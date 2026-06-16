@@ -9,8 +9,11 @@
 --   01960022: contact.contact_id            (rows 001–014 hex = 1–20, primary contacts)
 --   01960023: contact.contact_id            (rows 001–014 hex = 1–20, billing contacts)
 --   01960024: person_party.person_id        real Person rows in pos-people (rows 001–032 hex)
---   01960025: contact.person_id             real Person rows in pos-people (rows 001–014 hex)
+--   01960025: contact.person_id / person_party.customer_id  contact persons in pos-people (rows 001–014 hex)
 --   01960026: contact.person_id             billing Person rows in pos-people (rows 001–014 hex)
+--   01960027: contact_point.contact_point_id  email points for contact persons (rows 001–014 hex)
+--   01960028: contact_point.contact_point_id  phone points for contact persons (rows 001–014 hex)
+--   01960029: party_relationship.party_relationship_id (rows 001–014 hex = 1–20)
 --
 -- Enum ordinals used:
 --   AccountStatus : ACTIVE=0, INACTIVE=1, ON_HOLD=2
@@ -402,269 +405,195 @@ VALUES
 
 ON CONFLICT (customer_id) DO NOTHING;
 
+-- Sections 3 & 4 (INSERT INTO contact) removed — contact table dropped in V6.
+-- Contacts are seeded via party_relationship in sections 5-8 below.
+
+
+
 -- =========================================================================
--- SECTION 3: CONTACT — 20 rows, one per commercial party
---            Each contact is a separate individual (not from person_party).
---            person_id values use placeholder namespace 01960025-*.
+-- SECTION 5: CONTACT PERSON_PARTY — 20 rows, one per commercial contact
+--            These persons exist in pos-people under namespace 01960025-*.
+--            They must be in person_party to satisfy the FK on
+--            party_relationship.to_person_id → person_party.customer_id.
 -- =========================================================================
 
-INSERT INTO contact (contact_id, party_id, person_id,
-                     first_name, last_name, email, phone_number,
-                     active, created_at, updated_at)
+INSERT INTO person_party (customer_id, person_id, customer_number,
+                          first_name, last_name, primary_address,
+                          status, tier, tier_manual_override, preferred_contact_method,
+                          created_at, updated_at)
 VALUES
-    ('01960022-0000-7000-8000-000000000001'::uuid,
-     '01960021-0000-7000-8000-000000000001'::uuid,
-     '01960025-0000-7000-8000-000000000001'::uuid,
-     'Greg', 'Whitfield', 'g.whitfield@piedmontfreight.example.com', '704-555-3001',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000001'::uuid, '01960025-0000-7000-8000-000000000001'::uuid,
+     'CUST-CPC-001', 'Greg', 'Whitfield', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-000000000002'::uuid,
-     '01960021-0000-7000-8000-000000000002'::uuid,
-     '01960025-0000-7000-8000-000000000002'::uuid,
-     'Teresa', 'Mullen', 't.mullen@carolinaconcrete.example.com', '704-555-3002',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000002'::uuid, '01960025-0000-7000-8000-000000000002'::uuid,
+     'CUST-CPC-002', 'Teresa', 'Mullen', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-000000000003'::uuid,
-     '01960021-0000-7000-8000-000000000003'::uuid,
-     '01960025-0000-7000-8000-000000000003'::uuid,
-     'Darnell', 'Okafor', 'd.okafor@qcwaste.example.com', '704-555-3003',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000003'::uuid, '01960025-0000-7000-8000-000000000003'::uuid,
+     'CUST-CPC-003', 'Darnell', 'Okafor', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-000000000004'::uuid,
-     '01960021-0000-7000-8000-000000000004'::uuid,
-     '01960025-0000-7000-8000-000000000004'::uuid,
-     'Brittany', 'Norris', 'b.norris@blueridgelandscaping.example.com', '704-555-3004',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000004'::uuid, '01960025-0000-7000-8000-000000000004'::uuid,
+     'CUST-CPC-004', 'Brittany', 'Norris', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-000000000005'::uuid,
-     '01960021-0000-7000-8000-000000000005'::uuid,
-     '01960025-0000-7000-8000-000000000005'::uuid,
-     'Marcus', 'Tillman', 'm.tillman@tarheellogistics.example.com', '704-555-3005',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000005'::uuid, '01960025-0000-7000-8000-000000000005'::uuid,
+     'CUST-CPC-005', 'Marcus', 'Tillman', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-000000000006'::uuid,
-     '01960021-0000-7000-8000-000000000006'::uuid,
-     '01960025-0000-7000-8000-000000000006'::uuid,
-     'Christine', 'Walters', 'c.walters@meckplumbing.example.com', '704-555-3006',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000006'::uuid, '01960025-0000-7000-8000-000000000006'::uuid,
+     'CUST-CPC-006', 'Christine', 'Walters', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-000000000007'::uuid,
-     '01960021-0000-7000-8000-000000000007'::uuid,
-     '01960025-0000-7000-8000-000000000007'::uuid,
-     'Donald', 'Frazier', 'd.frazier@piedmontreadymix.example.com', '704-555-3007',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000007'::uuid, '01960025-0000-7000-8000-000000000007'::uuid,
+     'CUST-CPC-007', 'Donald', 'Frazier', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-000000000008'::uuid,
-     '01960021-0000-7000-8000-000000000008'::uuid,
-     '01960025-0000-7000-8000-000000000008'::uuid,
-     'Alicia', 'Stephens', 'a.stephens@carolinapower.example.com', '704-555-3008',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000008'::uuid, '01960025-0000-7000-8000-000000000008'::uuid,
+     'CUST-CPC-008', 'Alicia', 'Stephens', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-000000000009'::uuid,
-     '01960021-0000-7000-8000-000000000009'::uuid,
-     '01960025-0000-7000-8000-000000000009'::uuid,
-     'Keith', 'Burnham', 'k.burnham@bluestoneaggregate.example.com', '704-555-3009',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000009'::uuid, '01960025-0000-7000-8000-000000000009'::uuid,
+     'CUST-CPC-009', 'Keith', 'Burnham', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-00000000000a'::uuid,
-     '01960021-0000-7000-8000-00000000000a'::uuid,
-     '01960025-0000-7000-8000-00000000000a'::uuid,
-     'Tamara', 'McPherson', 't.mcpherson@cabarruscleaning.example.com', '704-555-3010',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-00000000000a'::uuid, '01960025-0000-7000-8000-00000000000a'::uuid,
+     'CUST-CPC-010', 'Tamara', 'McPherson', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-00000000000b'::uuid,
-     '01960021-0000-7000-8000-00000000000b'::uuid,
-     '01960025-0000-7000-8000-00000000000b'::uuid,
-     'Wesley', 'Parrish', 'w.parrish@sedelivery.example.com', '980-555-3011',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-00000000000b'::uuid, '01960025-0000-7000-8000-00000000000b'::uuid,
+     'CUST-CPC-011', 'Wesley', 'Parrish', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-00000000000c'::uuid,
-     '01960021-0000-7000-8000-00000000000c'::uuid,
-     '01960025-0000-7000-8000-00000000000c'::uuid,
-     'Renee', 'Holt', 'r.holt@carolinascrane.example.com', '704-555-3012',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-00000000000c'::uuid, '01960025-0000-7000-8000-00000000000c'::uuid,
+     'CUST-CPC-012', 'Renee', 'Holt', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-00000000000d'::uuid,
-     '01960021-0000-7000-8000-00000000000d'::uuid,
-     '01960025-0000-7000-8000-00000000000d'::uuid,
-     'Calvin', 'Dunmore', 'c.dunmore@lknpropane.example.com', '704-555-3013',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-00000000000d'::uuid, '01960025-0000-7000-8000-00000000000d'::uuid,
+     'CUST-CPC-013', 'Calvin', 'Dunmore', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-00000000000e'::uuid,
-     '01960021-0000-7000-8000-00000000000e'::uuid,
-     '01960025-0000-7000-8000-00000000000e'::uuid,
-     'Latasha', 'Gooden', 'l.gooden@rowanroad.example.com', '704-555-3014',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-00000000000e'::uuid, '01960025-0000-7000-8000-00000000000e'::uuid,
+     'CUST-CPC-014', 'Latasha', 'Gooden', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-00000000000f'::uuid,
-     '01960021-0000-7000-8000-00000000000f'::uuid,
-     '01960025-0000-7000-8000-00000000000f'::uuid,
-     'Bryan', 'Cantrell', 'b.cantrell@carolinafresh.example.com', '980-555-3015',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-00000000000f'::uuid, '01960025-0000-7000-8000-00000000000f'::uuid,
+     'CUST-CPC-015', 'Bryan', 'Cantrell', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-000000000010'::uuid,
-     '01960021-0000-7000-8000-000000000010'::uuid,
-     '01960025-0000-7000-8000-000000000010'::uuid,
-     'Monica', 'Byrd', 'm.byrd@piedmontmetals.example.com', '704-555-3016',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000010'::uuid, '01960025-0000-7000-8000-000000000010'::uuid,
+     'CUST-CPC-016', 'Monica', 'Byrd', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-000000000011'::uuid,
-     '01960021-0000-7000-8000-000000000011'::uuid,
-     '01960025-0000-7000-8000-000000000011'::uuid,
-     'Cedric', 'Blackwell', 'c.blackwell@uniongrading.example.com', '704-555-3017',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000011'::uuid, '01960025-0000-7000-8000-000000000011'::uuid,
+     'CUST-CPC-017', 'Cedric', 'Blackwell', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-000000000012'::uuid,
-     '01960021-0000-7000-8000-000000000012'::uuid,
-     '01960025-0000-7000-8000-000000000012'::uuid,
-     'Veronica', 'Pratt', 'v.pratt@carolinaseptic.example.com', '704-555-3018',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000012'::uuid, '01960025-0000-7000-8000-000000000012'::uuid,
+     'CUST-CPC-018', 'Veronica', 'Pratt', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-000000000013'::uuid,
-     '01960021-0000-7000-8000-000000000013'::uuid,
-     '01960025-0000-7000-8000-000000000013'::uuid,
-     'Jonathon', 'Culpepper', 'j.culpepper@mecktree.example.com', '704-555-3019',
-     true, NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000013'::uuid, '01960025-0000-7000-8000-000000000013'::uuid,
+     'CUST-CPC-019', 'Jonathon', 'Culpepper', NULL, 0, 0, false, 'EMAIL', NOW(), NOW()),
 
-    ('01960022-0000-7000-8000-000000000014'::uuid,
-     '01960021-0000-7000-8000-000000000014'::uuid,
-     '01960025-0000-7000-8000-000000000014'::uuid,
-     'Sheryl', 'Davenport', 's.davenport@highlandmoving.example.com', '980-555-3020',
-     true, NOW(), NOW())
+    ('01960025-0000-7000-8000-000000000014'::uuid, '01960025-0000-7000-8000-000000000014'::uuid,
+     'CUST-CPC-020', 'Sheryl', 'Davenport', NULL, 0, 0, false, 'EMAIL', NOW(), NOW())
 
-ON CONFLICT (contact_id) DO NOTHING;
+ON CONFLICT (customer_id) DO NOTHING;
 
 -- =========================================================================
--- SECTION 4: BILLING CONTACTS — 20 rows, one per commercial party
---            Represents the org-level billing/admin contact inbox preserved
---            from the former commercial_party.email / phone_number columns.
---            person_id values use namespace 01960026-* (real Person rows
---            seeded in pos-people R__seed_people_operational_data.sql).
---            contact_id values use namespace 01960023-*.
+-- SECTION 6: CONTACT_POINT — email + phone for each contact person
+--            person_id FK → person_party.customer_id (namespace 01960025-*)
+--            Email IDs use namespace 01960027-*, phone IDs use 01960028-*.
 -- =========================================================================
 
-INSERT INTO contact (contact_id, party_id, person_id,
-                     first_name, last_name, email, phone_number,
-                     active, created_at, updated_at)
+INSERT INTO contact_point (contact_point_id, person_id, contact_type, value, is_primary, created_at, updated_at)
 VALUES
-    ('01960023-0000-7000-8000-000000000001'::uuid,
-     '01960021-0000-7000-8000-000000000001'::uuid,
-     '01960026-0000-7000-8000-000000000001'::uuid,
-     'General', 'Piedmont Freight', 'info@piedmontfreight.example.com', '704-555-2001',
-     true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-000000000001'::uuid, '01960025-0000-7000-8000-000000000001'::uuid, 'EMAIL', 'g.whitfield@piedmontfreight.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-000000000001'::uuid, '01960025-0000-7000-8000-000000000001'::uuid, 'PHONE_WORK', '704-555-3001', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-000000000002'::uuid, '01960025-0000-7000-8000-000000000002'::uuid, 'EMAIL', 't.mullen@carolinaconcrete.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-000000000002'::uuid, '01960025-0000-7000-8000-000000000002'::uuid, 'PHONE_WORK', '704-555-3002', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-000000000003'::uuid, '01960025-0000-7000-8000-000000000003'::uuid, 'EMAIL', 'd.okafor@qcwaste.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-000000000003'::uuid, '01960025-0000-7000-8000-000000000003'::uuid, 'PHONE_WORK', '704-555-3003', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-000000000004'::uuid, '01960025-0000-7000-8000-000000000004'::uuid, 'EMAIL', 'b.norris@blueridgelandscaping.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-000000000004'::uuid, '01960025-0000-7000-8000-000000000004'::uuid, 'PHONE_WORK', '704-555-3004', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-000000000005'::uuid, '01960025-0000-7000-8000-000000000005'::uuid, 'EMAIL', 'm.tillman@tarheellogistics.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-000000000005'::uuid, '01960025-0000-7000-8000-000000000005'::uuid, 'PHONE_WORK', '704-555-3005', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-000000000006'::uuid, '01960025-0000-7000-8000-000000000006'::uuid, 'EMAIL', 'c.walters@meckplumbing.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-000000000006'::uuid, '01960025-0000-7000-8000-000000000006'::uuid, 'PHONE_WORK', '704-555-3006', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-000000000007'::uuid, '01960025-0000-7000-8000-000000000007'::uuid, 'EMAIL', 'd.frazier@piedmontreadymix.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-000000000007'::uuid, '01960025-0000-7000-8000-000000000007'::uuid, 'PHONE_WORK', '704-555-3007', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-000000000008'::uuid, '01960025-0000-7000-8000-000000000008'::uuid, 'EMAIL', 'a.stephens@carolinapower.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-000000000008'::uuid, '01960025-0000-7000-8000-000000000008'::uuid, 'PHONE_WORK', '704-555-3008', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-000000000009'::uuid, '01960025-0000-7000-8000-000000000009'::uuid, 'EMAIL', 'k.burnham@bluestoneaggregate.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-000000000009'::uuid, '01960025-0000-7000-8000-000000000009'::uuid, 'PHONE_WORK', '704-555-3009', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-00000000000a'::uuid, '01960025-0000-7000-8000-00000000000a'::uuid, 'EMAIL', 't.mcpherson@cabarruscleaning.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-00000000000a'::uuid, '01960025-0000-7000-8000-00000000000a'::uuid, 'PHONE_WORK', '704-555-3010', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-00000000000b'::uuid, '01960025-0000-7000-8000-00000000000b'::uuid, 'EMAIL', 'w.parrish@sedelivery.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-00000000000b'::uuid, '01960025-0000-7000-8000-00000000000b'::uuid, 'PHONE_WORK', '980-555-3011', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-00000000000c'::uuid, '01960025-0000-7000-8000-00000000000c'::uuid, 'EMAIL', 'r.holt@carolinascrane.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-00000000000c'::uuid, '01960025-0000-7000-8000-00000000000c'::uuid, 'PHONE_WORK', '704-555-3012', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-00000000000d'::uuid, '01960025-0000-7000-8000-00000000000d'::uuid, 'EMAIL', 'c.dunmore@lknpropane.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-00000000000d'::uuid, '01960025-0000-7000-8000-00000000000d'::uuid, 'PHONE_WORK', '704-555-3013', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-00000000000e'::uuid, '01960025-0000-7000-8000-00000000000e'::uuid, 'EMAIL', 'l.gooden@rowanroad.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-00000000000e'::uuid, '01960025-0000-7000-8000-00000000000e'::uuid, 'PHONE_WORK', '704-555-3014', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-00000000000f'::uuid, '01960025-0000-7000-8000-00000000000f'::uuid, 'EMAIL', 'b.cantrell@carolinafresh.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-00000000000f'::uuid, '01960025-0000-7000-8000-00000000000f'::uuid, 'PHONE_WORK', '980-555-3015', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-000000000010'::uuid, '01960025-0000-7000-8000-000000000010'::uuid, 'EMAIL', 'm.byrd@piedmontmetals.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-000000000010'::uuid, '01960025-0000-7000-8000-000000000010'::uuid, 'PHONE_WORK', '704-555-3016', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-000000000011'::uuid, '01960025-0000-7000-8000-000000000011'::uuid, 'EMAIL', 'c.blackwell@uniongrading.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-000000000011'::uuid, '01960025-0000-7000-8000-000000000011'::uuid, 'PHONE_WORK', '704-555-3017', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-000000000012'::uuid, '01960025-0000-7000-8000-000000000012'::uuid, 'EMAIL', 'v.pratt@carolinaseptic.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-000000000012'::uuid, '01960025-0000-7000-8000-000000000012'::uuid, 'PHONE_WORK', '704-555-3018', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-000000000013'::uuid, '01960025-0000-7000-8000-000000000013'::uuid, 'EMAIL', 'j.culpepper@mecktree.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-000000000013'::uuid, '01960025-0000-7000-8000-000000000013'::uuid, 'PHONE_WORK', '704-555-3019', true, NOW(), NOW()),
+    ('01960027-0000-7000-8000-000000000014'::uuid, '01960025-0000-7000-8000-000000000014'::uuid, 'EMAIL', 's.davenport@highlandmoving.example.com', true, NOW(), NOW()),
+    ('01960028-0000-7000-8000-000000000014'::uuid, '01960025-0000-7000-8000-000000000014'::uuid, 'PHONE_WORK', '980-555-3020', true, NOW(), NOW())
 
-    ('01960023-0000-7000-8000-000000000002'::uuid,
-     '01960021-0000-7000-8000-000000000002'::uuid,
-     '01960026-0000-7000-8000-000000000002'::uuid,
-     'Accounts', 'Carolina Concrete', 'accounts@carolinaconcrete.example.com', '704-555-2002',
-     true, NOW(), NOW()),
+ON CONFLICT (contact_point_id) DO NOTHING;
 
-    ('01960023-0000-7000-8000-000000000003'::uuid,
-     '01960021-0000-7000-8000-000000000003'::uuid,
-     '01960026-0000-7000-8000-000000000003'::uuid,
-     'Billing', 'QC Waste', 'billing@qcwaste.example.com', '704-555-2003',
-     true, NOW(), NOW()),
+-- =========================================================================
+-- SECTION 7: PARTY_RELATIONSHIP — 20 rows, one per commercial party
+--            from_party_id → commercial_party.customer_id (01960021-*)
+--            to_person_id  → person_party.customer_id     (01960025-*)
+--            effective_start_date = 2020-01-01 (pre-dates all test workorders)
+-- =========================================================================
 
-    ('01960023-0000-7000-8000-000000000004'::uuid,
-     '01960021-0000-7000-8000-000000000004'::uuid,
-     '01960026-0000-7000-8000-000000000004'::uuid,
-     'Fleet', 'Blue Ridge Landscaping', 'fleet@blueridgelandscaping.example.com', '704-555-2004',
-     true, NOW(), NOW()),
+INSERT INTO party_relationship (party_relationship_id, from_party_id, to_person_id,
+                                is_primary_billing_contact, effective_start_date, effective_end_date,
+                                created_at, updated_at)
+VALUES
+    ('01960029-0000-7000-8000-000000000001'::uuid, '01960021-0000-7000-8000-000000000001'::uuid, '01960025-0000-7000-8000-000000000001'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-000000000002'::uuid, '01960021-0000-7000-8000-000000000002'::uuid, '01960025-0000-7000-8000-000000000002'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-000000000003'::uuid, '01960021-0000-7000-8000-000000000003'::uuid, '01960025-0000-7000-8000-000000000003'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-000000000004'::uuid, '01960021-0000-7000-8000-000000000004'::uuid, '01960025-0000-7000-8000-000000000004'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-000000000005'::uuid, '01960021-0000-7000-8000-000000000005'::uuid, '01960025-0000-7000-8000-000000000005'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-000000000006'::uuid, '01960021-0000-7000-8000-000000000006'::uuid, '01960025-0000-7000-8000-000000000006'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-000000000007'::uuid, '01960021-0000-7000-8000-000000000007'::uuid, '01960025-0000-7000-8000-000000000007'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-000000000008'::uuid, '01960021-0000-7000-8000-000000000008'::uuid, '01960025-0000-7000-8000-000000000008'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-000000000009'::uuid, '01960021-0000-7000-8000-000000000009'::uuid, '01960025-0000-7000-8000-000000000009'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-00000000000a'::uuid, '01960021-0000-7000-8000-00000000000a'::uuid, '01960025-0000-7000-8000-00000000000a'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-00000000000b'::uuid, '01960021-0000-7000-8000-00000000000b'::uuid, '01960025-0000-7000-8000-00000000000b'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-00000000000c'::uuid, '01960021-0000-7000-8000-00000000000c'::uuid, '01960025-0000-7000-8000-00000000000c'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-00000000000d'::uuid, '01960021-0000-7000-8000-00000000000d'::uuid, '01960025-0000-7000-8000-00000000000d'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-00000000000e'::uuid, '01960021-0000-7000-8000-00000000000e'::uuid, '01960025-0000-7000-8000-00000000000e'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-00000000000f'::uuid, '01960021-0000-7000-8000-00000000000f'::uuid, '01960025-0000-7000-8000-00000000000f'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-000000000010'::uuid, '01960021-0000-7000-8000-000000000010'::uuid, '01960025-0000-7000-8000-000000000010'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-000000000011'::uuid, '01960021-0000-7000-8000-000000000011'::uuid, '01960025-0000-7000-8000-000000000011'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-000000000012'::uuid, '01960021-0000-7000-8000-000000000012'::uuid, '01960025-0000-7000-8000-000000000012'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-000000000013'::uuid, '01960021-0000-7000-8000-000000000013'::uuid, '01960025-0000-7000-8000-000000000013'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
+    ('01960029-0000-7000-8000-000000000014'::uuid, '01960021-0000-7000-8000-000000000014'::uuid, '01960025-0000-7000-8000-000000000014'::uuid, false, '2020-01-01', NULL, NOW(), NOW())
 
-    ('01960023-0000-7000-8000-000000000005'::uuid,
-     '01960021-0000-7000-8000-000000000005'::uuid,
-     '01960026-0000-7000-8000-000000000005'::uuid,
-     'Operations', 'Tarheel Logistics', 'ops@tarheellogistics.example.com', '704-555-2005',
-     true, NOW(), NOW()),
+ON CONFLICT (party_relationship_id) DO NOTHING;
 
-    ('01960023-0000-7000-8000-000000000006'::uuid,
-     '01960021-0000-7000-8000-000000000006'::uuid,
-     '01960026-0000-7000-8000-000000000006'::uuid,
-     'Dispatch', 'Meck Plumbing', 'dispatch@meckplumbing.example.com', '704-555-2006',
-     true, NOW(), NOW()),
+-- =========================================================================
+-- SECTION 8: PARTY_RELATIONSHIP_ROLE — 20 rows, PRIMARY_CONTACT per rel
+-- =========================================================================
 
-    ('01960023-0000-7000-8000-000000000007'::uuid,
-     '01960021-0000-7000-8000-000000000007'::uuid,
-     '01960026-0000-7000-8000-000000000007'::uuid,
-     'Fleet', 'Piedmont Ready Mix', 'fleet@piedmontreadymix.example.com', '704-555-2007',
-     true, NOW(), NOW()),
+INSERT INTO party_relationship_role (party_relationship_id, role_type)
+VALUES
+    ('01960029-0000-7000-8000-000000000001'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-000000000002'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-000000000003'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-000000000004'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-000000000005'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-000000000006'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-000000000007'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-000000000008'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-000000000009'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-00000000000a'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-00000000000b'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-00000000000c'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-00000000000d'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-00000000000e'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-00000000000f'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-000000000010'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-000000000011'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-000000000012'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-000000000013'::uuid, 'PRIMARY_CONTACT'),
+    ('01960029-0000-7000-8000-000000000014'::uuid, 'PRIMARY_CONTACT')
 
-    ('01960023-0000-7000-8000-000000000008'::uuid,
-     '01960021-0000-7000-8000-000000000008'::uuid,
-     '01960026-0000-7000-8000-000000000008'::uuid,
-     'Service', 'Carolina Power', 'service@carolinapower.example.com', '704-555-2008',
-     true, NOW(), NOW()),
-
-    ('01960023-0000-7000-8000-000000000009'::uuid,
-     '01960021-0000-7000-8000-000000000009'::uuid,
-     '01960026-0000-7000-8000-000000000009'::uuid,
-     'Accounts', 'Blue Stone Aggregate', 'accounts@bluestoneaggregate.example.com', '704-555-2009',
-     true, NOW(), NOW()),
-
-    ('01960023-0000-7000-8000-00000000000a'::uuid,
-     '01960021-0000-7000-8000-00000000000a'::uuid,
-     '01960026-0000-7000-8000-00000000000a'::uuid,
-     'Billing', 'Cabarrus Cleaning', 'billing@cabarruscleaning.example.com', '704-555-2010',
-     true, NOW(), NOW()),
-
-    ('01960023-0000-7000-8000-00000000000b'::uuid,
-     '01960021-0000-7000-8000-00000000000b'::uuid,
-     '01960026-0000-7000-8000-00000000000b'::uuid,
-     'Operations', 'SE Delivery', 'ops@sedelivery.example.com', '980-555-2011',
-     true, NOW(), NOW()),
-
-    ('01960023-0000-7000-8000-00000000000c'::uuid,
-     '01960021-0000-7000-8000-00000000000c'::uuid,
-     '01960026-0000-7000-8000-00000000000c'::uuid,
-     'Fleet', 'Carolinas Crane', 'fleet@carolinascrane.example.com', '704-555-2012',
-     true, NOW(), NOW()),
-
-    ('01960023-0000-7000-8000-00000000000d'::uuid,
-     '01960021-0000-7000-8000-00000000000d'::uuid,
-     '01960026-0000-7000-8000-00000000000d'::uuid,
-     'Service', 'LKN Propane', 'service@lknpropane.example.com', '704-555-2013',
-     true, NOW(), NOW()),
-
-    ('01960023-0000-7000-8000-00000000000e'::uuid,
-     '01960021-0000-7000-8000-00000000000e'::uuid,
-     '01960026-0000-7000-8000-00000000000e'::uuid,
-     'Accounts', 'Rowan Road Services', 'accounts@rowanroad.example.com', '704-555-2014',
-     true, NOW(), NOW()),
-
-    ('01960023-0000-7000-8000-00000000000f'::uuid,
-     '01960021-0000-7000-8000-00000000000f'::uuid,
-     '01960026-0000-7000-8000-00000000000f'::uuid,
-     'Dispatch', 'Carolina Fresh', 'dispatch@carolinafresh.example.com', '980-555-2015',
-     true, NOW(), NOW()),
-
-    ('01960023-0000-7000-8000-000000000010'::uuid,
-     '01960021-0000-7000-8000-000000000010'::uuid,
-     '01960026-0000-7000-8000-000000000010'::uuid,
-     'Billing', 'Piedmont Metals', 'billing@piedmontmetals.example.com', '704-555-2016',
-     true, NOW(), NOW()),
-
-    ('01960023-0000-7000-8000-000000000011'::uuid,
-     '01960021-0000-7000-8000-000000000011'::uuid,
-     '01960026-0000-7000-8000-000000000011'::uuid,
-     'Operations', 'Union Grading', 'ops@uniongrading.example.com', '704-555-2017',
-     true, NOW(), NOW()),
-
-    ('01960023-0000-7000-8000-000000000012'::uuid,
-     '01960021-0000-7000-8000-000000000012'::uuid,
-     '01960026-0000-7000-8000-000000000012'::uuid,
-     'Service', 'Carolina Septic', 'service@carolinaseptic.example.com', '704-555-2018',
-     true, NOW(), NOW()),
-
-    ('01960023-0000-7000-8000-000000000013'::uuid,
-     '01960021-0000-7000-8000-000000000013'::uuid,
-     '01960026-0000-7000-8000-000000000013'::uuid,
-     'Fleet', 'Meck Tree', 'fleet@mecktree.example.com', '704-555-2019',
-     true, NOW(), NOW()),
-
-    ('01960023-0000-7000-8000-000000000014'::uuid,
-     '01960021-0000-7000-8000-000000000014'::uuid,
-     '01960026-0000-7000-8000-000000000014'::uuid,
-     'Billing', 'Highland Moving', 'billing@highlandmoving.example.com', '980-555-2020',
-     true, NOW(), NOW())
-
-ON CONFLICT (contact_id) DO NOTHING;
+ON CONFLICT DO NOTHING;

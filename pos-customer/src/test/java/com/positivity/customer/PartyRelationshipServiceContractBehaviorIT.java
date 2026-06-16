@@ -9,7 +9,6 @@ import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
 import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
@@ -101,14 +100,6 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
                         .toString()
                         .substring(0, 8));
         testParty.setStatus(AccountStatus.ACTIVE);
-
-        Contact contact = new Contact();
-        contact.setCommercialParty(testParty);
-        contact.setPersonId(UUID.fromString("00000000-0000-0000-0000-000000000003"));
-        contact.setFirstName("Primary");
-        contact.setLastName("Contact");
-        contact.setActive(true);
-        testParty.getContacts().add(contact);
 
         testParty = partyRepository.save(testParty);
 

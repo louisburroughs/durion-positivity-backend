@@ -9,14 +9,11 @@ import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyResponse;
 import com.positivity.customer.internal.dto.DuplicateCheckResponse;
 import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
-import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.GetPartyResponse;
 import com.positivity.customer.internal.dto.MergePartiesRequest;
 import com.positivity.customer.internal.dto.MergePartiesResponse;
 import com.positivity.customer.internal.dto.SearchPartiesRequest;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
-import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
-import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
@@ -27,16 +24,19 @@ import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.dto.snapshot.SnapshotMetadata;
 import com.positivity.customer.internal.entity.BillingRulesEmbeddable;
 import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.entity.Contact;
+import com.positivity.customer.internal.entity.PartyRelationship;
+import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
+import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
-import com.positivity.customer.internal.repository.ContactRepository;
+import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.service.PartyService;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -66,12 +66,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class PartyServiceImpl implements PartyService {
     private static final String SUCCESS = "SUCCESS";
     private static final String NOT_APPLICABLE = "NOT_APPLICABLE";
-    private static final String DEFAULT_CONTACT_NAME = "Contact";
 
     private final Clock clock;
 
     private final CommercialPartyRepository partyRepository;
-    private final ContactRepository contactRepository;
+    private final PartyRelationshipRepository partyRelationshipRepository;
     private final CacheManager cacheManager;
     private final PeopleClient peopleClient;
     private final VehicleInventoryClient vehicleInventoryClient;
@@ -102,11 +101,7 @@ public class PartyServiceImpl implements PartyService {
             party.getExternalIdentifiers().putAll(request.getExternalIdentifiers());
         }
 
-        Contact contact = buildContactForParty(request, party);
-        party.getContacts().add(contact);
-
         CommercialParty saved = partyRepository.save(party);
-        contactRepository.save(contact);
         log.info(
                 "Created commercial account with partyId: {}, partyNumber: {}",
                 saved.getPartyId(),
@@ -139,33 +134,6 @@ public class PartyServiceImpl implements PartyService {
                 .build();
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public GetContactsWithRolesResponse getContactsWithRoles(UUID partyId) {
-        log.debug("Fetching contacts with roles for party: {}", partyId);
-        CommercialParty party = findPartyOrThrow(partyId);
-        List<Contact> contacts = contactRepository.findByCommercialParty(party);
-
-        List<GetContactsWithRolesResponse.ContactWithRoles> contactDtos = new ArrayList<>();
-        for (Contact contact : contacts) {
-            GetContactsWithRolesResponse.ContactWithRoles dto = GetContactsWithRolesResponse.ContactWithRoles.builder()
-                    .contactId(String.valueOf(contact.getContactId()))
-                    .contactName(buildContactName(contact))
-                    .email(contact.getEmail())
-                    .phone(contact.getPhoneNumber())
-                    .hasPrimaryEmail(StringUtils.hasText(contact.getEmail()))
-                    .roles(new ArrayList<>())
-                    .invoiceDeliveryMethod(null)
-                    .build();
-            contactDtos.add(dto);
-        }
-
-        return GetContactsWithRolesResponse.builder()
-                .partyId(String.valueOf(party.getPartyId()))
-                .contacts(contactDtos)
-                .build();
-    }
-
     private CommercialParty findPartyOrThrow(UUID partyId) {
         CommercialParty party = partyRepository.findByPartyId(partyId);
         if (party == null) {
@@ -175,40 +143,8 @@ public class PartyServiceImpl implements PartyService {
         return party;
     }
 
-    private Contact buildContactForParty(CreateCommercialAccountRequest request, CommercialParty party) {
-        String firstName = request.getContactFirstName();
-        String lastName = request.getContactLastName();
-
-        if (!StringUtils.hasText(lastName)) {
-            throw new IllegalArgumentException("contactLastName is required");
-        }
-
-        // Fall back to business name if no contact first name provided
-        if (!StringUtils.hasText(firstName)) {
-            firstName =
-                    StringUtils.hasText(request.getDisplayName()) ? request.getDisplayName() : request.getLegalName();
-        }
-
-        Contact contact = new Contact();
-        UUID personId =
-                peopleClient.resolveOrCreatePersonId(request.getEmail(), request.getPhone(), lastName, firstName);
-        contact.setCommercialParty(party);
-        contact.setPersonId(personId);
-        contact.setFirstName(firstName);
-        contact.setLastName(lastName);
-        contact.setEmail(request.getEmail());
-        contact.setPhoneNumber(request.getPhone());
-        contact.setActive(true);
-        return contact;
-    }
-
     private String generatePartyNumber() {
         return "PARTY-" + UUIDv7Generator.generate().toString().substring(0, 8).toUpperCase(Locale.US);
-    }
-
-    private String buildContactName(Contact contact) {
-        return (contact.getFirstName() != null ? contact.getFirstName() : "") + " "
-                + (contact.getLastName() != null ? contact.getLastName() : "");
     }
 
     @Override
@@ -286,12 +222,8 @@ public class PartyServiceImpl implements PartyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot merge party with itself");
         }
 
-        // Merge contacts from loser to survivor
-        for (Contact contact : new ArrayList<>(loser.getContacts())) {
-            contact.setCommercialParty(survivor);
-            survivor.getContacts().add(contact);
-        }
-        loser.getContacts().clear();
+        // Transfer party relationships from loser to survivor
+        partyRelationshipRepository.reassignFromParty(loser.getPartyId(), survivor.getPartyId());
 
         // Merge external identifiers
         survivor.getExternalIdentifiers().putAll(loser.getExternalIdentifiers());
@@ -310,30 +242,6 @@ public class PartyServiceImpl implements PartyService {
                 .survivorPartyId(String.valueOf(survivor.getPartyId()))
                 .losingPartyId(String.valueOf(loser.getPartyId()))
                 .status("COMPLETED")
-                .build();
-    }
-
-    @Override
-    @Transactional
-    public UpdateContactRolesResponse updateContactRoles(
-            UUID partyId, UUID contactId, UpdateContactRolesRequest request) {
-        log.debug("Updating contact roles for party: {}, contact: {}", partyId, contactId);
-        CommercialParty party = findPartyOrThrow(partyId);
-
-        Contact contact = contactRepository
-                .findById(contactId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "contact not found"));
-
-        if (!contact.getCommercialParty().getPartyId().equals(party.getPartyId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "contact does not belong to this party");
-        }
-
-        // In a real implementation, would store roles in a separate ContactRole entity
-        // For now, return success response
-        return UpdateContactRolesResponse.builder()
-                .contactId(String.valueOf(contact.getContactId()))
-                .partyId(String.valueOf(party.getPartyId()))
-                .status(SUCCESS)
                 .build();
     }
 
@@ -500,17 +408,6 @@ public class PartyServiceImpl implements PartyService {
     private CommercialParty findPartyByIdInternal(UUID partyId) {
         log.debug("Finding party by ID: {}", partyId);
         return partyRepository.findByPartyId(partyId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<Contact> findContactsByParty(CommercialParty party) {
-        return findContactsByPartyInternal(party);
-    }
-
-    private List<Contact> findContactsByPartyInternal(CommercialParty party) {
-        log.debug("Finding contacts for party: {}", party.getPartyId());
-        return contactRepository.findByCommercialParty(party);
     }
 
     @Override
@@ -707,86 +604,32 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private List<ContactSummary> buildContactSummaries(CommercialParty party) {
-        List<Contact> contacts = findContactsByPartyInternal(party);
-
-        if (contacts == null || contacts.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return contacts.stream().map(this::convertContactToSummary).toList();
+        LocalDate today = LocalDate.now(clock);
+        List<PartyRelationship> relationships =
+                partyRelationshipRepository.findActiveByFromPartyId(party.getPartyId(), today);
+        return relationships.stream().map(this::convertRelationshipToSummary).toList();
     }
 
-    private ContactSummary convertContactToSummary(Contact contact) {
+    private ContactSummary convertRelationshipToSummary(PartyRelationship rel) {
+        PersonParty person = rel.getToPerson();
         ContactSummary summary = new ContactSummary();
-        summary.setContactId(contact.getContactId().toString());
-        summary.setPrimary(false);
-        summary.setName(formatContactName(contact));
+        summary.setContactId(rel.getPartyRelationshipId().toString());
+        summary.setPrimary(rel.isPrimaryBillingContact());
+        summary.setName(person.getDisplayName());
         summary.setRoles(Collections.emptyList());
-        summary.setPhoneNumbers(buildPhoneList(contact));
-        summary.setEmailAddresses(buildEmailList(contact));
+        summary.setPhoneNumbers(person.getContactPoints().stream()
+                .filter(cp -> cp.getContactType() == ContactPointType.PHONE_MOBILE
+                        || cp.getContactType() == ContactPointType.PHONE_WORK)
+                .filter(cp -> cp.getValue() != null)
+                .map(cp -> new ContactSummary.PhoneNumberDTO("PRIMARY", cp.getValue()))
+                .toList());
+        summary.setEmailAddresses(person.getContactPoints().stream()
+                .filter(cp -> cp.getContactType() == ContactPointType.EMAIL)
+                .filter(cp -> cp.getValue() != null)
+                .map(cp -> new ContactSummary.EmailAddressDTO("PRIMARY", cp.getValue()))
+                .toList());
         summary.setPreferences(null);
         return summary;
-    }
-
-    private String formatContactName(Contact contact) {
-        if (contact == null) {
-            return DEFAULT_CONTACT_NAME;
-        }
-
-        StringBuilder nameBuilder = new StringBuilder();
-
-        if (StringUtils.hasText(contact.getFirstName())) {
-            nameBuilder.append(contact.getFirstName().trim());
-        }
-
-        if (StringUtils.hasText(contact.getLastName())) {
-            if (!nameBuilder.isEmpty()) {
-                nameBuilder.append(" ");
-            }
-            nameBuilder.append(contact.getLastName().trim());
-        }
-
-        if (!nameBuilder.isEmpty()) {
-            return nameBuilder.toString();
-        }
-
-        if (StringUtils.hasText(contact.getEmail())) {
-            return contact.getEmail().trim();
-        }
-
-        if (StringUtils.hasText(contact.getPhoneNumber())) {
-            return contact.getPhoneNumber().trim();
-        }
-
-        if (contact.getPersonId() != null) {
-            return contact.getPersonId().toString();
-        }
-
-        if (contact.getContactId() != null) {
-            return contact.getContactId().toString();
-        }
-
-        return DEFAULT_CONTACT_NAME;
-    }
-
-    private List<ContactSummary.PhoneNumberDTO> buildPhoneList(Contact contact) {
-        List<ContactSummary.PhoneNumberDTO> phones = new ArrayList<>();
-
-        if (contact.getPhoneNumber() != null && !contact.getPhoneNumber().isBlank()) {
-            phones.add(new ContactSummary.PhoneNumberDTO("PRIMARY", contact.getPhoneNumber()));
-        }
-
-        return phones;
-    }
-
-    private List<ContactSummary.EmailAddressDTO> buildEmailList(Contact contact) {
-        List<ContactSummary.EmailAddressDTO> emails = new ArrayList<>();
-
-        if (contact.getEmail() != null && !contact.getEmail().isBlank()) {
-            emails.add(new ContactSummary.EmailAddressDTO("PRIMARY", contact.getEmail()));
-        }
-
-        return emails;
     }
 
     private List<CrmSnapshotDTO.VehicleSummary> buildVehicleSummaries(CommercialParty party) {

@@ -14,31 +14,33 @@ import com.positivity.customer.internal.config.CacheConfig;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
 import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
-import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.GetPartyResponse;
 import com.positivity.customer.internal.dto.MergePartiesRequest;
 import com.positivity.customer.internal.dto.MergePartiesResponse;
 import com.positivity.customer.internal.dto.SearchPartiesRequest;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
-import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
-import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.dto.snapshot.SnapshotMetadata;
 import com.positivity.customer.internal.entity.BillingRulesEmbeddable;
 import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.entity.Contact;
+import com.positivity.customer.internal.entity.ContactPoint;
+import com.positivity.customer.internal.entity.PartyRelationship;
+import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
+import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.InvoiceDeliveryMethod;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
-import com.positivity.customer.internal.repository.ContactRepository;
+import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.service.PartyServiceImpl;
 import com.positivity.shared.dto.VehicleResponse;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -67,7 +69,7 @@ class PartyServiceImplTest {
     private CommercialPartyRepository partyRepository;
 
     @Mock
-    private ContactRepository contactRepository;
+    private PartyRelationshipRepository partyRelationshipRepository;
 
     @Mock
     private CacheManager cacheManager;
@@ -86,7 +88,7 @@ class PartyServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new PartyServiceImpl(
-                TEST_CLOCK, partyRepository, contactRepository, cacheManager, peopleClient, vehicleInventoryClient);
+                TEST_CLOCK, partyRepository, partyRelationshipRepository, cacheManager, peopleClient, vehicleInventoryClient);
     }
 
     private CommercialParty party(UUID id) {
@@ -99,7 +101,6 @@ class PartyServiceImplTest {
         p.setStatus(AccountStatus.ACTIVE);
         p.setCreatedAt(Instant.now(TEST_CLOCK));
         p.setModifiedAt(Instant.now(TEST_CLOCK));
-        p.setContacts(new HashSet<>());
         p.setVehicleVins(new HashSet<>());
         p.setExternalIdentifiers(new HashMap<>());
         return p;
@@ -124,7 +125,8 @@ class PartyServiceImplTest {
         when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
-        when(contactRepository.findByCommercialParty(p)).thenReturn(Collections.emptyList());
+        when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
+                .thenReturn(Collections.emptyList());
 
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
 
@@ -165,7 +167,8 @@ class PartyServiceImplTest {
 
         when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
-        when(contactRepository.findByCommercialParty(p)).thenReturn(Collections.emptyList());
+        when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
+                .thenReturn(Collections.emptyList());
 
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
 
@@ -176,20 +179,30 @@ class PartyServiceImplTest {
     @Test
     void buildSnapshotForParty_handlesContactsWithPhoneAndEmail() {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID relId = UUID.fromString("00000000-0000-0000-0000-000000000009");
         CommercialParty p = party(partyId);
 
-        Contact c = new Contact();
-        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
-        c.setFirstName("Jane");
-        c.setLastName("Doe");
-        c.setPhoneNumber("555-1234");
-        c.setEmail("jane@acme.com");
-        c.setCommercialParty(p);
+        PersonParty person = new PersonParty();
+        person.setFirstName("Jane");
+        person.setLastName("Doe");
+        ContactPoint phone = new ContactPoint();
+        phone.setContactType(ContactPointType.PHONE_MOBILE);
+        phone.setValue("555-1234");
+        ContactPoint email = new ContactPoint();
+        email.setContactType(ContactPointType.EMAIL);
+        email.setValue("jane@acme.com");
+        person.setContactPoints(new ArrayList<>(List.of(phone, email)));
+
+        PartyRelationship rel = new PartyRelationship();
+        rel.setPartyRelationshipId(relId);
+        rel.setToPerson(person);
+        rel.setPrimaryBillingContact(false);
 
         when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
-        when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
+        when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
+                .thenReturn(List.of(rel));
 
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
 
@@ -198,52 +211,6 @@ class PartyServiceImplTest {
         assertThat(result.getContacts().getFirst().getName()).isEqualTo("Jane Doe");
         assertThat(result.getContacts().getFirst().getPhoneNumbers()).hasSize(1);
         assertThat(result.getContacts().getFirst().getEmailAddresses()).hasSize(1);
-    }
-
-    @Test
-    void buildSnapshotForParty_usesContactId_whenContactNameMissing() {
-        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        CommercialParty p = party(partyId);
-        UUID contactId = UUID.fromString("00000000-0000-0000-0000-000000000009");
-
-        Contact c = new Contact();
-        c.setId(contactId);
-        c.setFirstName(" ");
-        c.setLastName(null);
-        c.setCommercialParty(p);
-
-        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
-        when(cache.get(partyId)).thenReturn(null);
-        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
-        when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
-
-        CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
-
-        assertThat(result.getContacts()).hasSize(1);
-        assertThat(result.getContacts().getFirst().getName()).isEqualTo(contactId.toString());
-    }
-
-    @Test
-    void buildSnapshotForParty_usesEmail_whenContactNameMissing() {
-        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        CommercialParty p = party(partyId);
-
-        Contact c = new Contact();
-        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000010"));
-        c.setFirstName(" ");
-        c.setLastName(" ");
-        c.setEmail("fallback@acme.com");
-        c.setCommercialParty(p);
-
-        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
-        when(cache.get(partyId)).thenReturn(null);
-        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
-        when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
-
-        CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
-
-        assertThat(result.getContacts()).hasSize(1);
-        assertThat(result.getContacts().getFirst().getName()).isEqualTo("fallback@acme.com");
     }
 
     @Test
@@ -256,7 +223,8 @@ class PartyServiceImplTest {
         when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
-        when(contactRepository.findByCommercialParty(p)).thenReturn(Collections.emptyList());
+        when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
+                .thenReturn(Collections.emptyList());
 
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
 
@@ -327,7 +295,8 @@ class PartyServiceImplTest {
         when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
-        when(contactRepository.findByCommercialParty(p)).thenReturn(Collections.emptyList());
+        when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
+                .thenReturn(Collections.emptyList());
         when(vehicleInventoryClient.getVehicleByVin("VIN-123")).thenReturn(Optional.of(vehicleResponse));
 
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
@@ -353,21 +322,6 @@ class PartyServiceImplTest {
     }
 
     @Test
-    void findContactsByParty_delegatesToRepository() {
-        CommercialParty p = party(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        Contact c = new Contact();
-        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
-        c.setFirstName("Alex");
-        c.setLastName("Rivera");
-        when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
-
-        List<Contact> result = service.findContactsByParty(p);
-
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().getFirstName()).isEqualTo("Alex");
-    }
-
-    @Test
     void createCommercialAccount_throwsBadRequest_whenLegalNameMissing() {
         CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
         request.setLegalName(" ");
@@ -379,28 +333,13 @@ class PartyServiceImplTest {
     }
 
     @Test
-    void createCommercialAccount_throwsIllegalArgument_whenContactLastNameMissing() {
-        CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
-        request.setLegalName("Acme Legal");
-        request.setEmail("billing@acme.com");
-
-        assertThatThrownBy(() -> service.createCommercialAccount(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("contactLastName is required");
-    }
-
-    @Test
-    void createCommercialAccount_savesPartyAndContact() {
+    void createCommercialAccount_savesParty() {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
         request.setLegalName("Acme Legal");
         request.setDisplayName("Acme Display");
         request.setTaxId("TAX-1");
         request.setBillingTermsId("NET30");
-        request.setContactFirstName("John");
-        request.setContactLastName("Doe");
-        request.setEmail("billing@acme.com");
-        request.setPhone("555-0001");
         request.setExternalIdentifiers(new HashMap<>(Collections.singletonMap("erp", "A-100")));
 
         CommercialParty saved = party(partyId);
@@ -419,7 +358,6 @@ class PartyServiceImplTest {
         assertThat(partyCaptor.getValue().getPartyType()).isEqualTo(PartyType.COMMERCIAL);
         assertThat(partyCaptor.getValue().getPartyNumber()).startsWith("PARTY-");
         assertThat(partyCaptor.getValue().getExternalIdentifiers()).containsEntry("erp", "A-100");
-        verify(contactRepository).save(any(Contact.class));
     }
 
     @Test
@@ -447,29 +385,6 @@ class PartyServiceImplTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("404 NOT_FOUND")
                 .hasMessageContaining("party not found");
-    }
-
-    @Test
-    void getContactsWithRoles_returnsContacts() {
-        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        CommercialParty p = party(partyId);
-        Contact c = new Contact();
-        c.setId(UUID.fromString("00000000-0000-0000-0000-000000000011"));
-        c.setFirstName("Mary");
-        c.setLastName("Jane");
-        c.setEmail("mary@acme.com");
-        c.setPhoneNumber("111-2222");
-        c.setCommercialParty(p);
-
-        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
-        when(contactRepository.findByCommercialParty(p)).thenReturn(List.of(c));
-
-        GetContactsWithRolesResponse response = service.getContactsWithRoles(partyId);
-
-        assertThat(response.getPartyId()).isEqualTo(partyId.toString());
-        assertThat(response.getContacts()).hasSize(1);
-        assertThat(response.getContacts().getFirst().getContactName()).isEqualTo("Mary Jane");
-        assertThat(response.getContacts().getFirst().getHasPrimaryEmail()).isTrue();
     }
 
     @Test
@@ -586,18 +501,11 @@ class PartyServiceImplTest {
     }
 
     @Test
-    void mergeParties_mergesContactsIdentifiersAndVins() {
+    void mergeParties_mergesIdentifiersAndVins_reassignsRelationships() {
         UUID survivorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID loserId = UUID.fromString("00000000-0000-0000-0000-000000000009");
         CommercialParty survivor = party(survivorId);
         CommercialParty loser = party(loserId);
-
-        Contact loserContact = new Contact();
-        loserContact.setId(UUID.fromString("00000000-0000-0000-0000-000000000011"));
-        loserContact.setFirstName("Loser");
-        loserContact.setLastName("Contact");
-        loserContact.setCommercialParty(loser);
-        loser.getContacts().add(loserContact);
         loser.getExternalIdentifiers().put("legacy", "L-1");
         loser.getVehicleVins().add("VIN-MERGE");
 
@@ -611,10 +519,10 @@ class PartyServiceImplTest {
         MergePartiesResponse response = service.mergeParties(survivorId, request);
 
         assertThat(response.getStatus()).isEqualTo("COMPLETED");
-        assertThat(survivor.getContacts()).hasSize(1);
         assertThat(survivor.getExternalIdentifiers()).containsEntry("legacy", "L-1");
         assertThat(survivor.getVehicleVins()).contains("VIN-MERGE");
         assertThat(loser.getStatus()).isEqualTo(AccountStatus.MERGED);
+        verify(partyRelationshipRepository).reassignFromParty(loserId, survivorId);
         verify(partyRepository).save(survivor);
         verify(partyRepository).save(loser);
     }
@@ -648,46 +556,6 @@ class PartyServiceImplTest {
         assertThatThrownBy(() -> service.mergeParties(partyId, request))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Cannot merge party with itself");
-    }
-
-    @Test
-    void updateContactRoles_returnsSuccess_whenContactBelongsToParty() {
-        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID contactId = UUID.fromString("00000000-0000-0000-0000-000000000011");
-        CommercialParty p = party(partyId);
-        Contact c = new Contact();
-        c.setId(contactId);
-        c.setCommercialParty(p);
-
-        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
-        when(contactRepository.findById(contactId)).thenReturn(Optional.of(c));
-
-        UpdateContactRolesResponse response =
-                service.updateContactRoles(partyId, contactId, new UpdateContactRolesRequest());
-
-        assertThat(response.getStatus()).isEqualTo("SUCCESS");
-        assertThat(response.getContactId()).isEqualTo(contactId.toString());
-        assertThat(response.getPartyId()).isEqualTo(partyId.toString());
-    }
-
-    @Test
-    void updateContactRoles_throwsBadRequest_whenContactNotInParty() {
-        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID contactId = UUID.fromString("00000000-0000-0000-0000-000000000011");
-        CommercialParty p1 = party(partyId);
-        CommercialParty p2 = party(UUID.fromString("00000000-0000-0000-0000-000000000002"));
-        Contact c = new Contact();
-        c.setId(contactId);
-        c.setCommercialParty(p2);
-
-        when(partyRepository.findByPartyId(partyId)).thenReturn(p1);
-        when(contactRepository.findById(contactId)).thenReturn(Optional.of(c));
-
-        UpdateContactRolesRequest request = new UpdateContactRolesRequest();
-        assertThatThrownBy(() -> service.updateContactRoles(partyId, contactId, request))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("400 BAD_REQUEST")
-                .hasMessageContaining("contact does not belong to this party");
     }
 
     @Test
