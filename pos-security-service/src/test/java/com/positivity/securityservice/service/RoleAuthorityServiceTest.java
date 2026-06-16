@@ -172,6 +172,7 @@ class RoleAuthorityServiceTest {
                 .contains("workorder:workorder:assign-technician")
                 .contains("workorder:change_request:emergency_override")
                 .contains("timekeeping:overlap_override")
+                .contains("people:timekeeping:view", "people:timekeeping:approve", "people:timekeeping:reject")
                 .doesNotContain("security:user:edit")
                 .contains(MCP_CHAT_EXECUTE);
     }
@@ -187,6 +188,7 @@ class RoleAuthorityServiceTest {
                 .contains("workorder:workorder:generate_invoice")
                 .contains("invoice:finalize")
                 .doesNotContain("workorder:workorder:assign-technician")
+                .doesNotContain("people:timekeeping:approve", "people:timekeeping:reject")
                 .contains(MCP_CHAT_EXECUTE);
     }
 
@@ -201,7 +203,24 @@ class RoleAuthorityServiceTest {
                 .contains("inventory:pick_list:execute")
                 .contains("timekeeping:work_session:create")
                 .doesNotContain("invoice:finalize")
+                .doesNotContain("people:timekeeping:approve", "people:timekeeping:reject")
                 .contains(MCP_CHAT_EXECUTE);
+    }
+
+    @Test
+    void expandRolesToAuthorities_timekeepingApprovalGrantedToApproversNotStaff() {
+        // Approver-tier roles can view/approve/reject pay-period timekeeping.
+        for (String role : Set.of("ADMIN", "MANAGER", "GENERAL_MANAGER", "LOCATION_MANAGER")) {
+            assertThat(roleAuthorityService.expandRolesToAuthorities(Set.of(role)))
+                    .as("role %s timekeeping approval grant", role)
+                    .contains("people:timekeeping:view", "people:timekeeping:approve", "people:timekeeping:reject");
+        }
+        // Staff-tier roles must never receive approve/reject.
+        for (String role : Set.of("SERVICE_ADVISOR", "TECHNICIAN", "CSR")) {
+            assertThat(roleAuthorityService.expandRolesToAuthorities(Set.of(role)))
+                    .as("role %s must not approve/reject timekeeping", role)
+                    .doesNotContain("people:timekeeping:approve", "people:timekeeping:reject");
+        }
     }
 
     @Test

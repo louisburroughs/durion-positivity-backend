@@ -150,6 +150,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
         set.addAll(appointmentAuthorities());
         set.addAll(invoiceAuthorities());
         set.addAll(timekeepingAuthorities());
+        set.addAll(timekeepingApprovalAuthorities());
         set.addAll(nltiAuthorities());
         set.addAll(productLifecycleAuthorities());
         set.addAll(mcpAuthorities());
@@ -167,6 +168,8 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     private Set<String> managerAuthorities() {
         Set<String> authorities = new HashSet<>(interactiveChatAuthorities());
         authorities.addAll(List.of("security:role:view", "security:role:assign", "security:permission:view"));
+        // Managers review, approve, and reject pay-period timekeeping for their staff.
+        authorities.addAll(timekeepingApprovalAuthorities());
         return authorities;
     }
 
@@ -356,6 +359,8 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
 
     private Set<String> locationManagerAuthorities() {
         Set<String> authorities = new HashSet<>(serviceAdvisorAuthorities());
+        // Shop/location managers approve and reject their staff's pay-period timekeeping.
+        authorities.addAll(timekeepingApprovalAuthorities());
         authorities.addAll(List.of(
                 "people:availability:view",
                 // Time management (self-service + team approval)
@@ -590,6 +595,16 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "timekeeping:work_session:break_start",
                 "timekeeping:work_session:break_stop",
                 "timekeeping:overlap_override"));
+    }
+
+    /**
+     * Pay-period timekeeping approval authorities required by TimekeepingApprovalController
+     * (people:timekeeping:*). Separate from the employee-facing work_session authorities above:
+     * view lists every employee's entries; approve/reject are manager decisions.
+     */
+    private Set<String> timekeepingApprovalAuthorities() {
+        return new HashSet<>(List.of(
+                "people:timekeeping:view", "people:timekeeping:approve", "people:timekeeping:reject"));
     }
 
     private Set<String> shopAuthorities() {
