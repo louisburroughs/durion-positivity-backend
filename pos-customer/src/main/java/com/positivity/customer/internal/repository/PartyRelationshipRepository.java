@@ -95,16 +95,6 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
             @Param("today") @NonNull LocalDate today);
 
     /**
-     * Demote existing primary billing contact by setting isPrimaryBillingContact to
-     * false.
-     * Used when assigning a new primary billing contact.
-     *
-     * @param partyId           the party ID
-     * @param excludeRelationId the relationship ID to exclude from demotion (the
-     *                          new primary)
-     * @return number of updated records
-     */
-    /**
      * Reassign all relationships from one party to another (used during merge).
      *
      * @param fromPartyId the losing party whose relationships will be transferred
@@ -116,6 +106,14 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
             + "WHERE pr.fromParty.partyId = :fromPartyId")
     int reassignFromParty(@Param("fromPartyId") @NonNull UUID fromPartyId, @Param("toPartyId") @NonNull UUID toPartyId);
 
+    /**
+     * Demote existing primary billing contact by setting isPrimaryBillingContact to
+     * false. Used when assigning a new primary billing contact.
+     *
+     * @param partyId           the party ID
+     * @param excludeRelationId the relationship ID to exclude from demotion (the new primary)
+     * @return number of updated records
+     */
     @Modifying
     @Query("UPDATE PartyRelationship pr SET pr.isPrimaryBillingContact = false "
             + "WHERE pr.fromParty.partyId = :partyId AND pr.isPrimaryBillingContact = true "
