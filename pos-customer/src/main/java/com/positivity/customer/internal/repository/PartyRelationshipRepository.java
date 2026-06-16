@@ -36,8 +36,7 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
      * @return list of active relationships
      */
     @Query("SELECT pr FROM PartyRelationship pr "
-            + "JOIN FETCH pr.toPerson p "
-            + "JOIN FETCH p.contactPoints "
+            + "JOIN FETCH pr.toPerson "
             + "WHERE pr.fromParty.partyId = :partyId "
             + "AND (pr.effectiveEndDate IS NULL OR pr.effectiveEndDate >= :today)")
     List<PartyRelationship> findActiveByFromPartyId(

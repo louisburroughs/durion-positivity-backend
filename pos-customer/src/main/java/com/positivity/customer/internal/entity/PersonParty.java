@@ -12,6 +12,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.OneToMany;
+import org.hibernate.annotations.BatchSize;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -67,6 +68,7 @@ public class PersonParty extends AbstractParty {
     private PreferredContactMethod preferredContactMethod = PreferredContactMethod.NONE;
 
     @OneToMany(mappedBy = "person", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = 20)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     @Schema(description = "Contact points (emails, phones) for this person")
