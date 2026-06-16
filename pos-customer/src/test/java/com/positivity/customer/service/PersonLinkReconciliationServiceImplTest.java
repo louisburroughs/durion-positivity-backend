@@ -1,0 +1,79 @@
+package com.positivity.customer.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+
+import com.positivity.customer.internal.client.PeopleClient;
+import com.positivity.customer.internal.repository.PersonPartyRepository;
+import com.positivity.customer.internal.service.PersonLinkReconciliationServiceImpl;
+import com.positivity.customer.service.PersonLinkReconciliationService.PersonLinkReport;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class PersonLinkReconciliationServiceImplTest {
+
+    @Mock
+    private PersonPartyRepository personPartyRepository;
+
+    @Mock
+    private PeopleClient peopleClient;
+
+    @InjectMocks
+    private PersonLinkReconciliationServiceImpl service;
+
+    private static UUID id(String suffix) {
+        return UUID.fromString("00000000-0000-0000-0000-0000000000" + suffix);
+    }
+
+    @Test
+    void reconcile_allLinksResolve_reportsHealthy() {
+        UUID a = id("a1");
+        UUID b = id("b2");
+        when(personPartyRepository.findDistinctPersonIds()).thenReturn(List.of(a, b));
+        when(peopleClient.fetchPersonIdentities(List.of(a, b)))
+                .thenReturn(Map.of(
+                        a, new PeopleClient.PersonIdentity(a, "Greg", "Whitfield", "g@x.com"),
+                        b, new PeopleClient.PersonIdentity(b, "Teresa", "Mullen", "t@x.com")));
+
+        PersonLinkReport report = service.reconcile();
+
+        assertThat(report.totalLinks()).isEqualTo(2);
+        assertThat(report.resolved()).isEqualTo(2);
+        assertThat(report.unresolvedPersonIds()).isEmpty();
+        assertThat(report.isHealthy()).isTrue();
+    }
+
+    @Test
+    void reconcile_orphanLink_reportedAsUnresolved() {
+        UUID linked = id("a1");
+        UUID orphan = id("c3");
+        when(personPartyRepository.findDistinctPersonIds()).thenReturn(List.of(linked, orphan));
+        when(peopleClient.fetchPersonIdentities(List.of(linked, orphan)))
+                .thenReturn(Map.of(linked, new PeopleClient.PersonIdentity(linked, "Greg", "Whitfield", "g@x.com")));
+
+        PersonLinkReport report = service.reconcile();
+
+        assertThat(report.totalLinks()).isEqualTo(2);
+        assertThat(report.resolved()).isEqualTo(1);
+        assertThat(report.unresolvedPersonIds()).containsExactly(orphan);
+        assertThat(report.isHealthy()).isFalse();
+    }
+
+    @Test
+    void reconcile_noLinks_reportsHealthy() {
+        when(personPartyRepository.findDistinctPersonIds()).thenReturn(List.of());
+        when(peopleClient.fetchPersonIdentities(List.of())).thenReturn(Map.of());
+
+        PersonLinkReport report = service.reconcile();
+
+        assertThat(report.totalLinks()).isZero();
+        assertThat(report.isHealthy()).isTrue();
+    }
+}

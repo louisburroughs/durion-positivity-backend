@@ -8,6 +8,7 @@ import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.PersonSpecifications;
 import com.positivity.people.service.PersonService;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -47,9 +48,7 @@ public class PersonServiceImpl implements PersonService {
     @Override
     @NonNull
     public List<Person> getAllPeople(@Nullable String type, @Nullable String q) {
-        return personRepository
-                .findAll(PersonSpecifications.directoryFilter(type, q))
-                .stream()
+        return personRepository.findAll(PersonSpecifications.directoryFilter(type, q)).stream()
                 .map(this::toDto)
                 .toList();
     }
@@ -58,6 +57,15 @@ public class PersonServiceImpl implements PersonService {
     @NonNull
     public Optional<Person> getPersonById(@NonNull UUID id) {
         return personRepository.findById(id).map(this::toDto);
+    }
+
+    @Override
+    @NonNull
+    public List<Person> getPeopleByIds(@NonNull Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return personRepository.findAllById(ids).stream().map(this::toDto).toList();
     }
 
     @Override
