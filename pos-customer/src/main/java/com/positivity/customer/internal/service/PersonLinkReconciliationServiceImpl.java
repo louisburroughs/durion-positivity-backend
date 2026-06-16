@@ -25,7 +25,16 @@ public class PersonLinkReconciliationServiceImpl implements PersonLinkReconcilia
     @Transactional(readOnly = true)
     public PersonLinkReport reconcile() {
         List<UUID> linkedIds = personPartyRepository.findDistinctPersonIds();
-        Map<UUID, PeopleClient.PersonIdentity> resolved = peopleClient.fetchPersonIdentities(linkedIds);
+
+        Map<UUID, PeopleClient.PersonIdentity> resolved;
+        try {
+            resolved = peopleClient.fetchPersonIdentities(linkedIds);
+        } catch (Exception exception) {
+            // pos-people unreachable — report degraded rather than 500. I1 cannot be
+            // verified right now; counts are not meaningful.
+            log.warn("Person-link reconciliation could not reach pos-people: {}", exception.getMessage());
+            return new PersonLinkReport(linkedIds.size(), 0, List.of(), false);
+        }
 
         List<UUID> unresolved =
                 linkedIds.stream().filter(id -> !resolved.containsKey(id)).toList();
@@ -36,6 +45,6 @@ public class PersonLinkReconciliationServiceImpl implements PersonLinkReconcilia
                     unresolved.size(),
                     linkedIds.size());
         }
-        return new PersonLinkReport(linkedIds.size(), resolved.size(), unresolved);
+        return new PersonLinkReport(linkedIds.size(), resolved.size(), unresolved, true);
     }
 }

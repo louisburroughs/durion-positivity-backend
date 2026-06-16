@@ -18,4 +18,6 @@ public interface PersonContactPointRepository extends JpaRepository<PersonContac
     List<PersonContactPoint> findByPersonId(@NonNull UUID personId);
 
     List<PersonContactPoint> findByPersonIdIn(@NonNull Collection<UUID> personIds);
+
+    void deleteByPersonId(@NonNull UUID personId);
 }

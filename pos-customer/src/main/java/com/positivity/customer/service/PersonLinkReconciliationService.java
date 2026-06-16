@@ -25,11 +25,13 @@ public interface PersonLinkReconciliationService {
      * @param totalLinks          distinct linked person ids
      * @param resolved            ids that exist in pos-people
      * @param unresolvedPersonIds ids with no matching pos-people person (orphans)
+     * @param posPeopleReachable  false if pos-people could not be reached, in which
+     *                            case the resolved/unresolved counts are not meaningful
      */
     record PersonLinkReport(
-            int totalLinks, int resolved, @NonNull List<UUID> unresolvedPersonIds) {
+            int totalLinks, int resolved, @NonNull List<UUID> unresolvedPersonIds, boolean posPeopleReachable) {
         public boolean isHealthy() {
-            return unresolvedPersonIds.isEmpty();
+            return posPeopleReachable && unresolvedPersonIds.isEmpty();
         }
     }
 }
