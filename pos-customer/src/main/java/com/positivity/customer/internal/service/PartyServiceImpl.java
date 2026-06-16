@@ -31,6 +31,7 @@ import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
+import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PartyService;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -40,6 +41,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -50,7 +52,6 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -70,6 +71,7 @@ public class PartyServiceImpl implements PartyService {
     private final Clock clock;
 
     private final CommercialPartyRepository partyRepository;
+    private final PersonPartyRepository personPartyRepository;
     private final PartyRelationshipRepository partyRelationshipRepository;
     private final CacheManager cacheManager;
     private final PeopleClient peopleClient;
@@ -152,15 +154,44 @@ public class PartyServiceImpl implements PartyService {
     @NonNull
     public SearchPartiesResponse browseParties(@NonNull Pageable pageable) {
         Pageable normalizedPageable = normalizeBrowsePageable(pageable);
-        Page<CommercialParty> page = partyRepository.findAll(normalizedPageable);
-        List<SearchPartiesResponse.PartySummary> summaries =
-                page.getContent().stream().map(this::mapToPartySummary).toList();
+
+        // Unified customer directory: commercial parties plus standalone individual
+        // customers (person parties that are not commercial-account contacts).
+        // Merged and paged in-memory; customer volumes are well within a single
+        // window at this tier (see ADR-0026 / OQ3 in PLAN-person-unification).
+        List<SearchPartiesResponse.PartySummary> all = new ArrayList<>();
+        partyRepository.findAll().stream().map(this::mapToPartySummary).forEach(all::add);
+        personPartyRepository.findIndividualCustomers().stream()
+                .map(this::mapPersonToPartySummary)
+                .forEach(all::add);
+
+        all.sort(Comparator.comparing(
+                        (SearchPartiesResponse.PartySummary s) ->
+                                s.getDisplayName() != null ? s.getDisplayName() : s.getLegalName(),
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                .thenComparing(SearchPartiesResponse.PartySummary::getPartyId));
+
+        int total = all.size();
+        int from = Math.min(normalizedPageable.getPageNumber() * normalizedPageable.getPageSize(), total);
+        int to = Math.min(from + normalizedPageable.getPageSize(), total);
+        List<SearchPartiesResponse.PartySummary> window = all.subList(from, to);
 
         return SearchPartiesResponse.builder()
-                .results(summaries)
-                .totalCount(safeTotalCount(page.getTotalElements()))
+                .results(window)
+                .totalCount(safeTotalCount(total))
                 .pageNumber(normalizedPageable.getPageNumber())
                 .pageSize(normalizedPageable.getPageSize())
+                .build();
+    }
+
+    private SearchPartiesResponse.PartySummary mapPersonToPartySummary(PersonParty person) {
+        return SearchPartiesResponse.PartySummary.builder()
+                .partyId(String.valueOf(person.getPartyId()))
+                .legalName(person.getDisplayName())
+                .displayName(person.getDisplayName())
+                .partyType(person.getPartyType().toString())
+                .status(person.getStatus() != null ? person.getStatus().toString() : null)
+                .createdAt(person.getCreatedAt() != null ? ISO_FORMATTER.format(person.getCreatedAt()) : null)
                 .build();
     }
 
