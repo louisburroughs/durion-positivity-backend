@@ -2417,7 +2417,6 @@ components:
           $ref: '#/components/schemas/PrimaryContact'
     PrimaryContact:
       type: object
-      description: Lightweight primary-contact projection for directory rows.
       properties:
         name:
           type: string
