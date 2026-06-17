@@ -75,7 +75,10 @@ public class LocationInventoryInquiryController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = LocationInventoryItemsResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid location identifier")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid location identifier",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "User lacks required on-hand view authority",

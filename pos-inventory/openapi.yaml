@@ -2569,7 +2569,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationInventoryItemsResponse'
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: User lacks required on-hand view authority
           content:
@@ -5211,7 +5211,7 @@ components:
       required:
       - siteId
       - totals
-    Item:
+    LocationInventoryItem:
       type: object
       description: A single on-hand stock item line
       properties:
@@ -5239,7 +5239,7 @@ components:
           type: array
           description: Stock items currently on hand at the location
           items:
-            $ref: '#/components/schemas/Item'
+            $ref: '#/components/schemas/LocationInventoryItem'
       required:
       - items
       - locationId

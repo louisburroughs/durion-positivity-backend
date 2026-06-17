@@ -28,7 +28,7 @@ public class LocationInventoryItemsResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    @Schema(description = "A single on-hand stock item line")
+    @Schema(name = "LocationInventoryItem", description = "A single on-hand stock item line")
     public static class Item {
 
         @Schema(description = "Stock item identifier (product SKU)", example = "MICH-XC2-0001",
