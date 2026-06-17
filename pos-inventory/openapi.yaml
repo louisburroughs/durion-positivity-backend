@@ -3008,7 +3008,7 @@ paths:
       - Inventory Availability
       summary: Query inventory availability by SKU (list form)
       description: Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location, wrapped in a list. Accepts 'sku' as the query param name.
-      operationId: queryAvailabilityBySku
+      operationId: queryAvailabilityBySkuList
       parameters:
       - name: sku
         in: query
@@ -3063,6 +3063,12 @@ paths:
                 $ref: '#/components/schemas/ApiError'
         '404':
           description: Product SKU or location not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Unexpected server error
           content:
             application/json:
               schema:

@@ -14,6 +14,8 @@ tags:
   description: Operations related to customers
 - name: CRM Communication Preferences
   description: Communication preferences and consent flag management
+- name: CRM Person-Link Reconciliation
+  description: Verify person_party links resolve in pos-people
 - name: CRM Vehicles
   description: Vehicle management operations for customers
 - name: CRM Snapshots
@@ -377,51 +379,6 @@ paths:
         - crm:relationship:update
       x-required-permissions:
       - crm:relationship:update
-  /v1/crm/accounts/parties/{partyId}/contacts/{contactId}/roles:
-    put:
-      tags:
-      - CRM Accounts
-      summary: Update contact roles
-      description: Assign or update role assignments for a specific contact within a party
-      operationId: updateContactRoles_1
-      parameters:
-      - name: partyId
-        in: path
-        description: Party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: contactId
-        in: path
-        description: Contact ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateContactRolesRequest'
-      responses:
-        '200':
-          description: Roles updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UpdateContactRolesResponse'
-        '404':
-          description: Party or contact not found
-        '400':
-          description: Invalid role assignment
-        '403':
-          description: Forbidden - insufficient permissions
-      security:
-      - bearerAuth:
-        - crm:contact_role:assign
-      x-required-permissions:
-      - crm:contact_role:assign
   /v1/crm/accounts/parties/{partyId}/billing-rules:
     put:
       tags:
@@ -1466,6 +1423,22 @@ paths:
         - crm:party:view
       x-required-permissions:
       - crm:party:view
+  /v1/crm/admin/person-links/reconcile:
+    get:
+      tags:
+      - CRM Person-Link Reconciliation
+      summary: Reconcile person links
+      description: Verify every person_party.person_id resolves to a pos-people person (ADR-0015 I1).
+      operationId: reconcile
+      responses:
+        '200':
+          description: Reconciliation report returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonLinkReport'
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/accounts/{accountId}/tier:
     get:
       tags:
@@ -1528,37 +1501,6 @@ paths:
         - crm:party:view
       x-required-permissions:
       - crm:party:view
-  /v1/crm/accounts/parties/{partyId}/contacts:
-    get:
-      tags:
-      - CRM Accounts
-      summary: Get contacts with roles
-      description: Retrieve all contacts for a party including their role assignments
-      operationId: getContactsWithRoles_1
-      parameters:
-      - name: partyId
-        in: path
-        description: Party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Contacts retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GetContactsWithRolesResponse'
-        '404':
-          description: Party not found
-        '403':
-          description: Forbidden - insufficient permissions
-      security:
-      - bearerAuth:
-        - crm:contact:view
-      x-required-permissions:
-      - crm:contact:view
   /v1/crm/accounts/parties/duplicate-check:
     get:
       tags:
@@ -1653,15 +1595,6 @@ components:
           description: First name of the customer
           example: John
           minLength: 1
-        phoneNumber:
-          type: string
-          description: Phone number of the customer
-          example: +1-555-1234
-        email:
-          type: string
-          format: email
-          description: Email address of the customer
-          example: john.doe@example.com
         primaryAddress:
           type: string
           description: Primary address label or identifier for the customer
@@ -1790,7 +1723,7 @@ components:
           type: boolean
     UpdateContactRolesRequest:
       type: object
-      description: Role update request
+      description: Role assignment request
       properties:
         version:
           type: string
@@ -2921,6 +2854,24 @@ components:
           format: int32
           description: Net payment days. Negative values indicate prepayment is required.
           example: 30
+    PersonLinkReport:
+      type: object
+      properties:
+        totalLinks:
+          type: integer
+          format: int32
+        resolved:
+          type: integer
+          format: int32
+        unresolvedPersonIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        posPeopleReachable:
+          type: boolean
+        healthy:
+          type: boolean
     GetAccountTierResponse:
       type: object
       description: Account tier information response

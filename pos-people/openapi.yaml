@@ -137,6 +137,37 @@ paths:
         - people:person:delete
       x-required-permissions:
       - people:person:delete
+  /v1/people/{personId}/contact-points:
+    put:
+      tags:
+      - People API
+      summary: Replace a person's contact points
+      description: Replaces all typed contact points (email/phone) for a person. pos-people is the source of truth for contacts (ADR-0015).
+      operationId: replaceContactPoints
+      parameters:
+      - name: personId
+        in: path
+        description: Person id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/ContactPointDto'
+        required: true
+      responses:
+        '204':
+          description: Contact points replaced.
+      security:
+      - bearerAuth:
+        - people:person:edit
+      x-required-permissions:
+      - people:person:edit
   /v1/people/staffing/assignments/{assignmentId}:
     get:
       tags:
@@ -1299,6 +1330,37 @@ paths:
         - people:employee:deactivate
       x-required-permissions:
       - people:employee:deactivate
+  /v1/people/by-ids:
+    post:
+      tags:
+      - People API
+      summary: Get people by IDs
+      description: Batch-resolve persons by id in one request. Unknown ids are omitted; the result may be smaller than the request. Used for cross-service identity reads (ADR-0015).
+      operationId: getPeopleByIds
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              description: Person ids to resolve
+              items:
+                type: string
+                format: uuid
+        required: true
+      responses:
+        '200':
+          description: Persons resolved.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Person'
+      security:
+      - bearerAuth:
+        - people:person:view
+      x-required-permissions:
+      - people:person:view
   /v1/people/bulk-ingest:
     post:
       tags:
@@ -1948,6 +2010,20 @@ paths:
       - people:userLink:write
 components:
   schemas:
+    ContactPointDto:
+      type: object
+      properties:
+        contactType:
+          type: string
+          enum:
+          - EMAIL
+          - PHONE_MOBILE
+          - PHONE_HOME
+          - PHONE_WORK
+        value:
+          type: string
+        primary:
+          type: boolean
     Person:
       type: object
       description: Person object to be created
@@ -1983,6 +2059,11 @@ components:
           - SUSPENDED
           - TERMINATED
           - DISABLED
+        contactPoints:
+          type: array
+          description: Typed contact points (email, phone). Populated on batch by-id lookups.
+          items:
+            $ref: '#/components/schemas/ContactPointDto'
       required:
       - firstName
       - lastName
