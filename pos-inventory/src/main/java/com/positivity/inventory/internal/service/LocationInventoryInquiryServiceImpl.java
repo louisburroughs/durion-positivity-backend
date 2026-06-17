@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.dto.LocationInventoryInquiryResponse;
+import com.positivity.inventory.internal.dto.LocationInventoryItemsResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
@@ -50,6 +51,25 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
                 .locationId(locationId)
                 .onHandQuantity(resolvedOnHandQuantity)
                 .availableToPromiseQuantity(resolvedOnHandQuantity - outstandingAllocations)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @NonNull
+    public LocationInventoryItemsResponse listLocationInventoryItems(@NonNull UUID locationId) {
+        List<LocationInventoryItemsResponse.Item> items = inventoryLedgerEntryRepository
+                .findPositiveOnHandByLocation(locationId, ON_HAND_EVENT_TYPES)
+                .stream()
+                .map(row -> LocationInventoryItemsResponse.Item.builder()
+                        .stockItemId(row.getStockItemId())
+                        .onHandQuantity(row.getOnHandQuantity() == null ? 0L : row.getOnHandQuantity())
+                        .build())
+                .toList();
+
+        return LocationInventoryItemsResponse.builder()
+                .locationId(locationId)
+                .items(items)
                 .build();
     }
 

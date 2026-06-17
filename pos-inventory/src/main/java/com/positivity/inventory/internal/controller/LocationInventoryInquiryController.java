@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.dto.LocationInventoryInquiryResponse;
+import com.positivity.inventory.internal.dto.LocationInventoryItemsResponse;
 import com.positivity.inventory.service.LocationInventoryInquiryService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -55,5 +56,35 @@ public class LocationInventoryInquiryController {
             @Parameter(description = "Storage location identifier", required = true) @PathVariable UUID locationId,
             @Parameter(description = "Product SKU filter") @RequestParam(required = false) String sku) {
         return ResponseEntity.ok(locationInventoryInquiryService.getLocationInventory(locationId, sku));
+    }
+
+    @GetMapping("/{locationId}/inventory-items")
+    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:on_hand:view"})
+    @Operation(
+            operationId = "listLocationInventoryItems",
+            summary = "List location inventory contents",
+            description = "Returns the on-hand stock items (positive quantity) at a storage location.",
+            tags = {"Inventory Locations"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Location inventory contents returned",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = LocationInventoryItemsResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid location identifier",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required on-hand view authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<LocationInventoryItemsResponse> listLocationInventoryItems(
+            @Parameter(description = "Storage location identifier", required = true) @PathVariable UUID locationId) {
+        return ResponseEntity.ok(locationInventoryInquiryService.listLocationInventoryItems(locationId));
     }
 }
