@@ -122,6 +122,17 @@ ON CONFLICT (id) DO NOTHING;
 -- matching pos-customer person_party rows are removed by pos-customer V9.
 -- =========================================================================
 
+-- ADR-0015: the person table also holds customer individuals (Group A) and
+-- commercial contacts (Group B), which are NOT employees. EmployeeStatus is an
+-- employment lifecycle value and must not be set on non-employees, otherwise the
+-- people directory's employee filters surface them. employee_number is the
+-- authoritative employee discriminator, so clear status wherever it is absent.
+UPDATE person
+   SET status = NULL,
+       status_effective_at = NULL
+ WHERE employee_number IS NULL
+   AND status IS NOT NULL;
+
 -- user_person_links (guarded by person table existence; person rows inserted above)
 DO $$
 BEGIN
