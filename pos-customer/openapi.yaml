@@ -2413,6 +2413,18 @@ components:
           type: string
         createdAt:
           type: string
+        primaryContact:
+          $ref: '#/components/schemas/PrimaryContact'
+    PrimaryContact:
+      type: object
+      description: Lightweight primary-contact projection for directory rows.
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
     SearchPartiesResponse:
       type: object
       properties:
