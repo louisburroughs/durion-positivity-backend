@@ -564,6 +564,32 @@ class PartyServiceImplTest {
     }
 
     @Test
+    void browseParties_populatesVehicleCount_fromPartyVins() {
+        CommercialParty commercial = party(UUID.fromString("00000000-0000-0000-0000-0000000000c3"));
+        commercial.setLegalName("Fleet Co");
+        commercial.setDisplayName("Fleet Co");
+        commercial.setVehicleVins(new java.util.HashSet<>(List.of("VIN1", "VIN2", "VIN3")));
+
+        PersonParty individual = new PersonParty();
+        individual.setPartyId(UUID.fromString("00000000-0000-0000-0000-0000000000a4"));
+        individual.setFirstName("No");
+        individual.setLastName("Vehicles");
+        individual.setStatus(AccountStatus.ACTIVE);
+
+        when(partyRepository.findAll()).thenReturn(List.of(commercial));
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
+
+        SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
+
+        java.util.Map<String, Integer> countByName = response.getResults().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        SearchPartiesResponse.PartySummary::getDisplayName,
+                        SearchPartiesResponse.PartySummary::getVehicleCount));
+        assertThat(countByName.get("Fleet Co")).isEqualTo(3);
+        assertThat(countByName.get("No Vehicles")).isZero();
+    }
+
+    @Test
     void searchParties_filtersByPartyTypeAndStatus_caseInsensitive() {
         CommercialParty match = party(UUID.fromString("00000000-0000-0000-0000-000000000003"));
         match.setPartyType(PartyType.COMMERCIAL);

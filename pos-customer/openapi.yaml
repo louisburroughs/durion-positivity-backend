@@ -2415,6 +2415,9 @@ components:
           type: string
         primaryContact:
           $ref: '#/components/schemas/PrimaryContact'
+        vehicleCount:
+          type: integer
+          format: int32
     PrimaryContact:
       type: object
       properties:

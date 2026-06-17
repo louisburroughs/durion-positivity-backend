@@ -59,6 +59,12 @@ public class SearchPartiesResponse {
          * it without a per-row fetch. Null when the party has no resolvable contact.
          */
         private PrimaryContact primaryContact;
+
+        /**
+         * Number of vehicles associated with the party, surfaced so the directory can
+         * show a count without a per-row fetch. Defaults to 0.
+         */
+        private Integer vehicleCount;
     }
 
     /**
