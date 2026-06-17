@@ -24,6 +24,7 @@ import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.dto.snapshot.SnapshotMetadata;
 import com.positivity.customer.internal.entity.BillingRulesEmbeddable;
 import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.Party;
 import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
@@ -202,6 +203,7 @@ public class PartyServiceImpl implements PartyService {
                 .status(person.getStatus() != null ? person.getStatus().toString() : null)
                 .createdAt(person.getCreatedAt() != null ? ISO_FORMATTER.format(person.getCreatedAt()) : null)
                 .primaryContact(resolvePersonPrimaryContact(person, displayName, identities))
+                .vehicleCount(vehicleCount(person))
                 .build();
     }
 
@@ -484,7 +486,13 @@ public class PartyServiceImpl implements PartyService {
                 .status(party.getStatus().toString())
                 .createdAt(party.getCreatedAt() != null ? ISO_FORMATTER.format(party.getCreatedAt()) : null)
                 .primaryContact(resolvePrimaryContact(party))
+                .vehicleCount(vehicleCount(party))
                 .build();
+    }
+
+    /** Vehicle count for a party; 0 when none. */
+    private int vehicleCount(Party party) {
+        return party.getVehicleVins() != null ? party.getVehicleVins().size() : 0;
     }
 
     /**
