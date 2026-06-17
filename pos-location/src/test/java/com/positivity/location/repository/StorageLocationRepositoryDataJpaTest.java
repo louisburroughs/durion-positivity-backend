@@ -143,4 +143,78 @@ class StorageLocationRepositoryDataJpaTest {
         assertThat(repository.existsByNameIgnoreCaseAndSiteId("main floor", site.getId())).isTrue();
         assertThat(repository.existsByNameIgnoreCaseAndSiteId("main floor", UUID.randomUUID())).isFalse();
     }
+
+    @Test
+    void findBySiteIdAndStatus_filtersByStatus() {
+        Location site = persistSite("SITE-H");
+        StorageLocationEntity inactive = persistStorage(site, "Old Bin", StorageLocationType.BIN, null);
+        inactive.setStatus(StorageLocationStatus.INACTIVE);
+        repository.save(inactive);
+        persistStorage(site, "Active Bin", StorageLocationType.BIN, null);
+
+        Page<StorageLocationEntity> active = repository.findBySiteIdAndStatus(
+                site.getId(), StorageLocationStatus.ACTIVE, PageRequest.of(0, 20));
+
+        assertThat(active.getContent()).extracting(StorageLocationEntity::getName).containsExactly("Active Bin");
+    }
+
+    @Test
+    void findBySiteIdAndType_filtersByType() {
+        Location site = persistSite("SITE-I");
+        persistStorage(site, "Shelf I", StorageLocationType.SHELF, null);
+        persistStorage(site, "Floor I", StorageLocationType.FLOOR, null);
+
+        Page<StorageLocationEntity> shelves =
+                repository.findBySiteIdAndType(site.getId(), StorageLocationType.SHELF, PageRequest.of(0, 20));
+
+        assertThat(shelves.getContent()).extracting(StorageLocationEntity::getName).containsExactly("Shelf I");
+    }
+
+    @Test
+    void existsByBarcodeAndSiteId_scopesToSite() {
+        Location site = persistSite("SITE-J");
+        StorageLocationEntity bin = StorageLocationEntity.builder()
+                .id(UUID.randomUUID())
+                .name("Barcoded Bin")
+                .type(StorageLocationType.BIN)
+                .status(StorageLocationStatus.ACTIVE)
+                .site(site)
+                .barcode("BC-J-001")
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+        repository.save(bin);
+        em.flush();
+
+        assertThat(repository.existsByBarcodeAndSiteId("BC-J-001", site.getId())).isTrue();
+        assertThat(repository.existsByBarcodeAndSiteId("BC-J-001", UUID.randomUUID())).isFalse();
+    }
+
+    @Test
+    void existsByNameAndBarcodeAndIdNot_excludeSelfDuringRename() {
+        Location site = persistSite("SITE-K");
+        StorageLocationEntity a = StorageLocationEntity.builder()
+                .id(UUID.randomUUID())
+                .name("Dup Floor")
+                .type(StorageLocationType.FLOOR)
+                .status(StorageLocationStatus.ACTIVE)
+                .site(site)
+                .barcode("BC-K-001")
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+        repository.save(a);
+        em.flush();
+
+        // name/barcode collision excluding the row itself -> false (only its own row matches)
+        assertThat(repository.existsByNameIgnoreCaseAndSiteIdAndIdNot("dup floor", site.getId(), a.getId()))
+                .isFalse();
+        assertThat(repository.existsByBarcodeAndSiteIdAndIdNot("BC-K-001", site.getId(), a.getId()))
+                .isFalse();
+        // a different id -> the existing row counts as a collision
+        assertThat(repository.existsByNameIgnoreCaseAndSiteIdAndIdNot("dup floor", site.getId(), UUID.randomUUID()))
+                .isTrue();
+        assertThat(repository.existsByBarcodeAndSiteIdAndIdNot("BC-K-001", site.getId(), UUID.randomUUID()))
+                .isTrue();
+    }
 }
