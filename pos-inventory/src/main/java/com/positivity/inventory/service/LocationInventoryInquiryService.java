@@ -1,6 +1,7 @@
 package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.dto.LocationInventoryInquiryResponse;
+import com.positivity.inventory.internal.dto.LocationInventoryItemsResponse;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -18,4 +19,14 @@ public interface LocationInventoryInquiryService {
      */
     @NonNull
     LocationInventoryInquiryResponse getLocationInventory(@NonNull UUID locationId, @Nullable String sku);
+
+    /**
+     * Lists the on-hand stock items (with positive quantity) at the given
+     * storage location.
+     *
+     * @param locationId storage location identifier
+     * @return per-stock-item on-hand contents for the location
+     */
+    @NonNull
+    LocationInventoryItemsResponse listLocationInventoryItems(@NonNull UUID locationId);
 }
