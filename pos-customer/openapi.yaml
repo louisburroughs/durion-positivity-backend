@@ -2413,6 +2413,17 @@ components:
           type: string
         createdAt:
           type: string
+        primaryContact:
+          $ref: '#/components/schemas/PrimaryContact'
+    PrimaryContact:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
     SearchPartiesResponse:
       type: object
       properties:

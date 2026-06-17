@@ -201,6 +201,24 @@ public class PartyServiceImpl implements PartyService {
                 .partyType(person.getPartyType().toString())
                 .status(person.getStatus() != null ? person.getStatus().toString() : null)
                 .createdAt(person.getCreatedAt() != null ? ISO_FORMATTER.format(person.getCreatedAt()) : null)
+                .primaryContact(resolvePersonPrimaryContact(person, displayName, identities))
+                .build();
+    }
+
+    /**
+     * For a standalone individual customer the party's primary contact is the person
+     * themselves: name plus their first email/phone (pos-people source of truth).
+     */
+    private SearchPartiesResponse.PrimaryContact resolvePersonPrimaryContact(
+            PersonParty person, String displayName, Map<UUID, PeopleClient.PersonIdentity> identities) {
+        PeopleClient.PersonIdentity identity =
+                person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
+        List<String> emails = resolveEmails(person, identity);
+        List<String> phones = resolvePhones(person, identity);
+        return SearchPartiesResponse.PrimaryContact.builder()
+                .name(displayName)
+                .email(emails.isEmpty() ? null : emails.get(0))
+                .phone(phones.isEmpty() ? null : phones.get(0))
                 .build();
     }
 
@@ -465,7 +483,36 @@ public class PartyServiceImpl implements PartyService {
                 .partyType(party.getPartyType().toString())
                 .status(party.getStatus().toString())
                 .createdAt(party.getCreatedAt() != null ? ISO_FORMATTER.format(party.getCreatedAt()) : null)
+                .primaryContact(resolvePrimaryContact(party))
                 .build();
+    }
+
+    /**
+     * Resolve the primary contact for a commercial party from its active
+     * relationships: the contact flagged primary, else the first active contact.
+     * Returns null when the party has no active contacts.
+     */
+    private SearchPartiesResponse.PrimaryContact resolvePrimaryContact(CommercialParty party) {
+        List<ContactSummary> contacts = buildContactSummaries(party);
+        if (contacts.isEmpty()) {
+            return null;
+        }
+        ContactSummary primary = contacts.stream()
+                .filter(ContactSummary::isPrimary)
+                .findFirst()
+                .orElse(contacts.get(0));
+        return SearchPartiesResponse.PrimaryContact.builder()
+                .name(primary.getName())
+                .email(firstContactValue(primary.getEmailAddresses(), ContactSummary.EmailAddressDTO::getAddress))
+                .phone(firstContactValue(primary.getPhoneNumbers(), ContactSummary.PhoneNumberDTO::getNumber))
+                .build();
+    }
+
+    private <T> String firstContactValue(List<T> values, java.util.function.Function<T, String> extractor) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+        return extractor.apply(values.get(0));
     }
 
     private Pageable normalizeBrowsePageable(@Nullable Pageable pageable) {

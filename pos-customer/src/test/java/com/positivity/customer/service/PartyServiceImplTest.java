@@ -501,6 +501,69 @@ class PartyServiceImplTest {
     }
 
     @Test
+    void browseParties_populatesPrimaryContact_forCommercialParty() {
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-0000000000c2");
+        UUID relId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        CommercialParty commercial = party(partyId);
+        commercial.setLegalName("Acme Corp");
+        commercial.setDisplayName("Acme Corp");
+
+        PersonParty contact = new PersonParty();
+        contact.setFirstName("Jane");
+        contact.setLastName("Doe");
+        ContactPoint phone = new ContactPoint();
+        phone.setContactType(ContactPointType.PHONE_MOBILE);
+        phone.setValue("555-1234");
+        ContactPoint email = new ContactPoint();
+        email.setContactType(ContactPointType.EMAIL);
+        email.setValue("jane@acme.com");
+        contact.setContactPoints(new ArrayList<>(List.of(phone, email)));
+
+        PartyRelationship rel = new PartyRelationship();
+        rel.setPartyRelationshipId(relId);
+        rel.setToPerson(contact);
+        rel.setPrimaryBillingContact(true);
+
+        when(partyRepository.findAll()).thenReturn(List.of(commercial));
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
+        when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
+                .thenReturn(List.of(rel));
+
+        SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
+
+        SearchPartiesResponse.PrimaryContact primary =
+                response.getResults().getFirst().getPrimaryContact();
+        assertThat(primary).isNotNull();
+        assertThat(primary.getName()).isEqualTo("Jane Doe");
+        assertThat(primary.getEmail()).isEqualTo("jane@acme.com");
+        assertThat(primary.getPhone()).isEqualTo("555-1234");
+    }
+
+    @Test
+    void browseParties_populatesPrimaryContact_forIndividualCustomer() {
+        PersonParty individual = new PersonParty();
+        individual.setPartyId(UUID.fromString("00000000-0000-0000-0000-0000000000a3"));
+        individual.setFirstName("Alice");
+        individual.setLastName("Anders");
+        individual.setStatus(AccountStatus.ACTIVE);
+        ContactPoint email = new ContactPoint();
+        email.setContactType(ContactPointType.EMAIL);
+        email.setValue("alice@example.com");
+        individual.setContactPoints(new ArrayList<>(List.of(email)));
+
+        when(partyRepository.findAll()).thenReturn(List.of());
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
+
+        SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
+
+        SearchPartiesResponse.PrimaryContact primary =
+                response.getResults().getFirst().getPrimaryContact();
+        assertThat(primary).isNotNull();
+        assertThat(primary.getName()).isEqualTo("Alice Anders");
+        assertThat(primary.getEmail()).isEqualTo("alice@example.com");
+    }
+
+    @Test
     void searchParties_filtersByPartyTypeAndStatus_caseInsensitive() {
         CommercialParty match = party(UUID.fromString("00000000-0000-0000-0000-000000000003"));
         match.setPartyType(PartyType.COMMERCIAL);

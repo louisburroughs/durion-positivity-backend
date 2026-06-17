@@ -53,5 +53,25 @@ public class SearchPartiesResponse {
         private String partyType;
         private String status;
         private String createdAt;
+
+        /**
+         * Primary contact for the party, surfaced so the customer directory can render
+         * it without a per-row fetch. Null when the party has no resolvable contact.
+         */
+        private PrimaryContact primaryContact;
+    }
+
+    /**
+     * Lightweight primary-contact projection for directory rows.
+     */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class PrimaryContact {
+        private String name;
+        private String email;
+        private String phone;
     }
 }
