@@ -40,7 +40,10 @@ public class CreatePartyRelationshipRequest {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private Set<PartyRelationshipRole> roles;
 
-    @Schema(description = "Whether this should be the primary billing contact", example = "true")
+    @Schema(
+            description = "Whether this should be the primary billing contact",
+            example = "true",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private boolean isPrimaryBillingContact;
 
     @NotNull(message = "effectiveStartDate is required")
@@ -50,6 +53,9 @@ public class CreatePartyRelationshipRequest {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate effectiveStartDate;
 
-    @Schema(description = "Date when this relationship ends (null means no end date)", example = "2026-12-31")
+    @Schema(
+            description = "Date when this relationship ends (null means no end date)",
+            example = "2026-12-31",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private LocalDate effectiveEndDate;
 }

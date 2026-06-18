@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,12 +21,20 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Billing term reference entry")
 public class BillingTermsRef {
 
-    @Schema(description = "Billing term code identifier", example = "NET_30")
+    @NotBlank
+    @Schema(
+            description = "Billing term code identifier",
+            example = "NET_30",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private String code;
 
-    @Schema(description = "Human-readable label", example = "Net 30")
+    @NotBlank
+    @Schema(description = "Human-readable label", example = "Net 30", requiredMode = Schema.RequiredMode.REQUIRED)
     private String label;
 
-    @Schema(description = "Net payment days. Negative values indicate prepayment is required.", example = "30")
+    @Schema(
+            description = "Net payment days. Negative values indicate prepayment is required.",
+            example = "30",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private int netDays;
 }
