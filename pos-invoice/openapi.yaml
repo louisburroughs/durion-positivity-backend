@@ -599,39 +599,70 @@ components:
   schemas:
     BillingRulesDTO:
       type: object
+      description: Billing rules and invoicing preferences for a billing party
       properties:
         id:
           type: string
           format: uuid
+          description: Unique identifier of the billing rules record
+          example: 01960003-0000-7000-8000-000000000001
         partyId:
           type: string
+          description: Identifier of the party these billing rules apply to
+          example: 01960003-0000-7000-8000-000000000002
         purchaseOrderRequired:
           type: boolean
+          description: Whether a purchase order is required before invoicing
+          example: true
         paymentTermsCode:
           type: string
+          description: Payment terms code governing due dates
+          example: NET30
         invoiceDeliveryMethod:
           type: string
+          description: Preferred method for delivering invoices
           enum:
           - EMAIL
           - PORTAL
           - MAIL
+          example: EMAIL
         invoiceGroupingStrategy:
           type: string
+          description: Strategy for grouping line items into invoices
           enum:
           - PER_WORKORDER
           - PER_VEHICLE
           - SINGLE_INVOICE
+          example: PER_WORKORDER
         version:
           type: integer
           format: int32
+          description: Optimistic-locking version of the record
+          example: 3
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the record was created
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the record was last updated
+          example: 2026-01-16 11:45:00+00:00
         updatedBy:
           type: string
+          description: Identifier of the actor who last updated the record
+          example: jdoe
+      required:
+      - createdAt
+      - invoiceDeliveryMethod
+      - invoiceGroupingStrategy
+      - partyId
+      - paymentTermsCode
+      - purchaseOrderRequired
+      - updatedAt
+      - updatedBy
+      - version
     InvoiceCreationRequest:
       type: object
       description: Internal service payload for creating invoice drafts.
@@ -732,114 +763,187 @@ components:
           example: 2026-02-27 12:00:00+00:00
     RevertRequest:
       type: object
+      description: Request payload for reverting a finalized invoice back to DRAFT
       properties:
         managerApprovalCode:
           type: string
+          description: Manager approval code authorizing the reversion
+          example: MGR-7788
           minLength: 1
         reason:
           type: string
+          description: Reason the invoice is being reverted
+          example: Incorrect line item billed
           minLength: 1
       required:
       - managerApprovalCode
       - reason
     InvoiceAdjustmentResponse:
       type: object
+      description: A monetary adjustment applied to an invoice
       properties:
         id:
           type: string
           format: uuid
+          description: Unique identifier of the adjustment entry
+          example: 01960003-0000-7000-8000-000000000030
         type:
           type: string
+          description: Type of adjustment applied
           enum:
           - DISCOUNT
           - FEE
           - CORRECTION
+          example: DISCOUNT
         amount:
           type: number
+          description: Adjustment amount
+          example: 25.0
         reason:
           type: string
+          description: Business reason justifying the adjustment
+          example: Goodwill discount for delayed service
         authorizedBy:
           type: string
+          description: Identifier of the actor who authorized the adjustment
+          example: jdoe
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the adjustment was created
+          example: 2026-01-15 09:30:00+00:00
     InvoiceDetailsResponse:
       type: object
+      description: Full details of an invoice including line items and adjustments
       properties:
         invoiceId:
           type: string
           format: uuid
+          description: Unique identifier of the invoice
+          example: 01960003-0000-7000-8000-000000000040
         invoiceNumber:
           type: string
+          description: Human-readable invoice number
+          example: INV-2026-000123
         workorderId:
           type: string
           format: uuid
+          description: Identifier of the associated workorder
+          example: 01960003-0000-7000-8000-000000000041
         estimateId:
           type: string
           format: uuid
+          description: Identifier of the source estimate
+          example: 01960003-0000-7000-8000-000000000042
         approvalId:
           type: string
           format: uuid
+          description: Identifier of the approval record
+          example: 01960003-0000-7000-8000-000000000043
         partyId:
           type: string
+          description: Identifier of the billed party
+          example: 01960003-0000-7000-8000-000000000044
         status:
           type: string
+          description: Current lifecycle status of the invoice
           enum:
           - DRAFT
           - FINALIZED
           - POSTED
           - ERROR
+          example: FINALIZED
         subtotal:
           type: number
+          description: Sum of line items before tax and adjustments
+          example: 200.0
         tax:
           type: number
+          description: Total tax applied to the invoice
+          example: 16.0
         total:
           type: number
+          description: Grand total payable on the invoice
+          example: 191.0
         adjustments:
           type: number
+          description: Net total of all monetary adjustments
+          example: -25.0
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the invoice was created
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the invoice was last updated
+          example: 2026-01-16 11:45:00+00:00
         finalizedAt:
           type: string
           format: date-time
+          description: Timestamp when the invoice was finalized
+          example: 2026-01-16 12:00:00+00:00
         finalizedBy:
           type: string
+          description: Identifier of the actor who finalized the invoice
+          example: jdoe
         revertedAt:
           type: string
           format: date-time
+          description: Timestamp when the invoice was reverted to draft
+          example: 2026-01-16 13:00:00+00:00
         reversionReason:
           type: string
+          description: Reason the invoice was reverted
+          example: Incorrect line item billed
         revertedBy:
           type: string
+          description: Identifier of the actor who reverted the invoice
+          example: msmith
         items:
           type: array
+          description: Line items belonging to the invoice
           items:
             $ref: '#/components/schemas/InvoiceItemResponse'
         adjustmentEntries:
           type: array
+          description: Monetary adjustment entries applied to the invoice
           items:
             $ref: '#/components/schemas/InvoiceAdjustmentResponse'
+      required:
+      - adjustmentEntries
+      - items
     InvoiceItemResponse:
       type: object
+      description: A single line item on an invoice
       properties:
         id:
           type: string
           format: uuid
+          description: Unique identifier of the invoice line item
+          example: 01960003-0000-7000-8000-000000000050
         description:
           type: string
+          description: Description of the line item
+          example: Synthetic oil change
         quantity:
           type: number
+          description: Quantity billed
+          example: 1
         unitPrice:
           type: number
+          description: Price per unit
+          example: 49.99
         amount:
           type: number
+          description: Extended amount (quantity x unit price)
+          example: 49.99
         workorderItemId:
           type: string
           format: uuid
+          description: Identifier of the source workorder item
+          example: 01960003-0000-7000-8000-000000000051
     GenerateReceiptRequest:
       type: object
       properties:
@@ -862,16 +966,26 @@ components:
       - terminalId
     ReceiptResponse:
       type: object
+      description: Result of generating a payment receipt
       properties:
         receiptId:
           type: string
           format: uuid
+          description: Unique identifier of the generated receipt
+          example: 01960003-0000-7000-8000-000000000060
         reference:
           type: string
+          description: Human-readable receipt reference
+          example: RCPT-2026-000789
         status:
           type: string
+          description: Current status of the receipt
           enum:
           - GENERATED
+          example: GENERATED
+      required:
+      - receiptId
+      - status
     ReprintReceiptRequest:
       type: object
       properties:
@@ -914,16 +1028,20 @@ components:
           enum:
           - SALE_CAPTURE
           - AUTH_ONLY
+          example: SALE_CAPTURE
         amount:
           type: number
           description: Payment amount (must be positive)
+          example: 149.99
         idempotencyKey:
           type: string
           description: Client-provided idempotency key for safe retry
+          example: idem-01960003-0000-7000-8000-000000000010
           minLength: 1
         paymentToken:
           type: string
           description: Tokenised card reference (no PAN)
+          example: tok_1NXyZ2eZvKYlo2Cabc12345
           minLength: 1
       required:
       - amount
@@ -938,6 +1056,7 @@ components:
           type: string
           format: uuid
           description: Payment intent identifier
+          example: 01960003-0000-7000-8000-000000000020
         status:
           type: string
           description: Current lifecycle status of the payment intent
@@ -948,21 +1067,32 @@ components:
           - CAPTURE_FAILED
           - VOIDED
           - EXPIRED
+          example: AUTHORIZED
         authorizedAmount:
           type: number
           description: Amount authorized on the card
+          example: 149.99
         capturedAmount:
           type: number
           description: Amount captured (funds moved)
+          example: 149.99
         voidedRemainderAmount:
           type: number
           description: Remainder voided after partial capture
+          example: 0.0
         gatewayProvider:
           type: string
           description: Gateway provider identifier (e.g., stripe)
+          example: stripe
         gatewayResponse:
           type: string
           description: Raw gateway response JSON for audit
+          example:
+            id: pi_3NXyZ2eZvKYlo2Ca
+            status: requires_capture
+      required:
+      - paymentIntentId
+      - status
     VoidPaymentRequest:
       type: object
       properties:
@@ -1003,20 +1133,30 @@ components:
       - reason
     RefundPaymentResponse:
       type: object
+      description: Result of processing a refund against an invoice payment
       properties:
         refundId:
           type: string
           format: uuid
+          description: Unique identifier of the refund
+          example: 01960003-0000-7000-8000-000000000070
         invoiceId:
           type: string
           format: uuid
+          description: Identifier of the invoice being refunded
+          example: 01960003-0000-7000-8000-000000000040
         paymentIntentId:
           type: string
           format: uuid
+          description: Identifier of the originating payment intent
+          example: 01960003-0000-7000-8000-000000000020
         amount:
           type: number
+          description: Refunded amount
+          example: 50.0
         reason:
           type: string
+          description: Reason for the refund
           enum:
           - CUSTOMER_RETURN
           - SERVICE_ERROR
@@ -1027,19 +1167,32 @@ components:
           - FRAUD_PREVENTION
           - MANAGER_DISCRETION
           - OTHER
+          example: CUSTOMER_REQUEST
         notes:
           type: string
+          description: Free-text notes accompanying the refund
+          example: Partial refund for unused service
         status:
           type: string
+          description: Current status of the refund
           enum:
           - PENDING
           - COMPLETED
           - FAILED
+          example: COMPLETED
         gatewayReference:
           type: string
+          description: Gateway reference identifier for the refund
+          example: re_3NXyZ2eZvKYlo2Ca
         completedAt:
           type: string
           format: date-time
+          description: Timestamp when the refund completed
+          example: 2026-01-17 10:15:00+00:00
+      required:
+      - invoiceId
+      - refundId
+      - status
     CaptureAmountRequest:
       type: object
       properties:
@@ -1053,28 +1206,42 @@ components:
       - captureIdempotencyKey
     FinalizationRequest:
       type: object
+      description: Request payload for finalizing an invoice
       properties:
         managerApprovalCode:
           type: string
+          description: Manager approval code, required when approval threshold is exceeded
+          example: MGR-7788
         overrideReason:
           type: string
+          description: Free-text reason for overriding the amount limit
+          example: Customer pre-approved by branch manager
     AdjustmentRequest:
       type: object
+      description: Request to apply a monetary adjustment to an invoice
       properties:
         type:
           type: string
+          description: Type of adjustment applied to the invoice
           enum:
           - DISCOUNT
           - FEE
           - CORRECTION
+          example: DISCOUNT
         amount:
           type: number
+          description: Adjustment amount (must be greater than zero)
+          example: 25.0
           minimum: 0.0001
         reason:
           type: string
+          description: Business reason justifying the adjustment
+          example: Goodwill discount for delayed service
           minLength: 1
         authorizedBy:
           type: string
+          description: Identifier of the actor who authorized the adjustment
+          example: jdoe
           minLength: 1
       required:
       - amount

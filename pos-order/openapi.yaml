@@ -546,37 +546,69 @@ components:
   schemas:
     UpdateItemRequest:
       type: object
+      description: Request payload for updating an existing cart item line
       properties:
         quantity:
           type: integer
           format: int32
+          description: Updated quantity for the item line
+          example: 3
           minimum: 1
+      required:
+      - quantity
     SalesOrderLineResponse:
       type: object
+      description: Response representing a single line on a sales order
       properties:
         orderLineId:
           type: string
+          description: Unique identifier of the order line
+          example: 01960003-0000-7000-8000-000000000002
         itemSku:
           type: string
+          description: Stock keeping unit identifying the line item
+          example: SKU-OIL-5W30-1L
         itemDescription:
           type: string
+          description: Human-readable description of the line item
+          example: Synthetic Motor Oil 5W-30 1L
         quantity:
           type: integer
           format: int32
+          description: Quantity of the item on the line
+          example: 2
         unitPrice:
           type: number
+          description: Unit price applied to the line
+          example: 19.99
         fulfillmentStatus:
           type: string
+          description: Fulfillment status of the line
+          example: PENDING
         priceSource:
           type: string
+          description: Source of the line price (e.g. CATALOG, MANUAL, OVERRIDE)
+          example: CATALOG
         reasonCode:
           type: string
+          description: Reason code associated with a manual price or special handling
+          example: PRICE_MATCH
         sourceType:
           type: string
+          description: Type classification of the line's originating source
+          example: WORKORDER
         sourceId:
           type: string
+          description: Identifier of the originating source record
+          example: 01960003-0000-7000-8000-000000000004
         sourceLineId:
           type: string
+          description: Identifier of the originating source line
+          example: 01960003-0000-7000-8000-000000000006
+      required:
+      - itemSku
+      - orderLineId
+      - quantity
     ApplyPriceOverrideRequest:
       type: object
       properties:
@@ -652,12 +684,17 @@ components:
           type: string
     RejectPriceOverrideRequest:
       type: object
+      description: Request payload for rejecting a pending price override
       properties:
         reason:
           type: string
+          description: Reason explaining why the override is being rejected
+          example: Outside approved discount threshold
           minLength: 1
         comments:
           type: string
+          description: Optional reviewer comments recorded with the rejection
+          example: Discount exceeds policy limit for this product
       required:
       - reason
     PriceOverrideDetail:
@@ -715,107 +752,182 @@ components:
           format: date-time
     ApprovePriceOverrideRequest:
       type: object
+      description: Request payload for approving a pending price override
       properties:
         comments:
           type: string
+          description: Optional approver comments recorded with the approval
+          example: Approved per store manager discretion
     CreateCartRequest:
       type: object
+      description: Request payload for creating a new cart
       properties:
         clerkId:
           type: string
+          description: Identifier of the clerk creating the cart
+          example: 01960003-0000-7000-8000-000000000050
           minLength: 1
         terminalId:
           type: string
+          description: Identifier of the terminal where the cart is created
+          example: 01960003-0000-7000-8000-000000000060
           minLength: 1
         customerId:
           type: string
+          description: Identifier of the customer associated with the cart, when known
+          example: 01960003-0000-7000-8000-000000000070
         vehicleId:
           type: string
+          description: Identifier of the vehicle associated with the cart, when applicable
+          example: 01960003-0000-7000-8000-000000000080
       required:
       - clerkId
       - terminalId
     SalesOrderResponse:
       type: object
+      description: Response representing a sales order and its lines
       properties:
         orderId:
           type: string
+          description: Unique identifier of the order
+          example: 01960003-0000-7000-8000-000000000001
         customerId:
           type: string
+          description: Identifier of the customer associated with the order
+          example: 01960003-0000-7000-8000-000000000070
         vehicleId:
           type: string
+          description: Identifier of the vehicle associated with the order
+          example: 01960003-0000-7000-8000-000000000080
         clerkId:
           type: string
+          description: Identifier of the clerk who owns the order
+          example: 01960003-0000-7000-8000-000000000050
         terminalId:
           type: string
+          description: Identifier of the terminal where the order was created
+          example: 01960003-0000-7000-8000-000000000060
         status:
           type: string
+          description: Current status of the order
+          example: OPEN
         subtotal:
           type: number
+          description: Subtotal of all order lines before taxes and fees
+          example: 59.97
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the order was created (ISO 8601)
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the order was last updated (ISO 8601)
+          example: 2026-01-15 09:45:00+00:00
         createdBy:
           type: string
+          description: Identifier of the user who created the order
+          example: 01960003-0000-7000-8000-000000000050
         updatedBy:
           type: string
+          description: Identifier of the user who last updated the order
+          example: 01960003-0000-7000-8000-000000000051
         lines:
           type: array
+          description: Lines belonging to the order
           items:
             $ref: '#/components/schemas/SalesOrderLineResponse'
+      required:
+      - orderId
+      - status
     AddItemRequest:
       type: object
+      description: Request payload for adding an item line to a cart
       properties:
         itemSku:
           type: string
+          description: Stock keeping unit identifying the item to add
+          example: SKU-OIL-5W30-1L
           minLength: 1
         quantity:
           type: integer
           format: int32
+          description: Quantity of the item to add to the cart
+          example: 2
           minimum: 1
         reasonCode:
           type: string
+          description: Reason code justifying a manual price or special handling
+          example: PRICE_MATCH
         manualPrice:
           type: number
+          description: Manual unit price override for the item, when applicable
+          example: 19.99
       required:
       - itemSku
+      - quantity
     CancelOrderRequest:
       type: object
+      description: Request payload for cancelling an order
       properties:
         cancellationReason:
           type: string
+          description: Reason explaining why the order is being cancelled
+          example: Customer changed their mind
           minLength: 1
         workOrderId:
           type: string
           format: uuid
+          description: Identifier of the associated workorder, when applicable
+          example: 01960003-0000-7000-8000-000000000004
         paymentId:
           type: string
           format: uuid
+          description: Identifier of the associated payment, when applicable
+          example: 01960003-0000-7000-8000-000000000005
         idempotencyKey:
           type: string
+          description: Optional idempotency key for duplicate cancellation prevention
+          example: cancel-req-abc123
       required:
       - cancellationReason
     CancellationResponse:
       type: object
+      description: Response returned after cancelling an order
       properties:
         orderId:
           type: string
+          description: Identifier of the cancelled order
+          example: 01960003-0000-7000-8000-000000000001
         status:
           type: string
+          description: Resulting status of the order after cancellation
+          example: CANCELLED
         message:
           type: string
+          description: Human-readable message describing the cancellation outcome
+          example: Order cancelled successfully
         cancellationIdempotencyKey:
           type: string
+          description: Idempotency key associated with the cancellation request
+          example: cancel-req-abc123
+      required:
+      - orderId
+      - status
     LinkSourceRequest:
       type: object
+      description: Request payload for linking an order to an originating source
       properties:
         sourceType:
           type: string
+          description: Type classification of the originating source
+          example: WORKORDER
           minLength: 1
         sourceId:
           type: string
+          description: Identifier of the originating source record
+          example: 01960003-0000-7000-8000-000000000004
           minLength: 1
       required:
       - sourceId
