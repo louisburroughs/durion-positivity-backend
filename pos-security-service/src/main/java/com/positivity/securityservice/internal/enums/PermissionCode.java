@@ -424,13 +424,23 @@ public enum PermissionCode {
     // ── People timekeeping approval (new) ────────────────────────────────────────
     PEOPLE__TIMEKEEPING__APPROVE(328, "people:timekeeping:approve"),
     PEOPLE__TIMEKEEPING__REJECT(329, "people:timekeeping:reject"),
-    PEOPLE__TIMEKEEPING__VIEW(330, "people:timekeeping:view");
+    PEOPLE__TIMEKEEPING__VIEW(330, "people:timekeeping:view"),
+    // ── Promotion (new) ────────────────────────────────────────────────────────
+    PROMOTION__APPLY(331, "Promotion:Apply"),
+    PROMOTION__MANAGE(332, "Promotion:Manage"),
+    PROMOTION__RECORDREDEMPTION(333, "Promotion:RecordRedemption"),
+    PROMOTION__VIEW(334, "Promotion:View"),
+    PROMOTION__VIEWREDEMPTION(335, "Promotion:ViewRedemption"),
+
+    // ── Timeentry (new) ────────────────────────────────────────────────────────
+    TIMEENTRY__APPROVE(336, "TimeEntry:Approve"),
+    TIMEENTRY__REJECT(337, "TimeEntry:Reject");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 11;
+    public static final int CATALOG_VERSION = 12;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

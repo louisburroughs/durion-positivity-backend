@@ -73,6 +73,26 @@ jobs:
             fi
           done
 
+  validate-permissions:
+    name: Validate Permission Catalog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Check @PreAuthorize permissions are registered in the catalog
+        run: |
+          # Fails if any @PreAuthorize permission is missing from PermissionCode /
+          # GatewayPermissionCatalog / DownstreamPermissionCatalog. Run
+          # `scripts/generate-permissions.sh --sync` locally and commit the result
+          # (note: a catalog change bumps CATALOG_VERSION = fleet-coordinated deploy).
+          scripts/generate-permissions.sh --sync --check
+
   pr-comment:
     name: PR Summary Comment
     runs-on: ubuntu-latest
