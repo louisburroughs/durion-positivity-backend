@@ -42,8 +42,8 @@ public class PromotionEligibilityRuleController {
     @EmitEvent(id = "PROMOTION_RULE_CREATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"Promotion:Manage"})
-    @PreAuthorize("hasAuthority('Promotion:Manage')")
+            scopes = {"pricing:promotion:manage"})
+    @PreAuthorize("hasAuthority('pricing:promotion:manage')")
     @Operation(
             summary = "Add eligibility rule to promotion offer",
             description = "Creates and attaches a new eligibility rule to the specified promotion offer.")
@@ -62,8 +62,8 @@ public class PromotionEligibilityRuleController {
     @GetMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"Promotion:View"})
-    @PreAuthorize("hasAuthority('Promotion:View')")
+            scopes = {"pricing:promotion:view"})
+    @PreAuthorize("hasAuthority('pricing:promotion:view')")
     @Operation(
             summary = "List eligibility rules for promotion offer",
             description = "Returns all eligibility rules configured for the specified promotion offer.")
@@ -81,8 +81,8 @@ public class PromotionEligibilityRuleController {
     @EmitEvent(id = "PROMOTION_RULE_DELETE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"Promotion:Manage"})
-    @PreAuthorize("hasAuthority('Promotion:Manage')")
+            scopes = {"pricing:promotion:manage"})
+    @PreAuthorize("hasAuthority('pricing:promotion:manage')")
     @Operation(
             summary = "Delete eligibility rule",
             description = "Deletes an eligibility rule from the specified promotion offer.")
@@ -99,8 +99,8 @@ public class PromotionEligibilityRuleController {
     @EmitEvent(id = "PROMOTION_RULE_EVALUATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"Promotion:Apply"})
-    @PreAuthorize("hasAuthority('Promotion:Apply')")
+            scopes = {"pricing:promotion:apply"})
+    @PreAuthorize("hasAuthority('pricing:promotion:apply')")
     @Operation(
             summary = "Evaluate promotion eligibility",
             description = "Evaluates whether a promotion offer is eligible for the provided evaluation context.")

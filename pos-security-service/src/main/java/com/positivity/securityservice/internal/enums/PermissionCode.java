@@ -434,13 +434,25 @@ public enum PermissionCode {
 
     // ── Timeentry (new) ────────────────────────────────────────────────────────
     TIMEENTRY__APPROVE(336, "TimeEntry:Approve"),
-    TIMEENTRY__REJECT(337, "TimeEntry:Reject");
+    TIMEENTRY__REJECT(337, "TimeEntry:Reject"),
+    // ── Crm (new) ──────────────────────────────────────────────────────────────
+    CRM__PROMOTION_REDEMPTION__RECORD(338, "crm:promotion_redemption:record"),
+    CRM__PROMOTION_REDEMPTION__VIEW(339, "crm:promotion_redemption:view"),
+
+    // ── Pricing (new) ──────────────────────────────────────────────────────────
+    PRICING__PROMOTION__APPLY(340, "pricing:promotion:apply"),
+    PRICING__PROMOTION__MANAGE(341, "pricing:promotion:manage"),
+    PRICING__PROMOTION__VIEW(342, "pricing:promotion:view"),
+
+    // ── Workorder (new) ────────────────────────────────────────────────────────
+    WORKORDER__TIMEENTRY__APPROVE(343, "workorder:timeEntry:approve"),
+    WORKORDER__TIMEENTRY__REJECT(344, "workorder:timeEntry:reject");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 12;
+    public static final int CATALOG_VERSION = 13;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

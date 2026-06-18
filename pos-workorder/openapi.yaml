@@ -1896,9 +1896,9 @@ paths:
                 $ref: '#/components/schemas/TimeEntryResponse'
       security:
       - bearerAuth:
-        - TimeEntry:Reject
+        - workorder:timeEntry:reject
       x-required-permissions:
-      - TimeEntry:Reject
+      - workorder:timeEntry:reject
   /v1/workorders/timeEntries/{timeEntryId}/approve:
     post:
       tags:
@@ -1922,9 +1922,9 @@ paths:
                 $ref: '#/components/schemas/TimeEntryResponse'
       security:
       - bearerAuth:
-        - TimeEntry:Approve
+        - workorder:timeEntry:approve
       x-required-permissions:
-      - TimeEntry:Approve
+      - workorder:timeEntry:approve
   /v1/workorders/estimates:
     get:
       tags:

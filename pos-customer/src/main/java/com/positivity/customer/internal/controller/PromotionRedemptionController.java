@@ -51,8 +51,8 @@ public class PromotionRedemptionController {
     @PostMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"Promotion:RecordRedemption"})
-    @PreAuthorize("hasAuthority('Promotion:RecordRedemption')")
+            scopes = {"crm:promotion_redemption:record"})
+    @PreAuthorize("hasAuthority('crm:promotion_redemption:record')")
     @EmitEvent(id = "PROMOTION_REDEMPTION_RECORD", apiVersion = "1")
     public ResponseEntity<PromotionRedemptionResponse> recordRedemption(
             @Valid @RequestBody RecordRedemptionRequest request) {
@@ -74,8 +74,8 @@ public class PromotionRedemptionController {
     @GetMapping("/by-customer/{customerId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"Promotion:ViewRedemption"})
-    @PreAuthorize("hasAuthority('Promotion:ViewRedemption')")
+            scopes = {"crm:promotion_redemption:view"})
+    @PreAuthorize("hasAuthority('crm:promotion_redemption:view')")
     @EmitEvent(id = "PROMOTION_REDEMPTION_LIST", apiVersion = "1")
     public ResponseEntity<List<PromotionRedemptionResponse>> getRedemptionsByCustomer(@PathVariable UUID customerId) {
         List<PromotionRedemptionResponse> response = promotionRedemptionService.getRedemptionsByCustomer(customerId);

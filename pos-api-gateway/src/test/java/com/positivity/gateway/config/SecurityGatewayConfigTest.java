@@ -1164,13 +1164,13 @@ class SecurityGatewayConfigTest {
         // ── Task-2: new catalog version + extended array tests ───────────────────
 
         @Test
-        @DisplayName("CATALOG_VERSION is 12")
-        void catalogVersionIsTwelve() {
-                assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(12);
+        @DisplayName("CATALOG_VERSION is 13")
+        void catalogVersionIsThirteen() {
+                assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(13);
         }
 
         @Test
-        @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 337")
+        @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 344")
         void authorityByBitCoversNewEntries() {
                 // batch-2: previously missing (bits 241-261)
                 assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1197,8 +1197,16 @@ class SecurityGatewayConfigTest {
                                 .isEqualTo("PERM_people:timekeeping:view");
                 assertThat(GatewayPermissionCatalog.authorityForBit(331)).isEqualTo("PERM_Promotion:Apply");
                 assertThat(GatewayPermissionCatalog.authorityForBit(337)).isEqualTo("PERM_TimeEntry:Reject");
+                // catalog v13 (#704): renamed convention names appended (bits 338-344)
+                assertThat(GatewayPermissionCatalog.authorityForBit(338))
+                                .isEqualTo("PERM_crm:promotion_redemption:record");
+                assertThat(GatewayPermissionCatalog.authorityForBit(340)).isEqualTo("PERM_pricing:promotion:apply");
+                assertThat(GatewayPermissionCatalog.authorityForBit(343))
+                                .isEqualTo("PERM_workorder:timeEntry:approve");
+                assertThat(GatewayPermissionCatalog.authorityForBit(344))
+                                .isEqualTo("PERM_workorder:timeEntry:reject");
                 // beyond array must return null
-                assertThat(GatewayPermissionCatalog.authorityForBit(338)).isNull();
+                assertThat(GatewayPermissionCatalog.authorityForBit(345)).isNull();
         }
 
         @Test

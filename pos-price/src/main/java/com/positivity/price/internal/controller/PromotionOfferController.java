@@ -39,8 +39,8 @@ public class PromotionOfferController {
     @EmitEvent(id = "PROMOTION_OFFER_CREATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"Promotion:Manage"})
-    @PreAuthorize("hasAuthority('Promotion:Manage')")
+            scopes = {"pricing:promotion:manage"})
+    @PreAuthorize("hasAuthority('pricing:promotion:manage')")
     @Operation(
             summary = "Create promotion offer",
             description = "Creates a new promotion offer with code, lifecycle settings, and discount policy.")
@@ -58,8 +58,8 @@ public class PromotionOfferController {
     @GetMapping("/{id}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"Promotion:View"})
-    @PreAuthorize("hasAuthority('Promotion:View')")
+            scopes = {"pricing:promotion:view"})
+    @PreAuthorize("hasAuthority('pricing:promotion:view')")
     @Operation(
             summary = "Get promotion offer by ID",
             description = "Retrieves a promotion offer using its unique identifier.")
@@ -74,8 +74,8 @@ public class PromotionOfferController {
     @GetMapping("/by-code/{promoCode}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"Promotion:View"})
-    @PreAuthorize("hasAuthority('Promotion:View')")
+            scopes = {"pricing:promotion:view"})
+    @PreAuthorize("hasAuthority('pricing:promotion:view')")
     @Operation(
             summary = "Get promotion offer by code",
             description = "Retrieves a promotion offer using its promotion code.")
@@ -91,8 +91,8 @@ public class PromotionOfferController {
     @EmitEvent(id = "PROMOTION_OFFER_ACTIVATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"Promotion:Manage"})
-    @PreAuthorize("hasAuthority('Promotion:Manage')")
+            scopes = {"pricing:promotion:manage"})
+    @PreAuthorize("hasAuthority('pricing:promotion:manage')")
     @Operation(
             summary = "Activate promotion offer",
             description = "Activates a promotion offer so it becomes eligible for application.")
@@ -109,8 +109,8 @@ public class PromotionOfferController {
     @EmitEvent(id = "PROMOTION_OFFER_DEACTIVATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"Promotion:Manage"})
-    @PreAuthorize("hasAuthority('Promotion:Manage')")
+            scopes = {"pricing:promotion:manage"})
+    @PreAuthorize("hasAuthority('pricing:promotion:manage')")
     @Operation(
             summary = "Deactivate promotion offer",
             description = "Deactivates a promotion offer so it is no longer eligible for application.")
@@ -126,8 +126,8 @@ public class PromotionOfferController {
     @EmitEvent(id = "PROMOTION_OFFER_APPLY", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"Promotion:Apply"})
-    @PreAuthorize("hasAuthority('Promotion:Apply')")
+            scopes = {"pricing:promotion:apply"})
+    @PreAuthorize("hasAuthority('pricing:promotion:apply')")
     @Operation(
             summary = "Apply promotion offer during estimate pricing",
             description =

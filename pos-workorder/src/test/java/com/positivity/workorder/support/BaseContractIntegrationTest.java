@@ -92,8 +92,8 @@ public abstract class BaseContractIntegrationTest {
             "timekeeping:work_session:break_start",
             "timekeeping:work_session:break_stop",
             // Issue CAP-139 Story #66: time entry approval authorities
-            "TimeEntry:Approve",
-            "TimeEntry:Reject");
+            "workorder:timeEntry:approve",
+            "workorder:timeEntry:reject");
 
     @BeforeEach
     void configureRestAssuredDefaults() {

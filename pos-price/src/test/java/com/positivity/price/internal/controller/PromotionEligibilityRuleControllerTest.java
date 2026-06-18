@@ -48,7 +48,7 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
     private PromotionEligibilityRuleRepository promotionEligibilityRuleRepository;
 
     /**
-     * Grant {@code Promotion:Manage} so that {@code @PreAuthorize} checks on POST
+     * Grant {@code pricing:promotion:manage} so that {@code @PreAuthorize} checks on POST
      * and DELETE
      * endpoints pass through to the service layer, producing behaviour-driven
      * failures
@@ -58,7 +58,7 @@ class PromotionEligibilityRuleControllerTest extends BaseContractIntegrationTest
      */
     @Override
     protected String defaultAuthorities() {
-        return "Promotion:Manage,Promotion:View,Promotion:Apply";
+        return "pricing:promotion:manage,pricing:promotion:view,pricing:promotion:apply";
     }
 
     // ========== ADD RULE ==========

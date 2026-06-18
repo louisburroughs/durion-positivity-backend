@@ -38,7 +38,7 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
     private PromotionRedemptionRepository promotionRedemptionRepository;
 
     /**
-     * Grant {@code Promotion:RecordRedemption} so POST requests pass
+     * Grant {@code crm:promotion_redemption:record} so POST requests pass
      * {@code @PreAuthorize} on {@link PromotionRedemptionController} and reach the
      * service layer, producing behaviour-driven failures rather than auth 403s.
      *
@@ -46,7 +46,7 @@ class PromotionRedemptionControllerTest extends BaseContractIntegrationTest {
      */
     @Override
     protected String defaultAuthorities() {
-        return "Promotion:RecordRedemption,Promotion:ViewRedemption";
+        return "crm:promotion_redemption:record,crm:promotion_redemption:view";
     }
 
     // -------------------------------------------------------------------------
