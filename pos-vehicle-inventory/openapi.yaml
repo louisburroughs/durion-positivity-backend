@@ -687,17 +687,30 @@ components:
   schemas:
     PreferencesUpsertDto:
       type: object
+      description: Request to create or fully replace vehicle care preferences
       properties:
         preferences:
           type: object
+          description: Complete preference map to store for the vehicle
+          example:
+            preferredOil: 5W-30
+            tireRotationInterval: 5000
         serviceNotes:
           type: string
+          description: Optional free-text service notes
+          example: Customer prefers synthetic oil only
         createdByUserId:
           type: string
           format: uuid
+          description: Identifier of the user creating the preferences
+          example: 01960003-0000-7000-8000-000000000010
         updatedByUserId:
           type: string
           format: uuid
+          description: Identifier of the user updating the preferences
+          example: 01960003-0000-7000-8000-000000000011
+      required:
+      - preferences
     VehicleCarePreferenceResponse:
       type: object
       description: Vehicle care preferences record
@@ -1070,20 +1083,28 @@ components:
       - vin
     BulkIngestRequestVehicleBulkIngestRecord:
       type: object
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
       properties:
         jobId:
           type: string
           format: uuid
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
         locationId:
           type: string
           format: uuid
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
         records:
           type: array
+          description: The records to ingest (at least one); shape depends on the target domain
           items:
             $ref: '#/components/schemas/VehicleBulkIngestRecord'
           minItems: 1
         operatorId:
           type: string
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
       required:
       - jobId
       - locationId
@@ -1145,35 +1166,62 @@ components:
       - vin
     BulkIngestResponse:
       type: object
+      description: 'Summary outcome of a bulk ingest job: per-record results plus aggregate counts'
       properties:
         totalSubmitted:
           type: integer
           format: int32
+          description: Total number of records submitted in the batch
+          example: 100
         successCount:
           type: integer
           format: int32
+          description: Number of records ingested successfully
+          example: 98
         failureCount:
           type: integer
           format: int32
+          description: Number of records that failed ingest
+          example: 2
         results:
           type: array
+          description: Per-record outcomes in submission order
           items:
             $ref: '#/components/schemas/BulkIngestResult'
+      required:
+      - failureCount
+      - results
+      - successCount
+      - totalSubmitted
     BulkIngestResult:
       type: object
+      description: Per-record outcome of a bulk ingest submission
       properties:
         rowIndex:
           type: integer
           format: int32
+          description: Zero-based index of the record within the submitted batch
+          example: 0
         entityId:
           type: string
           format: uuid
+          description: Identifier of the entity created/updated for this record, when successful
+          example: 01960003-0000-7000-8000-000000000001
         success:
           type: boolean
+          description: Whether this record was ingested successfully
+          example: true
         errorCode:
           type: string
+          description: Machine-readable error code when the record failed
+          example: VALIDATION_FAILED
         errorMessage:
           type: string
+          description: Human-readable error detail when the record failed
+          example: vin must be 17 characters
+      required:
+      - rowIndex
+      - success
     CreateVehicleRequest:
       type: object
       description: Vehicle creation request
@@ -1227,12 +1275,18 @@ components:
       - vin
     PreferencesMergeDto:
       type: object
+      description: Request to partially merge fields into existing vehicle care preferences
       properties:
         partialPreferences:
           type: object
+          description: Subset of preference fields to merge into existing preferences
+          example:
+            tireRotationInterval: 7500
         updatedByUserId:
           type: string
           format: uuid
+          description: Identifier of the user updating the preferences
+          example: 01960003-0000-7000-8000-000000000011
   securitySchemes:
     bearerAuth:
       type: http

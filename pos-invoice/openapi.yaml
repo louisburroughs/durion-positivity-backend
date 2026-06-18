@@ -946,18 +946,27 @@ components:
           example: 01960003-0000-7000-8000-000000000051
     GenerateReceiptRequest:
       type: object
+      description: Request to generate a receipt for an invoice payment
       properties:
         paymentIntentId:
           type: string
           format: uuid
+          description: Payment intent the receipt is generated for
+          example: 550e8400-e29b-41d4-a716-446655440000
         terminalId:
           type: string
+          description: Identifier of the terminal producing the receipt
+          example: TERM-001
           minLength: 1
         templateId:
           type: string
+          description: Receipt template identifier
+          example: RECEIPT_DEFAULT
           minLength: 1
         templateVersion:
           type: string
+          description: Receipt template version
+          example: '1'
           minLength: 1
       required:
       - paymentIntentId
@@ -988,33 +997,44 @@ components:
       - status
     ReprintReceiptRequest:
       type: object
+      description: Request to reprint an existing receipt
       properties:
         reason:
           type: string
+          description: Reason the receipt is being reprinted
+          example: Customer requested a duplicate copy
           minLength: 1
       required:
       - reason
     PrintDeliveryRequest:
       type: object
+      description: Request to record the delivery status of a printed receipt
       properties:
         status:
           type: string
+          description: Print delivery outcome status
           enum:
           - SUCCESS
           - FAILED
+          example: SUCCESS
       required:
       - status
     EmailDeliveryRequest:
       type: object
+      description: Request to email a receipt and record the delivery status
       properties:
         emailAddress:
           type: string
+          description: Recipient email address for the receipt
+          example: customer@example.com
           minLength: 1
         status:
           type: string
+          description: Email delivery outcome status
           enum:
           - SUCCESS
           - FAILED
+          example: SUCCESS
       required:
       - emailAddress
       - status
@@ -1095,9 +1115,11 @@ components:
       - status
     VoidPaymentRequest:
       type: object
+      description: Request to void an authorized payment before capture
       properties:
         reason:
           type: string
+          description: Reason the payment is being voided
           enum:
           - CUSTOMER_REQUEST
           - DUPLICATE_AUTHORIZATION
@@ -1105,17 +1127,24 @@ components:
           - FRAUD_PREVENTION
           - MANAGER_DISCRETION
           - OTHER
+          example: CUSTOMER_REQUEST
         notes:
           type: string
+          description: Optional free-text notes explaining the void
+          example: Customer cancelled before pickup
       required:
       - reason
     RefundPaymentRequest:
       type: object
+      description: Request to refund a captured payment
       properties:
         amount:
           type: number
+          description: Amount to refund from the captured payment
+          example: 25.0
         reason:
           type: string
+          description: Reason the payment is being refunded
           enum:
           - CUSTOMER_RETURN
           - SERVICE_ERROR
@@ -1126,8 +1155,11 @@ components:
           - FRAUD_PREVENTION
           - MANAGER_DISCRETION
           - OTHER
+          example: CUSTOMER_RETURN
         notes:
           type: string
+          description: Optional free-text notes explaining the refund
+          example: Returned damaged part
       required:
       - amount
       - reason
@@ -1195,11 +1227,16 @@ components:
       - status
     CaptureAmountRequest:
       type: object
+      description: Request to capture all or part of an authorized payment hold
       properties:
         amount:
           type: number
+          description: Amount to capture from the authorized hold
+          example: 89.99
         captureIdempotencyKey:
           type: string
+          description: Idempotency key ensuring the capture is processed at most once
+          example: capture-550e8400-1
           minLength: 1
       required:
       - amount

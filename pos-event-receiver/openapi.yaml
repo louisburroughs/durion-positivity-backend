@@ -427,3 +427,6 @@ components:
           format: int64
           description: Number of events of this type in the timeframe
           example: 42
+      required:
+      - count
+      - eventTypeId

@@ -77,19 +77,28 @@ public class TaxCalculationRequest {
      */
     @Builder.Default
     @IsoCurrencyCode(message = "currencyCode must be a valid ISO 4217 code")
-    @Schema(description = "Transaction currency in ISO 4217 alpha-3 format", example = "USD")
+    @Schema(
+            description = "Transaction currency in ISO 4217 alpha-3 format",
+            example = "USD",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String currencyCode = "USD";
 
     /**
      * BCP 47 locale tag requested by the client (e.g., en-US, fr-CA, es-MX).
      */
-    @Schema(description = "BCP 47 locale tag for localization preferences", example = "en-US")
+    @Schema(
+            description = "BCP 47 locale tag for localization preferences",
+            example = "en-US",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String locale;
 
     /**
      * Optional customer ID for tax exemption lookup.
      */
-    @Schema(description = "Optional customer identifier for exemption and tax profile lookups", example = "CUST-100234")
+    @Schema(
+            description = "Optional customer identifier for exemption and tax profile lookups",
+            example = "CUST-100234",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String customerId;
 
     /**
@@ -97,7 +106,10 @@ public class TaxCalculationRequest {
      * <p>
      * If not provided, current date is used.
      */
-    @Schema(description = "Optional transaction date/time in ISO 8601 format", example = "2026-02-21T09:30:00Z")
+    @Schema(
+            description = "Optional transaction date/time in ISO 8601 format",
+            example = "2026-02-21T09:30:00Z",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String transactionDate;
 
     /**
@@ -106,12 +118,16 @@ public class TaxCalculationRequest {
      */
     @Schema(
             description = "Optional reference identifier for the source transaction",
-            example = "550e8400-e29b-41d4-a716-446655440000")
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private UUID referenceId;
     /**
      * Optional reference type for the source transaction (e.g., estimate, invoice).
      */
-    @Schema(description = "Optional source transaction type associated with referenceId", example = "ESTIMATE")
+    @Schema(
+            description = "Optional source transaction type associated with referenceId",
+            example = "ESTIMATE",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private TaxReferenceType referenceType;
 
     /** Convenience accessor used by internal tax logic. */
@@ -169,7 +185,11 @@ public class TaxCalculationRequest {
          */
         @NotBlank(message = "destinationAddress.countryCode is required")
         @IsoCountryCode(message = "destinationAddress.countryCode must be a valid ISO 3166-1 alpha-2 code")
-        @Schema(type = "string", description = "Country code in ISO 3166-1 alpha-2 format", example = "US")
+        @Schema(
+                type = "string",
+                description = "Country code in ISO 3166-1 alpha-2 format",
+                example = "US",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         private String countryCode;
 
         /**
@@ -179,32 +199,49 @@ public class TaxCalculationRequest {
         @Schema(
                 type = "string",
                 description = "Region/subdivision code (typically ISO 3166-2 subdivision part)",
-                example = "CA")
+                example = "CA",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private String regionCode;
 
         /**
          * Locality/city/municipality name.
          */
-        @Schema(type = "string", description = "Locality/city/municipality name", example = "Los Angeles")
+        @Schema(
+                type = "string",
+                description = "Locality/city/municipality name",
+                example = "Los Angeles",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private String city;
 
         /**
          * Postal or ZIP code.
          */
         @NotBlank(message = "destinationAddress.postalCode is required")
-        @Schema(type = "string", description = "Postal/ZIP code", example = "\"90001\"")
+        @Schema(
+                type = "string",
+                description = "Postal/ZIP code",
+                example = "90001",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         private String postalCode;
 
         /**
          * Primary address line.
          */
-        @Schema(type = "string", description = "Primary street address line", example = "\"123 Main St\"")
+        @Schema(
+                type = "string",
+                description = "Primary street address line",
+                example = "123 Main St",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private String line1;
 
         /**
          * Secondary address line (optional).
          */
-        @Schema(type = "string", description = "Secondary address line", example = "\"Suite 200\"")
+        @Schema(
+                type = "string",
+                description = "Secondary address line",
+                example = "Suite 200",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private String line2;
 
         public String getCountryCode() {

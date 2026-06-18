@@ -611,21 +611,32 @@ components:
       - quantity
     ApplyPriceOverrideRequest:
       type: object
+      description: Request payload for applying a price override to an order line
       properties:
         orderId:
           type: string
+          description: Identifier of the order whose line is being overridden
+          example: 01960003-0000-7000-8000-000000000001
           minLength: 1
         orderLineId:
           type: string
+          description: Identifier of the order line receiving the price override
+          example: 01960003-0000-7000-8000-000000000002
           minLength: 1
         productId:
           type: string
+          description: Identifier of the product on the order line
+          example: 01960003-0000-7000-8000-000000000003
           minLength: 1
         originalPrice:
           type: number
+          description: Original price of the line before the override
+          example: 49.99
           minimum: 0.0
         overridePrice:
           type: number
+          description: Overridden price to apply to the line
+          example: 39.99
           minimum: 0.0
         reasonCode:
           type: string
@@ -634,6 +645,8 @@ components:
           minLength: 1
         justification:
           type: string
+          description: Free-text justification supporting the price override
+          example: Competitor price match per store policy
         idempotencyKey:
           type: string
           description: Optional idempotency key for duplicate prevention
@@ -647,41 +660,91 @@ components:
       - reasonCode
     PriceOverrideResult:
       type: object
+      description: Result of applying a price override to an order line
       properties:
         overrideId:
           type: string
           format: uuid
+          description: Unique identifier of the created price override
+          example: 01960003-0000-7000-8000-0000000000aa
         orderId:
           type: string
+          description: Identifier of the order the override applies to
+          example: 01960003-0000-7000-8000-000000000001
         orderLineId:
           type: string
+          description: Identifier of the order line the override applies to
+          example: 01960003-0000-7000-8000-000000000002
         productId:
           type: string
+          description: Identifier of the product on the overridden line
+          example: 01960003-0000-7000-8000-000000000003
         originalPrice:
           type: number
+          description: Original price before the override
+          example: 49.99
         overridePrice:
           type: number
+          description: Overridden price applied to the line
+          example: 39.99
         discountAmount:
           type: number
+          description: Absolute discount amount granted by the override
+          example: 10.0
         discountPercentage:
           type: number
+          description: Discount expressed as a percentage of the original price
+          example: 20.0
         reasonCode:
           type: string
+          description: Reason code supplied for the override
+          example: PRICE_MATCH
         justification:
           type: string
+          description: Free-text justification supporting the override
+          example: Competitor price match per store policy
         status:
           type: string
+          description: Override status; APPROVED means applied immediately, PENDING_APPROVAL means queued for review
+          example: APPROVED
         requiresApproval:
           type: boolean
+          default: false
+          description: Whether the override required approval
+          example: false
         affectsCommission:
           type: boolean
+          default: false
+          description: Whether the override affects sales commission
+          example: true
         requestedByUserId:
           type: string
+          description: Identifier of the user who requested the override
+          example: user-12345
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the override was created
+          example: 2026-02-21 09:18:40+00:00
         message:
           type: string
+          description: Optional human-readable message describing the result
+          example: Price override applied
+      required:
+      - affectsCommission
+      - createdAt
+      - discountAmount
+      - discountPercentage
+      - orderId
+      - orderLineId
+      - originalPrice
+      - overrideId
+      - overridePrice
+      - productId
+      - reasonCode
+      - requestedByUserId
+      - requiresApproval
+      - status
     RejectPriceOverrideRequest:
       type: object
       description: Request payload for rejecting a pending price override
@@ -699,57 +762,119 @@ components:
       - reason
     PriceOverrideDetail:
       type: object
+      description: Detailed view of a price override including approval workflow state
       properties:
         overrideId:
           type: string
           format: uuid
+          description: Unique identifier of the price override
+          example: 01960003-0000-7000-8000-0000000000aa
         orderId:
           type: string
+          description: Identifier of the order the override applies to
+          example: 01960003-0000-7000-8000-000000000001
         orderLineId:
           type: string
+          description: Identifier of the order line the override applies to
+          example: 01960003-0000-7000-8000-000000000002
         productId:
           type: string
+          description: Identifier of the product on the overridden line
+          example: 01960003-0000-7000-8000-000000000003
         originalPrice:
           type: number
+          description: Original price before the override
+          example: 49.99
         overridePrice:
           type: number
+          description: Overridden price applied to the line
+          example: 39.99
         discountAmount:
           type: number
+          description: Absolute discount amount granted by the override
+          example: 10.0
         discountPercentage:
           type: number
+          description: Discount expressed as a percentage of the original price
+          example: 20.0
         reasonCode:
           type: string
+          description: Reason code supplied for the override
+          example: PRICE_MATCH
         justification:
           type: string
+          description: Free-text justification supporting the override
+          example: Competitor price match per store policy
         status:
           type: string
+          description: Current override status (e.g. APPROVED, PENDING_APPROVAL, REJECTED)
+          example: PENDING_APPROVAL
         requiresApproval:
           type: boolean
+          default: false
+          description: Whether the override required approval
+          example: true
         affectsCommission:
           type: boolean
+          default: false
+          description: Whether the override affects sales commission
+          example: true
         requestedByUserId:
           type: string
+          description: Identifier of the user who requested the override
+          example: user-12345
         approvedByUserId:
           type: string
+          description: Identifier of the user who approved the override, if approved
+          example: manager-67890
         rejectedByUserId:
           type: string
+          description: Identifier of the user who rejected the override, if rejected
+          example: manager-67890
         rejectionReason:
           type: string
+          description: Reason the override was rejected, if rejected
+          example: Discount exceeds allowed threshold
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the override was created
+          example: 2026-02-21 09:18:40+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the override was last updated
+          example: 2026-02-21 10:05:12+00:00
         approvedAt:
           type: string
           format: date-time
+          description: Timestamp when the override was approved, if approved
+          example: 2026-02-21 10:05:12+00:00
         rejectedAt:
           type: string
           format: date-time
+          description: Timestamp when the override was rejected, if rejected
+          example: 2026-02-21 10:05:12+00:00
         appliedAt:
           type: string
           format: date-time
+          description: Timestamp when the override was applied to the line, if applied
+          example: 2026-02-21 10:06:00+00:00
+      required:
+      - affectsCommission
+      - createdAt
+      - discountAmount
+      - discountPercentage
+      - orderId
+      - orderLineId
+      - originalPrice
+      - overrideId
+      - overridePrice
+      - productId
+      - reasonCode
+      - requestedByUserId
+      - requiresApproval
+      - status
     ApprovePriceOverrideRequest:
       type: object
       description: Request payload for approving a pending price override

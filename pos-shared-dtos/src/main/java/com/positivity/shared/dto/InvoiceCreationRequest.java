@@ -1,6 +1,7 @@
 package com.positivity.shared.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -20,22 +21,29 @@ public class InvoiceCreationRequest {
 
     @Schema(
             description = "Workorder identifier backing the invoice draft.",
-            example = "550e8400-e29b-41d4-a716-446655440000")
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private UUID workorderId;
 
     @Schema(
             description = "Source estimate identifier, when generated from estimate.",
-            example = "550e8400-e29b-41d4-a716-446655440001")
+            example = "550e8400-e29b-41d4-a716-446655440001",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private UUID estimateId;
 
     @Schema(
             description = "Approval identifier used for billing authorization.",
-            example = "550e8400-e29b-41d4-a716-446655440002")
+            example = "550e8400-e29b-41d4-a716-446655440002",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private UUID approvalId;
 
-    @Schema(description = "Idempotency key to prevent duplicate invoice creation.", example = "inv-create-wo-1234")
+    @Schema(
+            description = "Idempotency key to prevent duplicate invoice creation.",
+            example = "inv-create-wo-1234",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String idempotencyKey;
 
-    @Schema(description = "Line items to include on the invoice.")
+    @Valid
+    @Schema(description = "Line items to include on the invoice.", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private List<InvoiceLineItem> lineItems;
 }
