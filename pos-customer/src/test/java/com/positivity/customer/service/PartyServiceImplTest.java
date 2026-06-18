@@ -56,6 +56,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -474,6 +475,92 @@ class PartyServiceImplTest {
                 .extracting(SearchPartiesResponse.PartySummary::getPartyType)
                 .containsExactly(PartyType.PERSON.toString(), PartyType.COMMERCIAL.toString());
         assertThat(response.getResults().get(0).getDisplayName()).isEqualTo("Alice Anders");
+    }
+
+    private CommercialParty browseable(String idSuffix, String legalName, String customerNumber,
+            AccountStatus status) {
+        CommercialParty p = party(UUID.fromString("00000000-0000-0000-0000-0000000000" + idSuffix));
+        p.setLegalName(legalName);
+        p.setDisplayName(legalName);
+        p.setCustomerNumber(customerNumber);
+        p.setStatus(status);
+        return p;
+    }
+
+    @Test
+    void browseParties_filtersByName_caseInsensitiveContainsOnDisplayOrLegal() {
+        when(partyRepository.findAll()).thenReturn(List.of(
+                browseable("01", "Acme Industrial", "CUST-1", AccountStatus.ACTIVE),
+                browseable("02", "Beta Supplies", "CUST-2", AccountStatus.ACTIVE)));
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
+
+        SearchPartiesResponse response =
+                service.browseParties(Pageable.unpaged(), "acme", null, null, null, null, null);
+
+        assertThat(response.getTotalCount()).isEqualTo(1);
+        assertThat(response.getResults()).extracting(SearchPartiesResponse.PartySummary::getLegalName)
+                .containsExactly("Acme Industrial");
+    }
+
+    @Test
+    void browseParties_filtersByStatusAndCustomerNumber() {
+        when(partyRepository.findAll()).thenReturn(List.of(
+                browseable("01", "Acme", "CUST-100", AccountStatus.ACTIVE),
+                browseable("02", "Beta", "CUST-200", AccountStatus.INACTIVE)));
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
+
+        assertThat(service.browseParties(Pageable.unpaged(), null, "INACTIVE", null, null, null, null)
+                        .getResults())
+                .extracting(SearchPartiesResponse.PartySummary::getLegalName)
+                .containsExactly("Beta");
+
+        assertThat(service.browseParties(Pageable.unpaged(), null, null, null, "cust-100", null, null)
+                        .getResults())
+                .extracting(SearchPartiesResponse.PartySummary::getCustomerNumber)
+                .containsExactly("CUST-100");
+    }
+
+    @Test
+    void browseParties_filterAppliedBeforePaging_totalCountReflectsFilteredSize() {
+        when(partyRepository.findAll()).thenReturn(List.of(
+                browseable("01", "Acme One", "C1", AccountStatus.ACTIVE),
+                browseable("02", "Acme Two", "C2", AccountStatus.ACTIVE),
+                browseable("03", "Other Co", "C3", AccountStatus.ACTIVE)));
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
+
+        SearchPartiesResponse response = service.browseParties(
+                PageRequest.of(0, 1), "acme", null, null, null, null, null);
+
+        // 2 match the filter; page size 1 -> one row, but totalCount is the filtered count.
+        assertThat(response.getTotalCount()).isEqualTo(2);
+        assertThat(response.getResults()).hasSize(1);
+    }
+
+    @Test
+    void browseParties_sortsByCustomerNumber_descending() {
+        when(partyRepository.findAll()).thenReturn(List.of(
+                browseable("01", "Acme", "CUST-001", AccountStatus.ACTIVE),
+                browseable("02", "Beta", "CUST-003", AccountStatus.ACTIVE),
+                browseable("03", "Gamma", "CUST-002", AccountStatus.ACTIVE)));
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
+
+        SearchPartiesResponse response = service.browseParties(
+                Pageable.unpaged(), null, null, null, null, "customerNumber", "desc");
+
+        assertThat(response.getResults()).extracting(SearchPartiesResponse.PartySummary::getCustomerNumber)
+                .containsExactly("CUST-003", "CUST-002", "CUST-001");
+    }
+
+    @Test
+    void browseParties_nullFilterFields_doNotMatchOrThrow() {
+        CommercialParty noCustNo = browseable("01", "Acme", null, AccountStatus.ACTIVE);
+        when(partyRepository.findAll()).thenReturn(List.of(noCustNo));
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
+
+        // filtering by customerNumber excludes the row whose customerNumber is null, no NPE
+        assertThat(service.browseParties(Pageable.unpaged(), null, null, null, "C", null, null)
+                        .getResults())
+                .isEmpty();
     }
 
     @Test
