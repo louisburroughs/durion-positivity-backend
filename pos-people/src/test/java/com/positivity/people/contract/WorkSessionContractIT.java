@@ -230,6 +230,34 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
                 .andExpect(status().isConflict());
     }
 
+    @Test
+    @DisplayName("VE-120-005: submitting negative billableMinutes returns 400")
+    void VE_120_005_submitWorkSession_negativeMinutes_returns400() throws Exception {
+        String response = mockMvc.perform(withAuth(post("/v1/people/workSessions/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(START_PAYLOAD)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String sessionId = objectMapper.readTree(response).get("sessionId").asText();
+
+        String invalidPayload =
+                """
+				{
+				  "billableMinutes": -1,
+				  "breakMinutes": 0,
+				  "submittedAt": "2026-01-01T16:05:00Z"
+				}
+				""";
+
+        mockMvc.perform(withAuth(post("/v1/people/workSessions/" + sessionId + "/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidPayload)))
+                .andExpect(status().isBadRequest());
+    }
+
     private void ensurePersonExists(UUID personId, String firstName, String lastName) {
         if (personRepository.existsById(personId)) {
             return;
