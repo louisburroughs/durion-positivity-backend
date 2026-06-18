@@ -1,7 +1,10 @@
 package com.positivity.accounting.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -25,15 +28,21 @@ import lombok.experimental.Tolerate;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Restored invoice state returned after a payment application reversal")
 public class ReversePaymentApplicationResponse implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    @Schema(
+            description = "Identifier of the invoice whose payment was reversed",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("invoiceId")
     private UUID invoiceId;
 
     /**
      * Invoice status after reversal
      */
+    @Schema(description = "Invoice status after the reversal", example = "PARTIALLY_PAID", requiredMode = NOT_REQUIRED)
     @JsonProperty("status")
     private InvoiceStatus status;
 
@@ -51,30 +60,38 @@ public class ReversePaymentApplicationResponse implements Serializable {
     /**
      * Invoice balance BEFORE reversal
      */
+    @Schema(description = "Invoice balance due before the reversal", example = "0.00", requiredMode = NOT_REQUIRED)
     @JsonProperty("balanceBefore")
     private BigDecimal balanceBefore;
 
     /**
      * Invoice balance AFTER reversal (restored)
      */
+    @Schema(description = "Invoice balance due after the reversal (restored)", example = "1250.00", requiredMode = NOT_REQUIRED)
     @JsonProperty("balanceDue")
     private BigDecimal balanceDue;
 
     /**
      * Total amount paid on this invoice (after reversal)
      */
+    @Schema(description = "Total amount paid on the invoice after the reversal", example = "0.00", requiredMode = NOT_REQUIRED)
     @JsonProperty("totalPaid")
     private BigDecimal totalPaid;
 
     /**
      * Reason for reversal
      */
+    @Schema(description = "Reason recorded for the reversal", example = "Duplicate payment applied in error", requiredMode = NOT_REQUIRED)
     @JsonProperty("reason")
     private String reason;
 
     /**
      * Timestamp of reversal
      */
+    @Schema(
+            description = "Timestamp when the reversal occurred (ISO 8601)",
+            example = "2026-06-18T08:00:00Z",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("reversedAt")
     private Instant reversedAt;
 }

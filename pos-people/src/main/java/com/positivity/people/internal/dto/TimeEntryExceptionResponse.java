@@ -8,7 +8,8 @@ public class TimeEntryExceptionResponse {
 
     @Schema(
             description = "Unique identifier of the created or updated exception",
-            example = "123e4567-e89b-12d3-a456-426614174000")
+            example = "123e4567-e89b-12d3-a456-426614174000",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private UUID exceptionId;
 
     @Schema(
@@ -17,7 +18,7 @@ public class TimeEntryExceptionResponse {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private boolean success;
 
-    @Schema(description = "Human-readable message describing the outcome", example = "Exception created successfully")
+    @Schema(description = "Human-readable message describing the outcome", example = "Exception created successfully", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String message;
 
     public TimeEntryExceptionResponse() {}

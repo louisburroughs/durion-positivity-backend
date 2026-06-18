@@ -9,11 +9,15 @@ import java.util.UUID;
  * Per-site entry of a parent-location rollup (CAP-218 #659). {@code nodes}
  * is present only when {@code expand=tree} was requested.
  */
+@Schema(description = "Per-site entry of a parent-location rollup, optionally including the storage-location tree")
 public record SiteRollupSummary(
-        @Schema(description = "Site (Location) identifier", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Site (Location) identifier",
+                example = "01960003-0000-7000-8000-000000000012",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         UUID siteId,
 
-        @Schema(description = "Site name from the location hierarchy")
+        @Schema(description = "Site name from the location hierarchy", example = "Downtown Service Center")
         String siteName,
 
         @Schema(

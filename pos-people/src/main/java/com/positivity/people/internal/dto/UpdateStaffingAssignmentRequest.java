@@ -48,7 +48,7 @@ public class UpdateStaffingAssignmentRequest {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate effectiveFrom;
 
-    @Schema(description = "Assignment effective end date", example = "2026-12-31")
+    @Schema(description = "Assignment effective end date", example = "2026-12-31", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private LocalDate effectiveTo;
 
     public UpdateStaffingAssignmentRequest() {}

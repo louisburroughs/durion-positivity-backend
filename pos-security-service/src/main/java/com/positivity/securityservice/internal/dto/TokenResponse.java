@@ -19,7 +19,8 @@ public record TokenResponse(
         @JsonProperty("token")
         @Schema(
                 description = "JWT token (Bearer token for Authorization header)",
-                example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
+                example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         String token) {
     /**
      * Factory method to create a token response.

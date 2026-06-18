@@ -1,6 +1,13 @@
 package com.positivity.inventory.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.positivity.inventory.internal.enums.OverrideReasonCode;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import java.util.UUID;
 
 /**
@@ -9,17 +16,66 @@ import java.util.UUID;
  * <p>
  * Represents the clerk's scan data and optional override information.
  */
+@Schema(description = "Request to execute a putaway move from staging to storage, with optional business-rule overrides")
 public class PutawayExecutionRequest {
+
+    @Schema(
+            description = "Identifier of the SKU being moved",
+            example = "01960003-0000-7000-8000-000000000120",
+            requiredMode = REQUIRED)
+    @NotBlank
     private String skuId;
+
+    @Schema(
+            description = "Identifier of the staging location the goods are moved from",
+            example = "01960003-0000-7000-8000-000000000121",
+            requiredMode = REQUIRED)
+    @NotNull
     private UUID sourceLocationId;
+
+    @Schema(
+            description = "Identifier of the storage location the goods are moved to",
+            example = "01960003-0000-7000-8000-000000000122",
+            requiredMode = REQUIRED)
+    @NotNull
     private UUID destinationLocationId;
+
+    @Schema(
+            description = "Quantity of units to move",
+            example = "12",
+            requiredMode = REQUIRED)
+    @Positive
     private int quantity;
 
     // Override fields (optional)
+    @Schema(
+            description = "When true, bypasses the location compatibility check for this move",
+            example = "false",
+            requiredMode = NOT_REQUIRED)
     private boolean overrideLocationCompatibility;
+
+    @Schema(
+            description = "When true, bypasses the destination capacity check for this move",
+            example = "false",
+            requiredMode = NOT_REQUIRED)
     private boolean overrideCapacity;
+
+    @Schema(
+            description = "Audit reason code justifying any applied override",
+            example = "CAPACITY_OVERRIDE",
+            requiredMode = NOT_REQUIRED)
     private OverrideReasonCode overrideReasonCode;
+
+    @Schema(
+            description = "Free-text justification supporting the override",
+            example = "Receiving dock at capacity during peak intake",
+            requiredMode = NOT_REQUIRED)
     private String overrideJustification;
+
+    @Schema(
+            description = "Identifier of the supervisor who approved the override",
+            example = "01960003-0000-7000-8000-000000000123",
+            requiredMode = NOT_REQUIRED)
     private String approvedBy;
 
     public PutawayExecutionRequest() {}

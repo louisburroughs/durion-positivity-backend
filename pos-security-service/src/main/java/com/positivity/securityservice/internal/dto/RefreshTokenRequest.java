@@ -17,7 +17,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "Request to refresh an access token using a refresh token")
 public record RefreshTokenRequest(
         @JsonProperty("refreshToken")
-        @Schema(description = "Long-lived refresh token", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Long-lived refresh token",
+                example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         String refreshToken) {
     /**
      * Validates request constraints.

@@ -5428,214 +5428,381 @@ components:
           example: must be greater than 0
     UserDto:
       type: object
+      description: User account view returned by user-management endpoints
       properties:
         id:
           type: string
           format: uuid
+          description: User identifier
+          example: 01960003-0000-7000-8000-000000000001
         username:
           type: string
+          description: Login username
+          example: jane.doe
         roles:
           type: array
+          description: Role names assigned to the user
+          example:
+          - SHOP_MGR
           items:
             type: string
           uniqueItems: true
         personId:
           type: string
           format: uuid
+          description: Linked person identifier, when the account is linked to a person record
+          example: 01960003-0000-7000-8000-000000000002
+      required:
+      - id
+      - roles
+      - username
     UserUpdateRequest:
       type: object
       description: Updated user object
       properties:
         username:
           type: string
+          description: New login username
+          example: jane.doe
         password:
           type: string
+          description: New password for the account
         roles:
           type: array
+          description: Replacement set of role names
+          example:
+          - SHOP_MGR
           items:
             type: string
           uniqueItems: true
     RolePermissionGrantRequest:
       type: object
+      description: Request to grant or revoke a single permission on a role
       properties:
         permission:
           type: string
+          description: Permission key in format domain:resource:action
+          example: people:timekeeping:view
+          minLength: 1
+      required:
+      - permission
     PermissionDto:
       type: object
+      description: A permission entry exposed by user-facing RBAC endpoints
       properties:
         id:
           type: string
           format: uuid
+          description: Permission identifier
+          example: 01960003-0000-7000-8000-000000000001
         name:
           type: string
+          description: Permission name in format domain:resource:action
+          example: people:timekeeping:view
         domain:
           type: string
+          description: Domain that owns the permission
+          example: people
         description:
           type: string
+          description: Human-readable description of the permission
+          example: View timekeeping records
         deprecated:
           type: boolean
+          description: True when the permission is deprecated
+          example: false
+      required:
+      - deprecated
+      - domain
+      - id
+      - name
     RoleDto:
       type: object
+      description: Role definition including its granted permissions and audit metadata
       properties:
         id:
           type: string
           format: uuid
+          description: Role identifier
+          example: 01960003-0000-7000-8000-000000000010
         name:
           type: string
+          description: Role name
+          example: SHOP_MGR
         description:
           type: string
+          description: Human-readable description of the role
+          example: Shop manager
         permissions:
           type: array
+          description: Permissions granted to the role
           items:
             $ref: '#/components/schemas/PermissionDto'
           uniqueItems: true
         createdAt:
           type: string
           format: date-time
+          description: Creation timestamp
+          example: 2026-01-15 09:30:00+00:00
         createdBy:
           type: string
+          description: Actor that created the role
+          example: system
         lastModifiedAt:
           type: string
           format: date-time
+          description: Last-modified timestamp
+          example: 2026-01-16 11:00:00+00:00
         lastModifiedBy:
           type: string
+          description: Actor that last modified the role
+          example: jane.doe
+      required:
+      - id
+      - name
     RolePermissionsRequest:
       type: object
+      description: Request to replace the permission set granted to a role
       properties:
         roleId:
           type: string
           format: uuid
+          description: Identifier of the role to update
+          example: 01960003-0000-7000-8000-000000000010
         permissionNames:
           type: array
+          description: Replacement set of permission names in format domain:resource:action
+          example:
+          - people:timekeeping:view
+          - people:timekeeping:edit
           items:
             type: string
           uniqueItems: true
+      required:
+      - permissionNames
+      - roleId
     RoleAssignmentRequest:
       type: object
+      description: Request to assign a role to a user within a scope
       properties:
         userId:
           type: string
           format: uuid
+          description: Identifier of the user to assign the role to
+          example: 01960003-0000-7000-8000-000000000001
         roleId:
           type: string
           format: uuid
+          description: Identifier of the role to assign
+          example: 01960003-0000-7000-8000-000000000010
         scopeType:
           type: string
+          description: Scope type that constrains the assignment
           enum:
           - GLOBAL
           - LOCATION
+          example: GLOBAL
         scopeLocationIds:
           type: array
+          description: Location identifiers the assignment applies to when scopeType is LOCATION
           items:
             type: string
           uniqueItems: true
         effectiveStartDate:
           type: string
           format: date-time
+          description: Inclusive start of the effective window
+          example: 2026-01-15 00:00:00
         effectiveEndDate:
           type: string
           format: date-time
+          description: Exclusive end of the effective window
+          example: 2026-12-31 00:00:00
+      required:
+      - roleId
+      - userId
     RoleAssignmentDto:
       type: object
+      description: A role assignment binding a user to a role within a scope
       properties:
         id:
           type: string
           format: uuid
+          description: Role assignment identifier
+          example: 01960003-0000-7000-8000-000000000020
         userId:
           type: string
           format: uuid
+          description: Identifier of the user the role is assigned to
+          example: 01960003-0000-7000-8000-000000000001
         roleId:
           type: string
           format: uuid
+          description: Identifier of the assigned role
+          example: 01960003-0000-7000-8000-000000000010
         scopeType:
           type: string
+          description: Scope type that constrains the assignment
           enum:
           - GLOBAL
           - LOCATION
+          example: GLOBAL
         scopeLocationIds:
           type: array
+          description: Location identifiers the assignment applies to when scopeType is LOCATION
           items:
             type: string
           uniqueItems: true
         effectiveStartDate:
           type: string
           format: date-time
+          description: Inclusive start of the effective window
+          example: 2026-01-15 00:00:00
         effectiveEndDate:
           type: string
           format: date-time
+          description: Exclusive end of the effective window
+          example: 2026-12-31 00:00:00
         revokedAt:
           type: string
           format: date-time
+          description: Timestamp at which the assignment was revoked
+          example: 2026-06-01 12:00:00+00:00
         createdAt:
           type: string
           format: date-time
+          description: Creation timestamp
+          example: 2026-01-15 09:30:00+00:00
         createdBy:
           type: string
+          description: Actor that created the assignment
+          example: system
         lastModifiedAt:
           type: string
           format: date-time
+          description: Last-modified timestamp
+          example: 2026-01-16 11:00:00+00:00
         lastModifiedBy:
           type: string
+          description: Actor that last modified the assignment
+          example: jane.doe
+      required:
+      - id
+      - roleId
+      - scopeType
+      - userId
     PermissionDefinition:
       type: object
+      description: A single permission definition within a registration manifest
       properties:
         name:
           type: string
+          description: Permission name in format domain:resource:action
+          example: people:timekeeping:view
         description:
           type: string
+          description: Human-readable description of the permission
+          example: View timekeeping records
+      required:
+      - name
     PermissionRegistrationRequest:
       type: object
+      description: Request to register the permission catalog published by a domain service
       properties:
         domain:
           type: string
+          description: Domain that owns the permissions being registered
+          example: people
         serviceName:
           type: string
+          description: Service identifier registering the permissions
+          example: pos-people-service
         permissions:
           type: array
+          description: Permission definitions to register or update
           items:
             $ref: '#/components/schemas/PermissionDefinition'
         version:
           type: string
+          description: Manifest schema version
+          example: '1.0'
+      required:
+      - domain
+      - permissions
+      - serviceName
     PermissionRegistrationResponse:
       type: object
+      description: Outcome of a permission catalog registration request
       properties:
         success:
           type: boolean
+          description: True when the registration completed without fatal errors
+          example: true
         message:
           type: string
+          description: Human-readable summary of the registration outcome
+          example: Registered 12 permissions, updated 3
         totalPermissions:
           type: integer
           format: int32
+          description: Total number of permissions submitted in the manifest
+          example: 15
         registeredPermissions:
           type: integer
           format: int32
+          description: Number of new permissions registered
+          example: 12
         updatedPermissions:
           type: integer
           format: int32
+          description: Number of existing permissions updated
+          example: 3
         skippedPermissions:
           type: integer
           format: int32
+          description: Number of permissions skipped because they were unchanged
+          example: 0
         errors:
           type: array
+          description: Per-permission error messages, when any occurred
           items:
             type: string
+      required:
+      - registeredPermissions
+      - skippedPermissions
+      - success
+      - totalPermissions
+      - updatedPermissions
     PermissionDecodeRequest:
       type: object
+      description: Request to decode encoded permission bits into permission code strings
       properties:
         perm_bits:
           type: string
+          description: Base64URL-encoded BitSet of permission bits taken from an access token
+          example: AQID
         perm_ver:
           type: integer
           format: int32
+          description: Catalog version that was in effect when permBits was encoded
+          example: 7
       required:
       - perm_bits
+      - perm_ver
     PermissionDecodeResponse:
       type: object
+      description: Decoded permission code strings
       properties:
         permissions:
           type: array
+          description: List of decoded permission code strings
+          example:
+          - people:timekeeping:view
+          - people:timekeeping:edit
           items:
             type: string
+      required:
+      - permissions
     ResolveSelfRegistrationReviewCaseRequest:
       type: object
       description: Administrative request to resolve a blocked self-registration case
@@ -5655,76 +5822,105 @@ components:
           type: string
           format: uuid
           description: Review case identifier
+          example: 01960003-0000-7000-8000-000000000070
         caseType:
           type: string
           description: Case type
           enum:
           - ACCOUNT_RECOVERY
           - IDENTITY_REVIEW
+          example: IDENTITY_REVIEW
         status:
           type: string
           description: Case status
           enum:
           - OPEN
           - RESOLVED
+          example: OPEN
         reasonCode:
           type: string
           description: Reason code that created the case
+          example: DUPLICATE_IDENTITY
         reasonMessage:
           type: string
           description: Reason message recorded for the case
+          example: Multiple persons matched the submitted email
         email:
           type: string
           description: Submitted email address
+          example: jane.smith@example.com
         requestedUsername:
           type: string
           description: Requested username, when available
+          example: jane.smith
         personId:
           type: string
           format: uuid
           description: Resolved or created person identifier, when available
+          example: 01960003-0000-7000-8000-000000000002
         linkedUserId:
           type: string
           format: uuid
           description: Linked or recoverable user identifier, when available
+          example: 01960003-0000-7000-8000-000000000001
         crmCandidateCount:
           type: integer
           format: int32
           description: CRM candidate count, when available
+          example: 3
         crmSharedIdentityCandidateCount:
           type: integer
           format: int32
           description: CRM shared-identity candidate count, when available
+          example: 0
         crmExactEmailMatch:
           type: boolean
           description: CRM exact email match flag, when available
+          example: true
         crmExactPhoneMatch:
           type: boolean
           description: CRM exact phone match flag, when available
+          example: false
         crmExactNameMatch:
           type: boolean
           description: CRM exact name match flag, when available
+          example: false
         notes:
           type: string
           description: Operator notes recorded for the case
+          example: Escalated for manual identity verification
         createdAt:
           type: string
           format: date-time
           description: Case creation timestamp
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
           description: Case last-updated timestamp
+          example: 2026-01-16 11:00:00+00:00
         resolvedAt:
           type: string
           format: date-time
           description: Resolution timestamp, when resolved
+          example: 2026-01-17 14:00:00+00:00
         resolvedBy:
           type: string
           description: Actor who resolved the case, when resolved
+          example: admin
         resolutionNotes:
           type: string
           description: Resolution notes, when resolved
+          example: Recovered existing disabled account
+      required:
+      - caseId
+      - caseType
+      - createdAt
+      - email
+      - reasonCode
+      - reasonMessage
+      - status
+      - updatedAt
     TokenPairRequest:
       type: object
       description: Request to generate an access token and refresh token pair
@@ -5755,6 +5951,9 @@ components:
           type: string
           description: Long-lived JWT refresh token (7 days expiration)
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      required:
+      - accessToken
+      - refreshToken
     SelfRegistrationRequest:
       type: object
       description: Anonymous self-registration request
@@ -5787,12 +5986,15 @@ components:
         username:
           type: string
           description: Optional requested username. If omitted, the email local part is used.
+          example: jane.smith
         idpSubject:
           type: string
           description: Optional external identity subject for future federation support
+          example: auth0|abc123
         idempotencyKey:
           type: string
           description: Optional idempotency key used to replay a completed registration attempt without creating duplicate side effects
+          example: 5f1d8c2e-1b2a-4c3d-9e8f-0a1b2c3d4e5f
       required:
       - email
       - firstName
@@ -5800,29 +6002,58 @@ components:
       - password
     CrmMatchSummaryDto:
       type: object
+      description: Summary of CRM person-search candidates evaluated during registration
       properties:
         candidateCount:
           type: integer
           format: int32
+          description: Total number of candidate persons returned
+          example: 3
         anyMatches:
           type: boolean
+          description: True when any candidate matched
+          example: true
         individualCustomerCandidateCount:
           type: integer
           format: int32
+          description: Number of individual-customer candidates
+          example: 2
         commercialContactCandidateCount:
           type: integer
           format: int32
+          description: Number of commercial-contact candidates
+          example: 1
         sharedIdentityCandidateCount:
           type: integer
           format: int32
+          description: Number of shared-identity candidates
+          example: 0
         exactEmailMatch:
           type: boolean
+          description: True when a candidate exactly matched the email
+          example: true
         exactPhoneMatch:
           type: boolean
+          description: True when a candidate exactly matched the phone
+          example: false
         exactNameMatch:
           type: boolean
+          description: True when a candidate exactly matched the name
+          example: false
         reviewRequired:
           type: boolean
+          description: True when manual review is required before completing registration
+          example: false
+      required:
+      - anyMatches
+      - candidateCount
+      - commercialContactCandidateCount
+      - exactEmailMatch
+      - exactNameMatch
+      - exactPhoneMatch
+      - individualCustomerCandidateCount
+      - reviewRequired
+      - sharedIdentityCandidateCount
     SelfRegistrationResponse:
       type: object
       description: Result of a successful self-registration
@@ -5831,13 +6062,16 @@ components:
           type: string
           format: uuid
           description: Created user identifier
+          example: 01960003-0000-7000-8000-000000000001
         personId:
           type: string
           format: uuid
           description: Resolved or created person identifier
+          example: 01960003-0000-7000-8000-000000000002
         username:
           type: string
           description: Canonical username assigned to the account
+          example: jane.smith
         linkStatus:
           type: string
           description: User-person link status
@@ -5845,14 +6079,24 @@ components:
         matchedExistingPerson:
           type: boolean
           description: True when an existing person was reused
+          example: false
         crmMatchSummary:
           $ref: '#/components/schemas/CrmMatchSummaryDto'
         idempotencyKey:
           type: string
           description: Idempotency key echoed back when the caller supplied one
+          example: 5f1d8c2e-1b2a-4c3d-9e8f-0a1b2c3d4e5f
         issuedTokens:
           type: boolean
           description: False for Phase 1 because follow-up login is required
+          example: false
+      required:
+      - issuedTokens
+      - linkStatus
+      - matchedExistingPerson
+      - personId
+      - userId
+      - username
     RefreshTokenRequest:
       type: object
       description: Request to refresh an access token using a refresh token
@@ -5860,6 +6104,7 @@ components:
         refreshToken:
           type: string
           description: Long-lived refresh token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
       required:
       - refreshToken
     LoginRequest:
@@ -5905,31 +6150,60 @@ components:
           type: string
           description: JWT token (Bearer token for Authorization header)
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      required:
+      - token
     PricingRuleTraceEntryRequest:
       type: object
+      description: A rule-evaluation step submitted while creating a pricing snapshot
       properties:
         ruleId:
           type: string
+          description: Identifier of the evaluated rule
+          example: RULE-VOLUME-DISCOUNT
+          minLength: 1
         status:
           type: string
+          description: Evaluation status of the rule
+          example: APPLIED
+          minLength: 1
+        inputs:
+          description: Inputs supplied to the rule
+        outputs:
+          description: Outputs produced by the rule
+      required:
+      - ruleId
+      - status
     PricingSnapshotRequest:
       type: object
+      description: Request to create a pricing snapshot with its rule-evaluation trace
       properties:
+        quoteContext:
+          description: Quote context evaluated to produce the price
         finalPrice:
           type: number
+          description: Final computed price
+          example: 129.99
         evaluationSteps:
           type: array
+          description: Ordered rule-evaluation steps that produced the price
           items:
             $ref: '#/components/schemas/PricingRuleTraceEntryRequest'
+      required:
+      - finalPrice
     PricingSnapshotCreatedResponse:
       type: object
+      description: Minimal acknowledgement returned after creating a pricing snapshot
       properties:
         snapshotId:
           type: string
           format: uuid
+          description: Identifier of the created pricing snapshot
+          example: 01960003-0000-7000-8000-000000000060
+      required:
+      - snapshotId
     AuditEventSearchFilter:
       type: object
-      description: Filter criteria for audit event search
+      description: Filter criteria for audit event search; all fields are optional
       properties:
         fromDate:
           type: string
@@ -5944,40 +6218,52 @@ components:
         actorId:
           type: string
           description: Actor username/service principal
+          example: jane.doe
         workorderId:
           type: string
           format: uuid
           description: Workorder UUID - one word per workspace naming policy
+          example: 01960003-0000-7000-8000-000000000030
         movementId:
           type: string
           format: uuid
           description: Movement UUID
+          example: 01960003-0000-7000-8000-000000000031
         productId:
           type: string
           format: uuid
           description: Product UUID
+          example: 01960003-0000-7000-8000-000000000032
         sku:
           type: string
           description: SKU code
+          example: SKU-12345
         eventType:
           type: string
           description: Event type code
+          example: ROLE_ASSIGNED
         aggregateId:
           type: string
           description: Aggregate identifier (string)
+          example: order-98765
         correlationId:
           type: string
           format: uuid
           description: Correlation ID UUID for tracing
+          example: 01960003-0000-7000-8000-000000000033
         reasonCode:
           type: string
           description: Reason code string
+          example: MANUAL_ADJUSTMENT
         pageToken:
           type: string
           description: Cursor token for page-based navigation
+          example: eyJvZmZzZXQiOjEwMH0
         locationIds:
           type: array
           description: Location UUID list filter
+          example:
+          - 01960003-0000-7000-8000-000000000040
           items:
             type: string
     AuditExportRequest:
@@ -6020,83 +6306,158 @@ components:
           - IN_PROGRESS
           - COMPLETED
           - FAILED
+          example: IN_PROGRESS
         requestedAt:
           type: string
           format: date-time
           description: Timestamp when the export was requested
+          example: 2026-01-15 09:30:00+00:00
         completedAt:
           type: string
           format: date-time
           description: Timestamp when the export completed (null if not yet complete)
+          example: 2026-01-15 09:35:00+00:00
         downloadUrl:
           type: string
           description: Pre-signed download URL (null until COMPLETED)
+          example: https://exports.example.com/audit/550e8400.csv?sig=...
         errorMessage:
           type: string
           description: Error message when status is FAILED
+          example: Export source unavailable
+      required:
+      - jobId
+      - requestedAt
+      - status
     AuditLogEventRequest:
       type: object
+      description: Request to record an immutable audit event
       properties:
         eventType:
           type: string
+          description: Event type code
+          example: ROLE_ASSIGNED
+          minLength: 1
         actorId:
           type: string
+          description: Ignored; actor is resolved server-side from the security context per ADR-0018
+          example: jane.doe
         entityId:
           type: string
+          description: Identifier of the affected entity
+          example: 01960003-0000-7000-8000-000000000001
         entityType:
           type: string
+          description: Type of the affected entity
+          example: USER
+        oldValue:
+          description: Value before the change
+        newValue:
+          description: Value after the change
+        context:
+          description: Additional contextual metadata
+      required:
+      - eventType
     AuditEventCreatedResponse:
       type: object
+      description: Minimal acknowledgement returned after creating an audit event
       properties:
         eventId:
           type: string
           format: uuid
+          description: Identifier of the created audit event
+          example: 550e8400-e29b-41d4-a716-446655440000
         timestamp:
           type: string
           format: date-time
+          description: Timestamp recorded for the audit event
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - eventId
+      - timestamp
     AccountStateResponse:
       type: object
+      description: Lifecycle and lock state of a user account
       properties:
         userId:
           type: string
           format: uuid
+          description: User identifier
+          example: 01960003-0000-7000-8000-000000000001
         enabled:
           type: boolean
+          description: True when the account is enabled
+          example: true
         accountNonLocked:
           type: boolean
+          description: True when the account is not locked
+          example: true
         accountNonExpired:
           type: boolean
+          description: True when the account has not expired
+          example: true
         credentialsNonExpired:
           type: boolean
+          description: True when the credentials have not expired
+          example: true
         failedLoginAttempts:
           type: integer
           format: int32
+          description: Number of consecutive failed login attempts
+          example: 0
         lockedAt:
           type: string
           format: date-time
+          description: Timestamp at which the account was locked
+          example: 2026-06-01 12:00:00+00:00
         lockedUntil:
           type: string
           format: date-time
+          description: Timestamp until which the account remains locked
+          example: 2026-06-01 12:30:00+00:00
         disabledAt:
           type: string
           format: date-time
+          description: Timestamp at which the account was disabled
+          example: 2026-05-01 08:00:00+00:00
         disabledBy:
           type: string
+          description: Actor that disabled the account
+          example: admin
         accountExpiresAt:
           type: string
           format: date-time
+          description: Timestamp at which the account expires
+          example: 2027-01-01 00:00:00+00:00
         credentialsExpireAt:
           type: string
           format: date-time
+          description: Timestamp at which the credentials expire
+          example: 2026-12-01 00:00:00+00:00
+      required:
+      - accountNonExpired
+      - accountNonLocked
+      - credentialsNonExpired
+      - enabled
+      - failedLoginAttempts
+      - userId
     CatalogVersionResponse:
       type: object
+      description: Current permission catalog version and size
       properties:
         version:
           type: integer
           format: int32
+          description: Current catalog version integer
+          example: 7
         permissionCount:
           type: integer
           format: int32
+          description: Total number of permissions in the catalog
+          example: 128
+      required:
+      - permissionCount
+      - version
     Page:
       type: object
       properties:
@@ -6156,9 +6517,14 @@ components:
           type: boolean
     AuthorizationDecisionResponse:
       type: object
+      description: Result of an authorization decision check
       properties:
         decision:
           type: string
+          description: Authorization decision (PERMIT|DENY)
+          example: PERMIT
+      required:
+      - decision
     ValidateResponse:
       type: object
       description: Token validation result
@@ -6168,57 +6534,117 @@ components:
           description: Whether the token is valid
     PricingRuleTraceEntryDto:
       type: object
+      description: A single rule-evaluation step recorded in a pricing snapshot trace
       properties:
         id:
           type: string
+          description: Trace entry identifier
+          example: 01960003-0000-7000-8000-000000000050
         ruleId:
           type: string
+          description: Identifier of the evaluated rule
+          example: RULE-VOLUME-DISCOUNT
         status:
           type: string
+          description: Evaluation status of the rule
+          example: APPLIED
         inputs:
           type: string
+          description: Serialized inputs supplied to the rule
+          example:
+            qty: 10
         outputs:
           type: string
+          description: Serialized outputs produced by the rule
+          example:
+            discount: 0.05
+      required:
+      - id
+      - ruleId
+      - status
     PricingSnapshotDto:
       type: object
+      description: Pricing snapshot including its rule-evaluation trace
       properties:
         snapshotId:
           type: string
           format: uuid
+          description: Snapshot identifier
+          example: 01960003-0000-7000-8000-000000000060
         timestamp:
           type: string
           format: date-time
+          description: Timestamp the snapshot was captured
+          example: 2026-01-15 09:30:00+00:00
         quoteContext:
           type: string
+          description: Serialized quote context evaluated
+          example:
+            customerId: C-1
         finalPrice:
           type: number
+          description: Final computed price
+          example: 129.99
         evaluationSteps:
           type: array
+          description: Ordered rule-evaluation steps that produced the price
           items:
             $ref: '#/components/schemas/PricingRuleTraceEntryDto'
+      required:
+      - finalPrice
+      - snapshotId
+      - timestamp
     AuditLogEventDto:
       type: object
+      description: Immutable audit event record
       properties:
         eventId:
           type: string
           format: uuid
+          description: Audit event identifier
+          example: 550e8400-e29b-41d4-a716-446655440000
         timestamp:
           type: string
           format: date-time
+          description: Timestamp recorded for the event
+          example: 2026-01-15 09:30:00+00:00
         eventType:
           type: string
+          description: Event type code
+          example: ROLE_ASSIGNED
         actorId:
           type: string
+          description: Actor that triggered the event
+          example: jane.doe
         entityId:
           type: string
+          description: Identifier of the affected entity
+          example: 01960003-0000-7000-8000-000000000001
         entityType:
           type: string
+          description: Type of the affected entity
+          example: USER
         oldValue:
           type: string
+          description: Serialized value before the change
+          example:
+            roles:
+            - CLERK
         newValue:
           type: string
+          description: Serialized value after the change
+          example:
+            roles:
+            - SHOP_MGR
         context:
           type: string
+          description: Additional contextual metadata
+          example:
+            ip: 10.0.0.1
+      required:
+      - eventId
+      - eventType
+      - timestamp
     PageAuditLogEventDto:
       type: object
       properties:

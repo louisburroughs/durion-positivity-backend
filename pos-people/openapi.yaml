@@ -2057,18 +2057,29 @@ components:
   schemas:
     ContactPointDto:
       type: object
+      description: Typed contact point (email, phone) for a person
       properties:
         contactType:
           type: string
+          description: Type of contact point
           enum:
           - EMAIL
           - PHONE_MOBILE
           - PHONE_HOME
           - PHONE_WORK
+          example: EMAIL
         value:
           type: string
+          description: Contact point value
+          example: jane.smith@example.com
         primary:
           type: boolean
+          description: Whether this is the primary contact point of its type
+          example: true
+      required:
+      - contactType
+      - primary
+      - value
     Person:
       type: object
       description: Person object to be created
@@ -2077,24 +2088,36 @@ components:
           type: string
           format: uuid
           description: Unique identifier for the person
+          example: 01960011-0000-7000-8000-000000000001
         firstName:
           type: string
           description: First name of the person
+          example: Jane
           minLength: 1
         lastName:
           type: string
           description: Last name of the person
+          example: Smith
           minLength: 1
         primaryEmail:
           type: string
+          description: Primary email address
+          example: jane.smith@example.com
         secondaryEmail:
           type: string
+          description: Secondary email address
+          example: jane.alt@example.com
         phoneNumbers:
           type: array
+          description: Phone numbers on record
+          example:
+          - +1-555-123-4567
           items:
             type: string
         username:
           type: string
+          description: Linked username, if any
+          example: jane.smith
         employeeStatus:
           type: string
           description: Employee status. Null if the person has no employee record.
@@ -2104,6 +2127,7 @@ components:
           - SUSPENDED
           - TERMINATED
           - DISABLED
+          example: ACTIVE
         contactPoints:
           type: array
           description: Typed contact points (email, phone). Populated on batch by-id lookups.
@@ -2182,6 +2206,7 @@ components:
           enum:
           - ACTIVE
           - ENDED
+          example: ACTIVE
         effectiveFrom:
           type: string
           format: date
@@ -2220,77 +2245,123 @@ components:
       - status
     EmployeeAddressDto:
       type: object
+      description: Postal address for an employee
       properties:
         line1:
           type: string
+          description: First address line
+          example: 123 Main St
         line2:
           type: string
+          description: Second address line
+          example: Suite 200
         city:
           type: string
+          description: City
+          example: Springfield
         region:
           type: string
+          description: State, province, or region
+          example: IL
         postalCode:
           type: string
+          description: Postal or ZIP code
+          example: '62704'
         country:
           type: string
+          description: Country
+          example: US
     EmployeeContactInfoDto:
       type: object
+      description: Contact information for an employee
       properties:
         primaryEmail:
           type: string
+          description: Primary email address
+          example: jane.smith@example.com
         primaryPhone:
           type: string
+          description: Primary phone number
+          example: +1-555-123-4567
         secondaryEmail:
           type: string
+          description: Secondary email address
+          example: jane.alt@example.com
         secondaryPhone:
           type: string
+          description: Secondary phone number
+          example: +1-555-987-6543
         address:
           $ref: '#/components/schemas/EmployeeAddressDto'
         emergencyContact:
           $ref: '#/components/schemas/EmployeeEmergencyContactDto'
     EmployeeEmergencyContactDto:
       type: object
+      description: Emergency contact details for an employee
       properties:
         name:
           type: string
+          description: Name of the emergency contact
+          example: John Smith
         relationship:
           type: string
+          description: Relationship to the employee
+          example: Spouse
         phone:
           type: string
+          description: Phone number of the emergency contact
+          example: +1-555-222-3333
         email:
           type: string
+          description: Email address of the emergency contact
+          example: john.smith@example.com
     UpdateEmployeeRequest:
       type: object
+      description: Request to update an existing employee record
       properties:
         legalName:
           type: string
+          description: Legal name of the employee
+          example: Jane Smith
           minLength: 1
         preferredName:
           type: string
+          description: Preferred name of the employee
+          example: Jane
         employeeNumber:
           type: string
+          description: Unique employee number
+          example: EMP-0001
           minLength: 1
         status:
           type: string
+          description: Employment status of the employee
           enum:
           - ACTIVE
           - ON_LEAVE
           - SUSPENDED
           - TERMINATED
           - DISABLED
+          example: ACTIVE
         hireDate:
           type: string
           format: date
+          description: Date the employee was hired
+          example: 2026-01-15
         terminationDate:
           type: string
           format: date
+          description: Date the employee was terminated, if applicable
+          example: 2026-12-31
         contactInfo:
           $ref: '#/components/schemas/EmployeeContactInfoDto'
         duplicatePolicy:
           type: string
+          description: Policy controlling how potential duplicate employee records are handled
           enum:
           - STRICT
           - BALANCED
+          example: STRICT
       required:
       - employeeNumber
       - hireDate
@@ -2298,74 +2369,122 @@ components:
       - status
     EmployeeProfileDto:
       type: object
+      description: Employee profile returned by employee read and write operations
       properties:
         id:
           type: string
           format: uuid
+          description: Employee identifier
+          example: 01960011-0000-7000-8000-000000000001
         legalName:
           type: string
+          description: Legal name of the employee
+          example: Jane Smith
         preferredName:
           type: string
+          description: Preferred name of the employee
+          example: Jane
         employeeNumber:
           type: string
+          description: Unique employee number
+          example: EMP-0001
         status:
           type: string
+          description: Employment status of the employee
           enum:
           - ACTIVE
           - ON_LEAVE
           - SUSPENDED
           - TERMINATED
           - DISABLED
+          example: ACTIVE
         hireDate:
           type: string
           format: date
+          description: Date the employee was hired
+          example: 2026-01-15
         terminationDate:
           type: string
           format: date
+          description: Date the employee was terminated, if applicable
+          example: 2026-12-31
         contactInfo:
           $ref: '#/components/schemas/EmployeeContactInfoDto'
         statusEffectiveAt:
           type: string
           format: date-time
+          description: Timestamp the current status became effective
+          example: 2026-01-15 09:30:00+00:00
         warnings:
           type: array
+          description: Non-fatal warnings raised while resolving the profile
+          example:
+          - Potential duplicate employee number
           items:
             type: string
+      required:
+      - employeeNumber
+      - hireDate
+      - id
+      - legalName
+      - status
     PersonRoleAssignmentRequest:
       type: object
+      description: Request to assign a role to a person
       properties:
         roleCode:
           type: string
+          description: Stable role code to assign
+          example: TECHNICIAN
           minLength: 1
         locationId:
           type: string
           format: uuid
+          description: Location identifier the role is scoped to
+          example: 01960011-0000-7000-8000-000000000010
         startDate:
           type: string
           format: date-time
+          description: Date and time the assignment becomes effective
+          example: 2026-01-01 00:00:00
         endDate:
           type: string
           format: date-time
+          description: Date and time the assignment ends
+          example: 2026-12-31 23:59:59
       required:
       - roleCode
     UserRoleDto:
       type: object
+      description: User role assignment as exposed by the security service
       properties:
         userId:
           type: string
+          description: User identifier
+          example: 01960011-0000-7000-8000-000000000001
         roleCode:
           type: string
+          description: Stable role code
+          example: TECHNICIAN
         locationId:
           type: string
           format: uuid
+          description: Location identifier the role is scoped to
+          example: 01960011-0000-7000-8000-000000000010
         startDate:
           type: string
           format: date
+          description: Date the assignment becomes effective
+          example: 2026-01-01
         endDate:
           type: string
           format: date
+          description: Date the assignment ends
+          example: 2026-12-31
         active:
           type: boolean
+          description: Whether the assignment is active
+          example: true
     ProblemDetail:
       type: object
       properties:
@@ -2392,56 +2511,90 @@ components:
           type: integer
           format: int32
           description: Total billable minutes for the session
+          example: 480
         breakMinutes:
           type: integer
           format: int32
           description: Total break minutes for the session
+          example: 30
         submittedAt:
           type: string
           format: date-time
           description: Timestamp the session was submitted
+          example: 2026-02-16 17:00:00+00:00
       required:
       - billableMinutes
       - breakMinutes
       - submittedAt
     WorkSessionDto:
       type: object
+      description: Work session representing a tracked period of work for a person
       properties:
         sessionId:
           type: string
           format: uuid
+          description: Work session identifier
+          example: 01960011-0000-7000-8000-000000000001
         personId:
           type: string
           format: uuid
+          description: Person the session belongs to
+          example: 01960011-0000-7000-8000-000000000002
         status:
           type: string
+          description: Lifecycle status of the session
+          example: OPEN
         startedAt:
           type: string
           format: date-time
+          description: Timestamp the session started
+          example: 2026-02-16 08:00:00+00:00
         endedAt:
           type: string
           format: date-time
+          description: Timestamp the session ended
+          example: 2026-02-16 17:00:00+00:00
         billableMinutes:
           type: integer
           format: int32
+          description: Total billable minutes for the session
+          example: 480
         breakMinutes:
           type: integer
           format: int32
+          description: Total break minutes for the session
+          example: 30
         submittedAt:
           type: string
           format: date-time
+          description: Timestamp the session was submitted
+          example: 2026-02-16 17:05:00+00:00
+      required:
+      - personId
+      - sessionId
+      - status
     BreakDto:
       type: object
+      description: Break taken within a work session
       properties:
         sessionId:
           type: string
           format: uuid
+          description: Work session the break belongs to
+          example: 01960011-0000-7000-8000-000000000001
         startedAt:
           type: string
           format: date-time
+          description: Timestamp the break started
+          example: 2026-02-16 12:00:00+00:00
         endedAt:
           type: string
           format: date-time
+          description: Timestamp the break ended
+          example: 2026-02-16 12:30:00+00:00
+      required:
+      - sessionId
+      - startedAt
     WorkSessionRequest:
       type: object
       description: Work session start request body
@@ -2450,82 +2603,134 @@ components:
           type: string
           format: uuid
           description: ID of the person
+          example: 01960011-0000-7000-8000-000000000001
         actor:
           type: string
           description: Actor performing the action
+          example: manager.user
       required:
       - personId
     LinkUserToPersonRequest:
       type: object
+      description: Request to link a user account to a person record
       properties:
         userId:
           type: string
           format: uuid
+          description: User account identifier
+          example: 01960011-0000-7000-8000-000000000001
         personId:
           type: string
           format: uuid
+          description: Person identifier
+          example: 01960011-0000-7000-8000-000000000002
         linkType:
           type: string
+          description: Type of link between user and person
+          example: PRIMARY
         notes:
           type: string
+          description: Optional notes describing the link
+          example: Linked during onboarding
       required:
       - personId
       - userId
     UserPersonLinkResponse:
       type: object
+      description: Response describing a link between a user account and a person record
       properties:
         linkId:
           type: string
           format: uuid
+          description: Link identifier
+          example: 01960011-0000-7000-8000-000000000001
         userId:
           type: string
           format: uuid
+          description: User account identifier
+          example: 01960011-0000-7000-8000-000000000002
         personId:
           type: string
           format: uuid
+          description: Person identifier
+          example: 01960011-0000-7000-8000-000000000003
         linkType:
           type: string
+          description: Type of link between user and person
+          example: PRIMARY
         createdAt:
           type: string
           format: date-time
+          description: Creation timestamp in UTC
+          example: 2026-01-15 09:30:00+00:00
         createdBy:
           type: string
+          description: Identifier of the actor that created the link
+          example: admin.user
         notes:
           type: string
+          description: Optional notes describing the link
+          example: Linked during onboarding
+      required:
+      - linkId
+      - personId
+      - userId
     CreateUserLinkRequest:
       type: object
+      description: Request to link a user account to a person record
       properties:
         userId:
           type: string
           format: uuid
+          description: User account identifier
+          example: 01960011-0000-7000-8000-000000000001
         personId:
           type: string
           format: uuid
+          description: Person identifier
+          example: 01960011-0000-7000-8000-000000000002
       required:
       - personId
       - userId
     RejectTimePeriodRequest:
       type: object
+      description: Request to reject a time period approval
       properties:
         reason:
           type: string
+          description: Reason the time period is being rejected
+          example: Missing break entries for two shifts
           minLength: 1
       required:
       - reason
     TimePeriodDecisionResponse:
       type: object
+      description: Result of an approve/reject decision applied across a person's time period entries
       properties:
         personId:
           type: string
           format: uuid
+          description: Person identifier
+          example: 01960011-0000-7000-8000-000000000001
         timePeriodId:
           type: string
           format: uuid
+          description: Time period identifier
+          example: 01960011-0000-7000-8000-000000000010
         processedCount:
           type: integer
           format: int32
+          description: Number of entries processed by the decision
+          example: 7
         status:
           type: string
+          description: Resulting status of the operation
+          example: APPROVED
+      required:
+      - personId
+      - processedCount
+      - status
+      - timePeriodId
     Decision:
       type: object
       description: An individual decision for a specific time entry
@@ -2686,21 +2891,27 @@ components:
           type: string
           format: uuid
           description: Canonical person ID
-          example: 550e8400-e29b-41d4-a716-446655440000
+          example: 01960011-0000-7000-8000-000000000001
         matchedExisting:
           type: boolean
           description: True when an existing person matched threshold
+          example: true
         score:
           type: integer
           format: int32
           description: Score of selected match (0 when created)
+          example: 85
         thresholdApplied:
           type: integer
           format: int32
           description: Threshold used for decision
+          example: 30
         matchedBy:
           type: array
           description: Which fields contributed to the winning match
+          example:
+          - email
+          - lastName
           items:
             type: string
         firstName:
@@ -2718,8 +2929,15 @@ components:
         phoneNumbers:
           type: array
           description: Resolved phone numbers
+          example:
+          - +1-555-123-4567
           items:
             type: string
+      required:
+      - matchedExisting
+      - personId
+      - score
+      - thresholdApplied
     TimeEntryExceptionRequest:
       type: object
       description: Request to create a time entry exception
@@ -2736,11 +2954,9 @@ components:
           type: string
           description: Severity level of the exception
           enum:
-          - LOW
-          - MEDIUM
-          - HIGH
-          - CRITICAL
-          example: HIGH
+          - WARNING
+          - BLOCKING
+          example: BLOCKING
         timeEntryId:
           type: string
           description: Time entry identifier associated with the exception
@@ -2778,6 +2994,7 @@ components:
       - success
     TimeEntryExceptionWaiveRequest:
       type: object
+      description: Request to waive a time entry exception
       properties:
         waiveReason:
           type: string
@@ -2787,42 +3004,58 @@ components:
       - waiveReason
     TimeEntryExceptionResolveRequest:
       type: object
+      description: Request to resolve a time entry exception
       properties:
         resolutionNotes:
           type: string
           description: Notes explaining the resolution
     CreateEmployeeRequest:
       type: object
+      description: Request to create an employee record
       properties:
         legalName:
           type: string
+          description: Legal name of the employee
+          example: Jane Smith
           minLength: 1
         preferredName:
           type: string
+          description: Preferred name of the employee
+          example: Jane
         employeeNumber:
           type: string
+          description: Unique employee number
+          example: EMP-0001
           minLength: 1
         status:
           type: string
+          description: Employment status of the employee
           enum:
           - ACTIVE
           - ON_LEAVE
           - SUSPENDED
           - TERMINATED
           - DISABLED
+          example: ACTIVE
         hireDate:
           type: string
           format: date
+          description: Date the employee was hired
+          example: 2026-01-15
         terminationDate:
           type: string
           format: date
+          description: Date the employee was terminated, if applicable
+          example: 2026-12-31
         contactInfo:
           $ref: '#/components/schemas/EmployeeContactInfoDto'
         duplicatePolicy:
           type: string
+          description: Policy controlling how potential duplicate employee records are handled during creation
           enum:
           - STRICT
           - BALANCED
+          example: STRICT
       required:
       - employeeNumber
       - hireDate
@@ -2830,17 +3063,24 @@ components:
       - status
     DisableEmployeeRequestDto:
       type: object
+      description: Request to disable an employee and govern handling of their staffing assignments
       properties:
         disableReason:
           type: string
+          description: Reason the employee is being disabled
+          example: Voluntary resignation
         assignmentPolicy:
           type: string
+          description: Policy controlling how active staffing assignments are terminated
           enum:
           - IMMEDIATE
           - GRACE_PERIOD
+          example: IMMEDIATE
         assignmentEndDate:
           type: string
           format: date
+          description: End date to apply to assignments when the policy is GRACE_PERIOD
+          example: 2026-03-31
     BulkIngestRequestPersonBulkIngestRecord:
       type: object
       properties:
@@ -2863,22 +3103,35 @@ components:
       - records
     PersonBulkIngestRecord:
       type: object
+      description: Single person record within a bulk ingest payload
       properties:
         legalName:
           type: string
+          description: Legal name of the person
+          example: Jane Smith
           minLength: 1
         preferredName:
           type: string
+          description: Preferred name of the person
+          example: Jane
         employeeNumber:
           type: string
+          description: Unique employee number
+          example: EMP-0001
           minLength: 1
         hireDate:
           type: string
+          description: Date the person was hired (ISO 8601 date)
+          example: 2026-01-15
           minLength: 1
         primaryEmail:
           type: string
+          description: Primary email address
+          example: jane.smith@example.com
         primaryPhone:
           type: string
+          description: Primary phone number
+          example: +1-555-123-4567
       required:
       - employeeNumber
       - hireDate
@@ -2916,119 +3169,216 @@ components:
           type: string
     RoleDto:
       type: object
+      description: Role definition as exposed by the security service
       properties:
         code:
           type: string
+          description: Stable role code
+          example: TECHNICIAN
         name:
           type: string
+          description: Human-readable role name
+          example: Technician
         description:
           type: string
+          description: Description of the role
+          example: Performs service work on vehicles
         scopeType:
           type: string
+          description: Scope at which the role applies
+          example: LOCATION
         active:
           type: boolean
+          description: Whether the role is active
+          example: true
     PersonResponse:
       type: object
+      description: Person summary returned by person read operations
       properties:
         id:
           type: string
           format: uuid
+          description: Person identifier
+          example: 01960011-0000-7000-8000-000000000001
         firstName:
           type: string
+          description: First name of the person
+          example: Jane
         lastName:
           type: string
+          description: Last name of the person
+          example: Smith
         primaryEmail:
           type: string
+          description: Primary email address
+          example: jane.smith@example.com
         secondaryEmail:
           type: string
+          description: Secondary email address
+          example: jane.alt@example.com
         phoneNumbers:
           type: array
+          description: Phone numbers on record
+          example:
+          - +1-555-123-4567
           items:
             type: string
         username:
           type: string
+          description: Linked username, if any
+          example: jane.smith
+      required:
+      - id
     TimekeepingEntryDto:
       type: object
+      description: Timekeeping entry summarizing a worked session pending or resolved for approval
       properties:
         timekeepingEntryId:
           type: string
           format: uuid
+          description: Timekeeping entry identifier
+          example: 01960011-0000-7000-8000-000000000001
         employeeId:
           type: string
           format: uuid
+          description: Employee identifier
+          example: 01960011-0000-7000-8000-000000000002
         sessionStartTime:
           type: string
           format: date-time
+          description: Session start timestamp
+          example: 2026-02-16 08:00:00+00:00
         sessionEndTime:
           type: string
           format: date-time
+          description: Session end timestamp
+          example: 2026-02-16 17:00:00+00:00
         approvalStatus:
           type: string
+          description: Approval status of the entry
           enum:
           - PENDING_APPROVAL
           - APPROVED
           - REJECTED
+          example: PENDING_APPROVAL
         associatedWorkOrderId:
           type: string
           format: uuid
+          description: Associated workorder identifier
+          example: 01960011-0000-7000-8000-000000000030
+      required:
+      - approvalStatus
+      - employeeId
+      - sessionStartTime
+      - timekeepingEntryId
     TimePeriodDto:
       type: object
+      description: Timekeeping time period bounding a payroll or submission cycle
       properties:
         timePeriodId:
           type: string
           format: uuid
+          description: Time period identifier
+          example: 01960011-0000-7000-8000-000000000001
         tenantId:
           type: string
           format: uuid
+          description: Tenant identifier the period belongs to
+          example: 01960011-0000-7000-8000-000000000099
         startDate:
           type: string
           format: date
+          description: First date of the period
+          example: 2026-02-01
         endDate:
           type: string
           format: date
+          description: Last date of the period
+          example: 2026-02-15
         status:
           type: string
+          description: Lifecycle status of the period
           enum:
           - OPEN
           - SUBMISSION_CLOSED
           - PAYROLL_CLOSED
+          example: OPEN
+      required:
+      - endDate
+      - startDate
+      - status
+      - tenantId
+      - timePeriodId
     TimePeriodApprovalDto:
       type: object
+      description: Aggregated approval state for a person within a time period
       properties:
         personId:
           type: string
           format: uuid
+          description: Person identifier
+          example: 01960011-0000-7000-8000-000000000001
         timePeriodId:
           type: string
           format: uuid
+          description: Time period identifier
+          example: 01960011-0000-7000-8000-000000000010
         totalCount:
           type: integer
           format: int32
+          description: Total number of entries in the period
+          example: 10
         pendingCount:
           type: integer
           format: int32
+          description: Number of entries still pending approval
+          example: 3
         approvedCount:
           type: integer
           format: int32
+          description: Number of approved entries
+          example: 6
         rejectedCount:
           type: integer
           format: int32
+          description: Number of rejected entries
+          example: 1
         overallStatus:
           type: string
+          description: Overall approval status for the person in the period
           enum:
           - PENDING_APPROVAL
           - APPROVED
           - REJECTED
+          example: PENDING_APPROVAL
+      required:
+      - approvedCount
+      - overallStatus
+      - pendingCount
+      - personId
+      - rejectedCount
+      - timePeriodId
+      - totalCount
     ApprovalPersonDto:
       type: object
+      description: Person summary shown in timekeeping approval workflows
       properties:
         personId:
           type: string
           format: uuid
+          description: Person identifier
+          example: 01960011-0000-7000-8000-000000000001
         displayName:
           type: string
+          description: Person display name
+          example: Jane Smith
         employeeNumber:
           type: string
+          description: Employee number
+          example: EMP-0001
+      required:
+      - displayName
+      - personId
     TimeEntryAdjustment:
       type: object
       description: Time entry adjustment representing a proposed or approved change to a time entry
@@ -3160,23 +3510,29 @@ components:
         timeEntryId:
           type: string
           description: Time entry identifier
+          example: 01960011-0000-7000-8000-000000000001
         employeeId:
           type: string
           description: Timekeeping employee identifier
+          example: EMP-0001
         employeeName:
           type: string
           description: Employee display name
+          example: Jane Smith
         locationId:
           type: string
           format: uuid
           description: Timekeeping location identifier
+          example: 01960011-0000-7000-8000-000000000010
         locationName:
           type: string
           description: Location display name
+          example: Downtown Service Center
         entryDate:
           type: string
           format: date
           description: Entry date (UTC)
+          example: 2026-02-16
         hoursWorked:
           type: number
           description: Worked hours in decimal format
@@ -3185,9 +3541,11 @@ components:
           type: string
           format: date-time
           description: Approval timestamp
+          example: 2026-02-17 09:15:00+00:00
         approvedBy:
           type: string
           description: Approver reference
+          example: manager.user
       required:
       - approvedAt
       - approvedBy
@@ -3238,7 +3596,7 @@ components:
           enum:
           - WARNING
           - BLOCKING
-          example: HIGH
+          example: BLOCKING
         status:
           type: string
           description: Current status of the exception
@@ -3247,7 +3605,7 @@ components:
           - ACKNOWLEDGED
           - RESOLVED
           - WAIVED
-          example: PENDING
+          example: OPEN
         timeEntryId:
           type: string
           description: Associated time entry identifier
@@ -3278,35 +3636,61 @@ components:
       - workDate
     PeopleAvailabilityResponse:
       type: object
+      description: Availability of a person at a location for a given date based on staffing assignments
       properties:
         personId:
           type: string
           format: uuid
+          description: Person identifier
+          example: 01960011-0000-7000-8000-000000000001
         firstName:
           type: string
+          description: First name of the person
+          example: Jane
         lastName:
           type: string
+          description: Last name of the person
+          example: Smith
         locationId:
           type: string
           format: uuid
+          description: Location identifier
+          example: 01960011-0000-7000-8000-000000000010
         role:
           type: string
+          description: Assignment role at the location
+          example: TECHNICIAN
         primary:
           type: boolean
+          description: Whether this is the person's primary assignment
+          example: true
         assignmentStatus:
           type: string
+          description: Lifecycle status of the assignment
           enum:
           - ACTIVE
           - ENDED
+          example: ACTIVE
         effectiveFrom:
           type: string
           format: date
+          description: Date the assignment becomes effective
+          example: 2026-02-01
         effectiveTo:
           type: string
           format: date
+          description: Date the assignment ends
+          example: 2026-12-31
         availableOn:
           type: string
           format: date
+          description: Date the availability was evaluated for
+          example: 2026-02-16
+      required:
+      - assignmentStatus
+      - locationId
+      - personId
+      - primary
   securitySchemes:
     bearerAuth:
       type: http

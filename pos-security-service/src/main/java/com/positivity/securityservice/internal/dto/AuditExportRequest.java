@@ -1,8 +1,12 @@
 package com.positivity.securityservice.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.positivity.securityservice.internal.enums.AuditDeliveryMode;
 import com.positivity.securityservice.internal.enums.AuditExportFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,14 +23,15 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Audit export job submission request")
 public class AuditExportRequest {
 
-    @Schema(description = "Filter criteria to scope the export", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Valid
+    @Schema(description = "Filter criteria to scope the export", requiredMode = NOT_REQUIRED)
     private AuditEventSearchFilter filters;
 
     @NotNull
-    @Schema(description = "Output format for the export", example = "CSV")
+    @Schema(description = "Output format for the export", example = "CSV", requiredMode = REQUIRED)
     private AuditExportFormat format;
 
     @NotNull
-    @Schema(description = "Delivery mode for the exported file", example = "DOWNLOAD")
+    @Schema(description = "Delivery mode for the exported file", example = "DOWNLOAD", requiredMode = REQUIRED)
     private AuditDeliveryMode deliveryMode;
 }

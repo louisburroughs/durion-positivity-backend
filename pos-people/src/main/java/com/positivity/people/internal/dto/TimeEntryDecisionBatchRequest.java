@@ -28,7 +28,8 @@ public class TimeEntryDecisionBatchRequest {
 
         @Schema(
                 description = "The reason for rejection. Applicable if this is a rejection request.",
-                example = "Incomplete work details")
+                example = "Incomplete work details",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private String rejectionReason;
 
         public Decision() {}
