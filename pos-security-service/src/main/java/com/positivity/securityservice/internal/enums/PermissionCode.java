@@ -420,13 +420,28 @@ public enum PermissionCode {
     PEOPLE__TIMEEXCEPTION__VIEW(326, "people:timeException:view"),
 
     // ── Workorder (new) ────────────────────────────────────────────────────────
-    WORKORDER__OPERATIONALCONTEXT__OVERRIDE(327, "workorder:operationalContext:override");
+    WORKORDER__OPERATIONALCONTEXT__OVERRIDE(327, "workorder:operationalContext:override"),
+    // ── Promotion (new) ────────────────────────────────────────────────────────
+    PROMOTION__APPLY(328, "Promotion:Apply"),
+    PROMOTION__MANAGE(329, "Promotion:Manage"),
+    PROMOTION__RECORDREDEMPTION(330, "Promotion:RecordRedemption"),
+    PROMOTION__VIEW(331, "Promotion:View"),
+    PROMOTION__VIEWREDEMPTION(332, "Promotion:ViewRedemption"),
+
+    // ── Timeentry (new) ────────────────────────────────────────────────────────
+    TIMEENTRY__APPROVE(333, "TimeEntry:Approve"),
+    TIMEENTRY__REJECT(334, "TimeEntry:Reject"),
+
+    // ── People (new) ───────────────────────────────────────────────────────────
+    PEOPLE__TIMEKEEPING__APPROVE(335, "people:timekeeping:approve"),
+    PEOPLE__TIMEKEEPING__REJECT(336, "people:timekeeping:reject"),
+    PEOPLE__TIMEKEEPING__VIEW(337, "people:timekeeping:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 10;
+    public static final int CATALOG_VERSION = 11;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
