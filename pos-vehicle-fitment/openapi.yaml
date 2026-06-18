@@ -501,26 +501,45 @@ components:
       - records
     FitmentBulkIngestRecord:
       type: object
+      description: Single fitment record consumed during bulk part fitment ingest
       properties:
         partNumberId:
           type: integer
           format: int64
+          description: Part number identifier the fitment record applies to
+          example: 100245
         manufacturerName:
           type: string
+          description: Manufacturer name for the vehicle
+          example: Toyota
         makeName:
           type: string
+          description: Make name for the vehicle
+          example: Camry
         modelName:
           type: string
+          description: Model name for the vehicle
+          example: Camry SE
         vehicleTypeName:
           type: string
+          description: Vehicle type name
+          example: Passenger Car
         vehicleYear:
           type: string
+          description: Vehicle year or year range
+          example: 2018-2022
         engineType:
           type: string
+          description: Engine type for the vehicle
+          example: 2.5L I4
         submodel:
           type: string
+          description: Vehicle submodel or trim
+          example: SE
         notes:
           type: string
+          description: Free-form notes about the fitment
+          example: Verified against OEM catalog
       required:
       - partNumberId
     BulkIngestResponse:

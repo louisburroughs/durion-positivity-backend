@@ -1034,8 +1034,11 @@ paths:
             application/json:
               schema:
                 type: array
+                additionalProperties: {}
+                contains: {}
                 items:
                   $ref: '#/components/schemas/UomConversionDto'
+                unevaluatedItems: {}
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -2087,6 +2090,9 @@ components:
           type: string
           description: Category name
           example: Tools
+      required:
+      - id
+      - name
     DimensionDto:
       type: object
       description: Product dimension detail
@@ -2122,6 +2128,7 @@ components:
           - CURRENT
           - VOLTAGE
           - RESISTANCE
+          example: LENGTH
         description:
           type: string
           description: Dimension description
@@ -2135,6 +2142,10 @@ components:
           format: double
           description: Dimension value
           example: 12.5
+      required:
+      - dimensionType
+      - dimensionValue
+      - id
     ProductDto:
       type: object
       description: Catalog product
@@ -2151,66 +2162,86 @@ components:
         shortDescription:
           type: string
           description: Short product description
+          example: Adjustable steel wrench
         longDescription:
           type: string
           description: Long product description
+          example: Forged steel adjustable wrench with cushioned grip
         description:
           type: string
           description: Product description
+          example: Heavy duty wrench
         images:
           type: array
           description: Product image URLs
+          example:
+          - https://cdn.example.com/img/wrench.jpg
           items:
             type: string
         manufacturerPartNumber:
           type: string
           description: Manufacturer part number
+          example: MPN-9981
         manufacturerId:
           type: string
           format: uuid
           description: Manufacturer identifier
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         manufacturerName:
           type: string
           description: Manufacturer name
+          example: AcmePro
         manufacturerWarranty:
           type: string
           description: Manufacturer warranty
+          example: 2 years limited
         manufacturerBrand:
           type: string
           description: Manufacturer brand
+          example: AcmePro
         countryOfOrigin:
           type: string
           description: Country of origin
+          example: US
         sku:
           type: string
           description: SKU
+          example: SKU-12345
         mpn:
           type: string
           description: Manufacturer part number
+          example: MPN-9981
         upc:
           type: string
           description: UPC
+          example: 012345678905
         attributes:
           type: string
           description: Attributes JSON
+          example:
+            color: black
         unitOfMeasure:
           type: string
           description: Unit of measure
+          example: EACH
         status:
           type: string
           description: Operational status
           enum:
           - ACTIVE
           - INACTIVE
+          example: ACTIVE
         productCode:
           type: string
           description: Product code
+          example: 012345678905
         productCodeType:
           type: string
           description: Product code type
           enum:
           - UPC
           - EAN
+          example: UPC
         category:
           $ref: '#/components/schemas/CategoryDto'
         subcategory:
@@ -2218,23 +2249,30 @@ components:
         type:
           type: string
           description: Product type
+          example: PHYSICAL
         dimensions:
           type: array
           description: Product dimensions
+          example: []
           items:
             $ref: '#/components/schemas/DimensionDto'
         material:
           type: string
           description: Material
+          example: Steel
         color:
           type: string
           description: Color
+          example: Black
         warranty:
           type: string
           description: Warranty
+          example: 1 year
         specifications:
           type: string
           description: Detailed specifications JSON
+          example:
+            weightKg: 1.2
         lifecycleState:
           type: string
           description: Lifecycle state
@@ -2242,29 +2280,39 @@ components:
           - ACTIVE
           - INACTIVE
           - DISCONTINUED
+          example: ACTIVE
         lifecycleStateEffectiveAt:
           type: string
           format: date-time
           description: Lifecycle state effective instant
+          example: 2026-01-15 09:30:00+00:00
         lastStateChangedBy:
           type: string
           format: uuid
           description: User that last changed lifecycle state
+          example: 8b8df63e-18d8-4bde-a8f4-88bc36bc57d7
         lastStateChangedAt:
           type: string
           format: date-time
           description: Last lifecycle state change instant
+          example: 2026-01-15 09:30:00+00:00
         lifecycleOverrideReason:
           type: string
           description: Lifecycle override reason
+          example: Vendor discontinued
         createdAt:
           type: string
           format: date-time
           description: Created timestamp
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
           description: Updated timestamp
+          example: 2026-01-16 11:00:00+00:00
+      required:
+      - id
+      - name
     SubcategoryDto:
       type: object
       description: Product subcategory
@@ -2304,35 +2352,64 @@ components:
       - effectiveStartDate
     ProductMsrpDto:
       type: object
+      description: Product MSRP detail
       properties:
         msrpId:
           type: string
           format: uuid
+          description: MSRP identifier
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         productId:
           type: string
           format: uuid
+          description: Product identifier the MSRP applies to
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         amount:
           type: string
+          description: MSRP amount
+          example: '99.99'
         currency:
           type: string
+          description: ISO 4217 currency code
+          example: USD
         effectiveStartDate:
           type: string
           format: date
+          description: Date the MSRP becomes effective
+          example: 2026-01-15
         effectiveEndDate:
           type: string
           format: date
+          description: Date the MSRP stops being effective
+          example: 2026-12-31
         createdAt:
           type: string
           format: date-time
+          description: Timestamp the MSRP was created
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp the MSRP was last updated
+          example: 2026-01-16 11:00:00+00:00
         updatedBy:
           type: string
           format: uuid
+          description: Identifier of the user that last updated the MSRP
+          example: 8b8df63e-18d8-4bde-a8f4-88bc36bc57d7
         version:
           type: integer
           format: int64
+          description: Version for optimistic locking
+          example: 1
+      required:
+      - amount
+      - createdAt
+      - currency
+      - effectiveStartDate
+      - msrpId
+      - productId
+      - version
     ProductLifecycleUpdateRequest:
       type: object
       description: Product lifecycle update request
@@ -2344,14 +2421,17 @@ components:
           - ACTIVE
           - INACTIVE
           - DISCONTINUED
+          example: DISCONTINUED
         effectiveAt:
           type: string
           format: date-time
           description: Effective instant for lifecycle change
+          example: 2026-01-15 09:30:00+00:00
         effectiveDate:
           type: string
           format: date
           description: Effective date for lifecycle change (date-only)
+          example: 2026-01-15
         changedBy:
           type: string
           description: Username performing the lifecycle change
@@ -2359,6 +2439,9 @@ components:
         overrideReason:
           type: string
           description: Reason for lifecycle override
+          example: Vendor discontinued
+      required:
+      - lifecycleState
     ProductLifecycleResponse:
       type: object
       description: Product lifecycle details and replacement options
@@ -2375,10 +2458,12 @@ components:
           - ACTIVE
           - INACTIVE
           - DISCONTINUED
+          example: ACTIVE
         lifecycleStateEffectiveAt:
           type: string
           format: date-time
           description: Lifecycle state effective instant
+          example: 2026-01-15 09:30:00+00:00
         lastStateChangedBy:
           type: string
           format: uuid
@@ -2388,14 +2473,20 @@ components:
           type: string
           format: date-time
           description: Last lifecycle state change instant
+          example: 2026-01-15 09:30:00+00:00
         lifecycleOverrideReason:
           type: string
           description: Lifecycle override reason
+          example: Vendor discontinued
         replacementOptions:
           type: array
           description: Replacement options for this product lifecycle state
+          example: []
           items:
             $ref: '#/components/schemas/ReplacementOption'
+      required:
+      - lifecycleState
+      - productId
     ReplacementOption:
       type: object
       description: Replacement option details
@@ -2418,10 +2509,15 @@ components:
         notes:
           type: string
           description: Replacement notes
+          example: Direct successor model
         effectiveAt:
           type: string
           format: date-time
           description: Replacement option effective instant
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - replacementId
+      - replacementProductId
     UomConversionUpdateRequestDto:
       type: object
       properties:
@@ -2543,98 +2639,155 @@ components:
             $ref: '#/components/schemas/CostTierDto'
     PriceBookCreateRequestDto:
       type: object
+      description: Request payload for creating a price book
       properties:
         name:
           type: string
+          description: Price book name
+          example: West Region Pricing
         scope:
           type: string
+          description: Scope the price book applies to
           enum:
           - COMPANY_DEFAULT
           - LOCATION
           - CUSTOMER_TIER
+          example: LOCATION
         scopeId:
           type: string
           format: uuid
+          description: Identifier of the scoped entity (location or customer tier)
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         isDefault:
           type: boolean
+          default: false
+          description: Whether this is the default price book for the scope
+          example: false
         status:
           type: string
+          description: Initial status of the price book
           enum:
           - ACTIVE
           - INACTIVE
+          example: ACTIVE
       required:
       - name
       - scope
     PriceBookDto:
       type: object
+      description: Price book detail
       properties:
         priceBookId:
           type: string
           format: uuid
+          description: Price book identifier
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         name:
           type: string
+          description: Price book name
+          example: West Region Pricing
         scope:
           type: string
+          description: Scope the price book applies to
           enum:
           - COMPANY_DEFAULT
           - LOCATION
           - CUSTOMER_TIER
+          example: LOCATION
         scopeId:
           type: string
           format: uuid
+          description: Identifier of the scoped entity (location or customer tier)
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         status:
           type: string
+          description: Current status of the price book
           enum:
           - ACTIVE
           - INACTIVE
+          example: ACTIVE
         createdAt:
           type: string
           format: date-time
+          description: Timestamp the price book was created
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp the price book was last updated
+          example: 2026-01-16 11:00:00+00:00
         version:
           type: integer
           format: int64
+          description: Version for optimistic locking
+          example: 1
         default:
           type: boolean
+      required:
+      - createdAt
+      - name
+      - priceBookId
+      - scope
+      - status
+      - version
     PriceBookRuleCreateRequestDto:
       type: object
+      description: Request payload for creating a price book rule
       properties:
         targetType:
           type: string
+          description: Target type the rule applies to
           enum:
           - SKU
           - CATEGORY
           - GLOBAL
+          example: SKU
         targetId:
           type: string
           format: uuid
+          description: Identifier of the targeted entity (SKU or category)
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         pricingLogic:
           type: string
+          description: Pricing logic expression applied by the rule
+          example: MSRP * 0.9
         conditionType:
           type: string
+          description: Condition type gating the rule
           enum:
           - CUSTOMER_TIER
           - LOCATION
           - NONE
+          example: CUSTOMER_TIER
         conditionValue:
           type: string
+          description: Value evaluated against the condition type
+          example: GOLD
         priority:
           type: integer
           format: int32
+          description: Evaluation priority; lower wins
+          example: 10
         effectiveStartAt:
           type: string
           format: date-time
+          description: Instant the rule becomes effective
+          example: 2026-01-15 09:30:00+00:00
         effectiveEndAt:
           type: string
           format: date-time
+          description: Instant the rule stops being effective
+          example: 2026-12-31 23:59:59+00:00
         createdByUserId:
           type: string
           format: uuid
+          description: Identifier of the user creating the rule
+          example: 8b8df63e-18d8-4bde-a8f4-88bc36bc57d7
         version:
           type: integer
           format: int64
+          description: Version for optimistic locking
+          example: 1
       required:
       - createdByUserId
       - effectiveStartAt
@@ -2642,59 +2795,100 @@ components:
       - targetType
     PriceBookRuleDto:
       type: object
+      description: Price book rule detail
       properties:
         ruleId:
           type: string
           format: uuid
+          description: Rule identifier
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         priceBookId:
           type: string
           format: uuid
+          description: Identifier of the owning price book
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         targetType:
           type: string
+          description: Target type the rule applies to
           enum:
           - SKU
           - CATEGORY
           - GLOBAL
+          example: SKU
         targetId:
           type: string
           format: uuid
+          description: Identifier of the targeted entity (SKU or category)
+          example: 3d129775-efeb-57f0-b949-7c0ecf9f0c2e
         pricingLogic:
           type: string
+          description: Pricing logic expression applied by the rule
+          example: MSRP * 0.9
         conditionType:
           type: string
+          description: Condition type gating the rule
           enum:
           - CUSTOMER_TIER
           - LOCATION
           - NONE
+          example: CUSTOMER_TIER
         conditionValue:
           type: string
+          description: Value evaluated against the condition type
+          example: GOLD
         priority:
           type: integer
           format: int32
+          description: Evaluation priority; lower wins
+          example: 10
         effectiveStartAt:
           type: string
           format: date-time
+          description: Instant the rule becomes effective
+          example: 2026-01-15 09:30:00+00:00
         effectiveEndAt:
           type: string
           format: date-time
+          description: Instant the rule stops being effective
+          example: 2026-12-31 23:59:59+00:00
         status:
           type: string
+          description: Current status of the rule
           enum:
           - ACTIVE
           - INACTIVE
           - NOT_APPLICABLE_MISSING_BASE
+          example: ACTIVE
         createdByUserId:
           type: string
           format: uuid
+          description: Identifier of the user that created the rule
+          example: 8b8df63e-18d8-4bde-a8f4-88bc36bc57d7
         createdAt:
           type: string
           format: date-time
+          description: Timestamp the rule was created
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp the rule was last updated
+          example: 2026-01-16 11:00:00+00:00
         version:
           type: integer
           format: int64
+          description: Version for optimistic locking
+          example: 1
+      required:
+      - createdAt
+      - createdByUserId
+      - effectiveStartAt
+      - priceBookId
+      - pricingLogic
+      - ruleId
+      - status
+      - targetType
+      - version
     UpdateStandardCostRequestDto:
       type: object
       description: Request payload to update standard cost
@@ -2716,12 +2910,22 @@ components:
         itemId:
           type: string
           format: uuid
+          description: Item identifier
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         standardCost:
           type: number
+          description: Current standard cost
+          example: 5.0
         lastCost:
           type: number
+          description: Most recent purchase cost
+          example: 6.25
         averageCost:
           type: number
+          description: Weighted average cost
+          example: 5.75
+      required:
+      - itemId
     CatalogDto:
       type: object
       description: Catalog container
@@ -2738,24 +2942,34 @@ components:
         description:
           type: string
           description: Catalog description
+          example: Seasonal winter product catalog
         productIds:
           type: array
           description: Product IDs included in the catalog
+          example:
+          - 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
           items:
             type: string
             format: uuid
         serviceIds:
           type: array
           description: Service IDs included in the catalog
+          example:
+          - 0196cf6f-c8dd-7ee0-93e7-f48a5698a536
           items:
             type: string
             format: uuid
         nonInventoryProductIds:
           type: array
           description: Non-inventory product IDs included in the catalog
+          example:
+          - 0196cf6f-c8dd-7ee0-93e7-f48a5698a537
           items:
             type: string
             format: uuid
+      required:
+      - id
+      - name
     CatalogItemRequestDto:
       type: object
       description: Catalog item upsert request. Fields are type-dependent.
@@ -2767,38 +2981,50 @@ components:
         shortDescription:
           type: string
           description: Short description
+          example: Adjustable steel wrench
         longDescription:
           type: string
           description: Long description
+          example: Forged steel adjustable wrench with cushioned grip
         images:
           type: array
           description: Product image URLs for product type
+          example:
+          - https://cdn.example.com/img/wrench.jpg
           items:
             type: string
         manufacturerPartNumber:
           type: string
           description: Manufacturer part number for product type
+          example: MPN-9981
         manufacturerId:
           type: string
           description: Manufacturer identifier for product type
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         manufacturerName:
           type: string
           description: Manufacturer name for product type
+          example: AcmePro
         manufacturerWarranty:
           type: string
           description: Manufacturer warranty for product type
+          example: 2 years limited
         manufacturerBrand:
           type: string
           description: Manufacturer brand for product type
+          example: AcmePro
         countryOfOrigin:
           type: string
           description: Country of origin for product type
+          example: US
         sku:
           type: string
           description: SKU for product type
+          example: SKU-12345
         productCode:
           type: string
           description: Product code for product type
+          example: 012345678905
         type:
           type: string
           description: Product type
@@ -2806,15 +3032,20 @@ components:
         material:
           type: string
           description: Material for product type
+          example: Steel
         color:
           type: string
           description: Color for product type
+          example: Black
         warranty:
           type: string
           description: Warranty for product type
+          example: 1 year
         specifications:
           type: string
           description: Detailed specifications JSON for product type
+          example:
+            weightKg: 1.2
     CatalogItemResponseDto:
       type: object
       description: Catalog item response
@@ -2823,6 +3054,7 @@ components:
           type: string
           format: uuid
           description: Item identifier
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         itemType:
           type: string
           description: Item type
@@ -2830,42 +3062,66 @@ components:
         name:
           type: string
           description: Item name
+          example: Heavy Duty Wrench
         shortDescription:
           type: string
           description: Short description
+          example: Adjustable steel wrench
         longDescription:
           type: string
           description: Long description
+          example: Forged steel adjustable wrench with cushioned grip
+      required:
+      - id
+      - itemType
     ProductCreateRequestDto:
       type: object
       description: Create product request
       properties:
         name:
           type: string
+          description: Product name
+          example: Heavy Duty Wrench
           minLength: 1
         description:
           type: string
+          description: Product description
+          example: Forged steel adjustable wrench
           minLength: 1
         unitOfMeasure:
           type: string
+          description: Unit of measure
+          example: EACH
           minLength: 1
         manufacturerId:
           type: string
           format: uuid
+          description: Manufacturer identifier
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         categoryId:
           type: string
           format: uuid
+          description: Category identifier
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         sku:
           type: string
+          description: Stock keeping unit
+          example: SKU-12345
           minLength: 1
         mpn:
           type: string
+          description: Manufacturer part number
+          example: MPN-9981
           minLength: 1
         upc:
           type: string
+          description: Universal product code
+          example: 012345678905
         attributes:
           type: string
           description: JSON object represented as string
+          example:
+            color: black
       required:
       - description
       - mpn
@@ -2889,26 +3145,41 @@ components:
         notes:
           type: string
           description: Replacement notes
+          example: Direct successor model
         effectiveAt:
           type: string
           format: date-time
           description: Replacement effective instant
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - replacementProductId
     CreateMsrpRequestDto:
       type: object
+      description: Request payload for creating a product MSRP
       properties:
         amount:
           type: number
+          description: MSRP amount
+          example: 99.99
         currency:
           type: string
+          description: ISO 4217 currency code
+          example: USD
         effectiveStartDate:
           type: string
           format: date
+          description: Date the MSRP becomes effective
+          example: 2026-01-15
         effectiveEndDate:
           type: string
           format: date
+          description: Date the MSRP stops being effective
+          example: 2026-12-31
         createdByUserId:
           type: string
           format: uuid
+          description: Identifier of the user creating the MSRP
+          example: 8b8df63e-18d8-4bde-a8f4-88bc36bc57d7
       required:
       - amount
       - createdByUserId
@@ -2963,25 +3234,38 @@ components:
       - supplierId
     LocationPriceOverrideCreateRequestDto:
       type: object
+      description: Request payload for creating a location price override
       properties:
         locationId:
           type: string
           format: uuid
+          description: Location identifier the override applies to
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         productId:
           type: string
           format: uuid
+          description: Product identifier the override applies to
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         basePrice:
           type: number
+          description: Base price before override
+          example: 100.0
           minimum: 0.0
         cost:
           type: number
+          description: Item cost used for margin calculation
+          example: 60.0
           minimum: 0.0
         overridePrice:
           type: number
+          description: Requested override price
+          example: 89.99
           minimum: 0.0
         createdByUserId:
           type: string
           format: uuid
+          description: Identifier of the user creating the override
+          example: 8b8df63e-18d8-4bde-a8f4-88bc36bc57d7
       required:
       - basePrice
       - createdByUserId
@@ -2990,95 +3274,164 @@ components:
       - productId
     LocationPriceOverrideResponseDto:
       type: object
+      description: Location price override detail
       properties:
         overrideId:
           type: string
           format: uuid
+          description: Override identifier
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         version:
           type: integer
           format: int64
+          description: Version for optimistic locking
+          example: 1
         locationId:
           type: string
           format: uuid
+          description: Location identifier the override applies to
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         productId:
           type: string
           format: uuid
+          description: Product identifier the override applies to
+          example: 3d129775-efeb-57f0-b949-7c0ecf9f0c2e
         basePrice:
           type: number
+          description: Base price before override
+          example: 100.0
         cost:
           type: number
+          description: Item cost used for margin calculation
+          example: 60.0
         overridePrice:
           type: number
+          description: Override price
+          example: 89.99
         discountPercent:
           type: number
+          description: Computed discount percent versus base price
+          example: 10.01
         marginPercent:
           type: number
+          description: Computed margin percent versus cost
+          example: 33.33
         status:
           type: string
+          description: Current override status
           enum:
           - ACTIVE
           - PENDING_APPROVAL
           - REJECTED
           - INACTIVE
+          example: PENDING_APPROVAL
         createdByUserId:
           type: string
           format: uuid
+          description: Identifier of the user that created the override
+          example: 8b8df63e-18d8-4bde-a8f4-88bc36bc57d7
         createdAt:
           type: string
           format: date-time
+          description: Timestamp the override was created
+          example: 2026-01-15 09:30:00+00:00
         assignedApproverId:
           type: string
           format: uuid
+          description: Identifier of the assigned approver
+          example: 9c9ef74f-29e9-5cef-b9f5-99cd47cd68e8
         assignmentStrategy:
           type: string
+          description: Strategy used to assign the approver
+          example: ROUND_ROBIN
         approvedByUserId:
           type: string
           format: uuid
+          description: Identifier of the user that approved the override
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a540
         approvedAt:
           type: string
           format: date-time
+          description: Timestamp the override was approved
+          example: 2026-01-15 10:00:00+00:00
         rejectedBy:
           type: string
           format: uuid
+          description: Identifier of the user that rejected the override
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a541
         rejectedAt:
           type: string
           format: date-time
+          description: Timestamp the override was rejected
+          example: 2026-01-15 10:05:00+00:00
         rejectionReasonCode:
           type: string
+          description: Reason code for rejection
+          example: BELOW_MARGIN
         rejectionNotes:
           type: string
+          description: Free-text notes for rejection
+          example: Margin too low for this location
+      required:
+      - basePrice
+      - createdAt
+      - createdByUserId
+      - locationId
+      - overrideId
+      - overridePrice
+      - productId
+      - status
+      - version
     LocationPriceOverrideDecisionRequestDto:
       type: object
+      description: Request payload for approving or rejecting a location price override
       properties:
         version:
           type: integer
           format: int64
+          description: Expected version for optimistic locking
+          example: 1
         actorUserId:
           type: string
           format: uuid
+          description: Identifier of the user making the decision
+          example: 8b8df63e-18d8-4bde-a8f4-88bc36bc57d7
         rejectionReasonCode:
           type: string
+          description: Reason code when rejecting the override
+          example: BELOW_MARGIN
         rejectionNotes:
           type: string
+          description: Free-text notes when rejecting the override
+          example: Margin too low for this location
       required:
       - actorUserId
       - version
     GuardrailPolicyUpsertRequestDto:
       type: object
+      description: Request payload for upserting a pricing guardrail policy
       properties:
         scopeId:
           type: string
           format: uuid
+          description: Scope identifier the guardrail policy applies to
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         minMarginPercent:
           type: number
+          description: Minimum allowed margin percent
+          example: 20.0
           maximum: 100.0
           minimum: 0.0
         maxDiscountPercent:
           type: number
+          description: Maximum allowed discount percent
+          example: 15.0
           maximum: 100.0
           minimum: 0.0
         autoApprovalThresholdPercent:
           type: number
+          description: Threshold percent below which overrides are auto-approved
+          example: 5.0
           maximum: 100.0
           minimum: 0.0
       required:
@@ -3147,23 +3500,38 @@ components:
       - records
     CatalogBulkIngestRecord:
       type: object
+      description: Single record in a catalog bulk-ingest request
       properties:
         sku:
           type: string
+          description: Stock keeping unit for the record
+          example: SKU-12345
           minLength: 1
         upc:
           type: string
+          description: Universal product code
+          example: 012345678905
         name:
           type: string
+          description: Display name of the item
+          example: Heavy Duty Wrench
           minLength: 1
         description:
           type: string
+          description: Long description of the item
+          example: Forged steel adjustable wrench
         categoryName:
           type: string
+          description: Category name to associate the item with
+          example: Tools
         subcategoryName:
           type: string
+          description: Subcategory name to associate the item with
+          example: Hand Tools
         price:
           type: number
+          description: List price for the item
+          example: 29.99
       required:
       - name
       - sku
@@ -3227,6 +3595,7 @@ components:
           type: string
           format: date-time
           description: Timestamp of availability data
+          example: 2026-01-15 09:30:00+00:00
         confidence:
           type: string
           description: Confidence level in availability data
@@ -3235,6 +3604,9 @@ components:
           - MEDIUM
           - HIGH
           example: MEDIUM
+      required:
+      - confidence
+      - status
     LeadTimeInfo:
       type: object
       description: Lead time information with source indicator
@@ -3265,6 +3637,7 @@ components:
           type: string
           format: date-time
           description: Timestamp of lead time data
+          example: 2026-01-15 09:30:00+00:00
         confidence:
           type: string
           description: Confidence in lead time estimate
@@ -3273,6 +3646,9 @@ components:
           - MEDIUM
           - HIGH
           example: LOW
+      required:
+      - confidence
+      - source
     PricingInfo:
       type: object
       description: Pricing information with availability status
@@ -3304,6 +3680,7 @@ components:
           type: string
           format: date-time
           description: Timestamp of pricing data
+          example: 2026-01-15 09:30:00+00:00
         confidence:
           type: string
           description: Confidence level in pricing data
@@ -3312,6 +3689,9 @@ components:
           - MEDIUM
           - HIGH
           example: HIGH
+      required:
+      - confidence
+      - status
     ProductDetailView:
       type: object
       description: Consolidated product detail view with pricing and availability
@@ -3327,6 +3707,7 @@ components:
         specifications:
           type: array
           description: Product specifications
+          example: []
           items:
             $ref: '#/components/schemas/ProductSpecification'
         pricing:
@@ -3336,12 +3717,14 @@ components:
         substitutions:
           type: array
           description: Substitution product suggestions
+          example: []
           items:
             $ref: '#/components/schemas/SubstitutionHint'
         generatedAt:
           type: string
           format: date-time
           description: Timestamp when this response was generated
+          example: 2026-01-15 09:30:00+00:00
         confidence:
           type: string
           description: Overall confidence in the data completeness
@@ -3350,6 +3733,10 @@ components:
           - MEDIUM
           - HIGH
           example: HIGH
+      required:
+      - confidence
+      - generatedAt
+      - productId
     ProductSpecification:
       type: object
       description: Product specification entry
@@ -3362,6 +3749,9 @@ components:
           type: string
           description: Specification value
           example: Steel
+      required:
+      - name
+      - value
     SubstitutionHint:
       type: object
       description: Product substitution suggestion
@@ -3374,6 +3764,8 @@ components:
           type: string
           description: Reason for substitution
           example: Newer Model
+      required:
+      - productId
     ServiceDto:
       type: object
       description: Catalog service item
@@ -3400,16 +3792,21 @@ components:
         data:
           type: array
           description: Page of matching product summaries
+          example: []
           items:
             $ref: '#/components/schemas/ProductSummary'
         nextCursor:
           type: string
           description: Opaque cursor for the next page; null if no more results
+          example: '2'
         limit:
           type: integer
           format: int32
           description: Number of items requested (limit)
           example: 20
+      required:
+      - data
+      - limit
     ProductSummary:
       type: object
       description: Lightweight product summary for search results
@@ -3439,24 +3836,40 @@ components:
           example: AcmePro
     EffectiveLocationPriceResponseDto:
       type: object
+      description: Effective location-specific price for a product
       properties:
         locationId:
           type: string
           format: uuid
+          description: Location identifier
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         productId:
           type: string
           format: uuid
+          description: Product identifier
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         basePrice:
           type: number
+          description: Base price before any override
+          example: 100.0
         effectivePrice:
           type: number
+          description: Effective price after applying any override
+          example: 89.99
         overrideStatus:
           type: string
+          description: Status of the override applied to derive the effective price
           enum:
           - ACTIVE
           - PENDING_APPROVAL
           - REJECTED
           - INACTIVE
+          example: ACTIVE
+      required:
+      - basePrice
+      - effectivePrice
+      - locationId
+      - productId
     NonInventoryProductDto:
       type: object
       description: Non-inventory product
@@ -3469,12 +3882,18 @@ components:
         name:
           type: string
           description: Name
+          example: Shop Supplies Fee
         longDescription:
           type: string
           description: Long description
+          example: Miscellaneous consumable shop supplies
         shortDescription:
           type: string
           description: Short description
+          example: Shop supplies
+      required:
+      - id
+      - name
     ItemCostAuditDto:
       type: object
       description: Item cost audit event
@@ -3482,33 +3901,59 @@ components:
         auditId:
           type: string
           format: uuid
+          description: Audit event identifier
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         itemId:
           type: string
           format: uuid
+          description: Item identifier the audit event belongs to
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         timestamp:
           type: string
           format: date-time
+          description: Timestamp the cost change occurred
+          example: 2026-01-15 09:30:00+00:00
         costTypeChanged:
           type: string
+          description: Type of cost that changed
           enum:
           - STANDARD
           - LAST
           - AVERAGE
+          example: STANDARD
         oldValue:
           type: number
+          description: Previous cost value
+          example: 5.0
         newValue:
           type: number
+          description: New cost value
+          example: 6.25
         changeSourceType:
           type: string
+          description: Source that triggered the cost change
           enum:
           - MANUAL
           - PURCHASE_ORDER
+          example: MANUAL
         changeSourceId:
           type: string
+          description: Identifier of the change source
+          example: PO-10045
         actor:
           type: string
+          description: Actor responsible for the change
+          example: jane.doe
         reasonCode:
           type: string
+          description: Reason code for the change
+          example: PRICE_CORRECTION
+      required:
+      - auditId
+      - changeSourceType
+      - costTypeChanged
+      - itemId
+      - timestamp
     Pageable:
       type: object
       properties:
@@ -3560,14 +4005,14 @@ components:
         offset:
           type: integer
           format: int64
-        paged:
-          type: boolean
         pageNumber:
           type: integer
           format: int32
         pageSize:
           type: integer
           format: int32
+        paged:
+          type: boolean
         sort:
           $ref: '#/components/schemas/SortObject'
         unpaged:

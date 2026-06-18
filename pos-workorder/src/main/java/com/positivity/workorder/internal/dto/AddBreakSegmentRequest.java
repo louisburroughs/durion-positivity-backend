@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+
 import com.positivity.workorder.internal.enums.BreakType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -16,10 +18,10 @@ import org.jspecify.annotations.Nullable;
 public class AddBreakSegmentRequest {
 
     @Nullable
-    @Schema(description = "Type of break")
+    @Schema(description = "Type of break", example = "MEAL", requiredMode = NOT_REQUIRED)
     private BreakType breakType;
 
     @Nullable
-    @Schema(description = "Optional break notes")
+    @Schema(description = "Optional break notes", example = "Lunch break", requiredMode = NOT_REQUIRED)
     private String notes;
 }

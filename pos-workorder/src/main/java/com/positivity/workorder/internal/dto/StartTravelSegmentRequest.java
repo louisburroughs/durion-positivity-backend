@@ -1,5 +1,8 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.positivity.workorder.internal.enums.OnBehalfReasonCode;
 import com.positivity.workorder.internal.enums.TravelSegmentType;
 import io.swagger.v3.oas.annotations.media.Schema;

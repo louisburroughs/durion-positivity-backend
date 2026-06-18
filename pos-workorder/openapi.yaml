@@ -3139,8 +3139,11 @@ paths:
             application/json:
               schema:
                 type: array
+                additionalProperties: {}
+                contains: {}
                 items:
                   $ref: '#/components/schemas/WorkorderPickedItemResponse'
+                unevaluatedItems: {}
         '403':
           description: Forbidden
           content:
@@ -3213,8 +3216,11 @@ paths:
             application/json:
               schema:
                 type: array
+                additionalProperties: {}
+                contains: {}
                 items:
                   $ref: '#/components/schemas/WorkorderPickTaskResponse'
+                unevaluatedItems: {}
         '403':
           description: Forbidden
           content:
@@ -3529,6 +3535,7 @@ paths:
               schema:
                 type: string
                 format: binary
+                additionalProperties: {}
         '404':
           description: Estimate not found
           content:
@@ -3982,6 +3989,7 @@ components:
         notes:
           type: string
           description: Assignment notes
+          example: Customer requested morning slot
     TechnicianAssignmentResponse:
       type: object
       description: Technician assignment response
@@ -4026,9 +4034,11 @@ components:
         notes:
           type: string
           description: Assignment notes
+          example: Customer requested morning slot
         reassignmentReason:
           type: string
           description: Reason for reassignment if applicable
+          example: Original technician called out sick
         reassignedAt:
           type: string
           format: date-time
@@ -4076,10 +4086,12 @@ components:
         notes:
           type: string
           description: Additional notes for the reassignment
+          example: Customer requested senior technician
         notifyPreviousTechnician:
           type: boolean
           default: false
           description: Whether to send notification to previous technician
+          example: true
       required:
       - newTechnicianId
     WorkorderLaborEntryResponse:
@@ -4142,6 +4154,10 @@ components:
           format: date-time
           description: Creation timestamp
           example: 2024-01-27 14:30:00+00:00
+      required:
+      - active
+      - id
+      - workorderId
     AdjustLaborRequest:
       type: object
       description: Request to manually adjust labor hours
@@ -4232,6 +4248,8 @@ components:
           format: int32
           description: Priority for configuration matching (0=default, 1=location-specific, 2=customer-specific)
           example: 0
+      required:
+      - id
     CreateWorkorderRequest:
       type: object
       description: Request DTO for workorder creation
@@ -4240,12 +4258,12 @@ components:
           type: string
           format: uuid
           description: Estimate ID
-          example: 550e8400-e29b-41d4-a716-446655440001
+          example: 01960003-0000-7000-8000-000000000001
         customerId:
           type: string
           format: uuid
           description: Customer ID
-          example: 550e8400-e29b-41d4-a716-446655440002
+          example: 01960003-0000-7000-8000-000000000002
       required:
       - customerId
       - estimateId
@@ -4383,24 +4401,42 @@ components:
           example: Vehicle pulled into service bay
     WorkorderStartResponse:
       type: object
+      description: Response returned after starting work on a workorder
       properties:
         workorderId:
           type: string
           format: uuid
+          description: Unique identifier of the workorder that was started
+          example: 01960003-0000-7000-8000-000000000001
         operationalContextVersion:
           type: string
+          description: Operational context version for optimistic concurrency
+          example: '2'
         workStartedAt:
           type: string
           format: date-time
+          description: Timestamp when work was started on the workorder
+          example: 2026-01-15 09:30:00+00:00
         previousStatus:
           type: string
+          description: Workorder status prior to the start transition
+          example: ASSIGNED
         currentStatus:
           type: string
+          description: Workorder status after the start transition
+          example: WORK_IN_PROGRESS
         transitionedAt:
           type: string
           format: date-time
+          description: Timestamp when the status transition occurred
+          example: 2026-01-15 09:30:00+00:00
         message:
           type: string
+          description: Human-readable message describing the start outcome
+          example: Work started on workorder
+      required:
+      - currentStatus
+      - workorderId
     StartLaborRequest:
       type: object
       description: Request to start a labor session on a workorder service
@@ -4430,6 +4466,9 @@ components:
           type: string
           description: Mandatory reason for reopening completed workorder
           example: Corrected labor hours
+          minLength: 1
+      required:
+      - reopenReason
     ReopenWorkorderResponse:
       type: object
       description: Response payload for controlled workorder reopen
@@ -4438,37 +4477,55 @@ components:
           type: string
           format: uuid
           description: Workorder identifier
+          example: 01960003-0000-7000-8000-000000000001
         currentStatus:
           type: string
           description: Current lifecycle status
+          example: WORK_IN_PROGRESS
         isReopened:
           type: boolean
           default: false
           description: Whether the workorder is reopened for controlled edits
+          example: true
         reopenedAt:
           type: string
           format: date-time
           description: Reopen timestamp
+          example: 2026-01-15 09:30:00+00:00
         message:
           type: string
           description: Operation message
+          example: Workorder reopened successfully
+      required:
+      - currentStatus
+      - isReopened
+      - message
+      - reopenedAt
+      - workorderId
     ConsumeItem:
       type: object
+      description: A single picked item to consume
       properties:
         pickTaskId:
           type: string
           format: uuid
+          description: Identifier of the pick task to consume from
+          example: 01960003-0000-7000-8000-000000000001
         quantityToConsume:
           type: integer
           format: int32
+          description: Quantity to consume
+          example: 2
       required:
       - pickTaskId
       - quantityToConsume
     ConsumePickedItemsRequest:
       type: object
+      description: Request to consume previously picked items into a workorder
       properties:
         items:
           type: array
+          description: Items to consume
           items:
             $ref: '#/components/schemas/ConsumeItem'
           minItems: 1
@@ -4476,32 +4533,52 @@ components:
       - items
     ConsumePickedItemsResponse:
       type: object
+      description: Result of consuming picked items into a workorder
       properties:
         workorderId:
           type: string
           format: uuid
+          description: Identifier of the workorder the items were consumed into
+          example: 01960003-0000-7000-8000-000000000001
         totalItemsConsumed:
           type: integer
           format: int32
+          description: Total number of items consumed
+          example: 2
         results:
           type: array
+          description: Per-item consumption results
           items:
             $ref: '#/components/schemas/ConsumedItemResult'
+      required:
+      - totalItemsConsumed
+      - workorderId
     ConsumedItemResult:
       type: object
+      description: Outcome of consuming a single picked item
       properties:
         pickTaskId:
           type: string
           format: uuid
+          description: Identifier of the pick task consumed
+          example: 01960003-0000-7000-8000-000000000002
         quantityConsumed:
           type: integer
           format: int32
+          description: Quantity actually consumed
+          example: 2
         status:
           type: string
+          description: Outcome status for the item
           enum:
           - SUCCESS
           - PARTIAL
           - FAILED
+          example: SUCCESS
+      required:
+      - pickTaskId
+      - quantityConsumed
+      - status
     ApiError:
       type: object
       description: Standard error response envelope returned by all Durion backend APIs
@@ -4586,47 +4663,85 @@ components:
           type: string
     CompletePickTaskRequest:
       type: object
+      description: Request to complete a pick task
       properties:
         reason:
           type: string
+          description: Optional reason for completing the pick task
+          example: All lines picked
     WorkorderPickTaskResponse:
       type: object
+      description: Response describing a single pick task within a pick list
       properties:
         pickTaskId:
           type: string
           format: uuid
+          description: Pick task identifier
+          example: 01960003-0000-7000-8000-000000000001
         pickListId:
           type: string
           format: uuid
+          description: Identifier of the pick list the task belongs to
+          example: 01960003-0000-7000-8000-000000000001
         skuId:
           type: string
           format: uuid
+          description: Identifier of the SKU to pick
+          example: 01960003-0000-7000-8000-000000000001
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location to pick from
+          example: 01960003-0000-7000-8000-000000000001
         requiredQty:
           type: integer
           format: int32
+          description: Quantity required to pick
+          example: 2
         pickedQty:
           type: integer
           format: int32
+          description: Quantity already picked
+          example: 2
         remainingQty:
           type: integer
           format: int32
+          description: Quantity remaining to pick
+          example: 2
         status:
           type: string
+          description: Status of the pick task
+          example: OPEN
         sortOrder:
           type: integer
           format: int32
+          description: Sort order of the pick task within the list
+          example: 2
         version:
           type: integer
           format: int64
+          description: Optimistic-locking version of the pick task
+          example: 2
+      required:
+      - locationId
+      - pickListId
+      - pickTaskId
+      - pickedQty
+      - remainingQty
+      - requiredQty
+      - skuId
+      - sortOrder
+      - status
+      - version
     ConfirmPickLineRequest:
       type: object
+      description: Request to confirm a picked pick-list line
       properties:
         quantityPicked:
           type: integer
           format: int32
+          description: Quantity picked for the line
+          example: 2
       required:
       - quantityPicked
     SubstitutePartRequest:
@@ -4647,6 +4762,7 @@ components:
           type: string
           description: Audit reason for substitution
           example: Original part unavailable, equivalent substitute used
+          minLength: 1
         notes:
           type: string
           description: Optional substitution notes
@@ -4707,9 +4823,19 @@ components:
           type: string
           format: date-time
           description: Adjustment timestamp
+          example: 2026-01-15 09:30:00+00:00
         notes:
           type: string
           description: Optional additional notes
+          example: Customer notified
+      required:
+      - adjustmentType
+      - id
+      - originalPartId
+      - performedAt
+      - performedBy
+      - quantityAdjustment
+      - workorderId
     ReturnPartRequest:
       type: object
       description: Request payload to return unused issued parts to inventory
@@ -4766,13 +4892,23 @@ components:
           type: string
           format: date-time
           description: Event timestamp
+          example: 2026-01-15 09:30:00+00:00
         notes:
           type: string
           description: Optional event notes
+          example: Issued from main bay
         partDescription:
           type: string
           description: Part description for display
           example: Brake Pad Set - Front
+      required:
+      - eventType
+      - id
+      - performedAt
+      - performedBy
+      - quantity
+      - workorderId
+      - workorderPartId
     ReturnPartQuantityRequest:
       type: object
       description: Request payload for returning unused authorized part quantity
@@ -4827,15 +4963,16 @@ components:
           type: string
           format: uuid
           description: Workorder part identifier
-          example: 550e8400-e29b-41d4-a716-446655440500
+          example: 01960003-0000-7000-8000-000000000001
         newQuantity:
           type: number
           description: Corrected authorized quantity
-          example: 3
+          example: 2
         reason:
           type: string
           description: Audit reason for correction
           example: Inventory recount adjusted authorized quantity
+          minLength: 1
         notes:
           type: string
           description: Optional correction notes
@@ -4852,11 +4989,11 @@ components:
           type: string
           format: uuid
           description: Workorder part identifier
-          example: 550e8400-e29b-41d4-a716-446655440500
+          example: 01960003-0000-7000-8000-000000000001
         quantity:
           type: number
           description: Quantity to consume
-          example: 1
+          example: 2
           minimum: 0.0001
         notes:
           type: string
@@ -4924,10 +5061,12 @@ components:
           type: string
           format: date-time
           description: Scheduled start time
+          example: 2026-01-15 09:30:00+00:00
         scheduledEndAt:
           type: string
           format: date-time
           description: Scheduled end time
+          example: 2026-01-15 09:30:00+00:00
         assignedMechanics:
           type: array
           description: Assigned mechanic identifiers
@@ -4956,6 +5095,8 @@ components:
           default: false
           description: Whether context is locked after work start
           example: false
+      required:
+      - locked
     InvoiceGenerationResponse:
       type: object
       description: Response payload returned after invoice generation.
@@ -5022,7 +5163,7 @@ components:
           type: string
           format: uuid
           description: Workorder identifier
-          example: 550e8400-e29b-41d4-a716-446655440000
+          example: 01960003-0000-7000-8000-000000000001
         previousStatus:
           type: string
           description: Status prior to completion
@@ -5035,11 +5176,16 @@ components:
           type: string
           format: date-time
           description: Timestamp when completion was recorded
-          example: 2026-03-02 12:34:56+00:00
+          example: 2026-01-15 09:30:00+00:00
         message:
           type: string
           description: Operation outcome message
           example: Work order completed successfully
+      required:
+      - completedAt
+      - currentStatus
+      - previousStatus
+      - workorderId
     CreateChangeRequestDTO:
       type: object
       description: Request payload for creating a change request
@@ -5048,7 +5194,7 @@ components:
           type: string
           format: uuid
           description: Workorder identifier
-          example: 550e8400-e29b-41d4-a716-446655440000
+          example: 01960003-0000-7000-8000-000000000001
         description:
           type: string
           description: Description of additional requested work
@@ -5066,11 +5212,13 @@ components:
         services:
           type: array
           description: Service items included in this change request
+          example: []
           items:
             $ref: '#/components/schemas/WorkorderItemDTO'
         parts:
           type: array
           description: Part items included in this change request
+          example: []
           items:
             $ref: '#/components/schemas/WorkorderItemDTO'
       required:
@@ -5083,22 +5231,22 @@ components:
           type: string
           format: uuid
           description: Service catalog entity identifier for service items
-          example: 550e8400-e29b-41d4-a716-446655440010
+          example: 01960003-0000-7000-8000-000000000010
         productEntityId:
           type: string
           format: uuid
           description: Product entity identifier for inventory part items
-          example: 550e8400-e29b-41d4-a716-446655440011
+          example: 01960003-0000-7000-8000-000000000011
         nonInventoryProductEntityId:
           type: string
           format: uuid
           description: Product entity identifier for non-inventory part items
-          example: 550e8400-e29b-41d4-a716-446655440012
+          example: 01960003-0000-7000-8000-000000000012
         quantity:
           type: integer
           format: int32
           description: Requested quantity for part line items
-          example: 1
+          example: 2
         isEmergencySafety:
           type: boolean
           default: false
@@ -5237,6 +5385,7 @@ components:
           type: string
           format: uuid
           description: Optional mechanic ID for disambiguation when multiple sessions could match
+          example: 01960003-0000-7000-8000-000000000001
     WorkSessionResponse:
       type: object
       description: Response DTO for a work session
@@ -5321,9 +5470,11 @@ components:
           - MEAL
           - REST
           - OTHER
+          example: MEAL
         notes:
           type: string
           description: Optional break notes
+          example: Lunch break
     BreakSegmentResponse:
       type: object
       description: Response DTO for a break segment
@@ -5332,18 +5483,22 @@ components:
           type: string
           format: uuid
           description: Unique identifier of the break segment
+          example: 550e8400-e29b-41d4-a716-446655440400
         workSessionId:
           type: string
           format: uuid
           description: ID of the parent work session
+          example: 550e8400-e29b-41d4-a716-446655440401
         breakStartAt:
           type: string
           format: date-time
           description: Break start timestamp
+          example: 2026-01-15 09:30:00+00:00
         breakEndAt:
           type: string
           format: date-time
           description: Break end timestamp
+          example: 2026-01-15 10:00:00+00:00
         breakType:
           type: string
           description: Type of break
@@ -5351,9 +5506,15 @@ components:
           - MEAL
           - REST
           - OTHER
+          example: MEAL
         notes:
           type: string
           description: Optional break notes
+          example: Lunch break
+      required:
+      - breakSegmentId
+      - breakStartAt
+      - workSessionId
     StartWorkSessionRequest:
       type: object
       description: Request payload for starting a work session
@@ -5393,8 +5554,12 @@ components:
         toLocationId:
           type: string
           format: uuid
+          description: Identifier of the location reached when the travel segment stops
+          example: 01960003-0000-7000-8000-000000000001
         notes:
           type: string
+          description: Optional notes recorded when stopping the travel segment
+          example: Arrived at customer site, parking on south lot
     TravelSegmentResponse:
       type: object
       description: Response representation of a travel segment
@@ -5402,14 +5567,21 @@ components:
         travelSegmentId:
           type: string
           format: uuid
+          description: Unique identifier of the travel segment
+          example: 01960003-0000-7000-8000-000000000001
         mobileWorkAssignmentId:
           type: string
           format: uuid
+          description: Identifier of the mobile work assignment this segment belongs to
+          example: 01960003-0000-7000-8000-000000000001
         technicianId:
           type: string
           format: uuid
+          description: Identifier of the technician who performed the travel
+          example: 01960003-0000-7000-8000-000000000001
         segmentType:
           type: string
+          description: Direction or purpose of the travel leg
           enum:
           - DEPART_SHOP
           - ARRIVE_CUSTOMER_SITE
@@ -5417,32 +5589,50 @@ components:
           - ARRIVE_SHOP
           - TRAVEL_BETWEEN_SITES
           - DEADHEAD
+          example: DEPART_SHOP
         startAt:
           type: string
           format: date-time
+          description: Timestamp when the travel segment started
+          example: 2026-01-15 09:30:00+00:00
         endAt:
           type: string
           format: date-time
+          description: Timestamp when the travel segment ended
+          example: 2026-01-15 09:30:00+00:00
         fromLocationId:
           type: string
           format: uuid
+          description: Identifier of the origin location
+          example: 01960003-0000-7000-8000-000000000001
         toLocationId:
           type: string
           format: uuid
+          description: Identifier of the destination location
+          example: 01960003-0000-7000-8000-000000000001
         workOrderId:
           type: string
           format: uuid
+          description: Identifier of the workorder associated with the travel
+          example: 01960003-0000-7000-8000-000000000001
         durationMinutes:
           type: integer
           format: int32
+          description: Effective travel duration in minutes
+          example: 2
         rawMinutes:
           type: integer
           format: int32
+          description: Raw recorded travel minutes before buffering
+          example: 2
         bufferedMinutes:
           type: integer
           format: int32
+          description: Buffered travel minutes applied by policy
+          example: 2
         status:
           type: string
+          description: Current status of the travel segment
           enum:
           - DRAFT
           - IN_PROGRESS
@@ -5450,81 +5640,143 @@ components:
           - SUBMITTED
           - APPROVED
           - CANCELLED
+          example: DRAFT
         createdBy:
           type: string
+          description: Identifier of the user who created the segment
+          example: 01960003-0000-7000-8000-000000000001
         lastModifiedBy:
           type: string
+          description: Identifier of the user who last modified the segment
+          example: 01960003-0000-7000-8000-000000000001
         lastModifiedAt:
           type: string
           format: date-time
+          description: Timestamp when the segment was last modified
+          example: 2026-01-15 09:30:00+00:00
         actedByUserId:
           type: string
+          description: Identifier of the user who acted to record the segment
+          example: 01960003-0000-7000-8000-000000000001
         actedForPersonId:
           type: string
           format: uuid
+          description: Identifier of the person the segment was recorded on behalf of
+          example: 01960003-0000-7000-8000-000000000001
         onBehalfReasonCode:
           type: string
+          description: Reason code when the segment was entered on behalf of another person
           enum:
           - TECHNICIAN_UNAVAILABLE
           - FORGOT_TO_CLOCK
           - DATA_ENTRY_ERROR
+          example: TECHNICIAN_UNAVAILABLE
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the segment was created
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the segment was last updated
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - createdAt
+      - mobileWorkAssignmentId
+      - segmentType
+      - status
+      - technicianId
+      - travelSegmentId
+      - updatedAt
     CreateTravelSegmentAdjustmentRequest:
       type: object
+      description: Request payload to adjust a travel segment's recorded times
       properties:
         adjustedStartAt:
           type: string
           format: date-time
+          description: Adjusted travel segment start timestamp
+          example: 2026-01-15 09:30:00+00:00
         adjustedEndAt:
           type: string
           format: date-time
+          description: Adjusted travel segment end timestamp
+          example: 2026-01-15 09:30:00+00:00
         adjustmentReason:
           type: string
+          description: Reason justifying the travel segment time adjustment
+          example: Corrected start time after GPS sync
           minLength: 1
       required:
       - adjustmentReason
     TravelSegmentAdjustmentResponse:
       type: object
+      description: Response representation of a travel segment time adjustment
       properties:
         adjustmentId:
           type: string
           format: uuid
+          description: Unique identifier of the adjustment
+          example: 01960003-0000-7000-8000-000000000001
         travelSegmentId:
           type: string
           format: uuid
+          description: Identifier of the travel segment that was adjusted
+          example: 01960003-0000-7000-8000-000000000001
         adjustedStartAt:
           type: string
           format: date-time
+          description: Adjusted start timestamp of the travel segment
+          example: 2026-01-15 09:30:00+00:00
         adjustedEndAt:
           type: string
           format: date-time
+          description: Adjusted end timestamp of the travel segment
+          example: 2026-01-15 09:30:00+00:00
         adjustmentReason:
           type: string
+          description: Reason recorded for the adjustment
+          example: Corrected for traffic delay not logged automatically
         adjustedByUserId:
           type: string
+          description: Identifier of the user who made the adjustment
+          example: 01960003-0000-7000-8000-000000000001
         approvalStatus:
           type: string
+          description: Approval status of the adjustment
+          example: PENDING
         approvedByUserId:
           type: string
+          description: Identifier of the user who approved the adjustment
+          example: 01960003-0000-7000-8000-000000000001
         approvedAt:
           type: string
           format: date-time
+          description: Timestamp when the adjustment was approved
+          example: 2026-01-15 09:30:00+00:00
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the adjustment was created
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - adjustmentId
+      - createdAt
+      - travelSegmentId
     SubmitTravelSegmentsRequest:
       type: object
+      description: Request payload for submitting travel segments for a work date
       properties:
         workDate:
           type: string
           format: date
+          description: Work date whose travel segments are being submitted
+          example: 2026-01-15
         notes:
           type: string
+          description: Optional notes accompanying the travel segment submission
+          example: All segments verified against GPS log
       required:
       - workDate
     StartTravelSegmentRequest:
@@ -5575,6 +5827,7 @@ components:
         rejectionReason:
           type: string
           description: Mandatory reason for rejection
+          example: Hours exceed approved estimate
           minLength: 1
       required:
       - rejectionReason
@@ -5585,41 +5838,73 @@ components:
         timeEntryId:
           type: string
           format: uuid
+          description: Unique identifier of the time entry
+          example: 01960003-0000-7000-8000-000000000001
         personId:
           type: string
           format: uuid
+          description: Identifier of the person the time entry belongs to
+          example: 01960003-0000-7000-8000-000000000001
         workOrderId:
           type: string
           format: uuid
+          description: Identifier of the workorder associated with the time entry
+          example: 01960003-0000-7000-8000-000000000001
         startAt:
           type: string
           format: date-time
+          description: Timestamp when the time entry started
+          example: 2026-01-15 09:30:00+00:00
         endAt:
           type: string
           format: date-time
+          description: Timestamp when the time entry ended
+          example: 2026-01-15 09:30:00+00:00
         status:
           type: string
+          description: Current status of the time entry
           enum:
           - DRAFT
           - SUBMITTED
           - APPROVED
           - REJECTED
+          example: SUBMITTED
         submittedAt:
           type: string
           format: date-time
+          description: Timestamp when the time entry was submitted
+          example: 2026-01-15 09:30:00+00:00
         decisionByUserId:
           type: string
+          description: Identifier of the user who approved or rejected the entry
+          example: 01960003-0000-7000-8000-000000000001
         decisionAtUtc:
           type: string
           format: date-time
+          description: UTC timestamp when the approval decision was made
+          example: 2026-01-15 09:30:00+00:00
         rejectionReason:
           type: string
+          description: Reason supplied when the time entry was rejected
+          example: Hours exceed scheduled shift
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the time entry was created
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the time entry was last updated
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - createdAt
+      - personId
+      - startAt
+      - status
+      - timeEntryId
+      - updatedAt
+      - workOrderId
     CreateEstimateRequest:
       type: object
       description: Request payload for creating an estimate
@@ -5628,17 +5913,17 @@ components:
           type: string
           format: uuid
           description: Customer identifier
-          example: 550e8400-e29b-41d4-a716-446655440001
+          example: 01960003-0000-7000-8000-000000000001
         vehicleId:
           type: string
           format: uuid
           description: Vehicle identifier
-          example: 550e8400-e29b-41d4-a716-446655440002
+          example: 01960003-0000-7000-8000-000000000002
         locationId:
           type: string
           format: uuid
           description: Optional location identifier; defaults from session when omitted
-          example: 550e8400-e29b-41d4-a716-446655440003
+          example: 01960003-0000-7000-8000-000000000003
         currencyUomId:
           type: string
           description: Optional currency code; defaults when omitted
@@ -5647,7 +5932,7 @@ components:
           type: string
           format: uuid
           description: Optional tax region identifier; defaults when omitted
-          example: 550e8400-e29b-41d4-a716-446655440004
+          example: 01960003-0000-7000-8000-000000000004
         subtotal:
           type: number
           description: Optional subtotal amount before tax
@@ -5734,6 +6019,7 @@ components:
           type: string
           format: date-time
           description: Date and time the estimate was created
+          example: 2026-01-15 09:30:00+00:00
         subtotal:
           type: number
           description: Subtotal amount before tax
@@ -5750,6 +6036,7 @@ components:
           type: string
           format: date-time
           description: Date and time the estimate was submitted for approval
+          example: 2026-01-15 09:30:00
         submittedBy:
           type: string
           description: Username who submitted the estimate for approval
@@ -5758,10 +6045,12 @@ components:
           type: string
           format: date-time
           description: Date and time the approval window expires
+          example: 2026-01-15 09:30:00
         approvedAt:
           type: string
           format: date-time
           description: Date and time the estimate was approved
+          example: 2026-01-15 09:30:00
         approvedBy:
           type: string
           format: uuid
@@ -5770,6 +6059,7 @@ components:
         signatureData:
           type: string
           description: Base64-encoded signature image
+          example: iVBORw0KGgo=
         signatureMimeType:
           type: string
           description: MIME type of the signature image
@@ -5777,9 +6067,11 @@ components:
         signerName:
           type: string
           description: Name of person who signed
+          example: Jane Customer
         approvalNotes:
           type: string
           description: Additional notes provided at approval time
+          example: Customer approved all items
         purchaseOrderNumber:
           type: string
           description: Purchase order number for commercial accounts
@@ -5788,6 +6080,7 @@ components:
           type: integer
           format: int32
           description: Optimistic locking version
+          example: 2
         crmPartyId:
           type: string
           description: CRM party identifier
@@ -5799,8 +6092,14 @@ components:
         crmContactIds:
           type: array
           description: List of CRM contact identifiers
+          example:
+          - 01952f4e-0000-7000-8000-000000000003
           items:
             type: string
+      required:
+      - estimateNumber
+      - id
+      - status
     EstimateSnapshotResponse:
       type: object
       description: Response payload for captured estimate snapshots
@@ -5830,14 +6129,17 @@ components:
           - INVOICED
           - CANCELLED
           - ARCHIVED
-          example: SUBMITTED
+          example: PENDING_APPROVAL
         snapshotData:
           type: string
           description: Serialized snapshot content
+          example:
+            total: 162.38
         capturedAt:
           type: string
           format: date-time
           description: Snapshot capture timestamp
+          example: 2026-01-15 09:30:00
         capturedById:
           type: string
           description: Actor identifier that captured the snapshot
@@ -5845,6 +6147,11 @@ components:
         notes:
           type: string
           description: Optional snapshot notes
+          example: Captured at submission
+      required:
+      - estimateId
+      - id
+      - status
     AddEstimateItemRequest:
       type: object
       description: Request payload for adding a line item to an estimate
@@ -5991,27 +6298,27 @@ components:
           type: string
           format: uuid
           description: Idempotency key to prevent duplicate estimate creation
-          example: 550e8400-e29b-41d4-a716-446655440010
+          example: 01960003-0000-7000-8000-000000000010
         appointmentId:
           type: string
           format: uuid
           description: Appointment identifier
-          example: 550e8400-e29b-41d4-a716-446655440011
+          example: 01960003-0000-7000-8000-000000000011
         customerId:
           type: string
           format: uuid
           description: Customer identifier
-          example: 550e8400-e29b-41d4-a716-446655440012
+          example: 01960003-0000-7000-8000-000000000012
         vehicleId:
           type: string
           format: uuid
           description: Vehicle identifier
-          example: 550e8400-e29b-41d4-a716-446655440013
+          example: 01960003-0000-7000-8000-000000000013
         locationId:
           type: string
           format: uuid
           description: Location identifier
-          example: 550e8400-e29b-41d4-a716-446655440014
+          example: 01960003-0000-7000-8000-000000000014
         requestedServices:
           type: array
           description: Requested services captured from appointment context
@@ -6034,7 +6341,7 @@ components:
           type: string
           format: uuid
           description: Created estimate identifier
-          example: 550e8400-e29b-41d4-a716-446655440000
+          example: 01960003-0000-7000-8000-000000000001
         status:
           type: string
           description: Created estimate status
@@ -6044,6 +6351,10 @@ components:
           default: false
           description: Whether a new estimate was created (false when idempotency returns existing record)
           example: true
+      required:
+      - created
+      - estimateId
+      - status
     EmergencyOverrideDTO:
       type: object
       description: Request payload for applying an emergency override
@@ -6159,23 +6470,33 @@ components:
       - workorderId
     LaborQuantity:
       type: object
+      description: Labor quantity and unit of measure
       properties:
         quantity:
           type: number
+          description: Amount of labor performed
+          example: 1.5
         unit:
           type: string
+          description: Unit of measure for the labor quantity
+          example: HOURS
           minLength: 1
       required:
       - quantity
       - unit
     SourceReference:
       type: object
+      description: External source system reference metadata
       properties:
         system:
           type: string
+          description: Identifier of the originating external system
+          example: workexec
           minLength: 1
         sourceReferenceId:
           type: string
+          description: Reference identifier of the record in the source system
+          example: EXT-REF-12345
           minLength: 1
       required:
       - sourceReferenceId
@@ -6188,14 +6509,17 @@ components:
           type: string
           format: uuid
           description: Workorder identifier
+          example: 550e8400-e29b-41d4-a716-446655440000
         technicianId:
           type: string
           format: uuid
           description: Technician identifier
+          example: 550e8400-e29b-41d4-a716-446655440120
         performedAt:
           type: string
           format: date-time
           description: Timestamp when labor was performed
+          example: 2026-01-15 09:30:00+00:00
         labor:
           $ref: '#/components/schemas/LaborQuantity'
         source:
@@ -6214,6 +6538,7 @@ components:
           type: string
           format: uuid
           description: Labor performed record identifier
+          example: 550e8400-e29b-41d4-a716-446655440700
         workorderId:
           type: string
           format: uuid
@@ -6228,6 +6553,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when labor was performed
+          example: 2026-01-15 09:30:00+00:00
         quantity:
           type: number
           description: Labor quantity
@@ -6244,6 +6570,15 @@ components:
           type: string
           description: Source reference identifier
           example: EXT-REF-12345
+      required:
+      - laborPerformedId
+      - performedAt
+      - quantity
+      - sourceReferenceId
+      - sourceSystem
+      - technicianId
+      - unit
+      - workorderId
     UpdateEstimateItemRequest:
       type: object
       description: Request payload for partial update of an estimate line item
@@ -6341,50 +6676,96 @@ components:
           description: Reason for capturing the snapshot
     WorkorderPickedItemResponse:
       type: object
+      description: Response describing a picked item resulting from a pick task
       properties:
         pickTaskId:
           type: string
           format: uuid
+          description: Identifier of the pick task that produced this item
+          example: 01960003-0000-7000-8000-000000000001
         pickListId:
           type: string
           format: uuid
+          description: Identifier of the pick list the task belongs to
+          example: 01960003-0000-7000-8000-000000000001
         skuId:
           type: string
           format: uuid
+          description: Identifier of the SKU that was picked
+          example: 01960003-0000-7000-8000-000000000001
         qtyPicked:
           type: integer
           format: int32
+          description: Quantity picked
+          example: 2
         qtyConsumed:
           type: integer
           format: int32
+          description: Quantity consumed from the picked amount
+          example: 2
         qtyRemaining:
           type: integer
           format: int32
+          description: Quantity remaining from the picked amount
+          example: 2
         status:
           type: string
+          description: Status of the picked item
+          example: PICKED
+      required:
+      - pickListId
+      - pickTaskId
+      - qtyConsumed
+      - qtyPicked
+      - qtyRemaining
+      - skuId
+      - status
     WorkorderPickListResponse:
       type: object
+      description: Response describing a workorder pick list
       properties:
         pickListId:
           type: string
           format: uuid
+          description: Pick list identifier
+          example: 01960003-0000-7000-8000-000000000001
         workorderId:
           type: string
           format: uuid
+          description: Identifier of the workorder the pick list belongs to
+          example: 01960003-0000-7000-8000-000000000001
         status:
           type: string
+          description: Status of the pick list
+          example: OPEN
         priority:
           type: integer
           format: int32
+          description: Priority ordering of the pick list
+          example: 2
         dueAt:
           type: string
           format: date-time
+          description: Timestamp the pick list is due
+          example: 2026-01-15 09:30:00+00:00
         createdAt:
           type: string
           format: date-time
+          description: Timestamp the pick list was created
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp the pick list was last updated
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - createdAt
+      - dueAt
+      - pickListId
+      - priority
+      - status
+      - updatedAt
+      - workorderId
     WorkorderCapabilities:
       type: object
       description: Capability flags for workorder actions based on user authorities
@@ -6429,6 +6810,15 @@ components:
           default: false
           description: User can delete workorder
           example: false
+      required:
+      - canApprove
+      - canAssignTechnician
+      - canDeleteWorkorder
+      - canEditWorkorder
+      - canRecordLabor
+      - canRecordPartsUsage
+      - canStart
+      - canViewFinancials
     WorkorderDetailResponse:
       type: object
       description: Comprehensive workorder detail with role-based visibility
@@ -6603,6 +6993,8 @@ components:
           type: number
           description: Line total from estimate
           example: 130.0
+      required:
+      - id
     WorkorderServiceResponse:
       type: object
       description: Workorder service line item with labor totals
@@ -6660,43 +7052,59 @@ components:
           type: string
           format: uuid
           description: Workorder identifier
+          example: 01960003-0000-7000-8000-000000000001
         canComplete:
           type: boolean
           default: false
           description: Whether the workorder can be completed
+          example: true
         currentStatus:
           type: string
           description: Current status
+          example: WORK_IN_PROGRESS
         checklistItems:
           type: array
           description: Checklist items evaluated before completion
+          example:
+          - All service items completed
           items:
             type: string
         blockingReasons:
           type: array
           description: Blocking reasons that prevent completion
+          example:
+          - Unresolved approval-gated change request
           items:
             type: string
         unresolvedApprovalGatedChangeRequests:
           type: integer
           format: int32
           description: Number of unresolved approval-gated change requests
+          example: 2
         nonTerminalServiceItems:
           type: integer
           format: int32
           description: Number of service items not in COMPLETED/CANCELLED status
+          example: 2
         nonTerminalPartItems:
           type: integer
           format: int32
           description: Number of part items not in COMPLETED/CANCELLED status
+          example: 2
         emergencyDenialAcknowledged:
           type: boolean
           default: false
           description: Whether emergency denial acknowledgment requirements are satisfied
+          example: true
         hasBillableItems:
           type: boolean
           default: false
           description: Whether at least one billable item exists for final snapshot
+          example: true
+      required:
+      - canComplete
+      - currentStatus
+      - workorderId
     EstimateSummaryResponse:
       type: object
       description: Customer-facing estimate summary with grouped items and totals
@@ -6714,10 +7122,12 @@ components:
           type: string
           format: date-time
           description: Creation timestamp
+          example: 2026-01-15 09:30:00+00:00
         expiresAt:
           type: string
           format: date-time
           description: Estimate expiry timestamp
+          example: 2026-01-15 09:30:00
         customerId:
           type: string
           format: uuid
@@ -6775,6 +7185,10 @@ components:
           type: string
           description: Currency code
           example: USD
+      required:
+      - estimateNumber
+      - id
+      - status
     Pageable:
       type: object
       properties:
@@ -7014,30 +7428,61 @@ components:
           type: boolean
     BayStatus:
       type: object
+      description: Current status of a service bay
       properties:
         bayId:
           type: string
+          description: Identifier of the bay
+          example: BAY-01
         bayName:
           type: string
+          description: Human-readable bay name
+          example: Front Bay 1
         status:
           type: string
+          description: Operational status of the bay
+          example: OCCUPIED
         assignedWorkorderId:
           type: string
+          description: Identifier of the workorder currently assigned to the bay
+          example: 550e8400-e29b-41d4-a716-446655440000
         available:
           type: boolean
+          default: false
+          description: Whether the bay is currently available
+          example: false
+      required:
+      - available
+      - bayId
+      - status
     ConflictEntry:
       type: object
+      description: A detected scheduling or resource conflict on the dispatch board
       properties:
         conflictType:
           type: string
+          description: Type of conflict detected
+          example: DOUBLE_BOOKING
         severity:
           type: string
+          description: Severity of the conflict
+          example: HIGH
         message:
           type: string
+          description: Human-readable conflict message
+          example: Mechanic assigned to two workorders in the same slot
         affectedResourceId:
           type: string
+          description: Identifier of the affected resource (mechanic or bay)
+          example: 01960003-0000-7000-8000-000000000001
         affectedWorkorderId:
           type: string
+          description: Identifier of the affected workorder
+          example: 01960003-0000-7000-8000-000000000002
+      required:
+      - conflictType
+      - message
+      - severity
     DashboardResponse:
       type: object
       description: Daily Dispatch Board dashboard aggregate response
@@ -7046,95 +7491,162 @@ components:
           type: string
           format: date
           description: The date this dashboard is for
+          example: 2026-01-15
         locationId:
           type: string
           description: Location identifier
+          example: 01960003-0000-7000-8000-000000000001
         workorders:
           type: array
           description: Workorder summaries for the day
+          example: []
           items:
             $ref: '#/components/schemas/WorkorderSummary'
         mechanics:
           type: array
           description: Mechanic statuses
+          example: []
           items:
             $ref: '#/components/schemas/MechanicStatus'
         bays:
           type: array
           description: Service bay statuses
+          example: []
           items:
             $ref: '#/components/schemas/BayStatus'
         conflicts:
           type: array
           description: Detected conflicts
+          example: []
           items:
             $ref: '#/components/schemas/ConflictEntry'
         lastRefreshed:
           type: string
           format: date-time
           description: Timestamp when data was last refreshed
+          example: 2026-01-15 09:30:00+00:00
         dataQualityWarning:
           type: boolean
           default: false
           description: True when one or more upstream data sources were unavailable during aggregation; data may be incomplete
+          example: false
+      required:
+      - date
+      - lastRefreshed
+      - locationId
+      - workorders
     MechanicStatus:
       type: object
+      description: Current availability and status of a mechanic
       properties:
         personId:
           type: string
+          description: Identifier of the mechanic person
+          example: 01960003-0000-7000-8000-000000000001
         firstName:
           type: string
+          description: Mechanic first name
+          example: Alex
         lastName:
           type: string
+          description: Mechanic last name
+          example: Rivera
         currentStatus:
           type: string
+          description: Current work status of the mechanic
+          example: AVAILABLE
         assignedWorkorderId:
           type: string
+          description: Identifier of the workorder the mechanic is currently assigned to
+          example: 01960003-0000-7000-8000-000000000002
         onBreak:
           type: boolean
+          default: false
+          description: Whether the mechanic is currently on break
+          example: false
         breakExpectedReturn:
           type: string
           format: date-time
+          description: Expected return time when the mechanic is on break
+          example: 2026-01-15 09:30:00+00:00
         ptoEntries:
           type: array
+          description: Paid time-off entries for the mechanic
           items:
             $ref: '#/components/schemas/PtoEntry'
+      required:
+      - personId
     PtoEntry:
       type: object
+      description: Paid time off entry affecting technician availability
       properties:
         ptoId:
           type: string
+          description: Identifier of the PTO entry
+          example: PTO-12345
         start:
           type: string
           format: date-time
+          description: Start timestamp of the PTO period
+          example: 2026-01-15 09:30:00+00:00
         end:
           type: string
           format: date-time
+          description: End timestamp of the PTO period
+          example: 2026-01-15 09:30:00+00:00
         ptoType:
           type: string
+          description: Type of paid time off
+          example: VACATION
+      required:
+      - end
+      - ptoId
+      - ptoType
+      - start
     WorkorderSummary:
       type: object
+      description: Summary view of a workorder for list displays
       properties:
         workorderId:
           type: string
           format: uuid
+          description: Unique identifier of the workorder
+          example: 01960003-0000-7000-8000-000000000001
         workorderNumber:
           type: string
+          description: Human-readable workorder number
+          example: WO-2024-5001
         status:
           type: string
+          description: Current workorder status
+          example: WORK_IN_PROGRESS
         customerName:
           type: string
+          description: Name of the customer
+          example: John Doe
         vehicleDescription:
           type: string
+          description: Human-readable vehicle description
+          example: 2020 Toyota Camry
         scheduledDate:
           type: string
           format: date
+          description: Date the workorder is scheduled for
+          example: 2026-01-15
         assignedMechanicId:
           type: string
+          description: Identifier of the assigned mechanic
+          example: 01960003-0000-7000-8000-000000000002
         assignedBayId:
           type: string
+          description: Identifier of the assigned bay
+          example: 01960003-0000-7000-8000-000000000003
         estimatedLaborHours:
           type: number
+          description: Estimated labor hours for the workorder
+          example: 2.5
+      required:
+      - workorderId
   securitySchemes:
     bearerAuth:
       type: http

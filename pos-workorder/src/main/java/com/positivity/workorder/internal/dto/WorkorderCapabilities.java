@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,35 +23,35 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Capability flags for workorder actions based on user authorities")
 public class WorkorderCapabilities {
 
-    @Schema(description = "User can start workorder", example = "true")
+    @Schema(description = "User can start workorder", example = "true", requiredMode = REQUIRED)
     @Builder.Default
     private boolean canStart = false;
 
-    @Schema(description = "User can approve workorder", example = "false")
+    @Schema(description = "User can approve workorder", example = "false", requiredMode = REQUIRED)
     @Builder.Default
     private boolean canApprove = false;
 
-    @Schema(description = "User can assign/reassign technicians", example = "true")
+    @Schema(description = "User can assign/reassign technicians", example = "true", requiredMode = REQUIRED)
     @Builder.Default
     private boolean canAssignTechnician = false;
 
-    @Schema(description = "User can record labor entries", example = "true")
+    @Schema(description = "User can record labor entries", example = "true", requiredMode = REQUIRED)
     @Builder.Default
     private boolean canRecordLabor = false;
 
-    @Schema(description = "User can record parts usage", example = "true")
+    @Schema(description = "User can record parts usage", example = "true", requiredMode = REQUIRED)
     @Builder.Default
     private boolean canRecordPartsUsage = false;
 
-    @Schema(description = "User can view financial data", example = "false")
+    @Schema(description = "User can view financial data", example = "false", requiredMode = REQUIRED)
     @Builder.Default
     private boolean canViewFinancials = false;
 
-    @Schema(description = "User can edit workorder", example = "true")
+    @Schema(description = "User can edit workorder", example = "true", requiredMode = REQUIRED)
     @Builder.Default
     private boolean canEditWorkorder = false;
 
-    @Schema(description = "User can delete workorder", example = "false")
+    @Schema(description = "User can delete workorder", example = "false", requiredMode = REQUIRED)
     @Builder.Default
     private boolean canDeleteWorkorder = false;
 }

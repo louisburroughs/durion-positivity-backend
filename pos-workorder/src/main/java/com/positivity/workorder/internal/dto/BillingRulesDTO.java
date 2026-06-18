@@ -1,5 +1,8 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.positivity.shared.enums.InvoiceDeliveryMethod;
 import com.positivity.shared.enums.InvoiceGroupingStrategy;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -17,50 +20,56 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "Billing rules payload associated to a party")
 public class BillingRulesDTO {
     @Nullable
-    @Schema(description = "Billing rule identifier", example = "550e8400-e29b-41d4-a716-446655440000")
+    @Schema(
+            description = "Billing rule identifier",
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = NOT_REQUIRED)
     private UUID id;
 
     @NotBlank(message = "partyId is required")
     @NonNull
-    @Schema(description = "Party identifier", example = "CUST-12345")
+    @Schema(description = "Party identifier", example = "CUST-12345", requiredMode = REQUIRED)
     private String partyId;
 
-    @Schema(description = "Whether purchase order number is required", example = "true")
+    @Schema(description = "Whether purchase order number is required", example = "true", requiredMode = REQUIRED)
     private boolean purchaseOrderRequired;
 
     @NotBlank(message = "paymentTermsCode is required")
     @NonNull
-    @Schema(description = "Payment terms code", example = "NET30")
+    @Schema(description = "Payment terms code", example = "NET30", requiredMode = REQUIRED)
     private String paymentTermsCode;
 
     @NotNull(message = "invoiceDeliveryMethod is required")
     @NonNull
-    @Schema(description = "Invoice delivery method", example = "EMAIL")
+    @Schema(description = "Invoice delivery method", example = "EMAIL", requiredMode = REQUIRED)
     private InvoiceDeliveryMethod invoiceDeliveryMethod;
 
     @NotNull(message = "invoiceGroupingStrategy is required")
     @NonNull
-    @Schema(description = "Invoice grouping strategy", example = "BY_WORKORDER")
+    @Schema(description = "Invoice grouping strategy", example = "PER_WORKORDER", requiredMode = REQUIRED)
     private InvoiceGroupingStrategy invoiceGroupingStrategy;
 
     @NotNull(message = "version is required")
     @NonNull
-    @Schema(description = "Optimistic lock version", example = "1")
+    @Schema(description = "Optimistic lock version", example = "1", requiredMode = REQUIRED)
     private Integer version;
 
     @NotNull(message = "createdAt is required")
     @NonNull
-    @Schema(description = "Creation timestamp", example = "2026-03-02T10:15:30Z")
+    @Schema(description = "Creation timestamp", example = "2026-03-02T10:15:30Z", requiredMode = REQUIRED)
     private Instant createdAt;
 
     @NotNull(message = "updatedAt is required")
     @NonNull
-    @Schema(description = "Last update timestamp", example = "2026-03-02T11:00:00Z")
+    @Schema(description = "Last update timestamp", example = "2026-03-02T11:00:00Z", requiredMode = REQUIRED)
     private Instant updatedAt;
 
     @NotBlank(message = "updatedBy is required")
     @NonNull
-    @Schema(description = "Actor identifier that last updated billing rules", example = "advisor@shop.local")
+    @Schema(
+            description = "Actor identifier that last updated billing rules",
+            example = "advisor@shop.local",
+            requiredMode = REQUIRED)
     private String updatedBy;
 
     // Constructors

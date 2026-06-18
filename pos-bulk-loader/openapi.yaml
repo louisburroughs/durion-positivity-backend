@@ -717,9 +717,11 @@ components:
   schemas:
     ColumnMappingApproveRequest:
       type: object
+      description: Request to approve the finalized set of column mappings for a bulk load job
       properties:
         mappings:
           type: array
+          description: Column mappings to approve, one per source column
           items:
             $ref: '#/components/schemas/ColumnMappingUpdateRequest'
           minItems: 1
@@ -727,48 +729,81 @@ components:
       - mappings
     ColumnMappingUpdateRequest:
       type: object
+      description: A single column mapping to create or update for a bulk load job
       properties:
         mappingId:
           type: string
           format: uuid
+          description: Identifier of the existing mapping to update; omit to create a new mapping
+          example: 00000000-0000-0000-0000-000000000001
         sourceColumn:
           type: string
+          description: Name of the source column in the uploaded file
+          example: Product SKU
           minLength: 1
         targetField:
           type: string
+          description: Name of the target domain field the column maps to
+          example: sku
           minLength: 1
       required:
       - sourceColumn
       - targetField
     ColumnMappingResponse:
       type: object
+      description: Inferred or user-overridden mapping from a source column to a target field
       properties:
         id:
           type: string
           format: uuid
+          description: Unique identifier of the column mapping
+          example: 00000000-0000-0000-0000-000000000001
         jobId:
           type: string
           format: uuid
+          description: Identifier of the bulk load job this mapping belongs to
+          example: 00000000-0000-0000-0000-000000000002
         sourceColumn:
           type: string
+          description: Name of the column in the source file
+          example: Product SKU
         targetField:
           type: string
+          description: Name of the target domain field the column maps to
+          example: sku
         confidence:
           type: number
           format: double
+          description: Confidence score of the inferred mapping, between 0 and 1
+          example: 0.95
         overriddenByUser:
           type: boolean
+          default: false
+          description: Whether the mapping was overridden by a user
+          example: false
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the mapping was created (ISO 8601)
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - createdAt
+      - id
+      - jobId
+      - sourceColumn
+      - targetField
     BulkLoadJobCreateRequest:
       type: object
+      description: Request to create a new bulk load job
       properties:
         fileName:
           type: string
+          description: Name of the source file to be uploaded for this job
+          example: products-2026-01.csv
           minLength: 1
         domainType:
           type: string
+          description: Target domain for the bulk load
           enum:
           - CATALOG_PRODUCT
           - INVENTORY_STOCK_COUNT
@@ -778,27 +813,40 @@ components:
           - BASE_PRICE
           - VEHICLE
           - VEHICLE_FITMENT
+          example: CATALOG_PRODUCT
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location to scope the load to, if applicable
+          example: 00000000-0000-0000-0000-000000000001
       required:
       - domainType
       - fileName
     BulkLoadJobResponse:
       type: object
+      description: Bulk load job state and progress counters
       properties:
         id:
           type: string
           format: uuid
+          description: Unique identifier of the bulk load job
+          example: 00000000-0000-0000-0000-000000000001
         operatorId:
           type: string
+          description: Identifier of the operator who created the job
+          example: operator-123
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location the job targets, if scoped to one
+          example: 00000000-0000-0000-0000-000000000002
         fileName:
           type: string
+          description: Original name of the uploaded source file
+          example: products-2026-01.csv
         domainType:
           type: string
+          description: Detected or selected target domain for the load
           enum:
           - CATALOG_PRODUCT
           - INVENTORY_STOCK_COUNT
@@ -808,8 +856,10 @@ components:
           - BASE_PRICE
           - VEHICLE
           - VEHICLE_FITMENT
+          example: CATALOG_PRODUCT
         status:
           type: string
+          description: Current lifecycle status of the job
           enum:
           - CREATED
           - UPLOADING
@@ -820,43 +870,80 @@ components:
           - COMPLETED
           - FAILED
           - CANCELLED
+          example: PROCESSING
         totalRows:
           type: integer
           format: int64
+          description: Total number of data rows detected in the source file
+          example: 1000
         processedRows:
           type: integer
           format: int64
+          description: Number of rows processed so far
+          example: 750
         successCount:
           type: integer
           format: int64
+          description: Number of rows successfully loaded
+          example: 740
         failureCount:
           type: integer
           format: int64
+          description: Number of rows that failed processing
+          example: 10
         startedAt:
           type: string
           format: date-time
+          description: Timestamp when processing started (ISO 8601)
+          example: 2026-01-15 09:30:00+00:00
         completedAt:
           type: string
           format: date-time
+          description: Timestamp when processing completed (ISO 8601)
+          example: 2026-01-15 09:45:00+00:00
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the job was created (ISO 8601)
+          example: 2026-01-15 09:25:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the job was last updated (ISO 8601)
+          example: 2026-01-15 09:45:00+00:00
+      required:
+      - createdAt
+      - domainType
+      - fileName
+      - id
+      - status
     FileUploadResponse:
       type: object
+      description: Result of uploading a source file for a bulk load job
       properties:
         jobId:
           type: string
           format: uuid
+          description: Identifier of the bulk load job the file was uploaded for
+          example: 00000000-0000-0000-0000-000000000001
         storagePath:
           type: string
+          description: Storage path where the uploaded file is persisted
+          example: bulk-loads/00000000-0000-0000-0000-000000000001/products.csv
         fileName:
           type: string
+          description: Original name of the uploaded file
+          example: products-2026-01.csv
         sizeBytes:
           type: integer
           format: int64
+          description: Size of the uploaded file in bytes
+          example: 204800
+      required:
+      - fileName
+      - jobId
+      - sizeBytes
+      - storagePath
     BulkCorrectionItem:
       type: object
       description: A single corrected data record for a failed audit entry
@@ -916,8 +1003,15 @@ components:
         rejections:
           type: array
           description: Rejection detail messages for each rejected correction, if any
+          example:
+          - Audit record does not belong to this job
           items:
             type: string
+      required:
+      - acceptedCount
+      - jobId
+      - rejectedCount
+      - submittedCount
     CorrectionResultDto:
       type: object
       description: Result of a single correction record submission
@@ -940,6 +1034,9 @@ components:
           - 'null'
           description: Reason for rejection if status is REJECTED
           example: Audit record does not belong to this job
+      required:
+      - auditRecordId
+      - status
     Pageable:
       type: object
       properties:
@@ -1016,35 +1113,61 @@ components:
           type: boolean
     AuditRecordResponse:
       type: object
+      description: Audit record for a single row processed during a bulk load job
       properties:
         id:
           type: string
           format: uuid
+          description: Unique identifier of the audit record
+          example: 00000000-0000-0000-0000-000000000001
         jobId:
           type: string
           format: uuid
+          description: Identifier of the bulk load job this audit record belongs to
+          example: 00000000-0000-0000-0000-000000000002
         entityType:
           type: string
+          description: Type of the target entity for the processed row
+          example: CATALOG_PRODUCT
         entityId:
           type: string
           format: uuid
+          description: Identifier of the entity created or updated from the row, if any
+          example: 00000000-0000-0000-0000-000000000003
         rowNumber:
           type: integer
           format: int64
+          description: One-based row number within the source file
+          example: 42
         reviewStatus:
           type: string
+          description: Review status of the audit record
           enum:
           - PENDING
           - APPROVED
           - REJECTED
           - CORRECTED
+          example: PENDING
         reasonCodes:
           type: string
+          description: Machine-readable reason codes describing why the row needs review
+          example: MISSING_REQUIRED_FIELD,INVALID_PRICE
         originalValues:
           type: string
+          description: Serialized original values from the source row
+          example:
+            sku: PROD-001
+            price: ''
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the audit record was created (ISO 8601)
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - createdAt
+      - id
+      - jobId
+      - reviewStatus
   securitySchemes:
     bearerAuth:
       type: http

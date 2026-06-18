@@ -1,5 +1,8 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
@@ -23,13 +26,14 @@ import org.jspecify.annotations.Nullable;
 public class AddEstimateItemRequest {
 
     @NotNull(message = "itemType is required")
-    @Schema(description = "Type of estimate item", example = "PART")
+    @Schema(description = "Type of estimate item", example = "PART", requiredMode = REQUIRED)
     private EstimateItemType itemType;
 
     @Nullable
     @Schema(
             description = "Human-readable description when no catalog reference is provided",
-            example = "Brake pad replacement")
+            example = "Brake pad replacement",
+            requiredMode = NOT_REQUIRED)
     private String description;
 
     @jakarta.validation.constraints.AssertTrue(
@@ -47,27 +51,29 @@ public class AddEstimateItemRequest {
 
     @NotNull(message = "quantity is required")
     @DecimalMin(value = "0.0001", message = "quantity must be greater than 0")
-    @Schema(description = "Requested quantity", example = "2")
+    @Schema(description = "Requested quantity", example = "2", requiredMode = REQUIRED)
     private BigDecimal quantity;
 
     @NotNull(message = "unitPrice is required")
     @DecimalMin(value = "0.00", message = "unitPrice must be 0 or greater")
-    @Schema(description = "Unit price for the line item", example = "49.99")
+    @Schema(description = "Unit price for the line item", example = "49.99", requiredMode = REQUIRED)
     private BigDecimal unitPrice;
 
     @Nullable
-    @Schema(description = "Optional tax code", example = "TX-GENERAL")
+    @Schema(description = "Optional tax code", example = "TX-GENERAL", requiredMode = NOT_REQUIRED)
     private String taxCode;
 
     @Nullable
     @Schema(
             description = "Referenced product identifier for PART items",
-            example = "550e8400-e29b-41d4-a716-446655440020")
+            example = "550e8400-e29b-41d4-a716-446655440020",
+            requiredMode = NOT_REQUIRED)
     private UUID productId; // For PART items
 
     @Nullable
     @Schema(
             description = "Referenced service identifier for LABOR items",
-            example = "550e8400-e29b-41d4-a716-446655440021")
+            example = "550e8400-e29b-41d4-a716-446655440021",
+            requiredMode = NOT_REQUIRED)
     private UUID serviceId; // For LABOR items
 }

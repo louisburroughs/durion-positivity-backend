@@ -35,7 +35,11 @@ public class AddEligibilityRuleRequest {
     @Size(max = 255, message = "value must not exceed 255 characters")
     private String value;
 
-    @Schema(description = "Logical combinator when multiple rules exist", example = "AND", nullable = true)
+    @Schema(
+            description = "Logical combinator when multiple rules exist",
+            example = "AND",
+            nullable = true,
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @Nullable
     private RuleCombination ruleCombination;
 

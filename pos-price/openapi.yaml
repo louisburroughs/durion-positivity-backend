@@ -912,6 +912,7 @@ components:
           - string
           - 'null'
           description: Optional promotion description
+          example: 20% off labor for seasonal service
         discountType:
           type: string
           description: Discount strategy
@@ -967,17 +968,30 @@ components:
           - 'null'
           format: date-time
           description: Record creation timestamp
+          example: 2026-03-01 08:00:00+00:00
         updatedAt:
           type:
           - string
           - 'null'
           format: date-time
           description: Record last update timestamp
+          example: 2026-03-02 10:15:00+00:00
         createdBy:
           type:
           - string
           - 'null'
           description: User that created the record
+          example: user-001
+      required:
+      - discountType
+      - discountValue
+      - endDate
+      - name
+      - promoCode
+      - promotionOfferId
+      - startDate
+      - status
+      - usageCount
     AddEligibilityRuleRequest:
       type: object
       description: Request payload to add a new eligibility rule to a promotion
@@ -1053,6 +1067,12 @@ components:
           type: string
           description: Rule threshold or value
           example: '1000'
+      required:
+      - conditionType
+      - operator
+      - promotionId
+      - ruleId
+      - value
     EligibilityContext:
       type: object
       description: Optional account/vehicle context used to evaluate promotion eligibility
@@ -1095,6 +1115,8 @@ components:
           type: boolean
           description: Whether the promotion is eligible for the provided context
           example: true
+      required:
+      - isEligible
     ApplyPromotionRequest:
       type: object
       description: Request payload for applying a promotion code to an estimate context
@@ -1198,8 +1220,13 @@ components:
         appliedAdjustments:
           type: array
           description: Adjustments applied during promotion evaluation
+          example: []
           items:
             $ref: '#/components/schemas/PricingAdjustment'
+      required:
+      - appliedAdjustments
+      - subtotal
+      - total
     PricingAdjustment:
       type: object
       description: A single pricing adjustment applied to an estimate
@@ -1223,33 +1250,52 @@ components:
           example: -100.0
         metadata:
           description: Optional adjustment metadata bag
+      required:
+      - amount
+      - label
+      - type
     RestrictionOverrideRequest:
       type: object
+      description: Request payload to override a sale-restriction rule for a transaction
       properties:
         ruleId:
           type: string
           format: uuid
+          description: Restriction rule being overridden
+          example: f51d2c5b-a1f2-4f4e-a7cf-4e7b1752e6ab
         transactionId:
           type: string
           format: uuid
+          description: Transaction the override applies to
+          example: 1f0c2b9a-7e44-4f0e-9c1b-2a6d8e3f4b50
         productId:
           type: string
           format: uuid
+          description: Product the override applies to
+          example: 7f3c35db-b908-42fa-83f1-2ef46a3c2149
         overrideContext:
           type: string
+          description: Transaction lifecycle context for the override
           enum:
           - BROWSE
           - QUOTE
           - CHECKOUT
           - INVOICE_FINALIZE
           - COMMIT_SALE
+          example: CHECKOUT
         reasonCode:
           type: string
+          description: Reason code justifying the override
+          example: MANAGER_APPROVAL
           minLength: 1
         notes:
           type: string
+          description: Optional free-text notes for the override
+          example: Customer is a licensed reseller
         approvedBy:
           type: string
+          description: Optional identifier of the approver who authorized the override
+          example: user-001
       required:
       - overrideContext
       - productId
@@ -1258,21 +1304,33 @@ components:
       - transactionId
     RestrictionOverrideResponse:
       type: object
+      description: Response payload confirming a created sale-restriction override
       properties:
         overrideId:
           type: string
           format: uuid
+          description: Identifier of the created override
+          example: 9c3b1f2a-5d6e-4a7b-8c9d-0e1f2a3b4c5d
         expiresAt:
           type: string
           format: date-time
+          description: Timestamp when the override expires
+          example: 2026-03-05 21:38:21.752000+00:00
+      required:
+      - expiresAt
+      - overrideId
     RestrictionEvaluationItem:
       type: object
+      description: Single product/context entry to evaluate against sale-restriction rules
       properties:
         productId:
           type: string
           format: uuid
+          description: Product to evaluate restrictions for
+          example: 7f3c35db-b908-42fa-83f1-2ef46a3c2149
         locationTag:
           type: string
+          description: Location scope tag for the evaluation
           enum:
           - ALL_LOCATIONS
           - RETAIL_STORE
@@ -1280,22 +1338,27 @@ components:
           - MOBILE_SERVICE
           - FRANCHISE
           - TEST_LOCATION
+          example: RETAIL_STORE
         serviceTag:
           type: string
+          description: Service channel scope tag for the evaluation
           enum:
           - POS_SALE
           - WORKORDER
           - ESTIMATE
           - INVOICE
           - DELIVERY
+          example: POS_SALE
         context:
           type: string
+          description: Transaction lifecycle context for the evaluation
           enum:
           - BROWSE
           - QUOTE
           - CHECKOUT
           - INVOICE_FINALIZE
           - COMMIT_SALE
+          example: CHECKOUT
       required:
       - context
       - locationTag
@@ -1303,9 +1366,11 @@ components:
       - serviceTag
     RestrictionEvaluationRequest:
       type: object
+      description: Batch request to evaluate sale-restriction rules for one or more product contexts
       properties:
         items:
           type: array
+          description: Product/context entries to evaluate; must contain at least one item
           items:
             $ref: '#/components/schemas/RestrictionEvaluationItem'
           minItems: 1
@@ -1313,41 +1378,64 @@ components:
       - items
     RestrictionEvaluationResponse:
       type: object
+      description: Batch response containing one restriction-evaluation result per requested item
       properties:
         results:
           type: array
+          description: Per-item restriction evaluation results
+          example: []
           items:
             $ref: '#/components/schemas/RestrictionEvaluationResult'
+      required:
+      - results
     RestrictionEvaluationResult:
       type: object
+      description: Restriction-evaluation outcome for a single product context
       properties:
         productId:
           type: string
           format: uuid
+          description: Product the evaluation applies to
+          example: 7f3c35db-b908-42fa-83f1-2ef46a3c2149
         decision:
           type: string
+          description: Restriction decision for the product context
           enum:
           - ALLOW
           - BLOCK
           - ALLOW_WITH_OVERRIDE
           - RESTRICTION_UNKNOWN
+          example: ALLOW
         ruleIds:
           type: array
+          description: Identifiers of rules that contributed to the decision
+          example: []
           items:
             type: string
             format: uuid
         reasonCodes:
           type: array
+          description: Reason codes explaining the decision
+          example: []
           items:
             type: string
+      required:
+      - decision
+      - productId
+      - reasonCodes
+      - ruleIds
     CreateRestrictionRuleRequest:
       type: object
+      description: Request payload to create a product sale-restriction rule
       properties:
         productId:
           type: string
           format: uuid
+          description: Product the restriction rule applies to
+          example: 7f3c35db-b908-42fa-83f1-2ef46a3c2149
         locationTag:
           type: string
+          description: Location scope tag for the restriction
           enum:
           - ALL_LOCATIONS
           - RETAIL_STORE
@@ -1355,41 +1443,59 @@ components:
           - MOBILE_SERVICE
           - FRANCHISE
           - TEST_LOCATION
+          example: RETAIL_STORE
         serviceTag:
           type: string
+          description: Service channel scope tag for the restriction
           enum:
           - POS_SALE
           - WORKORDER
           - ESTIMATE
           - INVOICE
           - DELIVERY
+          example: POS_SALE
         effectiveFrom:
           type: string
           format: date
+          description: Date the restriction rule becomes effective
+          example: 2026-03-01
         effectiveTo:
           type: string
           format: date
+          description: Optional date the restriction rule stops being effective
+          example: 2026-12-31
         policyVersion:
           type: integer
           format: int32
+          description: Optional pricing policy version associated with the rule
+          example: 3
         overrideable:
           type: boolean
+          description: Whether the restriction can be overridden with authorization
+          example: true
       required:
       - effectiveFrom
       - locationTag
+      - overrideable
       - productId
       - serviceTag
     RestrictionRuleResponse:
       type: object
+      description: Response payload representing a stored sale-restriction rule
       properties:
         ruleId:
           type: string
           format: uuid
+          description: Restriction rule identifier
+          example: f51d2c5b-a1f2-4f4e-a7cf-4e7b1752e6ab
         productId:
           type: string
           format: uuid
+          description: Product the restriction rule applies to
+          example: 7f3c35db-b908-42fa-83f1-2ef46a3c2149
         locationTag:
           type: string
+          description: Location scope tag for the restriction
           enum:
           - ALL_LOCATIONS
           - RETAIL_STORE
@@ -1397,22 +1503,38 @@ components:
           - MOBILE_SERVICE
           - FRANCHISE
           - TEST_LOCATION
+          example: RETAIL_STORE
         serviceTag:
           type: string
+          description: Service channel scope tag for the restriction
           enum:
           - POS_SALE
           - WORKORDER
           - ESTIMATE
           - INVOICE
           - DELIVERY
+          example: POS_SALE
         active:
           type: boolean
+          description: Whether the restriction rule is currently active
+          example: true
         effectiveFrom:
           type: string
           format: date
+          description: Date the restriction rule becomes effective
+          example: 2026-03-01
         effectiveTo:
           type: string
           format: date
+          description: Optional date the restriction rule stops being effective
+          example: 2026-12-31
+      required:
+      - active
+      - effectiveFrom
+      - locationTag
+      - productId
+      - ruleId
+      - serviceTag
     PriceQuoteRequest:
       type: object
       description: Request payload for calculating contextual price quotes
@@ -1462,6 +1584,9 @@ components:
           type: string
           description: ISO-4217 currency code
           example: USD
+      required:
+      - amount
+      - currency
     PriceQuoteResponse:
       type: object
       description: Calculated contextual price quote response
@@ -1489,13 +1614,24 @@ components:
         pricingBreakdown:
           type: array
           description: Per-rule pricing breakdown entries
+          example: []
           items:
             $ref: '#/components/schemas/PricingBreakdownEntry'
         warnings:
           type: array
           description: Non-fatal warnings generated during quote calculation
+          example: []
           items:
             type: string
+      required:
+      - extendedPrice
+      - msrp
+      - priceSource
+      - pricingBreakdown
+      - productId
+      - quantity
+      - unitPrice
+      - warnings
     PricingBreakdownEntry:
       type: object
       description: Single pricing-rule application entry within a quote breakdown
@@ -1512,21 +1648,35 @@ components:
           $ref: '#/components/schemas/MoneyAmount'
         resultingValue:
           $ref: '#/components/schemas/MoneyAmount'
+      required:
+      - adjustment
+      - resultingValue
+      - ruleName
+      - ruleType
     BasePriceBulkIngestRecord:
       type: object
+      description: Single base-price record within a bulk ingest payload
       properties:
         productId:
           type: string
+          description: Product identifier the base price applies to
+          example: P001
           minLength: 1
         msrp:
           type: string
+          description: Manufacturer suggested retail price
+          example: '125.50'
           minLength: 1
         currency:
           type: string
+          description: ISO-4217 currency code
+          example: USD
           maxLength: 3
           minLength: 3
         effectiveFrom:
           type: string
+          description: Date the base price becomes effective
+          example: 2026-03-01
           minLength: 1
       required:
       - currency
@@ -1616,6 +1766,9 @@ components:
         prices:
           type: string
           description: Serialized prices payload
+          example:
+            unitPrice: 100.0
+            total: 100.0
         appliedRules:
           type:
           - string
@@ -1625,6 +1778,13 @@ components:
           type: string
           description: Pricing policy version used
           example: 2026.03.1
+      required:
+      - createdAt
+      - itemIdentifier
+      - policyVersion
+      - prices
+      - quantity
+      - snapshotId
   securitySchemes:
     bearerAuth:
       type: http

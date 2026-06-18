@@ -32,7 +32,8 @@ public class CreatePromotionOfferRequest {
     @Schema(
             description = "Optional promotion description",
             example = "20% off labor for seasonal service",
-            nullable = true)
+            nullable = true,
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @Nullable
     @Size(max = 255, message = "description must not exceed 255 characters")
     private String description;
@@ -70,7 +71,11 @@ public class CreatePromotionOfferRequest {
     @NotNull(message = "endDate is required")
     private LocalDate endDate;
 
-    @Schema(description = "Maximum number of times promotion can be applied", example = "100", nullable = true)
+    @Schema(
+            description = "Maximum number of times promotion can be applied",
+            example = "100",
+            nullable = true,
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @Nullable
     @Positive(message = "usageLimit must be positive when provided")
     private Integer usageLimit;
