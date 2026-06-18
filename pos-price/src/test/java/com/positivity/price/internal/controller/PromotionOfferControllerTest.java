@@ -49,7 +49,7 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
     private Clock clock;
 
     /**
-     * Grant {@code Promotion:Manage} so that {@code @PreAuthorize} checks on POST
+     * Grant {@code pricing:promotion:manage} so that {@code @PreAuthorize} checks on POST
      * and PATCH
      * endpoints pass through to the service layer, producing behaviour-driven
      * failures
@@ -59,7 +59,7 @@ class PromotionOfferControllerTest extends BaseContractIntegrationTest {
      */
     @Override
     protected String defaultAuthorities() {
-        return "Promotion:Manage,Promotion:View,Promotion:Apply";
+        return "pricing:promotion:manage,pricing:promotion:view,pricing:promotion:apply";
     }
 
     // ========== CREATE ==========

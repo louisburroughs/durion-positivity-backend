@@ -445,9 +445,9 @@ paths:
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
-        - Promotion:RecordRedemption
+        - crm:promotion_redemption:record
       x-required-permissions:
-      - Promotion:RecordRedemption
+      - crm:promotion_redemption:record
   /v1/customer/bulk-ingest:
     post:
       tags:
@@ -1143,9 +1143,9 @@ paths:
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
-        - Promotion:ViewRedemption
+        - crm:promotion_redemption:view
       x-required-permissions:
-      - Promotion:ViewRedemption
+      - crm:promotion_redemption:view
   /v1/customers/{id}/requirements-met:
     get:
       tags:

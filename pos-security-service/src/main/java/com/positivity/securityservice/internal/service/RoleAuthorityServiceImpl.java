@@ -92,7 +92,10 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "crm:vehicle_party_association:view",
                 // Integration monitoring (read-only)
                 "crm:processing_log:view",
-                "crm:suspense:view"));
+                "crm:suspense:view",
+                // Promotion redemption
+                "crm:promotion_redemption:record",
+                "crm:promotion_redemption:view"));
         return authorities;
     }
 
@@ -127,7 +130,9 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "crm:billing_rules:edit",
                 "crm:relationship:create",
                 "crm:relationship:update",
-                "crm:relationship:delete"));
+                "crm:relationship:delete",
+                "crm:promotion_redemption:record",
+                "crm:promotion_redemption:view"));
         return set;
     }
 
@@ -158,6 +163,10 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
         set.addAll(vehicleFitmentAuthorities());
         set.addAll(vehicleInventoryAuthorities());
         set.add("documents:render");
+        // Workorder time-entry approval is an admin/manager-only operation,
+        // intentionally NOT granted via workorderAuthorities() (which technicians inherit).
+        set.add("workorder:timeEntry:approve");
+        set.add("workorder:timeEntry:reject");
         return set;
     }
 
@@ -170,6 +179,13 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
         authorities.addAll(List.of("security:role:view", "security:role:assign", "security:permission:view"));
         // Managers review, approve, and reject pay-period timekeeping for their staff.
         authorities.addAll(timekeepingApprovalAuthorities());
+        // Managers manage and apply promotions and approve/reject workorder time entries.
+        authorities.addAll(List.of(
+                "pricing:promotion:view",
+                "pricing:promotion:manage",
+                "pricing:promotion:apply",
+                "workorder:timeEntry:approve",
+                "workorder:timeEntry:reject"));
         return authorities;
     }
 
@@ -385,6 +401,8 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "workorder:workorder:edit",
                 "workorder:workorder:reopen_completed",
                 "workorder:workorder:assign-technician",
+                "workorder:timeEntry:approve",
+                "workorder:timeEntry:reject",
                 "workorder:dashboard:view",
                 "workorder:change_request:emergency_override",
                 "workorder:approval_config:view",
@@ -668,7 +686,10 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "pricing:restrictions:edit",
                 "pricing:restriction:manage",
                 "pricing:restriction:override",
-                "pricing:override:approve"));
+                "pricing:override:approve",
+                "pricing:promotion:view",
+                "pricing:promotion:manage",
+                "pricing:promotion:apply"));
     }
 
     private Set<String> appointmentAuthorities() {

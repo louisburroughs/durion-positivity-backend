@@ -67,9 +67,9 @@ paths:
                 $ref: '#/components/schemas/PromotionOfferResponse'
       security:
       - bearerAuth:
-        - Promotion:Manage
+        - pricing:promotion:manage
       x-required-permissions:
-      - Promotion:Manage
+      - pricing:promotion:manage
   /v1/promotions/offers/{promotionId}/rules:
     get:
       tags:
@@ -111,9 +111,9 @@ paths:
                   $ref: '#/components/schemas/EligibilityRuleResponse'
       security:
       - bearerAuth:
-        - Promotion:View
+        - pricing:promotion:view
       x-required-permissions:
-      - Promotion:View
+      - pricing:promotion:view
     post:
       tags:
       - Promotion Eligibility Rules
@@ -160,9 +160,9 @@ paths:
                 $ref: '#/components/schemas/EligibilityRuleResponse'
       security:
       - bearerAuth:
-        - Promotion:Manage
+        - pricing:promotion:manage
       x-required-permissions:
-      - Promotion:Manage
+      - pricing:promotion:manage
   /v1/promotions/offers/{promotionId}/rules/evaluate:
     post:
       tags:
@@ -210,9 +210,9 @@ paths:
                 $ref: '#/components/schemas/EligibilityDecisionResponse'
       security:
       - bearerAuth:
-        - Promotion:Apply
+        - pricing:promotion:apply
       x-required-permissions:
-      - Promotion:Apply
+      - pricing:promotion:apply
   /v1/promotions/offers/apply:
     post:
       tags:
@@ -253,9 +253,9 @@ paths:
                 $ref: '#/components/schemas/ApplyPromotionResponse'
       security:
       - bearerAuth:
-        - Promotion:Apply
+        - pricing:promotion:apply
       x-required-permissions:
-      - Promotion:Apply
+      - pricing:promotion:apply
   /v1/price/restrictions:override:
     post:
       tags:
@@ -548,9 +548,9 @@ paths:
                 $ref: '#/components/schemas/PromotionOfferResponse'
       security:
       - bearerAuth:
-        - Promotion:Manage
+        - pricing:promotion:manage
       x-required-permissions:
-      - Promotion:Manage
+      - pricing:promotion:manage
   /v1/promotions/offers/{id}/activate:
     patch:
       tags:
@@ -592,9 +592,9 @@ paths:
                 $ref: '#/components/schemas/PromotionOfferResponse'
       security:
       - bearerAuth:
-        - Promotion:Manage
+        - pricing:promotion:manage
       x-required-permissions:
-      - Promotion:Manage
+      - pricing:promotion:manage
   /v1/promotions/offers/{id}:
     get:
       tags:
@@ -630,9 +630,9 @@ paths:
                 $ref: '#/components/schemas/PromotionOfferResponse'
       security:
       - bearerAuth:
-        - Promotion:View
+        - pricing:promotion:view
       x-required-permissions:
-      - Promotion:View
+      - pricing:promotion:view
   /v1/promotions/offers/by-code/{promoCode}:
     get:
       tags:
@@ -667,9 +667,9 @@ paths:
                 $ref: '#/components/schemas/PromotionOfferResponse'
       security:
       - bearerAuth:
-        - Promotion:View
+        - pricing:promotion:view
       x-required-permissions:
-      - Promotion:View
+      - pricing:promotion:view
   /v1/price/snapshots/{snapshotId}:
     get:
       tags:
@@ -816,9 +816,9 @@ paths:
           description: Forbidden.
       security:
       - bearerAuth:
-        - Promotion:Manage
+        - pricing:promotion:manage
       x-required-permissions:
-      - Promotion:Manage
+      - pricing:promotion:manage
 components:
   schemas:
     CreatePromotionOfferRequest:
