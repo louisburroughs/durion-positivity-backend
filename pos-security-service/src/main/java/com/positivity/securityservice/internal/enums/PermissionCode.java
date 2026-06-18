@@ -421,21 +421,10 @@ public enum PermissionCode {
 
     // ── Workorder (new) ────────────────────────────────────────────────────────
     WORKORDER__OPERATIONALCONTEXT__OVERRIDE(327, "workorder:operationalContext:override"),
-    // ── Promotion (new) ────────────────────────────────────────────────────────
-    PROMOTION__APPLY(328, "Promotion:Apply"),
-    PROMOTION__MANAGE(329, "Promotion:Manage"),
-    PROMOTION__RECORDREDEMPTION(330, "Promotion:RecordRedemption"),
-    PROMOTION__VIEW(331, "Promotion:View"),
-    PROMOTION__VIEWREDEMPTION(332, "Promotion:ViewRedemption"),
-
-    // ── Timeentry (new) ────────────────────────────────────────────────────────
-    TIMEENTRY__APPROVE(333, "TimeEntry:Approve"),
-    TIMEENTRY__REJECT(334, "TimeEntry:Reject"),
-
-    // ── People (new) ───────────────────────────────────────────────────────────
-    PEOPLE__TIMEKEEPING__APPROVE(335, "people:timekeeping:approve"),
-    PEOPLE__TIMEKEEPING__REJECT(336, "people:timekeeping:reject"),
-    PEOPLE__TIMEKEEPING__VIEW(337, "people:timekeeping:view");
+    // ── People timekeeping approval (new) ────────────────────────────────────────
+    PEOPLE__TIMEKEEPING__APPROVE(328, "people:timekeeping:approve"),
+    PEOPLE__TIMEKEEPING__REJECT(329, "people:timekeeping:reject"),
+    PEOPLE__TIMEKEEPING__VIEW(330, "people:timekeeping:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new

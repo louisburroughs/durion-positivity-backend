@@ -1170,7 +1170,7 @@ class SecurityGatewayConfigTest {
         }
 
         @Test
-        @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 337")
+        @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 330")
         void authorityByBitCoversNewEntries() {
                 // batch-2: previously missing (bits 241-261)
                 assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1190,15 +1190,15 @@ class SecurityGatewayConfigTest {
                                 .isEqualTo("PERM_accounting:credit-memo:create");
                 assertThat(GatewayPermissionCatalog.authorityForBit(327))
                                 .isEqualTo("PERM_workorder:operationalContext:override");
-                // catalog v11: Promotion + TimeEntry + people:timekeeping (bits 328-337)
-                assertThat(GatewayPermissionCatalog.authorityForBit(328)).isEqualTo("PERM_Promotion:Apply");
-                assertThat(GatewayPermissionCatalog.authorityForBit(333)).isEqualTo("PERM_TimeEntry:Approve");
-                assertThat(GatewayPermissionCatalog.authorityForBit(335))
+                // catalog v11: people:timekeeping approval (bits 328-330)
+                assertThat(GatewayPermissionCatalog.authorityForBit(328))
                                 .isEqualTo("PERM_people:timekeeping:approve");
-                assertThat(GatewayPermissionCatalog.authorityForBit(337))
+                assertThat(GatewayPermissionCatalog.authorityForBit(329))
+                                .isEqualTo("PERM_people:timekeeping:reject");
+                assertThat(GatewayPermissionCatalog.authorityForBit(330))
                                 .isEqualTo("PERM_people:timekeeping:view");
                 // beyond array must return null
-                assertThat(GatewayPermissionCatalog.authorityForBit(338)).isNull();
+                assertThat(GatewayPermissionCatalog.authorityForBit(331)).isNull();
         }
 
         @Test
