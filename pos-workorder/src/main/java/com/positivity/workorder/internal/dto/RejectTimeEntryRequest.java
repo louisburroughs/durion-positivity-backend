@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
@@ -15,6 +17,9 @@ import lombok.NoArgsConstructor;
 public class RejectTimeEntryRequest {
 
     @NotBlank
-    @Schema(description = "Mandatory reason for rejection")
+    @Schema(
+            description = "Mandatory reason for rejection",
+            example = "Hours exceed approved estimate",
+            requiredMode = REQUIRED)
     private String rejectionReason;
 }

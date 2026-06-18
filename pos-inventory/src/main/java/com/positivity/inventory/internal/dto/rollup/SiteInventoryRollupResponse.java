@@ -12,8 +12,12 @@ import java.util.UUID;
  * list under this site (orphans) are excluded from this response in v1; an
  * {@code unassigned} bucket is deferred to v2.
  */
+@Schema(description = "Site inventory rollup with quantities subtotaled along the storage-location hierarchy")
 public record SiteInventoryRollupResponse(
-        @Schema(description = "Site (Location) identifier", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Site (Location) identifier",
+                example = "01960003-0000-7000-8000-000000000011",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         UUID siteId,
 
         @Schema(

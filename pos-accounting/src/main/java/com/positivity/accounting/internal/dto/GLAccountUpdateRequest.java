@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Size;
@@ -25,11 +27,17 @@ import lombok.NoArgsConstructor;
 public class GLAccountUpdateRequest {
 
     @Size(max = 100, message = "accountName must not exceed 100 characters")
-    @Schema(description = "Updated account name", example = "Accounts Receivable - Trade")
+    @Schema(
+            description = "Updated account name",
+            example = "Accounts Receivable - Trade",
+            requiredMode = NOT_REQUIRED)
     private String accountName;
 
     @Size(max = 500, message = "description must not exceed 500 characters")
-    @Schema(description = "Updated account description", example = "Primary receivables account")
+    @Schema(
+            description = "Updated account description",
+            example = "Primary receivables account",
+            requiredMode = NOT_REQUIRED)
     private String description;
 
     @AssertTrue(message = "At least one non-blank field (accountName or description) is required")

@@ -26,7 +26,8 @@ public record InternalTokenRequest(
         @JsonProperty("roles")
         @Schema(
                 description = "Optional set of role names to include in token",
-                example = "[\"SHOP_MGR\", \"ACCOUNTING_CLERK\"]")
+                example = "[\"SHOP_MGR\", \"ACCOUNTING_CLERK\"]",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         Set<String> roles) {
 
     public void validate() {

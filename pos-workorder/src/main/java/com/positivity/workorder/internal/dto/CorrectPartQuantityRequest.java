@@ -1,6 +1,10 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
@@ -25,7 +29,10 @@ public class CorrectPartQuantityRequest {
      * ID of the workorder part.
      */
     @NotNull(message = "Workorder part ID is required")
-    @Schema(description = "Workorder part identifier", example = "550e8400-e29b-41d4-a716-446655440500")
+    @Schema(
+            description = "Workorder part identifier",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = REQUIRED)
     private UUID workorderPartId;
 
     /**
@@ -33,20 +40,26 @@ public class CorrectPartQuantityRequest {
      */
     @NotNull(message = "New quantity is required")
     @Positive(message = "New quantity must be positive")
-    @Schema(description = "Corrected authorized quantity", example = "3")
+    @Schema(description = "Corrected authorized quantity", example = "2", requiredMode = REQUIRED)
     private BigDecimal newQuantity;
 
     /**
      * Reason for correction (required for audit).
      */
-    @NotNull(message = "Reason is required")
-    @Schema(description = "Audit reason for correction", example = "Inventory recount adjusted authorized quantity")
+    @NotBlank(message = "Reason is required")
+    @Schema(
+            description = "Audit reason for correction",
+            example = "Inventory recount adjusted authorized quantity",
+            requiredMode = REQUIRED)
     private String reason;
 
     /**
      * Optional additional notes.
      */
     @Nullable
-    @Schema(description = "Optional correction notes", example = "Adjusted after parts counter verification")
+    @Schema(
+            description = "Optional correction notes",
+            example = "Adjusted after parts counter verification",
+            requiredMode = NOT_REQUIRED)
     private String notes;
 }

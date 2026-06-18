@@ -21,36 +21,48 @@ import lombok.NoArgsConstructor;
 public class UpdateVehicleRequest {
 
     @Size(max = 255)
-    @Schema(description = "Fleet/unit number.", example = "UNIT-2048")
+    @Schema(
+            description = "Fleet/unit number.",
+            example = "UNIT-2048",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String unitNumber;
 
     @Size(max = 4000)
-    @Schema(description = "Human-readable vehicle description.", example = "2023 Chevrolet Silverado 1500")
+    @Schema(
+            description = "Human-readable vehicle description.",
+            example = "2023 Chevrolet Silverado 1500",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String description;
 
     @Size(max = 50)
-    @Schema(description = "License plate value.", example = "XYZ7890")
+    @Schema(description = "License plate value.", example = "XYZ7890", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String licensePlate;
 
     @Size(max = 50)
-    @Schema(description = "License plate jurisdiction/state or province.", example = "TX")
+    @Schema(
+            description = "License plate jurisdiction/state or province.",
+            example = "TX",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String licensePlateJurisdiction;
 
     @Min(1886)
     @Max(2100)
-    @Schema(description = "Model year.", example = "2023")
+    @Schema(description = "Model year.", example = "2023", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Integer year;
 
     @Size(max = 255)
-    @Schema(description = "Vehicle make.", example = "Chevrolet")
+    @Schema(description = "Vehicle make.", example = "Chevrolet", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String make;
 
     @Size(max = 255)
-    @Schema(description = "Vehicle model.", example = "Silverado 1500")
+    @Schema(
+            description = "Vehicle model.",
+            example = "Silverado 1500",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String model;
 
     @Size(max = 255)
-    @Schema(description = "Vehicle trim.", example = "LT")
+    @Schema(description = "Vehicle trim.", example = "LT", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String trim;
 
     @AssertTrue(message = "At least one field must be provided for update")

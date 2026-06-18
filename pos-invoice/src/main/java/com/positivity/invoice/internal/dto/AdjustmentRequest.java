@@ -1,6 +1,9 @@
 package com.positivity.invoice.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -8,19 +11,33 @@ import java.math.BigDecimal;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
+@Schema(description = "Request to apply a monetary adjustment to an invoice")
 public class AdjustmentRequest {
 
     @NotNull
+    @Schema(
+            description = "Type of adjustment applied to the invoice",
+            example = "DISCOUNT",
+            requiredMode = REQUIRED)
     private InvoiceAdjustmentType type;
 
     @NotNull
     @DecimalMin(value = "0.0001")
+    @Schema(description = "Adjustment amount (must be greater than zero)", example = "25.00", requiredMode = REQUIRED)
     private BigDecimal amount;
 
     @NotBlank
+    @Schema(
+            description = "Business reason justifying the adjustment",
+            example = "Goodwill discount for delayed service",
+            requiredMode = REQUIRED)
     private String reason;
 
     @NotBlank
+    @Schema(
+            description = "Identifier of the actor who authorized the adjustment",
+            example = "jdoe",
+            requiredMode = REQUIRED)
     private String authorizedBy;
 
     @Nullable

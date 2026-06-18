@@ -1911,19 +1911,31 @@ components:
           minLength: 0
     BillingRuleRef:
       type: object
+      description: Read-only billing rule reference surfaced in a CRM snapshot
       properties:
         poRequired:
           type: boolean
+          description: Whether a PO number is required before an order can be finalized
+          example: false
         taxExempt:
           type: boolean
+          description: Whether the customer is tax-exempt
+          example: false
         paymentTerms:
           type: string
+          description: Payment terms string
+          example: Net 30
         creditLimit:
           type: number
+          description: Maximum credit limit available; null means no configured limit
+          example: 10000.0
         creditHold:
           type: boolean
+          description: Whether the account is on a credit hold
+          example: false
         invoiceDeliveryMethod:
           type: string
+          description: Preferred invoice delivery method
           enum:
           - EMAIL
           - MAIL
@@ -1932,14 +1944,30 @@ components:
         billingAddressId:
           type: string
           format: uuid
+          description: Billing address ID; null if not configured
+          example: f47ac10b-58cc-4372-a567-0e02b2c3d479
         autoPayEnabled:
           type: boolean
+          description: Whether auto-pay is enabled for this account
+          example: false
         discountPolicyRef:
           type: string
+          description: Optional reference to a discount policy
+          example: DISC-GOLD-001
         currency:
           type: string
+          description: ISO-4217 currency code; null if not configured
+          example: USD
         extensions:
           type: object
+          description: Extension map for future fields; consumers must ignore unknown keys
+          example:
+            futureFlag: true
+      required:
+      - autoPayEnabled
+      - creditHold
+      - poRequired
+      - taxExempt
     RecordRedemptionRequest:
       type: object
       description: Request to record a promotion redemption for a customer
@@ -2075,20 +2103,28 @@ components:
       - workorderId
     BulkIngestRequestCustomerBulkIngestRecord:
       type: object
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
       properties:
         jobId:
           type: string
           format: uuid
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
         locationId:
           type: string
           format: uuid
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
         records:
           type: array
+          description: The records to ingest (at least one); shape depends on the target domain
           items:
             $ref: '#/components/schemas/CustomerBulkIngestRecord'
           minItems: 1
         operatorId:
           type: string
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
       required:
       - jobId
       - locationId
@@ -2138,35 +2174,62 @@ components:
       - lastName
     BulkIngestResponse:
       type: object
+      description: 'Summary outcome of a bulk ingest job: per-record results plus aggregate counts'
       properties:
         totalSubmitted:
           type: integer
           format: int32
+          description: Total number of records submitted in the batch
+          example: 100
         successCount:
           type: integer
           format: int32
+          description: Number of records ingested successfully
+          example: 98
         failureCount:
           type: integer
           format: int32
+          description: Number of records that failed ingest
+          example: 2
         results:
           type: array
+          description: Per-record outcomes in submission order
           items:
             $ref: '#/components/schemas/BulkIngestResult'
+      required:
+      - failureCount
+      - results
+      - successCount
+      - totalSubmitted
     BulkIngestResult:
       type: object
+      description: Per-record outcome of a bulk ingest submission
       properties:
         rowIndex:
           type: integer
           format: int32
+          description: Zero-based index of the record within the submitted batch
+          example: 0
         entityId:
           type: string
           format: uuid
+          description: Identifier of the entity created/updated for this record, when successful
+          example: 01960003-0000-7000-8000-000000000001
         success:
           type: boolean
+          description: Whether this record was ingested successfully
+          example: true
         errorCode:
           type: string
+          description: Machine-readable error code when the record failed
+          example: VALIDATION_FAILED
         errorMessage:
           type: string
+          description: Human-readable error detail when the record failed
+          example: vin must be 17 characters
+      required:
+      - rowIndex
+      - success
     CreatePersonRequest:
       type: object
       description: Request to create an individual person record
@@ -3041,64 +3104,124 @@ components:
           type: boolean
     AccountSummary:
       type: object
+      description: Account summary surfaced in a CRM snapshot
       properties:
         partyId:
           type: string
+          description: Canonical party identifier of the account
+          example: 01960003-0000-7000-8000-000000000001
         accountNumber:
           type: string
+          description: Human-readable account/customer number
+          example: CUST-000123
         accountName:
           type: string
+          description: Account display name
+          example: Acme Industrial Supply, LLC
         accountType:
           type: string
+          description: Account type discriminator
+          example: ORGANIZATION
+      required:
+      - accountName
+      - accountNumber
+      - accountType
+      - partyId
     BillingPreferences:
       type: object
+      description: Account-level billing preferences within a CRM snapshot
       properties:
         marketingOptOut:
           type: boolean
+          description: Whether the account has opted out of marketing communications
+          example: false
         doNotContact:
           type: boolean
+          description: Whether the account should not be contacted at all
+          example: false
         invoiceDeliveryMethod:
           type: string
+          description: Preferred invoice delivery method
+          example: EMAIL
+      required:
+      - doNotContact
+      - marketingOptOut
     ContactPreferences:
       type: object
+      description: Communication preferences for a contact
       properties:
         emailOptIn:
           type: boolean
+          description: Whether the contact has opted in to email communications
+          example: true
         smsOptIn:
           type: boolean
+          description: Whether the contact has opted in to SMS communications
+          example: false
         phoneOptIn:
           type: boolean
+          description: Whether the contact has opted in to phone communications
+          example: true
         doNotContact:
           type: boolean
+          description: Whether the contact should not be contacted at all
+          example: false
         preferredContactMethod:
           type: string
+          description: Preferred method of contact
+          example: EMAIL
         preferredLanguage:
           type: string
+          description: Preferred language for communications
+          example: en-US
+      required:
+      - doNotContact
+      - emailOptIn
+      - phoneOptIn
+      - smsOptIn
     ContactSummary:
       type: object
+      description: Contact summary surfaced in a CRM snapshot
       properties:
         contactId:
           type: string
+          description: Identifier of the contact
+          example: 01960003-0000-7000-8000-000000000020
         name:
           type: string
+          description: Contact display name
+          example: Jane Doe
         roles:
           type: array
+          description: Roles assigned to this contact
+          example:
+          - BILLING
+          - APPROVER
           items:
             type: string
         phoneNumbers:
           type: array
+          description: Phone numbers for this contact
           items:
             $ref: '#/components/schemas/PhoneNumberDTO'
         emailAddresses:
           type: array
+          description: Email addresses for this contact
           items:
             $ref: '#/components/schemas/EmailAddressDTO'
         preferences:
           $ref: '#/components/schemas/ContactPreferences'
         primary:
           type: boolean
+      required:
+      - contactId
+      - emailAddresses
+      - name
+      - phoneNumbers
+      - roles
     CrmSnapshotDTO:
       type: object
+      description: Read-only CRM snapshot of an account, its contacts, vehicles, and billing configuration
       properties:
         snapshotMetadata:
           $ref: '#/components/schemas/SnapshotMetadata'
@@ -3106,64 +3229,123 @@ components:
           $ref: '#/components/schemas/AccountSummary'
         contacts:
           type: array
+          description: Contacts associated with the account
           items:
             $ref: '#/components/schemas/ContactSummary'
         vehicles:
           type: array
+          description: Vehicles associated with the account
           items:
             $ref: '#/components/schemas/VehicleSummary'
         preferences:
           $ref: '#/components/schemas/BillingPreferences'
         billingRules:
           $ref: '#/components/schemas/BillingRuleRef'
+      required:
+      - account
+      - contacts
+      - snapshotMetadata
+      - vehicles
     EmailAddressDTO:
       type: object
+      description: An email address for a contact
       properties:
         type:
           type: string
+          description: Email address type
+          example: WORK
         address:
           type: string
+          description: Email address value
+          example: jane@acme.com
+      required:
+      - address
+      - type
     PhoneNumberDTO:
       type: object
+      description: A phone number for a contact
       properties:
         type:
           type: string
+          description: Phone number type
+          example: MOBILE
         number:
           type: string
+          description: Phone number value
+          example: +1-555-0142
+      required:
+      - number
+      - type
     SnapshotMetadata:
       type: object
+      description: Metadata describing a CRM snapshot, including freshness and version
       properties:
         snapshotId:
           type: string
           format: uuid
+          description: Unique identifier of the snapshot
+          example: 01960003-0000-7000-8000-000000000001
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the snapshot was created (ISO 8601)
+          example: 2026-06-17 10:15:30+00:00
         version:
           type: string
+          description: Snapshot schema/content version
+          example: '1'
         source:
           type: string
+          description: Data source the snapshot was served from
+          enum:
+          - CACHE
+          - CRM_API
+          example: CACHE
         stale:
           type: boolean
+          description: Whether this snapshot was served from a stale (expired) cache entry
+          example: false
         staleSince:
           type: string
           format: date-time
+          description: Timestamp when the cache entry went stale; only present when stale is true
+          example: 2026-06-17 09:00:00+00:00
+      required:
+      - createdAt
+      - snapshotId
+      - stale
+      - version
     VehicleSummary:
       type: object
+      description: Vehicle summary within a CRM snapshot
       properties:
         vehicleId:
           type: string
+          description: Identifier of the vehicle
+          example: 01960003-0000-7000-8000-000000000030
         vin:
           type: string
+          description: Vehicle Identification Number
+          example: 1HGCM82633A004352
         licensePlate:
           type: string
+          description: License plate
+          example: ABC-1234
         make:
           type: string
+          description: Vehicle make
+          example: Ford
         model:
           type: string
+          description: Vehicle model
+          example: Transit 250
         year:
           type: integer
           format: int32
+          description: Model year
+          example: 2019
+      required:
+      - vehicleId
     ContactPointDto:
       type: object
       description: Contact point details
@@ -3521,22 +3703,38 @@ components:
       - netDays
     PersonLinkReport:
       type: object
+      description: Outcome of a person-link reconciliation pass against pos-people
       properties:
         totalLinks:
           type: integer
           format: int32
+          description: Count of distinct linked person ids checked
+          example: 120
         resolved:
           type: integer
           format: int32
+          description: Count of linked ids that exist in pos-people
+          example: 118
         unresolvedPersonIds:
           type: array
+          description: Linked person ids with no matching pos-people person (orphans)
           items:
             type: string
             format: uuid
         posPeopleReachable:
           type: boolean
+          description: False if pos-people could not be reached, in which case resolved/unresolved counts are not meaningful
+          example: true
         healthy:
           type: boolean
+          description: 'Whether reconciliation is healthy: pos-people reachable and no unresolved orphan links'
+          example: true
+      required:
+      - healthy
+      - posPeopleReachable
+      - resolved
+      - totalLinks
+      - unresolvedPersonIds
     GetAccountTierResponse:
       type: object
       description: Account tier information response

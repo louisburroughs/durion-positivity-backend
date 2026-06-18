@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.dto.snapshot;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -9,23 +10,46 @@ import org.jspecify.annotations.Nullable;
  * Snapshot metadata for CRM snapshot response.
  * CAP:092 - Story #99
  */
+@Schema(description = "Metadata describing a CRM snapshot, including freshness and version")
 public class SnapshotMetadata {
+    @Schema(
+            description = "Unique identifier of the snapshot",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NonNull
     private UUID snapshotId;
 
+    @Schema(
+            description = "Timestamp when the snapshot was created (ISO 8601)",
+            example = "2026-06-17T10:15:30Z",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NonNull
     private Instant createdAt;
 
+    @Schema(description = "Snapshot schema/content version", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
     @NonNull
     private String version;
     /** Data source: CACHE or CRM_API. Null if not set. */
+    @Schema(
+            description = "Data source the snapshot was served from",
+            example = "CACHE",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+            allowableValues = {"CACHE", "CRM_API"})
     @Nullable
     private String source;
 
     /** True if this snapshot was served from a stale (expired) cache entry. */
+    @Schema(
+            description = "Whether this snapshot was served from a stale (expired) cache entry",
+            example = "false",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private boolean stale;
 
     /** When the cache entry went stale; only present when stale=true. */
+    @Schema(
+            description = "Timestamp when the cache entry went stale; only present when stale is true",
+            example = "2026-06-17T09:00:00Z",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @Nullable
     private Instant staleSince;
 

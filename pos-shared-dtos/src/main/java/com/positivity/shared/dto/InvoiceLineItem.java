@@ -1,6 +1,7 @@
 package com.positivity.shared.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,6 +20,7 @@ import org.jspecify.annotations.NonNull;
 public class InvoiceLineItem {
 
     @NonNull
+    @NotNull
     @Schema(
             description = "Line item description.",
             requiredMode = Schema.RequiredMode.REQUIRED,
@@ -26,14 +28,17 @@ public class InvoiceLineItem {
     private String description;
 
     @NonNull
+    @NotNull
     @Schema(description = "Quantity billed.", requiredMode = Schema.RequiredMode.REQUIRED, example = "2.0")
     private BigDecimal quantity;
 
     @NonNull
+    @NotNull
     @Schema(description = "Unit price amount.", requiredMode = Schema.RequiredMode.REQUIRED, example = "45.00")
     private BigDecimal unitPrice;
 
     @NonNull
+    @NotNull
     @Schema(
             description = "Line amount (quantity x unit price).",
             requiredMode = Schema.RequiredMode.REQUIRED,

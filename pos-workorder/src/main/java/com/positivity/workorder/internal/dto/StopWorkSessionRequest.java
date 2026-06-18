@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -16,6 +18,9 @@ import org.jspecify.annotations.Nullable;
 public class StopWorkSessionRequest {
 
     @Nullable
-    @Schema(description = "Optional mechanic ID for disambiguation when multiple sessions could match")
+    @Schema(
+            description = "Optional mechanic ID for disambiguation when multiple sessions could match",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = NOT_REQUIRED)
     private UUID mechanicId;
 }

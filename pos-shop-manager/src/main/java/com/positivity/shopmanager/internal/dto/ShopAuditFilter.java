@@ -1,5 +1,7 @@
 package com.positivity.shopmanager.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+
 import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -20,30 +22,54 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Filter criteria for querying the shop audit trail. At least one field must be non-null.")
 public class ShopAuditFilter {
 
-    @Schema(description = "Workorder UUID to filter by - one word per workspace naming policy")
+    @Schema(
+            description = "Workorder UUID to filter by - one word per workspace naming policy",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = NOT_REQUIRED)
     private String workorderId;
 
-    @Schema(description = "Appointment UUID to filter by")
+    @Schema(
+            description = "Appointment UUID to filter by",
+            example = "01960003-0000-7000-8000-000000000002",
+            requiredMode = NOT_REQUIRED)
     private String appointmentId;
 
-    @Schema(description = "Mechanic user ID to filter by")
+    @Schema(
+            description = "Mechanic user ID to filter by",
+            example = "01960003-0000-7000-8000-000000000010",
+            requiredMode = NOT_REQUIRED)
     private String mechanicId;
 
-    @Schema(description = "Actor user ID to filter by")
+    @Schema(
+            description = "Actor user ID to filter by",
+            example = "01960003-0000-7000-8000-000000000020",
+            requiredMode = NOT_REQUIRED)
     private String actorUserId;
 
-    @Schema(description = "Specific audit event type to filter by")
+    @Schema(
+            description = "Specific audit event type to filter by",
+            example = "SCHEDULE_UPDATED",
+            requiredMode = NOT_REQUIRED)
     private ShopAuditEventType eventType;
 
-    @Schema(description = "Location ID to filter by")
+    @Schema(
+            description = "Location ID to filter by",
+            example = "01960003-0000-7000-8000-000000000003",
+            requiredMode = NOT_REQUIRED)
     private String locationId;
 
     /** Inclusive start of the date-time range filter (defaults to 90 days ago). */
-    @Schema(description = "Inclusive start timestamp for date-time range filter", example = "2026-01-01T00:00:00Z")
+    @Schema(
+            description = "Inclusive start timestamp for date-time range filter",
+            example = "2026-01-01T00:00:00Z",
+            requiredMode = NOT_REQUIRED)
     private Instant fromDateTime;
 
     /** Inclusive end of the date-time range filter (defaults to now). */
-    @Schema(description = "Inclusive end timestamp for date-time range filter", example = "2026-12-31T23:59:59Z")
+    @Schema(
+            description = "Inclusive end timestamp for date-time range filter",
+            example = "2026-12-31T23:59:59Z",
+            requiredMode = NOT_REQUIRED)
     private Instant toDateTime;
 
     /**

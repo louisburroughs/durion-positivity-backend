@@ -21,6 +21,7 @@ public class InvoiceGenerationRequest {
     @Nullable
     @Schema(
             description = "Workorder identifier to generate invoice for.",
-            example = "550e8400-e29b-41d4-a716-446655440000")
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private UUID workorderId;
 }

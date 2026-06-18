@@ -1,9 +1,13 @@
 package com.positivity.price.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.positivity.price.internal.enums.DiscountType;
 import com.positivity.price.internal.enums.PromotionStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -15,49 +19,83 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "Response payload representing a promotion offer")
 public class PromotionOfferResponse {
 
-    @Schema(description = "Promotion offer identifier", example = "f51d2c5b-a1f2-4f4e-a7cf-4e7b1752e6aa")
+    @Schema(
+            description = "Promotion offer identifier",
+            example = "f51d2c5b-a1f2-4f4e-a7cf-4e7b1752e6aa",
+            requiredMode = REQUIRED)
+    @NotNull
     private UUID promotionOfferId;
 
-    @Schema(description = "Unique promotion code", example = "SUMMER20")
+    @Schema(description = "Unique promotion code", example = "SUMMER20", requiredMode = REQUIRED)
+    @NotNull
     private String promoCode;
 
-    @Schema(description = "Promotion display name", example = "Summer Labor Discount")
+    @Schema(description = "Promotion display name", example = "Summer Labor Discount", requiredMode = REQUIRED)
+    @NotNull
     private String name;
 
-    @Schema(description = "Optional promotion description", nullable = true)
+    @Schema(
+            description = "Optional promotion description",
+            example = "20% off labor for seasonal service",
+            nullable = true,
+            requiredMode = NOT_REQUIRED)
     private String description;
 
-    @Schema(description = "Discount strategy", example = "PERCENT_LABOR")
+    @Schema(description = "Discount strategy", example = "PERCENT_LABOR", requiredMode = REQUIRED)
+    @NotNull
     private DiscountType discountType;
 
-    @Schema(description = "Discount value based on discount type", example = "20.00")
+    @Schema(description = "Discount value based on discount type", example = "20.00", requiredMode = REQUIRED)
+    @NotNull
     private BigDecimal discountValue;
 
-    @Schema(description = "Promotion validity start date", example = "2026-03-01")
+    @Schema(description = "Promotion validity start date", example = "2026-03-01", requiredMode = REQUIRED)
+    @NotNull
     private LocalDate startDate;
 
-    @Schema(description = "Promotion validity end date", example = "2026-03-31")
+    @Schema(description = "Promotion validity end date", example = "2026-03-31", requiredMode = REQUIRED)
+    @NotNull
     private LocalDate endDate;
 
-    @Schema(description = "Optional usage limit", example = "100", nullable = true)
+    @Schema(description = "Optional usage limit", example = "100", nullable = true, requiredMode = NOT_REQUIRED)
     private Integer usageLimit;
 
-    @Schema(description = "Number of times the promotion has been applied", example = "14")
+    @Schema(
+            description = "Number of times the promotion has been applied",
+            example = "14",
+            requiredMode = REQUIRED)
     private int usageCount;
 
-    @Schema(description = "Current promotion status", example = "ACTIVE")
+    @Schema(description = "Current promotion status", example = "ACTIVE", requiredMode = REQUIRED)
+    @NotNull
     private PromotionStatus status;
 
-    @Schema(description = "Optional store code scope", example = "NYC-001", nullable = true)
+    @Schema(
+            description = "Optional store code scope",
+            example = "NYC-001",
+            nullable = true,
+            requiredMode = NOT_REQUIRED)
     private String storeCode;
 
-    @Schema(description = "Record creation timestamp", nullable = true)
+    @Schema(
+            description = "Record creation timestamp",
+            example = "2026-03-01T08:00:00Z",
+            nullable = true,
+            requiredMode = NOT_REQUIRED)
     private Instant createdAt;
 
-    @Schema(description = "Record last update timestamp", nullable = true)
+    @Schema(
+            description = "Record last update timestamp",
+            example = "2026-03-02T10:15:00Z",
+            nullable = true,
+            requiredMode = NOT_REQUIRED)
     private Instant updatedAt;
 
-    @Schema(description = "User that created the record", nullable = true)
+    @Schema(
+            description = "User that created the record",
+            example = "user-001",
+            nullable = true,
+            requiredMode = NOT_REQUIRED)
     private String createdBy;
 
     public UUID getPromotionOfferId() {

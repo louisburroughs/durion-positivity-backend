@@ -1,7 +1,9 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -20,23 +22,25 @@ public class LineItemApprovalDto {
     @Schema(
             description = "ID of the line item (service/product) being approved or rejected",
             example = "550e8400-e29b-41d4-a716-446655440000",
-            requiredMode = RequiredMode.REQUIRED)
+            requiredMode = REQUIRED)
     private UUID lineItemId;
 
     @NotNull(message = "approved status is required")
     @Schema(
             description = "Whether this line item is approved (true) or rejected (false)",
             example = "true",
-            requiredMode = RequiredMode.REQUIRED)
+            requiredMode = REQUIRED)
     private Boolean approved;
 
     @Schema(
             description = "Reason for rejection (required if approved=false)",
-            example = "Customer declined optional service")
+            example = "Customer declined optional service",
+            requiredMode = NOT_REQUIRED)
     private String rejectionReason;
 
     @Schema(
             description = "Additional notes about this line item decision",
-            example = "Customer wants to get second opinion")
+            example = "Customer wants to get second opinion",
+            requiredMode = NOT_REQUIRED)
     private String notes;
 }

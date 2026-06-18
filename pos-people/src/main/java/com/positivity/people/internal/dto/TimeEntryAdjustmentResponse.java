@@ -8,7 +8,8 @@ public class TimeEntryAdjustmentResponse {
 
     @Schema(
             description = "Unique identifier of the created or updated adjustment",
-            example = "123e4567-e89b-12d3-a456-426614174000")
+            example = "123e4567-e89b-12d3-a456-426614174000",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private UUID adjustmentId;
 
     @Schema(
@@ -19,7 +20,8 @@ public class TimeEntryAdjustmentResponse {
 
     @Schema(
             description = "Human-readable message describing the outcome",
-            example = "Adjustment created and pending approval")
+            example = "Adjustment created and pending approval",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String message;
 
     public TimeEntryAdjustmentResponse() {}

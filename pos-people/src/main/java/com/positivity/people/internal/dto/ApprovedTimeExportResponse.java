@@ -19,22 +19,22 @@ import java.util.UUID;
  */
 @Schema(description = "Approved time row for accounting/payroll export orchestration")
 public record ApprovedTimeExportResponse(
-        @Schema(description = "Time entry identifier", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Time entry identifier", example = "01960011-0000-7000-8000-000000000001", requiredMode = Schema.RequiredMode.REQUIRED)
         String timeEntryId,
 
-        @Schema(description = "Timekeeping employee identifier", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Timekeeping employee identifier", example = "EMP-0001", requiredMode = Schema.RequiredMode.REQUIRED)
         String employeeId,
 
-        @Schema(description = "Employee display name", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Employee display name", example = "Jane Smith", requiredMode = Schema.RequiredMode.REQUIRED)
         String employeeName,
 
-        @Schema(description = "Timekeeping location identifier", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Timekeeping location identifier", example = "01960011-0000-7000-8000-000000000010", requiredMode = Schema.RequiredMode.REQUIRED)
         UUID locationId,
 
-        @Schema(description = "Location display name", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Location display name", example = "Downtown Service Center", requiredMode = Schema.RequiredMode.REQUIRED)
         String locationName,
 
-        @Schema(description = "Entry date (UTC)", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Entry date (UTC)", example = "2026-02-16", requiredMode = Schema.RequiredMode.REQUIRED)
         LocalDate entryDate,
 
         @Schema(
@@ -43,8 +43,8 @@ public record ApprovedTimeExportResponse(
                 requiredMode = Schema.RequiredMode.REQUIRED)
         BigDecimal hoursWorked,
 
-        @Schema(description = "Approval timestamp", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Approval timestamp", example = "2026-02-17T09:15:00Z", requiredMode = Schema.RequiredMode.REQUIRED)
         Instant approvedAt,
 
-        @Schema(description = "Approver reference", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Approver reference", example = "manager.user", requiredMode = Schema.RequiredMode.REQUIRED)
         String approvedBy) {}

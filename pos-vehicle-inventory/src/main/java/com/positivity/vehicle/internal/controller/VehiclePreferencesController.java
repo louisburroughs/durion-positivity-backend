@@ -11,6 +11,8 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -79,7 +81,7 @@ public class VehiclePreferencesController {
     @EmitEvent(id = "VEHICLE_PREFERENCES_UPSERT", apiVersion = "1")
     public ResponseEntity<VehicleCarePreferenceResponse> upsertPreferences(
             @Parameter(description = "Vehicle ID") @PathVariable UUID vehicleId,
-            @RequestBody PreferencesUpsertDto request) {
+            @Valid @RequestBody PreferencesUpsertDto request) {
 
         log.info(
                 "PUT /v1/vehicles/{}/preferences - keys={}",
@@ -137,11 +139,43 @@ public class VehiclePreferencesController {
     /**
      * DTO for upserting preferences.
      */
+    @Schema(description = "Request to create or fully replace vehicle care preferences")
     public record PreferencesUpsertDto(
-            Map<String, Object> preferences, String serviceNotes, UUID createdByUserId, UUID updatedByUserId) {}
+            @NotNull
+                    @Schema(
+                            description = "Complete preference map to store for the vehicle",
+                            example = "{\"preferredOil\":\"5W-30\",\"tireRotationInterval\":5000}",
+                            requiredMode = Schema.RequiredMode.REQUIRED)
+                    Map<String, Object> preferences,
+            @Schema(
+                            description = "Optional free-text service notes",
+                            example = "Customer prefers synthetic oil only",
+                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+                    String serviceNotes,
+            @Schema(
+                            description = "Identifier of the user creating the preferences",
+                            example = "01960003-0000-7000-8000-000000000010",
+                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+                    UUID createdByUserId,
+            @Schema(
+                            description = "Identifier of the user updating the preferences",
+                            example = "01960003-0000-7000-8000-000000000011",
+                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+                    UUID updatedByUserId) {}
 
     /**
      * DTO for merging preferences.
      */
-    public record PreferencesMergeDto(Map<String, Object> partialPreferences, UUID updatedByUserId) {}
+    @Schema(description = "Request to partially merge fields into existing vehicle care preferences")
+    public record PreferencesMergeDto(
+            @Schema(
+                            description = "Subset of preference fields to merge into existing preferences",
+                            example = "{\"tireRotationInterval\":7500}",
+                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+                    Map<String, Object> partialPreferences,
+            @Schema(
+                            description = "Identifier of the user updating the preferences",
+                            example = "01960003-0000-7000-8000-000000000011",
+                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+                    UUID updatedByUserId) {}
 }

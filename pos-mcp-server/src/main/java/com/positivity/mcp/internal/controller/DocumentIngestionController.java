@@ -73,10 +73,18 @@ public class DocumentIngestionController {
             description = "Document ingestion payload",
             example = "{\"content\":\"sample\",\"metadata\":{\"document_id\":\"policy-123\",\"source\":\"manual\"}}")
     public record DocumentIngestionRequest(
-            @NotBlank @NonNull String content,
-
-            @Schema(description = "Optional key-value metadata for the document")
-            Map<String, Object> metadata) {
+            @Schema(
+                            description = "Raw text content of the document to ingest",
+                            example = "Refund policy: customers may return items within 30 days.",
+                            requiredMode = Schema.RequiredMode.REQUIRED)
+                    @NotBlank
+                    @NonNull
+                    String content,
+            @Schema(
+                            description = "Optional key-value metadata for the document",
+                            example = "{\"document_id\":\"policy-123\",\"source\":\"manual\"}",
+                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+                    Map<String, Object> metadata) {
         public DocumentIngestionRequest {
             if (metadata == null) {
                 metadata = Map.of();
@@ -86,15 +94,56 @@ public class DocumentIngestionController {
 
     @Schema(name = "DocumentIngestionJobResponse", description = "Asynchronous document ingestion job status")
     public record DocumentIngestionJobResponse(
-            @NonNull UUID jobId,
-            @NonNull String documentId,
-            @NonNull DocumentIngestionJobStatus status,
-            @NonNull OffsetDateTime createdAt,
-            @NonNull OffsetDateTime updatedAt,
-            OffsetDateTime startedAt,
-            OffsetDateTime completedAt,
-            Integer chunkCount,
-            String errorMessage) {
+            @Schema(
+                            description = "Unique identifier of the ingestion job",
+                            example = "01960003-0000-7000-8000-000000000009",
+                            requiredMode = Schema.RequiredMode.REQUIRED)
+                    @NonNull
+                    UUID jobId,
+            @Schema(
+                            description = "Identifier of the document being ingested",
+                            example = "policy-123",
+                            requiredMode = Schema.RequiredMode.REQUIRED)
+                    @NonNull
+                    String documentId,
+            @Schema(
+                            description = "Current status of the ingestion job",
+                            example = "RUNNING",
+                            requiredMode = Schema.RequiredMode.REQUIRED)
+                    @NonNull
+                    DocumentIngestionJobStatus status,
+            @Schema(
+                            description = "Timestamp when the job was created (ISO 8601)",
+                            example = "2026-01-15T09:30:00Z",
+                            requiredMode = Schema.RequiredMode.REQUIRED)
+                    @NonNull
+                    OffsetDateTime createdAt,
+            @Schema(
+                            description = "Timestamp when the job was last updated (ISO 8601)",
+                            example = "2026-01-15T09:31:00Z",
+                            requiredMode = Schema.RequiredMode.REQUIRED)
+                    @NonNull
+                    OffsetDateTime updatedAt,
+            @Schema(
+                            description = "Timestamp when ingestion processing started (ISO 8601)",
+                            example = "2026-01-15T09:30:05Z",
+                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+                    OffsetDateTime startedAt,
+            @Schema(
+                            description = "Timestamp when ingestion processing completed (ISO 8601)",
+                            example = "2026-01-15T09:30:45Z",
+                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+                    OffsetDateTime completedAt,
+            @Schema(
+                            description = "Number of chunks produced from the document",
+                            example = "12",
+                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+                    Integer chunkCount,
+            @Schema(
+                            description = "Error message describing why ingestion failed, when applicable",
+                            example = "Embedding provider unavailable",
+                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+                    String errorMessage) {
 
         static @NonNull DocumentIngestionJobResponse from(@NonNull DocumentIngestionJob job) {
             return new DocumentIngestionJobResponse(

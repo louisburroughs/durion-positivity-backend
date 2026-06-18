@@ -78,8 +78,21 @@ public class McpChatController {
     }
 
     @Schema(name = "ChatRequest", description = "Chat request payload", example = "{\"message\":\"Hello\"}")
-    public record ChatRequest(@NotBlank @NonNull String message) {}
+    public record ChatRequest(
+            @Schema(
+                            description = "User chat message to send to the agent",
+                            example = "Hello",
+                            requiredMode = Schema.RequiredMode.REQUIRED)
+                    @NotBlank
+                    @NonNull
+                    String message) {}
 
     @Schema(name = "ChatResponse", description = "Chat response payload", example = "{\"response\":\"Hi!\"}")
-    public record ChatResponse(@NonNull String response) {}
+    public record ChatResponse(
+            @Schema(
+                            description = "Full agent response text",
+                            example = "Hi!",
+                            requiredMode = Schema.RequiredMode.REQUIRED)
+                    @NonNull
+                    String response) {}
 }

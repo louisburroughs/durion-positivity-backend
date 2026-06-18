@@ -1,6 +1,9 @@
 package com.positivity.price.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 
 /**
  * One pricing rule application entry for quote breakdown.
@@ -10,16 +13,20 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "Single pricing-rule application entry within a quote breakdown")
 public class PricingBreakdownEntry {
 
-    @Schema(description = "Rule name", example = "Tier Discount Rule")
+    @Schema(description = "Rule name", example = "Tier Discount Rule", requiredMode = REQUIRED)
+    @NotNull
     private String ruleName;
 
-    @Schema(description = "Rule category/type", example = "CUSTOMER_TIER")
+    @Schema(description = "Rule category/type", example = "CUSTOMER_TIER", requiredMode = REQUIRED)
+    @NotNull
     private String ruleType;
 
-    @Schema(description = "Amount adjusted by this rule")
+    @Schema(description = "Amount adjusted by this rule", requiredMode = REQUIRED)
+    @NotNull
     private MoneyAmount adjustment;
 
-    @Schema(description = "Running value after this rule adjustment")
+    @Schema(description = "Running value after this rule adjustment", requiredMode = REQUIRED)
+    @NotNull
     private MoneyAmount resultingValue;
 
     public String getRuleName() {

@@ -11,21 +11,36 @@ import lombok.Data;
  * Request DTO for applying a price override.
  */
 @Data
+@Schema(description = "Request payload for applying a price override to an order line")
 public class ApplyPriceOverrideRequest {
 
+    @Schema(
+            description = "Identifier of the order whose line is being overridden",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "Order ID is required")
     private String orderId;
 
+    @Schema(
+            description = "Identifier of the order line receiving the price override",
+            example = "01960003-0000-7000-8000-000000000002",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "Order line ID is required")
     private String orderLineId;
 
+    @Schema(
+            description = "Identifier of the product on the order line",
+            example = "01960003-0000-7000-8000-000000000003",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "Product ID is required")
     private String productId;
 
+    @Schema(description = "Original price of the line before the override", example = "49.99", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "Original price is required")
     @DecimalMin(value = "0.0", inclusive = false, message = "Original price must be greater than 0")
     private BigDecimal originalPrice;
 
+    @Schema(description = "Overridden price to apply to the line", example = "39.99", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "Override price is required")
     @DecimalMin(value = "0.0", message = "Override price must be non-negative")
     private BigDecimal overridePrice;
@@ -37,6 +52,10 @@ public class ApplyPriceOverrideRequest {
     @NotBlank
     private String reasonCode;
 
+    @Schema(
+            description = "Free-text justification supporting the price override",
+            example = "Competitor price match per store policy",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String justification;
 
     /**

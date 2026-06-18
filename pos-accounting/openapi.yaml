@@ -3737,24 +3737,37 @@ components:
   schemas:
     PostingRuleSetCreateRequest:
       type: object
+      description: Request payload for creating a new posting rule set
       properties:
         name:
           type: string
+          description: Display name of the posting rule set
+          example: Workorder Revenue Posting
           maxLength: 100
           minLength: 0
         eventType:
           type: string
+          description: Accounting event type the rule set applies to
+          example: WORKORDER_COMPLETED
           maxLength: 100
           minLength: 0
         description:
           type: string
+          description: Optional human-readable description of the rule set
+          example: Posts revenue and tax for completed workorders
           maxLength: 500
           minLength: 0
         rulesDefinition:
           type: string
+          description: Serialized rules definition (JSON) describing GL mapping logic
+          example:
+            debit: 1200-100
+            credit: '4000'
           minLength: 1
         createdBy:
           type: string
+          description: Identifier of the user creating the rule set
+          example: ap.manager
           maxLength: 50
           minLength: 0
       required:
@@ -3764,73 +3777,124 @@ components:
       - rulesDefinition
     PostingRuleSetResponse:
       type: object
+      description: Posting rule set with its versions and audit metadata
       properties:
         postingRuleSetId:
           type: string
           format: uuid
+          description: Unique identifier of the posting rule set
+          example: 01960003-0000-7000-8000-000000000001
         name:
           type: string
+          description: Display name of the posting rule set
+          example: Workorder Revenue Posting
         eventType:
           type: string
+          description: Accounting event type the rule set applies to
+          example: WORKORDER_COMPLETED
         description:
           type: string
+          description: Human-readable description of the rule set
+          example: Posts revenue and tax for completed workorders
         versions:
           type: array
+          description: Versions belonging to this posting rule set
           items:
             $ref: '#/components/schemas/PostingRuleVersionResponse'
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the rule set was created (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         createdBy:
           type: string
+          description: Identifier of the user who created the rule set
+          example: ap.manager
         modifiedAt:
           type: string
           format: date-time
+          description: Timestamp when the rule set was last modified (ISO 8601)
+          example: 2026-06-18 09:30:00+00:00
         modifiedBy:
           type: string
+          description: Identifier of the user who last modified the rule set
+          example: ap.lead
+      required:
+      - postingRuleSetId
     PostingRuleVersionResponse:
       type: object
+      description: A single version of a posting rule set
       properties:
         versionId:
           type: string
           format: uuid
+          description: Unique identifier of the rule version
+          example: 01960003-0000-7000-8000-000000000002
         postingRuleSetId:
           type: string
           format: uuid
+          description: Identifier of the owning posting rule set
+          example: 01960003-0000-7000-8000-000000000001
         versionNumber:
           type: integer
           format: int32
+          description: Sequential version number within the rule set
+          example: 3
         state:
           type: string
+          description: Lifecycle state of the version
           enum:
           - DRAFT
           - PUBLISHED
           - ARCHIVED
+          example: PUBLISHED
         rulesDefinition:
           type: string
+          description: Serialized rules definition (JSON) for this version
+          example:
+            debit: 1200-100
+            credit: '4000'
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the version was created (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         createdBy:
           type: string
+          description: Identifier of the user who created the version
+          example: ap.manager
         modifiedAt:
           type: string
           format: date-time
+          description: Timestamp when the version was last modified (ISO 8601)
+          example: 2026-06-18 09:30:00+00:00
         modifiedBy:
           type: string
+          description: Identifier of the user who last modified the version
+          example: ap.lead
+      required:
+      - postingRuleSetId
+      - versionId
     PostingCategoryUpdateRequest:
       type: object
+      description: Request payload for updating an existing posting category
       properties:
         categoryName:
           type: string
+          description: Name of the posting category
+          example: Customer Payments
           maxLength: 100
           minLength: 0
         description:
           type: string
+          description: Optional description of the posting category
+          example: Categories for cleared customer payments
           maxLength: 500
           minLength: 0
         modifiedBy:
           type: string
+          description: Identifier of the user modifying the posting category
+          example: asmith
           maxLength: 50
           minLength: 0
       required:
@@ -3838,39 +3902,66 @@ components:
       - modifiedBy
     PostingCategoryResponse:
       type: object
+      description: Posting category details
       properties:
         postingCategoryId:
           type: string
           format: uuid
+          description: Unique identifier of the posting category
+          example: 01960003-0000-7000-8000-000000000001
         categoryName:
           type: string
+          description: Name of the posting category
+          example: Customer Payments
         description:
           type: string
+          description: Description of the posting category
+          example: Categories for cleared customer payments
         isActive:
           type: boolean
+          description: Whether the posting category is active
+          example: true
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the posting category was created (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         createdBy:
           type: string
+          description: Identifier of the user who created the posting category
+          example: jdoe
         modifiedAt:
           type: string
           format: date-time
+          description: Timestamp when the posting category was last modified (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         modifiedBy:
           type: string
+          description: Identifier of the user who last modified the posting category
+          example: asmith
+      required:
+      - categoryName
+      - postingCategoryId
     MappingKeyUpdateRequest:
       type: object
+      description: Request payload for updating an existing mapping key
       properties:
         keyName:
           type: string
+          description: Name of the mapping key
+          example: PAYMENT_RECEIVED
           maxLength: 100
           minLength: 0
         description:
           type: string
+          description: Optional description of the mapping key
+          example: Maps cleared customer payments to the receivable account
           maxLength: 500
           minLength: 0
         modifiedBy:
           type: string
+          description: Identifier of the user modifying the mapping key
+          example: asmith
           maxLength: 50
           minLength: 0
       required:
@@ -3878,31 +3969,56 @@ components:
       - modifiedBy
     MappingKeyResponse:
       type: object
+      description: Mapping key details
       properties:
         mappingKeyId:
           type: string
           format: uuid
+          description: Unique identifier of the mapping key
+          example: 01960003-0000-7000-8000-000000000001
         postingCategoryId:
           type: string
           format: uuid
+          description: Identifier of the posting category this mapping key belongs to
+          example: 01960003-0000-7000-8000-000000000002
         postingCategoryName:
           type: string
+          description: Name of the posting category this mapping key belongs to
+          example: Customer Payments
         keyName:
           type: string
+          description: Name of the mapping key
+          example: PAYMENT_RECEIVED
         description:
           type: string
+          description: Description of the mapping key
+          example: Maps cleared customer payments to the receivable account
         isActive:
           type: boolean
+          description: Whether the mapping key is active
+          example: true
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the mapping key was created (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         createdBy:
           type: string
+          description: Identifier of the user who created the mapping key
+          example: jdoe
         modifiedAt:
           type: string
           format: date-time
+          description: Timestamp when the mapping key was last modified (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         modifiedBy:
           type: string
+          description: Identifier of the user who last modified the mapping key
+          example: asmith
+      required:
+      - keyName
+      - mappingKeyId
+      - postingCategoryId
     JournalEntryCreateRequest:
       type: object
       description: Request payload for creating or updating a journal entry
@@ -4152,117 +4268,197 @@ components:
           minLength: 0
     GLAccountResponse:
       type: object
+      description: GL account response with computed status
       properties:
         glAccountId:
           type: string
           format: uuid
+          description: GL account UUID
+          example: 01960003-0000-7000-8000-000000000001
         accountCode:
           type: string
+          description: GL account code
+          example: 1200-100
         accountName:
           type: string
+          description: GL account display name
+          example: Accounts Receivable
         accountType:
           type: string
+          description: Account classification
           enum:
           - ASSET
           - LIABILITY
           - EQUITY
           - REVENUE
           - EXPENSE
+          example: ASSET
         description:
           type: string
+          description: GL account description
+          example: Primary receivables account
         parentAccountId:
           type: string
           format: uuid
+          description: Parent GL account UUID for hierarchical accounts
+          example: 01960003-0000-7000-8000-000000000002
         activationDate:
           type: string
           format: date-time
+          description: Date the account becomes active
+          example: 2026-01-15 10:30:00
         deactivationDate:
           type: string
           format: date-time
+          description: Date the account becomes inactive
+          example: 2026-06-18 08:00:00
         status:
           type: string
+          description: Derived account status (ACTIVE, INACTIVE, NOT_YET_ACTIVE)
           enum:
           - ACTIVE
           - INACTIVE
           - NOT_YET_ACTIVE
+          example: ACTIVE
         createdAt:
           type: string
           format: date-time
+          description: Created timestamp
+          example: 2026-06-18 08:00:00+00:00
         createdBy:
           type: string
+          description: Created by username
+          example: accounting.user
         modifiedAt:
           type: string
           format: date-time
+          description: Last modified timestamp
+          example: 2026-06-18 08:00:00+00:00
         modifiedBy:
           type: string
+          description: Last modified by username
+          example: accounting.user
         version:
           type: integer
           format: int32
+          description: Optimistic locking version
+          example: 6
+      required:
+      - glAccountId
     DefaultGLMappingRequest:
       type: object
+      description: Request to create or update a default GL account mapping
       properties:
         eventType:
           type: string
+          description: Accounting event type the mapping applies to
+          example: INVOICE_POSTED
           maxLength: 100
           minLength: 0
         organizationId:
           type: string
           format: uuid
+          description: Organization scope for the mapping; null for the global default
+          example: 01960003-0000-7000-8000-000000000001
         debitAccountId:
           type: string
           format: uuid
+          description: Identifier of the GL account to debit
+          example: 01960003-0000-7000-8000-000000000010
         creditAccountId:
           type: string
           format: uuid
+          description: Identifier of the GL account to credit
+          example: 01960003-0000-7000-8000-000000000020
         description:
           type: string
+          description: Optional description of the mapping
+          example: Default mapping for posted invoices
           maxLength: 500
           minLength: 0
         active:
           type: boolean
+          description: Whether the mapping is active
+          example: true
       required:
       - creditAccountId
       - debitAccountId
       - eventType
     DefaultGLMappingResponse:
       type: object
+      description: Response describing a default GL account mapping
       properties:
         mappingId:
           type: string
           format: uuid
+          description: Unique identifier of the mapping
+          example: 01960003-0000-7000-8000-000000000001
         eventType:
           type: string
+          description: Accounting event type the mapping applies to
+          example: INVOICE_POSTED
         organizationId:
           type: string
           format: uuid
+          description: Organization scope for the mapping; null for the global default
+          example: 01960003-0000-7000-8000-000000000002
         debitAccountId:
           type: string
           format: uuid
+          description: Identifier of the GL account to debit
+          example: 01960003-0000-7000-8000-000000000010
         debitAccountCode:
           type: string
+          description: Account code of the debit GL account
+          example: 1200-100
         debitAccountName:
           type: string
+          description: Account name of the debit GL account
+          example: Accounts Receivable
         creditAccountId:
           type: string
           format: uuid
+          description: Identifier of the GL account to credit
+          example: 01960003-0000-7000-8000-000000000020
         creditAccountCode:
           type: string
+          description: Account code of the credit GL account
+          example: '4000'
         creditAccountName:
           type: string
+          description: Account name of the credit GL account
+          example: Service Revenue
         description:
           type: string
+          description: Optional description of the mapping
+          example: Default mapping for posted invoices
         active:
           type: boolean
+          description: Whether the mapping is active
+          example: true
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the mapping was created (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         createdBy:
           type: string
+          description: Identifier of the user who created the mapping
+          example: user-1042
         modifiedAt:
           type: string
           format: date-time
+          description: Timestamp when the mapping was last modified (ISO 8601)
+          example: 2026-06-18 09:00:00+00:00
         modifiedBy:
           type: string
+          description: Identifier of the user who last modified the mapping
+          example: user-2087
+      required:
+      - creditAccountId
+      - debitAccountId
+      - eventType
+      - mappingId
     GoodsReceivedEvent:
       type: object
       description: Goods received event from inventory/purchasing system
@@ -4431,6 +4627,13 @@ components:
           type: string
           description: Rejection reason (if status = REJECTED)
           example: Incorrect invoice amount
+      required:
+      - billNumber
+      - createdAt
+      - status
+      - totalAmount
+      - vendorBillId
+      - vendorId
     ExceptionResolutionRequest:
       type: object
       description: Request payload for resolving a vendor bill match exception
@@ -4633,19 +4836,29 @@ components:
           type: string
           description: Report type that was exported
           example: JOURNAL_LINES
+      required:
+      - exportId
+      - status
     PostingCategoryCreateRequest:
       type: object
+      description: Request payload for creating a new posting category
       properties:
         categoryName:
           type: string
+          description: Name of the posting category
+          example: Customer Payments
           maxLength: 100
           minLength: 0
         description:
           type: string
+          description: Optional description of the posting category
+          example: Categories for cleared customer payments
           maxLength: 500
           minLength: 0
         createdBy:
           type: string
+          description: Identifier of the user creating the posting category
+          example: jdoe
           maxLength: 50
           minLength: 0
       required:
@@ -4653,34 +4866,46 @@ components:
       - createdBy
     PaymentApplicationReversalRequest:
       type: object
+      description: Request payload for reversing a payment application
       properties:
         reason:
           type: string
+          description: Reason for the reversal, recorded for the audit trail
+          example: Payment applied to the wrong invoice and must be reallocated
           maxLength: 1000
           minLength: 10
       required:
       - reason
     InvoiceApplication:
       type: object
+      description: Single invoice application within a payment application request
       properties:
         invoiceId:
           type: string
           format: uuid
+          description: Identifier of the invoice the payment is applied to
+          example: 01960003-0000-7000-8000-000000000001
         amountToApply:
           type: number
+          description: Amount of the payment to apply to this invoice
+          example: 1250.0
           minimum: 0.01
       required:
       - amountToApply
       - invoiceId
     PaymentApplicationRequest:
       type: object
+      description: Request payload for applying a payment to one or more invoices
       properties:
         applicationRequestId:
           type: string
+          description: Idempotency key for this application request; retries with the same key must not duplicate
+          example: pay-apply-20260618-001
           maxLength: 100
           minLength: 0
         applications:
           type: array
+          description: Invoice applications allocating the payment amount to each invoice
           items:
             $ref: '#/components/schemas/InvoiceApplication'
           minItems: 1
@@ -4689,21 +4914,33 @@ components:
       - applications
     ApplicationDetail:
       type: object
+      description: Details of a single invoice application
       properties:
         paymentApplicationId:
           type: string
           format: uuid
+          description: Identifier of the payment application record
+          example: 01960003-0000-7000-8000-000000000010
         invoiceId:
           type: string
           format: uuid
+          description: Identifier of the invoice the payment was applied to
+          example: 01960003-0000-7000-8000-000000000011
         appliedAmount:
           type: number
+          description: Amount applied to this invoice
+          example: 1000.0
         invoiceBalanceBefore:
           type: number
+          description: Invoice balance before this application
+          example: 1000.0
         invoiceBalanceAfter:
           type: number
+          description: Invoice balance after this application
+          example: 0.0
         invoiceStatus:
           type: string
+          description: Invoice status after this application
           enum:
           - OPEN
           - PARTIALLY_PAID
@@ -4711,36 +4948,58 @@ components:
           - VOIDED
           - CANCELLED
           - UNKNOWN
+          example: PAID_IN_FULL
     CustomerCreditInfo:
       type: object
+      description: Customer credit created from an overpayment
       properties:
         creditId:
           type: string
           format: uuid
+          description: Identifier of the customer credit record
+          example: 01960003-0000-7000-8000-000000000020
         amount:
           type: number
+          description: Credit amount created from overpayment
+          example: 250.0
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the credit was created (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
     PaymentApplicationResponse:
       type: object
+      description: Result of applying a payment to one or more invoices
       properties:
         paymentId:
           type: string
           format: uuid
+          description: Identifier of the payment that was applied
+          example: 01960003-0000-7000-8000-000000000001
         customerId:
           type: string
           format: uuid
+          description: Identifier of the customer who made the payment
+          example: 01960003-0000-7000-8000-000000000002
         currency:
           type: string
+          description: Currency code (ISO 4217)
+          example: USD
         totalAmount:
           type: number
+          description: Total payment amount
+          example: 1250.0
         appliedAmount:
           type: number
+          description: Amount of the payment applied to invoices
+          example: 1000.0
         remainingAmount:
           type: number
+          description: Amount of the payment remaining after application
+          example: 250.0
         applications:
           type: array
+          description: Per-invoice application details
           items:
             $ref: '#/components/schemas/ApplicationDetail'
         customerCredit:
@@ -4748,30 +5007,50 @@ components:
         applicationTimestamp:
           type: string
           format: date-time
+          description: Timestamp when the payment was applied (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         applicationRequestId:
           type: string
+          description: Idempotency key echoed from the application request
+          example: pay-apply-20260618-001
+      required:
+      - paymentId
     GLMappingCreateRequest:
       type: object
+      description: Request payload for creating a GL mapping
       properties:
         sourceSystem:
           type: string
+          description: Source system identifier
+          example: INVENTORY
           minLength: 1
         externalCode:
           type: string
+          description: External code from the source system
+          example: SKU-1234
           minLength: 1
         glAccountId:
           type: string
           format: uuid
+          description: GL account UUID this code maps to
+          example: 01960003-0000-7000-8000-000000000001
         effectiveStartDate:
           type: string
           format: date-time
+          description: Inclusive start of the mapping's temporal validity
+          example: 2026-01-15 10:30:00
         effectiveEndDate:
           type: string
           format: date-time
+          description: Exclusive end of the mapping's temporal validity (open-ended when null)
+          example: 2026-06-18 08:00:00
         dimensions:
           type: object
           additionalProperties:
             type: string
+          description: Dimensional context for this mapping (businessUnitId, locationId, etc.)
+          example:
+            businessUnitId: BU-001
       required:
       - effectiveStartDate
       - externalCode
@@ -4779,82 +5058,134 @@ components:
       - sourceSystem
     GLMappingCreateResponse:
       type: object
+      description: Wrapper response for GL mapping creation
       properties:
         mapping:
           $ref: '#/components/schemas/GLMappingResponse'
+      required:
+      - mapping
     GLMappingResponse:
       type: object
+      description: GL mapping response payload
       properties:
         glMappingId:
           type: string
           format: uuid
+          description: GL mapping UUID
+          example: 01960003-0000-7000-8000-000000000005
         sourceSystem:
           type: string
+          description: Source system identifier
+          example: INVENTORY
         externalCode:
           type: string
+          description: External code from the source system
+          example: SKU-1234
         glAccountId:
           type: string
           format: uuid
+          description: GL account UUID this code maps to
+          example: 01960003-0000-7000-8000-000000000001
         accountCode:
           type: string
+          description: GL account code
+          example: 1200-100
         accountName:
           type: string
+          description: GL account name
+          example: Accounts Receivable
         effectiveStartDate:
           type: string
           format: date-time
+          description: Inclusive start of the mapping's temporal validity
+          example: 2026-01-15 10:30:00
         effectiveEndDate:
           type: string
           format: date-time
+          description: Exclusive end of the mapping's temporal validity (open-ended when null)
+          example: 2026-06-18 08:00:00
         dimensions:
           type: object
           additionalProperties:
             type: string
+          description: Dimensional context for this mapping
+          example:
+            businessUnitId: BU-001
         priority:
           type: integer
           format: int32
+          description: Mapping resolution priority
+          example: 1
         createdAt:
           type: string
           format: date-time
+          description: Created timestamp
+          example: 2026-06-18 08:00:00+00:00
         createdBy:
           type: string
+          description: Created by username
+          example: accounting.user
+      required:
+      - glMappingId
     GLMappingResolveRequest:
       type: object
+      description: Request to resolve an external code to a GL account at a point in time
       properties:
         sourceSystem:
           type: string
+          description: Source system identifier
+          example: INVENTORY
           minLength: 1
         externalCode:
           type: string
+          description: External code from the source system
+          example: SKU-1234
           minLength: 1
         transactionDate:
           type: string
           format: date-time
+          description: Transaction date used for temporal mapping resolution
+          example: 2026-01-15 10:30:00
       required:
       - externalCode
       - sourceSystem
       - transactionDate
     GLMappingResolveResponse:
       type: object
+      description: Response from GL mapping resolution
       properties:
         glAccountId:
           type: string
           format: uuid
+          description: Resolved GL account UUID for the requested external code
+          example: 01960003-0000-7000-8000-000000000001
+      required:
+      - glAccountId
     MappingKeyCreateRequest:
       type: object
+      description: Request payload for creating a new mapping key
       properties:
         postingCategoryId:
           type: string
           format: uuid
+          description: Identifier of the posting category this mapping key belongs to
+          example: 01960003-0000-7000-8000-000000000001
         keyName:
           type: string
+          description: Name of the mapping key
+          example: PAYMENT_RECEIVED
           maxLength: 100
           minLength: 0
         description:
           type: string
+          description: Optional description of the mapping key
+          example: Maps cleared customer payments to the receivable account
           maxLength: 500
           minLength: 0
         createdBy:
           type: string
+          description: Identifier of the user creating the mapping key
+          example: jdoe
           maxLength: 50
           minLength: 0
       required:
@@ -4863,20 +5194,28 @@ components:
       - postingCategoryId
     JournalEntryReversalRequest:
       type: object
+      description: Request payload for reversing a journal entry
       properties:
         reason:
           type: string
+          description: Reason for reversing the journal entry
+          example: Correcting duplicate posting
           minLength: 1
       required:
       - reason
     RegenerateInvoiceFromWorkorderRequest:
       type: object
+      description: Request to regenerate an invoice from a completed workorder
       properties:
         workorderId:
           type: string
           format: uuid
+          description: Identifier of the workorder to regenerate the invoice from
+          example: 01960003-0000-7000-8000-000000000001
         idempotencyKey:
           type: string
+          description: Optional idempotency key to safely retry regeneration
+          example: 01960003-0000-7000-8000-000000000099
       required:
       - workorderId
     InvoiceGenerationResponse:
@@ -4926,30 +5265,43 @@ components:
           example: 2026-02-27 12:00:00+00:00
     GLAccountCreateRequest:
       type: object
+      description: Request to create a new GL account
       properties:
         accountCode:
           type: string
+          description: 'Account code in #### or ####-### format'
+          example: '4000'
           minLength: 1
           pattern: ^\d{4}(-\d{3})?$
         accountName:
           type: string
+          description: Display name of the GL account
+          example: Service Revenue
           minLength: 1
         accountType:
           type: string
+          description: Type of the GL account
           enum:
           - ASSET
           - LIABILITY
           - EQUITY
           - REVENUE
           - EXPENSE
+          example: REVENUE
         description:
           type: string
+          description: Optional description of the account
+          example: Revenue from service work
         parentAccountId:
           type: string
           format: uuid
+          description: Identifier of the parent account, if any
+          example: 01960003-0000-7000-8000-000000000001
         activationDate:
           type: string
           format: date-time
+          description: Date and time the account becomes active (ISO 8601)
+          example: 2026-06-18 08:00:00
       required:
       - accountCode
       - accountName
@@ -4957,10 +5309,13 @@ components:
       - activationDate
     GLAccountActivateRequest:
       type: object
+      description: Request to activate a GL account
       properties:
         effectiveDate:
           type: string
           format: date
+          description: Date the activation takes effect (ISO 8601 date)
+          example: 2026-06-18
       required:
       - effectiveDate
     ExportJobRequest:
@@ -4970,6 +5325,7 @@ components:
         exportType:
           type: string
           description: Type of export
+          example: TIMEKEEPING
           minLength: 1
         filters:
           type: object
@@ -4977,10 +5333,12 @@ components:
         format:
           type: string
           description: 'Export format: CSV or JSON'
+          example: CSV
           minLength: 1
         deliveryMode:
           type: string
           description: How the export will be delivered
+          example: DOWNLOAD
       required:
       - exportType
       - format
@@ -4992,29 +5350,39 @@ components:
           type: string
           format: uuid
           description: Unique job identifier
+          example: 01960003-0000-7000-8000-000000000001
         status:
           type: string
           description: Current job status
+          example: COMPLETED
         requestedAt:
           type: string
           format: date-time
-          description: When the export was requested
+          description: When the export was requested (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         completedAt:
           type:
           - string
           - 'null'
           format: date-time
-          description: When the export completed
+          description: When the export completed (ISO 8601)
+          example: 2026-06-18 08:05:00+00:00
         downloadUrl:
           type:
           - string
           - 'null'
           description: Download URL when available
+          example: https://exports.example.com/jobs/abc123.csv
         errorMessage:
           type:
           - string
           - 'null'
           description: Error message if job failed
+          example: Source dataset unavailable
+      required:
+      - jobId
+      - requestedAt
+      - status
     AccountingEventSubmitRequest:
       type: object
       description: Request payload for submitting an accounting event for ingestion
@@ -5055,94 +5423,160 @@ components:
       - payload
     AccountingEventResponse:
       type: object
+      description: Accounting event ingestion record and its processing outcome
       properties:
         eventId:
           type: string
           format: uuid
+          description: Unique identifier of the accounting event
+          example: 01960003-0000-7000-8000-000000000001
         organizationId:
           type: string
           format: uuid
+          description: Identifier of the owning organization
+          example: 01960003-0000-7000-8000-000000000002
         eventType:
           type: string
+          description: Event type identifier
+          example: INVOICE_RECEIVED
         sourceSystem:
           type: string
+          description: Source system that emitted the event
+          example: POS_ORDER
         transactionDate:
           type: string
           format: date-time
+          description: Business transaction timestamp
+          example: 2026-06-18 10:30:00
         payload:
           type: object
+          description: Event-specific payload content
         status:
           type: string
+          description: Processing status of the event
           enum:
           - RECEIVED
           - PROCESSING
           - PROCESSED
           - FAILED
           - SUSPENDED
+          example: PROCESSED
         journalEntryId:
           type: string
           format: uuid
+          description: Identifier of the journal entry produced, if any
+          example: 01960003-0000-7000-8000-000000000003
         errorMessage:
           type: string
+          description: Error message when processing failed
+          example: Mapping not found for event type
         receivedAt:
           type: string
           format: date-time
+          description: Timestamp when the event was received (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         processedAt:
           type: string
           format: date-time
+          description: Timestamp when the event was processed (ISO 8601)
+          example: 2026-06-18 08:00:05+00:00
         sequenceNumber:
           type: integer
           format: int64
+          description: Monotonic sequence number assigned to the event
+          example: 42
         failureReasonCode:
           type: string
+          description: Code categorizing the failure reason
+          example: MAPPING_NOT_FOUND
         failureDetails:
           type: string
+          description: Detailed failure description
+          example: No GL mapping configured for INVOICE_RECEIVED
         attemptCount:
           type: integer
           format: int32
+          description: Number of processing attempts made
+          example: 3
         finalPostingReferenceId:
           type: string
+          description: Posting reference assigned on final resolution
+          example: JE-2026-000456
         resolvedByUserId:
           type: string
+          description: Identifier of the user who resolved the event
+          example: 01960003-0000-7000-8000-000000000004
         mappingVersionAttempted:
           type: string
+          description: Mapping version attempted during processing
+          example: v3
         idempotencyOutcome:
           type: string
+          description: Idempotency outcome of ingestion
+          example: NEW
         ingestionId:
           type: string
           format: uuid
+          description: Identifier of the ingestion batch
+          example: 01960003-0000-7000-8000-000000000005
         domainKeyId:
           type: string
+          description: Domain key associated with the event
+          example: INVOICE-2026-000123
         invoiceId:
           type: string
           format: uuid
+          description: Identifier of the related invoice, if any
+          example: 01960003-0000-7000-8000-000000000006
+      required:
+      - eventId
+      - eventType
+      - organizationId
+      - receivedAt
+      - status
     ReprocessEventRequest:
       type: object
+      description: Request to reprocess a suspended accounting event
       properties:
         triggeredByUserId:
           type: string
+          description: Identifier of the user triggering the reprocessing (required for audit trail)
+          example: ap.manager
           minLength: 1
         mappingVersionToUse:
           type: string
+          description: Specific mapping version to use; defaults to latest when omitted
+          example: v3
         reprocessingNotes:
           type: string
+          description: Optional notes about why reprocessing is being triggered
+          example: Mapping rules corrected after vendor GL update
       required:
       - triggeredByUserId
     CreateCreditMemoRequest:
       type: object
+      description: Request to create a credit memo against a finalized invoice
       properties:
         originalInvoiceId:
           type: string
           format: uuid
+          description: Identifier of the finalized invoice the credit memo references
+          example: 01960003-0000-7000-8000-000000000001
         creditAmount:
           type: number
+          description: Credit amount; must not exceed the invoice outstanding balance
+          example: 1250.0
           minimum: 0.01
         reasonCode:
           type: string
+          description: Reason code for the credit memo (mandatory for audit)
+          example: RETURN
           maxLength: 50
           minLength: 0
         justificationNote:
           type: string
+          description: Optional justification note explaining the credit
+          example: Customer returned defective parts
           maxLength: 1000
           minLength: 0
       required:
@@ -5151,79 +5585,135 @@ components:
       - reasonCode
     CreditMemoResponse:
       type: object
+      description: Response containing credit memo details
       properties:
         creditMemoId:
           type: string
           format: uuid
+          description: Unique identifier of the credit memo
+          example: 01960003-0000-7000-8000-000000000001
         originalInvoiceId:
           type: string
           format: uuid
+          description: Identifier of the original invoice the credit memo references
+          example: 01960003-0000-7000-8000-000000000002
         customerId:
           type: string
           format: uuid
+          description: Identifier of the customer the credit memo applies to
+          example: 01960003-0000-7000-8000-000000000003
         creditAmount:
           type: number
+          description: Credit amount
+          example: 1250.0
         taxAmountReversed:
           type: number
+          description: Tax amount reversed by the credit
+          example: 100.0
         totalAmount:
           type: number
+          description: Total amount of the credit memo including tax
+          example: 1350.0
         reasonCode:
           type: string
+          description: Reason code for the credit memo
+          example: RETURN
         justificationNote:
           type: string
+          description: Justification note explaining the credit
+          example: Customer returned defective parts
         status:
           type: string
+          description: Current status of the credit memo
           enum:
           - DRAFT
           - POSTED
           - APPLIED
           - VOIDED
+          example: POSTED
         creationTimestamp:
           type: string
           format: date-time
+          description: Timestamp when the credit memo was created (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         postedTimestamp:
           type: string
           format: date-time
+          description: Timestamp when the credit memo was posted (ISO 8601)
+          example: 2026-06-18 09:00:00+00:00
         createdByUserId:
           type: string
+          description: Identifier of the user who created the credit memo
+          example: user-1042
         priorPeriodAdjustment:
           type: boolean
+          description: Whether the credit memo is a prior-period adjustment
+          example: false
         originalPeriodId:
           type: string
+          description: Identifier of the original accounting period
+          example: 2026-05
         currency:
           type: string
+          description: ISO 4217 currency code
+          example: USD
         invoiceBalanceAfter:
           type: number
+          description: Invoice outstanding balance after the credit was applied
+          example: 0.0
+      required:
+      - creationTimestamp
+      - creditAmount
+      - creditMemoId
+      - originalInvoiceId
+      - status
     RefundRequest:
       type: object
+      description: Request to record a refund audit event
       properties:
         invoiceId:
           type: string
           format: uuid
+          description: Identifier of the invoice being refunded
+          example: 01960003-0000-7000-8000-000000000001
         paymentId:
           type: string
           format: uuid
+          description: Identifier of the payment being refunded
+          example: 01960003-0000-7000-8000-000000000002
         refundType:
           type: string
+          description: Type of refund being recorded
           enum:
           - REVERSAL
           - CREDIT_MEMO
           - ADJUSTMENT
+          example: REVERSAL
         refundAmount:
           type: number
+          description: Amount being refunded
+          example: 1250.0
         originalPaymentStatus:
           type: string
+          description: Status of the original payment being refunded
           enum:
           - PENDING
           - SETTLED
           - FAILED
           - AUTHORIZED
+          example: SETTLED
         actorId:
           type: string
+          description: Legacy client-provided actor identifier; service resolves authoritative actor from security context
+          example: 01960003-0000-7000-8000-000000000003
         actorRole:
           type: string
+          description: Role of the actor performing the refund
+          example: STORE_MANAGER
         reason:
           type: string
+          description: Reason for the refund
+          example: Defective product returned
       required:
       - actorRole
       - invoiceId
@@ -5234,45 +5724,75 @@ components:
       - refundType
     AuditTrailResponse:
       type: object
+      description: Audit trail entry describing a recorded accounting exception event
       properties:
         auditId:
           type: string
           format: uuid
+          description: Unique identifier of the audit trail entry
+          example: 01960003-0000-7000-8000-000000000001
         exceptionType:
           type: string
+          description: Category of exception recorded
           enum:
           - PRICE_OVERRIDE
           - REFUND
           - CANCELLATION
+          example: PRICE_OVERRIDE
         actorId:
           type: string
+          description: Identifier of the actor who performed the action
+          example: 01960003-0000-7000-8000-000000000002
         actorRole:
           type: string
+          description: Role of the actor who performed the action
+          example: STORE_MANAGER
         timestamp:
           type: string
           format: date-time
+          description: Timestamp when the audit event occurred (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         reason:
           type: string
+          description: Reason captured for the action
+          example: Price matched competitor quote
         authorizationLevel:
           type: string
+          description: Authorization level applied to the action
+          example: MANAGER
         policyVersion:
           type: string
+          description: Version of the policy evaluated for the action
+          example: v3
         orderId:
           type: string
           format: uuid
+          description: Identifier of the order associated with the event
+          example: 01960003-0000-7000-8000-000000000003
         lineItemId:
           type: string
           format: uuid
+          description: Identifier of the line item associated with the event
+          example: 01960003-0000-7000-8000-000000000004
         originalPrice:
           type: number
+          description: Original price before override
+          example: 1250.0
         adjustedPrice:
           type: number
+          description: Adjusted price after override
+          example: 1100.0
         overrideAmountOrPercent:
           type: string
+          description: Override expressed as an amount or percentage
+          example: -12%
         forbiddenCategoryCode:
           type: string
+          description: Forbidden category code that was triggered, if any
+          example: BELOW_COST
         policyValidationResult:
           type: string
+          description: Result of policy validation for the event
           enum:
           - APPROVED
           - REJECTED_FORBIDDEN
@@ -5280,49 +5800,71 @@ components:
         invoiceId:
           type: string
           format: uuid
+          description: Identifier of the invoice associated with the event
+          example: 01960003-0000-7000-8000-000000000005
         paymentId:
           type: string
           format: uuid
+          description: Identifier of the payment associated with the event
+          example: 01960003-0000-7000-8000-000000000006
         refundType:
           type: string
+          description: Type of refund recorded
           enum:
           - REVERSAL
           - CREDIT_MEMO
           - ADJUSTMENT
+          example: REVERSAL
         refundAmount:
           type: number
+          description: Refund amount
+          example: 1250.0
         originalPaymentStatus:
           type: string
+          description: Status of the original payment being refunded
           enum:
           - PENDING
           - SETTLED
           - FAILED
           - AUTHORIZED
+          example: SETTLED
         refundMethod:
           type: string
+          description: Method used to issue the refund
           enum:
           - VOID
           - CHARGEBACK
           - CASH_REFUND
           - CREDIT_MEMO
+          example: CASH_REFUND
         linkedSourceIds:
           type: string
+          description: Comma-separated linked source identifiers
+          example: 01960003-0000-7000-8000-000000000007
         cancellationType:
           type: string
+          description: Type of cancellation recorded
           enum:
           - ORDER_CANCELLED
           - INVOICE_CANCELLED
           - PAYMENT_FAILED
+          example: ORDER_CANCELLED
         beforeSnapshot:
           type: string
+          description: Snapshot of state before the cancellation (JSON)
         afterSnapshot:
           type: string
+          description: Snapshot of state after the cancellation (JSON)
         partialPaymentInfo:
           type: string
+          description: Partial payment details captured at cancellation (JSON)
         glReversalStatus:
           type: string
+          description: Status of the GL reversal triggered by the cancellation
+          example: COMPLETED
         accountingIntent:
           type: string
+          description: Accounting intent of the event
           enum:
           - REVENUE_ADJUSTMENT
           - PAYMENT_REVERSAL
@@ -5330,8 +5872,10 @@ components:
           - WRITE_OFF
           - REVENUE_REVERSAL
           - PAYMENT_RECOVERY
+          example: REVENUE_ADJUSTMENT
         accountingStatus:
           type: string
+          description: Accounting status of the event
           enum:
           - PENDING_POSTING
           - POSTED
@@ -5341,32 +5885,58 @@ components:
           - VOIDED
           - ON_HOLD
           - DISPUTED
+          example: POSTED
         expectedAccountingOutcome:
           type: string
+          description: Expected accounting outcome description
+          example: Net revenue decreased by 150.00
         sourceEventId:
           type: string
           format: uuid
+          description: Identifier of the source accounting event
+          example: 01960003-0000-7000-8000-000000000008
         sourceDocumentId:
           type: string
+          description: Identifier of the source business document
+          example: INV-2026-000123
+      required:
+      - auditId
+      - exceptionType
+      - timestamp
     PriceOverrideRequest:
       type: object
+      description: Request to record a price override audit event
       properties:
         orderId:
           type: string
           format: uuid
+          description: Identifier of the order containing the line item
+          example: 01960003-0000-7000-8000-000000000001
         lineItemId:
           type: string
           format: uuid
+          description: Identifier of the line item being overridden
+          example: 01960003-0000-7000-8000-000000000002
         originalPrice:
           type: number
+          description: Original price before the override
+          example: 1250.0
         adjustedPrice:
           type: number
+          description: Adjusted price after the override
+          example: 1100.0
         actorRole:
           type: string
+          description: Role of the actor performing the override
+          example: STORE_MANAGER
         reason:
           type: string
+          description: Reason for the price override
+          example: Price matched competitor quote
         categoryCode:
           type: string
+          description: Optional forbidden category code (e.g., BELOW_COST, STACKING_VIOLATION)
+          example: BELOW_COST
       required:
       - actorRole
       - adjustedPrice
@@ -5376,31 +5946,47 @@ components:
       - reason
     CancellationRequest:
       type: object
+      description: Request to record a cancellation audit event
       properties:
         orderId:
           type: string
           format: uuid
+          description: Identifier of the order being cancelled
+          example: 01960003-0000-7000-8000-000000000001
         invoiceId:
           type: string
           format: uuid
+          description: Identifier of the invoice being cancelled
+          example: 01960003-0000-7000-8000-000000000002
         cancellationType:
           type: string
+          description: Type of cancellation being recorded
           enum:
           - ORDER_CANCELLED
           - INVOICE_CANCELLED
           - PAYMENT_FAILED
+          example: ORDER_CANCELLED
         beforeSnapshot:
           type: string
+          description: Snapshot of state before the cancellation (JSON)
         afterSnapshot:
           type: string
+          description: Snapshot of state after the cancellation (JSON)
         partialPaymentInfo:
           type: string
+          description: Partial payment details captured at cancellation (JSON)
         actorId:
           type: string
+          description: Legacy client-provided actor identifier; service resolves authoritative actor from security context
+          example: 01960003-0000-7000-8000-000000000003
         actorRole:
           type: string
+          description: Role of the actor performing the cancellation
+          example: STORE_MANAGER
         reason:
           type: string
+          description: Reason for the cancellation
+          example: Customer requested cancellation
       required:
       - actorRole
       - afterSnapshot
@@ -5611,109 +6197,214 @@ components:
           example: 1
     VendorBillMatchCandidateResponse:
       type: object
+      description: Vendor bill match candidate presented for manual selection during ambiguous matching
       properties:
         candidateId:
           type: string
           format: uuid
+          description: Candidate record identifier (used for selection)
+          example: 01960003-0000-7000-8000-000000000001
         invoiceEventId:
           type: string
           format: uuid
+          description: Identifier of the invoice event that triggered the ambiguous match
+          example: 01960003-0000-7000-8000-000000000002
         vendorBillId:
           type: string
           format: uuid
+          description: Identifier of the candidate vendor bill
+          example: 01960003-0000-7000-8000-000000000003
         vendorId:
           type: string
           format: uuid
+          description: Identifier of the vendor
+          example: 01960003-0000-7000-8000-000000000004
         billNumber:
           type: string
+          description: Bill number for display
+          example: BILL-2026-00456
         billTotalAmount:
           type: number
+          description: Total amount of the candidate bill
+          example: 1250.0
         matchScore:
           type: integer
           format: int32
+          description: Composite match score (0-100)
+          example: 85
         scoreBreakdown:
           type: string
+          description: Human-readable breakdown of the match score
+          example: amount:40, date:25, vendor:20
         resolved:
           type: boolean
+          description: Whether this candidate has been resolved
+          example: false
         selected:
           type: boolean
+          description: Whether this candidate was the selected one
+          example: false
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the candidate record was created (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
+      required:
+      - candidateId
+      - invoiceEventId
+      - vendorBillId
     IncomeStatementReport:
       type: object
+      description: Income statement (Profit & Loss) report built from POSTED journal entries
       properties:
         startDate:
           type: string
           format: date
+          description: Report period start date (inclusive)
+          example: 2026-01-01
         endDate:
           type: string
           format: date
+          description: Report period end date (inclusive)
+          example: 2026-03-31
         generatedAt:
           type: string
           format: date-time
+          description: Timestamp when the report was generated
+          example: 2026-06-18 08:00:00+00:00
         lineItems:
           type: object
           additionalProperties:
             type: number
+          description: Map of statement line codes to amounts (e.g. PL_REVENUE_SALES, PL_EXPENSE_SALARIES)
+          example:
+            PL_REVENUE_SALES: '1250.00'
         totalRevenue:
           type: number
+          description: Total revenue (sum of all revenue accounts)
+          example: 1250.0
         totalExpenses:
           type: number
+          description: Total expenses (sum of all expense accounts)
+          example: 1250.0
         netIncome:
           type: number
+          description: Net income (total revenue minus total expenses); positive is profit, negative is loss
+          example: 1250.0
+      required:
+      - endDate
+      - generatedAt
+      - lineItems
+      - netIncome
+      - startDate
+      - totalExpenses
+      - totalRevenue
     JournalLineDrilldownResponse:
       type: object
+      description: Drilldown of an individual journal line affecting an account
       properties:
         journalEntryId:
           type: string
           format: uuid
+          description: Journal entry UUID
+          example: 01960003-0000-7000-8000-000000000001
         transactionDate:
           type: string
           format: date
+          description: Transaction date
+          example: 2026-01-15
         description:
           type: string
+          description: Description/narrative for the journal line
+          example: Recognize receivable
         debitAmount:
           type: number
+          description: Debit amount (null if credit)
+          example: 1250.0
         creditAmount:
           type: number
+          description: Credit amount (null if debit)
+          example: 1250.0
         sourceEventId:
           type: string
           format: uuid
+          description: Source event UUID that triggered this journal entry
+          example: 01960003-0000-7000-8000-000000000002
         sourceEventType:
           type: string
+          description: Source event type
+          example: INVOICE_POSTED
+      required:
+      - journalEntryId
+      - transactionDate
     AccountDrilldownResponse:
       type: object
+      description: GL account contribution to a financial statement line
       properties:
         accountId:
           type: string
+          description: Identifier of the GL account
+          example: '4000'
         accountName:
           type: string
+          description: Name of the GL account
+          example: Salaries and Wages
         balance:
           type: number
+          description: Account balance for the period (sum of POSTED journal lines within the date range)
+          example: 1250.0
         statementLineCode:
           type: string
+          description: Statement line code this account contributes to
+          example: 1200-100
+      required:
+      - accountId
+      - accountName
+      - balance
+      - statementLineCode
     BalanceSheetReport:
       type: object
+      description: Balance Sheet report response with assets, liabilities, and equity totals derived from POSTED journal entries
       properties:
         asOfDate:
           type: string
           format: date
+          description: Date the balance sheet is reported as of
+          example: 2026-06-18
         generatedAt:
           type: string
           format: date-time
+          description: Timestamp when the report was generated (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         lineItems:
           type: object
           additionalProperties:
             type: number
+          description: Map of balance sheet line codes to their amounts (e.g. BS_ASSETS_CURRENT_CASH)
         totalAssets:
           type: number
+          description: Total assets (sum of all asset accounts)
+          example: 1250000.0
         totalLiabilities:
           type: number
+          description: Total liabilities (sum of all liability accounts)
+          example: 450000.0
         totalEquity:
           type: number
+          description: Total equity (sum of all equity accounts)
+          example: 800000.0
         balanced:
           type: boolean
+          description: Whether the accounting equation balances (assets == liabilities + equity within tolerance)
+          example: true
+      required:
+      - asOfDate
+      - balanced
+      - generatedAt
+      - lineItems
+      - totalAssets
+      - totalEquity
+      - totalLiabilities
     Pageable:
       type: object
       properties:
@@ -5790,80 +6481,124 @@ components:
           type: boolean
     PostingRuleSetListResponse:
       type: object
+      description: Paginated list of posting rule sets
       properties:
         ruleSets:
           type: array
+          description: Posting rule sets on the current page
           items:
             $ref: '#/components/schemas/PostingRuleSetResponse'
         totalElements:
           type: integer
           format: int32
+          description: Total number of posting rule sets across all pages
+          example: 42
         totalPages:
           type: integer
           format: int32
+          description: Total number of pages available
+          example: 5
         currentPage:
           type: integer
           format: int32
+          description: Zero-based index of the current page
+          example: 0
         pageSize:
           type: integer
           format: int32
+          description: Number of items per page
+          example: 10
     PostingCategoryListResponse:
       type: object
+      description: Paginated list of posting categories
       properties:
         results:
           type: array
+          description: Posting categories on the current page
           items:
             $ref: '#/components/schemas/PostingCategoryResponse'
         totalCount:
           type: integer
           format: int64
+          description: Total number of posting categories matching the query
+          example: 42
         pageNumber:
           type: integer
           format: int32
+          description: Zero-based index of the current page
+          example: 0
         pageSize:
           type: integer
           format: int32
+          description: Number of items per page
+          example: 20
         totalPages:
           type: integer
           format: int32
+          description: Total number of pages available
+          example: 3
+      required:
+      - results
     MappingKeyListResponse:
       type: object
+      description: Paginated list of mapping keys
       properties:
         results:
           type: array
+          description: Mapping keys on the current page
           items:
             $ref: '#/components/schemas/MappingKeyResponse'
         totalCount:
           type: integer
           format: int64
+          description: Total number of mapping keys matching the query
+          example: 42
         pageNumber:
           type: integer
           format: int32
+          description: Zero-based index of the current page
+          example: 0
         pageSize:
           type: integer
           format: int32
+          description: Number of items per page
+          example: 20
         totalPages:
           type: integer
           format: int32
+          description: Total number of pages available
+          example: 3
+      required:
+      - results
     PagedResponseJournalEntryResponse:
       type: object
+      description: Generic paginated list response wrapper
       properties:
         items:
           type: array
+          description: Items on the current page
           items:
             $ref: '#/components/schemas/JournalEntryResponse'
         pageNumber:
           type: integer
           format: int32
+          description: Zero-based index of the current page
+          example: 0
         pageSize:
           type: integer
           format: int32
+          description: Number of items per page
+          example: 20
         totalCount:
           type: integer
           format: int64
+          description: Total number of items matching the query
+          example: 42
         totalPages:
           type: integer
           format: int32
+          description: Total number of pages available
+          example: 3
         content:
           type: array
           items:
@@ -5871,15 +6606,22 @@ components:
         totalElements:
           type: integer
           format: int64
+      required:
+      - items
     JournalEntryTraceabilityResponse:
       type: object
+      description: Traceability response linking a journal entry to its source and related entries
       properties:
         journalEntryId:
           type: string
           format: uuid
+          description: Journal entry UUID
+          example: 01960003-0000-7000-8000-000000000001
         sourceEventId:
           type: string
           format: uuid
+          description: Source event UUID that triggered the journal entry
+          example: 01960003-0000-7000-8000-000000000002
         journalEntry:
           $ref: '#/components/schemas/JournalEntryResponse'
         originalJournalEntry:
@@ -5888,93 +6630,172 @@ components:
           $ref: '#/components/schemas/JournalEntryResponse'
         relatedJournalEntries:
           type: array
+          description: Other journal entries related to the same source event
           items:
             $ref: '#/components/schemas/JournalEntryResponse'
+      required:
+      - journalEntryId
     InvoiceStatusResponse:
       type: object
+      description: Invoice payment status response
       properties:
         invoiceId:
           type: string
           format: uuid
+          description: Invoice UUID
+          example: 01960003-0000-7000-8000-000000000001
         status:
           type: string
+          description: Payment status of the invoice
           enum:
           - PAID
           - PARTIALLY_PAID
           - UNPAID
           - FAILED
           - CHARGEBACK
+          example: PARTIALLY_PAID
         totalPaid:
           type: number
+          description: Total amount paid to date
+          example: 1250.0
         invoiceTotal:
           type: number
+          description: Total invoice amount
+          example: 1250.0
         remainingBalance:
           type: number
+          description: Remaining balance (invoice total minus total paid)
+          example: 0.0
         latestTransactionReference:
           type: string
+          description: Reference of the latest payment transaction
+          example: TXN-2026-000123
         lastUpdated:
           type: string
           format: date-time
+          description: Last updated timestamp
+          example: 2026-06-18 08:00:00+00:00
+      required:
+      - invoiceId
+      - status
     BillingRuleRefResponse:
       type: object
+      description: Billing rules snapshot returned by pos-customer for a customer account
       properties:
         poRequired:
           type: boolean
+          description: Whether a purchase order is required for billing
+          example: true
         taxExempt:
           type: boolean
+          description: Whether the customer is tax exempt
+          example: false
         paymentTerms:
           type: string
+          description: Agreed payment terms
+          example: NET30
         creditLimit:
           type: number
+          description: Credit limit extended to the customer
+          example: 50000.0
         creditHold:
           type: boolean
+          description: Whether the customer is currently on credit hold
+          example: false
         invoiceDeliveryMethod:
           type: string
+          description: Method used to deliver invoices
+          example: EMAIL
         billingAddressId:
           type: string
           format: uuid
+          description: Identifier of the billing address
+          example: 01960003-0000-7000-8000-000000000001
         autoPayEnabled:
           type: boolean
+          description: Whether automatic payment is enabled
+          example: false
         discountPolicyRef:
           type: string
+          description: Reference to the applicable discount policy
+          example: STD-2026
         currency:
           type: string
+          description: ISO 4217 currency code
+          example: USD
         extensions:
           type: object
+          description: Additional extension attributes keyed by name
+      required:
+      - autoPayEnabled
+      - creditHold
+      - poRequired
+      - taxExempt
     GLAccountListResponse:
       type: object
+      description: Paginated list of GL accounts
       properties:
         pageNumber:
           type: integer
           format: int32
+          description: Zero-based page index
+          example: 0
         pageSize:
           type: integer
           format: int32
+          description: Page size
+          example: 20
         totalPages:
           type: integer
           format: int32
+          description: Total number of pages
+          example: 7
         glAccounts:
           type: array
+          description: GL accounts on the current page
           items:
             $ref: '#/components/schemas/GLAccountResponse'
         totalElements:
           type: integer
           format: int64
+          description: Total number of matching GL accounts
+          example: 137
+      required:
+      - glAccounts
+      - pageNumber
+      - pageSize
+      - totalElements
+      - totalPages
     GLAccountBalanceResponse:
       type: object
+      description: Balance of a GL account as of a point in time
       properties:
         glAccountId:
           type: string
           format: uuid
+          description: Unique identifier of the GL account
+          example: 01960003-0000-7000-8000-000000000001
         accountCode:
           type: string
+          description: Account code of the GL account
+          example: '4000'
         accountName:
           type: string
+          description: Account name of the GL account
+          example: Service Revenue
         balance:
           type: number
+          description: Balance of the account
+          example: 1250.0
         asOfDate:
           type: string
           format: date-time
+          description: Point in time the balance is computed as of (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
+      required:
+      - asOfDate
+      - balance
+      - glAccountId
     PageExportJobResponse:
       type: object
       properties:
@@ -6041,27 +6862,45 @@ components:
           type: boolean
     ReprocessingAttemptHistoryResponse:
       type: object
+      description: Historical record of a single reprocessing attempt
       properties:
         attemptId:
           type: string
           format: uuid
+          description: Unique identifier of the reprocessing attempt
+          example: 01960003-0000-7000-8000-000000000001
         eventId:
           type: string
           format: uuid
+          description: Identifier of the event that was reprocessed
+          example: 01960003-0000-7000-8000-000000000002
         attemptedAt:
           type: string
           format: date-time
+          description: Timestamp when the reprocessing was attempted (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         triggeredByUserId:
           type: string
+          description: Identifier of the user who triggered the attempt
+          example: ap.manager
         outcome:
           type: string
+          description: Outcome of the reprocessing attempt
           enum:
           - SUCCESS
           - FAILURE
+          example: SUCCESS
         outcomeDetails:
           type: string
+          description: Additional detail about the outcome
+          example: Posted to GL successfully
         mappingVersionUsed:
           type: string
+          description: Mapping version used for the attempt
+          example: v3
+      required:
+      - attemptId
+      - eventId
     EventProcessingLogEntry:
       type: object
       description: A single entry in an accounting event's processing audit log
@@ -6070,41 +6909,68 @@ components:
           type: string
           format: uuid
           description: Unique identifier for this log entry
+          example: 01960003-0000-7000-8000-000000000001
         occurredAt:
           type: string
           format: date-time
-          description: When this log entry was created
+          description: When this log entry was created (ISO 8601)
+          example: 2026-06-18 08:00:00+00:00
         severity:
           type: string
           description: 'Severity level: INFO, WARN, or ERROR'
+          example: INFO
         message:
           type: string
           description: Human-readable log message
+          example: Event processed successfully
         contextJson:
           type:
           - string
           - 'null'
           description: Optional JSON context for debugging
+          example:
+            retries: 0
+      required:
+      - entryId
+      - message
+      - occurredAt
+      - severity
     ContractField:
       type: object
       description: A single field definition in an event envelope contract
       properties:
         name:
           type: string
+          description: Name of the field
+          example: eventId
         jsonPath:
           type: string
+          description: JSON path locating the field within the envelope
+          example: $.payload.eventId
         type:
           type: string
+          description: Data type of the field
+          example: string
         required:
           type: boolean
+          description: Whether the field is required in the envelope
+          example: true
         description:
           type: string
+          description: Human-readable description of the field
+          example: Unique identifier of the event
         enumValues:
           type:
           - array
           - 'null'
+          description: Allowed enum values for the field, if constrained
           items:
             type: string
+      required:
+      - jsonPath
+      - name
+      - required
+      - type
     EventEnvelopeContract:
       type: object
       description: Describes the expected structure of accounting event envelopes
@@ -6112,6 +6978,7 @@ components:
         version:
           type: string
           description: Contract schema version
+          example: '1.0'
         fields:
           type: array
           description: Field definitions in the event envelope
@@ -6120,25 +6987,44 @@ components:
         examples:
           type: array
           description: Example event payloads
+      required:
+      - fields
+      - version
     DefaultGLMappingListResponse:
       type: object
+      description: Paginated list of default GL account mappings
       properties:
         mappings:
           type: array
+          description: Default GL mappings on the current page
           items:
             $ref: '#/components/schemas/DefaultGLMappingResponse'
         page:
           type: integer
           format: int32
+          description: Zero-based page index
+          example: 0
         size:
           type: integer
           format: int32
+          description: Page size
+          example: 20
         totalElements:
           type: integer
           format: int64
+          description: Total number of matching mappings
+          example: 137
         totalPages:
           type: integer
           format: int32
+          description: Total number of pages
+          example: 7
+      required:
+      - mappings
+      - page
+      - size
+      - totalElements
+      - totalPages
     PageCreditMemoResponse:
       type: object
       properties:
@@ -6254,6 +7140,12 @@ components:
           - PAID
           - VOIDED
           example: APPROVED
+      required:
+      - billNumber
+      - status
+      - totalAmount
+      - vendorBillId
+      - vendorId
   securitySchemes:
     bearerAuth:
       type: http

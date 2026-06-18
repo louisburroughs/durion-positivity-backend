@@ -7,15 +7,20 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * {@code onHand - allocated} and is intentionally NOT clamped — negative
  * available is a real over-allocation signal (CAP-218 #658).
  */
+@Schema(description = "On-hand, allocated and available quantity triple used at every rollup node")
 public record RollupQuantities(
-        @Schema(description = "On-hand quantity", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "On-hand quantity", example = "120", requiredMode = Schema.RequiredMode.REQUIRED)
         long onHand,
 
-        @Schema(description = "Outstanding allocated quantity", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Outstanding allocated quantity",
+                example = "30",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         long allocated,
 
         @Schema(
                 description = "Available to promise: onHand - allocated (may be negative)",
+                example = "90",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         long available) {
 

@@ -38,7 +38,7 @@ public class StaffingAssignmentResponse {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private boolean primary;
 
-    @Schema(description = "Assignment lifecycle status", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Assignment lifecycle status", example = "ACTIVE", requiredMode = Schema.RequiredMode.REQUIRED)
     private AssignmentStatus status;
 
     @Schema(
@@ -47,16 +47,16 @@ public class StaffingAssignmentResponse {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate effectiveFrom;
 
-    @Schema(description = "Assignment effective end date", example = "2026-12-31")
+    @Schema(description = "Assignment effective end date", example = "2026-12-31", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private LocalDate effectiveTo;
 
-    @Schema(description = "Creation timestamp in UTC", example = "2026-02-16T14:30:00Z")
+    @Schema(description = "Creation timestamp in UTC", example = "2026-02-16T14:30:00Z", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant createdAt;
 
-    @Schema(description = "Last update timestamp in UTC", example = "2026-02-18T09:15:00Z")
+    @Schema(description = "Last update timestamp in UTC", example = "2026-02-18T09:15:00Z", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant updatedAt;
 
-    @Schema(description = "Username that created the assignment", example = "manager.user")
+    @Schema(description = "Username that created the assignment", example = "manager.user", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String createdBy;
 
     public StaffingAssignmentResponse() {}

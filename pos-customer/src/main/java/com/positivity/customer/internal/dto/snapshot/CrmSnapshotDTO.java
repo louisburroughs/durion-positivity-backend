@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.dto.snapshot;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -8,44 +9,64 @@ import org.jspecify.annotations.Nullable;
  * CRM Snapshot response DTO.
  * CAP:092 - Story #99: Expose CRM Snapshot
  */
+@Schema(description = "Read-only CRM snapshot of an account, its contacts, vehicles, and billing configuration")
 public class CrmSnapshotDTO {
+    @Schema(description = "Metadata describing the snapshot", requiredMode = Schema.RequiredMode.REQUIRED)
     @NonNull
     private SnapshotMetadata snapshotMetadata;
 
+    @Schema(description = "Account summary", requiredMode = Schema.RequiredMode.REQUIRED)
     @NonNull
     private AccountSummary account;
 
+    @Schema(description = "Contacts associated with the account", requiredMode = Schema.RequiredMode.REQUIRED)
     @NonNull
     private List<ContactSummary> contacts;
 
+    @Schema(description = "Vehicles associated with the account", requiredMode = Schema.RequiredMode.REQUIRED)
     @NonNull
     private List<VehicleSummary> vehicles;
 
+    @Schema(description = "Account-level billing preferences", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @Nullable
     private BillingPreferences preferences;
 
+    @Schema(description = "Read-only billing rule reference", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @Nullable
     private BillingRuleRef billingRules;
 
     /**
      * Vehicle summary within CRM snapshot context.
      */
+    @Schema(description = "Vehicle summary within a CRM snapshot")
     public static class VehicleSummary {
+        @Schema(
+                description = "Identifier of the vehicle",
+                example = "01960003-0000-7000-8000-000000000030",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         @NonNull
         private String vehicleId;
 
+        @Schema(
+                description = "Vehicle Identification Number",
+                example = "1HGCM82633A004352",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
         private String vin;
 
+        @Schema(description = "License plate", example = "ABC-1234", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
         private String licensePlate;
 
+        @Schema(description = "Vehicle make", example = "Ford", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
         private String make;
 
+        @Schema(description = "Vehicle model", example = "Transit 250", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
         private String model;
 
+        @Schema(description = "Model year", example = "2019", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
         private Integer year;
 
@@ -109,10 +130,24 @@ public class CrmSnapshotDTO {
     /**
      * Account-level billing preferences within CRM snapshot context.
      */
+    @Schema(description = "Account-level billing preferences within a CRM snapshot")
     public static class BillingPreferences {
+        @Schema(
+                description = "Whether the account has opted out of marketing communications",
+                example = "false",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         private boolean marketingOptOut;
+
+        @Schema(
+                description = "Whether the account should not be contacted at all",
+                example = "false",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         private boolean doNotContact;
 
+        @Schema(
+                description = "Preferred invoice delivery method",
+                example = "EMAIL",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
         private String invoiceDeliveryMethod;
 

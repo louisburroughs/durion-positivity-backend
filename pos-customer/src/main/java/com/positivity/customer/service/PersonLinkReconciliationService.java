@@ -1,5 +1,6 @@
 package com.positivity.customer.service;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -28,8 +29,28 @@ public interface PersonLinkReconciliationService {
      * @param posPeopleReachable  false if pos-people could not be reached, in which
      *                            case the resolved/unresolved counts are not meaningful
      */
+    @Schema(description = "Outcome of a person-link reconciliation pass against pos-people")
     record PersonLinkReport(
-            int totalLinks, int resolved, @NonNull List<UUID> unresolvedPersonIds, boolean posPeopleReachable) {
+            @Schema(description = "Count of distinct linked person ids checked", example = "120", requiredMode = Schema.RequiredMode.REQUIRED)
+                    int totalLinks,
+            @Schema(
+                            description = "Count of linked ids that exist in pos-people",
+                            example = "118",
+                            requiredMode = Schema.RequiredMode.REQUIRED)
+                    int resolved,
+            @Schema(
+                            description = "Linked person ids with no matching pos-people person (orphans)",
+                            requiredMode = Schema.RequiredMode.REQUIRED)
+                    @NonNull List<UUID> unresolvedPersonIds,
+            @Schema(
+                            description = "False if pos-people could not be reached, in which case resolved/unresolved counts are not meaningful",
+                            example = "true",
+                            requiredMode = Schema.RequiredMode.REQUIRED)
+                    boolean posPeopleReachable) {
+        @Schema(
+                description = "Whether reconciliation is healthy: pos-people reachable and no unresolved orphan links",
+                example = "true",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         public boolean isHealthy() {
             return posPeopleReachable && unresolvedPersonIds.isEmpty();
         }

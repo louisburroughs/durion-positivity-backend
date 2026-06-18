@@ -34,6 +34,7 @@ paths:
               schema:
                 type: string
                 format: binary
+                additionalProperties: {}
         '400':
           description: Invalid render request
           content:
@@ -57,19 +58,28 @@ components:
   schemas:
     RenderRequest:
       type: object
+      description: Request to render document content into a target output format
       properties:
         format:
           type: string
+          description: Target output format for the rendered document
           enum:
           - JSON
           - XML
           - MARKDOWN
           - TEXT
           - CSV
+          example: JSON
         templateId:
           type: string
+          description: Optional identifier of the template to apply when rendering
+          example: invoice-default
         content:
           type: string
+          description: Raw content to be rendered into the target format
+          example:
+            title: Invoice
+            total: 125.0
           minLength: 1
       required:
       - content

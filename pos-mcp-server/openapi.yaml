@@ -458,51 +458,85 @@ components:
   schemas:
     SystemPromptRequest:
       type: object
+      description: Request to create or update a reusable system prompt
       properties:
         name:
           type: string
+          description: Human-readable name identifying the system prompt
+          example: Workorder Assistant
           minLength: 1
         content:
           type: string
+          description: Text content of the system prompt
+          example: You are a helpful assistant that creates workorders.
           minLength: 1
       required:
       - content
       - name
     SystemPromptResponse:
       type: object
+      description: Stored reusable system prompt returned to clients
       properties:
         id:
           type: string
           format: uuid
+          description: Unique identifier of the stored system prompt
+          example: 01960003-0000-7000-8000-000000000008
         name:
           type: string
+          description: Human-readable name identifying the system prompt
+          example: Workorder Assistant
         content:
           type: string
+          description: Text content of the system prompt
+          example: You are a helpful assistant that creates workorders.
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the system prompt was created (ISO 8601)
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the system prompt was last updated (ISO 8601)
+          example: 2026-01-16 11:45:00+00:00
+      required:
+      - content
+      - createdAt
+      - id
+      - name
+      - updatedAt
     LlmApiConfigRequest:
       type: object
+      description: Request to create or update an external LLM API configuration
       properties:
         apiId:
           type: string
+          description: Stable identifier for the LLM API configuration
+          example: openai-gpt4
           minLength: 1
         model:
           type: string
+          description: Model name to invoke on the configured provider
+          example: gpt-4o
           minLength: 1
         baseUrl:
           type: string
+          description: Base URL of the LLM provider API
+          example: https://api.openai.com/v1
           minLength: 1
         apiKey:
           type: string
+          description: API key credential used to authenticate with the provider
+          example: sk-proj-xxxxxxxxxxxxxxxx
           minLength: 1
         headers:
           type: object
           additionalProperties:
             type: string
+          description: Additional HTTP headers to send with each provider request
+          example:
+            X-Org-Id: org-01960003
       required:
       - apiId
       - apiKey
@@ -510,57 +544,110 @@ components:
       - model
     LlmApiConfigResponse:
       type: object
+      description: Stored external LLM API configuration returned to clients
       properties:
         id:
           type: string
           format: uuid
+          description: Unique identifier of the stored LLM API configuration
+          example: 01960003-0000-7000-8000-000000000005
         apiId:
           type: string
+          description: Stable identifier for the LLM API configuration
+          example: openai-gpt4
         model:
           type: string
+          description: Model name invoked on the configured provider
+          example: gpt-4o
         baseUrl:
           type: string
+          description: Base URL of the LLM provider API
+          example: https://api.openai.com/v1
         apiKey:
           type: string
+          description: API key credential used to authenticate with the provider
+          example: sk-proj-xxxxxxxxxxxxxxxx
         headers:
           type: object
           additionalProperties:
             type: string
+          description: Additional HTTP headers sent with each provider request
+          example:
+            X-Org-Id: org-01960003
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the configuration was created (ISO 8601)
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the configuration was last updated (ISO 8601)
+          example: 2026-01-16 11:45:00+00:00
+      required:
+      - apiId
+      - apiKey
+      - baseUrl
+      - createdAt
+      - headers
+      - id
+      - model
+      - updatedAt
     NltiRequestDTO:
       type: object
+      description: Natural-language task interpretation request submitted by a client
       properties:
         prompt:
           type: string
+          description: Natural-language prompt to interpret
+          example: Create a workorder for an oil change at the downtown store
           minLength: 1
         sessionId:
           type: string
           format: uuid
+          description: Conversation session identifier to maintain interpretation context
+          example: 01960003-0000-7000-8000-000000000006
         clientContext:
           type: object
+          description: Arbitrary client-supplied context to aid interpretation
+          example:
+            locationId: 01960003-0000-7000-8000-000000000001
       required:
       - prompt
     NltiResponseV1:
       type: object
+      description: Natural-language task interpretation response (version 1)
       properties:
         requestId:
           type: string
           format: uuid
+          description: Unique identifier of the interpretation request
+          example: 01960003-0000-7000-8000-000000000007
         correlationId:
           type: string
           format: uuid
+          description: Correlation identifier linking the response to the originating request flow
+          example: 01960003-0000-7000-8000-000000000002
         sessionId:
           type: string
           format: uuid
+          description: Conversation session identifier the request belonged to
+          example: 01960003-0000-7000-8000-000000000006
         status:
           type: string
+          description: Status of the interpretation
+          example: RESOLVED
+        result:
+          description: Interpretation result payload, typically the resolved intent
         meta:
           type: object
+          description: Additional metadata about the interpretation
+          example:
+            durationMs: 142
+      required:
+      - correlationId
+      - requestId
+      - status
     DocumentIngestionRequest:
       type: object
       description: Document ingestion payload
@@ -572,10 +659,15 @@ components:
       properties:
         content:
           type: string
+          description: Raw text content of the document to ingest
+          example: 'Refund policy: customers may return items within 30 days.'
           minLength: 1
         metadata:
           type: object
           description: Optional key-value metadata for the document
+          example:
+            document_id: policy-123
+            source: manual
       required:
       - content
     DocumentIngestionJobResponse:
@@ -585,32 +677,56 @@ components:
         jobId:
           type: string
           format: uuid
+          description: Unique identifier of the ingestion job
+          example: 01960003-0000-7000-8000-000000000009
         documentId:
           type: string
+          description: Identifier of the document being ingested
+          example: policy-123
         status:
           type: string
+          description: Current status of the ingestion job
           enum:
           - PENDING
           - RUNNING
           - SUCCEEDED
           - FAILED
+          example: RUNNING
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the job was created (ISO 8601)
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the job was last updated (ISO 8601)
+          example: 2026-01-15 09:31:00+00:00
         startedAt:
           type: string
           format: date-time
+          description: Timestamp when ingestion processing started (ISO 8601)
+          example: 2026-01-15 09:30:05+00:00
         completedAt:
           type: string
           format: date-time
+          description: Timestamp when ingestion processing completed (ISO 8601)
+          example: 2026-01-15 09:30:45+00:00
         chunkCount:
           type: integer
           format: int32
+          description: Number of chunks produced from the document
+          example: 12
         errorMessage:
           type: string
+          description: Error message describing why ingestion failed, when applicable
+          example: Embedding provider unavailable
+      required:
+      - createdAt
+      - documentId
+      - jobId
+      - status
+      - updatedAt
     ChatRequest:
       type: object
       description: Chat request payload
@@ -619,6 +735,8 @@ components:
       properties:
         message:
           type: string
+          description: User chat message to send to the agent
+          example: Hello
           minLength: 1
       required:
       - message
@@ -630,21 +748,35 @@ components:
       properties:
         response:
           type: string
+          description: Full agent response text
+          example: Hi!
+      required:
+      - response
     ServerSentEventString:
       type: object
       description: A Server-Sent Event carrying a string data payload
       properties:
         id:
           type: string
+          description: Event identifier
+          example: '1'
         event:
           type: string
+          description: Event name
+          example: chat
         data:
           type: string
+          description: String data payload of the event, typically a response token
+          example: Hi
         retry:
           type: integer
           format: int64
+          description: Reconnection time in milliseconds the client should wait before retrying
+          example: 3000
         comment:
           type: string
+          description: Comment line carried by the event
+          example: keep-alive
     StreamChatRequest:
       type: object
       description: Streaming chat request payload
@@ -653,27 +785,46 @@ components:
       properties:
         message:
           type: string
+          description: User chat message to stream to the agent
+          example: Hello
           minLength: 1
       required:
       - message
     AuditEventResponse:
       type: object
+      description: Audit event record describing a single recorded action within the MCP server
       properties:
         eventId:
           type: string
           format: uuid
+          description: Unique identifier of the audit event
+          example: 01960003-0000-7000-8000-000000000001
         correlationId:
           type: string
           format: uuid
+          description: Correlation identifier linking the event to a request flow
+          example: 01960003-0000-7000-8000-000000000002
         eventType:
           type: string
+          description: Type of the audit event
+          example: NLTI_INTENT_RESOLVED
         timestamp:
           type: string
           format: date-time
+          description: Timestamp when the event occurred (ISO 8601)
+          example: 2026-01-15 09:30:00+00:00
         actorSubjectId:
           type: string
+          description: Subject identifier of the actor that triggered the event
+          example: user-01960003
         payloadRef:
           type: string
+          description: Reference pointer to the stored event payload
+          example: payload/01960003-0000-7000-8000-000000000003
+      required:
+      - eventId
+      - eventType
+      - timestamp
     PageAuditEventResponse:
       type: object
       properties:
@@ -712,8 +863,6 @@ components:
         offset:
           type: integer
           format: int64
-        unpaged:
-          type: boolean
         paged:
           type: boolean
         pageNumber:
@@ -724,12 +873,14 @@ components:
           format: int32
         sort:
           $ref: '#/components/schemas/SortObject'
+        unpaged:
+          type: boolean
     SortObject:
       type: object
       properties:
         empty:
           type: boolean
-        unsorted:
-          type: boolean
         sorted:
+          type: boolean
+        unsorted:
           type: boolean

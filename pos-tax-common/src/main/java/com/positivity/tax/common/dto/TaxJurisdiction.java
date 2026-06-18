@@ -48,31 +48,51 @@ public class TaxJurisdiction {
     /**
      * Region/subdivision code (ISO 3166-2 subdivision part where applicable).
      */
-    @Schema(type = "string", description = "Region/subdivision code (ISO 3166-2 subdivision part)", example = "CA")
+    @Schema(
+            type = "string",
+            description = "Region/subdivision code (ISO 3166-2 subdivision part)",
+            example = "CA",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String regionCode;
 
     /**
      * Locality/city/municipality name.
      */
-    @Schema(type = "string", description = "Locality/city/municipality name", example = "Los Angeles")
+    @Schema(
+            type = "string",
+            description = "Locality/city/municipality name",
+            example = "Los Angeles",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String city;
 
     /**
      * Postal or ZIP code.
      */
-    @Schema(type = "string", description = "Postal/ZIP code", example = "\"90001\"")
+    @Schema(
+            type = "string",
+            description = "Postal/ZIP code",
+            example = "90001",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String postalCode;
 
     /**
      * Primary address line.
      */
-    @Schema(type = "string", description = "Primary street address line", example = "\"123 Main St\"")
+    @Schema(
+            type = "string",
+            description = "Primary street address line",
+            example = "123 Main St",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String line1;
 
     /**
      * Secondary address line (optional).
      */
-    @Schema(type = "string", description = "Secondary address line", example = "\"Suite 200\"")
+    @Schema(
+            type = "string",
+            description = "Secondary address line",
+            example = "Suite 200",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String line2;
 
     /**
@@ -99,7 +119,10 @@ public class TaxJurisdiction {
      * Clients can use this key to localize human-readable labels.
      */
     @JsonProperty("jurisdictionTypeI18nKey")
-    @Schema(description = "I18n key for localized jurisdiction type labels", example = "tax.jurisdiction.type.state")
+    @Schema(
+            description = "I18n key for localized jurisdiction type labels",
+            example = "tax.jurisdiction.type.state",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     public String getJurisdictionTypeI18nKey() {
         return jurisdictionType != null ? jurisdictionType.i18nKey() : null;
     }

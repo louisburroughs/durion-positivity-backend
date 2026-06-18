@@ -3350,16 +3350,23 @@ components:
   schemas:
     RecordMovementRequest:
       type: object
+      description: Request body for recording a directional stock movement in the inventory ledger
       properties:
         productSku:
           type: string
+          description: Stock keeping unit code of the product being moved
+          example: SKU-10042
           minLength: 1
         fromLocationId:
           type: string
           format: uuid
+          description: Identifier of the location the stock moves from
+          example: 01960003-0000-7000-8000-000000000130
         toLocationId:
           type: string
           format: uuid
+          description: Identifier of the destination location; required for TRANSFER movements
+          example: 01960003-0000-7000-8000-000000000131
         movementType:
           type: string
           description: Direct ledger movement type. ADJUST is workflow-only and must use /v1/inventory/adjustments endpoints.
@@ -3370,13 +3377,20 @@ components:
           - ISSUE
           - RETURN
           - TRANSFER
+          example: RECEIVE
         quantity:
           type: integer
           format: int32
+          description: Quantity of units being moved
+          example: 12
         unitOfMeasure:
           type: string
+          description: Unit of measure for the quantity
+          example: EACH
         sourceTransactionId:
           type: string
+          description: Reference to the originating system transaction that caused the movement
+          example: 01960003-0000-7000-8000-000000000132
       required:
       - fromLocationId
       - movementType
@@ -3384,36 +3398,61 @@ components:
       - quantity
     ShortageResolveRequest:
       type: object
+      description: Request to resolve an inventory shortage on an allocation
       properties:
         allocationId:
           type: string
           format: uuid
+          description: Identifier of the allocation to resolve
+          example: 01960003-0000-7000-8000-000000000001
         allocationLineId:
           type: string
           format: uuid
+          description: Identifier of the specific allocation line to resolve, when line-scoped
+          example: 01960003-0000-7000-8000-000000000002
         resolution:
           type: string
+          description: Resolution strategy to apply to the shortage
+          example: SUBSTITUTE
           minLength: 1
         substituteSku:
           type: string
+          description: Substitute stock-keeping unit to use, when the resolution is a substitution
+          example: SKU-10043
         notes:
           type: string
+          description: Optional free-text notes explaining the resolution
+          example: Customer approved substitute item
       required:
       - allocationId
       - resolution
     ShortageResolutionResultDto:
       type: object
+      description: Result of applying a resolution to an inventory shortage
       properties:
         allocationId:
           type: string
           format: uuid
+          description: Identifier of the allocation that was resolved
+          example: 01960003-0000-7000-8000-000000000001
         resolution:
           type: string
+          description: Resolution strategy that was applied
+          example: SUBSTITUTE
         resolvedAt:
           type: string
           format: date-time
+          description: Timestamp when the shortage was resolved
+          example: 2026-01-15 09:30:00+00:00
         status:
           type: string
+          description: Resulting status of the allocation after resolution
+          example: RESOLVED
+      required:
+      - allocationId
+      - resolution
+      - resolvedAt
+      - status
     ApiError:
       type: object
       description: Standard error response envelope returned by all Durion backend APIs
@@ -3467,34 +3506,50 @@ components:
           example: must be greater than 0
     ReturnLineDto:
       type: object
+      description: 'A single line of a return submission: item, quantity, reason and disposition location'
       properties:
         itemId:
           type: string
           format: uuid
+          description: Identifier of the item being returned
+          example: 01960003-0000-7000-8000-000000000005
         quantity:
           type: integer
           format: int32
+          description: Quantity of the item being returned
+          example: 3
         reasonCode:
           type: string
+          description: Reason code explaining the return
+          example: DAMAGED
           minLength: 1
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location the item is returned to
+          example: 01960003-0000-7000-8000-000000000006
         storageLocationId:
           type: string
           format: uuid
+          description: Optional storage location within the location to receive the returned item
+          example: 01960003-0000-7000-8000-000000000007
       required:
       - itemId
       - locationId
+      - quantity
       - reasonCode
     ReturnSubmitRequest:
       type: object
+      description: Request to submit a set of return lines against a workorder
       properties:
         workorderId:
           type: string
           format: uuid
+          description: Identifier of the workorder the return is submitted against
+          example: 01960003-0000-7000-8000-00000000000c
         lines:
           type: array
+          description: Return lines describing each item, quantity and reason
           items:
             $ref: '#/components/schemas/ReturnLineDto'
           minItems: 1
@@ -3503,84 +3558,141 @@ components:
       - workorderId
     ReturnSubmissionResultDto:
       type: object
+      description: Outcome of a return submission, summarizing how many lines were processed
       properties:
         returnId:
           type: string
           format: uuid
+          description: Identifier of the created return record
+          example: 01960003-0000-7000-8000-00000000000a
         workorderId:
           type: string
           format: uuid
+          description: Identifier of the workorder the return was submitted against
+          example: 01960003-0000-7000-8000-00000000000b
         processedLines:
           type: integer
           format: int32
+          description: Number of return lines that were processed
+          example: 2
         status:
           type: string
+          description: Status of the return submission
+          example: COMPLETED
         processedAt:
           type: string
           format: date-time
+          description: Timestamp when the return was processed
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - processedAt
+      - processedLines
+      - returnId
+      - status
+      - workorderId
     CreateReservationRequest:
       type: object
+      description: Request to create an inventory reservation against a workorder line for a stock item
       properties:
         workorderLineId:
           type: string
           format: uuid
+          description: Identifier of the workorder line the reservation fulfils
+          example: 01960003-0000-7000-8000-000000000001
         stockItemId:
           type: string
           format: uuid
+          description: Identifier of the stock item being reserved
+          example: 01960003-0000-7000-8000-000000000002
         requiredQuantity:
           type: integer
           format: int32
+          description: Quantity of the stock item required by the reservation
+          example: 4
       required:
+      - requiredQuantity
       - stockItemId
       - workorderLineId
     ReservationResponse:
       type: object
+      description: Inventory reservation with its allocation state for a workorder line
       properties:
         reservationId:
           type: string
           format: uuid
+          description: Identifier of the reservation
+          example: 01960003-0000-7000-8000-000000000001
         workorderLineId:
           type: string
           format: uuid
+          description: Identifier of the workorder line the reservation fulfils
+          example: 01960003-0000-7000-8000-000000000002
         stockItemId:
           type: string
           format: uuid
+          description: Identifier of the stock item being reserved
+          example: 01960003-0000-7000-8000-000000000003
         requiredQuantity:
           type: integer
           format: int32
+          description: Quantity of the stock item required by the reservation
+          example: 4
         allocatedQuantity:
           type: integer
           format: int32
+          description: Quantity currently allocated against the reservation
+          example: 4
         status:
           type: string
+          description: Status of the reservation, such as PENDING, ALLOCATED, or HARDENED
+          example: ALLOCATED
+      required:
+      - allocatedQuantity
+      - requiredQuantity
+      - reservationId
+      - status
+      - stockItemId
+      - workorderLineId
     PromoteAllocationRequest:
       type: object
+      description: Request to promote a soft allocation to a hardened, location-pinned allocation
       properties:
         storageLocationId:
           type: string
           format: uuid
           description: Storage location identifier where the hardened allocation pins stock
+          example: 01960003-0000-7000-8000-000000000001
         hardenedReason:
           type: string
           description: Reason the allocation is being hardened
+          example: Reserved for scheduled workorder pick
       required:
       - storageLocationId
     CreateReplenishmentPolicyRequest:
       type: object
+      description: Request to create a replenishment policy defining min/max stock thresholds for an item at a location
       properties:
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location the replenishment policy applies to
+          example: 01960003-0000-7000-8000-000000000001
         itemSKU:
           type: string
+          description: SKU of the item the replenishment policy applies to
+          example: SKU-10042
           minLength: 1
         minimumQuantity:
           type: integer
           format: int32
+          description: Minimum on-hand quantity that triggers replenishment when reached
+          example: 5
           minimum: 0
         maximumQuantity:
           type: integer
           format: int32
+          description: Maximum on-hand quantity replenishment aims to restock up to
+          example: 50
           minimum: 1
         minimumLessThanMaximum:
           type: boolean
@@ -3591,82 +3703,153 @@ components:
       - minimumQuantity
     ReplenishmentPolicyResponse:
       type: object
+      description: Representation of a replenishment policy defining min/max stock thresholds for an item at a location
       properties:
         policyId:
           type: string
+          description: Unique identifier of the replenishment policy
+          example: 01960003-0000-7000-8000-000000000001
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location the replenishment policy applies to
+          example: 01960003-0000-7000-8000-000000000002
         itemSKU:
           type: string
+          description: SKU of the item the replenishment policy applies to
+          example: SKU-10042
         minimumQuantity:
           type: integer
           format: int32
+          description: Minimum on-hand quantity that triggers replenishment when reached
+          example: 5
         maximumQuantity:
           type: integer
           format: int32
+          description: Maximum on-hand quantity replenishment aims to restock up to
+          example: 50
         createdAt:
           type: string
+          description: Timestamp at which the replenishment policy was created
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - createdAt
+      - itemSKU
+      - locationId
+      - maximumQuantity
+      - minimumQuantity
+      - policyId
     CreateReceivingSessionRequest:
       type: object
+      description: Request to open a new inventory receiving session against a source document
       properties:
         sourceDocumentId:
           type: string
+          description: Identifier of the source document (e.g. purchase order or workorder) being received against
+          example: 01960003-0000-7000-8000-000000000001
           minLength: 1
         entryMethod:
           type: string
+          description: Method used to enter receiving lines, such as SCAN or MANUAL
+          example: MANUAL
       required:
       - sourceDocumentId
     ReceivingLineResponse:
       type: object
+      description: A single line within a receiving session, with expected and received quantities
       properties:
         lineId:
           type: string
           format: uuid
+          description: Identifier of the receiving line
+          example: 01960003-0000-7000-8000-000000000001
         productId:
           type: string
+          description: Identifier of the product on the receiving line
+          example: 01960003-0000-7000-8000-000000000002
         expectedQuantity:
           type: number
+          description: Quantity expected to be received on the line
+          example: 10
         receivedQuantity:
           type: number
+          description: Quantity received so far on the line
+          example: 8
         status:
           type: string
+          description: Status of the receiving line, such as PENDING or RECEIVED
+          example: RECEIVED
         workorderId:
           type: string
+          description: Identifier of the workorder the line is associated with, when applicable
+          example: 01960003-0000-7000-8000-000000000003
         workorderLineId:
           type: string
+          description: Identifier of the workorder line the receiving line fulfils, when applicable
+          example: 01960003-0000-7000-8000-000000000004
+      required:
+      - lineId
+      - productId
+      - status
     ReceivingSessionResponse:
       type: object
+      description: Inventory receiving session with its lines and source document context
       properties:
         sessionId:
           type: string
           format: uuid
+          description: Identifier of the receiving session
+          example: 01960003-0000-7000-8000-000000000001
         sourceDocumentId:
           type: string
+          description: Identifier of the source document the session receives against
+          example: 01960003-0000-7000-8000-000000000002
         sourceDocumentType:
           type: string
+          description: Type of the source document, such as PURCHASE_ORDER or WORKORDER
+          example: PURCHASE_ORDER
         supplierId:
           type: string
+          description: Identifier of the supplier providing the received stock
+          example: 01960003-0000-7000-8000-000000000003
         shipmentReference:
           type: string
+          description: Carrier or shipment reference for the received goods
+          example: SHIP-2026-00042
         status:
           type: string
+          description: Status of the receiving session, such as IN_PROGRESS or COMPLETED
+          example: IN_PROGRESS
         entryMethod:
           type: string
+          description: Method used to enter receiving lines, such as SCAN or MANUAL
+          example: MANUAL
         createdByUserId:
           type: string
+          description: Identifier of the user who created the receiving session
+          example: 01960003-0000-7000-8000-000000000004
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the receiving session was created
+          example: 2026-01-15 09:30:00+00:00
         lines:
           type: array
+          description: Receiving lines belonging to the session
           items:
             $ref: '#/components/schemas/ReceivingLineResponse'
+      required:
+      - createdAt
+      - sessionId
+      - sourceDocumentId
+      - status
     ReceiveItemsRequest:
       type: object
+      description: Request to record received quantities for one or more receiving session lines
       properties:
         lines:
           type: array
+          description: Receiving lines with their received quantities; at least one line is required
           items:
             $ref: '#/components/schemas/ReceiveLineRequest'
           minItems: 1
@@ -3674,237 +3857,429 @@ components:
       - lines
     ReceiveLineRequest:
       type: object
+      description: Received quantity recorded against a single receiving session line
       properties:
         lineId:
           type: string
           format: uuid
+          description: Identifier of the receiving line being recorded
+          example: 01960003-0000-7000-8000-000000000001
         receivedQuantity:
           type: number
+          description: Quantity actually received for the line; may be zero
+          example: 8
           minimum: 0.0
       required:
       - lineId
       - receivedQuantity
     ReceiveItemsResponse:
       type: object
+      description: Result of recording received quantities for a receiving session
       properties:
         sessionId:
           type: string
           format: uuid
+          description: Identifier of the receiving session the items were recorded against
+          example: 01960003-0000-7000-8000-000000000001
         sessionStatus:
           type: string
+          description: Status of the receiving session after recording the items
+          example: IN_PROGRESS
         linesProcessed:
           type: integer
           format: int32
+          description: Number of receiving lines processed in this request
+          example: 3
         variances:
           type: array
+          description: Variance summaries for lines whose received quantity differed from the expected quantity
           items:
             $ref: '#/components/schemas/VarianceSummaryResponse'
+      required:
+      - linesProcessed
+      - sessionId
+      - sessionStatus
     VarianceSummaryResponse:
       type: object
+      description: Summary of a quantity variance detected on a single receiving line
       properties:
         lineId:
           type: string
           format: uuid
+          description: Identifier of the receiving line that had a variance
+          example: 01960003-0000-7000-8000-000000000002
         productId:
           type: string
+          description: Identifier of the product on the receiving line
+          example: 01960003-0000-7000-8000-000000000003
         varianceType:
           type: string
+          description: Type of variance detected, such as OVER or SHORT
+          example: SHORT
         varianceQuantity:
           type: number
+          description: Difference between received and expected quantity for the line
+          example: 2
         expectedQuantity:
           type: number
+          description: Quantity originally expected on the receiving line
+          example: 10
         receivedQuantity:
           type: number
+          description: Quantity actually received on the line
+          example: 8
+      required:
+      - expectedQuantity
+      - lineId
+      - productId
+      - receivedQuantity
+      - varianceQuantity
+      - varianceType
     CrossDockRequest:
       type: object
+      description: Request to cross-dock received stock directly against a workorder line
       properties:
         workorderId:
           type: string
+          description: Identifier of the workorder the received stock is cross-docked to
+          example: 01960003-0000-7000-8000-000000000001
           minLength: 1
         workorderLineId:
           type: string
+          description: Identifier of the workorder line the received stock fulfils
+          example: 01960003-0000-7000-8000-000000000002
           minLength: 1
         quantity:
           type: number
+          description: Quantity of stock to cross-dock against the workorder line
+          example: 12
           minimum: 0.01
         notes:
           type: string
+          description: Optional free-text note describing the cross-dock action
+          example: Cross-docked at dock door 3 for urgent workorder
       required:
       - quantity
       - workorderId
       - workorderLineId
     CrossDockResponse:
       type: object
+      description: Result of cross-docking received stock against a workorder line
       properties:
         lineId:
           type: string
           format: uuid
+          description: Identifier of the receiving line that was cross-docked
+          example: 01960003-0000-7000-8000-000000000001
         workorderId:
           type: string
+          description: Identifier of the workorder the stock was cross-docked to
+          example: 01960003-0000-7000-8000-000000000002
         workorderLineId:
           type: string
+          description: Identifier of the workorder line the stock fulfilled
+          example: 01960003-0000-7000-8000-000000000003
         crossDockedQuantity:
           type: number
+          description: Quantity of stock that was cross-docked
+          example: 12
         ledgerEntryIds:
           type: array
+          description: Identifiers of the inventory ledger entries created by the cross-dock
+          example:
+          - 01960003-0000-7000-8000-000000000004
           items:
             type: string
         sessionStatus:
           type: string
+          description: Status of the receiving session after the cross-dock
+          example: COMPLETED
         lineStatus:
           type: string
+          description: Status of the receiving line after the cross-dock
+          example: RECEIVED
+      required:
+      - crossDockedQuantity
+      - lineId
+      - lineStatus
+      - sessionStatus
+      - workorderId
+      - workorderLineId
     PutawayExecutionRequest:
       type: object
       description: Putaway execution request payload
       properties:
         skuId:
           type: string
+          description: Identifier of the SKU being moved
+          example: 01960003-0000-7000-8000-000000000120
+          minLength: 1
         sourceLocationId:
           type: string
           format: uuid
+          description: Identifier of the staging location the goods are moved from
+          example: 01960003-0000-7000-8000-000000000121
         destinationLocationId:
           type: string
           format: uuid
+          description: Identifier of the storage location the goods are moved to
+          example: 01960003-0000-7000-8000-000000000122
         quantity:
           type: integer
           format: int32
+          description: Quantity of units to move
+          example: 12
         overrideLocationCompatibility:
           type: boolean
+          description: When true, bypasses the location compatibility check for this move
+          example: false
         overrideCapacity:
           type: boolean
+          description: When true, bypasses the destination capacity check for this move
+          example: false
         overrideReasonCode:
           type: string
+          description: Audit reason code justifying any applied override
           enum:
           - CAPACITY_OVERRIDE
           - LOCATION_COMPATIBILITY_OVERRIDE
           - URGENT_FULFILLMENT
           - ALTERNATE_LOCATION
           - OTHER
+          example: CAPACITY_OVERRIDE
         overrideJustification:
           type: string
+          description: Free-text justification supporting the override
+          example: Receiving dock at capacity during peak intake
         approvedBy:
           type: string
+          description: Identifier of the supervisor who approved the override
+          example: 01960003-0000-7000-8000-000000000123
+      required:
+      - destinationLocationId
+      - quantity
+      - skuId
+      - sourceLocationId
     PutawayExecutionResponse:
       type: object
+      description: Result of executing a putaway move, including the ledger entry and final placement
       properties:
         ledgerEntryId:
           type: string
+          description: Identifier of the inventory ledger entry recorded for the move
+          example: 01960003-0000-7000-8000-000000000070
         taskId:
           type: string
+          description: Identifier of the putaway task that was executed
+          example: 01960003-0000-7000-8000-000000000071
         skuId:
           type: string
+          description: Identifier of the SKU that was moved
+          example: 01960003-0000-7000-8000-000000000072
         sourceLocationId:
           type: string
           format: uuid
+          description: Identifier of the staging location the goods moved from
+          example: 01960003-0000-7000-8000-000000000073
         destinationLocationId:
           type: string
           format: uuid
+          description: Identifier of the storage location the goods moved to
+          example: 01960003-0000-7000-8000-000000000074
         quantityMoved:
           type: integer
           format: int32
+          description: Quantity of units moved during the putaway
+          example: 12
         transactionType:
           type: string
+          description: Ledger transaction type recorded for the move
+          example: PUT_AWAY
         status:
           type: string
+          description: Outcome status of the putaway execution
+          example: COMPLETED
         executedAt:
           type: string
+          description: Timestamp when the putaway was executed
+          example: 2026-01-15 09:30:00+00:00
         actorId:
           type: string
+          description: Identifier of the actor who executed the putaway
+          example: 01960003-0000-7000-8000-000000000075
+      required:
+      - destinationLocationId
+      - executedAt
+      - ledgerEntryId
+      - quantityMoved
+      - skuId
+      - status
+      - taskId
+      - transactionType
     PutawayTaskResponse:
       type: object
+      description: Putaway task describing a product to move from staging to a suggested storage location
       properties:
         taskId:
           type: string
+          description: Unique identifier of the putaway task
+          example: 01960003-0000-7000-8000-000000000090
         sourceReceiptId:
           type: string
+          description: Identifier of the receipt the goods were received against
+          example: 01960003-0000-7000-8000-000000000091
         productId:
           type: string
+          description: Identifier of the product to be put away
+          example: 01960003-0000-7000-8000-000000000092
         quantity:
           type: integer
           format: int32
+          description: Quantity of the product to be put away
+          example: 12
         sourceLocationId:
           type: string
           format: uuid
+          description: Identifier of the staging location the goods are moved from
+          example: 01960003-0000-7000-8000-000000000093
         suggestedDestinationLocationId:
           type: string
           format: uuid
+          description: Currently suggested destination location for the goods
+          example: 01960003-0000-7000-8000-000000000094
         originalSuggestedLocationId:
           type: string
           format: uuid
+          description: Originally suggested destination location before any fallback
+          example: 01960003-0000-7000-8000-000000000095
         finalSuggestedLocationId:
           type: string
           format: uuid
+          description: Final suggested destination location after fallback resolution
+          example: 01960003-0000-7000-8000-000000000096
         actualDestinationLocationId:
           type: string
           format: uuid
+          description: Actual destination location where the goods were placed
+          example: 01960003-0000-7000-8000-000000000097
         fallbackReason:
           type: string
+          description: Reason the suggested location fell back to an alternate, when applicable
+          example: Suggested bin at capacity
         status:
           type: string
+          description: Current status of the putaway task
+          example: PENDING
         assigneeId:
           type: string
+          description: Identifier of the worker assigned to the task, when assigned
+          example: 01960003-0000-7000-8000-000000000098
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the putaway task was created
+          example: 2026-01-15 08:00:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the putaway task was last updated
+          example: 2026-01-15 08:45:00+00:00
+      required:
+      - createdAt
+      - productId
+      - quantity
+      - sourceReceiptId
+      - status
+      - taskId
+      - updatedAt
     GeneratePutawayTasksRequest:
       type: object
+      description: Request to generate putaway tasks for goods received against a source receipt
       properties:
         sourceReceiptId:
           type: string
+          description: Identifier of the receipt the received goods belong to
+          example: 01960003-0000-7000-8000-000000000060
           minLength: 1
         productId:
           type: string
+          description: Legacy single-line product identifier; prefer lineItems for new integrations
+          example: 01960003-0000-7000-8000-000000000061
         quantity:
           type: integer
           format: int32
+          description: Legacy single-line quantity received; prefer lineItems for new integrations
+          example: 12
           minimum: 1
         lineItems:
           type: array
+          description: Line items describing the products and quantities to be put away
           items:
             $ref: '#/components/schemas/PutawayLineItemRequest'
       required:
       - sourceReceiptId
     PutawayLineItemRequest:
       type: object
+      description: A single product and quantity line for a putaway tasks generation request
       properties:
         productId:
           type: string
+          description: Identifier of the product to be put away
+          example: 01960003-0000-7000-8000-000000000080
           minLength: 1
         quantity:
           type: integer
           format: int32
+          description: Quantity of the product to be put away
+          example: 12
           minimum: 1
       required:
       - productId
       - quantity
     CreatePurchaseOrderRequest:
       type: object
+      description: Request to create a new purchase order for a vendor with one or more order lines
       properties:
         vendorId:
           type: string
           format: uuid
+          description: Identifier of the vendor the purchase order is placed with
+          example: 01960003-0000-7000-8000-000000000001
         poDate:
           type: string
           format: date
+          description: Date the purchase order is issued
+          example: 2026-01-15
         currency:
           type: string
+          description: ISO 4217 currency code the purchase order is denominated in
+          example: USD
+          minLength: 1
         paymentTermsId:
           type: string
+          description: Identifier of the payment terms applied to this purchase order
+          example: NET30
         expectedDeliveryDate:
           type: string
           format: date
+          description: Date the ordered goods are expected to be delivered
+          example: 2026-01-29
         shipToLocationId:
           type: string
           format: uuid
+          description: Identifier of the location the goods should be shipped to
+          example: 01960003-0000-7000-8000-000000000002
         requestedBy:
           type: string
+          description: Identifier or name of the person who requested the purchase order
+          example: user-jdoe
         comment:
           type: string
+          description: Free-text comment providing additional context for the purchase order
+          example: Urgent restock for spring promotion
         lines:
           type: array
+          description: Order lines detailing the SKUs, quantities, and costs being purchased
           items:
             $ref: '#/components/schemas/PurchaseOrderLineRequest'
           minItems: 1
@@ -3915,24 +4290,40 @@ components:
       - vendorId
     PurchaseOrderLineRequest:
       type: object
+      description: A single line item on a purchase order request, identifying the SKU, quantity, and unit cost
       properties:
         lineNumber:
           type: integer
           format: int32
+          description: Sequential line number identifying this line within the purchase order
+          example: 1
         skuId:
           type: string
           format: uuid
+          description: Identifier of the SKU being ordered on this line
+          example: 01960003-0000-7000-8000-000000000010
         description:
           type: string
+          description: Human-readable description of the item being ordered
+          example: Stainless steel water bottle, 750ml
+          minLength: 1
         quantity:
           type: number
+          description: Quantity of the item being ordered on this line
+          example: 12
         unitCostMinor:
           type: integer
           format: int64
+          description: Unit cost of the item in the smallest currency unit (e.g. cents)
+          example: 1499
         taxCodeId:
           type: string
+          description: Identifier of the tax code applied to this line
+          example: TAX-STD
         glAccountId:
           type: string
+          description: Identifier of the general ledger account this line posts to
+          example: GL-5000
       required:
       - description
       - lineNumber
@@ -3940,44 +4331,74 @@ components:
       - unitCostMinor
     PurchaseOrderLineResponse:
       type: object
+      description: A single line item returned as part of a purchase order
       properties:
         lineId:
           type: string
           format: uuid
+          description: Unique identifier of this purchase order line
+          example: 01960003-0000-7000-8000-000000000020
         lineNumber:
           type: integer
           format: int32
+          description: Sequential line number identifying this line within the purchase order
+          example: 1
         skuId:
           type: string
           format: uuid
+          description: Identifier of the SKU on this line
+          example: 01960003-0000-7000-8000-000000000010
         description:
           type: string
+          description: Human-readable description of the item on this line
+          example: Stainless steel water bottle, 750ml
         quantityDecimal:
           type: number
+          description: Quantity ordered on this line
+          example: 12
         unitCostMinor:
           type: integer
           format: int64
+          description: Unit cost of the item in the smallest currency unit (e.g. cents)
+          example: 1499
         lineTotalMinor:
           type: integer
           format: int64
+          description: Total cost of this line in the smallest currency unit (e.g. cents)
+          example: 17988
         taxMinor:
           type: integer
           format: int64
+          description: Tax amount for this line in the smallest currency unit (e.g. cents)
+          example: 1439
         openQuantityDecimal:
           type: number
+          description: Quantity on this line not yet received
+          example: 4
+      required:
+      - lineId
+      - lineNumber
     PurchaseOrderResponse:
       type: object
+      description: Full representation of a purchase order, including header totals and line items
       properties:
         purchaseOrderId:
           type: string
           format: uuid
+          description: Unique identifier of the purchase order
+          example: 01960003-0000-7000-8000-000000000001
         vendorId:
           type: string
           format: uuid
+          description: Identifier of the vendor the purchase order is placed with
+          example: 01960003-0000-7000-8000-000000000002
         poNumber:
           type: string
+          description: Human-readable purchase order number
+          example: PO-2026-00042
         status:
           type: string
+          description: Current lifecycle status of the purchase order
           enum:
           - DRAFT
           - APPROVED
@@ -3985,109 +4406,186 @@ components:
           - FULLY_RECEIVED
           - CLOSED
           - CANCELLED
+          example: APPROVED
         versionNumber:
           type: integer
           format: int32
+          description: Revision/version number of the purchase order, incremented on each revision
+          example: 1
         currency:
           type: string
+          description: ISO 4217 currency code the purchase order is denominated in
+          example: USD
         subtotalMinor:
           type: integer
           format: int64
+          description: Sum of line totals before tax in the smallest currency unit (e.g. cents)
+          example: 17988
         taxMinor:
           type: integer
           format: int64
+          description: Total tax amount in the smallest currency unit (e.g. cents)
+          example: 1439
         grandTotalMinor:
           type: integer
           format: int64
+          description: Grand total including tax in the smallest currency unit (e.g. cents)
+          example: 19427
         openBalanceMinor:
           type: integer
           format: int64
+          description: Remaining unpaid/unreceived balance in the smallest currency unit (e.g. cents)
+          example: 19427
         shipToLocationId:
           type: string
           format: uuid
+          description: Identifier of the location the goods are shipped to
+          example: 01960003-0000-7000-8000-000000000003
         paymentTermsId:
           type: string
+          description: Identifier of the payment terms applied to this purchase order
+          example: NET30
         poDate:
           type: string
           format: date
+          description: Date the purchase order was issued
+          example: 2026-01-15
         expectedDeliveryDate:
           type: string
           format: date
+          description: Date the ordered goods are expected to be delivered
+          example: 2026-01-29
         requestedBy:
           type: string
+          description: Identifier or name of the person who requested the purchase order
+          example: user-jdoe
         comment:
           type: string
+          description: Free-text comment providing additional context for the purchase order
+          example: Urgent restock for spring promotion
         approverId:
           type: string
+          description: Identifier of the person who approved the purchase order
+          example: user-asmith
         approvalTimestamp:
           type: string
           format: date-time
+          description: Timestamp at which the purchase order was approved
+          example: 2026-01-15 09:30:00+00:00
         approvalNotes:
           type: string
+          description: Notes recorded by the approver explaining the approval decision
+          example: Approved within budget for Q1 restock
         encumbranceRef:
           type: string
+          description: Reference to the financial encumbrance reserved for this purchase order
+          example: ENC-2026-00042
         createdBy:
           type: string
+          description: Identifier of the user who created the purchase order
+          example: user-jdoe
         updatedBy:
           type: string
+          description: Identifier of the user who last updated the purchase order
+          example: user-asmith
         createdAt:
           type: string
           format: date-time
+          description: Timestamp at which the purchase order was created
+          example: 2026-01-15 09:00:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp at which the purchase order was last updated
+          example: 2026-01-15 09:30:00+00:00
         lines:
           type: array
+          description: Line items belonging to this purchase order
           items:
             $ref: '#/components/schemas/PurchaseOrderLineResponse'
+      required:
+      - createdAt
+      - currency
+      - poNumber
+      - purchaseOrderId
+      - status
+      - updatedAt
+      - vendorId
+      - versionNumber
     RevisePurchaseOrderRequest:
       type: object
+      description: Request to revise an existing purchase order, replacing its lines and recording a revision reason
       properties:
         poDate:
           type: string
           format: date
+          description: Date the revised purchase order is issued
+          example: 2026-01-20
         paymentTermsId:
           type: string
+          description: Identifier of the payment terms applied to the revised purchase order
+          example: NET30
         expectedDeliveryDate:
           type: string
           format: date
+          description: Date the ordered goods are expected to be delivered
+          example: 2026-02-03
         shipToLocationId:
           type: string
           format: uuid
+          description: Identifier of the location the goods should be shipped to
+          example: 01960003-0000-7000-8000-000000000003
         requestedBy:
           type: string
+          description: Identifier or name of the person who requested the revision
+          example: user-jdoe
         comment:
           type: string
+          description: Free-text comment providing additional context for the revised purchase order
+          example: Increased quantities after vendor confirmed availability
         lines:
           type: array
+          description: Order lines replacing the existing purchase order lines
           items:
             $ref: '#/components/schemas/PurchaseOrderLineRequest'
           minItems: 1
         revisionReason:
           type: string
+          description: Reason explaining why the purchase order is being revised
+          example: Vendor price change required updated unit costs
+          minLength: 1
       required:
       - lines
       - poDate
       - revisionReason
     ReceivePurchaseOrderLineRequest:
       type: object
+      description: Receipt detail for a single purchase order line
       properties:
         lineId:
           type: string
           format: uuid
+          description: Identifier of the purchase order line being received
+          example: 01960003-0000-7000-8000-000000000020
         quantityReceived:
           type: number
+          description: Quantity received for this line
+          example: 4
         unitCostMinor:
           type: integer
           format: int64
+          description: Actual unit cost of the received goods in the smallest currency unit (e.g. cents)
+          example: 1499
       required:
       - lineId
       - quantityReceived
     ReceivePurchaseOrderRequest:
       type: object
+      description: Request to record receipt of goods against one or more purchase order lines
       properties:
         lines:
           type: array
+          description: Line-level receipts describing the quantity received against each purchase order line
           items:
             $ref: '#/components/schemas/ReceivePurchaseOrderLineRequest'
           minItems: 1
@@ -4095,20 +4593,31 @@ components:
       - lines
     ReceivePurchaseOrderLineDetail:
       type: object
+      description: Open-quantity detail for a single purchase order line after a receipt
       properties:
         lineId:
           type: string
           format: uuid
+          description: Identifier of the purchase order line
+          example: 01960003-0000-7000-8000-000000000020
         openQuantityDecimal:
           type: number
+          description: Quantity on this line still awaiting receipt
+          example: 8
+      required:
+      - lineId
     ReceivePurchaseOrderResponse:
       type: object
+      description: Result of receiving goods against a purchase order, including updated status and open balances
       properties:
         poId:
           type: string
           format: uuid
+          description: Identifier of the purchase order that was received against
+          example: 01960003-0000-7000-8000-000000000001
         status:
           type: string
+          description: Updated lifecycle status of the purchase order after the receipt
           enum:
           - DRAFT
           - APPROVED
@@ -4116,183 +4625,304 @@ components:
           - FULLY_RECEIVED
           - CLOSED
           - CANCELLED
+          example: PARTIALLY_RECEIVED
         openBalanceMinor:
           type: integer
           format: int64
+          description: Remaining open balance in the smallest currency unit (e.g. cents) after the receipt
+          example: 5000
         message:
           type: string
+          description: Human-readable message summarising the outcome of the receipt
+          example: Received 4 of 12 units; purchase order partially received
         lines:
           type: array
+          description: Per-line detail of remaining open quantities after the receipt
           items:
             $ref: '#/components/schemas/ReceivePurchaseOrderLineDetail'
+      required:
+      - poId
+      - status
     ApprovePurchaseOrderRequest:
       type: object
+      description: Request to approve a purchase order, optionally capturing approval notes
       properties:
         approvalNotes:
           type: string
+          description: Free-text notes recorded by the approver explaining the approval decision
+          example: Approved within budget for Q1 restock
     CreatePickListRequest:
       type: object
+      description: Request to create a pick list for a workorder, optionally linked to a parts reservation
       properties:
         workorderId:
           type: string
           format: uuid
+          description: Identifier of the workorder the pick list fulfills
+          example: 01960003-0000-7000-8000-000000000010
         dueAt:
           type: string
           format: date-time
+          description: Timestamp by which the pick list should be completed
+          example: 2026-01-15 09:30:00+00:00
         priority:
           type: integer
           format: int32
+          description: Relative priority of the pick list; higher values are picked sooner
+          example: 5
         reservationId:
           type: string
           format: uuid
+          description: Identifier of the reservation backing the pick list, when applicable
+          example: 01960003-0000-7000-8000-000000000011
       required:
       - workorderId
     PickListResponse:
       type: object
+      description: Pick list details returned after creation, generation, or lookup
       properties:
         pickListId:
           type: string
           format: uuid
+          description: Unique identifier of the pick list
+          example: 01960003-0000-7000-8000-000000000030
         workorderId:
           type: string
           format: uuid
+          description: Identifier of the workorder the pick list fulfills
+          example: 01960003-0000-7000-8000-000000000031
         status:
           type: string
+          description: Current lifecycle status of the pick list
           enum:
           - DRAFT
           - READY_TO_PICK
           - IN_PROGRESS
           - COMPLETED
           - CANCELLED
+          example: READY_TO_PICK
         priority:
           type: integer
           format: int32
+          description: Relative priority of the pick list; higher values are picked sooner
+          example: 5
         dueAt:
           type: string
           format: date-time
+          description: Timestamp by which the pick list should be completed
+          example: 2026-01-15 09:30:00+00:00
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the pick list was created
+          example: 2026-01-15 08:00:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the pick list was last updated
+          example: 2026-01-15 08:45:00+00:00
+      required:
+      - createdAt
+      - pickListId
+      - priority
+      - status
+      - updatedAt
+      - workorderId
     ConfirmPickTaskRequest:
       type: object
+      description: Request to confirm a pick task by recording the scanned SKU, scanned location, and quantity picked
       properties:
         scannedSkuId:
           type: string
           format: uuid
+          description: Identifier of the SKU scanned by the picker
+          example: 01960003-0000-7000-8000-000000000001
         scannedLocationId:
           type: string
           format: uuid
+          description: Identifier of the bin or shelf location scanned during the pick
+          example: 01960003-0000-7000-8000-000000000002
         quantityPicked:
           type: integer
           format: int32
+          description: Quantity of units actually picked at the scanned location
+          example: 12
       required:
       - quantityPicked
       - scannedLocationId
       - scannedSkuId
     PickTaskResponse:
       type: object
+      description: Pick task details describing a single SKU-and-location pick within a pick list
       properties:
         pickTaskId:
           type: string
           format: uuid
+          description: Unique identifier of the pick task
+          example: 01960003-0000-7000-8000-000000000040
         pickListId:
           type: string
           format: uuid
+          description: Identifier of the pick list this task belongs to
+          example: 01960003-0000-7000-8000-000000000041
         skuId:
           type: string
           format: uuid
+          description: Identifier of the SKU to be picked
+          example: 01960003-0000-7000-8000-000000000042
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location the SKU is picked from
+          example: 01960003-0000-7000-8000-000000000043
         quantityRequired:
           type: integer
           format: int32
+          description: Quantity required to satisfy this pick task
+          example: 12
         quantityPicked:
           type: integer
           format: int32
+          description: Quantity already picked against this task
+          example: 8
         status:
           type: string
+          description: Current status of the pick task
           enum:
           - PENDING
           - NEEDS_REVIEW
           - PICKED
           - CANCELLED
+          example: PENDING
         sortOrder:
           type: integer
           format: int32
+          description: Ordinal position of this task in the pick sequence
+          example: 1
+      required:
+      - locationId
+      - pickListId
+      - pickTaskId
+      - quantityPicked
+      - quantityRequired
+      - skuId
+      - sortOrder
+      - status
     DeactivateLocationRequest:
       type: object
+      description: Request to deactivate a location, optionally moving its inventory to a destination location
       properties:
         destinationLocationId:
           type: string
           format: uuid
+          description: Optional destination location to which remaining inventory is transferred on deactivation
+          example: 01960003-0000-7000-8000-000000000001
     DeactivateLocationResponse:
       type: object
+      description: Response describing the outcome of deactivating a location and any inventory transfer performed
       properties:
         sourceLocationId:
           type: string
           format: uuid
+          description: Identifier of the location that was deactivated
+          example: 01960003-0000-7000-8000-000000000001
         destinationLocationId:
           type: string
           format: uuid
+          description: Identifier of the destination location inventory was moved to, if any
+          example: 01960003-0000-7000-8000-000000000002
         status:
           type: string
+          description: Resulting status of the source location after deactivation
+          example: Inactive
         transfer:
           $ref: '#/components/schemas/Transfer'
+      required:
+      - sourceLocationId
+      - status
     MovedItem:
       type: object
+      description: A single inventory item moved during location deactivation
       properties:
         itemId:
           type: string
+          description: Identifier of the moved inventory item
+          example: SKU-10042
         quantity:
           type: number
           format: double
+          description: Quantity of the item moved
+          example: 4.5
+      required:
+      - itemId
+      - quantity
     Transfer:
       type: object
+      description: Details of inventory moved from the deactivated location to the destination location
       properties:
         movedItems:
           type: array
+          description: Items moved as part of the transfer
           items:
             $ref: '#/components/schemas/MovedItem'
         movedAt:
           type: string
           format: date-time
+          description: Timestamp when the inventory was moved
+          example: 2026-01-15 09:30:00+00:00
     CreateGoodsReceiptLineRequest:
       type: object
+      description: Request payload describing a single received line item when recording a goods receipt against a purchase order
       properties:
         poLineId:
           type: string
           format: uuid
+          description: Identifier of the specific purchase order line this receipt line fulfills
+          example: 01960003-0000-7000-8000-000000000001
         sku:
           type: string
+          description: Stock keeping unit identifier for the received product
+          example: SKU-10042
+          minLength: 1
         quantityReceived:
           type: number
+          description: Whole-unit quantity of the SKU received in this goods receipt
+          example: 8
         unitCostMinor:
           type: integer
           format: int64
+          description: Unit cost of the received product expressed in minor currency units (e.g. cents)
+          example: 1499
         lotNumber:
           type: string
+          description: Lot or batch number associated with the received product
+          example: LOT-2026-0042
       required:
       - quantityReceived
       - sku
       - unitCostMinor
     CreateGoodsReceiptRequest:
       type: object
+      description: Request payload to record a goods receipt for inventory received against a purchase order, optionally linked to an ASN
       properties:
         poId:
           type: string
           format: uuid
+          description: Identifier of the purchase order the goods are received against
+          example: 01960003-0000-7000-8000-000000000001
         asnId:
           type: string
           format: uuid
+          description: Identifier of the advance shipping notice (ASN) this receipt fulfills, if applicable
+          example: 01960003-0000-7000-8000-000000000002
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location where the goods are received into inventory
+          example: 01960003-0000-7000-8000-000000000003
         lines:
           type: array
+          description: Received line items detailing the SKUs and quantities in this goods receipt
           items:
             $ref: '#/components/schemas/CreateGoodsReceiptLineRequest'
       required:
@@ -4301,118 +4931,216 @@ components:
       - poId
     GoodsReceiptLineResponse:
       type: object
+      description: A single received line item on a goods receipt response, describing one SKU, its received quantity, and accrued cost
       properties:
         receiptLineId:
           type: string
           format: uuid
+          description: Unique identifier of the goods receipt line
+          example: 01960003-0000-7000-8000-000000000001
         poLineId:
           type: string
           format: uuid
+          description: Identifier of the purchase order line this receipt line fulfills
+          example: 01960003-0000-7000-8000-000000000002
         sku:
           type: string
+          description: Stock keeping unit identifier for the received product
+          example: SKU-10042
         quantityReceived:
           type: number
+          description: Quantity of the SKU received in this goods receipt
+          example: 8
         unitCostMinor:
           type: integer
           format: int64
+          description: Unit cost of the received product expressed in minor currency units (e.g. cents)
+          example: 1499
         lineAccruedAmountMinor:
           type: integer
           format: int64
+          description: Total accrued cost for this line expressed in minor currency units (quantity multiplied by unit cost)
+          example: 11992
+      required:
+      - quantityReceived
+      - receiptLineId
+      - sku
     GoodsReceiptResponse:
       type: object
+      description: Goods receipt representing inventory received against a purchase order, including its received line items and accrued totals
       properties:
         receiptId:
           type: string
           format: uuid
+          description: Unique identifier of the goods receipt
+          example: 01960003-0000-7000-8000-000000000001
         receiptNumber:
           type: string
+          description: Human-readable reference number assigned to the goods receipt
+          example: GR-2026-000456
         poId:
           type: string
           format: uuid
+          description: Identifier of the purchase order the goods were received against
+          example: 01960003-0000-7000-8000-000000000002
         asnId:
           type: string
           format: uuid
+          description: Identifier of the advance shipping notice (ASN) this receipt fulfilled, if applicable
+          example: 01960003-0000-7000-8000-000000000003
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location where the goods were received into inventory
+          example: 01960003-0000-7000-8000-000000000004
         totalAccruedAmountMinor:
           type: integer
           format: int64
+          description: Total accrued cost for the goods receipt expressed in minor currency units (e.g. cents)
+          example: 11992
         createdBy:
           type: string
+          description: Identifier of the user who recorded the goods receipt
+          example: user-jdoe
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the goods receipt was created
+          example: 2026-01-20 14:05:00+00:00
         lines:
           type: array
+          description: Received line items detailing the SKUs and quantities in this goods receipt
           items:
             $ref: '#/components/schemas/GoodsReceiptLineResponse'
+      required:
+      - createdAt
+      - locationId
+      - poId
+      - receiptId
+      - receiptNumber
     CreateCycleCountPlanRequest:
       type: object
+      description: Request to create a cycle count plan scheduling counts across a location and zones
       properties:
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location the plan applies to
+          example: 01960003-0000-7000-8000-000000000001
         zoneIds:
           type: array
+          description: Identifiers of the zones within the location to include in the plan
+          example:
+          - 01960003-0000-7000-8000-000000000002
           items:
             type: string
             format: uuid
         planName:
           type: string
+          description: Human-readable name for the cycle count plan
+          example: Q1 perishables count
+          minLength: 1
         scheduledDate:
           type: string
           format: date
+          description: Date on which the cycle count is scheduled to occur
+          example: 2026-01-15
+      required:
+      - locationId
+      - planName
+      - scheduledDate
     CycleCountPlanResponse:
       type: object
+      description: A cycle count plan describing scheduled counts for a location and its current state
       properties:
         planId:
           type: string
           format: uuid
+          description: Unique identifier of the cycle count plan
+          example: 01960003-0000-7000-8000-000000000001
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location the plan applies to
+          example: 01960003-0000-7000-8000-000000000002
         zoneIds:
           type: array
+          description: Identifiers of the zones within the location covered by the plan
+          example:
+          - 01960003-0000-7000-8000-000000000003
           items:
             type: string
             format: uuid
         planName:
           type: string
+          description: Human-readable name of the cycle count plan
+          example: Q1 perishables count
         scheduledDate:
           type: string
           format: date
+          description: Date on which the cycle count is scheduled to occur
+          example: 2026-01-15
         status:
           type: string
+          description: Current lifecycle status of the plan
+          example: SCHEDULED
         createdBy:
           type: string
+          description: Identifier of the user who created the plan
+          example: user-10042
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the plan was created
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the plan was last updated
+          example: 2026-01-15 10:05:00+00:00
+      required:
+      - createdAt
+      - createdBy
+      - locationId
+      - planId
+      - planName
+      - scheduledDate
+      - status
+      - updatedAt
     CreateAdjustmentRequest:
       type: object
+      description: Request to create a new inventory adjustment from a cycle count variance
       properties:
         stockItemId:
           type: string
           format: uuid
+          description: Identifier of the stock item being adjusted
+          example: 01960003-0000-7000-8000-000000000001
         reasonCode:
           type: string
+          description: Reason code explaining why the adjustment is being made
+          example: CYCLE_COUNT_VARIANCE
           minLength: 1
         countedQuantity:
           type: integer
           format: int32
+          description: Quantity physically counted by the auditor
+          example: 12
           minimum: 0
         quantityOnHandBefore:
           type: integer
           format: int32
+          description: Quantity on hand recorded before the count was applied
+          example: 15
         costAtTimeOfAdjustment:
           type: number
+          description: Unit cost to capture at the time of the adjustment
+          example: 12.5
           minimum: 0.0
         createdByUserId:
           type: string
+          description: Identifier of the user creating the adjustment
+          example: user-10042
           minLength: 1
       required:
       - costAtTimeOfAdjustment
@@ -4423,28 +5151,44 @@ components:
       - stockItemId
     AdjustmentResponse:
       type: object
+      description: Result of a cycle count inventory adjustment, including approval state and posting outcome
       properties:
         adjustmentId:
           type: string
           format: uuid
+          description: Unique identifier of the adjustment record
+          example: 01960003-0000-7000-8000-000000000001
         stockItemId:
           type: string
           format: uuid
+          description: Identifier of the stock item the adjustment applies to
+          example: 01960003-0000-7000-8000-000000000002
         reasonCode:
           type: string
+          description: Reason code explaining why the adjustment was made
+          example: CYCLE_COUNT_VARIANCE
         quantityChange:
           type: integer
           format: int32
+          description: Net change in quantity on hand resulting from the adjustment (may be negative)
+          example: -3
         costAtTimeOfAdjustment:
           type: number
+          description: Unit cost captured at the moment the adjustment was created
+          example: 12.5
         quantityOnHandBefore:
           type: integer
           format: int32
+          description: Quantity on hand recorded before the count was applied
+          example: 15
         countedQuantity:
           type: integer
           format: int32
+          description: Quantity physically counted by the auditor
+          example: 12
         status:
           type: string
+          description: Current lifecycle status of the adjustment
           enum:
           - PENDING_APPROVAL
           - AUTO_APPROVED
@@ -4452,73 +5196,131 @@ components:
           - POSTED
           - REJECTED
           - FAILED
+          example: PENDING_APPROVAL
         requiredApprovalTier:
           type: string
+          description: Approval tier required to authorize the adjustment, when manual approval applies
           enum:
           - TIER_1_MANAGER
           - TIER_2_DIRECTOR
+          example: TIER_1_MANAGER
         createdByUserId:
           type: string
+          description: Identifier of the user who created the adjustment
+          example: user-10042
         approvedByUserId:
           type: string
+          description: Identifier of the user who approved the adjustment, if approved
+          example: user-20055
         rejectedByUserId:
           type: string
+          description: Identifier of the user who rejected the adjustment, if rejected
+          example: user-30077
         rejectionReason:
           type: string
+          description: Free-text reason supplied when the adjustment was rejected
+          example: Recount required before posting
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the adjustment was created
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the adjustment was last updated
+          example: 2026-01-15 10:05:00+00:00
         approvedAt:
           type: string
           format: date-time
+          description: Timestamp when the adjustment was approved, if approved
+          example: 2026-01-15 10:05:00+00:00
         rejectedAt:
           type: string
           format: date-time
+          description: Timestamp when the adjustment was rejected, if rejected
+          example: 2026-01-15 10:05:00+00:00
         postedAt:
           type: string
           format: date-time
+          description: Timestamp when the adjustment was posted to the inventory ledger, if posted
+          example: 2026-01-15 10:10:00+00:00
         ledgerEntryId:
           type: string
           format: uuid
+          description: Identifier of the inventory ledger entry created when the adjustment was posted
+          example: 01960003-0000-7000-8000-000000000003
         errorMessage:
           type: string
+          description: Error message describing why processing failed, if the adjustment failed
+          example: Stock item not found
         varianceValue:
           type: number
+          description: Monetary value of the counted variance
+          example: 37.5
         variancePercentage:
           type: number
+          description: Variance expressed as a percentage of expected quantity on hand
+          example: 20.0
+      required:
+      - adjustmentId
+      - costAtTimeOfAdjustment
+      - countedQuantity
+      - createdAt
+      - createdByUserId
+      - quantityChange
+      - quantityOnHandBefore
+      - reasonCode
+      - status
+      - stockItemId
+      - updatedAt
     RejectAdjustmentRequest:
       type: object
+      description: Request to reject a pending cycle count adjustment
       properties:
         rejectorUserId:
           type: string
+          description: Identifier of the user rejecting the adjustment
+          example: user-30077
           minLength: 1
         rejectionReason:
           type: string
+          description: Reason explaining why the adjustment is being rejected
+          example: Recount required before posting
           minLength: 1
       required:
       - rejectionReason
       - rejectorUserId
     ApproveAdjustmentRequest:
       type: object
+      description: Request to approve a pending cycle count adjustment
       properties:
         approverUserId:
           type: string
+          description: Legacy client-provided approver identifier; the authoritative actor is resolved server-side from the authenticated context
+          example: user-20055
         notes:
           type: string
+          description: Optional free-text notes recorded with the approval
+          example: Variance confirmed against receiving log
     SubmitCountRequest:
       type: object
+      description: Request to submit the initial physical count for a cycle count task
       properties:
         taskId:
           type: string
           format: uuid
+          description: Identifier of the cycle count task being counted
+          example: 01960003-0000-7000-8000-000000000001
         auditorId:
           type: string
+          description: Identifier of the auditor submitting the count
+          example: auditor-10042
         actualQuantity:
           type: integer
           format: int32
+          description: Quantity physically counted by the auditor
+          example: 12
           minimum: 0
       required:
       - actualQuantity
@@ -4526,54 +5328,94 @@ components:
       - taskId
     CountResponse:
       type: object
+      description: Result of submitting a count or recount for a cycle count task
       properties:
         countEntryId:
           type: string
           format: uuid
+          description: Unique identifier of the recorded count entry
+          example: 01960003-0000-7000-8000-000000000001
         taskId:
           type: string
           format: uuid
+          description: Identifier of the cycle count task the count was submitted against
+          example: 01960003-0000-7000-8000-000000000002
         actualQuantity:
           type: integer
           format: int32
+          description: Quantity physically counted by the auditor
+          example: 12
         expectedQuantity:
           type: integer
           format: int32
+          description: Quantity expected on hand at the time of the count
+          example: 15
         variance:
           type: integer
           format: int32
+          description: Difference between counted and expected quantity (actual minus expected)
+          example: -3
         recountSequenceNumber:
           type: integer
           format: int32
+          description: Sequence number of this count within the recount chain; 0 for the initial count
+          example: 1
         taskStatus:
           type: string
+          description: Resulting status of the cycle count task after the submission
           enum:
           - ASSIGNED
           - COUNTED_PENDING_REVIEW
           - REQUIRES_INVESTIGATION
           - APPROVED
           - REJECTED
+          example: COUNTED_PENDING_REVIEW
         countedAt:
           type: string
           format: date-time
+          description: Timestamp when the count was recorded
+          example: 2026-01-15 09:30:00+00:00
         limitExceeded:
           type: boolean
+          description: Whether the maximum allowed number of recounts has been exceeded
+          example: false
         message:
           type: string
+          description: Human-readable message describing the outcome of the submission
+          example: Count submitted and awaiting review
+      required:
+      - actualQuantity
+      - countEntryId
+      - countedAt
+      - expectedQuantity
+      - limitExceeded
+      - recountSequenceNumber
+      - taskId
+      - taskStatus
+      - variance
     SubmitRecountRequest:
       type: object
+      description: Request to submit a recount for a cycle count task, including the caller's permission context
       properties:
         taskId:
           type: string
           format: uuid
+          description: Identifier of the cycle count task being recounted
+          example: 01960003-0000-7000-8000-000000000001
         auditorId:
           type: string
+          description: Identifier of the auditor submitting the recount
+          example: auditor-10042
         actualQuantity:
           type: integer
           format: int32
+          description: Quantity physically counted by the auditor on the recount
+          example: 13
           minimum: 0
         permission:
           type: string
+          description: Permission context authorizing the recount; one of TRIGGER_RECOUNT_SELF or TRIGGER_RECOUNT_ANY
+          example: TRIGGER_RECOUNT_SELF
       required:
       - actualQuantity
       - auditorId
@@ -4581,125 +5423,207 @@ components:
       - taskId
     ConsumeItemLine:
       type: object
+      description: A single line in a consumption request, identifying a SKU and quantity to consume against a pick task
       properties:
         pickTaskId:
           type: string
           format: uuid
+          description: Identifier of the pick task the consumed items are drawn from
+          example: 01960003-0000-7000-8000-000000000001
         skuId:
           type: string
           format: uuid
+          description: Identifier of the SKU being consumed
+          example: 01960003-0000-7000-8000-000000000002
         quantity:
           type: integer
           format: int32
+          description: Quantity of the SKU to consume
+          example: 4
+      required:
+      - pickTaskId
+      - quantity
+      - skuId
     ConsumeItemsRequest:
       type: object
+      description: Request payload to consume inventory items against a workorder, optionally drawn from a specific pick list
       properties:
         workorderId:
           type: string
           format: uuid
+          description: Identifier of the workorder the items are consumed for
+          example: 01960003-0000-7000-8000-000000000001
         pickListId:
           type: string
           format: uuid
+          description: Identifier of the pick list the consumed items are drawn from, if applicable
+          example: 01960003-0000-7000-8000-000000000002
         items:
           type: array
+          description: Line items identifying the SKUs and quantities to consume
           items:
             $ref: '#/components/schemas/ConsumeItemLine'
       required:
       - workorderId
     ConsumptionResponse:
       type: object
+      description: Response describing the outcome of consuming inventory items against a workorder, including the ledger entries created
       properties:
         consumptionId:
           type: string
           format: uuid
+          description: Unique identifier of the consumption record
+          example: 01960003-0000-7000-8000-000000000001
         workorderId:
           type: string
           format: uuid
+          description: Identifier of the workorder the items were consumed for
+          example: 01960003-0000-7000-8000-000000000002
         pickListId:
           type: string
           format: uuid
+          description: Identifier of the pick list the consumed items were drawn from, if applicable
+          example: 01960003-0000-7000-8000-000000000003
         totalItemsConsumed:
           type: integer
           format: int32
+          description: Total number of items consumed in this operation
+          example: 4
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the consumption was recorded
+          example: 2026-01-20 14:05:00+00:00
         ledgerEntryIds:
           type: array
+          description: Identifiers of the inventory ledger entries created by this consumption
+          example:
+          - 01960003-0000-7000-8000-000000000004
           items:
             type: string
             format: uuid
+      required:
+      - consumptionId
+      - createdAt
+      - totalItemsConsumed
+      - workorderId
     BulkIngestRequestInventoryBulkIngestRecord:
       type: object
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
       properties:
         jobId:
           type: string
           format: uuid
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
         locationId:
           type: string
           format: uuid
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
         records:
           type: array
+          description: The records to ingest (at least one); shape depends on the target domain
           items:
             $ref: '#/components/schemas/InventoryBulkIngestRecord'
           minItems: 1
         operatorId:
           type: string
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
       required:
       - jobId
       - locationId
       - records
     InventoryBulkIngestRecord:
       type: object
+      description: Single record within a bulk inventory ingest request
       properties:
         sku:
           type: string
+          description: Stock-keeping unit of the product being ingested
+          example: SKU-10042
           minLength: 1
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location the quantity applies to
+          example: 01960003-0000-7000-8000-000000000001
         quantity:
           type: integer
           format: int32
+          description: Quantity to ingest for the product (non-negative)
+          example: 120
           minimum: 0
         reasonCode:
           type: string
+          description: Optional reason code explaining the ingest
+          example: CYCLE_COUNT
         unitOfMeasure:
           type: string
+          description: Optional unit of measure code for the quantity (e.g. EACH, KG)
+          example: EACH
       required:
       - quantity
       - sku
     BulkIngestResponse:
       type: object
+      description: 'Summary outcome of a bulk ingest job: per-record results plus aggregate counts'
       properties:
         totalSubmitted:
           type: integer
           format: int32
+          description: Total number of records submitted in the batch
+          example: 100
         successCount:
           type: integer
           format: int32
+          description: Number of records ingested successfully
+          example: 98
         failureCount:
           type: integer
           format: int32
+          description: Number of records that failed ingest
+          example: 2
         results:
           type: array
+          description: Per-record outcomes in submission order
           items:
             $ref: '#/components/schemas/BulkIngestResult'
+      required:
+      - failureCount
+      - results
+      - successCount
+      - totalSubmitted
     BulkIngestResult:
       type: object
+      description: Per-record outcome of a bulk ingest submission
       properties:
         rowIndex:
           type: integer
           format: int32
+          description: Zero-based index of the record within the submitted batch
+          example: 0
         entityId:
           type: string
           format: uuid
+          description: Identifier of the entity created/updated for this record, when successful
+          example: 01960003-0000-7000-8000-000000000001
         success:
           type: boolean
+          description: Whether this record was ingested successfully
+          example: true
         errorCode:
           type: string
+          description: Machine-readable error code when the record failed
+          example: VALIDATION_FAILED
         errorMessage:
           type: string
+          description: Human-readable error detail when the record failed
+          example: vin must be 17 characters
+      required:
+      - rowIndex
+      - success
     InventoryAvailabilityResponse:
       type: object
       description: Inventory availability response including on-hand, allocations, and ATP
@@ -4751,39 +5675,63 @@ components:
       - uom
     CreateAsnLineRequest:
       type: object
+      description: Request payload describing a single line item to include when creating an advance shipping notice (ASN)
       properties:
         poId:
           type: string
           format: uuid
+          description: Identifier of the purchase order this ASN line is associated with
+          example: 01960003-0000-7000-8000-000000000001
         poLineId:
           type: string
           format: uuid
+          description: Identifier of the specific purchase order line this ASN line fulfills
+          example: 01960003-0000-7000-8000-000000000002
         sku:
           type: string
+          description: Stock keeping unit identifier for the shipped product
+          example: SKU-10042
+          minLength: 1
         quantityShipped:
           type: number
+          description: Quantity of the SKU declared as shipped on the ASN
+          example: 12
         unitOfMeasure:
           type: string
+          description: Unit of measure for the shipped quantity
+          example: EA
         unitCostMinor:
           type: integer
           format: int64
+          description: Unit cost of the product expressed in minor currency units (e.g. cents)
+          example: 1499
         lotNumber:
           type: string
+          description: Lot or batch number associated with the shipped product
+          example: LOT-2026-0042
       required:
       - poId
       - quantityShipped
       - sku
     CreateAsnRequest:
       type: object
+      description: Request payload to create an advance shipping notice (ASN) for an inbound vendor shipment
       properties:
         vendorId:
           type: string
           format: uuid
+          description: Identifier of the vendor that issued the shipment
+          example: 01960003-0000-7000-8000-000000000001
         asnReferenceNumber:
           type: string
+          description: Human-readable reference number assigned to the ASN by the vendor
+          example: ASN-2026-000123
           minLength: 1
         relatedPoIds:
           type: array
+          description: Identifiers of the purchase orders this shipment relates to
+          example:
+          - 01960003-0000-7000-8000-000000000002
           items:
             type: string
             format: uuid
@@ -4791,11 +5739,16 @@ components:
         shipDate:
           type: string
           format: date
+          description: Date the shipment left the vendor
+          example: 2026-01-15
         expectedArrivalDate:
           type: string
           format: date
+          description: Expected arrival date of the shipment at the destination
+          example: 2026-01-20
         lineItems:
           type: array
+          description: Line items detailing the SKUs and quantities included in this ASN
           items:
             $ref: '#/components/schemas/CreateAsnLineRequest'
       required:
@@ -4805,101 +5758,177 @@ components:
       - vendorId
     AsnLineResponse:
       type: object
+      description: A single line item on an advance shipping notice (ASN) response, describing one SKU and its shipped/received quantities
       properties:
         asnLineId:
           type: string
           format: uuid
+          description: Unique identifier of the ASN line item
+          example: 01960003-0000-7000-8000-000000000001
         poId:
           type: string
           format: uuid
+          description: Identifier of the purchase order this ASN line is associated with
+          example: 01960003-0000-7000-8000-000000000002
         sku:
           type: string
+          description: Stock keeping unit identifier for the shipped product
+          example: SKU-10042
         quantityShipped:
           type: number
+          description: Quantity of the SKU declared as shipped on the ASN
+          example: 12
         quantityReceived:
           type: number
+          description: Quantity of the SKU received against this ASN line so far
+          example: 8
         unitOfMeasure:
           type: string
+          description: Unit of measure for the shipped and received quantities
+          example: EA
         lotNumber:
           type: string
+          description: Lot or batch number associated with the shipped product
+          example: LOT-2026-0042
+      required:
+      - asnLineId
+      - poId
+      - quantityShipped
+      - sku
     AsnResponse:
       type: object
+      description: Advance shipping notice (ASN) representing an inbound shipment from a vendor, including its line items and lifecycle status
       properties:
         asnId:
           type: string
           format: uuid
+          description: Unique identifier of the ASN
+          example: 01960003-0000-7000-8000-000000000001
         asnReferenceNumber:
           type: string
+          description: Human-readable reference number assigned to the ASN
+          example: ASN-2026-000123
         vendorId:
           type: string
           format: uuid
+          description: Identifier of the vendor that issued the shipment
+          example: 01960003-0000-7000-8000-000000000002
         status:
           type: string
+          description: Current lifecycle status of the ASN
           enum:
           - LOADED
           - READY_FOR_RECEIPT
           - PARTIALLY_RECEIVED
           - FULLY_RECEIVED
           - CANCELLED
+          example: READY_FOR_RECEIPT
         shipDate:
           type: string
           format: date
+          description: Date the shipment left the vendor
+          example: 2026-01-15
         expectedArrivalDate:
           type: string
           format: date
+          description: Expected arrival date of the shipment at the destination
+          example: 2026-01-20
         createdBy:
           type: string
+          description: Identifier of the user who created the ASN
+          example: user-jdoe
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the ASN was created
+          example: 2026-01-15 09:30:00+00:00
         lineItems:
           type: array
+          description: Line items detailing the SKUs and quantities included in this ASN
           items:
             $ref: '#/components/schemas/AsnLineResponse'
+      required:
+      - asnId
+      - asnReferenceNumber
+      - createdAt
+      - status
+      - vendorId
     ReallocateRequest:
       type: object
+      description: Request to reallocate available-to-promise stock for a stock item
       properties:
         stockItemId:
           type: string
           format: uuid
+          description: Identifier of the stock item to reallocate
+          example: 01960003-0000-7000-8000-000000000100
         triggerType:
           type: string
+          description: Type of event that triggered the reallocation
+          example: STOCK_RECEIPT
         triggerReferenceId:
           type: string
+          description: Identifier of the source record that triggered the reallocation
+          example: 01960003-0000-7000-8000-000000000101
       required:
       - stockItemId
     ReallocateResponse:
       type: object
+      description: Result of a stock reallocation, summarizing reallocated quantities and resulting availability
       properties:
         stockItemId:
           type: string
           format: uuid
+          description: Identifier of the stock item that was reallocated
+          example: 01960003-0000-7000-8000-000000000110
         totalReallocated:
           type: integer
           format: int32
+          description: Total quantity reallocated across all affected reservations
+          example: 12
         auditRecordsCreated:
           type: integer
           format: int32
+          description: Number of audit records created during the reallocation
+          example: 3
         atpAfterReallocation:
           type: integer
           format: int32
+          description: Available-to-promise quantity for the stock item after reallocation
+          example: 20
+      required:
+      - atpAfterReallocation
+      - auditRecordsCreated
+      - stockItemId
+      - totalReallocated
     CreateAdjustmentRequestDto:
       type: object
+      description: Request body for creating a draft inventory adjustment request
       properties:
         productSku:
           type: string
+          description: Stock-keeping unit of the product to adjust
+          example: SKU-10042
           minLength: 1
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location where the adjustment applies
+          example: 01960003-0000-7000-8000-000000000001
         quantity:
           type: integer
           format: int32
+          description: Adjustment quantity (positive to add stock, negative to remove)
+          example: 12
         reasonCode:
           type: string
+          description: Mandatory reason code explaining the adjustment
+          example: CYCLE_COUNT
           minLength: 1
         unitOfMeasure:
           type: string
+          description: Optional unit of measure code for the quantity (e.g. EACH, KG)
+          example: EACH
       required:
       - locationId
       - productSku
@@ -4907,33 +5936,56 @@ components:
       - reasonCode
     AdjustmentRequestResponse:
       type: object
+      description: Response returned when an inventory adjustment request is created
       properties:
         adjustmentRequestId:
           type: string
           format: uuid
+          description: Unique identifier of the created adjustment request
+          example: 01960003-0000-7000-8000-000000000001
         productSku:
           type: string
+          description: Stock-keeping unit of the product being adjusted
+          example: SKU-10042
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location where the adjustment applies
+          example: 01960003-0000-7000-8000-000000000002
         quantity:
           type: integer
           format: int32
+          description: Requested adjustment quantity (positive to add, negative to remove)
+          example: 12
         reasonCode:
           type: string
+          description: Reason code explaining why the adjustment was requested
+          example: CYCLE_COUNT
         status:
           type: string
+          description: Current workflow status of the adjustment request
+          example: DRAFT
+      required:
+      - adjustmentRequestId
+      - locationId
+      - productSku
+      - quantity
+      - reasonCode
+      - status
     UpdatePickListStatusRequest:
       type: object
+      description: Request to transition a pick list to a new lifecycle status
       properties:
         status:
           type: string
+          description: Target status to apply to the pick list
           enum:
           - DRAFT
           - READY_TO_PICK
           - IN_PROGRESS
           - COMPLETED
           - CANCELLED
+          example: IN_PROGRESS
       required:
       - status
     Pageable:
@@ -4953,19 +6005,23 @@ components:
             type: string
     RollupQuantities:
       type: object
+      description: On-hand, allocated and available quantity triple used at every rollup node
       properties:
         onHand:
           type: integer
           format: int64
           description: On-hand quantity
+          example: 120
         allocated:
           type: integer
           format: int64
           description: Outstanding allocated quantity
+          example: 30
         available:
           type: integer
           format: int64
           description: 'Available to promise: onHand - allocated (may be negative)'
+          example: 90
         empty:
           type: boolean
       required:
@@ -4974,11 +6030,13 @@ components:
       - onHand
     SiteInventoryRollupResponse:
       type: object
+      description: Site inventory rollup with quantities subtotaled along the storage-location hierarchy
       properties:
         siteId:
           type: string
           format: uuid
           description: Site (Location) identifier
+          example: 01960003-0000-7000-8000-000000000011
         totals:
           $ref: '#/components/schemas/RollupQuantities'
         nodes:
@@ -4992,20 +6050,25 @@ components:
       - totals
     StorageLocationRollupNode:
       type: object
+      description: One storage location node in the site rollup tree, with own and rolled-up quantities
       properties:
         storageLocationId:
           type: string
           format: uuid
           description: Storage location identifier
+          example: 01960003-0000-7000-8000-000000000013
         name:
           type: string
           description: Storage location name
+          example: Aisle 3 — Bin 12
         type:
           type: string
           description: Storage location type (e.g. FLOOR, SHELF, BIN)
+          example: BIN
         status:
           type: string
           description: Storage location status
+          example: ACTIVE
         own:
           $ref: '#/components/schemas/RollupQuantities'
         rolledUp:
@@ -5021,83 +6084,161 @@ components:
       - storageLocationId
     ShortageOptionDto:
       type: object
+      description: A candidate option for resolving an inventory shortage on an allocation
       properties:
         allocationId:
           type: string
           format: uuid
+          description: Identifier of the allocation the option applies to
+          example: 01960003-0000-7000-8000-000000000001
         allocationLineId:
           type: string
           format: uuid
+          description: Identifier of the specific allocation line, when the option is line-scoped
+          example: 01960003-0000-7000-8000-000000000002
         resolution:
           type: string
+          description: Resolution strategy offered for the shortage
+          example: SUBSTITUTE
         description:
           type: string
+          description: Human-readable description of the resolution option
+          example: Substitute with equivalent SKU available at main warehouse
         substituteSku:
           type: string
+          description: Substitute stock-keeping unit offered, when the resolution is a substitution
+          example: SKU-10043
         estimatedDays:
           type: integer
           format: int32
+          description: Estimated number of days to fulfill using this option
+          example: 3
+      required:
+      - allocationId
+      - description
+      - estimatedDays
+      - resolution
     ReturnableItemDto:
       type: object
+      description: An item eligible to be returned, with the quantity still returnable
       properties:
         itemId:
           type: string
           format: uuid
+          description: Identifier of the returnable item
+          example: 01960003-0000-7000-8000-000000000001
         sku:
           type: string
+          description: Stock keeping unit of the item
+          example: SKU-10042
         description:
           type: string
+          description: Human-readable description of the item
+          example: Brake pad set, front axle
         quantityReturnable:
           type: integer
           format: int32
+          description: Quantity of the item that can still be returned
+          example: 4
         workorderId:
           type: string
           format: uuid
+          description: Identifier of the workorder the item was issued against
+          example: 01960003-0000-7000-8000-000000000002
+      required:
+      - itemId
+      - quantityReturnable
+      - sku
+      - workorderId
     ReasonCodeDto:
       type: object
+      description: Reference entry describing a valid reason a returned item can be assigned
       properties:
         code:
           type: string
+          description: Machine-readable reason code
+          example: DAMAGED
         description:
           type: string
+          description: Human-readable explanation of the reason code
+          example: Item arrived damaged or defective
         category:
           type: string
+          description: Grouping category the reason code belongs to
+          example: QUALITY
+      required:
+      - code
+      - description
     ReplenishmentTaskResponse:
       type: object
+      description: A replenishment task describing a recommended or in-progress stock movement between locations
       properties:
         taskId:
           type: string
+          description: Unique identifier of the replenishment task
+          example: 01960003-0000-7000-8000-000000000001
         itemSKU:
           type: string
+          description: SKU of the item to be replenished
+          example: SKU-10042
         quantity:
           type: integer
           format: int32
+          description: Quantity of the item to be moved by this replenishment task
+          example: 12
         sourceLocationId:
           type: string
           format: uuid
+          description: Identifier of the location stock is sourced from
+          example: 01960003-0000-7000-8000-000000000002
         destinationLocationId:
           type: string
           format: uuid
+          description: Identifier of the location stock is moved to
+          example: 01960003-0000-7000-8000-000000000003
         status:
           type: string
+          description: Current status of the replenishment task
+          example: PENDING
         triggerType:
           type: string
+          description: Mechanism that triggered the task, such as a manual request or automatic threshold breach
+          example: AUTOMATIC
         decisionReason:
           type: string
+          description: Explanation of why this replenishment was decided
+          example: On-hand quantity 3 fell below minimum threshold of 5
         sourcingReason:
           type: string
+          description: Explanation of why the chosen source location was selected to supply the stock
+          example: Nearest location with sufficient available stock
         assignedTo:
           type: string
+          description: Identifier or name of the user the replenishment task is assigned to
+          example: user-jdoe
         createdAt:
           type: string
+          description: Timestamp at which the replenishment task was created
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - createdAt
+      - destinationLocationId
+      - itemSKU
+      - quantity
+      - status
+      - taskId
     ListPurchaseOrdersRequest:
       type: object
+      description: Optional filter criteria for listing purchase orders
       properties:
         vendorId:
           type: string
           format: uuid
+          description: Filter to purchase orders placed with this vendor
+          example: 01960003-0000-7000-8000-000000000001
         status:
           type: string
+          description: Filter to purchase orders in this lifecycle status
           enum:
           - DRAFT
           - APPROVED
@@ -5105,11 +6246,16 @@ components:
           - FULLY_RECEIVED
           - CLOSED
           - CANCELLED
+          example: APPROVED
         currency:
           type: string
+          description: Filter to purchase orders denominated in this ISO 4217 currency code
+          example: USD
         locationId:
           type: string
           format: uuid
+          description: Filter to purchase orders shipping to this location
+          example: 01960003-0000-7000-8000-000000000002
     PagePurchaseOrderResponse:
       type: object
       properties:
@@ -5171,14 +6317,17 @@ components:
           type: boolean
     LocationInventoryRollupResponse:
       type: object
+      description: Parent-location inventory rollup aggregating site totals across all descendant sites
       properties:
         locationId:
           type: string
           format: uuid
           description: Parent location identifier (building/place/region)
+          example: 01960003-0000-7000-8000-000000000010
         parentType:
           type: string
           description: Parent chain type used for descendant resolution
+          example: BUILDING
         totals:
           $ref: '#/components/schemas/RollupQuantities'
         sites:
@@ -5193,14 +6342,17 @@ components:
       - totals
     SiteRollupSummary:
       type: object
+      description: Per-site entry of a parent-location rollup, optionally including the storage-location tree
       properties:
         siteId:
           type: string
           format: uuid
           description: Site (Location) identifier
+          example: 01960003-0000-7000-8000-000000000012
         siteName:
           type: string
           description: Site name from the location hierarchy
+          example: Downtown Service Center
         totals:
           $ref: '#/components/schemas/RollupQuantities'
         nodes:
@@ -5267,24 +6419,38 @@ components:
       - onHandQuantity
     LedgerPage:
       type: object
+      description: A single page of ledger entries with an optional cursor to the next page
       properties:
         entries:
           type: array
+          description: Ledger entries contained in this page
         nextPageToken:
           type: string
+          description: Opaque cursor for the next page; null when there are no more entries
+          example: eyJvZmZzZXQiOjUwfQ==
+      required:
+      - entries
     InventoryLedgerEntryDto:
       type: object
+      description: Inventory ledger entry record capturing a single stock movement or allocation event
       properties:
         ledgerEntryId:
           type: string
           format: uuid
+          description: Unique identifier of the ledger entry
+          example: 01960003-0000-7000-8000-000000000001
         stockItemId:
           type: string
+          description: Identifier of the stock item the entry applies to
+          example: SKU-10042
         adjustmentId:
           type: string
           format: uuid
+          description: Identifier of the adjustment that produced this entry, if any
+          example: 01960003-0000-7000-8000-000000000002
         eventType:
           type: string
+          description: Type of inventory ledger event recorded
           enum:
           - GOODS_RECEIPT
           - TRANSFER_IN
@@ -5307,159 +6473,295 @@ components:
           - BACKORDER_RESOLVED
           - PICK_TASK_CREATED
           - PICK_TASK_COMPLETED
+          example: GOODS_RECEIPT
         changeInQuantity:
           type: integer
           format: int32
+          description: Signed change in quantity applied by this entry (positive inbound, negative outbound)
+          example: 12
         quantityAfter:
           type: integer
           format: int32
+          description: Running quantity after this entry was applied
+          example: 120
         unitCost:
           type: number
+          description: Unit cost associated with this movement, if recorded
+          example: 4.5
         transactionUserId:
           type: string
+          description: Identifier of the user who initiated the transaction
+          example: 01960003-0000-7000-8000-000000000003
         timestamp:
           type: string
           format: date-time
+          description: Business timestamp of the inventory event
+          example: 2026-01-15 09:30:00+00:00
         locationId:
           type: string
           format: uuid
+          description: Location the entry applies to
+          example: 01960003-0000-7000-8000-000000000004
         fromLocationId:
           type: string
           format: uuid
+          description: Source location for transfer events
+          example: 01960003-0000-7000-8000-000000000005
         toLocationId:
           type: string
           format: uuid
+          description: Destination location for transfer events
+          example: 01960003-0000-7000-8000-000000000006
         reasonCode:
           type: string
+          description: Reason code explaining the entry
+          example: CYCLE_COUNT
         sourceTransactionId:
           type: string
+          description: Identifier of the originating source transaction
+          example: 01960003-0000-7000-8000-000000000007
         unitOfMeasure:
           type: string
+          description: Unit of measure code for the quantities (e.g. EACH, KG)
+          example: EACH
         notes:
           type: string
+          description: Free-text notes attached to the entry
+          example: Variance corrected after recount
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the entry record was created
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the entry record was last updated
+          example: 2026-01-15 09:35:00+00:00
+      required:
+      - changeInQuantity
+      - eventType
+      - ledgerEntryId
+      - quantityAfter
+      - stockItemId
+      - timestamp
     CycleCountTaskResponse:
       type: object
+      description: A cycle count task describing an item to be counted at a location and its current state
       properties:
         taskId:
           type: string
           format: uuid
+          description: Unique identifier of the cycle count task
+          example: 01960003-0000-7000-8000-000000000001
         binLocation:
           type: string
+          description: Bin or location code where the item is stored
+          example: LOC-001
         itemSku:
           type: string
+          description: Stock keeping unit of the item to count
+          example: SKU-10042
         itemDescription:
           type: string
+          description: Human-readable description of the item
+          example: Stainless steel water bottle, 750ml
         expectedQuantity:
           type: integer
           format: int32
+          description: Quantity expected on hand for the item
+          example: 15
         auditorId:
           type: string
+          description: Identifier of the auditor assigned to the task, if assigned
+          example: auditor-10042
         status:
           type: string
+          description: Current status of the cycle count task
           enum:
           - ASSIGNED
           - COUNTED_PENDING_REVIEW
           - REQUIRES_INVESTIGATION
           - APPROVED
           - REJECTED
+          example: ASSIGNED
         latestCountEntryId:
           type: string
           format: uuid
+          description: Identifier of the most recent count entry recorded for the task, if any
+          example: 01960003-0000-7000-8000-000000000002
         countEntriesCount:
           type: integer
           format: int32
+          description: Total number of count entries recorded for the task
+          example: 2
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the task was created
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the task was last updated
+          example: 2026-01-15 10:05:00+00:00
+      required:
+      - binLocation
+      - countEntriesCount
+      - createdAt
+      - expectedQuantity
+      - itemSku
+      - status
+      - taskId
+      - updatedAt
     CountEntryResponse:
       type: object
+      description: A single recorded count entry in a cycle count task's history
       properties:
         countEntryId:
           type: string
           format: uuid
+          description: Unique identifier of the count entry
+          example: 01960003-0000-7000-8000-000000000001
         cycleCountTaskId:
           type: string
           format: uuid
+          description: Identifier of the cycle count task this entry belongs to
+          example: 01960003-0000-7000-8000-000000000002
         auditorId:
           type: string
+          description: Identifier of the auditor who recorded the count
+          example: auditor-10042
         actualQuantity:
           type: integer
           format: int32
+          description: Quantity physically counted by the auditor
+          example: 12
         expectedQuantity:
           type: integer
           format: int32
+          description: Quantity expected on hand at the time of the count
+          example: 15
         variance:
           type: integer
           format: int32
+          description: Difference between counted and expected quantity (actual minus expected)
+          example: -3
         recountSequenceNumber:
           type: integer
           format: int32
+          description: Sequence number of this count within the recount chain; 0 for the initial count
+          example: 1
         recountOfCountEntryId:
           type: string
           format: uuid
+          description: Identifier of the count entry this entry is a recount of, if any
+          example: 01960003-0000-7000-8000-000000000003
         countedAt:
           type: string
           format: date-time
+          description: Timestamp when the count was recorded
+          example: 2026-01-15 09:30:00+00:00
         recount:
           type: boolean
+          description: Whether this entry is a recount of a prior count
+          example: false
+      required:
+      - actualQuantity
+      - auditorId
+      - countEntryId
+      - countedAt
+      - cycleCountTaskId
+      - expectedQuantity
+      - recount
+      - recountSequenceNumber
+      - variance
     AvailabilityView:
       type: object
+      description: Read-only view of on-hand and available-to-promise quantities for a product at a specific location scope
       properties:
         productSku:
           type: string
+          description: Stock-keeping unit identifier of the product
+          example: SKU-10042
         locationId:
           type: string
           format: uuid
+          description: Location identifier for the scope of this availability view
+          example: 01960003-0000-7000-8000-000000000001
         storageLocationId:
           type: string
           format: uuid
+          description: Optional storage sub-location identifier; null when scoped to the full location
+          example: 01960003-0000-7000-8000-000000000002
         onHandQuantity:
           type: integer
           format: int32
+          description: Net on-hand quantity (sum of affectsOnHand ledger entries)
+          example: 120
         allocatedQuantity:
           type: integer
           format: int32
+          description: Net allocated quantity (ALLOCATION_CREATED minus ALLOCATION_RELEASED)
+          example: 30
         availableToPromiseQuantity:
           type: integer
           format: int32
+          description: Available-to-promise quantity, equal to onHandQuantity minus allocatedQuantity
+          example: 90
         unitOfMeasure:
           type: string
+          description: Unit of measure code for the quantities (e.g. EACH, KG)
+          example: EACH
+      required:
+      - allocatedQuantity
+      - availableToPromiseQuantity
+      - locationId
+      - onHandQuantity
+      - productSku
+      - unitOfMeasure
     LocationAvailabilityDto:
       type: object
+      description: Per-location availability projection for inventory availability queries
       properties:
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location
+          example: 01960003-0000-7000-8000-000000000001
         locationName:
           type: string
+          description: Human-readable name of the location
+          example: Main Warehouse
         onHandQuantity:
           type: integer
           format: int32
+          description: On-hand quantity at the location
+          example: 120
         availableToPromiseQuantity:
           type: integer
           format: int32
+          description: Available-to-promise quantity at the location
+          example: 90
+      required:
+      - availableToPromiseQuantity
+      - locationId
+      - locationName
+      - onHandQuantity
     LeadTimeView:
       type: object
+      description: Lead-time view returned by inventory for product detail aggregation
       properties:
         productId:
           type: string
           format: uuid
           description: Product identifier
-          example: 650e8400-e29b-41d4-a716-446655440000
+          example: 01960003-0000-7000-8000-000000000001
         locationId:
           type: string
           format: uuid
           description: Location identifier
-          example: 650e8400-e29b-41d4-a716-446655440001
+          example: 01960003-0000-7000-8000-000000000002
         source:
           type: string
           description: Source of lead-time data
@@ -5486,6 +6788,10 @@ components:
           type: string
           format: date-time
           description: Timestamp when lead-time data was last refreshed
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - locationId
+      - productId
   securitySchemes:
     bearerAuth:
       type: http

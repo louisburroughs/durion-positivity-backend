@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -25,12 +27,15 @@ public class AdjustLaborRequest {
 
     @NotNull(message = "Hours worked is required")
     @Positive(message = "Hours worked must be positive")
-    @Schema(description = "Adjusted hours worked", example = "2.5")
+    @Schema(description = "Adjusted hours worked", example = "2.5", requiredMode = REQUIRED)
     @JsonProperty("hoursWorked")
     private BigDecimal hoursWorked;
 
     @NotNull(message = "Adjustment reason is required")
-    @Schema(description = "Reason for the adjustment", example = "Manual correction for break time")
+    @Schema(
+            description = "Reason for the adjustment",
+            example = "Manual correction for break time",
+            requiredMode = REQUIRED)
     @JsonProperty("adjustmentReason")
     private String adjustmentReason;
 }

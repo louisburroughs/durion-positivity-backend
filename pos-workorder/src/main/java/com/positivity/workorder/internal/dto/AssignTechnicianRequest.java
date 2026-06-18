@@ -1,5 +1,8 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
@@ -19,14 +22,21 @@ import lombok.NoArgsConstructor;
 public class AssignTechnicianRequest {
 
     @NotNull(message = "technicianId is required")
-    @Schema(description = "ID of the technician to assign", example = "550e8400-e29b-41d4-a716-446655440050")
+    @Schema(
+            description = "ID of the technician to assign",
+            example = "550e8400-e29b-41d4-a716-446655440050",
+            requiredMode = REQUIRED)
     private UUID technicianId;
 
     @Schema(
             description = "ID of the user performing the assignment (defaults from X-User-Id header if not provided)",
-            example = "550e8400-e29b-41d4-a716-446655440000")
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = NOT_REQUIRED)
     private UUID assignedByUserId;
 
-    @Schema(description = "Assignment notes or reason", example = "Assigned to senior tech for brake system work")
+    @Schema(
+            description = "Assignment notes or reason",
+            example = "Assigned to senior tech for brake system work",
+            requiredMode = NOT_REQUIRED)
     private String notes;
 }

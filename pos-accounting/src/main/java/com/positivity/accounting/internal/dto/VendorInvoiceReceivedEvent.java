@@ -1,7 +1,11 @@
 package com.positivity.accounting.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -31,37 +35,38 @@ import org.jspecify.annotations.Nullable;
 public class VendorInvoiceReceivedEvent {
 
     @NotNull
-    @Schema(description = "Event UUID (idempotency key)", example = "01936e5d-5678-7a3d-8b6e-456789012345")
+    @Schema(description = "Event UUID (idempotency key)", example = "01936e5d-5678-7a3d-8b6e-456789012345", requiredMode = REQUIRED)
     @JsonProperty("eventId")
     private UUID eventId;
 
     @NotNull
-    @Schema(description = "Organization UUID", example = "00000000-0000-4000-a000-000000000010")
+    @Schema(description = "Organization UUID", example = "00000000-0000-4000-a000-000000000010", requiredMode = REQUIRED)
     @JsonProperty("organizationId")
     private UUID organizationId;
 
     @NotNull
-    @Schema(description = "Vendor UUID", example = "01936e5a-7890-7a3d-8b6e-2b3456789012")
+    @Schema(description = "Vendor UUID", example = "01936e5a-7890-7a3d-8b6e-2b3456789012", requiredMode = REQUIRED)
     @JsonProperty("vendorId")
     private UUID vendorId;
 
     @NotBlank
-    @Schema(description = "Vendor invoice number", example = "INV-2026-001234")
+    @Schema(description = "Vendor invoice number", example = "INV-2026-001234", requiredMode = REQUIRED)
     @JsonProperty("invoiceReference")
     private String invoiceReference;
 
     @NotNull
-    @Schema(description = "Invoice date", example = "2026-01-16T00:00:00")
+    @Schema(description = "Invoice date", example = "2026-01-16T00:00:00", requiredMode = REQUIRED)
     @JsonProperty("invoiceDate")
     private LocalDateTime invoiceDate;
 
     @Nullable
-    @Schema(description = "Invoice due date", example = "2026-02-15T00:00:00")
+    @Schema(description = "Invoice due date", example = "2026-02-15T00:00:00", requiredMode = NOT_REQUIRED)
     @JsonProperty("dueDate")
     private LocalDateTime dueDate;
 
     @NotNull
-    @Schema(description = "Invoice line items")
+    @Valid
+    @Schema(description = "Invoice line items", requiredMode = REQUIRED)
     @JsonProperty("lineItems")
     private List<InvoiceLineItem> lineItems;
 
@@ -73,24 +78,24 @@ public class VendorInvoiceReceivedEvent {
     public static class InvoiceLineItem {
 
         @NotNull
-        @Schema(description = "Product/SKU UUID", example = "01936e59-abcd-7a3d-8b6e-3c4567890123")
+        @Schema(description = "Product/SKU UUID", example = "01936e59-abcd-7a3d-8b6e-3c4567890123", requiredMode = REQUIRED)
         @JsonProperty("productId")
         private UUID productId;
 
         @NotBlank
-        @Schema(description = "Product description", example = "Widget Type A")
+        @Schema(description = "Product description", example = "Widget Type A", requiredMode = REQUIRED)
         @JsonProperty("description")
         private String description;
 
         @NotNull
         @Positive
-        @Schema(description = "Invoiced quantity", example = "100.00")
+        @Schema(description = "Invoiced quantity", example = "100.00", requiredMode = REQUIRED)
         @JsonProperty("quantity")
         private BigDecimal quantity;
 
         @NotNull
         @Positive
-        @Schema(description = "Unit price from invoice", example = "12.50")
+        @Schema(description = "Unit price from invoice", example = "12.50", requiredMode = REQUIRED)
         @JsonProperty("unitPrice")
         private BigDecimal unitPrice;
     }

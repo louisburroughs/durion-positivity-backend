@@ -22,19 +22,21 @@ public class TimeEntryExceptionRequest {
 
     @Schema(
             description = "Severity level of the exception",
-            example = "HIGH",
-            allowableValues = {"LOW", "MEDIUM", "HIGH", "CRITICAL"})
+            example = "BLOCKING",
+            allowableValues = {"WARNING", "BLOCKING"},
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String severity;
 
-    @Schema(description = "Time entry identifier associated with the exception", example = "te-12345")
+    @Schema(description = "Time entry identifier associated with the exception", example = "te-12345", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String timeEntryId;
 
     @Schema(
             description = "Notes describing the exception or initial resolution steps",
-            example = "Employee forgot to clock out at end of shift")
+            example = "Employee forgot to clock out at end of shift",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String resolutionNotes;
 
-    @Schema(description = "Timestamp when the exception was detected", example = "2026-02-17T08:30:00-05:00")
+    @Schema(description = "Timestamp when the exception was detected", example = "2026-02-17T08:30:00-05:00", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private OffsetDateTime detectedAt;
 
     public String getEmployeeId() {

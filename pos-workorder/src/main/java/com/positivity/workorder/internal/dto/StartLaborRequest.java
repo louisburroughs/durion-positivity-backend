@@ -1,6 +1,9 @@
 package com.positivity.workorder.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
@@ -24,12 +27,18 @@ import org.jspecify.annotations.Nullable;
 public class StartLaborRequest {
 
     @NotNull(message = "Technician ID is required")
-    @Schema(description = "ID of the technician performing the work", example = "550e8400-e29b-41d4-a716-446655440050")
+    @Schema(
+            description = "ID of the technician performing the work",
+            example = "550e8400-e29b-41d4-a716-446655440050",
+            requiredMode = REQUIRED)
     @JsonProperty("technicianId")
     private UUID technicianId;
 
     @Nullable
-    @Schema(description = "Optional notes about the labor session", example = "Beginning brake pad replacement")
+    @Schema(
+            description = "Optional notes about the labor session",
+            example = "Beginning brake pad replacement",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("notes")
     private String notes;
 }

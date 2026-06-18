@@ -1,5 +1,8 @@
 package com.positivity.accounting.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.positivity.accounting.internal.enums.ExportFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -25,7 +28,7 @@ public class ReportExportRequest {
      * Export format (CSV or PDF).
      */
     @NotNull(message = "format is required")
-    @Schema(description = "Export format", example = "CSV", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Export format", example = "CSV", requiredMode = REQUIRED)
     private ExportFormat format;
 
     /**
@@ -33,7 +36,7 @@ public class ReportExportRequest {
      */
     @NotBlank(message = "reportType is required")
     @Size(max = 100, message = "reportType must not exceed 100 characters")
-    @Schema(description = "Report type key", example = "JOURNAL_LINES", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Report type key", example = "JOURNAL_LINES", requiredMode = REQUIRED)
     private String reportType;
 
     /**
@@ -43,7 +46,7 @@ public class ReportExportRequest {
     @Schema(
             description = "Period start date (inclusive, YYYY-MM-DD)",
             example = "2026-01-01",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+            requiredMode = REQUIRED)
     private LocalDate startDate;
 
     /**
@@ -53,7 +56,7 @@ public class ReportExportRequest {
     @Schema(
             description = "Period end date (inclusive, YYYY-MM-DD)",
             example = "2026-03-31",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+            requiredMode = REQUIRED)
     private LocalDate endDate;
 
     /**
@@ -63,13 +66,16 @@ public class ReportExportRequest {
     @Schema(
             description = "Organization UUID to scope the export",
             example = "d10217f9-3ec6-46b9-9c87-e7066c100c24",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+            requiredMode = REQUIRED)
     private UUID organizationId;
 
     /**
      * Optional filename (without extension).
      */
     @Size(max = 150, message = "filename must not exceed 150 characters")
-    @Schema(description = "Optional output filename without extension", example = "journal-lines-q1-2026")
+    @Schema(
+            description = "Optional output filename without extension",
+            example = "journal-lines-q1-2026",
+            requiredMode = NOT_REQUIRED)
     private String filename;
 }

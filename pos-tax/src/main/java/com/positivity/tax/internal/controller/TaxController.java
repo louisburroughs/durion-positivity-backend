@@ -4,9 +4,12 @@ import com.positivity.events.EmitEvent;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.service.TaxCalculationService;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -115,5 +118,16 @@ public class TaxController {
     /**
      * Response DTO for mode endpoint.
      */
-    public record ModeResponse(String mode, boolean testMode) {}
+    @Schema(description = "Current tax service operating mode")
+    public record ModeResponse(
+            @Schema(
+                            description = "Human-readable tax service mode label",
+                            example = "production",
+                            requiredMode = REQUIRED)
+                    String mode,
+            @Schema(
+                            description = "Whether the tax service is running in test mode",
+                            example = "false",
+                            requiredMode = REQUIRED)
+                    boolean testMode) {}
 }
