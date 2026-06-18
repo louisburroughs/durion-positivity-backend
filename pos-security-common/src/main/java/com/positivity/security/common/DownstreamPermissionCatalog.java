@@ -23,7 +23,7 @@ public final class DownstreamPermissionCatalog {
      * {@code PermissionCode.CATALOG_VERSION}.
      * Updated automatically by {@code scripts/generate-permissions.py --sync}.
      */
-    public static final int CATALOG_VERSION = 10;
+    public static final int CATALOG_VERSION = 11;
 
     /**
      * Index-to-authority mapping. Entry at position N is the {@code PERM_*}-prefixed
@@ -366,7 +366,19 @@ public final class DownstreamPermissionCatalog {
         "PERM_people:timeException:create",                  // 324
         "PERM_people:timeException:resolve",                 // 325
         "PERM_people:timeException:view",                    // 326
-        "PERM_workorder:operationalContext:override"         // 327
+        "PERM_workorder:operationalContext:override",         // 327
+
+        // ── New batch (bits 328–337) ──────────────────────────────────────────
+        "PERM_Promotion:Apply",                              // 328
+        "PERM_Promotion:Manage",                             // 329
+        "PERM_Promotion:RecordRedemption",                   // 330
+        "PERM_Promotion:View",                               // 331
+        "PERM_Promotion:ViewRedemption",                     // 332
+        "PERM_TimeEntry:Approve",                            // 333
+        "PERM_TimeEntry:Reject",                             // 334
+        "PERM_people:timekeeping:approve",                   // 335
+        "PERM_people:timekeeping:reject",                    // 336
+        "PERM_people:timekeeping:view"                      // 337
     };
 
     public static String authorityForBit(int bitIndex) {
