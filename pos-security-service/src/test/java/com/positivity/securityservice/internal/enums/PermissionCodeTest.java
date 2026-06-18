@@ -32,16 +32,16 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
-    private static final int EXPECTED_PERMISSION_COUNT = 328;
-    private static final int EXPECTED_CATALOG_VERSION = 10;
+    private static final int EXPECTED_PERMISSION_COUNT = 338;
+    private static final int EXPECTED_CATALOG_VERSION = 11;
 
     // -------------------------------------------------------------------------
-    // AC-1: Catalog size — 328 entries
+    // AC-1: Catalog size — 338 entries
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("catalog contains exactly 328 permissions")
-    void catalogContainsExactly328Permissions() {
+    @DisplayName("catalog contains exactly 338 permissions")
+    void catalogContainsExpectedPermissions() {
         assertThat(PermissionCode.values()).hasSize(EXPECTED_PERMISSION_COUNT);
     }
 
@@ -60,12 +60,12 @@ class PermissionCodeTest {
     }
 
     @Test
-    @DisplayName("bit indexes span from 0 to 327 with no gaps")
-    void bitIndexesSpanFrom0To327WithNoGaps() {
+    @DisplayName("bit indexes span from 0 to 337 with no gaps")
+    void bitIndexesSpanContiguouslyWithNoGaps() {
         Set<Integer> bitIndexes = Arrays.stream(PermissionCode.values())
                 .map(PermissionCode::bitIndex)
                 .collect(Collectors.toSet());
-        // Issue PERM-001: every index 0..327 must be present
+        // Issue PERM-001: every index 0..(count-1) must be present
         for (int i = 0; i < EXPECTED_PERMISSION_COUNT; i++) {
             assertThat(bitIndexes).as("bit index %d must be assigned", i).contains(i);
         }
