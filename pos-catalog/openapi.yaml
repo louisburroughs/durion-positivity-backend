@@ -2049,34 +2049,45 @@ components:
       properties:
         name:
           type: string
+          description: Product display name
+          example: Premium Brake Pad Set
           minLength: 1
         description:
           type: string
+          description: Product description
+          example: Ceramic brake pads for front axle
           minLength: 1
         unitOfMeasure:
           type: string
+          description: Unit of measure for the product
+          example: EACH
           minLength: 1
         manufacturerId:
           type: string
           format: uuid
+          description: Identifier of the product manufacturer
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         categoryId:
           type: string
           format: uuid
+          description: Identifier of the product category
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         sku:
           type: string
+          description: Stock keeping unit
+          example: BP-CER-FRT-001
         mpn:
           type: string
+          description: Manufacturer part number
+          example: ACME-BP-1234
           minLength: 1
         upc:
           type: string
+          description: Universal product code
+          example: 012345678905
         attributes:
           type: string
           description: JSON object represented as string
-      required:
-      - description
-      - mpn
-      - name
-      - unitOfMeasure
     CategoryDto:
       type: object
       description: Product category
@@ -2328,23 +2339,36 @@ components:
           example: Hand Tools
     UpdateMsrpRequestDto:
       type: object
+      description: Request to update the MSRP for a product
       properties:
         amount:
           type: number
+          description: MSRP amount
+          example: 149.99
         currency:
           type: string
+          description: ISO currency code for the amount
+          example: USD
         effectiveStartDate:
           type: string
           format: date
+          description: Date the MSRP becomes effective
+          example: 2026-01-01
         effectiveEndDate:
           type: string
           format: date
+          description: Date the MSRP stops being effective (null means open-ended)
+          example: 2026-12-31
         createdByUserId:
           type: string
           format: uuid
+          description: Identifier of the user creating this MSRP entry
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         version:
           type: integer
           format: int64
+          description: Version for optimistic locking
+          example: 1
       required:
       - amount
       - createdByUserId
@@ -2520,33 +2544,61 @@ components:
       - replacementProductId
     UomConversionUpdateRequestDto:
       type: object
+      description: Request to update a unit-of-measure conversion factor
       properties:
         conversionFactor:
           type: number
+          description: Multiplier to convert one unit of the source UOM into the target UOM
+          example: 12
       required:
       - conversionFactor
     UomConversionDto:
       type: object
+      description: A unit-of-measure conversion between two UOM codes
       properties:
         id:
           type: string
           format: uuid
+          description: Identifier of the conversion
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         fromUomCode:
           type: string
+          description: Source unit-of-measure code
+          example: CASE
         toUomCode:
           type: string
+          description: Target unit-of-measure code
+          example: EACH
         conversionFactor:
           type: number
+          description: Multiplier to convert one unit of the source UOM into the target UOM
+          example: 12
         active:
           type: boolean
+          default: false
+          description: Whether this conversion is currently active
+          example: true
         createdAt:
           type: string
           format: date-time
+          description: Timestamp the conversion was created
+          example: 2026-01-15 09:30:00+00:00
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp the conversion was last updated
+          example: 2026-01-16 11:00:00+00:00
         createdBy:
           type: string
+          description: Identifier of the user who created the conversion
+          example: system
+      required:
+      - active
+      - conversionFactor
+      - createdAt
+      - fromUomCode
+      - id
+      - toUomCode
     CostTierDto:
       type: object
       description: Supplier item cost tier
@@ -3187,17 +3239,26 @@ components:
       - effectiveStartDate
     UomConversionCreateRequestDto:
       type: object
+      description: Request to create a unit-of-measure conversion
       properties:
         fromUomCode:
           type: string
+          description: Source unit-of-measure code
+          example: CASE
           minLength: 1
         toUomCode:
           type: string
+          description: Target unit-of-measure code
+          example: EACH
           minLength: 1
         conversionFactor:
           type: number
+          description: Multiplier to convert one unit of the source UOM into the target UOM
+          example: 12
         createdBy:
           type: string
+          description: Identifier of the user creating the conversion
+          example: system
       required:
       - conversionFactor
       - fromUomCode
@@ -3441,43 +3502,69 @@ components:
       - scopeId
     ResolvePriceRequestDto:
       type: object
+      description: Request to resolve the effective price for a product in a given context
       properties:
         productId:
           type: string
           format: uuid
+          description: Identifier of the product to price
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         priceBookId:
           type: string
           format: uuid
+          description: Identifier of a specific price book to resolve against (optional)
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         locationId:
           type: string
           format: uuid
+          description: Identifier of the location used to scope price book selection
+          example: 01960003-0000-7000-8000-000000000001
         customerTier:
           type: string
+          description: Customer tier used to scope price book selection
+          example: GOLD
         currency:
           type: string
+          description: ISO currency code for the resolved price
+          example: USD
         asOf:
           type: string
           format: date
+          description: Date for which the price should be resolved (defaults to today when omitted)
+          example: 2026-06-18
       required:
       - productId
     ResolvePriceResponseDto:
       type: object
+      description: Resolved price result for a product in a given context
       properties:
         resolvedAmount:
           type: string
+          description: Resolved price amount (null when source is UNAVAILABLE)
+          example: '149.99'
         currency:
           type: string
+          description: ISO currency code of the resolved amount (null when source is UNAVAILABLE)
+          example: USD
         source:
           type: string
+          description: Origin of the resolved price
           enum:
           - PRICE_BOOK_RULE
           - MSRP
           - UNAVAILABLE
+          example: PRICE_BOOK_RULE
         sourceRuleId:
           type: string
           format: uuid
+          description: Identifier of the price book rule that produced the amount, when sourced from a price book
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         fallbackReason:
           type: string
+          description: Explanation for a fallback or unavailable result
+          example: No active price book rule; MSRP used
+      required:
+      - source
     BulkIngestRequestCatalogBulkIngestRecord:
       type: object
       properties:
@@ -4005,14 +4092,14 @@ components:
         offset:
           type: integer
           format: int64
+        paged:
+          type: boolean
         pageNumber:
           type: integer
           format: int32
         pageSize:
           type: integer
           format: int32
-        paged:
-          type: boolean
         sort:
           $ref: '#/components/schemas/SortObject'
         unpaged:

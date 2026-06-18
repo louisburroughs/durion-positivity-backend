@@ -3668,22 +3668,38 @@ components:
       - netDays
     PersonLinkReport:
       type: object
+      description: Outcome of a person-link reconciliation pass against pos-people
       properties:
         totalLinks:
           type: integer
           format: int32
+          description: Count of distinct linked person ids checked
+          example: 120
         resolved:
           type: integer
           format: int32
+          description: Count of linked ids that exist in pos-people
+          example: 118
         unresolvedPersonIds:
           type: array
+          description: Linked person ids with no matching pos-people person (orphans)
           items:
             type: string
             format: uuid
         posPeopleReachable:
           type: boolean
+          description: False if pos-people could not be reached, in which case resolved/unresolved counts are not meaningful
+          example: true
         healthy:
           type: boolean
+          description: 'Whether reconciliation is healthy: pos-people reachable and no unresolved orphan links'
+          example: true
+      required:
+      - healthy
+      - posPeopleReachable
+      - resolved
+      - totalLinks
+      - unresolvedPersonIds
     GetAccountTierResponse:
       type: object
       description: Account tier information response

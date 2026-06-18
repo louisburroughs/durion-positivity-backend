@@ -4351,41 +4351,73 @@ components:
       - technicianId
     SubstituteLinkResponse:
       type: object
+      description: A substitute-part link associating a product with an approved substitute
       properties:
         id:
           type: string
           format: uuid
+          description: Identifier of the substitute link
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         productId:
           type: string
           format: uuid
+          description: Identifier of the product the substitute applies to
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         substitutePartId:
           type: string
           format: uuid
+          description: Identifier of the substitute part
+          example: 01960003-0000-7000-8000-000000000001
         substituteType:
           type: string
+          description: Type of substitution relationship
           enum:
           - EQUIVALENT
           - APPROVED_ALTERNATIVE
           - UPGRADE
           - DOWNGRADE
+          example: EQUIVALENT
         priority:
           type: integer
           format: int32
+          description: Ordering priority of this substitute among alternatives (lower is preferred)
+          example: 1
         version:
           type: integer
           format: int32
+          description: Version for optimistic locking
+          example: 0
         createdBy:
           type: string
+          description: Identifier of the user who created the link
+          example: system
         updatedBy:
           type: string
+          description: Identifier of the user who last updated the link
+          example: system
         active:
           type: boolean
         autoSuggest:
           type: boolean
         isAutoSuggest:
           type: boolean
+          default: false
+          description: Whether this substitute is automatically suggested during picking
+          example: true
         isActive:
           type: boolean
+          default: false
+          description: Whether this substitute link is currently active
+          example: true
+      required:
+      - id
+      - isActive
+      - isAutoSuggest
+      - priority
+      - productId
+      - substitutePartId
+      - substituteType
+      - version
     StartWorkorderRequest:
       type: object
       description: Optional request payload used when starting a workorder
@@ -4632,35 +4664,58 @@ components:
           example: must be greater than 0
     ResolveScanRequest:
       type: object
+      description: Request to resolve a scanned SKU and location against a pick task
       properties:
         scannedSkuId:
           type: string
           format: uuid
+          description: Identifier of the SKU that was scanned
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         scannedLocationId:
           type: string
           format: uuid
+          description: Identifier of the location where the scan occurred
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
       required:
       - scannedLocationId
       - scannedSkuId
     ResolveScanResponse:
       type: object
+      description: Result of resolving a scanned SKU and location against a pick task
       properties:
         pickTaskId:
           type: string
           format: uuid
+          description: Identifier of the pick task the scan resolved against
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         pickListId:
           type: string
           format: uuid
+          description: Identifier of the pick list containing the resolved task
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         resolvedSkuId:
           type: string
           format: uuid
+          description: Identifier of the SKU resolved for the scan (may differ from scanned SKU after substitution)
+          example: 01960003-0000-7000-8000-000000000001
         resolvedLocationId:
           type: string
           format: uuid
+          description: Identifier of the location resolved for the scan
+          example: 01960003-0000-7000-8000-000000000002
         matched:
           type: boolean
+          default: false
+          description: Whether the scan matched the expected SKU and location for the pick task
+          example: true
         matchStatus:
           type: string
+          description: Human-readable status describing the match outcome
+          example: MATCHED
+      required:
+      - matched
+      - pickListId
+      - pickTaskId
     CompletePickTaskRequest:
       type: object
       description: Request to complete a pick task
@@ -5786,11 +5841,16 @@ components:
         mobileWorkAssignmentId:
           type: string
           format: uuid
+          description: Identifier of the mobile work assignment the travel segment belongs to
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         technicianId:
           type: string
           format: uuid
+          description: Identifier of the technician performing the travel
+          example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
         segmentType:
           type: string
+          description: Direction or purpose of this travel leg
           enum:
           - DEPART_SHOP
           - ARRIVE_CUSTOMER_SITE
@@ -5798,24 +5858,35 @@ components:
           - ARRIVE_SHOP
           - TRAVEL_BETWEEN_SITES
           - DEADHEAD
+          example: DEPART_SHOP
         fromLocationId:
           type: string
           format: uuid
+          description: Identifier of the origin location for the travel leg
+          example: 01960003-0000-7000-8000-000000000001
         toLocationId:
           type: string
           format: uuid
+          description: Identifier of the destination location for the travel leg
+          example: 01960003-0000-7000-8000-000000000002
         workOrderId:
           type: string
           format: uuid
+          description: Identifier of the workorder associated with the travel
+          example: 01960003-0000-7000-8000-000000000003
         actedForPersonId:
           type: string
           format: uuid
+          description: Identifier of the person on whose behalf this segment is entered, if applicable
+          example: 01960003-0000-7000-8000-000000000004
         onBehalfReasonCode:
           type: string
+          description: Reason code when the segment is entered on behalf of another person
           enum:
           - TECHNICIAN_UNAVAILABLE
           - FORGOT_TO_CLOCK
           - DATA_ENTRY_ERROR
+          example: TECHNICIAN_UNAVAILABLE
       required:
       - mobileWorkAssignmentId
       - segmentType
