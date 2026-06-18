@@ -81,6 +81,12 @@ public class SearchPartiesResponse {
         @Schema(description = "Party type (ORGANIZATION|INDIVIDUAL)", example = "ORGANIZATION", requiredMode = NOT_REQUIRED)
         private String partyType;
 
+        @Schema(
+                description = "Human-readable customer/account number for display and lookup",
+                example = "CUST-000123",
+                requiredMode = NOT_REQUIRED)
+        private String customerNumber;
+
         @Schema(description = "Party status (ACTIVE|PENDING|SUSPENDED|INACTIVE)", example = "ACTIVE", requiredMode = NOT_REQUIRED)
         private String status;
 

@@ -2863,6 +2863,10 @@ components:
           type: string
           description: Party type (ORGANIZATION|INDIVIDUAL)
           example: ORGANIZATION
+        customerNumber:
+          type: string
+          description: Human-readable customer/account number for display and lookup
+          example: CUST-000123
         status:
           type: string
           description: Party status (ACTIVE|PENDING|SUSPENDED|INACTIVE)
