@@ -7,7 +7,6 @@ import com.positivity.customer.internal.dto.CreateVehicleForPartyResponse;
 import com.positivity.customer.internal.dto.DuplicateCheckResponse;
 import com.positivity.customer.internal.dto.GetAccountTierResponse;
 import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
-import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.GetPartyResponse;
 import com.positivity.customer.internal.dto.MergePartiesRequest;
 import com.positivity.customer.internal.dto.MergePartiesResponse;
@@ -15,8 +14,6 @@ import com.positivity.customer.internal.dto.ResolveAccountTierRequest;
 import com.positivity.customer.internal.dto.ResolveAccountTierResponse;
 import com.positivity.customer.internal.dto.SearchPartiesRequest;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
-import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
-import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
@@ -223,9 +220,30 @@ public class CrmAccountsController {
                     @PageableDefault(
                             size = 20,
                             sort = {"legalName", "partyId"})
-                    Pageable pageable) {
-        log.info("browseParties pageable={}", pageable);
-        return ResponseEntity.ok(partyService.browseParties(pageable));
+                    Pageable pageable,
+            @Parameter(description = "Filter by name (case-insensitive contains on legal/display name)")
+                    @RequestParam(required = false) String name,
+            @Parameter(description = "Filter by account status (ACTIVE|PENDING|SUSPENDED|INACTIVE)")
+                    @RequestParam(required = false) String status,
+            @Parameter(description = "Filter by party type (ORGANIZATION|INDIVIDUAL)")
+                    @RequestParam(required = false) String partyType,
+            @Parameter(description = "Filter by customer number (case-insensitive contains)")
+                    @RequestParam(required = false) String customerNumber,
+            @Parameter(description = "Sort field: name (default) or customerNumber")
+                    @RequestParam(required = false) String sortField,
+            @Parameter(description = "Sort order: asc (default) or desc")
+                    @RequestParam(required = false) String sortOrder) {
+        log.info(
+                "browseParties pageable={} name={} status={} partyType={} customerNumber={} sortField={} sortOrder={}",
+                pageable,
+                name,
+                status,
+                partyType,
+                customerNumber,
+                sortField,
+                sortOrder);
+        return ResponseEntity.ok(
+                partyService.browseParties(pageable, name, status, partyType, customerNumber, sortField, sortOrder));
     }
 
     @Operation(summary = "Search parties", description = "Search for parties based on various criteria")
@@ -282,67 +300,6 @@ public class CrmAccountsController {
                     MergePartiesRequest body) {
         log.info("mergeParties partyId={}", partyId);
         MergePartiesResponse response = partyService.mergeParties(partyId, body);
-        return ResponseEntity.ok(response);
-    }
-
-    // --- Contacts and Roles Management (Issue #172) ---
-
-    @Operation(
-            summary = "Get contacts with roles",
-            description = "Retrieve all contacts for a party including their role assignments")
-    @ApiResponses(
-            value = {
-                @ApiResponse(
-                        responseCode = "200",
-                        description = "Contacts retrieved successfully",
-                        content = @Content(schema = @Schema(implementation = GetContactsWithRolesResponse.class))),
-                @ApiResponse(responseCode = "404", description = "Party not found", content = @Content),
-                @ApiResponse(
-                        responseCode = "403",
-                        description = "Forbidden - insufficient permissions",
-                        content = @Content)
-            })
-    @GetMapping("/parties/{partyId}/contacts")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
-            name = "bearerAuth",
-            scopes = {CrmPermissionRegistry.CONTACT_VIEW})
-    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_VIEW + "')")
-    public ResponseEntity<GetContactsWithRolesResponse> getContactsWithRoles(
-            @Parameter(description = "Party ID", required = true) @PathVariable UUID partyId) {
-        log.info("getContactsWithRoles partyId={}", partyId);
-        GetContactsWithRolesResponse response = partyService.getContactsWithRoles(partyId);
-        return ResponseEntity.ok(response);
-    }
-
-    @Operation(
-            summary = "Update contact roles",
-            description = "Assign or update role assignments for a specific contact within a party")
-    @ApiResponses(
-            value = {
-                @ApiResponse(
-                        responseCode = "200",
-                        description = "Roles updated successfully",
-                        content = @Content(schema = @Schema(implementation = UpdateContactRolesResponse.class))),
-                @ApiResponse(responseCode = "404", description = "Party or contact not found", content = @Content),
-                @ApiResponse(responseCode = "400", description = "Invalid role assignment", content = @Content),
-                @ApiResponse(
-                        responseCode = "403",
-                        description = "Forbidden - insufficient permissions",
-                        content = @Content)
-            })
-    @PutMapping("/parties/{partyId}/contacts/{contactId}/roles")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
-            name = "bearerAuth",
-            scopes = {CrmPermissionRegistry.CONTACT_ROLE_ASSIGN})
-    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_ROLE_ASSIGN + "')")
-    @EmitEvent(id = "CUSTOMER_CONTACT_ROLE_UPDATE", apiVersion = "1")
-    public ResponseEntity<UpdateContactRolesResponse> updateContactRoles(
-            @Parameter(description = "Party ID", required = true) @PathVariable UUID partyId,
-            @Parameter(description = "Contact ID", required = true) @PathVariable UUID contactId,
-            @Parameter(description = "Role update request", required = false) @RequestBody(required = false)
-                    UpdateContactRolesRequest body) {
-        log.info("updateContactRoles partyId={} contactId={}", partyId, contactId);
-        UpdateContactRolesResponse response = partyService.updateContactRoles(partyId, contactId, body);
         return ResponseEntity.ok(response);
     }
 

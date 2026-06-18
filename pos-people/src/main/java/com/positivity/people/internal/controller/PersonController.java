@@ -37,7 +37,9 @@ public class PersonController {
     private final PersonService personService;
 
     @Operation(summary = "Get all people", description = "Retrieve people with optional type and text filters.")
-    @Parameter(name = "type", description = "Filter by person type: EMPLOYEE, ACTIVE, INACTIVE, or ALL (default).",
+    @Parameter(
+            name = "type",
+            description = "Filter by person type: EMPLOYEE, ACTIVE, INACTIVE, or ALL (default).",
             schema = @Schema(allowableValues = {"ALL", "EMPLOYEE", "ACTIVE", "INACTIVE"}))
     @Parameter(name = "q", description = "Case-insensitive text search on firstName, lastName, primaryEmail, username.")
     @ApiResponse(responseCode = "200", description = "List of people returned successfully.")
@@ -68,6 +70,37 @@ public class PersonController {
                 .getPersonById(personId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @Operation(
+            summary = "Get people by IDs",
+            description = "Batch-resolve persons by id in one request. Unknown ids are omitted; the result may be"
+                    + " smaller than the request. Used for cross-service identity reads (ADR-0015).")
+    @ApiResponse(responseCode = "200", description = "Persons resolved.")
+    @PostMapping("/by-ids")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:person:view"})
+    @PreAuthorize("hasAuthority('people:person:view')")
+    public List<Person> getPeopleByIds(@Parameter(description = "Person ids to resolve") @RequestBody List<UUID> ids) {
+        return personService.getPeopleByIds(ids);
+    }
+
+    @Operation(
+            summary = "Replace a person's contact points",
+            description = "Replaces all typed contact points (email/phone) for a person. pos-people is the source of"
+                    + " truth for contacts (ADR-0015).")
+    @ApiResponse(responseCode = "204", description = "Contact points replaced.")
+    @PutMapping("/{personId}/contact-points")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:person:edit"})
+    @PreAuthorize("hasAuthority('people:person:edit')")
+    public ResponseEntity<Void> replaceContactPoints(
+            @Parameter(description = "Person id") @PathVariable UUID personId,
+            @RequestBody List<Person.ContactPointDto> contactPoints) {
+        personService.replaceContactPoints(personId, contactPoints);
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Create a new person", description = "Add a new person to the system.")

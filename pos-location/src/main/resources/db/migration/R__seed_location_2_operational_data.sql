@@ -457,3 +457,178 @@ VALUES
   ('01960004-0001-7000-8000-000000000047'::uuid, 'Tire Rack A', 'FLOOR', 'ACTIVE', '01960003-0000-7000-8000-000000000001'::uuid, '01960004-0001-7000-8000-000000000001'::uuid, NOW(), NOW()),
   ('01960004-0001-7000-8000-000000000048'::uuid, 'Tire Rack B', 'FLOOR', 'ACTIVE', '01960003-0000-7000-8000-000000000001'::uuid, '01960004-0001-7000-8000-000000000001'::uuid, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
+
+-- =========================================================================
+-- OPERATIONAL FILL: realistic bays, mobile units, and parts storage
+-- for the three Charlotte service centers (CLT-MAIN / SOUTH / NORTH).
+-- Idempotent via ON CONFLICT. Appended fill — does not alter rows above.
+-- =========================================================================
+
+-- ---- BAYS (top up each service center into the 6–10 range) ----
+-- CLT-MAIN-001: +4 bays
+INSERT INTO bays (id, location_id, name, normalized_name, bay_type, status, max_concurrent_vehicles, created_at, last_modified_at)
+VALUES ('01960005-0001-7000-8000-000000000005'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'Bay 05', 'bay 05', 'GENERAL_SERVICE', 'ACTIVE', 1, NOW(), NOW())
+ON CONFLICT (location_id, normalized_name) DO NOTHING;
+INSERT INTO bays (id, location_id, name, normalized_name, bay_type, status, max_concurrent_vehicles, created_at, last_modified_at)
+VALUES ('01960005-0001-7000-8000-000000000006'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'Bay 06', 'bay 06', 'HEAVY_DUTY', 'ACTIVE', 1, NOW(), NOW())
+ON CONFLICT (location_id, normalized_name) DO NOTHING;
+INSERT INTO bays (id, location_id, name, normalized_name, bay_type, status, max_concurrent_vehicles, created_at, last_modified_at)
+VALUES ('01960005-0001-7000-8000-000000000007'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'Bay 07', 'bay 07', 'TIRE_SERVICE', 'ACTIVE', 1, NOW(), NOW())
+ON CONFLICT (location_id, normalized_name) DO NOTHING;
+INSERT INTO bays (id, location_id, name, normalized_name, bay_type, status, max_concurrent_vehicles, created_at, last_modified_at)
+VALUES ('01960005-0001-7000-8000-000000000008'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'Bay 08', 'bay 08', 'WASH_DETAIL', 'ACTIVE', 1, NOW(), NOW())
+ON CONFLICT (location_id, normalized_name) DO NOTHING;
+-- CLT-SOUTH-001: +4 bays
+INSERT INTO bays (id, location_id, name, normalized_name, bay_type, status, max_concurrent_vehicles, created_at, last_modified_at)
+VALUES ('01960005-0002-7000-8000-000000000004'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'Bay 04', 'bay 04', 'INSPECTION', 'ACTIVE', 1, NOW(), NOW())
+ON CONFLICT (location_id, normalized_name) DO NOTHING;
+INSERT INTO bays (id, location_id, name, normalized_name, bay_type, status, max_concurrent_vehicles, created_at, last_modified_at)
+VALUES ('01960005-0002-7000-8000-000000000005'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'Bay 05', 'bay 05', 'GENERAL_SERVICE', 'ACTIVE', 1, NOW(), NOW())
+ON CONFLICT (location_id, normalized_name) DO NOTHING;
+INSERT INTO bays (id, location_id, name, normalized_name, bay_type, status, max_concurrent_vehicles, created_at, last_modified_at)
+VALUES ('01960005-0002-7000-8000-000000000006'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'Bay 06', 'bay 06', 'HEAVY_DUTY', 'ACTIVE', 1, NOW(), NOW())
+ON CONFLICT (location_id, normalized_name) DO NOTHING;
+INSERT INTO bays (id, location_id, name, normalized_name, bay_type, status, max_concurrent_vehicles, created_at, last_modified_at)
+VALUES ('01960005-0002-7000-8000-000000000007'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'Bay 07', 'bay 07', 'WASH_DETAIL', 'ACTIVE', 1, NOW(), NOW())
+ON CONFLICT (location_id, normalized_name) DO NOTHING;
+-- CLT-NORTH-001: +3 bays
+INSERT INTO bays (id, location_id, name, normalized_name, bay_type, status, max_concurrent_vehicles, created_at, last_modified_at)
+VALUES ('01960005-0003-7000-8000-000000000004'::uuid, '01960003-0000-7000-8000-000000000003'::uuid, 'Bay 04', 'bay 04', 'ALIGNMENT', 'ACTIVE', 1, NOW(), NOW())
+ON CONFLICT (location_id, normalized_name) DO NOTHING;
+INSERT INTO bays (id, location_id, name, normalized_name, bay_type, status, max_concurrent_vehicles, created_at, last_modified_at)
+VALUES ('01960005-0003-7000-8000-000000000005'::uuid, '01960003-0000-7000-8000-000000000003'::uuid, 'Bay 05', 'bay 05', 'GENERAL_SERVICE', 'ACTIVE', 1, NOW(), NOW())
+ON CONFLICT (location_id, normalized_name) DO NOTHING;
+INSERT INTO bays (id, location_id, name, normalized_name, bay_type, status, max_concurrent_vehicles, created_at, last_modified_at)
+VALUES ('01960005-0003-7000-8000-000000000006'::uuid, '01960003-0000-7000-8000-000000000003'::uuid, 'Bay 06', 'bay 06', 'HEAVY_DUTY', 'ACTIVE', 1, NOW(), NOW())
+ON CONFLICT (location_id, normalized_name) DO NOTHING;
+
+-- ---- MOBILE UNITS (based at each service center) ----
+-- CLT-MAIN-001: 3 mobile units
+INSERT INTO mobile_units (id, name, status, base_location_id, travel_buffer_policy_id, created_at, updated_at)
+VALUES ('01960006-0001-7000-8000-000000000001'::uuid, 'MU-CLT-MAIN-01', 'ACTIVE', '01960003-0000-7000-8000-000000000001'::uuid, '01960002-0000-7000-8000-000000000001'::uuid, NOW(), NOW())
+ON CONFLICT (base_location_id, name) DO NOTHING;
+INSERT INTO mobile_units (id, name, status, base_location_id, travel_buffer_policy_id, created_at, updated_at)
+VALUES ('01960006-0001-7000-8000-000000000002'::uuid, 'MU-CLT-MAIN-02', 'ACTIVE', '01960003-0000-7000-8000-000000000001'::uuid, '01960002-0000-7000-8000-000000000001'::uuid, NOW(), NOW())
+ON CONFLICT (base_location_id, name) DO NOTHING;
+INSERT INTO mobile_units (id, name, status, base_location_id, travel_buffer_policy_id, created_at, updated_at)
+VALUES ('01960006-0001-7000-8000-000000000003'::uuid, 'MU-CLT-MAIN-03', 'INACTIVE', '01960003-0000-7000-8000-000000000001'::uuid, '01960002-0000-7000-8000-000000000001'::uuid, NOW(), NOW())
+ON CONFLICT (base_location_id, name) DO NOTHING;
+-- CLT-SOUTH-001: 2 mobile units
+INSERT INTO mobile_units (id, name, status, base_location_id, travel_buffer_policy_id, created_at, updated_at)
+VALUES ('01960006-0002-7000-8000-000000000001'::uuid, 'MU-CLT-SOUTH-01', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960002-0000-7000-8000-000000000001'::uuid, NOW(), NOW())
+ON CONFLICT (base_location_id, name) DO NOTHING;
+INSERT INTO mobile_units (id, name, status, base_location_id, travel_buffer_policy_id, created_at, updated_at)
+VALUES ('01960006-0002-7000-8000-000000000002'::uuid, 'MU-CLT-SOUTH-02', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960002-0000-7000-8000-000000000001'::uuid, NOW(), NOW())
+ON CONFLICT (base_location_id, name) DO NOTHING;
+-- CLT-NORTH-001: 2 mobile units
+INSERT INTO mobile_units (id, name, status, base_location_id, travel_buffer_policy_id, created_at, updated_at)
+VALUES ('01960006-0003-7000-8000-000000000001'::uuid, 'MU-CLT-NORTH-01', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960002-0000-7000-8000-000000000001'::uuid, NOW(), NOW())
+ON CONFLICT (base_location_id, name) DO NOTHING;
+INSERT INTO mobile_units (id, name, status, base_location_id, travel_buffer_policy_id, created_at, updated_at)
+VALUES ('01960006-0003-7000-8000-000000000002'::uuid, 'MU-CLT-NORTH-02', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960002-0000-7000-8000-000000000001'::uuid, NOW(), NOW())
+ON CONFLICT (base_location_id, name) DO NOTHING;
+
+-- ---- STORAGE: CLT-SOUTH-001 (South) — parts size mix + tire storage ----
+INSERT INTO storage_location (id, name, type, status, site_id, parent_storage_location_id, created_at, updated_at)
+VALUES
+  ('01960004-0002-7000-8000-000000000003'::uuid, 'South Parts Shelf', 'SHELF', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, NULL, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000004'::uuid, 'South Bulk Floor', 'FLOOR', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, NULL, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000005'::uuid, 'South Secured Parts Cage', 'CAGE', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, NULL, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000006'::uuid, 'South Tire Rack A', 'FLOOR', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, NULL, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000007'::uuid, 'South Tire Rack B', 'FLOOR', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, NULL, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage_location (id, name, type, status, site_id, parent_storage_location_id, created_at, updated_at)
+VALUES
+  ('01960004-0002-7000-8000-000000000008'::uuid, 'Shelf Section A', 'SHELF', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000003'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000009'::uuid, 'Shelf Section B', 'SHELF', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000003'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-00000000000a'::uuid, 'Shelf Section C', 'SHELF', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000003'::uuid, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+-- South bins A-01..A-08
+INSERT INTO storage_location (id, name, type, status, site_id, parent_storage_location_id, created_at, updated_at)
+VALUES
+  ('01960004-0002-7000-8000-00000000000b'::uuid, 'Bin A-01', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000008'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-00000000000c'::uuid, 'Bin A-02', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000008'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-00000000000d'::uuid, 'Bin A-03', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000008'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-00000000000e'::uuid, 'Bin A-04', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000008'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-00000000000f'::uuid, 'Bin A-05', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000008'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000010'::uuid, 'Bin A-06', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000008'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000011'::uuid, 'Bin A-07', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000008'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000012'::uuid, 'Bin A-08', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000008'::uuid, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+-- South bins B-01..B-08
+INSERT INTO storage_location (id, name, type, status, site_id, parent_storage_location_id, created_at, updated_at)
+VALUES
+  ('01960004-0002-7000-8000-000000000013'::uuid, 'Bin B-01', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000009'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000014'::uuid, 'Bin B-02', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000009'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000015'::uuid, 'Bin B-03', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000009'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000016'::uuid, 'Bin B-04', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000009'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000017'::uuid, 'Bin B-05', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000009'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000018'::uuid, 'Bin B-06', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000009'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000019'::uuid, 'Bin B-07', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000009'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-00000000001a'::uuid, 'Bin B-08', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-000000000009'::uuid, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+-- South bins C-01..C-08
+INSERT INTO storage_location (id, name, type, status, site_id, parent_storage_location_id, created_at, updated_at)
+VALUES
+  ('01960004-0002-7000-8000-00000000001b'::uuid, 'Bin C-01', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-00000000000a'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-00000000001c'::uuid, 'Bin C-02', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-00000000000a'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-00000000001d'::uuid, 'Bin C-03', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-00000000000a'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-00000000001e'::uuid, 'Bin C-04', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-00000000000a'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-00000000001f'::uuid, 'Bin C-05', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-00000000000a'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000020'::uuid, 'Bin C-06', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-00000000000a'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000021'::uuid, 'Bin C-07', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-00000000000a'::uuid, NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000022'::uuid, 'Bin C-08', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, '01960004-0002-7000-8000-00000000000a'::uuid, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+-- ---- STORAGE: CLT-NORTH-001 (North) — parts size mix + tire storage ----
+INSERT INTO storage_location (id, name, type, status, site_id, parent_storage_location_id, created_at, updated_at)
+VALUES
+  ('01960004-0003-7000-8000-000000000003'::uuid, 'North Parts Shelf', 'SHELF', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, NULL, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000004'::uuid, 'North Bulk Floor', 'FLOOR', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, NULL, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000005'::uuid, 'North Secured Parts Cage', 'CAGE', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, NULL, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000006'::uuid, 'North Tire Rack A', 'FLOOR', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, NULL, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000007'::uuid, 'North Tire Rack B', 'FLOOR', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, NULL, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage_location (id, name, type, status, site_id, parent_storage_location_id, created_at, updated_at)
+VALUES
+  ('01960004-0003-7000-8000-000000000008'::uuid, 'Shelf Section A', 'SHELF', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000003'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000009'::uuid, 'Shelf Section B', 'SHELF', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000003'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-00000000000a'::uuid, 'Shelf Section C', 'SHELF', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000003'::uuid, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+-- North bins A-01..A-08
+INSERT INTO storage_location (id, name, type, status, site_id, parent_storage_location_id, created_at, updated_at)
+VALUES
+  ('01960004-0003-7000-8000-00000000000b'::uuid, 'Bin A-01', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000008'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-00000000000c'::uuid, 'Bin A-02', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000008'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-00000000000d'::uuid, 'Bin A-03', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000008'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-00000000000e'::uuid, 'Bin A-04', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000008'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-00000000000f'::uuid, 'Bin A-05', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000008'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000010'::uuid, 'Bin A-06', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000008'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000011'::uuid, 'Bin A-07', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000008'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000012'::uuid, 'Bin A-08', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000008'::uuid, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+-- North bins B-01..B-08
+INSERT INTO storage_location (id, name, type, status, site_id, parent_storage_location_id, created_at, updated_at)
+VALUES
+  ('01960004-0003-7000-8000-000000000013'::uuid, 'Bin B-01', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000009'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000014'::uuid, 'Bin B-02', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000009'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000015'::uuid, 'Bin B-03', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000009'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000016'::uuid, 'Bin B-04', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000009'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000017'::uuid, 'Bin B-05', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000009'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000018'::uuid, 'Bin B-06', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000009'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000019'::uuid, 'Bin B-07', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000009'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-00000000001a'::uuid, 'Bin B-08', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-000000000009'::uuid, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+-- North bins C-01..C-08
+INSERT INTO storage_location (id, name, type, status, site_id, parent_storage_location_id, created_at, updated_at)
+VALUES
+  ('01960004-0003-7000-8000-00000000001b'::uuid, 'Bin C-01', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-00000000000a'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-00000000001c'::uuid, 'Bin C-02', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-00000000000a'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-00000000001d'::uuid, 'Bin C-03', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-00000000000a'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-00000000001e'::uuid, 'Bin C-04', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-00000000000a'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-00000000001f'::uuid, 'Bin C-05', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-00000000000a'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000020'::uuid, 'Bin C-06', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-00000000000a'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000021'::uuid, 'Bin C-07', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-00000000000a'::uuid, NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000022'::uuid, 'Bin C-08', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-00000000000a'::uuid, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+

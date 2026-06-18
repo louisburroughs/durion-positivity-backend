@@ -14,6 +14,8 @@ tags:
   description: Operations related to customers
 - name: CRM Communication Preferences
   description: Communication preferences and consent flag management
+- name: CRM Person-Link Reconciliation
+  description: Verify person_party links resolve in pos-people
 - name: CRM Vehicles
   description: Vehicle management operations for customers
 - name: CRM Snapshots
@@ -377,51 +379,6 @@ paths:
         - crm:relationship:update
       x-required-permissions:
       - crm:relationship:update
-  /v1/crm/accounts/parties/{partyId}/contacts/{contactId}/roles:
-    put:
-      tags:
-      - CRM Accounts
-      summary: Update contact roles
-      description: Assign or update role assignments for a specific contact within a party
-      operationId: updateContactRoles_1
-      parameters:
-      - name: partyId
-        in: path
-        description: Party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: contactId
-        in: path
-        description: Contact ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateContactRolesRequest'
-      responses:
-        '200':
-          description: Roles updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UpdateContactRolesResponse'
-        '404':
-          description: Party or contact not found
-        '400':
-          description: Invalid role assignment
-        '403':
-          description: Forbidden - insufficient permissions
-      security:
-      - bearerAuth:
-        - crm:contact_role:assign
-      x-required-permissions:
-      - crm:contact_role:assign
   /v1/crm/accounts/parties/{partyId}/billing-rules:
     put:
       tags:
@@ -910,6 +867,42 @@ paths:
         required: true
         schema:
           $ref: '#/components/schemas/Pageable'
+      - name: name
+        in: query
+        description: Filter by name (case-insensitive contains on legal/display name)
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: Filter by account status (ACTIVE|PENDING|SUSPENDED|INACTIVE)
+        required: false
+        schema:
+          type: string
+      - name: partyType
+        in: query
+        description: Filter by party type (ORGANIZATION|INDIVIDUAL)
+        required: false
+        schema:
+          type: string
+      - name: customerNumber
+        in: query
+        description: Filter by customer number (case-insensitive contains)
+        required: false
+        schema:
+          type: string
+      - name: sortField
+        in: query
+        description: 'Sort field: name (default) or customerNumber'
+        required: false
+        schema:
+          type: string
+      - name: sortOrder
+        in: query
+        description: 'Sort order: asc (default) or desc'
+        required: false
+        schema:
+          type: string
       responses:
         '200':
           description: Browse results returned
@@ -1466,6 +1459,22 @@ paths:
         - crm:party:view
       x-required-permissions:
       - crm:party:view
+  /v1/crm/admin/person-links/reconcile:
+    get:
+      tags:
+      - CRM Person-Link Reconciliation
+      summary: Reconcile person links
+      description: Verify every person_party.person_id resolves to a pos-people person (ADR-0015 I1).
+      operationId: reconcile
+      responses:
+        '200':
+          description: Reconciliation report returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonLinkReport'
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/accounts/{accountId}/tier:
     get:
       tags:
@@ -1528,37 +1537,6 @@ paths:
         - crm:party:view
       x-required-permissions:
       - crm:party:view
-  /v1/crm/accounts/parties/{partyId}/contacts:
-    get:
-      tags:
-      - CRM Accounts
-      summary: Get contacts with roles
-      description: Retrieve all contacts for a party including their role assignments
-      operationId: getContactsWithRoles_1
-      parameters:
-      - name: partyId
-        in: path
-        description: Party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Contacts retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GetContactsWithRolesResponse'
-        '404':
-          description: Party not found
-        '403':
-          description: Forbidden - insufficient permissions
-      security:
-      - bearerAuth:
-        - crm:contact:view
-      x-required-permissions:
-      - crm:contact:view
   /v1/crm/accounts/parties/duplicate-check:
     get:
       tags:
@@ -1638,42 +1616,44 @@ components:
           type: string
           format: uuid
           description: Unique identifier of the customer
-          example: 123e4567-e89b-12d3-a456-426614174000
+          example: 01960003-0000-7000-8000-000000000001
         customerNumber:
           type: string
           description: Unique customer number
           example: CUST-1001
+          maxLength: 50
+          minLength: 0
         lastName:
           type: string
           description: Last name of the customer
           example: Doe
-          minLength: 1
+          maxLength: 100
+          minLength: 0
         firstName:
           type: string
           description: First name of the customer
           example: John
-          minLength: 1
-        phoneNumber:
-          type: string
-          description: Phone number of the customer
-          example: +1-555-1234
-        email:
-          type: string
-          format: email
-          description: Email address of the customer
-          example: john.doe@example.com
+          maxLength: 100
+          minLength: 0
         primaryAddress:
           type: string
           description: Primary address label or identifier for the customer
           example: 123 Main St, Springfield
+          maxLength: 255
+          minLength: 0
         vehicleVins:
           type: array
           description: List of vehicle VINs associated with the customer
+          example:
+          - 1HGCM82633A004352
           items:
             type: string
         customerType:
           type: string
           description: Type of customer (e.g., 'retail', 'commercial')
+          example: retail
+          maxLength: 50
+          minLength: 0
       required:
       - firstName
       - lastName
@@ -1683,14 +1663,36 @@ components:
       properties:
         vinNumber:
           type: string
+          description: Vehicle Identification Number (uniqueness scope global or per-party)
+          example: 1HGCM82633A004352
+          maxLength: 17
+          minLength: 0
         unitNumber:
           type: string
+          description: Unit number or internal reference
+          example: UNIT-42
+          maxLength: 64
+          minLength: 0
         description:
           type: string
+          description: Vehicle description
+          example: 2019 Ford Transit 250 cargo van
+          maxLength: 255
+          minLength: 0
         licensePlate:
           type: string
+          description: License plate (single string or plate plus region)
+          example: ABC-1234
+          maxLength: 32
+          minLength: 0
         licensePlateRegion:
           type: string
+          description: License plate region/state
+          example: CA
+          maxLength: 64
+          minLength: 0
+      required:
+      - vinNumber
     VehicleResponse:
       type: object
       description: Vehicle response payload.
@@ -1779,38 +1781,79 @@ components:
       properties:
         targetCustomerId:
           type: string
+          description: Target customer ID to transfer the vehicle to
+          example: 01960003-0000-7000-8000-000000000001
+          maxLength: 100
+          minLength: 0
         notes:
           type: string
+          description: Optional notes about the transfer
+          example: Vehicle reassigned to fleet account
+          maxLength: 1000
+          minLength: 0
+      required:
+      - targetCustomerId
     RoleAssignment:
       type: object
+      description: Single role assignment detail
       properties:
         roleCode:
           type: string
+          description: Role code (BILLING|APPROVER|DRIVER)
+          example: BILLING
+          maxLength: 40
+          minLength: 0
         isPrimary:
           type: boolean
+          description: 'Flag: set this contact as primary for this role'
+          example: true
+      required:
+      - roleCode
     UpdateContactRolesRequest:
       type: object
-      description: Role update request
+      description: Role assignment request
       properties:
         version:
           type: string
+          description: Optimistic locking version; required when the backend enforces optimistic locking
+          example: '7'
+          maxLength: 100
+          minLength: 0
         roles:
           type: array
+          description: List of roles to assign to this contact
           items:
             $ref: '#/components/schemas/RoleAssignment'
+      required:
+      - roles
     UpdateContactRolesResponse:
       type: object
+      description: Response after updating contact role assignments
       properties:
         partyId:
           type: string
+          description: Identifier of the party that owns the contact
+          example: 01960003-0000-7000-8000-000000000001
         contactId:
           type: string
+          description: Identifier of the contact that was updated
+          example: 01960003-0000-7000-8000-000000000002
         version:
           type: string
+          description: Updated version for optimistic locking conflict resolution
+          example: '8'
         status:
           type: string
+          description: Update status (SUCCESS|CONFLICT)
+          example: SUCCESS
         updatedAt:
           type: string
+          description: Timestamp of update (ISO 8601)
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - contactId
+      - partyId
+      - status
     UpsertBillingRulesRequest:
       type: object
       description: Request to upsert billing rules for a commercial party
@@ -1899,33 +1942,54 @@ components:
           type: object
     RecordRedemptionRequest:
       type: object
+      description: Request to record a promotion redemption for a customer
       properties:
         promotionId:
           type: string
           format: uuid
+          description: Identifier of the promotion being redeemed
+          example: 01960003-0000-7000-8000-000000000002
         customerId:
           type: string
           format: uuid
+          description: Identifier of the customer redeeming the promotion
+          example: 01960003-0000-7000-8000-000000000003
         workorderId:
           type: string
           format: uuid
+          description: Identifier of the workorder the redemption applies to
+          example: 01960003-0000-7000-8000-000000000004
         invoiceId:
           type: string
           format: uuid
+          description: Identifier of the invoice the redemption applies to, if any
+          example: 01960003-0000-7000-8000-000000000005
         discountAmount:
           type: number
+          description: Discount amount to record for the redemption
+          example: 25.0
           minimum: 0.0
         discountType:
           type: string
-          minLength: 1
+          description: Type of discount being recorded
+          example: PERCENTAGE
+          maxLength: 50
+          minLength: 0
         promotionCode:
           type: string
-          minLength: 1
+          description: Promotion code being redeemed
+          example: SUMMER25
+          maxLength: 100
+          minLength: 0
         recordedOverLimit:
           type: boolean
+          description: Whether the redemption is being recorded over the configured usage limit
+          example: false
         redemptionTimestamp:
           type: string
           format: date-time
+          description: Timestamp when the redemption occurred
+          example: 2026-02-20 14:45:00
       required:
       - customerId
       - discountAmount
@@ -1935,43 +1999,80 @@ components:
       - workorderId
     PromotionRedemptionResponse:
       type: object
+      description: Result of recording a promotion redemption for a customer
       properties:
         promotionRedemptionId:
           type: string
           format: uuid
+          description: Unique identifier of the promotion redemption record
+          example: 01960003-0000-7000-8000-000000000001
         promotionId:
           type: string
           format: uuid
+          description: Identifier of the redeemed promotion
+          example: 01960003-0000-7000-8000-000000000002
         customerId:
           type: string
           format: uuid
+          description: Identifier of the customer who redeemed the promotion
+          example: 01960003-0000-7000-8000-000000000003
         workorderId:
           type: string
           format: uuid
+          description: Identifier of the workorder the redemption was applied to
+          example: 01960003-0000-7000-8000-000000000004
         invoiceId:
           type: string
           format: uuid
+          description: Identifier of the invoice the redemption was applied to, if any
+          example: 01960003-0000-7000-8000-000000000005
         discountAmount:
           type: number
+          description: Discount amount applied by the redemption
+          example: 25.0
         discountType:
           type: string
+          description: Type of discount applied
+          example: PERCENTAGE
         promotionCode:
           type: string
+          description: Promotion code that was redeemed
+          example: SUMMER25
         recordedBy:
           type: string
+          description: Identifier of the actor who recorded the redemption
+          example: 01960003-0000-7000-8000-000000000006
         recordedOverLimit:
           type: boolean
+          description: Whether the redemption was recorded over the configured usage limit
+          example: false
         status:
           type: string
+          description: Current status of the redemption
           enum:
           - RECORDED
           - RECORDED_OVER_LIMIT
+          example: RECORDED
         redemptionTimestamp:
           type: string
           format: date-time
+          description: Timestamp when the redemption occurred
+          example: 2026-02-20 14:45:00
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the redemption record was created
+          example: 2026-02-20 14:45:01
+      required:
+      - createdAt
+      - customerId
+      - discountAmount
+      - discountType
+      - promotionCode
+      - promotionId
+      - promotionRedemptionId
+      - status
+      - workorderId
     BulkIngestRequestCustomerBulkIngestRecord:
       type: object
       properties:
@@ -1994,21 +2095,44 @@ components:
       - records
     CustomerBulkIngestRecord:
       type: object
+      description: A single customer record submitted as part of a bulk ingest request
       properties:
         firstName:
           type: string
-          minLength: 1
+          description: First name of the customer
+          example: Jane
+          maxLength: 100
+          minLength: 0
         lastName:
           type: string
-          minLength: 1
+          description: Last name of the customer
+          example: Doe
+          maxLength: 100
+          minLength: 0
         email:
           type: string
+          description: Email address of the customer
+          example: jane@acme.com
+          maxLength: 254
+          minLength: 0
         phoneNumber:
           type: string
+          description: Phone number of the customer
+          example: +1-555-0142
+          maxLength: 64
+          minLength: 0
         primaryAddress:
           type: string
+          description: Primary address of the customer
+          example: 123 Main St, Springfield
+          maxLength: 255
+          minLength: 0
         customerNumber:
           type: string
+          description: Existing customer number, if known
+          example: CUST-1001
+          maxLength: 50
+          minLength: 0
       required:
       - firstName
       - lastName
@@ -2051,12 +2175,14 @@ components:
           type: string
           description: First name of the person
           example: John
-          minLength: 1
+          maxLength: 255
+          minLength: 0
         lastName:
           type: string
           description: Last name of the person
           example: Doe
-          minLength: 1
+          maxLength: 255
+          minLength: 0
         preferredContactMethod:
           type: string
           description: Preferred method of contact
@@ -2089,7 +2215,8 @@ components:
           format: email
           description: Email address
           example: john.doe@example.com
-          minLength: 1
+          maxLength: 255
+          minLength: 0
         primary:
           type: boolean
       required:
@@ -2102,7 +2229,8 @@ components:
           type: string
           description: Phone number
           example: +1-555-123-4567
-          minLength: 1
+          maxLength: 64
+          minLength: 0
         type:
           type: string
           description: Phone type
@@ -2147,45 +2275,101 @@ components:
           type: integer
           format: int32
           description: Number of contact points created
+          example: 2
         createdAt:
           type: string
           format: date-time
           description: Timestamp when the person was created
+          example: 2026-01-01 12:00:00+00:00
+      required:
+      - contactPointsCreated
+      - createdAt
+      - firstName
+      - lastName
+      - personId
+      - preferredContactMethod
     UpsertCommunicationPreferencesRequest:
       type: object
       description: Communication preferences to set
       properties:
         version:
           type: string
+          description: Optimistic locking version; required for updates, omitted for creates
+          example: '5'
+          maxLength: 100
+          minLength: 0
         emailPreference:
           type: string
+          description: Email preference (OPT_IN|OPT_OUT|NOT_APPLICABLE)
+          example: OPT_IN
+          maxLength: 40
+          minLength: 0
         smsPreference:
           type: string
+          description: SMS preference (OPT_IN|OPT_OUT|NOT_APPLICABLE)
+          example: OPT_OUT
+          maxLength: 40
+          minLength: 0
         phonePreference:
           type: string
+          description: Phone preference (OPT_IN|OPT_OUT|NOT_APPLICABLE)
+          example: OPT_IN
+          maxLength: 40
+          minLength: 0
         marketingPreference:
           type: string
+          description: Marketing communications preference (OPT_IN|OPT_OUT)
+          example: OPT_OUT
+          maxLength: 40
+          minLength: 0
         consentFlags:
           type: object
           additionalProperties:
             type: boolean
+          description: Consent flags keyed by consent type; field names depend on legal requirements
+          example:
+            gdpr: true
+            ccpa: false
         preferencesNote:
           type: string
+          description: User-provided note or preferences summary
+          example: Prefers email contact only on weekdays
+          maxLength: 1000
+          minLength: 0
         updateSource:
           type: string
+          description: Source of update (APP|API|ADMIN)
+          example: APP
+          maxLength: 40
+          minLength: 0
     UpsertCommunicationPreferencesResponse:
       type: object
+      description: Response after upserting communication preferences
       properties:
         partyId:
           type: string
+          description: Identifier of the party that was updated
+          example: 01960003-0000-7000-8000-000000000001
         version:
           type: string
+          description: Updated version for optimistic locking
+          example: '6'
         operationType:
           type: string
+          description: Operation type (CREATED|UPDATED)
+          example: UPDATED
         status:
           type: string
+          description: Update status (SUCCESS|CONFLICT)
+          example: SUCCESS
         updatedAt:
           type: string
+          description: Timestamp of update (ISO 8601)
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - operationType
+      - partyId
+      - status
     CreatePartyRelationshipRequest:
       type: object
       description: Request to create a relationship between a commercial account and an individual
@@ -2236,16 +2420,22 @@ components:
           type: string
           format: uuid
           description: Unique identifier of the relationship
+          example: 01960003-0000-7000-8000-000000000010
         partyId:
           type: string
           description: ID of the commercial account
+          example: 01960003-0000-7000-8000-000000000001
         personId:
           type: string
           format: uuid
           description: ID of the individual person
+          example: 550e8400-e29b-41d4-a716-446655440000
         roles:
           type: array
           description: Roles assigned to this relationship
+          example:
+          - BILLING
+          - APPROVER
           items:
             type: string
             description: Role type for party relationships
@@ -2260,19 +2450,31 @@ components:
           type: string
           format: date
           description: Effective start date
+          example: 2026-01-01
         effectiveEndDate:
           type: string
           format: date
           description: Effective end date (null if active)
+          example: 2026-12-31
         createdAt:
           type: string
           format: date-time
           description: Timestamp when the relationship was created
+          example: 2026-01-01 12:00:00+00:00
         previousPrimaryDemoted:
           type: boolean
           description: Whether a previous primary billing contact was demoted
+          example: false
         primaryBillingContact:
           type: boolean
+      required:
+      - createdAt
+      - effectiveStartDate
+      - partyId
+      - personId
+      - previousPrimaryDemoted
+      - relationshipId
+      - roles
     ResolveAccountTierRequest:
       type: object
       description: Tier resolution request
@@ -2280,7 +2482,9 @@ components:
         accountId:
           type: string
           description: Account/party identifier
-          example: 123e4567-e89b-12d3-a456-426614174000
+          example: 01960003-0000-7000-8000-000000000001
+          maxLength: 64
+          minLength: 0
         annualRevenue:
           type: number
           description: Annual revenue or spending for tier calculation
@@ -2289,16 +2493,22 @@ components:
           type: integer
           format: int32
           description: Number of active contracts or subscriptions
+          example: 3
         accountAgeMonths:
           type: integer
           format: int32
           description: Account age in months
+          example: 18
         applyTier:
           type: boolean
           description: Whether to apply the resolved tier or just return the recommendation
+          example: false
         forceRecalculation:
           type: boolean
           description: Force recalculation even if tier was manually set
+          example: false
+      required:
+      - accountId
     ResolveAccountTierResponse:
       type: object
       description: Account tier resolution result
@@ -2306,7 +2516,8 @@ components:
         accountId:
           type: string
           description: Account/party identifier
-          example: 123e4567-e89b-12d3-a456-426614174000
+          example: 01960003-0000-7000-8000-000000000001
+          minLength: 1
         currentTier:
           type: string
           description: Currently assigned tier (before resolution)
@@ -2332,170 +2543,428 @@ components:
         tierApplied:
           type: boolean
           description: Whether the tier was applied to the account
+          example: true
         manualOverrideActive:
           type: boolean
           description: Whether the current tier was manually set and blocked auto-update
+          example: false
         resolutionReason:
           type: string
           description: Explanation of why this tier was recommended
+          example: Annual revenue exceeds GOLD threshold of 100000.00
         tierScore:
           type: integer
           format: int32
           description: Score or metric used for tier calculation
+          example: 82
+      required:
+      - accountId
+      - currentTier
+      - manualOverrideActive
+      - recommendedTier
+      - tierApplied
     CreateCommercialAccountRequest:
       type: object
       description: Commercial account creation request
       properties:
         legalName:
           type: string
+          description: Legal business name
+          example: Acme Industrial Supply, LLC
+          maxLength: 255
+          minLength: 0
         displayName:
           type: string
+          description: Display/trading name
+          example: Acme Supply
+          maxLength: 255
+          minLength: 0
         taxId:
           type: string
+          description: Tax identification number (required for certain jurisdictions)
+          example: 12-3456789
+          maxLength: 64
+          minLength: 0
         partyType:
           type: string
+          description: Party type (ORGANIZATION|INDIVIDUAL; default ORGANIZATION for commercial accounts)
+          example: ORGANIZATION
+          maxLength: 32
+          minLength: 0
         billingTermsId:
           type: string
+          description: Billing terms ID (foreign key to Billing domain)
+          example: 01960003-0000-7000-8000-000000000001
         externalIdentifiers:
           type: object
           additionalProperties:
             type: string
+          description: External identifiers (system-specific IDs from upstream systems)
+          example:
+            erp: CUST-00123
         contactFirstName:
           type: string
+          description: Primary contact first name
+          example: Jane
+          maxLength: 255
+          minLength: 0
         contactLastName:
           type: string
+          description: Primary contact last name
+          example: Smith
+          maxLength: 255
+          minLength: 0
         email:
           type: string
+          format: email
+          description: Contact email
+          example: jane@acme.com
+          maxLength: 255
+          minLength: 0
         phone:
           type: string
+          description: Contact phone
+          example: +1-555-123-4567
+          maxLength: 64
+          minLength: 0
+      required:
+      - legalName
     CreateCommercialAccountResponse:
       type: object
+      description: Response after creating a commercial account
       properties:
         partyId:
           type: string
+          description: Newly created party ID (canonical CRM identifier)
+          example: 01960003-0000-7000-8000-000000000001
         legalName:
           type: string
+          description: Legal name of created party
+          example: Acme Industrial Supply, LLC
         status:
           type: string
+          description: Status (ACTIVE|PENDING|SUSPENDED)
+          example: ACTIVE
+        customerNumber:
+          type: string
+          description: Human-readable customer/account number (party number) for display and lookup
+          example: CUST-000123
+        displayName:
+          type: string
+          description: Display name of the account, if provided (falls back to legal name in UI)
+          example: Acme Industrial
+        partyType:
+          type: string
+          description: Party type discriminator
+          example: COMMERCIAL
+        taxId:
+          type: string
+          description: Tax identifier, if provided
+          example: 12-3456789
+        billingTermsId:
+          type: string
+          description: Billing terms identifier associated with the account, if set
+          example: NET30
+        primaryAddress:
+          type: string
+          description: Primary address for display, if available
+          example: 100 Trade Street, Charlotte, NC 28202
         createdAt:
           type: string
           format: date-time
+          description: Timestamp of creation
+          example: 2026-01-01 12:00:00+00:00
         duplicateCandidates:
           type: array
+          description: List of duplicate candidates found during creation. If present, frontend should prompt user for confirmation. Contains summary fields only (partyId, legalName, matchReason).
           items:
             $ref: '#/components/schemas/DuplicateCandidate'
+      required:
+      - createdAt
+      - customerNumber
+      - legalName
+      - partyId
+      - status
     DuplicateCandidate:
       type: object
+      description: Duplicate candidate summary returned on 409 or as advisory in 201
       properties:
         partyId:
           type: string
+          description: Candidate party ID
+          example: 01960003-0000-7000-8000-000000000002
         legalName:
           type: string
+          description: Candidate legal name
+          example: Acme Industrial Supply Co.
         matchReason:
           type: string
+          description: Reason this candidate matched
+          example: LEGAL_NAME_SIMILARITY
+      required:
+      - legalName
+      - matchReason
+      - partyId
     CreateVehicleForPartyResponse:
       type: object
+      description: Response returned after creating a vehicle record for a party
       properties:
         vehicleId:
           type: string
+          description: Newly created vehicle identifier
+          example: 01960003-0000-7000-8000-000000000001
+          minLength: 1
         partyId:
           type: string
+          description: Party identifier of the vehicle owner
+          example: 01960003-0000-7000-8000-000000000002
+          minLength: 1
         vinNumber:
           type: string
+          description: Vehicle Identification Number
+          example: 1HGCM82633A004352
         unitNumber:
           type: string
+          description: Unit number or internal reference
+          example: UNIT-204
         description:
           type: string
+          description: Human-readable vehicle description
+          example: 2020 Ford F-150 XLT
         licensePlate:
           type: string
+          description: License plate
+          example: ABC-1234
         status:
           type: string
+          description: Vehicle status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          example: ACTIVE
+          minLength: 1
         createdAt:
           type: string
+          description: Timestamp of creation (ISO 8601)
+          example: 2026-06-17 10:15:30+00:00
+      required:
+      - partyId
+      - status
+      - vehicleId
     MergePartiesRequest:
       type: object
       description: Merge request with source party IDs
       properties:
         survivorPartyId:
           type: string
+          description: ID of the party to merge into (survivor party). Sourced from the URL path.
+          example: 01960003-0000-7000-8000-000000000001
         losingPartyId:
           type: string
+          description: ID of the party to be merged away (losing party)
+          example: 01960003-0000-7000-8000-000000000002
+          minLength: 1
         justification:
           type: string
+          description: Justification for the merge
+          example: Duplicate party created during onboarding; consolidating records.
+          maxLength: 1000
+          minLength: 0
+      required:
+      - justification
+      - losingPartyId
     MergePartiesResponse:
       type: object
+      description: Result of a party merge operation
       properties:
         mergeAuditId:
           type: string
+          description: Merge audit record ID (for traceability)
+          example: 01960003-0000-7000-8000-000000000003
+          minLength: 1
         survivorPartyId:
           type: string
+          description: Survivor party ID (canonical identifier for merged entity)
+          example: 01960003-0000-7000-8000-000000000001
+          minLength: 1
         losingPartyId:
           type: string
+          description: Losing party ID (now merged away)
+          example: 01960003-0000-7000-8000-000000000002
+          minLength: 1
         mergedPartyAlias:
           type: string
+          description: Alias/redirect ID for the losing party, pointing to the survivor
+          example: 01960003-0000-7000-8000-000000000001
         status:
           type: string
+          description: Merge status
+          example: COMPLETED
+          minLength: 1
         completedAt:
           type: string
+          description: Timestamp of merge completion (ISO 8601)
+          example: 2026-02-20 14:45:00+00:00
+      required:
+      - losingPartyId
+      - mergeAuditId
+      - status
+      - survivorPartyId
     SearchPartiesRequest:
       type: object
       description: Search criteria
       properties:
         name:
           type: string
+          description: Party name search term (matches legalName or displayName)
+          example: Acme Corporation
+          maxLength: 200
+          minLength: 0
         email:
           type: string
+          description: Search by email address
+          example: jane@acme.com
+          maxLength: 254
+          minLength: 0
         phone:
           type: string
+          description: Search by phone number
+          example: +1-555-0100
+          maxLength: 50
+          minLength: 0
         taxId:
           type: string
+          description: Search by tax ID
+          example: 12-3456789
+          maxLength: 50
+          minLength: 0
         partyType:
           type: string
+          description: Filter by party type (ORGANIZATION|INDIVIDUAL)
+          example: ORGANIZATION
+          maxLength: 40
+          minLength: 0
         status:
           type: string
+          description: Filter by status (ACTIVE|PENDING|SUSPENDED|INACTIVE)
+          example: ACTIVE
+          maxLength: 40
+          minLength: 0
         includeMerged:
           type: boolean
+          description: Include merged parties in results (default false); admin-only troubleshooting toggle
+          example: false
         pageNumber:
           type: integer
           format: int32
+          description: 'Pagination: page number (1-indexed, default 1)'
+          example: 1
+          minimum: 1
         pageSize:
           type: integer
           format: int32
+          description: 'Pagination: items per page (default 20, max 100)'
+          example: 20
+          maximum: 100
+          minimum: 1
         sortField:
           type: string
+          description: Sort field (legalName|createdAt|modifiedAt)
+          example: legalName
+          maxLength: 40
+          minLength: 0
         sortOrder:
           type: string
+          description: Sort order (ASC|DESC)
+          example: ASC
+          maxLength: 4
+          minLength: 0
     PartySummary:
       type: object
+      description: Party summary record for a directory row
       properties:
         partyId:
           type: string
+          description: Unique identifier of the party
+          example: 01960003-0000-7000-8000-000000000001
         legalName:
           type: string
+          description: Legal name of the party
+          example: Acme Corporation
         displayName:
           type: string
+          description: Display name of the party
+          example: Acme
         partyType:
           type: string
+          description: Party type (ORGANIZATION|INDIVIDUAL)
+          example: ORGANIZATION
+        customerNumber:
+          type: string
+          description: Human-readable customer/account number for display and lookup
+          example: CUST-000123
         status:
           type: string
+          description: Party status (ACTIVE|PENDING|SUSPENDED|INACTIVE)
+          example: ACTIVE
         createdAt:
           type: string
+          description: Creation timestamp (ISO 8601)
+          example: 2026-01-15 09:30:00+00:00
+        primaryContact:
+          $ref: '#/components/schemas/PrimaryContact'
+        vehicleCount:
+          type: integer
+          format: int32
+          description: Number of vehicles associated with the party (defaults to 0)
+          example: 3
+      required:
+      - partyId
+    PrimaryContact:
+      type: object
+      description: Lightweight primary-contact projection for directory rows
+      properties:
+        name:
+          type: string
+          description: Contact name
+          example: Jane Doe
+        email:
+          type: string
+          description: Contact email address
+          example: jane@acme.com
+        phone:
+          type: string
+          description: Contact phone number
+          example: +1-555-0100
     SearchPartiesResponse:
       type: object
+      description: Paged response of matching party summaries
       properties:
         results:
           type: array
+          description: List of party summary records
           items:
             $ref: '#/components/schemas/PartySummary'
         totalCount:
           type: integer
           format: int32
+          description: Total number of matching records
+          example: 42
         pageNumber:
           type: integer
           format: int32
+          description: Current page number
+          example: 1
         pageSize:
           type: integer
           format: int32
+          description: Items per page
+          example: 20
+      required:
+      - pageNumber
+      - pageSize
+      - results
+      - totalCount
     Pageable:
       type: object
       properties:
@@ -2703,6 +3172,7 @@ components:
           type: string
           format: uuid
           description: Contact point ID
+          example: 01960003-0000-7000-8000-000000000002
         contactType:
           type: string
           description: Type of contact point
@@ -2719,6 +3189,10 @@ components:
           example: john.doe@example.com
         primary:
           type: boolean
+      required:
+      - contactPointId
+      - contactType
+      - value
     GetPersonResponse:
       type: object
       description: Person details response
@@ -2727,7 +3201,7 @@ components:
           type: string
           format: uuid
           description: Unique identifier of the person
-          example: 550e8400-e29b-41d4-a716-446655440000
+          example: 01960003-0000-7000-8000-000000000001
         firstName:
           type: string
           description: First name
@@ -2771,72 +3245,172 @@ components:
           type: string
           format: date-time
           description: Timestamp when the person was created
+          example: 2026-01-15 10:30:00+00:00
         updatedAt:
           type: string
           format: date-time
           description: Timestamp when the person was last updated
+          example: 2026-02-20 14:45:00+00:00
+      required:
+      - commercialAccountCount
+      - commercialContact
+      - createdAt
+      - firstName
+      - individualCustomer
+      - lastName
+      - personId
     AssignedRole:
       type: object
+      description: An assigned role with its primary flag
       properties:
         roleCode:
           type: string
+          description: Role code
+          enum:
+          - BILLING
+          - APPROVER
+          - DRIVER
+          example: BILLING
+          minLength: 1
         roleLabel:
           type: string
+          description: Role display label
+          example: Billing Contact
         isPrimary:
           type: boolean
+          description: Whether this contact is primary for this role
+          example: true
+      required:
+      - roleCode
     ContactWithRoles:
       type: object
+      description: A single contact with its assigned roles
       properties:
         contactId:
           type: string
+          description: Contact point identifier (person/contact)
+          example: 01960003-0000-7000-8000-000000000020
+          minLength: 1
         contactName:
           type: string
+          description: Contact name
+          example: Jane Doe
         email:
           type: string
+          description: Email address
+          example: jane@acme.com
         phone:
           type: string
+          description: Phone number
+          example: +1-555-0142
         hasPrimaryEmail:
           type: boolean
+          description: Whether the contact has at least one primary email on file
+          example: true
         roles:
           type: array
+          description: Assigned roles for this contact
           items:
             $ref: '#/components/schemas/AssignedRole'
         invoiceDeliveryMethod:
           type: string
+          description: Invoice delivery method for this contact
+          enum:
+          - EMAIL
+          - PHONE
+          - NONE
+          example: EMAIL
+      required:
+      - contactId
+      - contactName
     GetContactsWithRolesResponse:
       type: object
+      description: Contacts with their assigned roles and primary flags for a party
       properties:
         partyId:
           type: string
+          description: Party identifier the contacts belong to
+          example: 01960003-0000-7000-8000-000000000001
+          minLength: 1
         contacts:
           type: array
+          description: List of contacts with assigned roles
           items:
             $ref: '#/components/schemas/ContactWithRoles'
+      required:
+      - contacts
+      - partyId
     GetCommunicationPreferencesResponse:
       type: object
+      description: Communication preferences and consent flags for a party
       properties:
         partyId:
           type: string
+          description: Party identifier the preferences belong to
+          example: 01960003-0000-7000-8000-000000000001
+          minLength: 1
         version:
           type: string
+          description: Optimistic locking version token for concurrent updates
+          example: '3'
         emailPreference:
           type: string
+          description: Email communication preference
+          enum:
+          - OPT_IN
+          - OPT_OUT
+          - NOT_APPLICABLE
+          example: OPT_IN
         smsPreference:
           type: string
+          description: SMS communication preference
+          enum:
+          - OPT_IN
+          - OPT_OUT
+          - NOT_APPLICABLE
+          example: OPT_OUT
         phonePreference:
           type: string
+          description: Phone communication preference
+          enum:
+          - OPT_IN
+          - OPT_OUT
+          - NOT_APPLICABLE
+          example: OPT_IN
         marketingPreference:
           type: string
+          description: Marketing communications preference
+          enum:
+          - OPT_IN
+          - OPT_OUT
+          example: OPT_OUT
         consentFlags:
           type: object
           additionalProperties:
             type: boolean
+          description: Consent flags keyed by consent type
+          example:
+            gdpr: true
+            tcpa: false
         preferencesNote:
           type: string
+          description: User-provided note or preferences summary
+          example: Prefers contact after 5pm
         updatedAt:
           type: string
+          description: Last update timestamp (ISO 8601)
+          example: 2026-06-17 10:15:30+00:00
         updateSource:
           type: string
+          description: Source of the last update
+          enum:
+          - APP
+          - API
+          - ADMIN
+          - IMPORT
+          example: API
+      required:
+      - partyId
     ContactWithRole:
       type: object
       description: Contact information with role assignments
@@ -2845,13 +3419,17 @@ components:
           type: string
           format: uuid
           description: Relationship ID
+          example: 01960003-0000-7000-8000-000000000010
         individualId:
           type: string
           format: uuid
           description: Individual person ID
+          example: 01960003-0000-7000-8000-000000000011
         roles:
           type: array
           description: Roles assigned to this contact
+          example:
+          - BILLING
           items:
             type: string
             description: Role type for party relationships
@@ -2870,14 +3448,20 @@ components:
           type: string
           format: date
           description: Effective start date
+          example: 2026-01-01
         effectiveTo:
           type: string
           format: date
           description: Effective end date (null if active)
+          example: 2026-12-31
         individual:
           $ref: '#/components/schemas/IndividualDetails'
         primaryBilling:
           type: boolean
+      required:
+      - individualId
+      - relationshipId
+      - status
     GetCommercialAccountContactsResponse:
       type: object
       description: Contacts with roles for a commercial account
@@ -2885,11 +3469,15 @@ components:
         commercialAccountId:
           type: string
           description: ID of the commercial account
+          example: 01960003-0000-7000-8000-000000000001
         contacts:
           type: array
           description: List of contacts with their roles
           items:
             $ref: '#/components/schemas/ContactWithRole'
+      required:
+      - commercialAccountId
+      - contacts
     IndividualDetails:
       type: object
       description: Individual person details
@@ -2901,9 +3489,13 @@ components:
         email:
           type: string
           description: Primary email address
+          example: john.doe@acme.com
         phone:
           type: string
           description: Primary phone number
+          example: +1-555-0142
+      required:
+      - displayName
     BillingTermsRef:
       type: object
       description: Billing term reference entry
@@ -2912,15 +3504,39 @@ components:
           type: string
           description: Billing term code identifier
           example: NET_30
+          minLength: 1
         label:
           type: string
           description: Human-readable label
           example: Net 30
+          minLength: 1
         netDays:
           type: integer
           format: int32
           description: Net payment days. Negative values indicate prepayment is required.
           example: 30
+      required:
+      - code
+      - label
+      - netDays
+    PersonLinkReport:
+      type: object
+      properties:
+        totalLinks:
+          type: integer
+          format: int32
+        resolved:
+          type: integer
+          format: int32
+        unresolvedPersonIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        posPeopleReachable:
+          type: boolean
+        healthy:
+          type: boolean
     GetAccountTierResponse:
       type: object
       description: Account tier information response
@@ -2928,7 +3544,7 @@ components:
         accountId:
           type: string
           description: Account/party identifier
-          example: 123e4567-e89b-12d3-a456-426614174000
+          example: 01960003-0000-7000-8000-000000000001
         tier:
           type: string
           description: Current tier level
@@ -2948,36 +3564,74 @@ components:
           type: string
           format: date-time
           description: When the tier was last assigned or updated
+          example: 2026-06-17 10:15:30+00:00
         tierAssignedBy:
           type: string
           description: Who assigned or last modified the tier
+          example: user-admin
         notes:
           type: string
           description: Optional notes about tier assignment or status
+          example: Upgraded after Q2 spend review
         manualOverride:
           type: boolean
           description: Whether tier was manually assigned or auto-calculated
+          example: false
+      required:
+      - accountId
+      - manualOverride
+      - tier
+      - tierDisplayName
     GetPartyResponse:
       type: object
+      description: Party details for a commercial account or individual party
       properties:
         partyId:
           type: string
+          description: Party ID (canonical CRM identifier)
+          example: 01960003-0000-7000-8000-000000000001
+          minLength: 1
         partyType:
           type: string
+          description: Party type discriminator
+          example: ORGANIZATION
+          minLength: 1
         legalName:
           type: string
+          description: Legal name of the party
+          example: Acme Industrial Supply LLC
+          minLength: 1
         displayName:
           type: string
+          description: Display/trading name
+          example: Acme Supply
         taxId:
           type: string
+          description: Tax identification number
+          example: 82-1234567
         status:
           type: string
+          description: Current status of the party
+          example: ACTIVE
+          minLength: 1
         billingTermsId:
           type: string
+          description: Billing terms ID
+          example: 01960003-0000-7000-8000-000000000010
         createdAt:
           type: string
+          description: Party creation timestamp (ISO 8601)
+          example: 2026-01-15 10:30:00+00:00
         modifiedAt:
           type: string
+          description: Last modification timestamp (ISO 8601)
+          example: 2026-02-20 14:45:00+00:00
+      required:
+      - createdAt
+      - legalName
+      - partyId
+      - partyType
+      - status
     DuplicateCheckResponse:
       type: object
       description: Response containing potential duplicate party matches
@@ -2989,12 +3643,15 @@ components:
         exactMatchPartyId:
           type: string
           description: ID of exact-match party, if any
-          example: f47ac10b-58cc-4372-a567-0e02b2c3d479
+          example: 01960003-0000-7000-8000-000000000001
         potentialDuplicates:
           type: array
           description: List of potential duplicate matches
           items:
             $ref: '#/components/schemas/PartyMatch'
+      required:
+      - duplicatesFound
+      - potentialDuplicates
     PartyMatch:
       type: object
       description: A single potential duplicate party match
@@ -3002,7 +3659,8 @@ components:
         partyId:
           type: string
           description: Party ID
-          example: f47ac10b-58cc-4372-a567-0e02b2c3d479
+          example: 01960003-0000-7000-8000-000000000001
+          minLength: 1
         legalName:
           type: string
           description: Legal name of the party
@@ -3019,6 +3677,11 @@ components:
           - EXACT
           - FUZZY
           example: EXACT
+      required:
+      - legalName
+      - matchType
+      - partyId
+      - score
   securitySchemes:
     bearerAuth:
       type: http

@@ -2542,6 +2542,45 @@ paths:
         - inventory:on_hand:view
       x-required-permissions:
       - inventory:on_hand:view
+  /v1/inventory/locations/{locationId}/inventory-items:
+    get:
+      tags:
+      - Inventory Locations
+      summary: List location inventory contents
+      description: Returns the on-hand stock items (positive quantity) at a storage location.
+      operationId: listLocationInventoryItems
+      parameters:
+      - name: locationId
+        in: path
+        description: Storage location identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Location inventory contents returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationInventoryItemsResponse'
+        '400':
+          description: Invalid location identifier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: User lacks required on-hand view authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
   /v1/inventory/locations/{locationId}/inventory-inquiry:
     get:
       tags:
@@ -3008,7 +3047,7 @@ paths:
       - Inventory Availability
       summary: Query inventory availability by SKU (list form)
       description: Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location, wrapped in a list. Accepts 'sku' as the query param name.
-      operationId: queryAvailabilityBySku
+      operationId: queryAvailabilityBySkuList
       parameters:
       - name: sku
         in: query
@@ -3063,6 +3102,12 @@ paths:
                 $ref: '#/components/schemas/ApiError'
         '404':
           description: Product SKU or location not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Unexpected server error
           content:
             application/json:
               schema:
@@ -5166,6 +5211,38 @@ components:
       required:
       - siteId
       - totals
+    LocationInventoryItem:
+      type: object
+      description: A single on-hand stock item line
+      properties:
+        stockItemId:
+          type: string
+          description: Stock item identifier (product SKU)
+          example: MICH-XC2-0001
+        onHandQuantity:
+          type: integer
+          format: int64
+          description: On-hand quantity of this stock item at the location
+          example: 24
+      required:
+      - onHandQuantity
+      - stockItemId
+    LocationInventoryItemsResponse:
+      type: object
+      description: On-hand inventory contents for a storage location
+      properties:
+        locationId:
+          type: string
+          format: uuid
+          description: Storage location identifier
+        items:
+          type: array
+          description: Stock items currently on hand at the location
+          items:
+            $ref: '#/components/schemas/LocationInventoryItem'
+      required:
+      - items
+      - locationId
     LocationInventoryInquiryResponse:
       type: object
       description: Inventory summary for a storage location

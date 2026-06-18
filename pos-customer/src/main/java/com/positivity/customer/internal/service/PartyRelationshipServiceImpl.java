@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.service;
 
+import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
 import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
 import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
@@ -17,7 +18,10 @@ import com.positivity.customer.service.PartyRelationshipService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -55,6 +59,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
     private final CommercialPartyRepository partyRepository;
     private final PersonPartyRepository personRepository;
     private final ContactPointRepository contactPointRepository;
+    private final PeopleClient peopleClient;
     private final Clock clock;
 
     /**
@@ -199,16 +204,39 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
                     .toList();
         }
 
+        // Names from pos-people (source of truth, ADR-0015 I2), batched by canonical id.
+        Map<UUID, PeopleClient.PersonIdentity> identities =
+                peopleClient.fetchPersonIdentitiesQuietly(relationships.stream()
+                        .map(rel -> rel.getToPerson().getPersonId())
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet()));
+
         // Map to response DTOs
         List<GetCommercialAccountContactsResponse.ContactWithRole> contacts = relationships.stream()
                 .map(rel -> {
                     PersonParty person = rel.getToPerson();
-                    // Get primary contact points for the person
-                    String email = getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.EMAIL);
-                    String phone = getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.PHONE_MOBILE);
-                    if (phone == null) {
-                        phone = getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.PHONE_WORK);
+                    PeopleClient.PersonIdentity identity =
+                            person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
+
+                    // Email/phone from pos-people (source of truth, ADR-0015 I2);
+                    // fall back to the local contact_point copy when absent.
+                    String email = identity != null && !identity.emails().isEmpty()
+                            ? identity.emails().get(0)
+                            : getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.EMAIL);
+                    String phone;
+                    if (identity != null && !identity.phones().isEmpty()) {
+                        phone = identity.phones().get(0);
+                    } else {
+                        phone = getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.PHONE_MOBILE);
+                        if (phone == null) {
+                            phone = getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.PHONE_WORK);
+                        }
                     }
+
+                    String displayName =
+                            identity != null && !identity.displayName().isBlank()
+                                    ? identity.displayName()
+                                    : person.getDisplayName();
 
                     return GetCommercialAccountContactsResponse.ContactWithRole.builder()
                             .relationshipId(rel.getPartyRelationshipId())
@@ -219,7 +247,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
                             .effectiveFrom(rel.getEffectiveStartDate())
                             .effectiveTo(rel.getEffectiveEndDate())
                             .individual(GetCommercialAccountContactsResponse.IndividualDetails.builder()
-                                    .displayName(person.getDisplayName())
+                                    .displayName(displayName)
                                     .email(email)
                                     .phone(phone)
                                     .build())
@@ -305,7 +333,9 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
     }
 
     private String getPrimaryContactValue(UUID personId, ContactPointType type) {
-        ContactPoint primary = contactPointRepository.findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(personId, type);
+        ContactPoint primary =
+                contactPointRepository.findFirstByPersonPartyIdAndContactTypeAndIsPrimaryTrueOrderByCreatedAtAsc(
+                        personId, type);
         if (primary != null) {
             return primary.getValue();
         }

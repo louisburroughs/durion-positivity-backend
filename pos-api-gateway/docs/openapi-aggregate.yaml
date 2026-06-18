@@ -275,10 +275,6 @@ paths:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1accounts~1parties~1{partyId}~1billing-rules
   /v1/crm/accounts/parties/{partyId}/communicationPreferences:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1accounts~1parties~1{partyId}~1communicationPreferences
-  /v1/crm/accounts/parties/{partyId}/contacts:
-    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1accounts~1parties~1{partyId}~1contacts
-  /v1/crm/accounts/parties/{partyId}/contacts/{contactId}/roles:
-    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1accounts~1parties~1{partyId}~1contacts~1{contactId}~1roles
   /v1/crm/accounts/parties/{partyId}/merge:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1accounts~1parties~1{partyId}~1merge
   /v1/crm/accounts/parties/{partyId}/vehicles:
@@ -287,6 +283,8 @@ paths:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1accounts~1tierResolve
   /v1/crm/accounts/{accountId}/tier:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1accounts~1{accountId}~1tier
+  /v1/crm/admin/person-links/reconcile:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1admin~1person-links~1reconcile
   /v1/crm/billing-terms:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1billing-terms
   /v1/crm/commercial-accounts/{partyId}/contacts:
@@ -615,6 +613,8 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1availability
   /v1/people/bulk-ingest:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1bulk-ingest
+  /v1/people/by-ids:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1by-ids
   /v1/people/employees:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1employees
   /v1/people/employees/{employeeId}:
@@ -683,6 +683,8 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1workSessions~1{id}~1breaks~1stop
   /v1/people/{personId}:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1{personId}
+  /v1/people/{personId}/contact-points:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1{personId}~1contact-points
   /v1/people/{personId}/users:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1{personId}~1users
   /v1/people/{personUuid}/access/assignments:

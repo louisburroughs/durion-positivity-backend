@@ -16,14 +16,24 @@ public final class PersonSpecifications {
             List<Predicate> predicates = new ArrayList<>();
 
             if (type != null) {
+                // employee_number is the discriminator for "is an employee". The person
+                // table also holds customer individuals and commercial contacts (ADR-0015
+                // person unification), so status alone is not sufficient — those records
+                // may carry an EmployeeStatus without being employees.
                 switch (type.toUpperCase()) {
-                    case "EMPLOYEE" -> predicates.add(root.get("status").isNotNull());
-                    case "ACTIVE" -> predicates.add(cb.equal(root.get("status"), EmployeeStatus.ACTIVE));
-                    case "INACTIVE" -> predicates.add(root.get("status").in(
-                            EmployeeStatus.ON_LEAVE,
-                            EmployeeStatus.SUSPENDED,
-                            EmployeeStatus.TERMINATED,
-                            EmployeeStatus.DISABLED));
+                    case "EMPLOYEE" -> predicates.add(cb.isNotNull(root.get("employeeNumber")));
+                    case "ACTIVE" -> {
+                        predicates.add(cb.isNotNull(root.get("employeeNumber")));
+                        predicates.add(cb.equal(root.get("status"), EmployeeStatus.ACTIVE));
+                    }
+                    case "INACTIVE" -> {
+                        predicates.add(cb.isNotNull(root.get("employeeNumber")));
+                        predicates.add(root.get("status").in(
+                                EmployeeStatus.ON_LEAVE,
+                                EmployeeStatus.SUSPENDED,
+                                EmployeeStatus.TERMINATED,
+                                EmployeeStatus.DISABLED));
+                    }
                     default -> { /* ALL or unrecognised — no predicate */ }
                 }
             }

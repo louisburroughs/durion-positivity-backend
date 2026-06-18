@@ -7,17 +7,17 @@ import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
 import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.entity.ContactPoint;
+import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ContactPointRepository;
-import com.positivity.customer.internal.repository.ContactRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PersonService;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,9 +59,6 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
     private ContactPointRepository contactPointRepository;
 
     @Autowired
-    private ContactRepository contactRepository;
-
-    @Autowired
     private CommercialPartyRepository commercialPartyRepository;
 
     @Autowired
@@ -71,7 +68,6 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
     void setUp() {
         // Clean up before each test
         partyRelationshipRepository.deleteAll();
-        contactRepository.deleteAll();
         commercialPartyRepository.deleteAll();
         contactPointRepository.deleteAll();
         personRepository.deleteAll();
@@ -356,16 +352,15 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         party.setPartyNumber("PARTY-2001");
         party.setLegalName("Acme Logistics");
         party.setDisplayName("Acme Logistics");
-
-        Contact contact = new Contact();
-        contact.setPersonId(created.getPersonId());
-        contact.setFirstName("Jane");
-        contact.setLastName("Smith");
-        contact.setEmail("jane@example.com");
-        contact.setActive(true);
-        contact.setCommercialParty(party);
-        party.getContacts().add(contact);
         commercialPartyRepository.save(party);
+
+        PersonParty personParty =
+                personRepository.findByPersonId(created.getPersonId()).orElseThrow();
+        PartyRelationship relationship = new PartyRelationship();
+        relationship.setFromParty(party);
+        relationship.setToPerson(personParty);
+        relationship.setEffectiveStartDate(LocalDate.of(2024, 1, 1));
+        partyRelationshipRepository.save(relationship);
 
         List<GetPersonResponse> results = personService.searchPersons(null, "jane@example.com", null, 20, 0);
 

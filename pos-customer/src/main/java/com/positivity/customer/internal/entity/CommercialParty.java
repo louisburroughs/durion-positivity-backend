@@ -20,7 +20,6 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -100,23 +99,10 @@ public class CommercialParty extends AbstractParty {
     @Schema(description = "Embedded billing rules for this commercial party")
     private BillingRulesEmbeddable billingRules;
 
-    @OneToMany(mappedBy = "commercialParty", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @NotEmpty
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    private Set<Contact> contacts = new HashSet<>();
-
-    private void ensureContactsPresent() {
-        if (contacts == null || contacts.isEmpty()) {
-            throw new IllegalStateException("Party must have at least one contact");
-        }
-    }
-
     @PreUpdate
     @PrePersist
     public void onPersist() {
         validateNames();
-        ensureContactsPresent();
     }
 
     /** Helper method to validate customer names */

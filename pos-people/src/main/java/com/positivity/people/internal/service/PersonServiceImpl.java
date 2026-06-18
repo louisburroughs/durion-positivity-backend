@@ -4,10 +4,13 @@ import com.positivity.people.internal.client.SecurityServiceClient;
 import com.positivity.people.internal.dto.Person;
 import com.positivity.people.internal.dto.ResolvePersonRequest;
 import com.positivity.people.internal.dto.ResolvePersonResponse;
+import com.positivity.people.internal.entity.PersonContactPoint;
+import com.positivity.people.internal.repository.PersonContactPointRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.PersonSpecifications;
 import com.positivity.people.service.PersonService;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -16,6 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -39,6 +43,8 @@ public class PersonServiceImpl implements PersonService {
 
     private final PersonRepository personRepository;
 
+    private final PersonContactPointRepository personContactPointRepository;
+
     private final SecurityServiceClient securityServiceClient;
 
     @Value("${pos.people.matching.threshold:30}")
@@ -47,9 +53,7 @@ public class PersonServiceImpl implements PersonService {
     @Override
     @NonNull
     public List<Person> getAllPeople(@Nullable String type, @Nullable String q) {
-        return personRepository
-                .findAll(PersonSpecifications.directoryFilter(type, q))
-                .stream()
+        return personRepository.findAll(PersonSpecifications.directoryFilter(type, q)).stream()
                 .map(this::toDto)
                 .toList();
     }
@@ -58,6 +62,47 @@ public class PersonServiceImpl implements PersonService {
     @NonNull
     public Optional<Person> getPersonById(@NonNull UUID id) {
         return personRepository.findById(id).map(this::toDto);
+    }
+
+    @Override
+    @NonNull
+    public List<Person> getPeopleByIds(@NonNull Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        List<Person> people =
+                personRepository.findAllById(ids).stream().map(this::toDto).toList();
+
+        // Attach typed contact points (pos-people is SoT for contacts, ADR-0015 I2), batched.
+        Map<UUID, List<Person.ContactPointDto>> contactsByPerson =
+                personContactPointRepository.findByPersonIdIn(ids).stream()
+                        .collect(Collectors.groupingBy(
+                                PersonContactPoint::getPersonId,
+                                Collectors.mapping(
+                                        cp -> new Person.ContactPointDto(
+                                                cp.getContactType(), cp.getValue(), cp.isPrimary()),
+                                        Collectors.toList())));
+        people.forEach(p -> p.setContactPoints(contactsByPerson.getOrDefault(p.getId(), List.of())));
+        return people;
+    }
+
+    @Override
+    @Transactional
+    public void replaceContactPoints(@NonNull UUID personId, @NonNull List<Person.ContactPointDto> contactPoints) {
+        personContactPointRepository.deleteByPersonId(personId);
+        if (contactPoints.isEmpty()) {
+            return;
+        }
+        List<PersonContactPoint> entities = contactPoints.stream()
+                .filter(cp -> cp.getContactType() != null && cp.getValue() != null)
+                .map(cp -> PersonContactPoint.builder()
+                        .personId(personId)
+                        .contactType(cp.getContactType())
+                        .value(cp.getValue())
+                        .isPrimary(cp.isPrimary())
+                        .build())
+                .toList();
+        personContactPointRepository.saveAll(entities);
     }
 
     @Override

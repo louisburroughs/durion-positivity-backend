@@ -1,5 +1,7 @@
 package com.positivity.people.internal.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.positivity.people.internal.enums.ContactPointType;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -29,6 +31,9 @@ public class Person {
 
     @Schema(description = "Employee status. Null if the person has no employee record.")
     private EmployeeStatus employeeStatus;
+
+    @Schema(description = "Typed contact points (email, phone). Populated on batch by-id lookups.")
+    private List<ContactPointDto> contactPoints;
 
     public UUID getId() {
         return id;
@@ -92,5 +97,57 @@ public class Person {
 
     public void setEmployeeStatus(EmployeeStatus employeeStatus) {
         this.employeeStatus = employeeStatus;
+    }
+
+    public List<ContactPointDto> getContactPoints() {
+        return contactPoints;
+    }
+
+    public void setContactPoints(List<ContactPointDto> contactPoints) {
+        this.contactPoints = contactPoints;
+    }
+
+    /** Typed contact point (email, phone) for a person. */
+    public static class ContactPointDto {
+        private ContactPointType contactType;
+        private String value;
+
+        // Pin the JSON name to "primary" for BOTH directions. The isPrimary() getter
+        // serializes as "primary", but without this the field deserializes from
+        // "isPrimary" — an asymmetry that 400'd the contact-point write endpoint.
+        @JsonProperty("primary")
+        private boolean isPrimary;
+
+        public ContactPointDto() {}
+
+        public ContactPointDto(ContactPointType contactType, String value, boolean isPrimary) {
+            this.contactType = contactType;
+            this.value = value;
+            this.isPrimary = isPrimary;
+        }
+
+        public ContactPointType getContactType() {
+            return contactType;
+        }
+
+        public void setContactType(ContactPointType contactType) {
+            this.contactType = contactType;
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+        public void setValue(String value) {
+            this.value = value;
+        }
+
+        public boolean isPrimary() {
+            return isPrimary;
+        }
+
+        public void setPrimary(boolean primary) {
+            this.isPrimary = primary;
+        }
     }
 }

@@ -8,7 +8,6 @@ import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest.RoleAssignment;
 import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.entity.ContactRole;
 import com.positivity.customer.internal.entity.ContactRoleAssignment;
 import com.positivity.customer.internal.entity.PersonParty;
@@ -79,15 +78,6 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
         testParty.setPartyNumber("PARTY-TEST-" + System.currentTimeMillis());
         testParty.setCustomerNumber("CUST-TEST-" + System.currentTimeMillis());
         testParty.setStatus(AccountStatus.ACTIVE);
-
-        // Create and add a contact to the party before saving
-        Contact contact = new Contact();
-        contact.setCommercialParty(testParty);
-        contact.setPersonId(testContactUuid);
-        contact.setFirstName("John");
-        contact.setLastName("Doe");
-        contact.setActive(true);
-        testParty.getContacts().add(contact);
 
         testParty = partyRepository.save(testParty);
         testPartyUuid = testParty.getPartyId();

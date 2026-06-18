@@ -15,7 +15,6 @@ import jakarta.persistence.Inheritance;
 import jakarta.persistence.InheritanceType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Transient;
-import jakarta.validation.constraints.Email;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
@@ -48,13 +47,6 @@ public abstract class AbstractParty implements Party {
     @Column(unique = true, nullable = false)
     @Schema(description = "Unique customer number", example = "CUST-1001")
     private String customerNumber;
-
-    @Schema(description = "Phone number of the customer", example = "+1-888-555-1234")
-    private String phoneNumber;
-
-    @Email
-    @Schema(description = "Email address of the customer", example = "john.doe@example.com")
-    private String email;
 
     @Schema(description = "Primary address label or identifier for the customer", example = "123 Main St, Springfield")
     private String primaryAddress;

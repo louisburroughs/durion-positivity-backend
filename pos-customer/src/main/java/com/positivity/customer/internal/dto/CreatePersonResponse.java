@@ -3,6 +3,7 @@ package com.positivity.customer.internal.dto;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -24,22 +25,39 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Response after creating a person record")
 public class CreatePersonResponse {
 
-    @Schema(description = "Unique identifier of the created person", example = "550e8400-e29b-41d4-a716-446655440000")
+    @NotNull
+    @Schema(
+            description = "Unique identifier of the created person",
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID personId;
 
-    @Schema(description = "First name", example = "John")
+    @NotNull
+    @Schema(description = "First name", example = "John", requiredMode = Schema.RequiredMode.REQUIRED)
     private String firstName;
 
-    @Schema(description = "Last name", example = "Doe")
+    @NotNull
+    @Schema(description = "Last name", example = "Doe", requiredMode = Schema.RequiredMode.REQUIRED)
     private String lastName;
 
-    @Schema(description = "Preferred contact method", example = "EMAIL")
+    @NotNull
+    @Schema(
+            description = "Preferred contact method",
+            example = "EMAIL",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private PreferredContactMethod preferredContactMethod;
 
-    @Schema(description = "Number of contact points created")
+    @Schema(
+            description = "Number of contact points created",
+            example = "2",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private int contactPointsCreated;
 
-    @Schema(description = "Timestamp when the person was created")
+    @NotNull
+    @Schema(
+            description = "Timestamp when the person was created",
+            example = "2026-01-01T12:00:00Z",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private Instant createdAt;
 
     /**

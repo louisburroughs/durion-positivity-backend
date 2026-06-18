@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.service;
 
+import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
@@ -12,6 +13,7 @@ import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.ContactRoleService;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -49,16 +51,19 @@ public class ContactRoleServiceImpl implements ContactRoleService {
     private final CommercialPartyRepository partyRepository;
     private final PersonPartyRepository personRepository;
     private final ContactPointRepository contactPointRepository;
+    private final PeopleClient peopleClient;
 
     ContactRoleServiceImpl(
             ContactRoleAssignmentRepository roleAssignmentRepository,
             CommercialPartyRepository partyRepository,
             PersonPartyRepository personRepository,
-            ContactPointRepository contactPointRepository) {
+            ContactPointRepository contactPointRepository,
+            PeopleClient peopleClient) {
         this.roleAssignmentRepository = roleAssignmentRepository;
         this.partyRepository = partyRepository;
         this.personRepository = personRepository;
         this.contactPointRepository = contactPointRepository;
+        this.peopleClient = peopleClient;
     }
 
     /**
@@ -83,6 +88,10 @@ public class ContactRoleServiceImpl implements ContactRoleService {
         // Group assignments by contact
         var contactMap = assignments.stream().collect(Collectors.groupingBy(ContactRoleAssignment::getContactId));
 
+        // Names from pos-people (source of truth, ADR-0015 I2), batched by canonical id.
+        Map<UUID, PeopleClient.PersonIdentity> identities =
+                peopleClient.fetchPersonIdentitiesQuietly(contactMap.keySet());
+
         List<GetContactsWithRolesResponse.ContactWithRoles> contacts = new ArrayList<>();
 
         for (var entry : contactMap.entrySet()) {
@@ -91,24 +100,44 @@ public class ContactRoleServiceImpl implements ContactRoleService {
 
             // Get person details
             personRepository.findByPersonId(contactId).ifPresent(person -> {
+                PeopleClient.PersonIdentity identity = identities.get(contactId);
+                String contactName = identity != null && !identity.displayName().isBlank()
+                        ? identity.displayName()
+                        : person.getFirstName() + " " + person.getLastName();
                 var contactDto = GetContactsWithRolesResponse.ContactWithRoles.builder()
                         .contactId(contactId.toString())
-                        .contactName(person.getFirstName() + " " + person.getLastName())
+                        .contactName(contactName)
                         .build();
 
-                // Get email and phone from contact points
-                var emailOpt =
-                        Optional.ofNullable(contactPointRepository.findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
-                                person.getPersonPartyId(),
-                                com.positivity.customer.internal.enums.ContactPointType.EMAIL));
-                emailOpt.ifPresent(cp -> contactDto.setEmail(cp.getValue()));
-                contactDto.setHasPrimaryEmail(emailOpt.isPresent());
+                // Email/phone from pos-people (source of truth, ADR-0015 I2);
+                // fall back to the local contact_point copy when absent.
+                String email = identity != null && !identity.emails().isEmpty()
+                        ? identity.emails().get(0)
+                        : Optional.ofNullable(
+                                        contactPointRepository
+                                                .findFirstByPersonPartyIdAndContactTypeAndIsPrimaryTrueOrderByCreatedAtAsc(
+                                                        person.getPersonPartyId(),
+                                                        com.positivity.customer.internal.enums.ContactPointType.EMAIL))
+                                .map(cp -> cp.getValue())
+                                .orElse(null);
+                if (email != null) {
+                    contactDto.setEmail(email);
+                }
+                contactDto.setHasPrimaryEmail(email != null);
 
-                var phoneOpt =
-                        Optional.ofNullable(contactPointRepository.findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
-                                person.getPersonPartyId(),
-                                com.positivity.customer.internal.enums.ContactPointType.PHONE_MOBILE));
-                phoneOpt.ifPresent(cp -> contactDto.setPhone(cp.getValue()));
+                String phone = identity != null && !identity.phones().isEmpty()
+                        ? identity.phones().get(0)
+                        : Optional.ofNullable(
+                                        contactPointRepository
+                                                .findFirstByPersonPartyIdAndContactTypeAndIsPrimaryTrueOrderByCreatedAtAsc(
+                                                        person.getPersonPartyId(),
+                                                        com.positivity.customer.internal.enums.ContactPointType
+                                                                .PHONE_MOBILE))
+                                .map(cp -> cp.getValue())
+                                .orElse(null);
+                if (phone != null) {
+                    contactDto.setPhone(phone);
+                }
 
                 // Map role assignments
                 List<GetContactsWithRolesResponse.AssignedRole> roles = contactAssignments.stream()

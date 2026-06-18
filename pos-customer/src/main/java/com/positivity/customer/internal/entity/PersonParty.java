@@ -24,6 +24,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import org.hibernate.annotations.BatchSize;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
@@ -67,6 +68,7 @@ public class PersonParty extends AbstractParty {
     private PreferredContactMethod preferredContactMethod = PreferredContactMethod.NONE;
 
     @OneToMany(mappedBy = "person", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = 20)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     @Schema(description = "Contact points (emails, phones) for this person")

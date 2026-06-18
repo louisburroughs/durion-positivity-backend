@@ -2,6 +2,8 @@ package com.positivity.customer.internal.dto;
 
 import com.positivity.customer.internal.enums.PartyRelationshipRole;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -26,10 +28,18 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Contacts with roles for a commercial account")
 public class GetCommercialAccountContactsResponse {
 
-    @Schema(description = "ID of the commercial account")
+    @NotNull
+    @Schema(
+            description = "ID of the commercial account",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private String commercialAccountId;
 
-    @Schema(description = "List of contacts with their roles")
+    @Valid
+    @NotNull
+    @Schema(
+            description = "List of contacts with their roles",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private List<ContactWithRole> contacts;
 
     /**
@@ -42,28 +52,54 @@ public class GetCommercialAccountContactsResponse {
     @Schema(description = "Contact information with role assignments")
     public static class ContactWithRole {
 
-        @Schema(description = "Relationship ID")
+        @NotNull
+        @Schema(
+                description = "Relationship ID",
+                example = "01960003-0000-7000-8000-000000000010",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         private UUID relationshipId;
 
-        @Schema(description = "Individual person ID")
+        @NotNull
+        @Schema(
+                description = "Individual person ID",
+                example = "01960003-0000-7000-8000-000000000011",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         private UUID individualId;
 
-        @Schema(description = "Roles assigned to this contact")
+        @Schema(
+                description = "Roles assigned to this contact",
+                example = "[\"BILLING\"]",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private Set<PartyRelationshipRole> roles;
 
-        @Schema(description = "Whether this is the primary billing contact")
+        @Schema(
+                description = "Whether this is the primary billing contact",
+                example = "true",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         private boolean isPrimaryBilling;
 
-        @Schema(description = "Status of the relationship", example = "ACTIVE")
+        @Schema(
+                description = "Status of the relationship",
+                example = "ACTIVE",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         private String status;
 
-        @Schema(description = "Effective start date")
+        @Schema(
+                description = "Effective start date",
+                example = "2026-01-01",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private LocalDate effectiveFrom;
 
-        @Schema(description = "Effective end date (null if active)")
+        @Schema(
+                description = "Effective end date (null if active)",
+                example = "2026-12-31",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private LocalDate effectiveTo;
 
-        @Schema(description = "Individual person details")
+        @Valid
+        @Schema(
+                description = "Individual person details",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private IndividualDetails individual;
     }
 
@@ -77,13 +113,22 @@ public class GetCommercialAccountContactsResponse {
     @Schema(description = "Individual person details")
     public static class IndividualDetails {
 
-        @Schema(description = "Display name", example = "John Doe")
+        @Schema(
+                description = "Display name",
+                example = "John Doe",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         private String displayName;
 
-        @Schema(description = "Primary email address")
+        @Schema(
+                description = "Primary email address",
+                example = "john.doe@acme.com",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private String email;
 
-        @Schema(description = "Primary phone number")
+        @Schema(
+                description = "Primary phone number",
+                example = "+1-555-0142",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private String phone;
     }
 }

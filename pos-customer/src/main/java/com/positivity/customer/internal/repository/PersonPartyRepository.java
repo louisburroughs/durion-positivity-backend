@@ -17,6 +17,26 @@ import org.springframework.stereotype.Repository;
 public interface PersonPartyRepository extends JpaRepository<PersonParty, UUID> {
     Optional<PersonParty> findByPersonId(@NonNull UUID personId);
 
+    /**
+     * Find individual-customer persons: person parties that are NOT acting as a
+     * commercial-account contact (i.e. not referenced by any party relationship).
+     * These are the standalone individual customers shown in the customer directory.
+     *
+     * @return list of individual-customer person parties
+     */
+    @Query("SELECT p FROM PersonParty p WHERE p.partyId NOT IN "
+            + "(SELECT pr.toPerson.partyId FROM PartyRelationship pr)")
+    List<PersonParty> findIndividualCustomers();
+
+    /**
+     * Distinct canonical person ids linked from person parties. Used by person-link
+     * reconciliation to verify every link resolves in pos-people (ADR-0015 I1).
+     *
+     * @return distinct non-null person ids
+     */
+    @Query("SELECT DISTINCT p.personId FROM PersonParty p WHERE p.personId IS NOT NULL")
+    List<UUID> findDistinctPersonIds();
+
     List<PersonParty> findByLastNameIgnoreCase(@NonNull String lastName);
 
     List<PersonParty> findByFirstNameIgnoreCaseAndLastNameIgnoreCase(

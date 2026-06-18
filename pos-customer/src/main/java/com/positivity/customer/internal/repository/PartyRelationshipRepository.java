@@ -35,7 +35,9 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
      * @param today   the current date
      * @return list of active relationships
      */
-    @Query("SELECT pr FROM PartyRelationship pr WHERE pr.fromParty.partyId = :partyId "
+    @Query("SELECT pr FROM PartyRelationship pr "
+            + "JOIN FETCH pr.toPerson "
+            + "WHERE pr.fromParty.partyId = :partyId "
             + "AND (pr.effectiveEndDate IS NULL OR pr.effectiveEndDate >= :today)")
     List<PartyRelationship> findActiveByFromPartyId(
             @Param("partyId") @NonNull UUID partyId, @Param("today") @NonNull LocalDate today);
@@ -47,6 +49,20 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
      * @return list of relationships
      */
     List<PartyRelationship> findByToPersonPartyId(@NonNull UUID personId);
+
+    /**
+     * Find all active relationships where this person is the contact.
+     * Active means effective_end_date is null or in the future.
+     *
+     * @param personPartyId the person party ID
+     * @param today         the current date
+     * @return list of active relationships
+     */
+    @Query("SELECT pr FROM PartyRelationship pr "
+            + "WHERE pr.toPerson.partyId = :personPartyId "
+            + "AND (pr.effectiveEndDate IS NULL OR pr.effectiveEndDate >= :today)")
+    List<PartyRelationship> findActiveByToPersonPartyId(
+            @Param("personPartyId") @NonNull UUID personPartyId, @Param("today") @NonNull LocalDate today);
 
     /**
      * Find the primary billing contact relationship for a party.
@@ -77,13 +93,23 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
             @Param("today") @NonNull LocalDate today);
 
     /**
+     * Reassign all relationships from one party to another (used during merge).
+     *
+     * @param fromPartyId the losing party whose relationships will be transferred
+     * @param toPartyId   the surviving party that will own the relationships
+     * @return number of updated records
+     */
+    @Modifying
+    @Query("UPDATE PartyRelationship pr SET pr.fromParty.partyId = :toPartyId "
+            + "WHERE pr.fromParty.partyId = :fromPartyId")
+    int reassignFromParty(@Param("fromPartyId") @NonNull UUID fromPartyId, @Param("toPartyId") @NonNull UUID toPartyId);
+
+    /**
      * Demote existing primary billing contact by setting isPrimaryBillingContact to
-     * false.
-     * Used when assigning a new primary billing contact.
+     * false. Used when assigning a new primary billing contact.
      *
      * @param partyId           the party ID
-     * @param excludeRelationId the relationship ID to exclude from demotion (the
-     *                          new primary)
+     * @param excludeRelationId the relationship ID to exclude from demotion (the new primary)
      * @return number of updated records
      */
     @Modifying

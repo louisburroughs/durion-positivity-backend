@@ -1,8 +1,8 @@
 package com.positivity.customer.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -22,34 +22,53 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Customer data transfer object for API operations")
 public class CustomerDTO {
 
-    @Schema(description = "Unique identifier of the customer", example = "123e4567-e89b-12d3-a456-426614174000")
+    @Schema(
+            description = "Unique identifier of the customer",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private UUID id;
 
-    @Schema(description = "Unique customer number", example = "CUST-1001")
+    @Size(max = 50)
+    @Schema(
+            description = "Unique customer number",
+            example = "CUST-1001",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String customerNumber;
 
     @NotBlank
-    @Schema(description = "Last name of the customer", example = "Doe")
+    @Size(max = 100)
+    @Schema(
+            description = "Last name of the customer",
+            example = "Doe",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private String lastName;
 
     @NotBlank
-    @Schema(description = "First name of the customer", example = "John")
+    @Size(max = 100)
+    @Schema(
+            description = "First name of the customer",
+            example = "John",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private String firstName;
 
-    @Schema(description = "Phone number of the customer", example = "+1-555-1234")
-    private String phoneNumber;
-
-    @Email
-    @Schema(description = "Email address of the customer", example = "john.doe@example.com")
-    private String email;
-
-    @Schema(description = "Primary address label or identifier for the customer", example = "123 Main St, Springfield")
+    @Size(max = 255)
+    @Schema(
+            description = "Primary address label or identifier for the customer",
+            example = "123 Main St, Springfield",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String primaryAddress;
 
     @Builder.Default
-    @Schema(description = "List of vehicle VINs associated with the customer")
+    @Schema(
+            description = "List of vehicle VINs associated with the customer",
+            example = "[\"1HGCM82633A004352\"]",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private List<String> vehicleVins = new ArrayList<>();
 
-    @Schema(description = "Type of customer (e.g., 'retail', 'commercial')")
+    @Size(max = 50)
+    @Schema(
+            description = "Type of customer (e.g., 'retail', 'commercial')",
+            example = "retail",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String customerType;
 }

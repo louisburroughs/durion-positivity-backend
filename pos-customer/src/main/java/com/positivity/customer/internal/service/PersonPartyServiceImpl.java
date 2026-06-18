@@ -169,8 +169,6 @@ public class PersonPartyServiceImpl implements CustomerService {
                 .customerNumber(entity.getCustomerNumber())
                 .lastName(entity.getLastName())
                 .firstName(entity.getFirstName())
-                .phoneNumber(entity.getPhoneNumber())
-                .email(entity.getEmail())
                 .primaryAddress(entity.getPrimaryAddress())
                 .vehicleVins(new ArrayList<>(entity.getVehicleVins()))
                 .customerType(customerType.toString())
@@ -185,14 +183,12 @@ public class PersonPartyServiceImpl implements CustomerService {
      */
     private PersonParty toEntity(CustomerDTO dto) {
         PersonParty entity = createEntityByType(dto.getCustomerType());
-        UUID canonicalPersonId = peopleClient.resolveOrCreatePersonId(
-                dto.getEmail(), dto.getPhoneNumber(), dto.getLastName(), dto.getFirstName());
+        UUID canonicalPersonId =
+                peopleClient.resolveOrCreatePersonId(null, null, dto.getLastName(), dto.getFirstName());
         entity.setPersonId(canonicalPersonId);
         entity.setCustomerNumber(dto.getCustomerNumber());
         entity.setLastName(dto.getLastName());
         entity.setFirstName(dto.getFirstName());
-        entity.setPhoneNumber(dto.getPhoneNumber());
-        entity.setEmail(dto.getEmail());
         entity.setPrimaryAddress(dto.getPrimaryAddress());
         if (dto.getVehicleVins() != null) {
             entity.getVehicleVins().addAll(dto.getVehicleVins());
@@ -215,12 +211,6 @@ public class PersonPartyServiceImpl implements CustomerService {
         }
         if (dto.getFirstName() != null) {
             entity.setFirstName(dto.getFirstName());
-        }
-        if (dto.getPhoneNumber() != null) {
-            entity.setPhoneNumber(dto.getPhoneNumber());
-        }
-        if (dto.getEmail() != null) {
-            entity.setEmail(dto.getEmail());
         }
         if (dto.getPrimaryAddress() != null) {
             entity.setPrimaryAddress(dto.getPrimaryAddress());

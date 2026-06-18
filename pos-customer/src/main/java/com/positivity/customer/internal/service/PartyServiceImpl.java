@@ -9,14 +9,11 @@ import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyResponse;
 import com.positivity.customer.internal.dto.DuplicateCheckResponse;
 import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
-import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.GetPartyResponse;
 import com.positivity.customer.internal.dto.MergePartiesRequest;
 import com.positivity.customer.internal.dto.MergePartiesResponse;
 import com.positivity.customer.internal.dto.SearchPartiesRequest;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
-import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
-import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
@@ -27,30 +24,39 @@ import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.dto.snapshot.SnapshotMetadata;
 import com.positivity.customer.internal.entity.BillingRulesEmbeddable;
 import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.entity.Contact;
+import com.positivity.customer.internal.entity.Party;
+import com.positivity.customer.internal.entity.PartyRelationship;
+import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
+import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
-import com.positivity.customer.internal.repository.ContactRepository;
+import com.positivity.customer.internal.repository.PartyRelationshipRepository;
+import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PartyService;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -66,12 +72,12 @@ import org.springframework.web.server.ResponseStatusException;
 public class PartyServiceImpl implements PartyService {
     private static final String SUCCESS = "SUCCESS";
     private static final String NOT_APPLICABLE = "NOT_APPLICABLE";
-    private static final String DEFAULT_CONTACT_NAME = "Contact";
 
     private final Clock clock;
 
     private final CommercialPartyRepository partyRepository;
-    private final ContactRepository contactRepository;
+    private final PersonPartyRepository personPartyRepository;
+    private final PartyRelationshipRepository partyRelationshipRepository;
     private final CacheManager cacheManager;
     private final PeopleClient peopleClient;
     private final VehicleInventoryClient vehicleInventoryClient;
@@ -102,11 +108,7 @@ public class PartyServiceImpl implements PartyService {
             party.getExternalIdentifiers().putAll(request.getExternalIdentifiers());
         }
 
-        Contact contact = buildContactForParty(request, party);
-        party.getContacts().add(contact);
-
         CommercialParty saved = partyRepository.save(party);
-        contactRepository.save(contact);
         log.info(
                 "Created commercial account with partyId: {}, partyNumber: {}",
                 saved.getPartyId(),
@@ -116,6 +118,12 @@ public class PartyServiceImpl implements PartyService {
                 .partyId(String.valueOf(saved.getPartyId()))
                 .legalName(saved.getLegalName())
                 .status(saved.getStatus().toString())
+                .customerNumber(saved.getPartyNumber())
+                .displayName(saved.getDisplayName())
+                .partyType(saved.getPartyType() != null ? saved.getPartyType().toString() : null)
+                .taxId(saved.getTaxId())
+                .billingTermsId(saved.getBillingTermsId())
+                .primaryAddress(saved.getPrimaryAddress())
                 .createdAt(saved.getCreatedAt())
                 .duplicateCandidates(new ArrayList<>())
                 .build();
@@ -139,33 +147,6 @@ public class PartyServiceImpl implements PartyService {
                 .build();
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public GetContactsWithRolesResponse getContactsWithRoles(UUID partyId) {
-        log.debug("Fetching contacts with roles for party: {}", partyId);
-        CommercialParty party = findPartyOrThrow(partyId);
-        List<Contact> contacts = contactRepository.findByCommercialParty(party);
-
-        List<GetContactsWithRolesResponse.ContactWithRoles> contactDtos = new ArrayList<>();
-        for (Contact contact : contacts) {
-            GetContactsWithRolesResponse.ContactWithRoles dto = GetContactsWithRolesResponse.ContactWithRoles.builder()
-                    .contactId(String.valueOf(contact.getContactId()))
-                    .contactName(buildContactName(contact))
-                    .email(contact.getEmail())
-                    .phone(contact.getPhoneNumber())
-                    .hasPrimaryEmail(StringUtils.hasText(contact.getEmail()))
-                    .roles(new ArrayList<>())
-                    .invoiceDeliveryMethod(null)
-                    .build();
-            contactDtos.add(dto);
-        }
-
-        return GetContactsWithRolesResponse.builder()
-                .partyId(String.valueOf(party.getPartyId()))
-                .contacts(contactDtos)
-                .build();
-    }
-
     private CommercialParty findPartyOrThrow(UUID partyId) {
         CommercialParty party = partyRepository.findByPartyId(partyId);
         if (party == null) {
@@ -175,57 +156,194 @@ public class PartyServiceImpl implements PartyService {
         return party;
     }
 
-    private Contact buildContactForParty(CreateCommercialAccountRequest request, CommercialParty party) {
-        String firstName = request.getContactFirstName();
-        String lastName = request.getContactLastName();
-
-        if (!StringUtils.hasText(lastName)) {
-            throw new IllegalArgumentException("contactLastName is required");
-        }
-
-        // Fall back to business name if no contact first name provided
-        if (!StringUtils.hasText(firstName)) {
-            firstName =
-                    StringUtils.hasText(request.getDisplayName()) ? request.getDisplayName() : request.getLegalName();
-        }
-
-        Contact contact = new Contact();
-        UUID personId =
-                peopleClient.resolveOrCreatePersonId(request.getEmail(), request.getPhone(), lastName, firstName);
-        contact.setCommercialParty(party);
-        contact.setPersonId(personId);
-        contact.setFirstName(firstName);
-        contact.setLastName(lastName);
-        contact.setEmail(request.getEmail());
-        contact.setPhoneNumber(request.getPhone());
-        contact.setActive(true);
-        return contact;
-    }
-
     private String generatePartyNumber() {
         return "PARTY-" + UUIDv7Generator.generate().toString().substring(0, 8).toUpperCase(Locale.US);
-    }
-
-    private String buildContactName(Contact contact) {
-        return (contact.getFirstName() != null ? contact.getFirstName() : "") + " "
-                + (contact.getLastName() != null ? contact.getLastName() : "");
     }
 
     @Override
     @Transactional(readOnly = true)
     @NonNull
     public SearchPartiesResponse browseParties(@NonNull Pageable pageable) {
+        return browseParties(pageable, null, null, null, null, null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SearchPartiesResponse browseParties(
+            @NonNull Pageable pageable,
+            String name,
+            String status,
+            String partyType,
+            String customerNumber,
+            String sortField,
+            String sortOrder) {
         Pageable normalizedPageable = normalizeBrowsePageable(pageable);
-        Page<CommercialParty> page = partyRepository.findAll(normalizedPageable);
-        List<SearchPartiesResponse.PartySummary> summaries =
-                page.getContent().stream().map(this::mapToPartySummary).toList();
+
+        // Unified customer directory: commercial parties plus standalone individual
+        // customers (person parties that are not commercial-account contacts).
+        // Merged, filtered, sorted, and paged in-memory; customer volumes are well
+        // within a single window at this tier (see ADR-0026 / OQ3 in PLAN-person-unification).
+        List<SearchPartiesResponse.PartySummary> all = new ArrayList<>();
+        partyRepository.findAll().stream().map(this::mapToPartySummary).forEach(all::add);
+
+        List<PersonParty> individuals = personPartyRepository.findIndividualCustomers();
+        Map<UUID, PeopleClient.PersonIdentity> identities = fetchIdentitiesFor(individuals);
+        individuals.stream()
+                .map(person -> mapPersonToPartySummary(person, identities))
+                .forEach(all::add);
+
+        List<SearchPartiesResponse.PartySummary> filtered = all.stream()
+                .filter(s -> matchesBrowseFilter(s, name, status, partyType, customerNumber))
+                .sorted(browseComparator(sortField, sortOrder))
+                .toList();
+
+        int total = filtered.size();
+        int from = Math.min(normalizedPageable.getPageNumber() * normalizedPageable.getPageSize(), total);
+        int to = Math.min(from + normalizedPageable.getPageSize(), total);
+        List<SearchPartiesResponse.PartySummary> window = filtered.subList(from, to);
 
         return SearchPartiesResponse.builder()
-                .results(summaries)
-                .totalCount(safeTotalCount(page.getTotalElements()))
+                .results(new ArrayList<>(window))
+                .totalCount(safeTotalCount(total))
                 .pageNumber(normalizedPageable.getPageNumber())
                 .pageSize(normalizedPageable.getPageSize())
                 .build();
+    }
+
+    private boolean matchesBrowseFilter(
+            SearchPartiesResponse.PartySummary s,
+            String name,
+            String status,
+            String partyType,
+            String customerNumber) {
+        if (StringUtils.hasText(name)) {
+            String needle = name.toLowerCase(java.util.Locale.ROOT);
+            String legal = s.getLegalName() != null ? s.getLegalName().toLowerCase(java.util.Locale.ROOT) : "";
+            String display = s.getDisplayName() != null ? s.getDisplayName().toLowerCase(java.util.Locale.ROOT) : "";
+            if (!legal.contains(needle) && !display.contains(needle)) {
+                return false;
+            }
+        }
+        if (StringUtils.hasText(status) && !status.equalsIgnoreCase(s.getStatus())) {
+            return false;
+        }
+        if (StringUtils.hasText(partyType) && !partyType.equalsIgnoreCase(s.getPartyType())) {
+            return false;
+        }
+        if (StringUtils.hasText(customerNumber)) {
+            String cn = s.getCustomerNumber() != null ? s.getCustomerNumber().toLowerCase(java.util.Locale.ROOT) : "";
+            return cn.contains(customerNumber.toLowerCase(java.util.Locale.ROOT));
+        }
+        return true;
+    }
+
+    private Comparator<SearchPartiesResponse.PartySummary> browseComparator(String sortField, String sortOrder) {
+        Comparator<SearchPartiesResponse.PartySummary> base;
+        if ("customerNumber".equalsIgnoreCase(sortField)) {
+            base = Comparator.comparing(
+                    SearchPartiesResponse.PartySummary::getCustomerNumber,
+                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+        } else {
+            base = Comparator.comparing(
+                    (SearchPartiesResponse.PartySummary s) ->
+                            s.getDisplayName() != null ? s.getDisplayName() : s.getLegalName(),
+                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+        }
+        if ("desc".equalsIgnoreCase(sortOrder)) {
+            base = base.reversed();
+        }
+        // Stable tie-breaker so paging is deterministic.
+        return base.thenComparing(SearchPartiesResponse.PartySummary::getPartyId);
+    }
+
+    private SearchPartiesResponse.PartySummary mapPersonToPartySummary(
+            PersonParty person, Map<UUID, PeopleClient.PersonIdentity> identities) {
+        String displayName = resolveDisplayName(person, identities);
+        return SearchPartiesResponse.PartySummary.builder()
+                .partyId(String.valueOf(person.getPartyId()))
+                .legalName(displayName)
+                .displayName(displayName)
+                .partyType(person.getPartyType().toString())
+                .customerNumber(person.getCustomerNumber())
+                .status(person.getStatus() != null ? person.getStatus().toString() : null)
+                .createdAt(person.getCreatedAt() != null ? ISO_FORMATTER.format(person.getCreatedAt()) : null)
+                .primaryContact(resolvePersonPrimaryContact(person, displayName, identities))
+                .vehicleCount(vehicleCount(person))
+                .build();
+    }
+
+    /**
+     * For a standalone individual customer the party's primary contact is the person
+     * themselves: name plus their first email/phone (pos-people source of truth).
+     */
+    private SearchPartiesResponse.PrimaryContact resolvePersonPrimaryContact(
+            PersonParty person, String displayName, Map<UUID, PeopleClient.PersonIdentity> identities) {
+        PeopleClient.PersonIdentity identity =
+                person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
+        List<String> emails = resolveEmails(person, identity);
+        List<String> phones = resolvePhones(person, identity);
+        return SearchPartiesResponse.PrimaryContact.builder()
+                .name(displayName)
+                .email(emails.isEmpty() ? null : emails.get(0))
+                .phone(phones.isEmpty() ? null : phones.get(0))
+                .build();
+    }
+
+    /**
+     * Batch-load canonical identities from pos-people (source of truth, ADR-0015 I2)
+     * for the given person parties, keyed by the canonical person id.
+     */
+    private Map<UUID, PeopleClient.PersonIdentity> fetchIdentitiesFor(Collection<PersonParty> persons) {
+        Set<UUID> personIds = persons.stream()
+                .map(PersonParty::getPersonId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        return peopleClient.fetchPersonIdentities(personIds);
+    }
+
+    /**
+     * Resolve a person's display name from pos-people (source of truth), falling
+     * back to the local person_party copy while the thin-link migration is in
+     * progress (e.g. an orphan link not yet reconciled).
+     */
+    private String resolveDisplayName(PersonParty person, Map<UUID, PeopleClient.PersonIdentity> identities) {
+        PeopleClient.PersonIdentity identity =
+                (identities != null && person.getPersonId() != null) ? identities.get(person.getPersonId()) : null;
+        if (identity != null && !identity.displayName().isBlank()) {
+            return identity.displayName();
+        }
+        return person.getDisplayName();
+    }
+
+    /**
+     * Phone values from pos-people (source of truth, ADR-0015 I2); falls back to
+     * the local contact_point copy when pos-people has none for this person.
+     */
+    private List<String> resolvePhones(PersonParty person, PeopleClient.PersonIdentity identity) {
+        if (identity != null && !identity.phones().isEmpty()) {
+            return identity.phones();
+        }
+        return person.getContactPoints().stream()
+                .filter(cp -> cp.getContactType() == ContactPointType.PHONE_MOBILE
+                        || cp.getContactType() == ContactPointType.PHONE_WORK)
+                .map(cp -> cp.getValue())
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    /**
+     * Email values from pos-people (source of truth, ADR-0015 I2); falls back to
+     * the local contact_point copy when pos-people has none for this person.
+     */
+    private List<String> resolveEmails(PersonParty person, PeopleClient.PersonIdentity identity) {
+        if (identity != null && !identity.emails().isEmpty()) {
+            return identity.emails();
+        }
+        return person.getContactPoints().stream()
+                .filter(cp -> cp.getContactType() == ContactPointType.EMAIL)
+                .map(cp -> cp.getValue())
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     private int safeTotalCount(long totalElements) {
@@ -286,12 +404,8 @@ public class PartyServiceImpl implements PartyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot merge party with itself");
         }
 
-        // Merge contacts from loser to survivor
-        for (Contact contact : new ArrayList<>(loser.getContacts())) {
-            contact.setCommercialParty(survivor);
-            survivor.getContacts().add(contact);
-        }
-        loser.getContacts().clear();
+        // Transfer party relationships from loser to survivor
+        partyRelationshipRepository.reassignFromParty(loser.getPartyId(), survivor.getPartyId());
 
         // Merge external identifiers
         survivor.getExternalIdentifiers().putAll(loser.getExternalIdentifiers());
@@ -310,30 +424,6 @@ public class PartyServiceImpl implements PartyService {
                 .survivorPartyId(String.valueOf(survivor.getPartyId()))
                 .losingPartyId(String.valueOf(loser.getPartyId()))
                 .status("COMPLETED")
-                .build();
-    }
-
-    @Override
-    @Transactional
-    public UpdateContactRolesResponse updateContactRoles(
-            UUID partyId, UUID contactId, UpdateContactRolesRequest request) {
-        log.debug("Updating contact roles for party: {}, contact: {}", partyId, contactId);
-        CommercialParty party = findPartyOrThrow(partyId);
-
-        Contact contact = contactRepository
-                .findById(contactId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "contact not found"));
-
-        if (!contact.getCommercialParty().getPartyId().equals(party.getPartyId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "contact does not belong to this party");
-        }
-
-        // In a real implementation, would store roles in a separate ContactRole entity
-        // For now, return success response
-        return UpdateContactRolesResponse.builder()
-                .contactId(String.valueOf(contact.getContactId()))
-                .partyId(String.valueOf(party.getPartyId()))
-                .status(SUCCESS)
                 .build();
     }
 
@@ -458,9 +548,45 @@ public class PartyServiceImpl implements PartyService {
                 .legalName(party.getLegalName())
                 .displayName(party.getDisplayName())
                 .partyType(party.getPartyType().toString())
+                .customerNumber(party.getCustomerNumber())
                 .status(party.getStatus().toString())
                 .createdAt(party.getCreatedAt() != null ? ISO_FORMATTER.format(party.getCreatedAt()) : null)
+                .primaryContact(resolvePrimaryContact(party))
+                .vehicleCount(vehicleCount(party))
                 .build();
+    }
+
+    /** Vehicle count for a party; 0 when none. */
+    private int vehicleCount(Party party) {
+        return party.getVehicleVins() != null ? party.getVehicleVins().size() : 0;
+    }
+
+    /**
+     * Resolve the primary contact for a commercial party from its active
+     * relationships: the contact flagged primary, else the first active contact.
+     * Returns null when the party has no active contacts.
+     */
+    private SearchPartiesResponse.PrimaryContact resolvePrimaryContact(CommercialParty party) {
+        List<ContactSummary> contacts = buildContactSummaries(party);
+        if (contacts.isEmpty()) {
+            return null;
+        }
+        ContactSummary primary = contacts.stream()
+                .filter(ContactSummary::isPrimary)
+                .findFirst()
+                .orElse(contacts.get(0));
+        return SearchPartiesResponse.PrimaryContact.builder()
+                .name(primary.getName())
+                .email(firstContactValue(primary.getEmailAddresses(), ContactSummary.EmailAddressDTO::getAddress))
+                .phone(firstContactValue(primary.getPhoneNumbers(), ContactSummary.PhoneNumberDTO::getNumber))
+                .build();
+    }
+
+    private <T> String firstContactValue(List<T> values, java.util.function.Function<T, String> extractor) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+        return extractor.apply(values.get(0));
     }
 
     private Pageable normalizeBrowsePageable(@Nullable Pageable pageable) {
@@ -500,17 +626,6 @@ public class PartyServiceImpl implements PartyService {
     private CommercialParty findPartyByIdInternal(UUID partyId) {
         log.debug("Finding party by ID: {}", partyId);
         return partyRepository.findByPartyId(partyId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<Contact> findContactsByParty(CommercialParty party) {
-        return findContactsByPartyInternal(party);
-    }
-
-    private List<Contact> findContactsByPartyInternal(CommercialParty party) {
-        log.debug("Finding contacts for party: {}", party.getPartyId());
-        return contactRepository.findByCommercialParty(party);
     }
 
     @Override
@@ -707,86 +822,35 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private List<ContactSummary> buildContactSummaries(CommercialParty party) {
-        List<Contact> contacts = findContactsByPartyInternal(party);
-
-        if (contacts == null || contacts.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return contacts.stream().map(this::convertContactToSummary).toList();
+        LocalDate today = LocalDate.now(clock);
+        List<PartyRelationship> relationships =
+                partyRelationshipRepository.findActiveByFromPartyId(party.getPartyId(), today);
+        Map<UUID, PeopleClient.PersonIdentity> identities = fetchIdentitiesFor(
+                relationships.stream().map(PartyRelationship::getToPerson).toList());
+        return relationships.stream()
+                .map(rel -> convertRelationshipToSummary(rel, identities))
+                .toList();
     }
 
-    private ContactSummary convertContactToSummary(Contact contact) {
+    private ContactSummary convertRelationshipToSummary(
+            PartyRelationship rel, Map<UUID, PeopleClient.PersonIdentity> identities) {
+        PersonParty person = rel.getToPerson();
         ContactSummary summary = new ContactSummary();
-        summary.setContactId(contact.getContactId().toString());
-        summary.setPrimary(false);
-        summary.setName(formatContactName(contact));
+        summary.setContactId(rel.getPartyRelationshipId().toString());
+        summary.setPrimary(rel.isPrimaryBillingContact());
+        summary.setName(resolveDisplayName(person, identities));
         summary.setRoles(Collections.emptyList());
-        summary.setPhoneNumbers(buildPhoneList(contact));
-        summary.setEmailAddresses(buildEmailList(contact));
+
+        PeopleClient.PersonIdentity identity =
+                person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
+        summary.setPhoneNumbers(resolvePhones(person, identity).stream()
+                .map(v -> new ContactSummary.PhoneNumberDTO("PRIMARY", v))
+                .toList());
+        summary.setEmailAddresses(resolveEmails(person, identity).stream()
+                .map(v -> new ContactSummary.EmailAddressDTO("PRIMARY", v))
+                .toList());
         summary.setPreferences(null);
         return summary;
-    }
-
-    private String formatContactName(Contact contact) {
-        if (contact == null) {
-            return DEFAULT_CONTACT_NAME;
-        }
-
-        StringBuilder nameBuilder = new StringBuilder();
-
-        if (StringUtils.hasText(contact.getFirstName())) {
-            nameBuilder.append(contact.getFirstName().trim());
-        }
-
-        if (StringUtils.hasText(contact.getLastName())) {
-            if (!nameBuilder.isEmpty()) {
-                nameBuilder.append(" ");
-            }
-            nameBuilder.append(contact.getLastName().trim());
-        }
-
-        if (!nameBuilder.isEmpty()) {
-            return nameBuilder.toString();
-        }
-
-        if (StringUtils.hasText(contact.getEmail())) {
-            return contact.getEmail().trim();
-        }
-
-        if (StringUtils.hasText(contact.getPhoneNumber())) {
-            return contact.getPhoneNumber().trim();
-        }
-
-        if (contact.getPersonId() != null) {
-            return contact.getPersonId().toString();
-        }
-
-        if (contact.getContactId() != null) {
-            return contact.getContactId().toString();
-        }
-
-        return DEFAULT_CONTACT_NAME;
-    }
-
-    private List<ContactSummary.PhoneNumberDTO> buildPhoneList(Contact contact) {
-        List<ContactSummary.PhoneNumberDTO> phones = new ArrayList<>();
-
-        if (contact.getPhoneNumber() != null && !contact.getPhoneNumber().isBlank()) {
-            phones.add(new ContactSummary.PhoneNumberDTO("PRIMARY", contact.getPhoneNumber()));
-        }
-
-        return phones;
-    }
-
-    private List<ContactSummary.EmailAddressDTO> buildEmailList(Contact contact) {
-        List<ContactSummary.EmailAddressDTO> emails = new ArrayList<>();
-
-        if (contact.getEmail() != null && !contact.getEmail().isBlank()) {
-            emails.add(new ContactSummary.EmailAddressDTO("PRIMARY", contact.getEmail()));
-        }
-
-        return emails;
     }
 
     private List<CrmSnapshotDTO.VehicleSummary> buildVehicleSummaries(CommercialParty party) {

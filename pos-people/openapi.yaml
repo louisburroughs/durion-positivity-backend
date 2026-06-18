@@ -137,6 +137,37 @@ paths:
         - people:person:delete
       x-required-permissions:
       - people:person:delete
+  /v1/people/{personId}/contact-points:
+    put:
+      tags:
+      - People API
+      summary: Replace a person's contact points
+      description: Replaces all typed contact points (email/phone) for a person. pos-people is the source of truth for contacts (ADR-0015).
+      operationId: replaceContactPoints
+      parameters:
+      - name: personId
+        in: path
+        description: Person id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/ContactPointDto'
+        required: true
+      responses:
+        '204':
+          description: Contact points replaced.
+      security:
+      - bearerAuth:
+        - people:person:edit
+      x-required-permissions:
+      - people:person:edit
   /v1/people/staffing/assignments/{assignmentId}:
     get:
       tags:
@@ -473,6 +504,51 @@ paths:
         - people:role:assign
       x-required-permissions:
       - people:role:assign
+  /v1/people/workSessions/{id}/submit:
+    post:
+      tags:
+      - Work Sessions API
+      summary: Submit work session
+      description: Submit an ended work session with its billable and break totals for approval.
+      operationId: submitWorkSession
+      parameters:
+      - name: id
+        in: path
+        description: Work session ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkSessionSubmitRequest'
+        required: true
+      responses:
+        '200':
+          description: Work session submitted successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkSessionDto'
+        '404':
+          description: Work session not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkSessionDto'
+        '409':
+          description: Work session is not in a submittable state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkSessionDto'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/people/workSessions/{id}/breaks/stop:
     post:
       tags:
@@ -1299,6 +1375,37 @@ paths:
         - people:employee:deactivate
       x-required-permissions:
       - people:employee:deactivate
+  /v1/people/by-ids:
+    post:
+      tags:
+      - People API
+      summary: Get people by IDs
+      description: Batch-resolve persons by id in one request. Unknown ids are omitted; the result may be smaller than the request. Used for cross-service identity reads (ADR-0015).
+      operationId: getPeopleByIds
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              description: Person ids to resolve
+              items:
+                type: string
+                format: uuid
+        required: true
+      responses:
+        '200':
+          description: Persons resolved.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Person'
+      security:
+      - bearerAuth:
+        - people:person:view
+      x-required-permissions:
+      - people:person:view
   /v1/people/bulk-ingest:
     post:
       tags:
@@ -1948,6 +2055,20 @@ paths:
       - people:userLink:write
 components:
   schemas:
+    ContactPointDto:
+      type: object
+      properties:
+        contactType:
+          type: string
+          enum:
+          - EMAIL
+          - PHONE_MOBILE
+          - PHONE_HOME
+          - PHONE_WORK
+        value:
+          type: string
+        primary:
+          type: boolean
     Person:
       type: object
       description: Person object to be created
@@ -1983,6 +2104,11 @@ components:
           - SUSPENDED
           - TERMINATED
           - DISABLED
+        contactPoints:
+          type: array
+          description: Typed contact points (email, phone). Populated on batch by-id lookups.
+          items:
+            $ref: '#/components/schemas/ContactPointDto'
       required:
       - firstName
       - lastName
@@ -2258,6 +2384,52 @@ components:
           format: uri
         properties:
           type: object
+    WorkSessionSubmitRequest:
+      type: object
+      description: Work session submit request body
+      properties:
+        billableMinutes:
+          type: integer
+          format: int32
+          description: Total billable minutes for the session
+        breakMinutes:
+          type: integer
+          format: int32
+          description: Total break minutes for the session
+        submittedAt:
+          type: string
+          format: date-time
+          description: Timestamp the session was submitted
+      required:
+      - billableMinutes
+      - breakMinutes
+      - submittedAt
+    WorkSessionDto:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        personId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        billableMinutes:
+          type: integer
+          format: int32
+        breakMinutes:
+          type: integer
+          format: int32
+        submittedAt:
+          type: string
+          format: date-time
     BreakDto:
       type: object
       properties:
@@ -2283,23 +2455,6 @@ components:
           description: Actor performing the action
       required:
       - personId
-    WorkSessionDto:
-      type: object
-      properties:
-        sessionId:
-          type: string
-          format: uuid
-        personId:
-          type: string
-          format: uuid
-        status:
-          type: string
-        startedAt:
-          type: string
-          format: date-time
-        endedAt:
-          type: string
-          format: date-time
     LinkUserToPersonRequest:
       type: object
       properties:

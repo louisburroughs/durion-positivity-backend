@@ -4,17 +4,20 @@ import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
-import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.entity.ContactPoint;
+import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.repository.ContactPointRepository;
-import com.positivity.customer.internal.repository.ContactRepository;
+import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PersonService;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,8 +47,9 @@ public class PersonServiceImpl implements PersonService {
 
     private final PersonPartyRepository personRepository;
     private final ContactPointRepository contactPointRepository;
-    private final ContactRepository contactRepository;
+    private final PartyRelationshipRepository partyRelationshipRepository;
     private final PeopleClient peopleClient;
+    private final Clock clock;
 
     /**
      * Creates a new individual person record with optional contact points.
@@ -147,6 +151,16 @@ public class PersonServiceImpl implements PersonService {
                     contactPoints.size(),
                     savedPerson.getPersonPartyId());
         }
+
+        // Mirror contact points to pos-people (source of truth, ADR-0015 I2). Dual-write:
+        // the local contact_point rows remain as a read fallback. Non-fatal if pos-people
+        // is unreachable — local data still serves reads.
+        peopleClient.setContactPoints(
+                peoplePersonId,
+                contactPoints.stream()
+                        .map(cp -> new PeopleClient.ContactPointUpsert(
+                                cp.getContactType().name(), cp.getValue(), cp.isPrimary()))
+                        .toList());
 
         log.info(
                 "Successfully created person personId={} personPartyId={} with {} contact points",
@@ -298,32 +312,73 @@ public class PersonServiceImpl implements PersonService {
      * @return the response DTO
      */
     private GetPersonResponse toGetPersonResponse(PersonParty person) {
-        List<GetPersonResponse.ContactPointDto> contactPointDtos = person.getContactPoints().stream()
-                .map(cp -> GetPersonResponse.ContactPointDto.builder()
-                        .contactPointId(cp.getContactPointId())
-                        .contactType(cp.getContactType())
-                        .value(cp.getValue())
-                        .isPrimary(cp.isPrimary())
-                        .build())
-                .toList();
-        List<Contact> activeCommercialContacts = contactRepository.findByPersonIdAndActiveTrue(person.getPersonId());
-        int commercialAccountCount = (int) activeCommercialContacts.stream()
-                .map(contact -> contact.getCommercialParty().getPartyId())
+        List<PartyRelationship> commercialRelationships = partyRelationshipRepository.findActiveByToPersonPartyId(
+                person.getPersonPartyId(), LocalDate.now(clock));
+        int commercialAccountCount = (int) commercialRelationships.stream()
+                .map(rel -> rel.getFromParty().getPartyId())
                 .distinct()
                 .count();
 
+        // Name from pos-people (source of truth, ADR-0015 I2); fall back to the local
+        // person_party copy while the thin-link migration is in progress.
+        PeopleClient.PersonIdentity identity = person.getPersonId() != null
+                ? peopleClient
+                        .fetchPersonIdentitiesQuietly(Set.of(person.getPersonId()))
+                        .get(person.getPersonId())
+                : null;
+        String firstName =
+                identity != null && identity.firstName() != null ? identity.firstName() : person.getFirstName();
+        String lastName = identity != null && identity.lastName() != null ? identity.lastName() : person.getLastName();
+        String displayName = identity != null && !identity.displayName().isBlank()
+                ? identity.displayName()
+                : person.getDisplayName();
+
+        // Contact points from pos-people (source of truth, ADR-0015 I2); fall back to
+        // the local contact_point copy when pos-people has none for this person.
+        List<GetPersonResponse.ContactPointDto> contactPointDtos;
+        if (identity != null && !identity.contactPoints().isEmpty()) {
+            contactPointDtos = identity.contactPoints().stream()
+                    .map(cp -> GetPersonResponse.ContactPointDto.builder()
+                            .contactType(parseContactType(cp.contactType()))
+                            .value(cp.value())
+                            .isPrimary(cp.isPrimary())
+                            .build())
+                    .toList();
+        } else {
+            contactPointDtos = person.getContactPoints().stream()
+                    .map(cp -> GetPersonResponse.ContactPointDto.builder()
+                            .contactPointId(cp.getContactPointId())
+                            .contactType(cp.getContactType())
+                            .value(cp.getValue())
+                            .isPrimary(cp.isPrimary())
+                            .build())
+                    .toList();
+        }
+
         return GetPersonResponse.builder()
                 .personId(person.getPersonId())
-                .firstName(person.getFirstName())
-                .lastName(person.getLastName())
-                .displayName(person.getDisplayName())
+                .firstName(firstName)
+                .lastName(lastName)
+                .displayName(displayName)
                 .preferredContactMethod(person.getPreferredContactMethod())
                 .contactPoints(contactPointDtos)
                 .individualCustomer(true)
-                .commercialContact(!activeCommercialContacts.isEmpty())
+                .commercialContact(!commercialRelationships.isEmpty())
                 .commercialAccountCount(commercialAccountCount)
                 .createdAt(person.getCreatedAt())
                 .updatedAt(person.getUpdatedAt())
                 .build();
+    }
+
+    /** Maps a pos-people contact-type string to the local enum; null if unrecognized. */
+    private static ContactPointType parseContactType(String type) {
+        if (type == null) {
+            return null;
+        }
+        try {
+            return ContactPointType.valueOf(type);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 }

@@ -712,6 +712,8 @@ components:
         offset:
           type: integer
           format: int64
+        unpaged:
+          type: boolean
         paged:
           type: boolean
         pageNumber:
@@ -722,14 +724,12 @@ components:
           format: int32
         sort:
           $ref: '#/components/schemas/SortObject'
-        unpaged:
-          type: boolean
     SortObject:
       type: object
       properties:
         empty:
           type: boolean
-        sorted:
-          type: boolean
         unsorted:
+          type: boolean
+        sorted:
           type: boolean

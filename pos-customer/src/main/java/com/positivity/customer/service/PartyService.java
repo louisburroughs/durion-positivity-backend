@@ -6,21 +6,16 @@ import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyResponse;
 import com.positivity.customer.internal.dto.DuplicateCheckResponse;
 import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
-import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.GetPartyResponse;
 import com.positivity.customer.internal.dto.MergePartiesRequest;
 import com.positivity.customer.internal.dto.MergePartiesResponse;
 import com.positivity.customer.internal.dto.SearchPartiesRequest;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
-import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
-import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
 import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.entity.Contact;
-import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -32,16 +27,27 @@ public interface PartyService {
 
     GetPartyResponse getParty(UUID partyId);
 
-    GetContactsWithRolesResponse getContactsWithRoles(UUID partyId);
-
     @NonNull
     SearchPartiesResponse browseParties(@NonNull Pageable pageable);
+
+    /**
+     * Browse the unified customer directory with optional server-side filtering
+     * (name, status, party type, customer number) and sorting (by name or
+     * customer number), paged.
+     */
+    @NonNull
+    SearchPartiesResponse browseParties(
+            @NonNull Pageable pageable,
+            String name,
+            String status,
+            String partyType,
+            String customerNumber,
+            String sortField,
+            String sortOrder);
 
     SearchPartiesResponse searchParties(SearchPartiesRequest request);
 
     MergePartiesResponse mergeParties(UUID survivorPartyId, MergePartiesRequest request);
-
-    UpdateContactRolesResponse updateContactRoles(UUID partyId, UUID contactId, UpdateContactRolesRequest request);
 
     GetCommunicationPreferencesResponse getCommunicationPreferences(UUID partyId);
 
@@ -51,8 +57,6 @@ public interface PartyService {
     CreateVehicleForPartyResponse createVehicleForParty(UUID partyId, CreateVehicleForPartyRequest request);
 
     CommercialParty findPartyById(UUID partyId);
-
-    List<Contact> findContactsByParty(CommercialParty party);
 
     com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO buildSnapshotForParty(UUID partyId);
 

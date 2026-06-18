@@ -1,6 +1,11 @@
 package com.positivity.customer.internal.client;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -75,6 +80,137 @@ public class PeopleClient {
         }
     }
 
+    /**
+     * Batch-resolve canonical person identities from pos-people (the source of
+     * truth, ADR-0015 I2). Unknown ids are simply absent from the returned map.
+     *
+     * @param personIds the canonical person ids to fetch
+     * @return map of personId to identity for ids that exist in pos-people
+     */
+    @NonNull
+    public Map<UUID, PersonIdentity> fetchPersonIdentities(@NonNull Collection<UUID> personIds) {
+        if (personIds.isEmpty()) {
+            return Map.of();
+        }
+        PersonView[] people = restClient
+                .post()
+                .uri("/v1/people/by-ids")
+                .header("X-User", "pos-customer")
+                .header("X-Authorities", "people:person:view")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(List.copyOf(personIds))
+                .retrieve()
+                .body(PersonView[].class);
+
+        if (people == null) {
+            return Map.of();
+        }
+        Map<UUID, PersonIdentity> result = new HashMap<>();
+        for (PersonView p : people) {
+            if (p.getId() != null) {
+                List<ContactPoint> points = p.getContactPoints() == null
+                        ? List.of()
+                        : p.getContactPoints().stream()
+                                .map(cp -> new ContactPoint(cp.getContactType(), cp.getValue(), cp.isPrimary()))
+                                .toList();
+                result.put(
+                        p.getId(),
+                        new PersonIdentity(p.getId(), p.getFirstName(), p.getLastName(), p.getPrimaryEmail(), points));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Mirror a person's contact points to pos-people (source of truth, ADR-0015 I2).
+     * Best-effort: failures are logged and swallowed so the local contact_point copy
+     * still serves reads (we are dual-writing during the transition).
+     *
+     * @param personId the canonical person id
+     * @param contactPoints the contact points to persist (replaces existing)
+     */
+    public void setContactPoints(@NonNull UUID personId, @NonNull List<ContactPointUpsert> contactPoints) {
+        try {
+            restClient
+                    .put()
+                    .uri("/v1/people/{personId}/contact-points", personId)
+                    .header("X-User", "pos-customer")
+                    .header("X-Authorities", "people:person:edit")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(contactPoints)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (Exception exception) {
+            log.warn(
+                    "Failed to mirror contact points to pos-people for personId={}: {}",
+                    personId,
+                    exception.getMessage());
+        }
+    }
+
+    /** Contact point to upsert into pos-people. Serializes the flag as "primary". */
+    public record ContactPointUpsert(String contactType, String value, boolean primary) {}
+
+    /**
+     * Resilient variant of {@link #fetchPersonIdentities} for display read paths:
+     * if pos-people is unreachable, returns an empty map instead of throwing, so
+     * callers transparently fall back to the local person_party name copy rather
+     * than failing the request. Do not use for reconciliation, which must
+     * distinguish "unreachable" from "not found".
+     *
+     * @param personIds the canonical person ids to fetch
+     * @return identities by id, or an empty map if pos-people could not be reached
+     */
+    @NonNull
+    public Map<UUID, PersonIdentity> fetchPersonIdentitiesQuietly(@NonNull Collection<UUID> personIds) {
+        try {
+            return fetchPersonIdentities(personIds);
+        } catch (Exception exception) {
+            log.warn("pos-people identity fetch failed; falling back to local names: {}", exception.getMessage());
+            return Map.of();
+        }
+    }
+
+    /** Canonical person identity sourced from pos-people. */
+    public record PersonIdentity(
+            UUID id, String firstName, String lastName, String primaryEmail, List<ContactPoint> contactPoints) {
+        public String displayName() {
+            return ((firstName != null ? firstName : "") + " " + (lastName != null ? lastName : "")).trim();
+        }
+
+        @NonNull
+        public List<ContactPoint> contactPoints() {
+            return contactPoints != null ? contactPoints : List.of();
+        }
+
+        /** Email values from typed contact points (falls back to primaryEmail). */
+        @NonNull
+        public List<String> emails() {
+            List<String> fromPoints = contactPoints().stream()
+                    .filter(cp -> "EMAIL".equals(cp.contactType()))
+                    .map(ContactPoint::value)
+                    .filter(v -> v != null && !v.isBlank())
+                    .toList();
+            if (!fromPoints.isEmpty()) {
+                return fromPoints;
+            }
+            return primaryEmail != null && !primaryEmail.isBlank() ? List.of(primaryEmail) : List.of();
+        }
+
+        /** Phone values from typed contact points (any PHONE_* type). */
+        @NonNull
+        public List<String> phones() {
+            return contactPoints().stream()
+                    .filter(cp -> cp.contactType() != null && cp.contactType().startsWith("PHONE"))
+                    .map(ContactPoint::value)
+                    .filter(v -> v != null && !v.isBlank())
+                    .toList();
+        }
+    }
+
+    /** Typed contact point sourced from pos-people. */
+    public record ContactPoint(String contactType, String value, boolean isPrimary) {}
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
@@ -91,5 +227,29 @@ public class PeopleClient {
     @AllArgsConstructor
     private static class ResolvePersonResponse {
         private UUID personId;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    private static class PersonView {
+        private UUID id;
+        private String firstName;
+        private String lastName;
+        private String primaryEmail;
+        private List<ContactPointView> contactPoints;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    private static class ContactPointView {
+        private String contactType;
+        private String value;
+
+        // pos-people serializes this flag as JSON "primary" (its isPrimary() getter);
+        // map it explicitly so deserialization does not bind null to a primitive boolean.
+        @JsonProperty("primary")
+        private boolean isPrimary;
     }
 }

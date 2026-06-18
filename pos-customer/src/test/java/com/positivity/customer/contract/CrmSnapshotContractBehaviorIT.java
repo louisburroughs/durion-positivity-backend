@@ -5,7 +5,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
@@ -54,15 +53,6 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
     /** X-Authorities header value granting PARTY_VIEW (ADR-0025 policy). */
     private static final String PARTY_VIEW_AUTH = "crm:party:view";
 
-    /**
-     * Creates and persists a minimal {@link CommercialParty} suitable for snapshot
-     * tests.
-     * Provides the required {@code displayName} and at least one {@link Contact} to
-     * satisfy
-     * entity lifecycle validation.
-     *
-     * @return the saved entity with a generated partyId
-     */
     private CommercialParty createTestParty() {
         CommercialParty party = new CommercialParty();
         party.setPartyType(PartyType.COMMERCIAL);
@@ -74,15 +64,6 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
                         .toString()
                         .substring(0, 8));
         party.setStatus(AccountStatus.ACTIVE);
-
-        Contact contact = new Contact();
-        contact.setPersonId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
-        contact.setFirstName("Test");
-        contact.setLastName("Contact");
-        contact.setActive(true);
-        contact.setCommercialParty(party);
-        party.getContacts().add(contact);
-
         return partyRepository.saveAndFlush(party);
     }
 

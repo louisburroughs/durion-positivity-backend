@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.people.internal.dto.BreakDto;
 import com.positivity.people.internal.dto.WorkSessionDto;
+import com.positivity.people.internal.dto.WorkSessionSubmitRequest;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.WorkSession;
 import com.positivity.people.internal.entity.WorkSessionBreak;
@@ -277,6 +278,83 @@ class WorkSessionServiceTest {
             assertThat(result.getStatus()).isEqualTo("ENDED");
             verify(workSessionBreakRepository).save(any(WorkSessionBreak.class));
             assertThat(activeBreak.getEndedAt()).isNotNull();
+        }
+    }
+
+    @Test
+    void submitSession_whenSessionEnded_transitionsToSubmittedAndPersistsTotals() {
+        UUID sessionId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        WorkSession ended = new WorkSession();
+        ended.setSessionId(sessionId);
+        ended.setPerson(Person.builder().id(personId).build());
+        ended.setStatus("ENDED");
+        ended.setStartedAt(Instant.parse("2026-01-01T08:00:00Z"));
+        ended.setEndedAt(Instant.parse("2026-01-01T16:00:00Z"));
+
+        WorkSessionSubmitRequest request = new WorkSessionSubmitRequest();
+        request.setBillableMinutes(450);
+        request.setBreakMinutes(30);
+        request.setSubmittedAt(Instant.parse("2026-01-01T16:05:00Z"));
+
+        when(workSessionRepository.findById(sessionId)).thenReturn(Optional.of(ended));
+        when(workSessionRepository.save(any(WorkSession.class))).thenAnswer(i -> i.getArgument(0));
+
+        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+            helperMock
+                    .when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+                    .thenReturn("worker.user");
+
+            WorkSessionDto result = service.submitSession(sessionId, request);
+
+            assertThat(result.getStatus()).isEqualTo("SUBMITTED");
+            assertThat(result.getBillableMinutes()).isEqualTo(450);
+            assertThat(result.getBreakMinutes()).isEqualTo(30);
+            assertThat(result.getSubmittedAt()).isEqualTo(Instant.parse("2026-01-01T16:05:00Z"));
+            verify(workSessionRepository).save(any(WorkSession.class));
+        }
+    }
+
+    @Test
+    void submitSession_whenSessionMissing_throwsWorkSessionNotFoundException() {
+        UUID missingId = UUID.fromString("44444444-4444-4444-4444-444444444444");
+        WorkSessionSubmitRequest request = new WorkSessionSubmitRequest();
+        request.setBillableMinutes(10);
+        request.setBreakMinutes(0);
+        request.setSubmittedAt(Instant.parse("2026-01-01T16:05:00Z"));
+        when(workSessionRepository.findById(missingId)).thenReturn(Optional.empty());
+
+        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+            helperMock
+                    .when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+                    .thenReturn("worker.user");
+
+            assertThatThrownBy(() -> service.submitSession(missingId, request))
+                    .isInstanceOf(WorkSessionNotFoundException.class);
+        }
+    }
+
+    @Test
+    void submitSession_whenSessionNotEnded_throwsIllegalState() {
+        UUID sessionId = UUID.fromString("55555555-5555-5555-5555-555555555556");
+        WorkSession active = new WorkSession();
+        active.setSessionId(sessionId);
+        active.setPerson(Person.builder().id(personId).build());
+        active.setStatus("ACTIVE");
+
+        WorkSessionSubmitRequest request = new WorkSessionSubmitRequest();
+        request.setBillableMinutes(10);
+        request.setBreakMinutes(0);
+        request.setSubmittedAt(Instant.parse("2026-01-01T16:05:00Z"));
+        when(workSessionRepository.findById(sessionId)).thenReturn(Optional.of(active));
+
+        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+            helperMock
+                    .when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+                    .thenReturn("worker.user");
+
+            assertThatThrownBy(() -> service.submitSession(sessionId, request))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("ENDED");
         }
     }
 }
