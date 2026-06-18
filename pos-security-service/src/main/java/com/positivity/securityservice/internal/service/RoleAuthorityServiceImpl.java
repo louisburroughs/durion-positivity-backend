@@ -95,7 +95,9 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "crm:suspense:view",
                 // Promotion redemption
                 "crm:promotion_redemption:record",
-                "crm:promotion_redemption:view"));
+                "crm:promotion_redemption:view",
+                // #704: view active promotions during a sale
+                "pricing:promotion:view"));
         return authorities;
     }
 
@@ -369,7 +371,12 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "workorder:invoice:view",
                 "workorder:invoice:create",
                 "invoice:manage",
-                "invoice:finalize"));
+                "invoice:finalize",
+                // #704: service advisors view active promotions during a sale and
+                // approve/reject pay-period time entries.
+                "pricing:promotion:view",
+                "workorder:timeEntry:approve",
+                "workorder:timeEntry:reject"));
         return authorities;
     }
 

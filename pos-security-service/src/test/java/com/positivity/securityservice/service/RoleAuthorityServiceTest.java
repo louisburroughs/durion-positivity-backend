@@ -291,7 +291,11 @@ class RoleAuthorityServiceTest {
 
         assertThat(authorities)
                 .contains("ROLE_CSR")
-                .contains("crm:promotion_redemption:record", "crm:promotion_redemption:view");
+                .contains(
+                        "crm:promotion_redemption:record",
+                        "crm:promotion_redemption:view",
+                        // #704: CSR views active promotions during a sale
+                        "pricing:promotion:view");
     }
 
     @Test
@@ -301,5 +305,17 @@ class RoleAuthorityServiceTest {
         assertThat(authorities)
                 .contains("ROLE_LOCATION_MANAGER")
                 .contains("workorder:timeEntry:approve", "workorder:timeEntry:reject");
+    }
+
+    @Test
+    void expandRolesToAuthorities_serviceAdvisorIncludesPromotionViewAndTimeEntryApproval() {
+        Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(Set.of("SERVICE_ADVISOR"));
+
+        assertThat(authorities)
+                .contains("ROLE_SERVICE_ADVISOR")
+                .contains(
+                        "pricing:promotion:view",
+                        "workorder:timeEntry:approve",
+                        "workorder:timeEntry:reject");
     }
 }
