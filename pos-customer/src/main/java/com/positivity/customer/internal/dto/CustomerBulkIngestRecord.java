@@ -1,7 +1,6 @@
 package com.positivity.customer.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -26,7 +25,9 @@ public class CustomerBulkIngestRecord {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String lastName;
 
-    @Email
+    // Bulk ingest tolerates dirty legacy data — length-bounded only, no strict
+    // @Email format check, so a malformed value flags per-record rather than
+    // 400-ing the whole batch.
     @Size(max = 254)
     @Schema(
             description = "Email address of the customer",
@@ -34,7 +35,7 @@ public class CustomerBulkIngestRecord {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String email;
 
-    @Size(max = 32)
+    @Size(max = 64)
     @Schema(
             description = "Phone number of the customer",
             example = "+1-555-0142",
