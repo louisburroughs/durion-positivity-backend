@@ -2,6 +2,7 @@ package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.dto.BreakDto;
 import com.positivity.people.internal.dto.WorkSessionDto;
+import com.positivity.people.internal.dto.WorkSessionSubmitRequest;
 import com.positivity.people.internal.entity.WorkSession;
 import com.positivity.people.internal.entity.WorkSessionBreak;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
@@ -28,6 +29,8 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     private static final String STATUS_ACTIVE = "ACTIVE";
 
     private static final String STATUS_ENDED = "ENDED";
+
+    private static final String STATUS_SUBMITTED = "SUBMITTED";
 
     private static final String SYSTEM_USER = "system";
 
@@ -148,6 +151,30 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         return toBreakDto(saved);
     }
 
+    @Override
+    public WorkSessionDto submitSession(@NonNull UUID sessionId, @NonNull WorkSessionSubmitRequest request) {
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        Objects.requireNonNull(request, "request must not be null");
+        String resolvedActor = resolveActorFromSecurityContext();
+
+        WorkSession session = workSessionRepository
+                .findById(sessionId)
+                .orElseThrow(() -> new WorkSessionNotFoundException("No work session found for sessionId=" + sessionId));
+
+        if (!STATUS_ENDED.equals(session.getStatus())) {
+            throw new IllegalStateException(
+                    "Only an ENDED session can be submitted; sessionId=" + sessionId + " status=" + session.getStatus());
+        }
+
+        session.setStatus(STATUS_SUBMITTED);
+        session.setBillableMinutes(request.getBillableMinutes());
+        session.setBreakMinutes(request.getBreakMinutes());
+        session.setSubmittedAt(request.getSubmittedAt());
+        session.setActor(resolvedActor);
+
+        return toWorkSessionDto(workSessionRepository.save(session));
+    }
+
     private String resolveActorFromSecurityContext() {
         return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER);
     }
@@ -159,6 +186,9 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         dto.setStatus(session.getStatus());
         dto.setStartedAt(session.getStartedAt());
         dto.setEndedAt(session.getEndedAt());
+        dto.setBillableMinutes(session.getBillableMinutes());
+        dto.setBreakMinutes(session.getBreakMinutes());
+        dto.setSubmittedAt(session.getSubmittedAt());
         return dto;
     }
 

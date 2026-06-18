@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.BreakDto;
 import com.positivity.people.internal.dto.WorkSessionDto;
 import com.positivity.people.internal.dto.WorkSessionRequest;
+import com.positivity.people.internal.dto.WorkSessionSubmitRequest;
 import com.positivity.people.service.WorkSessionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -83,6 +84,27 @@ public class WorkSessionController {
                     UUID id) {
         log.info("Stopping break for work session ID(mask): {}", maskForLog(id));
         BreakDto response = workSessionService.stopBreak(id);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(
+            summary = "Submit work session",
+            description = "Submit an ended work session with its billable and break totals for approval.")
+    @ApiResponse(responseCode = "200", description = "Work session submitted successfully.")
+    @ApiResponse(responseCode = "404", description = "Work session not found.")
+    @ApiResponse(responseCode = "409", description = "Work session is not in a submittable state.")
+    @EmitEvent(id = "PEOPLE_WORK_SESSION_SUBMIT", apiVersion = "1")
+    @PostMapping("/{id}/submit")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<WorkSessionDto> submitWorkSession(
+            @Parameter(description = "Work session ID", example = "7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c")
+                    @PathVariable
+                    @NonNull
+                    UUID id,
+            @Parameter(description = "Work session submit request body") @Valid @RequestBody @NonNull
+                    WorkSessionSubmitRequest request) {
+        log.info("Submitting work session ID(mask): {}", maskForLog(id));
+        WorkSessionDto response = workSessionService.submitSession(id, request);
         return ResponseEntity.ok(response);
     }
 
