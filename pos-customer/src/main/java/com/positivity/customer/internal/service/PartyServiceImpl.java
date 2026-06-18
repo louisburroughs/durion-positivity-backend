@@ -164,12 +164,25 @@ public class PartyServiceImpl implements PartyService {
     @Transactional(readOnly = true)
     @NonNull
     public SearchPartiesResponse browseParties(@NonNull Pageable pageable) {
+        return browseParties(pageable, null, null, null, null, null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SearchPartiesResponse browseParties(
+            @NonNull Pageable pageable,
+            String name,
+            String status,
+            String partyType,
+            String customerNumber,
+            String sortField,
+            String sortOrder) {
         Pageable normalizedPageable = normalizeBrowsePageable(pageable);
 
         // Unified customer directory: commercial parties plus standalone individual
         // customers (person parties that are not commercial-account contacts).
-        // Merged and paged in-memory; customer volumes are well within a single
-        // window at this tier (see ADR-0026 / OQ3 in PLAN-person-unification).
+        // Merged, filtered, sorted, and paged in-memory; customer volumes are well
+        // within a single window at this tier (see ADR-0026 / OQ3 in PLAN-person-unification).
         List<SearchPartiesResponse.PartySummary> all = new ArrayList<>();
         partyRepository.findAll().stream().map(this::mapToPartySummary).forEach(all::add);
 
@@ -179,23 +192,68 @@ public class PartyServiceImpl implements PartyService {
                 .map(person -> mapPersonToPartySummary(person, identities))
                 .forEach(all::add);
 
-        all.sort(Comparator.comparing(
-                        (SearchPartiesResponse.PartySummary s) ->
-                                s.getDisplayName() != null ? s.getDisplayName() : s.getLegalName(),
-                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
-                .thenComparing(SearchPartiesResponse.PartySummary::getPartyId));
+        List<SearchPartiesResponse.PartySummary> filtered = all.stream()
+                .filter(s -> matchesBrowseFilter(s, name, status, partyType, customerNumber))
+                .sorted(browseComparator(sortField, sortOrder))
+                .toList();
 
-        int total = all.size();
+        int total = filtered.size();
         int from = Math.min(normalizedPageable.getPageNumber() * normalizedPageable.getPageSize(), total);
         int to = Math.min(from + normalizedPageable.getPageSize(), total);
-        List<SearchPartiesResponse.PartySummary> window = all.subList(from, to);
+        List<SearchPartiesResponse.PartySummary> window = filtered.subList(from, to);
 
         return SearchPartiesResponse.builder()
-                .results(window)
+                .results(new ArrayList<>(window))
                 .totalCount(safeTotalCount(total))
                 .pageNumber(normalizedPageable.getPageNumber())
                 .pageSize(normalizedPageable.getPageSize())
                 .build();
+    }
+
+    private boolean matchesBrowseFilter(
+            SearchPartiesResponse.PartySummary s,
+            String name,
+            String status,
+            String partyType,
+            String customerNumber) {
+        if (StringUtils.hasText(name)) {
+            String needle = name.toLowerCase(java.util.Locale.ROOT);
+            String legal = s.getLegalName() != null ? s.getLegalName().toLowerCase(java.util.Locale.ROOT) : "";
+            String display = s.getDisplayName() != null ? s.getDisplayName().toLowerCase(java.util.Locale.ROOT) : "";
+            if (!legal.contains(needle) && !display.contains(needle)) {
+                return false;
+            }
+        }
+        if (StringUtils.hasText(status) && !status.equalsIgnoreCase(s.getStatus())) {
+            return false;
+        }
+        if (StringUtils.hasText(partyType) && !partyType.equalsIgnoreCase(s.getPartyType())) {
+            return false;
+        }
+        if (StringUtils.hasText(customerNumber)) {
+            String cn = s.getCustomerNumber() != null ? s.getCustomerNumber().toLowerCase(java.util.Locale.ROOT) : "";
+            return cn.contains(customerNumber.toLowerCase(java.util.Locale.ROOT));
+        }
+        return true;
+    }
+
+    private Comparator<SearchPartiesResponse.PartySummary> browseComparator(String sortField, String sortOrder) {
+        Comparator<SearchPartiesResponse.PartySummary> base;
+        if ("customerNumber".equalsIgnoreCase(sortField)) {
+            base = Comparator.comparing(
+                    SearchPartiesResponse.PartySummary::getCustomerNumber,
+                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+        } else {
+            base = Comparator.comparing(
+                    (SearchPartiesResponse.PartySummary s) ->
+                            s.getDisplayName() != null ? s.getDisplayName() : s.getLegalName(),
+                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+        }
+        if ("desc".equalsIgnoreCase(sortOrder)) {
+            base = base.reversed();
+        }
+        // Stable tie-breaker so paging is deterministic.
+        return base.thenComparing(SearchPartiesResponse.PartySummary::getPartyId);
     }
 
     private SearchPartiesResponse.PartySummary mapPersonToPartySummary(
