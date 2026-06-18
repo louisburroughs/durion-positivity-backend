@@ -118,6 +118,12 @@ public class PartyServiceImpl implements PartyService {
                 .partyId(String.valueOf(saved.getPartyId()))
                 .legalName(saved.getLegalName())
                 .status(saved.getStatus().toString())
+                .customerNumber(saved.getPartyNumber())
+                .displayName(saved.getDisplayName())
+                .partyType(saved.getPartyType() != null ? saved.getPartyType().toString() : null)
+                .taxId(saved.getTaxId())
+                .billingTermsId(saved.getBillingTermsId())
+                .primaryAddress(saved.getPrimaryAddress())
                 .createdAt(saved.getCreatedAt())
                 .duplicateCandidates(new ArrayList<>())
                 .build();
