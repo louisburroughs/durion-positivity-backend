@@ -78,6 +78,11 @@ class PermissionRegistryServiceImplTest {
                 .isTrue();
         assertThat(permissionRegistryService.isValidPermissionName("people:userLink:view"))
                 .isTrue();
+        // PascalCase/camelCase domains are accepted (e.g. Promotion:Apply, TimeEntry:Approve)
+        assertThat(permissionRegistryService.isValidPermissionName("Promotion:Apply"))
+                .isTrue();
+        assertThat(permissionRegistryService.isValidPermissionName("TimeEntry:Approve"))
+                .isTrue();
         assertThat(permissionRegistryService.isValidPermissionName("INVALID")).isFalse();
         assertThat(permissionRegistryService.getPermissionsByDomain("pricing")).hasSize(1);
         assertThat(permissionRegistryService.getAllPermissions()).hasSize(1);
