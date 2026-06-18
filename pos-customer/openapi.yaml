@@ -867,6 +867,42 @@ paths:
         required: true
         schema:
           $ref: '#/components/schemas/Pageable'
+      - name: name
+        in: query
+        description: Filter by name (case-insensitive contains on legal/display name)
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: Filter by account status (ACTIVE|PENDING|SUSPENDED|INACTIVE)
+        required: false
+        schema:
+          type: string
+      - name: partyType
+        in: query
+        description: Filter by party type (ORGANIZATION|INDIVIDUAL)
+        required: false
+        schema:
+          type: string
+      - name: customerNumber
+        in: query
+        description: Filter by customer number (case-insensitive contains)
+        required: false
+        schema:
+          type: string
+      - name: sortField
+        in: query
+        description: 'Sort field: name (default) or customerNumber'
+        required: false
+        schema:
+          type: string
+      - name: sortOrder
+        in: query
+        description: 'Sort order: asc (default) or desc'
+        required: false
+        schema:
+          type: string
       responses:
         '200':
           description: Browse results returned

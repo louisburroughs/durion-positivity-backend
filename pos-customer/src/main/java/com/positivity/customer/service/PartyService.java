@@ -30,6 +30,21 @@ public interface PartyService {
     @NonNull
     SearchPartiesResponse browseParties(@NonNull Pageable pageable);
 
+    /**
+     * Browse the unified customer directory with optional server-side filtering
+     * (name, status, party type, customer number) and sorting (by name or
+     * customer number), paged.
+     */
+    @NonNull
+    SearchPartiesResponse browseParties(
+            @NonNull Pageable pageable,
+            String name,
+            String status,
+            String partyType,
+            String customerNumber,
+            String sortField,
+            String sortOrder);
+
     SearchPartiesResponse searchParties(SearchPartiesRequest request);
 
     MergePartiesResponse mergeParties(UUID survivorPartyId, MergePartiesRequest request);

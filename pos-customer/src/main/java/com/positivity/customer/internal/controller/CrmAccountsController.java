@@ -220,9 +220,30 @@ public class CrmAccountsController {
                     @PageableDefault(
                             size = 20,
                             sort = {"legalName", "partyId"})
-                    Pageable pageable) {
-        log.info("browseParties pageable={}", pageable);
-        return ResponseEntity.ok(partyService.browseParties(pageable));
+                    Pageable pageable,
+            @Parameter(description = "Filter by name (case-insensitive contains on legal/display name)")
+                    @RequestParam(required = false) String name,
+            @Parameter(description = "Filter by account status (ACTIVE|PENDING|SUSPENDED|INACTIVE)")
+                    @RequestParam(required = false) String status,
+            @Parameter(description = "Filter by party type (ORGANIZATION|INDIVIDUAL)")
+                    @RequestParam(required = false) String partyType,
+            @Parameter(description = "Filter by customer number (case-insensitive contains)")
+                    @RequestParam(required = false) String customerNumber,
+            @Parameter(description = "Sort field: name (default) or customerNumber")
+                    @RequestParam(required = false) String sortField,
+            @Parameter(description = "Sort order: asc (default) or desc")
+                    @RequestParam(required = false) String sortOrder) {
+        log.info(
+                "browseParties pageable={} name={} status={} partyType={} customerNumber={} sortField={} sortOrder={}",
+                pageable,
+                name,
+                status,
+                partyType,
+                customerNumber,
+                sortField,
+                sortOrder);
+        return ResponseEntity.ok(
+                partyService.browseParties(pageable, name, status, partyType, customerNumber, sortField, sortOrder));
     }
 
     @Operation(summary = "Search parties", description = "Search for parties based on various criteria")

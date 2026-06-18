@@ -142,7 +142,9 @@ class CrmAccountsControllerTest {
                 .pageSize(20)
                 .build();
 
-        when(partyService.browseParties(any(Pageable.class))).thenReturn(response);
+        when(partyService.browseParties(
+                        any(Pageable.class), any(), any(), any(), any(), any(), any()))
+                .thenReturn(response);
 
         mockMvc.perform(get("/v1/crm/accounts/parties").header("X-Authorities", "crm:party:view"))
                 .andExpect(status().isOk())
@@ -159,7 +161,8 @@ class CrmAccountsControllerTest {
                 .andExpect(jsonPath("$.pageSize").value(20));
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(partyService).browseParties(pageableCaptor.capture());
+        verify(partyService).browseParties(
+                pageableCaptor.capture(), any(), any(), any(), any(), any(), any());
         assertEquals(0, pageableCaptor.getValue().getPageNumber());
         assertEquals(20, pageableCaptor.getValue().getPageSize());
         assertTrue(pageableCaptor.getValue().getSort().isSorted());
@@ -170,6 +173,39 @@ class CrmAccountsControllerTest {
         var partyIdOrder = sortIterator.next();
         assertEquals("partyId", partyIdOrder.getProperty());
         assertEquals(Sort.Direction.ASC, partyIdOrder.getDirection());
+    }
+
+    @Test
+    @DisplayName("browseParties forwards filter and sort query params to the service")
+    void browsePartiesForwardsFilterSortParams() throws Exception {
+        SearchPartiesResponse response = SearchPartiesResponse.builder()
+                .results(List.of())
+                .totalCount(0)
+                .pageNumber(0)
+                .pageSize(20)
+                .build();
+        when(partyService.browseParties(
+                        any(Pageable.class), any(), any(), any(), any(), any(), any()))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/v1/crm/accounts/parties")
+                        .param("name", "acme")
+                        .param("status", "ACTIVE")
+                        .param("partyType", "ORGANIZATION")
+                        .param("customerNumber", "CUST-1")
+                        .param("sortField", "customerNumber")
+                        .param("sortOrder", "desc")
+                        .header("X-Authorities", "crm:party:view"))
+                .andExpect(status().isOk());
+
+        verify(partyService).browseParties(
+                any(Pageable.class),
+                eq("acme"),
+                eq("ACTIVE"),
+                eq("ORGANIZATION"),
+                eq("CUST-1"),
+                eq("customerNumber"),
+                eq("desc"));
     }
 
     @Test
