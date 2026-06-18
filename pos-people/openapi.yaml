@@ -504,6 +504,51 @@ paths:
         - people:role:assign
       x-required-permissions:
       - people:role:assign
+  /v1/people/workSessions/{id}/submit:
+    post:
+      tags:
+      - Work Sessions API
+      summary: Submit work session
+      description: Submit an ended work session with its billable and break totals for approval.
+      operationId: submitWorkSession
+      parameters:
+      - name: id
+        in: path
+        description: Work session ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkSessionSubmitRequest'
+        required: true
+      responses:
+        '200':
+          description: Work session submitted successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkSessionDto'
+        '404':
+          description: Work session not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkSessionDto'
+        '409':
+          description: Work session is not in a submittable state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkSessionDto'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/people/workSessions/{id}/breaks/stop:
     post:
       tags:
@@ -2339,6 +2384,52 @@ components:
           format: uri
         properties:
           type: object
+    WorkSessionSubmitRequest:
+      type: object
+      description: Work session submit request body
+      properties:
+        billableMinutes:
+          type: integer
+          format: int32
+          description: Total billable minutes for the session
+        breakMinutes:
+          type: integer
+          format: int32
+          description: Total break minutes for the session
+        submittedAt:
+          type: string
+          format: date-time
+          description: Timestamp the session was submitted
+      required:
+      - billableMinutes
+      - breakMinutes
+      - submittedAt
+    WorkSessionDto:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        personId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        billableMinutes:
+          type: integer
+          format: int32
+        breakMinutes:
+          type: integer
+          format: int32
+        submittedAt:
+          type: string
+          format: date-time
     BreakDto:
       type: object
       properties:
@@ -2364,23 +2455,6 @@ components:
           description: Actor performing the action
       required:
       - personId
-    WorkSessionDto:
-      type: object
-      properties:
-        sessionId:
-          type: string
-          format: uuid
-        personId:
-          type: string
-          format: uuid
-        status:
-          type: string
-        startedAt:
-          type: string
-          format: date-time
-        endedAt:
-          type: string
-          format: date-time
     LinkUserToPersonRequest:
       type: object
       properties:

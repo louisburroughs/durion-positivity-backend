@@ -146,6 +146,90 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    @DisplayName("CP-120-005: submit an ended work session returns 200 with SUBMITTED status and totals")
+    void CP_120_005_submitWorkSession_returns200() throws Exception {
+        mockMvc.perform(withAuth(post("/v1/people/workSessions/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(START_PAYLOAD)))
+                .andExpect(status().isOk());
+
+        String stopResponse = mockMvc.perform(withAuth(post("/v1/people/workSessions/stop")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(START_PAYLOAD)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String sessionId = objectMapper.readTree(stopResponse).get("sessionId").asText();
+
+        String submitPayload =
+                """
+				{
+				  "billableMinutes": 450,
+				  "breakMinutes": 30,
+				  "submittedAt": "2026-01-01T16:05:00Z"
+				}
+				""";
+
+        mockMvc.perform(withAuth(post("/v1/people/workSessions/" + sessionId + "/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(submitPayload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.billableMinutes").value(450))
+                .andExpect(jsonPath("$.breakMinutes").value(30));
+    }
+
+    @Test
+    @DisplayName("VE-120-003: submitting a non-existent session returns 404")
+    void VE_120_003_submitWorkSession_nonExistentSession_returns404() throws Exception {
+        String submitPayload =
+                """
+				{
+				  "billableMinutes": 60,
+				  "breakMinutes": 0,
+				  "submittedAt": "2026-01-01T16:05:00Z"
+				}
+				""";
+
+        mockMvc.perform(withAuth(post(
+                                "/v1/people/workSessions/{id}/submit",
+                                UUID.fromString("99999999-9999-9999-9999-999999999999"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(submitPayload)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("VE-120-004: submitting an active (not ended) session returns 409")
+    void VE_120_004_submitWorkSession_notEnded_returns409() throws Exception {
+        String startResponse = mockMvc.perform(withAuth(post("/v1/people/workSessions/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(START_PAYLOAD)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String sessionId = objectMapper.readTree(startResponse).get("sessionId").asText();
+
+        String submitPayload =
+                """
+				{
+				  "billableMinutes": 60,
+				  "breakMinutes": 0,
+				  "submittedAt": "2026-01-01T16:05:00Z"
+				}
+				""";
+
+        mockMvc.perform(withAuth(post("/v1/people/workSessions/" + sessionId + "/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(submitPayload)))
+                .andExpect(status().isConflict());
+    }
+
     private void ensurePersonExists(UUID personId, String firstName, String lastName) {
         if (personRepository.existsById(personId)) {
             return;

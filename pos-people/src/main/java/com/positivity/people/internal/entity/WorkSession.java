@@ -50,6 +50,15 @@ public class WorkSession {
     @Column(name = "actor", length = 128)
     private String actor;
 
+    @Column(name = "billable_minutes")
+    private Integer billableMinutes;
+
+    @Column(name = "break_minutes")
+    private Integer breakMinutes;
+
+    @Column(name = "submitted_at")
+    private Instant submittedAt;
+
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

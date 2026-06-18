@@ -15,6 +15,12 @@ public class WorkSessionDto {
 
     private Instant endedAt;
 
+    private Integer billableMinutes;
+
+    private Integer breakMinutes;
+
+    private Instant submittedAt;
+
     public WorkSessionDto() {}
 
     public WorkSessionDto(UUID sessionId, UUID personId, String status, Instant startedAt, Instant endedAt) {
@@ -63,5 +69,29 @@ public class WorkSessionDto {
 
     public void setEndedAt(Instant endedAt) {
         this.endedAt = endedAt;
+    }
+
+    public Integer getBillableMinutes() {
+        return billableMinutes;
+    }
+
+    public void setBillableMinutes(Integer billableMinutes) {
+        this.billableMinutes = billableMinutes;
+    }
+
+    public Integer getBreakMinutes() {
+        return breakMinutes;
+    }
+
+    public void setBreakMinutes(Integer breakMinutes) {
+        this.breakMinutes = breakMinutes;
+    }
+
+    public Instant getSubmittedAt() {
+        return submittedAt;
+    }
+
+    public void setSubmittedAt(Instant submittedAt) {
+        this.submittedAt = submittedAt;
     }
 }
