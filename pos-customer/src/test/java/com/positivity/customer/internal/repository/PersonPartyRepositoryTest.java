@@ -29,8 +29,6 @@ class PersonPartyRepositoryTest {
         PersonParty party = new PersonParty();
         party.setCustomerNumber("CUST-TEST-001");
         party.setPersonId(UUID.randomUUID());
-        party.setLastName("Doe");
-        party.setFirstName("John");
 
         PersonParty saved = personPartyRepository.saveAndFlush(party);
 

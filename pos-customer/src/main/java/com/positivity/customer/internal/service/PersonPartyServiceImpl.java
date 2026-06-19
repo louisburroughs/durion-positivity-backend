@@ -9,13 +9,16 @@ import com.positivity.customer.service.CustomerService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,9 +56,10 @@ public class PersonPartyServiceImpl implements CustomerService {
     @Transactional(readOnly = true)
     public Page<CustomerDTO> getAllCustomers(@NonNull Pageable pageable) {
         log.debug("Fetching all person customers with paging: {}", pageable);
-        Page<PersonParty> page = customerRepository.findAll(pageable);
+        Pageable safePageable = sanitizeSort(pageable);
+        Page<PersonParty> page = customerRepository.findAll(safePageable);
         List<CustomerDTO> dtos = page.getContent().stream().map(this::toDTO).toList();
-        return new PageImpl<>(dtos, pageable, page.getTotalElements());
+        return new PageImpl<>(dtos, safePageable, page.getTotalElements());
     }
 
     /**
@@ -164,15 +168,35 @@ public class PersonPartyServiceImpl implements CustomerService {
      */
     private CustomerDTO toDTO(PersonParty entity) {
         PartyType customerType = determineCustomerType(entity);
+        // Names from pos-people (sole source of truth, ADR-0015 I2; issue #684).
+        PeopleClient.PersonIdentity identity = entity.getPersonId() != null
+                ? peopleClient
+                        .fetchPersonIdentitiesQuietly(Set.of(entity.getPersonId()))
+                        .get(entity.getPersonId())
+                : null;
         return CustomerDTO.builder()
                 .id(entity.getPartyId())
                 .customerNumber(entity.getCustomerNumber())
-                .lastName(entity.getLastName())
-                .firstName(entity.getFirstName())
+                .lastName(identity != null ? identity.lastName() : null)
+                .firstName(identity != null ? identity.firstName() : null)
                 .primaryAddress(entity.getPrimaryAddress())
                 .vehicleVins(new ArrayList<>(entity.getVehicleVins()))
                 .customerType(customerType.toString())
                 .build();
+    }
+
+    /**
+     * Drops sort orders on name properties, which no longer exist locally (names
+     * live in pos-people, ADR-0015 I2; issue #684). Falls back to customerNumber.
+     */
+    private Pageable sanitizeSort(Pageable pageable) {
+        Sort filtered = Sort.by(pageable.getSort().stream()
+                .filter(o -> !"firstName".equals(o.getProperty()) && !"lastName".equals(o.getProperty()))
+                .toList());
+        if (filtered.isUnsorted()) {
+            filtered = Sort.by("customerNumber");
+        }
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), filtered);
     }
 
     /**
@@ -187,8 +211,8 @@ public class PersonPartyServiceImpl implements CustomerService {
                 peopleClient.resolveOrCreatePersonId(null, null, dto.getLastName(), dto.getFirstName());
         entity.setPersonId(canonicalPersonId);
         entity.setCustomerNumber(dto.getCustomerNumber());
-        entity.setLastName(dto.getLastName());
-        entity.setFirstName(dto.getFirstName());
+        // Names are resolved/created in pos-people via resolveOrCreatePersonId above;
+        // pos-customer keeps no local name copy (ADR-0015 I2; issue #684).
         entity.setPrimaryAddress(dto.getPrimaryAddress());
         if (dto.getVehicleVins() != null) {
             entity.getVehicleVins().addAll(dto.getVehicleVins());
@@ -206,12 +230,8 @@ public class PersonPartyServiceImpl implements CustomerService {
         if (dto.getCustomerNumber() != null) {
             entity.setCustomerNumber(dto.getCustomerNumber());
         }
-        if (dto.getLastName() != null) {
-            entity.setLastName(dto.getLastName());
-        }
-        if (dto.getFirstName() != null) {
-            entity.setFirstName(dto.getFirstName());
-        }
+        // Name updates are not applied locally: pos-people is the source of truth for
+        // person identity (ADR-0015 I2; issue #684). Name edits go through pos-people.
         if (dto.getPrimaryAddress() != null) {
             entity.setPrimaryAddress(dto.getPrimaryAddress());
         }

@@ -28,7 +28,6 @@ import com.positivity.customer.internal.entity.Party;
 import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
-import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
@@ -211,11 +210,7 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private boolean matchesBrowseFilter(
-            SearchPartiesResponse.PartySummary s,
-            String name,
-            String status,
-            String partyType,
-            String customerNumber) {
+            SearchPartiesResponse.PartySummary s, String name, String status, String partyType, String customerNumber) {
         if (StringUtils.hasText(name)) {
             String needle = name.toLowerCase(java.util.Locale.ROOT);
             String legal = s.getLegalName() != null ? s.getLegalName().toLowerCase(java.util.Locale.ROOT) : "";
@@ -291,59 +286,38 @@ public class PartyServiceImpl implements PartyService {
 
     /**
      * Batch-load canonical identities from pos-people (source of truth, ADR-0015 I2)
-     * for the given person parties, keyed by the canonical person id.
+     * for the given person parties, keyed by the canonical person id. Uses the resilient
+     * (quiet) variant so a pos-people outage degrades names/contacts to null on these
+     * display read paths (directory browse, contact summaries) rather than failing the
+     * whole request — there is no local fallback after issue #684.
      */
     private Map<UUID, PeopleClient.PersonIdentity> fetchIdentitiesFor(Collection<PersonParty> persons) {
         Set<UUID> personIds = persons.stream()
                 .map(PersonParty::getPersonId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        return peopleClient.fetchPersonIdentities(personIds);
+        return peopleClient.fetchPersonIdentitiesQuietly(personIds);
     }
 
     /**
-     * Resolve a person's display name from pos-people (source of truth), falling
-     * back to the local person_party copy while the thin-link migration is in
-     * progress (e.g. an orphan link not yet reconciled).
+     * Resolve a person's display name from pos-people (sole source of truth, ADR-0015 I2;
+     * issue #684). Returns {@code null} when pos-people has no name for the canonical id
+     * (or is unreachable) — there is no local fallback copy.
      */
     private String resolveDisplayName(PersonParty person, Map<UUID, PeopleClient.PersonIdentity> identities) {
         PeopleClient.PersonIdentity identity =
                 (identities != null && person.getPersonId() != null) ? identities.get(person.getPersonId()) : null;
-        if (identity != null && !identity.displayName().isBlank()) {
-            return identity.displayName();
-        }
-        return person.getDisplayName();
+        return identity != null && !identity.displayName().isBlank() ? identity.displayName() : null;
     }
 
-    /**
-     * Phone values from pos-people (source of truth, ADR-0015 I2); falls back to
-     * the local contact_point copy when pos-people has none for this person.
-     */
+    /** Phone values from pos-people (sole source of truth, ADR-0015 I2; issue #684). */
     private List<String> resolvePhones(PersonParty person, PeopleClient.PersonIdentity identity) {
-        if (identity != null && !identity.phones().isEmpty()) {
-            return identity.phones();
-        }
-        return person.getContactPoints().stream()
-                .filter(cp -> cp.getContactType() == ContactPointType.PHONE_MOBILE
-                        || cp.getContactType() == ContactPointType.PHONE_WORK)
-                .map(cp -> cp.getValue())
-                .filter(Objects::nonNull)
-                .toList();
+        return identity != null ? identity.phones() : List.of();
     }
 
-    /**
-     * Email values from pos-people (source of truth, ADR-0015 I2); falls back to
-     * the local contact_point copy when pos-people has none for this person.
-     */
+    /** Email values from pos-people (sole source of truth, ADR-0015 I2; issue #684). */
     private List<String> resolveEmails(PersonParty person, PeopleClient.PersonIdentity identity) {
-        if (identity != null && !identity.emails().isEmpty()) {
-            return identity.emails();
-        }
-        return person.getContactPoints().stream()
-                .filter(cp -> cp.getContactType() == ContactPointType.EMAIL)
-                .map(cp -> cp.getValue())
-                .filter(Objects::nonNull)
-                .toList();
+        return identity != null ? identity.emails() : List.of();
     }
 
     private int safeTotalCount(long totalElements) {
@@ -571,10 +545,8 @@ public class PartyServiceImpl implements PartyService {
         if (contacts.isEmpty()) {
             return null;
         }
-        ContactSummary primary = contacts.stream()
-                .filter(ContactSummary::isPrimary)
-                .findFirst()
-                .orElse(contacts.get(0));
+        ContactSummary primary =
+                contacts.stream().filter(ContactSummary::isPrimary).findFirst().orElse(contacts.get(0));
         return SearchPartiesResponse.PrimaryContact.builder()
                 .name(primary.getName())
                 .email(firstContactValue(primary.getEmailAddresses(), ContactSummary.EmailAddressDTO::getAddress))

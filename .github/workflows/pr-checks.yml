@@ -85,6 +85,9 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Install Python dependencies
+        run: pip install pyyaml
+
       - name: Check @PreAuthorize permissions are registered in the catalog
         run: |
           # Fails if any @PreAuthorize permission is missing from PermissionCode /

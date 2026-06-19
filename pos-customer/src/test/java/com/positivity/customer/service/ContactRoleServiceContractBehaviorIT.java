@@ -2,8 +2,10 @@ package com.positivity.customer.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
 import com.positivity.customer.BaseContractIntegrationTest;
+import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest.RoleAssignment;
@@ -25,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -54,6 +57,9 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private ContactRoleAssignmentRepository roleAssignmentRepository;
 
+    @MockitoBean
+    private PeopleClient peopleClient;
+
     private CommercialParty testParty;
     private UUID testContactUuid;
     private UUID testPartyUuid;
@@ -63,8 +69,6 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
         // Create test person (independent entity for contact role assignments)
         PersonParty contactPerson = new PersonParty();
         contactPerson.setPersonId(UUID.randomUUID());
-        contactPerson.setFirstName("John");
-        contactPerson.setLastName("Doe");
         contactPerson.setCustomerNumber("CUST-PERSON-" + System.currentTimeMillis());
         contactPerson.setPreferredContactMethod(com.positivity.customer.internal.enums.PreferredContactMethod.EMAIL);
         contactPerson = personRepository.save(contactPerson);
@@ -94,6 +98,13 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
                 .primary(true)
                 .build();
         roleAssignmentRepository.save(assignment);
+
+        // Names come from pos-people (sole source of truth, ADR-0015 I2; issue #684).
+        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(testContactUuid)))
+                .thenReturn(java.util.Map.of(
+                        testContactUuid,
+                        new PeopleClient.PersonIdentity(
+                                testContactUuid, "John", "Doe", "john@example.com", java.util.List.of())));
 
         GetContactsWithRolesResponse response = contactRoleService.getContactsWithRoles(testParty.getPartyId());
 
@@ -153,8 +164,6 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
         // Create another contact
         PersonParty contact2 = new PersonParty();
         contact2.setPersonId(UUID.randomUUID());
-        contact2.setFirstName("Jane");
-        contact2.setLastName("Smith");
         contact2.setCustomerNumber("CUST-PERSON2-" + System.currentTimeMillis());
         contact2.setPreferredContactMethod(com.positivity.customer.internal.enums.PreferredContactMethod.EMAIL);
         contact2 = personRepository.save(contact2);

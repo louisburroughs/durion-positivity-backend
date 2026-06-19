@@ -69,8 +69,6 @@ class CrmVehicleServiceImplTest {
     private PersonParty personParty(UUID id) {
         PersonParty party = new PersonParty();
         party.setPartyId(id);
-        party.setFirstName("John");
-        party.setLastName("Doe");
         party.setVehicleVins(new HashSet<>());
         return party;
     }

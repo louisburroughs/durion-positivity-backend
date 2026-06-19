@@ -2,23 +2,29 @@ package com.positivity.customer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
 import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.entity.ContactPoint;
 import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
-import com.positivity.customer.internal.repository.ContactPointRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PersonService;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
@@ -29,18 +35,16 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Contract behavior integration tests for Party Management services.
+ * Contract behavior integration tests for person management.
  * <p>
- * Tests acceptance criteria from:
- * - Issue #111: Create Individual PersonParty Record
- * - Issue #110: Associate Individuals to Commercial Account
- * </p>
- * <p>
- * These tests verify the business logic behavior at the service layer,
- * using real database interactions (H2 in-memory).
+ * Tests acceptance criteria from Issue #111 (Create Individual PersonParty Record),
+ * updated for issue #684: pos-people is the sole source of truth for person identity
+ * and contact points (ADR-0015 I2), so {@link PeopleClient} is mocked here and
+ * pos-customer persists only the thin link.
  * </p>
  */
 @SpringBootTest
@@ -49,6 +53,8 @@ import org.springframework.web.server.ResponseStatusException;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
+    private static final UUID USER = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
     @Autowired
     private PersonService personService;
 
@@ -56,67 +62,65 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
     private PersonPartyRepository personRepository;
 
     @Autowired
-    private ContactPointRepository contactPointRepository;
-
-    @Autowired
     private CommercialPartyRepository commercialPartyRepository;
 
     @Autowired
     private PartyRelationshipRepository partyRelationshipRepository;
 
+    @MockitoBean
+    private PeopleClient peopleClient;
+
     @BeforeEach
     void setUp() {
-        // Clean up before each test
         partyRelationshipRepository.deleteAll();
         commercialPartyRepository.deleteAll();
-        contactPointRepository.deleteAll();
         personRepository.deleteAll();
+    }
+
+    private static PeopleClient.PersonIdentity identity(UUID id, String first, String last, String... emails) {
+        List<PeopleClient.ContactPoint> cps = java.util.Arrays.stream(emails)
+                .map(e -> new PeopleClient.ContactPoint("EMAIL", e, true))
+                .toList();
+        return new PeopleClient.PersonIdentity(id, first, last, emails.length > 0 ? emails[0] : null, cps);
     }
 
     // ==========================================================================
     // Issue #111: Create Individual PersonParty Record - Acceptance Criteria Tests
     // ==========================================================================
 
-    /**
-     * AC1: Minimal create (name + preferred method) returns 201 and persists a
-     * PersonParty.
-     */
+    /** AC1: Minimal create (name + preferred method) returns 201 and persists the thin link. */
     @Test
     @Order(1)
     void ac1_minimalCreate_persistsPerson() {
-        // Given: minimal valid request
+        UUID personId = UUID.randomUUID();
+        when(peopleClient.resolveOrCreatePersonId(any(), any(), eq("Doe"), eq("John")))
+                .thenReturn(personId);
+
         CreatePersonRequest request = CreatePersonRequest.builder()
                 .firstName("John")
                 .lastName("Doe")
                 .preferredContactMethod(PreferredContactMethod.EMAIL)
                 .build();
 
-        // When: creating person
-        CreatePersonResponse response =
-                personService.createPerson(request, UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        CreatePersonResponse response = personService.createPerson(request, USER);
 
-        // Then: person is persisted
-        assertThat(response.getPersonId()).isNotNull();
+        assertThat(response.getPersonId()).isEqualTo(personId);
         assertThat(response.getFirstName()).isEqualTo("John");
         assertThat(response.getLastName()).isEqualTo("Doe");
         assertThat(response.getPreferredContactMethod()).isEqualTo(PreferredContactMethod.EMAIL);
 
-        // Verify in database
-        PersonParty savedPerson =
-                personRepository.findByPersonId(response.getPersonId()).orElse(null);
+        PersonParty savedPerson = personRepository.findByPersonId(personId).orElse(null);
         assertThat(savedPerson).isNotNull();
-        assertThat(savedPerson.getFirstName()).isEqualTo("John");
-        assertThat(savedPerson.getLastName()).isEqualTo("Doe");
+        assertThat(savedPerson.getPersonId()).isEqualTo(personId);
     }
 
-    /**
-     * AC2: Create with two emails and two phone numbers persists four
-     * ContactPoints.
-     */
+    /** AC2: Create with two emails and two phones mirrors four contact points to pos-people. */
     @Test
     @Order(2)
-    void ac2_createWithContactPoints_persistsAllContactPoints() {
-        // Given: request with multiple contact points
+    void ac2_createWithContactPoints_mirrorsAllContactPointsToPeople() {
+        UUID personId = UUID.randomUUID();
+        when(peopleClient.resolveOrCreatePersonId(any(), any(), any(), any())).thenReturn(personId);
+
         CreatePersonRequest request = CreatePersonRequest.builder()
                 .firstName("Jane")
                 .lastName("Smith")
@@ -143,81 +147,47 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                 .build()))
                 .build();
 
-        // When: creating person
-        CreatePersonResponse response =
-                personService.createPerson(request, UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        CreatePersonResponse response = personService.createPerson(request, USER);
 
-        // Then: 4 contact points persisted
         assertThat(response.getContactPointsCreated()).isEqualTo(4);
-
-        // Verify in database
-        PersonParty personParty =
-                personRepository.findByPersonId(response.getPersonId()).orElseThrow();
-        List<ContactPoint> contactPoints = contactPointRepository.findByPersonPartyId(personParty.getPersonPartyId());
-        assertThat(contactPoints).hasSize(4);
-
-        // Verify email contact points
-        List<ContactPoint> emails = contactPoints.stream()
-                .filter(cp -> cp.getContactType() == ContactPointType.EMAIL)
-                .toList();
-        assertThat(emails).hasSize(2);
-        assertThat(emails).anyMatch(e -> e.getValue().equals("jane.primary@example.com") && e.isPrimary());
-        assertThat(emails).anyMatch(e -> e.getValue().equals("jane.secondary@example.com") && !e.isPrimary());
-
-        // Verify phone contact points
-        List<ContactPoint> phones = contactPoints.stream()
-                .filter(cp -> cp.getContactType() == ContactPointType.PHONE_MOBILE
-                        || cp.getContactType() == ContactPointType.PHONE_WORK)
-                .toList();
-        assertThat(phones).hasSize(2);
+        // Contacts are written to pos-people (source of truth), not stored locally.
+        verify(peopleClient).setContactPoints(eq(personId), argThat(list -> list.size() == 4));
     }
 
-    /**
-     * AC3: Missing lastName returns 400 and persists nothing.
-     */
+    /** AC3: Missing lastName returns 400 and persists nothing. */
     @Test
     @Order(3)
     void ac3_missingLastName_returns400AndPersistsNothing() {
-        UUID requestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        // Given: request without lastName
         CreatePersonRequest request = CreatePersonRequest.builder()
                 .firstName("John")
-                .lastName(null) // Missing
+                .lastName(null)
                 .preferredContactMethod(PreferredContactMethod.EMAIL)
                 .build();
 
-        // When/Then: expect validation error
-        assertThatThrownBy(() -> personService.createPerson(request, requestId))
+        assertThatThrownBy(() -> personService.createPerson(request, USER))
                 .isInstanceOf(ResponseStatusException.class)
-                .satisfies(ex -> {
-                    ResponseStatusException rse = (ResponseStatusException) ex;
-                    assertThat(rse.getStatusCode().value()).isEqualTo(400);
-                });
+                .satisfies(ex -> assertThat(
+                                ((ResponseStatusException) ex).getStatusCode().value())
+                        .isEqualTo(400));
 
-        // Verify nothing persisted
         assertThat(personRepository.count()).isZero();
     }
 
-    /**
-     * AC4: Invalid email format returns 400 and persists nothing.
-     */
+    /** AC4: Invalid email format returns 400 and persists nothing. */
     @Test
     @Order(4)
     void ac4_invalidEmailFormat_returns400AndPersistsNothing() {
-        UUID requestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        // Given: request with invalid email
         CreatePersonRequest request = CreatePersonRequest.builder()
                 .firstName("John")
                 .lastName("Doe")
                 .preferredContactMethod(PreferredContactMethod.EMAIL)
                 .emails(List.of(CreatePersonRequest.EmailInput.builder()
-                        .value("not-an-email") // Invalid
+                        .value("not-an-email")
                         .isPrimary(true)
                         .build()))
                 .build();
 
-        // When/Then: expect validation error
-        assertThatThrownBy(() -> personService.createPerson(request, requestId))
+        assertThatThrownBy(() -> personService.createPerson(request, USER))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(ex -> {
                     ResponseStatusException rse = (ResponseStatusException) ex;
@@ -225,8 +195,10 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                     assertThat(rse.getReason()).contains("Invalid email");
                 });
 
-        // Verify nothing persisted
+        // Persists nothing locally AND never creates a canonical person in pos-people:
+        // email validation runs before resolveOrCreatePersonId (issue #684 review).
         assertThat(personRepository.count()).isZero();
+        verify(peopleClient, never()).resolveOrCreatePersonId(any(), any(), any(), any());
     }
 
     // ==========================================================================
@@ -235,8 +207,10 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Test
     @Order(5)
-    void getPerson_existingPerson_returnsPersonWithContactPoints() {
-        // Given: an existing person with contact points
+    void getPerson_existingPerson_returnsPersonWithContactPointsFromPeople() {
+        UUID personId = UUID.randomUUID();
+        when(peopleClient.resolveOrCreatePersonId(any(), any(), any(), any())).thenReturn(personId);
+
         CreatePersonRequest request = CreatePersonRequest.builder()
                 .firstName("Test")
                 .lastName("User")
@@ -246,13 +220,13 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                         .isPrimary(true)
                         .build()))
                 .build();
-        CreatePersonResponse created =
-                personService.createPerson(request, UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        CreatePersonResponse created = personService.createPerson(request, USER);
 
-        // When: getting person by ID
+        when(peopleClient.fetchPersonIdentitiesQuietly(Set.of(personId)))
+                .thenReturn(java.util.Map.of(personId, identity(personId, "Test", "User", "test@example.com")));
+
         GetPersonResponse response = personService.getPerson(created.getPersonId());
 
-        // Then: person with contact points returned
         assertThat(response.getPersonId()).isEqualTo(created.getPersonId());
         assertThat(response.getFirstName()).isEqualTo("Test");
         assertThat(response.getLastName()).isEqualTo("User");
@@ -263,53 +237,65 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @Order(6)
     void getPerson_nonExistentPerson_returns404() {
-        // Given: non-existent person ID
-        UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-0000000000ff");
 
-        // When/Then: expect not found
         assertThatThrownBy(() -> personService.getPerson(nonExistentId))
                 .isInstanceOf(ResponseStatusException.class)
-                .satisfies(ex -> {
-                    ResponseStatusException rse = (ResponseStatusException) ex;
-                    assertThat(rse.getStatusCode().value()).isEqualTo(404);
-                });
+                .satisfies(ex -> assertThat(
+                                ((ResponseStatusException) ex).getStatusCode().value())
+                        .isEqualTo(404));
     }
 
     @Test
     @Order(7)
-    void searchPersons_byName_returnsMatchingPersons() {
-        // Given: multiple persons
-        CreatePersonRequest request1 = CreatePersonRequest.builder()
-                .firstName("Alice")
-                .lastName("Johnson")
-                .preferredContactMethod(PreferredContactMethod.EMAIL)
-                .build();
-        CreatePersonRequest request2 = CreatePersonRequest.builder()
-                .firstName("Bob")
-                .lastName("Johnson")
-                .preferredContactMethod(PreferredContactMethod.PHONE_CALL)
-                .build();
-        CreatePersonRequest request3 = CreatePersonRequest.builder()
-                .firstName("Charlie")
-                .lastName("Brown")
-                .preferredContactMethod(PreferredContactMethod.SMS)
-                .build();
-        personService.createPerson(request1, UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        personService.createPerson(request2, UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        personService.createPerson(request3, UUID.fromString("00000000-0000-0000-0000-000000000001"));
+    void searchPersons_byName_delegatesToPeopleAndReturnsLocalLinks() {
+        UUID aliceId = UUID.randomUUID();
+        UUID bobId = UUID.randomUUID();
+        UUID charlieId = UUID.randomUUID();
+        when(peopleClient.resolveOrCreatePersonId(any(), any(), eq("Johnson"), eq("Alice")))
+                .thenReturn(aliceId);
+        when(peopleClient.resolveOrCreatePersonId(any(), any(), eq("Johnson"), eq("Bob")))
+                .thenReturn(bobId);
+        when(peopleClient.resolveOrCreatePersonId(any(), any(), eq("Brown"), eq("Charlie")))
+                .thenReturn(charlieId);
 
-        // When: searching by last name
+        personService.createPerson(
+                CreatePersonRequest.builder()
+                        .firstName("Alice")
+                        .lastName("Johnson")
+                        .preferredContactMethod(PreferredContactMethod.EMAIL)
+                        .build(),
+                USER);
+        personService.createPerson(
+                CreatePersonRequest.builder()
+                        .firstName("Bob")
+                        .lastName("Johnson")
+                        .preferredContactMethod(PreferredContactMethod.PHONE_CALL)
+                        .build(),
+                USER);
+        personService.createPerson(
+                CreatePersonRequest.builder()
+                        .firstName("Charlie")
+                        .lastName("Brown")
+                        .preferredContactMethod(PreferredContactMethod.SMS)
+                        .build(),
+                USER);
+
+        when(peopleClient.searchPersons("Johnson"))
+                .thenReturn(List.of(identity(aliceId, "Alice", "Johnson"), identity(bobId, "Bob", "Johnson")));
+
         List<GetPersonResponse> results = personService.searchPersons("Johnson", null, null, 20, 0);
 
-        // Then: only Johnsons returned
         assertThat(results).hasSize(2);
         assertThat(results).allMatch(p -> p.getLastName().equals("Johnson"));
     }
 
     @Test
     @Order(8)
-    void emailNormalization_storesLowercase() {
-        // Given: request with mixed-case email
+    void emailNormalization_mirrorsLowercaseToPeople() {
+        UUID personId = UUID.randomUUID();
+        when(peopleClient.resolveOrCreatePersonId(any(), any(), any(), any())).thenReturn(personId);
+
         CreatePersonRequest request = CreatePersonRequest.builder()
                 .firstName("Test")
                 .lastName("User")
@@ -320,32 +306,31 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                         .build()))
                 .build();
 
-        // When: creating person
-        CreatePersonResponse response =
-                personService.createPerson(request, UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        personService.createPerson(request, USER);
 
-        // Then: email stored in lowercase
-        PersonParty personParty =
-                personRepository.findByPersonId(response.getPersonId()).orElseThrow();
-        List<ContactPoint> contacts = contactPointRepository.findByPersonPartyId(personParty.getPersonPartyId());
-        assertThat(contacts).hasSize(1);
-        assertThat(contacts.get(0).getValue()).isEqualTo("test.user@example.com");
+        verify(peopleClient)
+                .setContactPoints(
+                        eq(personId),
+                        argThat(list -> list.size() == 1 && list.get(0).value().equals("test.user@example.com")));
     }
 
     @Test
     @Order(9)
     void searchPersons_includesCommercialIdentitySummary() {
-        CreatePersonRequest request = CreatePersonRequest.builder()
-                .firstName("Jane")
-                .lastName("Smith")
-                .preferredContactMethod(PreferredContactMethod.EMAIL)
-                .emails(List.of(CreatePersonRequest.EmailInput.builder()
-                        .value("jane@example.com")
-                        .isPrimary(true)
-                        .build()))
-                .build();
-        CreatePersonResponse created =
-                personService.createPerson(request, UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        UUID janeId = UUID.randomUUID();
+        when(peopleClient.resolveOrCreatePersonId(any(), any(), any(), any())).thenReturn(janeId);
+
+        CreatePersonResponse created = personService.createPerson(
+                CreatePersonRequest.builder()
+                        .firstName("Jane")
+                        .lastName("Smith")
+                        .preferredContactMethod(PreferredContactMethod.EMAIL)
+                        .emails(List.of(CreatePersonRequest.EmailInput.builder()
+                                .value("jane@example.com")
+                                .isPrimary(true)
+                                .build()))
+                        .build(),
+                USER);
 
         CommercialParty party = new CommercialParty();
         party.setCustomerNumber("CUST-2001");
@@ -361,6 +346,9 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         relationship.setToPerson(personParty);
         relationship.setEffectiveStartDate(LocalDate.of(2024, 1, 1));
         partyRelationshipRepository.save(relationship);
+
+        when(peopleClient.searchPersons("jane@example.com"))
+                .thenReturn(List.of(identity(janeId, "Jane", "Smith", "jane@example.com")));
 
         List<GetPersonResponse> results = personService.searchPersons(null, "jane@example.com", null, 20, 0);
 

@@ -4,42 +4,33 @@ import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.shared.id.UUIDv7Id;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
-import jakarta.validation.constraints.NotBlank;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import lombok.ToString;
-import org.hibernate.annotations.BatchSize;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * PersonParty entity representing an individual in the CRM system.
- * Distinct from CommercialParty (which represents organizations) and Contact
- * (which links
- * persons to CommercialParties).
+ * Distinct from CommercialParty (which represents organizations).
  * <p>
- * This entity is the system of record for individual person master data per
- * domain:crm decisions.
+ * This is a thin link to the canonical person in pos-people (ADR-0015 I2):
+ * identity (name) and contact points live solely in pos-people and are read via
+ * {@code personId}. pos-customer keeps only the link plus CRM-local state
+ * (customer number, preferred contact method, status/tier, vehicles).
  * </p>
  *
  * @see <a href=
- *      "https://github.com/louisburroughs/durion-positivity-backend/issues/111">Backend
- *      Issue #111</a>
+ *      "https://github.com/louisburroughs/durion-positivity-backend/issues/684">Backend
+ *      Issue #684</a>
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -54,55 +45,27 @@ public class PersonParty extends AbstractParty {
     @Schema(description = "Canonical person ID from pos-people", example = "550e8400-e29b-41d4-a716-446655440000")
     private UUID personId;
 
-    @NotBlank
-    @Schema(description = "Last name of the customer", example = "Doe")
-    private String lastName;
-
-    @NotBlank
-    @Schema(description = "First name of the customer", example = "John")
-    private String firstName;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "preferred_contact_method", nullable = false, length = 20)
     @Schema(description = "Preferred method of contact", example = "EMAIL", requiredMode = Schema.RequiredMode.REQUIRED)
     private PreferredContactMethod preferredContactMethod = PreferredContactMethod.NONE;
 
-    @OneToMany(mappedBy = "person", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @BatchSize(size = 20)
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    @Schema(description = "Contact points (emails, phones) for this person")
-    private List<ContactPoint> contactPoints = new ArrayList<>();
-
     /**
-     * Returns the full display name of the person.
-     *
-     * @return formatted full name
+     * Display name for this party. Sourced from pos-people (ADR-0015 I2); pos-customer
+     * no longer keeps a local name copy, so this returns {@code null}. Callers needing
+     * a name resolve it from pos-people via {@link #getPersonId()}.
      */
+    @Override
     @Transient
-    @Schema(description = "Full display name", example = "John Doe")
-    public String getDisplayName() {
-        return (getFirstName() != null ? getFirstName() : "") + " " + (getLastName() != null ? getLastName() : "");
+    @Schema(description = "Display name (sourced from pos-people)")
+    public @Nullable String getDisplayName() {
+        return null;
     }
 
-    @PrePersist
-    public void onPersist() {
-        validateNames();
-    }
-
-    @PreUpdate
-    private void onUpdate() {
-        validateNames();
-    }
-
-    /** Helper method to validate customer names */
+    /** No local name to validate — identity lives in pos-people (ADR-0015 I2). */
+    @Override
     protected void validateNames() {
-        if (firstName == null || firstName.isBlank()) {
-            throw new IllegalStateException("firstName is required for a customer");
-        }
-        if (lastName == null || lastName.isBlank()) {
-            throw new IllegalStateException("lastName is required for a customer");
-        }
+        // intentionally empty
     }
 
     @Override

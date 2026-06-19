@@ -4,11 +4,9 @@ import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
-import com.positivity.customer.internal.entity.ContactPoint;
 import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.ContactPointType;
-import com.positivity.customer.internal.repository.ContactPointRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PersonService;
@@ -17,6 +15,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -46,7 +45,6 @@ import org.springframework.web.server.ResponseStatusException;
 public class PersonServiceImpl implements PersonService {
 
     private final PersonPartyRepository personRepository;
-    private final ContactPointRepository contactPointRepository;
     private final PartyRelationshipRepository partyRelationshipRepository;
     private final PeopleClient peopleClient;
     private final Clock clock;
@@ -82,85 +80,56 @@ public class PersonServiceImpl implements PersonService {
         // fields
         validateCreateRequest(request);
 
+        String firstName = request.getFirstName().trim();
+        String lastName = request.getLastName().trim();
+
+        // Build contact-point upserts from the request first, validating eagerly so an
+        // invalid email fails BEFORE we resolve/create a canonical person in pos-people
+        // (the sole writer of identity now) — AC4 must persist nothing anywhere.
+        // pos-people is the source of truth for contacts (ADR-0015 I2); pos-customer
+        // keeps no local copy (issue #684).
+        List<PeopleClient.ContactPointUpsert> contactPoints = new ArrayList<>();
+        if (request.getEmails() != null) {
+            for (CreatePersonRequest.EmailInput emailInput : request.getEmails()) {
+                validateEmail(emailInput.getValue());
+                contactPoints.add(new PeopleClient.ContactPointUpsert(
+                        ContactPointType.EMAIL.name(),
+                        emailInput.getValue().trim().toLowerCase(),
+                        emailInput.isPrimary()));
+            }
+        }
+        if (request.getPhones() != null) {
+            for (CreatePersonRequest.PhoneInput phoneInput : request.getPhones()) {
+                ContactPointType phoneType =
+                        phoneInput.getType() != null ? phoneInput.getType() : ContactPointType.PHONE_MOBILE;
+                contactPoints.add(new PeopleClient.ContactPointUpsert(
+                        phoneType.name(), phoneInput.getValue().trim(), phoneInput.isPrimary()));
+            }
+        }
+
         String primaryEmail = extractPrimaryEmail(request);
         String primaryPhone = extractPrimaryPhone(request);
-        UUID peoplePersonId = peopleClient.resolveOrCreatePersonId(
-                primaryEmail, primaryPhone, request.getLastName(), request.getFirstName());
+        UUID peoplePersonId = peopleClient.resolveOrCreatePersonId(primaryEmail, primaryPhone, lastName, firstName);
 
         // Reuse existing person-party if already associated to this canonical person
         PersonParty existing = personRepository.findByPersonId(peoplePersonId).orElse(null);
         if (existing != null) {
-            int existingContactPointCount = contactPointRepository
-                    .findByPersonPartyId(existing.getPersonPartyId())
-                    .size();
-            return CreatePersonResponse.from(existing, existingContactPointCount);
+            return CreatePersonResponse.from(existing, firstName, lastName, 0);
         }
 
-        // Create person-party entity
+        // Create the thin link (no local name/contact copy)
         PersonParty person = new PersonParty();
-        person.setFirstName(request.getFirstName().trim());
-        person.setLastName(request.getLastName().trim());
         person.setPersonId(peoplePersonId);
         person.setCustomerNumber("CUST-PER-" + UUIDv7Generator.generate());
         person.setPreferredContactMethod(request.getPreferredContactMethod());
-
-        // Save person first to get ID
         PersonParty savedPerson = personRepository.save(person);
         log.debug(
                 "PersonParty created with partyId={} mapped to personId={}",
                 savedPerson.getPersonPartyId(),
                 savedPerson.getPersonId());
 
-        // Create contact points
-        List<ContactPoint> contactPoints = new ArrayList<>();
-
-        // Process emails
-        if (request.getEmails() != null && !request.getEmails().isEmpty()) {
-            for (CreatePersonRequest.EmailInput emailInput : request.getEmails()) {
-                validateEmail(emailInput.getValue());
-
-                ContactPoint cp = new ContactPoint();
-                cp.setPerson(savedPerson);
-                cp.setContactType(ContactPointType.EMAIL);
-                cp.setValue(emailInput.getValue().trim().toLowerCase());
-                cp.setPrimary(emailInput.isPrimary());
-                contactPoints.add(cp);
-            }
-        }
-
-        // Process phones
-        if (request.getPhones() != null && !request.getPhones().isEmpty()) {
-            for (CreatePersonRequest.PhoneInput phoneInput : request.getPhones()) {
-                ContactPointType phoneType =
-                        phoneInput.getType() != null ? phoneInput.getType() : ContactPointType.PHONE_MOBILE;
-
-                ContactPoint cp = new ContactPoint();
-                cp.setPerson(savedPerson);
-                cp.setContactType(phoneType);
-                cp.setValue(phoneInput.getValue().trim());
-                cp.setPrimary(phoneInput.isPrimary());
-                contactPoints.add(cp);
-            }
-        }
-
-        // Save all contact points
-        if (!contactPoints.isEmpty()) {
-            contactPointRepository.saveAll(contactPoints);
-            log.debug(
-                    "Created {} contact points for personPartyId={}",
-                    contactPoints.size(),
-                    savedPerson.getPersonPartyId());
-        }
-
-        // Mirror contact points to pos-people (source of truth, ADR-0015 I2). Dual-write:
-        // the local contact_point rows remain as a read fallback. Non-fatal if pos-people
-        // is unreachable — local data still serves reads.
-        peopleClient.setContactPoints(
-                peoplePersonId,
-                contactPoints.stream()
-                        .map(cp -> new PeopleClient.ContactPointUpsert(
-                                cp.getContactType().name(), cp.getValue(), cp.isPrimary()))
-                        .toList());
+        // Write contact points to pos-people (source of truth, ADR-0015 I2).
+        peopleClient.setContactPoints(peoplePersonId, contactPoints);
 
         log.info(
                 "Successfully created person personId={} personPartyId={} with {} contact points",
@@ -168,7 +137,7 @@ public class PersonServiceImpl implements PersonService {
                 savedPerson.getPersonPartyId(),
                 contactPoints.size());
 
-        return CreatePersonResponse.from(savedPerson, contactPoints.size());
+        return CreatePersonResponse.from(savedPerson, firstName, lastName, contactPoints.size());
     }
 
     /**
@@ -187,10 +156,6 @@ public class PersonServiceImpl implements PersonService {
             log.warn("Person not found: {}", personId);
             return new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found");
         });
-
-        // Load contact points
-        List<ContactPoint> contactPoints = contactPointRepository.findByPersonPartyId(person.getPersonPartyId());
-        person.getContactPoints().addAll(contactPoints);
 
         return toGetPersonResponse(person);
     }
@@ -216,37 +181,40 @@ public class PersonServiceImpl implements PersonService {
                 limit,
                 offset);
 
-        List<PersonParty> persons;
-
-        // Search by different criteria
-        if (name != null && !name.trim().isEmpty()) {
-            persons = personRepository.searchByName(name.trim());
-        } else if (email != null && !email.trim().isEmpty()) {
-            // Find by email requires joining with contact points
-            persons = personRepository.findByContactPointValue(email.trim().toLowerCase());
-        } else if (phone != null && !phone.trim().isEmpty()) {
-            // Find by phone requires joining with contact points
-            persons = personRepository.findByContactPointValue(phone.trim());
-        } else {
-            // Return empty for no search criteria
-            persons = new ArrayList<>();
-        }
-
-        // Apply pagination manually (for now - could be improved with Pageable)
-        int endIndex = Math.min(offset + limit, persons.size());
-        if (offset >= persons.size()) {
+        // Identity (name/email) now lives solely in pos-people (ADR-0015 I2, issue #684).
+        // Delegate the text search to pos-people (GET /v1/people?q=, which matches
+        // firstName, lastName, primaryEmail, username), then keep only canonical
+        // persons that have a local CRM person-party so we can attach CRM-local state.
+        // NOTE: phone search is best-effort only — pos-people's q does not index phone
+        // numbers, so a phone-only query typically returns no matches. A dedicated
+        // pos-people phone/contact-point lookup would be needed to restore it.
+        String query = firstNonBlank(name, email, phone);
+        if (query == null) {
             return new ArrayList<>();
         }
-        persons = persons.subList(offset, endIndex);
 
-        return persons.stream()
-                .map(person -> {
-                    List<ContactPoint> contactPoints =
-                            contactPointRepository.findByPersonPartyId(person.getPersonPartyId());
-                    person.getContactPoints().addAll(contactPoints);
-                    return toGetPersonResponse(person);
-                })
+        List<GetPersonResponse> matches = peopleClient.searchPersons(query).stream()
+                .map(identity -> personRepository
+                        .findByPersonId(identity.id())
+                        .map(person -> toGetPersonResponse(person, identity))
+                        .orElse(null))
+                .filter(Objects::nonNull)
                 .toList();
+
+        // Apply pagination manually (for now - could be improved with Pageable)
+        if (offset >= matches.size()) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(matches.subList(offset, Math.min(offset + limit, matches.size())));
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String v : values) {
+            if (v != null && !v.trim().isEmpty()) {
+                return v.trim();
+            }
+        }
+        return null;
     }
 
     /**
@@ -312,6 +280,21 @@ public class PersonServiceImpl implements PersonService {
      * @return the response DTO
      */
     private GetPersonResponse toGetPersonResponse(PersonParty person) {
+        PeopleClient.PersonIdentity identity = person.getPersonId() != null
+                ? peopleClient
+                        .fetchPersonIdentitiesQuietly(Set.of(person.getPersonId()))
+                        .get(person.getPersonId())
+                : null;
+        return toGetPersonResponse(person, identity);
+    }
+
+    /**
+     * Builds the response from the CRM person-party plus a canonical identity already
+     * fetched from pos-people (the sole source for name/contacts, ADR-0015 I2). When
+     * {@code identity} is null (pos-people unreachable or no match) names and contacts
+     * are absent — there is no local fallback after issue #684.
+     */
+    private GetPersonResponse toGetPersonResponse(PersonParty person, PeopleClient.PersonIdentity identity) {
         List<PartyRelationship> commercialRelationships = partyRelationshipRepository.findActiveByToPersonPartyId(
                 person.getPersonPartyId(), LocalDate.now(clock));
         int commercialAccountCount = (int) commercialRelationships.stream()
@@ -319,41 +302,19 @@ public class PersonServiceImpl implements PersonService {
                 .distinct()
                 .count();
 
-        // Name from pos-people (source of truth, ADR-0015 I2); fall back to the local
-        // person_party copy while the thin-link migration is in progress.
-        PeopleClient.PersonIdentity identity = person.getPersonId() != null
-                ? peopleClient
-                        .fetchPersonIdentitiesQuietly(Set.of(person.getPersonId()))
-                        .get(person.getPersonId())
-                : null;
-        String firstName =
-                identity != null && identity.firstName() != null ? identity.firstName() : person.getFirstName();
-        String lastName = identity != null && identity.lastName() != null ? identity.lastName() : person.getLastName();
-        String displayName = identity != null && !identity.displayName().isBlank()
-                ? identity.displayName()
-                : person.getDisplayName();
+        String firstName = identity != null ? identity.firstName() : null;
+        String lastName = identity != null ? identity.lastName() : null;
+        String displayName = identity != null && !identity.displayName().isBlank() ? identity.displayName() : null;
 
-        // Contact points from pos-people (source of truth, ADR-0015 I2); fall back to
-        // the local contact_point copy when pos-people has none for this person.
-        List<GetPersonResponse.ContactPointDto> contactPointDtos;
-        if (identity != null && !identity.contactPoints().isEmpty()) {
-            contactPointDtos = identity.contactPoints().stream()
-                    .map(cp -> GetPersonResponse.ContactPointDto.builder()
-                            .contactType(parseContactType(cp.contactType()))
-                            .value(cp.value())
-                            .isPrimary(cp.isPrimary())
-                            .build())
-                    .toList();
-        } else {
-            contactPointDtos = person.getContactPoints().stream()
-                    .map(cp -> GetPersonResponse.ContactPointDto.builder()
-                            .contactPointId(cp.getContactPointId())
-                            .contactType(cp.getContactType())
-                            .value(cp.getValue())
-                            .isPrimary(cp.isPrimary())
-                            .build())
-                    .toList();
-        }
+        List<GetPersonResponse.ContactPointDto> contactPointDtos = identity == null
+                ? List.of()
+                : identity.contactPoints().stream()
+                        .map(cp -> GetPersonResponse.ContactPointDto.builder()
+                                .contactType(parseContactType(cp.contactType()))
+                                .value(cp.value())
+                                .isPrimary(cp.isPrimary())
+                                .build())
+                        .toList();
 
         return GetPersonResponse.builder()
                 .personId(person.getPersonId())
