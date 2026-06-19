@@ -1,0 +1,37 @@
+# Test profile that runs the real Flyway migration chain against a Testcontainers Postgres
+# with Hibernate ddl-auto=validate. Executes the actual Postgres DDL (V1 baseline .. Vn) in CI,
+# catching entity/migration drift that the default H2 + flyway-disabled tests miss
+# (issue #711: the on-behalf audit columns added in V2). The datasource is supplied at runtime
+# by @ServiceConnection (no static URL here).
+spring:
+  application:
+    name: pos-workorder-pg-test
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+  kafka:
+    bootstrap-servers: localhost:9092
+  main:
+    allow-bean-definition-overriding: true
+
+# Disable security for tests
+security:
+  enabled: false
+
+# Disable eureka for tests
+eureka:
+  client:
+    enabled: false
+
+logging:
+  level:
+    com.positivity: INFO

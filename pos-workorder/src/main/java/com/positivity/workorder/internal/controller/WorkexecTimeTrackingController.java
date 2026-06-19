@@ -204,8 +204,8 @@ public class WorkexecTimeTrackingController {
     @EmitEvent(id = "WORKEXEC_TIMER_START", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"workorder:labor:add"})
-    @PreAuthorize("hasAuthority('workorder:labor:add')")
+            scopes = {"workorder:labor:add", "workorder:labor:add_on_behalf"})
+    @PreAuthorize("hasAnyAuthority('workorder:labor:add','workorder:labor:add_on_behalf')")
     @Operation(summary = "Start timer", description = "Start a workexec timer entry for the authenticated mechanic")
     @ApiResponse(
             responseCode = "201",
@@ -215,7 +215,10 @@ public class WorkexecTimeTrackingController {
             responseCode = "200",
             description = "Idempotent replay returned existing timer",
             content = @Content(schema = @Schema(implementation = WorkexecTimerEntryResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Missing or invalid authenticated user id")
+    @ApiResponse(responseCode = "400", description = "Missing or invalid authenticated user id, or missing reason")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Attributing labor to another technician without workorder:labor:add_on_behalf")
     @ApiResponse(responseCode = "404", description = "Referenced resource not found")
     @ApiResponse(responseCode = "409", description = "Conflict while starting timer")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -341,7 +344,11 @@ public class WorkexecTimeTrackingController {
 
     private WorkexecTimeTrackingService.TimerStartRequest toTimerStartRequest(WorkexecTimerStartRequest request) {
         return new WorkexecTimeTrackingService.TimerStartRequest(
-                request.getWorkorderId(), request.getWorkorderItemId(), request.getLaborCode());
+                request.getWorkorderId(),
+                request.getWorkorderItemId(),
+                request.getLaborCode(),
+                request.getTechnicianId(),
+                request.getReason());
     }
 
     private WorkexecTimerEntryResponse toTimerEntryResponse(WorkexecTimeTrackingService.TimerEntry response) {

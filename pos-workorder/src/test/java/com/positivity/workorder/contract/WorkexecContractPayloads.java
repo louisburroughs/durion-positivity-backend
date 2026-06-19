@@ -1,6 +1,7 @@
 package com.positivity.workorder.contract;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -27,5 +28,15 @@ final class WorkexecContractPayloads {
 
     static Map<String, Object> timerStartPayload(UUID workorderId, String laborCode) {
         return Map.of("workorderId", workorderId.toString(), "laborCode", laborCode);
+    }
+
+    static Map<String, Object> timerStartOnBehalfPayload(UUID workorderId, UUID technicianId, String reason) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("workorderId", workorderId.toString());
+        payload.put("technicianId", technicianId.toString());
+        if (reason != null) {
+            payload.put("reason", reason);
+        }
+        return payload;
     }
 }

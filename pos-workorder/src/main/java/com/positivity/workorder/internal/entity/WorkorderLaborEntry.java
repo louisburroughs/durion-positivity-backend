@@ -106,6 +106,26 @@ public class WorkorderLaborEntry {
     @Column(nullable = false, updatable = false, columnDefinition = "TEXT")
     private String createdBy;
 
+    /**
+     * Set only when this entry was created on behalf of a technician other than the authenticated actor
+     * (see {@code workorder:labor:add_on_behalf}). Its presence marks the entry as an on-behalf
+     * attribution; {@code technicianId} is the tracked (subject) technician while
+     * {@code actedByUserId}/{@code createdBy} identify the initiating actor. Follows the same
+     * actor/subject/reason on-behalf audit approach as {@code travel_segment}; note this stores the actor's
+     * stable user id (UUID) in {@code actedByUserId} and the actor username in {@code createdBy}.
+     */
+    @Nullable
+    @Column(updatable = false, columnDefinition = "TEXT")
+    private String onBehalfReason;
+
+    /**
+     * Stable user id (UUID) of the actor who initiated an on-behalf timer start; null for
+     * self/assignment-default starts. The actor's username is captured separately in {@code createdBy}.
+     */
+    @Nullable
+    @Column(updatable = false, columnDefinition = "UUID")
+    private UUID actedByUserId;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
