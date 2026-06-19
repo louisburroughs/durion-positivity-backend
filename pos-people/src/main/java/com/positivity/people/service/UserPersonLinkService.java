@@ -1,5 +1,6 @@
 package com.positivity.people.service;
 
+import com.positivity.people.internal.dto.InactivePersonActiveUserResponse;
 import com.positivity.people.internal.dto.LinkUserToPersonRequest;
 import com.positivity.people.internal.dto.PersonResponse;
 import com.positivity.people.internal.dto.UserPersonLinkResponse;
@@ -32,4 +33,14 @@ public interface UserPersonLinkService {
 
     @NonNull
     UserPersonLinkResponse findLinkByPersonId(@NonNull UUID personId);
+
+    /**
+     * Compliance check (ADR-0015 §4): returns every ACTIVE user-person link whose
+     * linked person is in an inactive status (SUSPENDED, TERMINATED, DISABLED).
+     * These users should have been disabled when the person was disabled/archived.
+     *
+     * @return offending links; empty when none
+     */
+    @NonNull
+    List<InactivePersonActiveUserResponse> findActiveUsersForInactivePersons();
 }

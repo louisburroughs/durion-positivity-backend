@@ -1,10 +1,13 @@
 package com.positivity.people.internal.service;
 
+import com.positivity.people.internal.dto.InactivePersonActiveUserResponse;
 import com.positivity.people.internal.dto.LinkUserToPersonRequest;
 import com.positivity.people.internal.dto.PersonResponse;
 import com.positivity.people.internal.dto.UserPersonLinkResponse;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.UserPersonLink;
+import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.enums.UserLinkStatus;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.UserAlreadyLinkedException;
 import com.positivity.people.internal.exception.UserPersonLinkNotFoundException;
@@ -12,7 +15,9 @@ import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.UserPersonLinkRepository;
 import com.positivity.people.service.UserPersonLinkService;
 import com.positivity.security.common.SecurityContextHelper;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -24,6 +29,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserPersonLinkServiceImpl implements UserPersonLinkService {
 
     private static final String SYSTEM_USER = "system";
+
+    /** Person statuses that should NOT retain an active user (ADR-0015 §4). */
+    private static final Set<EmployeeStatus> INACTIVE_PERSON_STATUSES =
+            EnumSet.of(EmployeeStatus.SUSPENDED, EmployeeStatus.TERMINATED, EmployeeStatus.DISABLED);
 
     private final UserPersonLinkRepository linkRepository;
 
@@ -152,6 +161,26 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
                 .orElseThrow(() -> new UserPersonLinkNotFoundException(personId));
 
         return toResponse(link);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @NonNull
+    public List<InactivePersonActiveUserResponse> findActiveUsersForInactivePersons() {
+        return linkRepository.findByStatusAndPerson_StatusIn(UserLinkStatus.ACTIVE, INACTIVE_PERSON_STATUSES).stream()
+                .map(this::toInactivePersonResponse)
+                .toList();
+    }
+
+    private InactivePersonActiveUserResponse toInactivePersonResponse(UserPersonLink link) {
+        Person person = link.getPerson();
+        return InactivePersonActiveUserResponse.builder()
+                .linkId(link.getId())
+                .userId(link.getUserId())
+                .personId(link.getPersonId())
+                .personStatus(person != null ? person.getStatus() : null)
+                .personStatusEffectiveAt(person != null ? person.getStatusEffectiveAt() : null)
+                .build();
     }
 
     private UserPersonLinkResponse toResponse(UserPersonLink link) {

@@ -2,6 +2,7 @@ package com.positivity.people.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.CreateUserLinkRequest;
+import com.positivity.people.internal.dto.InactivePersonActiveUserResponse;
 import com.positivity.people.internal.dto.LinkUserToPersonRequest;
 import com.positivity.people.internal.dto.PersonResponse;
 import com.positivity.people.internal.dto.UserPersonLinkResponse;
@@ -136,6 +137,24 @@ public class UserPersonLinkController {
 
         List<UUID> userIds = linkService.findUserIdsByPersonId(personId);
         return ResponseEntity.ok(userIds);
+    }
+
+    @GetMapping("/user-links/inactive-person-active-user")
+    @Operation(
+            summary = "List active users linked to inactive persons",
+            description = "Compliance check (ADR-0015 §4): returns every ACTIVE user-person link whose linked person"
+                    + " is in an inactive status (SUSPENDED, TERMINATED, DISABLED). Each row is a user that should"
+                    + " have been disabled when the person was disabled/archived. Returns an empty list when none.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Offending links returned (possibly empty)",
+            content = @Content(schema = @Schema(implementation = InactivePersonActiveUserResponse.class)))
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:userLink:view"})
+    @PreAuthorize("hasAuthority('people:userLink:view')")
+    public ResponseEntity<List<InactivePersonActiveUserResponse>> findActiveUsersForInactivePersons() {
+        return ResponseEntity.ok(linkService.findActiveUsersForInactivePersons());
     }
 
     @GetMapping("/user-links/{personId}")
