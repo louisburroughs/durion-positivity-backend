@@ -286,20 +286,23 @@ public class PartyServiceImpl implements PartyService {
 
     /**
      * Batch-load canonical identities from pos-people (source of truth, ADR-0015 I2)
-     * for the given person parties, keyed by the canonical person id.
+     * for the given person parties, keyed by the canonical person id. Uses the resilient
+     * (quiet) variant so a pos-people outage degrades names/contacts to null on these
+     * display read paths (directory browse, contact summaries) rather than failing the
+     * whole request — there is no local fallback after issue #684.
      */
     private Map<UUID, PeopleClient.PersonIdentity> fetchIdentitiesFor(Collection<PersonParty> persons) {
         Set<UUID> personIds = persons.stream()
                 .map(PersonParty::getPersonId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        return peopleClient.fetchPersonIdentities(personIds);
+        return peopleClient.fetchPersonIdentitiesQuietly(personIds);
     }
 
     /**
-     * Resolve a person's display name from pos-people (source of truth), falling
-     * back to the local person_party copy while the thin-link migration is in
-     * progress (e.g. an orphan link not yet reconciled).
+     * Resolve a person's display name from pos-people (sole source of truth, ADR-0015 I2;
+     * issue #684). Returns {@code null} when pos-people has no name for the canonical id
+     * (or is unreachable) — there is no local fallback copy.
      */
     private String resolveDisplayName(PersonParty person, Map<UUID, PeopleClient.PersonIdentity> identities) {
         PeopleClient.PersonIdentity identity =

@@ -163,9 +163,10 @@ public class PeopleClient {
     }
 
     /**
-     * Mirror a person's contact points to pos-people (source of truth, ADR-0015 I2).
-     * Best-effort: failures are logged and swallowed so the local contact_point copy
-     * still serves reads (we are dual-writing during the transition).
+     * Write a person's contact points to pos-people (sole source of truth, ADR-0015 I2;
+     * issue #684 removed the local copy). Best-effort: failures are logged and swallowed
+     * so a transient pos-people outage does not fail person creation — the canonical link
+     * is still persisted and contacts can be re-mirrored later.
      *
      * @param personId the canonical person id
      * @param contactPoints the contact points to persist (replaces existing)
@@ -195,9 +196,9 @@ public class PeopleClient {
     /**
      * Resilient variant of {@link #fetchPersonIdentities} for display read paths:
      * if pos-people is unreachable, returns an empty map instead of throwing, so
-     * callers transparently fall back to the local person_party name copy rather
-     * than failing the request. Do not use for reconciliation, which must
-     * distinguish "unreachable" from "not found".
+     * callers degrade names/contacts to null rather than failing the request (there
+     * is no local fallback copy after issue #684). Do not use for reconciliation,
+     * which must distinguish "unreachable" from "not found".
      *
      * @param personIds the canonical person ids to fetch
      * @return identities by id, or an empty map if pos-people could not be reached

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -176,8 +177,6 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @Order(4)
     void ac4_invalidEmailFormat_returns400AndPersistsNothing() {
-        when(peopleClient.resolveOrCreatePersonId(any(), any(), any(), any())).thenReturn(UUID.randomUUID());
-
         CreatePersonRequest request = CreatePersonRequest.builder()
                 .firstName("John")
                 .lastName("Doe")
@@ -196,7 +195,10 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                     assertThat(rse.getReason()).contains("Invalid email");
                 });
 
+        // Persists nothing locally AND never creates a canonical person in pos-people:
+        // email validation runs before resolveOrCreatePersonId (issue #684 review).
         assertThat(personRepository.count()).isZero();
+        verify(peopleClient, never()).resolveOrCreatePersonId(any(), any(), any(), any());
     }
 
     // ==========================================================================

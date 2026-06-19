@@ -82,19 +82,12 @@ public class PersonServiceImpl implements PersonService {
 
         String firstName = request.getFirstName().trim();
         String lastName = request.getLastName().trim();
-        String primaryEmail = extractPrimaryEmail(request);
-        String primaryPhone = extractPrimaryPhone(request);
-        UUID peoplePersonId = peopleClient.resolveOrCreatePersonId(primaryEmail, primaryPhone, lastName, firstName);
 
-        // Reuse existing person-party if already associated to this canonical person
-        PersonParty existing = personRepository.findByPersonId(peoplePersonId).orElse(null);
-        if (existing != null) {
-            return CreatePersonResponse.from(existing, firstName, lastName, 0);
-        }
-
-        // Build contact-point upserts from the request (validating eagerly so an invalid
-        // email fails before any persistence — AC4). pos-people is the source of truth
-        // for contacts (ADR-0015 I2); pos-customer keeps no local copy (issue #684).
+        // Build contact-point upserts from the request first, validating eagerly so an
+        // invalid email fails BEFORE we resolve/create a canonical person in pos-people
+        // (the sole writer of identity now) — AC4 must persist nothing anywhere.
+        // pos-people is the source of truth for contacts (ADR-0015 I2); pos-customer
+        // keeps no local copy (issue #684).
         List<PeopleClient.ContactPointUpsert> contactPoints = new ArrayList<>();
         if (request.getEmails() != null) {
             for (CreatePersonRequest.EmailInput emailInput : request.getEmails()) {
@@ -112,6 +105,16 @@ public class PersonServiceImpl implements PersonService {
                 contactPoints.add(new PeopleClient.ContactPointUpsert(
                         phoneType.name(), phoneInput.getValue().trim(), phoneInput.isPrimary()));
             }
+        }
+
+        String primaryEmail = extractPrimaryEmail(request);
+        String primaryPhone = extractPrimaryPhone(request);
+        UUID peoplePersonId = peopleClient.resolveOrCreatePersonId(primaryEmail, primaryPhone, lastName, firstName);
+
+        // Reuse existing person-party if already associated to this canonical person
+        PersonParty existing = personRepository.findByPersonId(peoplePersonId).orElse(null);
+        if (existing != null) {
+            return CreatePersonResponse.from(existing, firstName, lastName, 0);
         }
 
         // Create the thin link (no local name/contact copy)
@@ -182,6 +185,9 @@ public class PersonServiceImpl implements PersonService {
         // Delegate the text search to pos-people (GET /v1/people?q=, which matches
         // firstName, lastName, primaryEmail, username), then keep only canonical
         // persons that have a local CRM person-party so we can attach CRM-local state.
+        // NOTE: phone search is best-effort only — pos-people's q does not index phone
+        // numbers, so a phone-only query typically returns no matches. A dedicated
+        // pos-people phone/contact-point lookup would be needed to restore it.
         String query = firstNonBlank(name, email, phone);
         if (query == null) {
             return new ArrayList<>();

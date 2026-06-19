@@ -216,7 +216,7 @@ class PartyServiceImplTest {
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
         when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
                 .thenReturn(List.of(rel));
-        when(peopleClient.fetchPersonIdentities(java.util.Set.of(personId)))
+        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(personId)))
                 .thenReturn(java.util.Map.of(personId, identity(personId, "Jane", "Doe", "jane@acme.com", "555-1234")));
 
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
@@ -474,7 +474,7 @@ class PartyServiceImplTest {
         when(partyRepository.findAll()).thenReturn(List.of(commercial));
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
         lenient()
-                .when(peopleClient.fetchPersonIdentities(java.util.Set.of(aliceId)))
+                .when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(aliceId)))
                 .thenReturn(java.util.Map.of(aliceId, identity(aliceId, "Alice", "Anders", null, null)));
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
@@ -588,7 +588,7 @@ class PartyServiceImplTest {
 
         when(partyRepository.findAll()).thenReturn(List.of());
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
-        when(peopleClient.fetchPersonIdentities(java.util.Set.of(canonicalPersonId)))
+        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(canonicalPersonId)))
                 .thenReturn(java.util.Map.of(
                         canonicalPersonId,
                         new PeopleClient.PersonIdentity(
@@ -598,6 +598,28 @@ class PartyServiceImplTest {
 
         // Name comes from pos-people (source of truth), not the local person_party copy.
         assertThat(response.getResults().get(0).getDisplayName()).isEqualTo("Fresh Canonical");
+    }
+
+    @Test
+    void browseParties_posPeopleUnreachable_degradesNameToNull_doesNotFail() {
+        // Regression guard (issue #684 review): with the local name fallback removed,
+        // a pos-people outage must degrade the directory listing (null names) rather than
+        // failing the whole request. The read path uses the resilient quiet fetch.
+        UUID canonicalId = UUID.fromString("00000000-0000-0000-0000-0000000000d5");
+        PersonParty individual = new PersonParty();
+        individual.setPartyId(UUID.fromString("00000000-0000-0000-0000-0000000000a5"));
+        individual.setPersonId(canonicalId);
+        individual.setStatus(AccountStatus.ACTIVE);
+
+        when(partyRepository.findAll()).thenReturn(List.of());
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
+        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(canonicalId)))
+                .thenReturn(java.util.Map.of());
+
+        SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
+
+        assertThat(response.getTotalCount()).isEqualTo(1);
+        assertThat(response.getResults().getFirst().getDisplayName()).isNull();
     }
 
     @Test
@@ -621,7 +643,7 @@ class PartyServiceImplTest {
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
         when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
                 .thenReturn(List.of(rel));
-        when(peopleClient.fetchPersonIdentities(java.util.Set.of(contactPersonId)))
+        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(contactPersonId)))
                 .thenReturn(java.util.Map.of(
                         contactPersonId, identity(contactPersonId, "Jane", "Doe", "jane@acme.com", "555-1234")));
 
@@ -645,7 +667,7 @@ class PartyServiceImplTest {
 
         when(partyRepository.findAll()).thenReturn(List.of());
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
-        when(peopleClient.fetchPersonIdentities(java.util.Set.of(aliceId)))
+        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(aliceId)))
                 .thenReturn(java.util.Map.of(aliceId, identity(aliceId, "Alice", "Anders", "alice@example.com", null)));
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
@@ -673,7 +695,7 @@ class PartyServiceImplTest {
         when(partyRepository.findAll()).thenReturn(List.of(commercial));
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
         lenient()
-                .when(peopleClient.fetchPersonIdentities(java.util.Set.of(noVehId)))
+                .when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(noVehId)))
                 .thenReturn(java.util.Map.of(noVehId, identity(noVehId, "No", "Vehicles", null, null)));
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
