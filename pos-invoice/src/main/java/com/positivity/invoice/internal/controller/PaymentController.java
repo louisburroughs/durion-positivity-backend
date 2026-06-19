@@ -4,7 +4,10 @@ import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
 import com.positivity.invoice.service.PaymentService;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -96,6 +99,16 @@ public class PaymentController {
      * Capture request body wrapping the capture amount.
      * Story #9, AC3.
      */
+    @Schema(description = "Request to capture all or part of an authorized payment hold")
     private record CaptureAmountRequest(
-            @NotNull @Positive BigDecimal amount, @NotBlank String captureIdempotencyKey) {}
+            @NotNull
+                    @Positive
+                    @Schema(description = "Amount to capture from the authorized hold", example = "89.99", requiredMode = REQUIRED)
+                    BigDecimal amount,
+            @NotBlank
+                    @Schema(
+                            description = "Idempotency key ensuring the capture is processed at most once",
+                            example = "capture-550e8400-1",
+                            requiredMode = REQUIRED)
+                    String captureIdempotencyKey) {}
 }

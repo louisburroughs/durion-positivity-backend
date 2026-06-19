@@ -69,8 +69,6 @@ class CrmVehicleServiceImplTest {
     private PersonParty personParty(UUID id) {
         PersonParty party = new PersonParty();
         party.setPartyId(id);
-        party.setFirstName("John");
-        party.setLastName("Doe");
         party.setVehicleVins(new HashSet<>());
         return party;
     }
@@ -343,5 +341,52 @@ class CrmVehicleServiceImplTest {
 
         verify(personPartyRepository).save(person);
         verify(commercialPartyRepository, never()).save(any());
+    }
+
+    @Test
+    void findVehiclesForCustomer_returnsEmptyOptional_whenCustomerUnknown() {
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
+        when(commercialPartyRepository.findById(customerId)).thenReturn(Optional.empty());
+
+        assertThat(service.findVehiclesForCustomer(customerId)).isEmpty();
+        verify(vehicleInventoryClient, never()).getVehicleByVin(any());
+    }
+
+    @Test
+    void findVehiclesForCustomer_returnsSummaries_forCommercialPartyVins() {
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-0000000000cc");
+        CommercialParty party = commercialParty(customerId);
+        party.getVehicleVins().add("VIN-OWNED");
+
+        when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
+        when(commercialPartyRepository.findById(customerId)).thenReturn(Optional.of(party));
+        when(vehicleInventoryClient.getVehicleByVin("VIN-OWNED"))
+                .thenReturn(Optional.of(vehicle(vehicleId, "VIN-OWNED")));
+
+        Optional<List<CrmSnapshotDTO.VehicleSummary>> result = service.findVehiclesForCustomer(customerId);
+
+        assertThat(result).isPresent();
+        assertThat(result.get()).hasSize(1);
+        CrmSnapshotDTO.VehicleSummary summary = result.get().get(0);
+        assertThat(summary.getVehicleId()).isEqualTo(vehicleId.toString());
+        assertThat(summary.getVin()).isEqualTo("VIN-OWNED");
+        assertThat(summary.getMake()).isEqualTo("Ford");
+        assertThat(summary.getModel()).isEqualTo("F-150");
+        assertThat(summary.getYear()).isEqualTo(2022);
+    }
+
+    @Test
+    void findVehiclesForCustomer_resolvesPersonParty_andReturnsEmptyListWhenNoVins() {
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-0000000000dd");
+        PersonParty person = personParty(customerId);
+        when(personPartyRepository.findById(customerId)).thenReturn(Optional.of(person));
+
+        Optional<List<CrmSnapshotDTO.VehicleSummary>> result = service.findVehiclesForCustomer(customerId);
+
+        assertThat(result).isPresent();
+        assertThat(result.get()).isEmpty();
+        verify(commercialPartyRepository, never()).findById(any());
     }
 }

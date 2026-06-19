@@ -1,6 +1,10 @@
 package com.positivity.accounting.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -25,65 +29,103 @@ import lombok.Setter;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Event payload emitted when a payment clears and becomes available for application")
 public class PaymentClearedEvent {
 
     /**
      * Unique event ID (used as sourceEventId for idempotency).
      */
+    @Schema(
+            description = "Unique event identifier, used as the source event id for idempotency",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = REQUIRED)
     @JsonProperty("eventId")
     private UUID eventId;
 
     /**
      * Organization ID.
      */
+    @Schema(
+            description = "Identifier of the organization that owns the payment",
+            example = "01960003-0000-7000-8000-000000000002",
+            requiredMode = REQUIRED)
     @JsonProperty("organizationId")
     private UUID organizationId;
 
     /**
      * Payment ID from Payment domain.
      */
+    @Schema(
+            description = "Identifier of the payment from the Payment domain",
+            example = "01960003-0000-7000-8000-000000000003",
+            requiredMode = REQUIRED)
     @JsonProperty("paymentId")
     private UUID paymentId;
 
     /**
      * Customer ID who made the payment.
      */
+    @Schema(
+            description = "Identifier of the customer who made the payment",
+            example = "01960003-0000-7000-8000-000000000004",
+            requiredMode = REQUIRED)
     @JsonProperty("customerId")
     private UUID customerId;
 
     /**
      * Payment amount (full cleared amount available for application).
      */
+    @Schema(
+            description = "Full cleared payment amount available for application",
+            example = "1250.00",
+            requiredMode = REQUIRED)
     @JsonProperty("amount")
     private BigDecimal amount;
 
     /**
      * Currency code (ISO 4217 - e.g., "USD").
      */
+    @Schema(description = "Currency code (ISO 4217)", example = "USD", requiredMode = REQUIRED)
     @JsonProperty("currencyCode")
     private String currencyCode;
 
     /**
      * Payment method (e.g., "CREDIT_CARD", "CHECK", "ACH", "WIRE").
      */
+    @Schema(
+            description = "Payment method (e.g., CREDIT_CARD, CHECK, ACH, WIRE)",
+            example = "CREDIT_CARD",
+            requiredMode = REQUIRED)
     @JsonProperty("paymentMethod")
     private String paymentMethod;
 
     /**
      * External reference (e.g., transaction ID from payment processor).
      */
+    @Schema(
+            description = "External reference such as the payment processor transaction id",
+            example = "txn_abc123xyz",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("externalReference")
     private String externalReference;
 
     /**
      * Timestamp when payment cleared.
      */
+    @Schema(
+            description = "Timestamp when the payment cleared (ISO 8601)",
+            example = "2026-06-18T08:00:00Z",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("clearedAt")
     private Instant clearedAt;
 
     /**
      * Original event timestamp.
      */
+    @Schema(
+            description = "Original event timestamp (ISO 8601)",
+            example = "2026-06-18T08:00:00Z",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("eventTimestamp")
     private Instant eventTimestamp;
 

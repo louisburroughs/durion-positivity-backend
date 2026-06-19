@@ -26,8 +26,8 @@ public class TimeEntryController {
     @EmitEvent(id = "WORKORDER_TIME_ENTRY_APPROVED", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"TimeEntry:Approve"})
-    @PreAuthorize("hasAuthority('TimeEntry:Approve')")
+            scopes = {"workorder:timeEntry:approve"})
+    @PreAuthorize("hasAuthority('workorder:timeEntry:approve')")
     @Operation(
             summary = "Approve a time entry in SUBMITTED state",
             description = "Approve a submitted time entry so it can move forward in the workorder timekeeping workflow")
@@ -39,8 +39,8 @@ public class TimeEntryController {
     @EmitEvent(id = "WORKORDER_TIME_ENTRY_REJECTED", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"TimeEntry:Reject"})
-    @PreAuthorize("hasAuthority('TimeEntry:Reject')")
+            scopes = {"workorder:timeEntry:reject"})
+    @PreAuthorize("hasAuthority('workorder:timeEntry:reject')")
     @Operation(
             summary = "Reject a time entry in SUBMITTED state",
             description = "Reject a submitted time entry and record the rejection details for follow-up")

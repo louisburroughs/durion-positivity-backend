@@ -49,8 +49,6 @@ class CustomerRequirementsContractBehaviorIT extends BaseContractIntegrationTest
         PersonParty party = new PersonParty();
         party.setPersonId(UUID.randomUUID());
         party.setCustomerNumber("CUST-PER-" + UUID.randomUUID().toString().substring(0, 8));
-        party.setFirstName("Jane");
-        party.setLastName("Doe");
         party.setPreferredContactMethod(PreferredContactMethod.NONE);
         party.setStatus(status);
         return personPartyRepository.saveAndFlush(party);

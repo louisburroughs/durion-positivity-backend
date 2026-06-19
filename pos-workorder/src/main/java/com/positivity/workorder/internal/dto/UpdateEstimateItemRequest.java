@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import java.math.BigDecimal;
@@ -21,20 +23,20 @@ import org.jspecify.annotations.Nullable;
 public class UpdateEstimateItemRequest {
 
     @Nullable
-    @Schema(description = "Updated description", example = "Front brake pad replacement")
+    @Schema(description = "Updated description", example = "Front brake pad replacement", requiredMode = NOT_REQUIRED)
     private String description;
 
     @Nullable
     @DecimalMin(value = "0.0001", message = "quantity must be greater than 0")
-    @Schema(description = "Updated quantity", example = "2")
+    @Schema(description = "Updated quantity", example = "2", requiredMode = NOT_REQUIRED)
     private BigDecimal quantity;
 
     @Nullable
     @DecimalMin(value = "0.00", message = "unitPrice must be 0 or greater")
-    @Schema(description = "Updated unit price", example = "59.99")
+    @Schema(description = "Updated unit price", example = "59.99", requiredMode = NOT_REQUIRED)
     private BigDecimal unitPrice;
 
     @Nullable
-    @Schema(description = "Updated tax code", example = "TX-GENERAL")
+    @Schema(description = "Updated tax code", example = "TX-GENERAL", requiredMode = NOT_REQUIRED)
     private String taxCode;
 }

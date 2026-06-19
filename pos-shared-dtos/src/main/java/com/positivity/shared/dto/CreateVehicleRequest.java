@@ -1,6 +1,8 @@
 package com.positivity.shared.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,6 +21,7 @@ import org.jspecify.annotations.NonNull;
 public class CreateVehicleRequest {
 
     @NonNull
+    @NotNull
     @Schema(
             description = "Owning account identifier.",
             requiredMode = Schema.RequiredMode.REQUIRED,
@@ -26,36 +29,45 @@ public class CreateVehicleRequest {
     private UUID accountId;
 
     @NonNull
+    @NotBlank
     @Schema(description = "Vehicle VIN.", requiredMode = Schema.RequiredMode.REQUIRED, example = "1HGCM82633A004352")
     private String vin;
 
     @NonNull
+    @NotBlank
     @Schema(description = "Fleet/unit number.", requiredMode = Schema.RequiredMode.REQUIRED, example = "UNIT-1024")
     private String unitNumber;
 
     @NonNull
+    @NotBlank
     @Schema(
             description = "Human-readable vehicle description.",
             requiredMode = Schema.RequiredMode.REQUIRED,
             example = "2024 Ford F-150 XL")
     private String description;
 
-    @Schema(description = "License plate value.", example = "ABC1234")
+    @Schema(
+            description = "License plate value.",
+            example = "ABC1234",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String licensePlate;
 
-    @Schema(description = "License plate jurisdiction/state or province.", example = "CA")
+    @Schema(
+            description = "License plate jurisdiction/state or province.",
+            example = "CA",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String licensePlateJurisdiction;
 
     // Optional structured fields
-    @Schema(description = "Model year.", example = "2024")
+    @Schema(description = "Model year.", example = "2024", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Integer year;
 
-    @Schema(description = "Vehicle make.", example = "Ford")
+    @Schema(description = "Vehicle make.", example = "Ford", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String make;
 
-    @Schema(description = "Vehicle model.", example = "F-150")
+    @Schema(description = "Vehicle model.", example = "F-150", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String model;
 
-    @Schema(description = "Vehicle trim.", example = "XL")
+    @Schema(description = "Vehicle trim.", example = "XL", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String trim;
 }

@@ -3,6 +3,7 @@ package com.positivity.customer.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -25,11 +26,9 @@ import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.dto.snapshot.SnapshotMetadata;
 import com.positivity.customer.internal.entity.BillingRulesEmbeddable;
 import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.entity.ContactPoint;
 import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
-import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.InvoiceDeliveryMethod;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
@@ -114,6 +113,19 @@ class PartyServiceImplTest {
         return p;
     }
 
+    /** Build a canonical pos-people identity (sole source of name/contacts, ADR-0015 I2). */
+    private static PeopleClient.PersonIdentity identity(
+            UUID id, String first, String last, String email, String phone) {
+        List<PeopleClient.ContactPoint> cps = new ArrayList<>();
+        if (email != null) {
+            cps.add(new PeopleClient.ContactPoint("EMAIL", email, true));
+        }
+        if (phone != null) {
+            cps.add(new PeopleClient.ContactPoint("PHONE_MOBILE", phone, true));
+        }
+        return new PeopleClient.PersonIdentity(id, first, last, email, cps);
+    }
+
     @Test
     void buildSnapshotForParty_returnsNull_whenPartyNotFound() {
         when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
@@ -190,16 +202,9 @@ class PartyServiceImplTest {
         UUID relId = UUID.fromString("00000000-0000-0000-0000-000000000009");
         CommercialParty p = party(partyId);
 
+        UUID personId = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
         PersonParty person = new PersonParty();
-        person.setFirstName("Jane");
-        person.setLastName("Doe");
-        ContactPoint phone = new ContactPoint();
-        phone.setContactType(ContactPointType.PHONE_MOBILE);
-        phone.setValue("555-1234");
-        ContactPoint email = new ContactPoint();
-        email.setContactType(ContactPointType.EMAIL);
-        email.setValue("jane@acme.com");
-        person.setContactPoints(new ArrayList<>(List.of(phone, email)));
+        person.setPersonId(personId);
 
         PartyRelationship rel = new PartyRelationship();
         rel.setPartyRelationshipId(relId);
@@ -211,6 +216,8 @@ class PartyServiceImplTest {
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
         when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
                 .thenReturn(List.of(rel));
+        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(personId)))
+                .thenReturn(java.util.Map.of(personId, identity(personId, "Jane", "Doe", "jane@acme.com", "555-1234")));
 
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
 
@@ -458,14 +465,17 @@ class PartyServiceImplTest {
         commercial.setLegalName("Zenith Freight LLC");
         commercial.setDisplayName("Zenith Freight LLC");
 
+        UUID aliceId = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
         PersonParty individual = new PersonParty();
         individual.setPartyId(UUID.fromString("00000000-0000-0000-0000-0000000000a1"));
-        individual.setFirstName("Alice");
-        individual.setLastName("Anders");
+        individual.setPersonId(aliceId);
         individual.setStatus(AccountStatus.ACTIVE);
 
         when(partyRepository.findAll()).thenReturn(List.of(commercial));
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
+        lenient()
+                .when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(aliceId)))
+                .thenReturn(java.util.Map.of(aliceId, identity(aliceId, "Alice", "Anders", null, null)));
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
 
@@ -477,8 +487,7 @@ class PartyServiceImplTest {
         assertThat(response.getResults().get(0).getDisplayName()).isEqualTo("Alice Anders");
     }
 
-    private CommercialParty browseable(String idSuffix, String legalName, String customerNumber,
-            AccountStatus status) {
+    private CommercialParty browseable(String idSuffix, String legalName, String customerNumber, AccountStatus status) {
         CommercialParty p = party(UUID.fromString("00000000-0000-0000-0000-0000000000" + idSuffix));
         p.setLegalName(legalName);
         p.setDisplayName(legalName);
@@ -489,24 +498,27 @@ class PartyServiceImplTest {
 
     @Test
     void browseParties_filtersByName_caseInsensitiveContainsOnDisplayOrLegal() {
-        when(partyRepository.findAll()).thenReturn(List.of(
-                browseable("01", "Acme Industrial", "CUST-1", AccountStatus.ACTIVE),
-                browseable("02", "Beta Supplies", "CUST-2", AccountStatus.ACTIVE)));
+        when(partyRepository.findAll())
+                .thenReturn(List.of(
+                        browseable("01", "Acme Industrial", "CUST-1", AccountStatus.ACTIVE),
+                        browseable("02", "Beta Supplies", "CUST-2", AccountStatus.ACTIVE)));
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
 
         SearchPartiesResponse response =
                 service.browseParties(Pageable.unpaged(), "acme", null, null, null, null, null);
 
         assertThat(response.getTotalCount()).isEqualTo(1);
-        assertThat(response.getResults()).extracting(SearchPartiesResponse.PartySummary::getLegalName)
+        assertThat(response.getResults())
+                .extracting(SearchPartiesResponse.PartySummary::getLegalName)
                 .containsExactly("Acme Industrial");
     }
 
     @Test
     void browseParties_filtersByStatusAndCustomerNumber() {
-        when(partyRepository.findAll()).thenReturn(List.of(
-                browseable("01", "Acme", "CUST-100", AccountStatus.ACTIVE),
-                browseable("02", "Beta", "CUST-200", AccountStatus.INACTIVE)));
+        when(partyRepository.findAll())
+                .thenReturn(List.of(
+                        browseable("01", "Acme", "CUST-100", AccountStatus.ACTIVE),
+                        browseable("02", "Beta", "CUST-200", AccountStatus.INACTIVE)));
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
 
         assertThat(service.browseParties(Pageable.unpaged(), null, "INACTIVE", null, null, null, null)
@@ -522,14 +534,15 @@ class PartyServiceImplTest {
 
     @Test
     void browseParties_filterAppliedBeforePaging_totalCountReflectsFilteredSize() {
-        when(partyRepository.findAll()).thenReturn(List.of(
-                browseable("01", "Acme One", "C1", AccountStatus.ACTIVE),
-                browseable("02", "Acme Two", "C2", AccountStatus.ACTIVE),
-                browseable("03", "Other Co", "C3", AccountStatus.ACTIVE)));
+        when(partyRepository.findAll())
+                .thenReturn(List.of(
+                        browseable("01", "Acme One", "C1", AccountStatus.ACTIVE),
+                        browseable("02", "Acme Two", "C2", AccountStatus.ACTIVE),
+                        browseable("03", "Other Co", "C3", AccountStatus.ACTIVE)));
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
 
-        SearchPartiesResponse response = service.browseParties(
-                PageRequest.of(0, 1), "acme", null, null, null, null, null);
+        SearchPartiesResponse response =
+                service.browseParties(PageRequest.of(0, 1), "acme", null, null, null, null, null);
 
         // 2 match the filter; page size 1 -> one row, but totalCount is the filtered count.
         assertThat(response.getTotalCount()).isEqualTo(2);
@@ -538,16 +551,18 @@ class PartyServiceImplTest {
 
     @Test
     void browseParties_sortsByCustomerNumber_descending() {
-        when(partyRepository.findAll()).thenReturn(List.of(
-                browseable("01", "Acme", "CUST-001", AccountStatus.ACTIVE),
-                browseable("02", "Beta", "CUST-003", AccountStatus.ACTIVE),
-                browseable("03", "Gamma", "CUST-002", AccountStatus.ACTIVE)));
+        when(partyRepository.findAll())
+                .thenReturn(List.of(
+                        browseable("01", "Acme", "CUST-001", AccountStatus.ACTIVE),
+                        browseable("02", "Beta", "CUST-003", AccountStatus.ACTIVE),
+                        browseable("03", "Gamma", "CUST-002", AccountStatus.ACTIVE)));
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
 
-        SearchPartiesResponse response = service.browseParties(
-                Pageable.unpaged(), null, null, null, null, "customerNumber", "desc");
+        SearchPartiesResponse response =
+                service.browseParties(Pageable.unpaged(), null, null, null, null, "customerNumber", "desc");
 
-        assertThat(response.getResults()).extracting(SearchPartiesResponse.PartySummary::getCustomerNumber)
+        assertThat(response.getResults())
+                .extracting(SearchPartiesResponse.PartySummary::getCustomerNumber)
                 .containsExactly("CUST-003", "CUST-002", "CUST-001");
     }
 
@@ -569,13 +584,11 @@ class PartyServiceImplTest {
         PersonParty individual = new PersonParty();
         individual.setPartyId(UUID.fromString("00000000-0000-0000-0000-0000000000a2"));
         individual.setPersonId(canonicalPersonId);
-        individual.setFirstName("Stale");
-        individual.setLastName("Local");
         individual.setStatus(AccountStatus.ACTIVE);
 
         when(partyRepository.findAll()).thenReturn(List.of());
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
-        when(peopleClient.fetchPersonIdentities(java.util.Set.of(canonicalPersonId)))
+        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(canonicalPersonId)))
                 .thenReturn(java.util.Map.of(
                         canonicalPersonId,
                         new PeopleClient.PersonIdentity(
@@ -588,6 +601,28 @@ class PartyServiceImplTest {
     }
 
     @Test
+    void browseParties_posPeopleUnreachable_degradesNameToNull_doesNotFail() {
+        // Regression guard (issue #684 review): with the local name fallback removed,
+        // a pos-people outage must degrade the directory listing (null names) rather than
+        // failing the whole request. The read path uses the resilient quiet fetch.
+        UUID canonicalId = UUID.fromString("00000000-0000-0000-0000-0000000000d5");
+        PersonParty individual = new PersonParty();
+        individual.setPartyId(UUID.fromString("00000000-0000-0000-0000-0000000000a5"));
+        individual.setPersonId(canonicalId);
+        individual.setStatus(AccountStatus.ACTIVE);
+
+        when(partyRepository.findAll()).thenReturn(List.of());
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
+        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(canonicalId)))
+                .thenReturn(java.util.Map.of());
+
+        SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
+
+        assertThat(response.getTotalCount()).isEqualTo(1);
+        assertThat(response.getResults().getFirst().getDisplayName()).isNull();
+    }
+
+    @Test
     void browseParties_populatesPrimaryContact_forCommercialParty() {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-0000000000c2");
         UUID relId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
@@ -595,16 +630,9 @@ class PartyServiceImplTest {
         commercial.setLegalName("Acme Corp");
         commercial.setDisplayName("Acme Corp");
 
+        UUID contactPersonId = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
         PersonParty contact = new PersonParty();
-        contact.setFirstName("Jane");
-        contact.setLastName("Doe");
-        ContactPoint phone = new ContactPoint();
-        phone.setContactType(ContactPointType.PHONE_MOBILE);
-        phone.setValue("555-1234");
-        ContactPoint email = new ContactPoint();
-        email.setContactType(ContactPointType.EMAIL);
-        email.setValue("jane@acme.com");
-        contact.setContactPoints(new ArrayList<>(List.of(phone, email)));
+        contact.setPersonId(contactPersonId);
 
         PartyRelationship rel = new PartyRelationship();
         rel.setPartyRelationshipId(relId);
@@ -615,6 +643,9 @@ class PartyServiceImplTest {
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
         when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
                 .thenReturn(List.of(rel));
+        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(contactPersonId)))
+                .thenReturn(java.util.Map.of(
+                        contactPersonId, identity(contactPersonId, "Jane", "Doe", "jane@acme.com", "555-1234")));
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
 
@@ -628,18 +659,16 @@ class PartyServiceImplTest {
 
     @Test
     void browseParties_populatesPrimaryContact_forIndividualCustomer() {
+        UUID aliceId = UUID.fromString("00000000-0000-0000-0000-0000000000b3");
         PersonParty individual = new PersonParty();
         individual.setPartyId(UUID.fromString("00000000-0000-0000-0000-0000000000a3"));
-        individual.setFirstName("Alice");
-        individual.setLastName("Anders");
+        individual.setPersonId(aliceId);
         individual.setStatus(AccountStatus.ACTIVE);
-        ContactPoint email = new ContactPoint();
-        email.setContactType(ContactPointType.EMAIL);
-        email.setValue("alice@example.com");
-        individual.setContactPoints(new ArrayList<>(List.of(email)));
 
         when(partyRepository.findAll()).thenReturn(List.of());
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
+        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(aliceId)))
+                .thenReturn(java.util.Map.of(aliceId, identity(aliceId, "Alice", "Anders", "alice@example.com", null)));
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
 
@@ -657,14 +686,17 @@ class PartyServiceImplTest {
         commercial.setDisplayName("Fleet Co");
         commercial.setVehicleVins(new java.util.HashSet<>(List.of("VIN1", "VIN2", "VIN3")));
 
+        UUID noVehId = UUID.fromString("00000000-0000-0000-0000-0000000000b4");
         PersonParty individual = new PersonParty();
         individual.setPartyId(UUID.fromString("00000000-0000-0000-0000-0000000000a4"));
-        individual.setFirstName("No");
-        individual.setLastName("Vehicles");
+        individual.setPersonId(noVehId);
         individual.setStatus(AccountStatus.ACTIVE);
 
         when(partyRepository.findAll()).thenReturn(List.of(commercial));
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
+        lenient()
+                .when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(noVehId)))
+                .thenReturn(java.util.Map.of(noVehId, identity(noVehId, "No", "Vehicles", null, null)));
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
 

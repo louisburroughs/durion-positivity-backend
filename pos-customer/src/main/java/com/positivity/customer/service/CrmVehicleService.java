@@ -46,4 +46,16 @@ public interface CrmVehicleService {
 
     java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> collectVehiclesForParty(
             CommercialParty party);
+
+    /**
+     * Lists vehicle summaries for any customer (person or commercial), resolved by
+     * the Durion customer/party id. Returns {@link Optional#empty()} when the
+     * customer does not exist (so the caller can answer 404); a present list may be
+     * empty when the customer has no associated vehicles.
+     *
+     * @param customerId the Durion customer (party) id
+     * @return optional list of vehicle summaries; empty when the customer is unknown
+     */
+    Optional<java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary>>
+            findVehiclesForCustomer(UUID customerId);
 }

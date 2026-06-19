@@ -23,19 +23,19 @@ public class TimeEntryAdjustmentRequest {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String reasonCode;
 
-    @Schema(description = "Additional notes explaining the adjustment", example = "Employee forgot to log lunch break")
+    @Schema(description = "Additional notes explaining the adjustment", example = "Employee forgot to log lunch break", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String notes;
 
-    @Schema(description = "Proposed new start timestamp", example = "2026-02-17T08:00:00-05:00")
+    @Schema(description = "Proposed new start timestamp", example = "2026-02-17T08:00:00-05:00", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private OffsetDateTime proposedStartAt;
 
-    @Schema(description = "Proposed new end timestamp", example = "2026-02-17T17:00:00-05:00")
+    @Schema(description = "Proposed new end timestamp", example = "2026-02-17T17:00:00-05:00", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private OffsetDateTime proposedEndAt;
 
-    @Schema(description = "Adjustment in minutes (positive to add time, negative to subtract)", example = "-30")
+    @Schema(description = "Adjustment in minutes (positive to add time, negative to subtract)", example = "-30", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Integer minutesDelta;
 
-    @Schema(description = "User creating the adjustment request", example = "employee-456")
+    @Schema(description = "User creating the adjustment request", example = "employee-456", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String createdBy;
 
     public UUID getTimeEntryId() {

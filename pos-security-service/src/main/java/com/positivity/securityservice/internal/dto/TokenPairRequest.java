@@ -25,7 +25,10 @@ public record TokenPairRequest(
         String subject,
 
         @JsonProperty("roles")
-        @Schema(description = "Optional set of role names to include in token", example = "[\"SHOP_MGR\"]")
+        @Schema(
+                description = "Optional set of role names to include in token",
+                example = "[\"SHOP_MGR\"]",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         Set<String> roles) {
     /**
      * Validates request constraints.

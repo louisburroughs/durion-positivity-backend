@@ -11,7 +11,8 @@ public class TimeEntryAdjustment {
     @Schema(
             description = "Unique identifier for the adjustment",
             example = "123e4567-e89b-12d3-a456-426614174000",
-            accessMode = Schema.AccessMode.READ_ONLY)
+            accessMode = Schema.AccessMode.READ_ONLY,
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private UUID adjustmentId;
 
     @Schema(
@@ -26,16 +27,16 @@ public class TimeEntryAdjustment {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String reasonCode;
 
-    @Schema(description = "Additional notes explaining the adjustment", example = "Employee forgot to log lunch break")
+    @Schema(description = "Additional notes explaining the adjustment", example = "Employee forgot to log lunch break", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String notes;
 
-    @Schema(description = "Proposed new start timestamp", example = "2026-02-17T08:00:00Z")
+    @Schema(description = "Proposed new start timestamp", example = "2026-02-17T08:00:00Z", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant proposedStartAt;
 
-    @Schema(description = "Proposed new end timestamp", example = "2026-02-17T17:00:00Z")
+    @Schema(description = "Proposed new end timestamp", example = "2026-02-17T17:00:00Z", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant proposedEndAt;
 
-    @Schema(description = "Adjustment in minutes (positive to add time, negative to subtract)", example = "-30")
+    @Schema(description = "Adjustment in minutes (positive to add time, negative to subtract)", example = "-30", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Integer minutesDelta;
 
     @Schema(
@@ -44,16 +45,16 @@ public class TimeEntryAdjustment {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private AdjustmentStatus status;
 
-    @Schema(description = "User who created the adjustment request", example = "employee-456")
+    @Schema(description = "User who created the adjustment request", example = "employee-456", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String createdBy;
 
-    @Schema(description = "Timestamp when the adjustment was created", example = "2026-02-17T08:30:00Z")
+    @Schema(description = "Timestamp when the adjustment was created", example = "2026-02-17T08:30:00Z", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant createdAt;
 
-    @Schema(description = "User who approved or rejected the adjustment", example = "manager-123")
+    @Schema(description = "User who approved or rejected the adjustment", example = "manager-123", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String decidedBy;
 
-    @Schema(description = "Timestamp when the adjustment was approved or rejected", example = "2026-02-17T09:15:00Z")
+    @Schema(description = "Timestamp when the adjustment was approved or rejected", example = "2026-02-17T09:15:00Z", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant decidedAt;
 
     public UUID getAdjustmentId() {

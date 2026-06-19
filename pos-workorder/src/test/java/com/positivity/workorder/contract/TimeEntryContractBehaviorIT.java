@@ -46,8 +46,8 @@ import org.springframework.context.annotation.Import;
  * Required authorities:
  * </p>
  * <ul>
- * <li>{@code TimeEntry:Approve} — guard on approve endpoint</li>
- * <li>{@code TimeEntry:Reject} — guard on reject endpoint</li>
+ * <li>{@code workorder:timeEntry:approve} — guard on approve endpoint</li>
+ * <li>{@code workorder:timeEntry:reject} — guard on reject endpoint</li>
  * </ul>
  *
  * Issue: CAP-139 Story #66

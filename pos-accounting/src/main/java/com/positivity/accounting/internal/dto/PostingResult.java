@@ -1,7 +1,11 @@
 package com.positivity.accounting.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -18,23 +22,38 @@ import org.jspecify.annotations.Nullable;
  */
 @Value
 @Builder
+@Schema(description = "Result of evaluating a posting rule against an accounting event")
 public class PostingResult {
     /** Whether the posting rule evaluation succeeded */
+    @Schema(description = "Whether the posting rule evaluation succeeded", example = "true", requiredMode = REQUIRED)
     boolean success;
 
     /** Generated journal entry draft (present when success=true) */
+    @Schema(description = "Generated journal entry draft, present when evaluation succeeded", requiredMode = NOT_REQUIRED)
     @Nullable
     JournalEntry journalEntryDraft;
 
     /** Reason for failure (present when success=false) */
+    @Schema(
+            description = "Reason for failure, present when evaluation failed",
+            example = "UNMAPPED_EVENT_TYPE",
+            requiredMode = NOT_REQUIRED)
     @Nullable
     PostingFailureReason failureReason;
 
     /** Detailed failure message (present when success=false) */
+    @Schema(
+            description = "Detailed failure message, present when evaluation failed",
+            example = "Event type does not match any rule mapping",
+            requiredMode = NOT_REQUIRED)
     @Nullable
     String failureDetails;
 
     /** Mapping version UUID that was used for evaluation */
+    @Schema(
+            description = "Mapping version identifier used for evaluation",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = NOT_REQUIRED)
     @Nullable
     UUID mappingVersionUsed;
 
@@ -42,6 +61,9 @@ public class PostingResult {
      * Additional evaluation metadata (mapping keys evaluated, fallbacks tried,
      * etc.)
      */
+    @Schema(
+            description = "Additional evaluation metadata such as mapping keys evaluated and fallbacks tried",
+            requiredMode = NOT_REQUIRED)
     @Nullable
     @Builder.Default
     Map<String, Object> evaluationDetails = new HashMap<>();

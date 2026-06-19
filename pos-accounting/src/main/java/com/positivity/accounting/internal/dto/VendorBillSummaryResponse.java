@@ -1,8 +1,12 @@
 package com.positivity.accounting.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -22,42 +26,47 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "Vendor bill summary for payment allocation")
 public class VendorBillSummaryResponse {
 
-    @Schema(description = "Vendor bill UUID", example = "01936e5d-1234-7a3d-8b6e-3c4567890123")
+    @Schema(description = "Vendor bill UUID", example = "01936e5d-1234-7a3d-8b6e-3c4567890123", requiredMode = REQUIRED)
+    @NotNull
     @JsonProperty("vendorBillId")
     private UUID vendorBillId;
 
-    @Schema(description = "Vendor UUID", example = "01936e5b-4567-7a3d-8b6e-1a2345678901")
+    @Schema(description = "Vendor UUID", example = "01936e5b-4567-7a3d-8b6e-1a2345678901", requiredMode = REQUIRED)
+    @NotNull
     @JsonProperty("vendorId")
     private UUID vendorId;
 
     @Nullable
-    @Schema(description = "Vendor name", example = "Acme Supplies Ltd")
+    @Schema(description = "Vendor name", example = "Acme Supplies Ltd", requiredMode = NOT_REQUIRED)
     @JsonProperty("vendorName")
     private String vendorName;
 
-    @Schema(description = "Bill number", example = "INV-2026-001234")
+    @Schema(description = "Bill number", example = "INV-2026-001234", requiredMode = REQUIRED)
+    @NotNull
     @JsonProperty("billNumber")
     private String billNumber;
 
     @Nullable
-    @Schema(description = "Bill date", example = "2026-01-15T00:00:00")
+    @Schema(description = "Bill date", example = "2026-01-15T00:00:00", requiredMode = NOT_REQUIRED)
     @JsonProperty("billDate")
     private LocalDateTime billDate;
 
     @Nullable
-    @Schema(description = "Due date", example = "2026-02-14T00:00:00")
+    @Schema(description = "Due date", example = "2026-02-14T00:00:00", requiredMode = NOT_REQUIRED)
     @JsonProperty("dueDate")
     private LocalDateTime dueDate;
 
-    @Schema(description = "Total bill amount", example = "1200.00")
+    @Schema(description = "Total bill amount", example = "1200.00", requiredMode = REQUIRED)
+    @NotNull
     @JsonProperty("totalAmount")
     private BigDecimal totalAmount;
 
-    @Schema(description = "Open/unpaid amount (eligible for payment)", example = "1200.00")
+    @Schema(description = "Open/unpaid amount (eligible for payment)", example = "1200.00", requiredMode = NOT_REQUIRED)
     @JsonProperty("openAmount")
     private BigDecimal openAmount;
 
-    @Schema(description = "Bill status", example = "APPROVED")
+    @Schema(description = "Bill status", example = "APPROVED", requiredMode = REQUIRED)
+    @NotNull
     @JsonProperty("status")
     private VendorBillStatus status;
 }

@@ -24,13 +24,15 @@ public record TokenPairResponse(
         @JsonProperty("accessToken")
         @Schema(
                 description = "Short-lived JWT access token (1 hour expiration)",
-                example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
+                example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         String accessToken,
 
         @JsonProperty("refreshToken")
         @Schema(
                 description = "Long-lived JWT refresh token (7 days expiration)",
-                example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
+                example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         String refreshToken) {
     /**
      * Factory method to create a token pair response.

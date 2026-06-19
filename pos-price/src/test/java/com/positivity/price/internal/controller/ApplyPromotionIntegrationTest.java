@@ -59,14 +59,14 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
     private PromotionEligibilityRuleRepository ruleRepository;
 
     /**
-     * Override to supply the {@code Promotion:Apply} authority required by the
+     * Override to supply the {@code pricing:promotion:apply} authority required by the
      * apply endpoint.
      *
      * @return the authority string forwarded via {@code X-Authorities} header
      */
     @Override
     protected String defaultAuthorities() {
-        return "Promotion:Apply";
+        return "pricing:promotion:apply";
     }
 
     @BeforeEach
@@ -242,17 +242,17 @@ class ApplyPromotionIntegrationTest extends BaseContractIntegrationTest {
     // ========== APT-007 ==========
 
     /**
-     * Authenticated user missing {@code Promotion:Apply} authority → 403 Forbidden.
+     * Authenticated user missing {@code pricing:promotion:apply} authority → 403 Forbidden.
      * Confirms the {@code @PreAuthorize} guard fires for the apply endpoint.
      *
      * Issue: #95
      */
     @Test
-    @DisplayName("APT-007: Missing Promotion:Apply authority → 403 Forbidden")
+    @DisplayName("APT-007: Missing pricing:promotion:apply authority → 403 Forbidden")
     void givenNoPromotionApplyAuthority_whenApply_thenReturns403() throws Exception {
         mockMvc.perform(post("/v1/promotions/offers/apply")
                         .header("X-User", "test-user")
-                        .header("X-Authorities", "Promotion:Manage")
+                        .header("X-Authorities", "pricing:promotion:manage")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(applyRequest("ANY", "100.00")))
                 .andExpect(status().isForbidden());

@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
+@Schema(description = "Request to waive a time entry exception")
 public class TimeEntryExceptionWaiveRequest {
 
     @NotBlank(message = "waiveReason is required")

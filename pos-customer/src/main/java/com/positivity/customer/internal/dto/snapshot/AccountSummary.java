@@ -1,21 +1,39 @@
 package com.positivity.customer.internal.dto.snapshot;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.NonNull;
 
 /**
  * Account summary in CRM snapshot.
  * CAP:092 - Story #99
  */
+@Schema(description = "Account summary surfaced in a CRM snapshot")
 public class AccountSummary {
+    @Schema(
+            description = "Canonical party identifier of the account",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NonNull
     private String partyId;
 
+    @Schema(
+            description = "Human-readable account/customer number",
+            example = "CUST-000123",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NonNull
     private String accountNumber;
 
+    @Schema(
+            description = "Account display name",
+            example = "Acme Industrial Supply, LLC",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NonNull
     private String accountName;
 
+    @Schema(
+            description = "Account type discriminator",
+            example = "ORGANIZATION",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NonNull
     private String accountType;
 

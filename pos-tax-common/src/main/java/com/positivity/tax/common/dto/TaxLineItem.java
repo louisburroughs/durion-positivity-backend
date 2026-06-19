@@ -1,5 +1,9 @@
 package com.positivity.tax.common.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -20,18 +24,24 @@ import org.jspecify.annotations.NonNull;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Single line item to be evaluated for tax calculation")
 public class TaxLineItem {
 
     /**
      * Unique identifier for the line item (e.g., estimate item ID, invoice line ID).
      */
     @NotBlank(message = "Line item ID is required")
+    @Schema(
+            description = "Unique identifier for the line item (e.g., estimate item ID, invoice line ID)",
+            example = "1",
+            requiredMode = REQUIRED)
     private String lineItemId;
 
     /**
      * Description of the item being taxed.
      */
     @NotBlank(message = "Description is required")
+    @Schema(description = "Description of the item being taxed", example = "Oil Change Service", requiredMode = REQUIRED)
     private String description;
 
     /**
@@ -39,6 +49,7 @@ public class TaxLineItem {
      */
     @NotNull(message = "Quantity is required")
     @Positive(message = "Quantity must be positive")
+    @Schema(description = "Quantity of the item", example = "1", requiredMode = REQUIRED)
     private BigDecimal quantity;
 
     /**
@@ -46,6 +57,7 @@ public class TaxLineItem {
      */
     @NotNull(message = "Unit price is required")
     @Positive(message = "Unit price must be positive")
+    @Schema(description = "Unit price of the item before tax", example = "89.99", requiredMode = REQUIRED)
     private BigDecimal unitPrice;
 
     /**
@@ -53,6 +65,10 @@ public class TaxLineItem {
      * <p>
      * If not provided, will be calculated as quantity * unitPrice.
      */
+    @Schema(
+            description = "Total amount before tax (quantity x unitPrice); calculated when omitted",
+            example = "89.99",
+            requiredMode = NOT_REQUIRED)
     private BigDecimal subtotal;
 
     /**
@@ -60,12 +76,17 @@ public class TaxLineItem {
      * <p>
      * Different categories may have different tax rates depending on jurisdiction.
      */
+    @Schema(
+            description = "Optional tax category code (e.g., GOODS, SERVICES, LABOR)",
+            example = "SERVICES",
+            requiredMode = NOT_REQUIRED)
     private String taxCategory;
 
     /**
      * Whether this item is tax-exempt.
      */
     @Builder.Default
+    @Schema(description = "Whether this item is tax-exempt", example = "false", requiredMode = NOT_REQUIRED)
     private boolean taxExempt = false;
 
     /**

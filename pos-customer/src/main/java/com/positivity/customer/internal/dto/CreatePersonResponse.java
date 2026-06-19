@@ -41,10 +41,7 @@ public class CreatePersonResponse {
     private String lastName;
 
     @NotNull
-    @Schema(
-            description = "Preferred contact method",
-            example = "EMAIL",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Preferred contact method", example = "EMAIL", requiredMode = Schema.RequiredMode.REQUIRED)
     private PreferredContactMethod preferredContactMethod;
 
     @Schema(
@@ -61,17 +58,22 @@ public class CreatePersonResponse {
     private Instant createdAt;
 
     /**
-     * Creates a response from a PersonParty entity.
+     * Creates a response from a PersonParty entity. Names are supplied by the
+     * caller (the request), since pos-customer no longer stores a local name copy
+     * — identity lives in pos-people (ADR-0015 I2, issue #684).
      *
      * @param person             the created person-party
+     * @param firstName          first name (from the create request)
+     * @param lastName           last name (from the create request)
      * @param contactPointsCount number of contact points created
      * @return the response DTO
      */
-    public static CreatePersonResponse from(PersonParty person, int contactPointsCount) {
+    public static CreatePersonResponse from(
+            PersonParty person, String firstName, String lastName, int contactPointsCount) {
         return CreatePersonResponse.builder()
                 .personId(person.getPersonId())
-                .firstName(person.getFirstName())
-                .lastName(person.getLastName())
+                .firstName(firstName)
+                .lastName(lastName)
                 .preferredContactMethod(person.getPreferredContactMethod())
                 .contactPointsCreated(contactPointsCount)
                 .createdAt(person.getCreatedAt())

@@ -88,7 +88,10 @@ public class TaxCalculationResponse {
     /**
      * Whether this calculation was performed in test mode.
      */
-    @Schema(description = "Whether calculation was performed in test mode", example = "false")
+    @Schema(
+            description = "Whether calculation was performed in test mode",
+            example = "false",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private boolean testMode;
 
     /**
@@ -104,16 +107,25 @@ public class TaxCalculationResponse {
     /**
      * Reference ID from the request (if provided).
      */
-    @Schema(description = "Reference ID echoed from request", example = "550e8400-e29b-41d4-a716-446655440000")
+    @Schema(
+            description = "Reference ID echoed from request",
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private UUID referenceId;
 
-    @Schema(description = "Optional source transaction type associated with referenceId", example = "ESTIMATE")
+    @Schema(
+            description = "Optional source transaction type associated with referenceId",
+            example = "ESTIMATE",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private TaxReferenceType referenceType;
 
     /**
      * Optional external transaction ID if using external tax service.
      */
-    @Schema(description = "External tax provider transaction identifier", example = "tx_9f0d2c")
+    @Schema(
+            description = "External tax provider transaction identifier",
+            example = "tx_9f0d2c",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String externalTransactionId;
 
     /**
@@ -126,7 +138,7 @@ public class TaxCalculationResponse {
     @Schema(name = "LineItemTax", description = "Tax breakdown for a single line item")
     public static class LineItemTax {
         @NotBlank(message = "lineItemId is required")
-        @Schema(description = "Line item identifier", example = "\"1\"", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Line item identifier", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
         private String lineItemId;
 
         @NotNull(message = "subtotal is required")
@@ -150,7 +162,10 @@ public class TaxCalculationResponse {
                 requiredMode = Schema.RequiredMode.REQUIRED)
         private BigDecimal total;
 
-        @Schema(description = "Whether this line item is tax exempt", example = "false")
+        @Schema(
+                description = "Whether this line item is tax exempt",
+                example = "false",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         private boolean taxExempt;
     }
 }

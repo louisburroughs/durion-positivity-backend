@@ -1,5 +1,8 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
 import lombok.Builder;
@@ -20,7 +23,7 @@ public class PromotionValidationResult {
     /**
      * Whether all validation checks passed.
      */
-    @Schema(description = "Indicates whether promotion validation succeeded", example = "true")
+    @Schema(description = "Indicates whether promotion validation succeeded", example = "true", requiredMode = REQUIRED)
     boolean valid;
 
     /**
@@ -29,14 +32,18 @@ public class PromotionValidationResult {
     @Nullable
     @Schema(
             description = "Validation failure message when valid=false",
-            example = "Estimate has unresolved required approvals")
+            example = "Estimate has unresolved required approvals",
+            requiredMode = NOT_REQUIRED)
     String errorMessage;
 
     /**
      * Structured error code if validation failed.
      */
     @Nullable
-    @Schema(description = "Machine-readable validation error code", example = "APPROVAL_REQUIRED")
+    @Schema(
+            description = "Machine-readable validation error code",
+            example = "APPROVAL_REQUIRED",
+            requiredMode = NOT_REQUIRED)
     String errorCode;
 
     /**
@@ -45,7 +52,8 @@ public class PromotionValidationResult {
     @Nullable
     @Schema(
             description = "Existing workorder identifier when promotion already occurred",
-            example = "550e8400-e29b-41d4-a716-446655440000")
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = NOT_REQUIRED)
     UUID existingWorkorderId;
 
     /**

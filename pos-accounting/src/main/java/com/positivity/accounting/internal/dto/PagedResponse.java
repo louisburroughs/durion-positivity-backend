@@ -1,6 +1,10 @@
 package com.positivity.accounting.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,12 +23,22 @@ import lombok.experimental.Tolerate;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Generic paginated list response wrapper")
 public class PagedResponse<T> {
 
+    @Schema(description = "Items on the current page", requiredMode = REQUIRED)
     private List<T> items;
+
+    @Schema(description = "Zero-based index of the current page", example = "0", requiredMode = NOT_REQUIRED)
     private Integer pageNumber;
+
+    @Schema(description = "Number of items per page", example = "20", requiredMode = NOT_REQUIRED)
     private Integer pageSize;
+
+    @Schema(description = "Total number of items matching the query", example = "42", requiredMode = NOT_REQUIRED)
     private Long totalCount;
+
+    @Schema(description = "Total number of pages available", example = "3", requiredMode = NOT_REQUIRED)
     private Integer totalPages;
 
     /**

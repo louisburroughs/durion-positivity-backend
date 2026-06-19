@@ -14,7 +14,8 @@ public class TimeEntryException {
     @Schema(
             description = "Unique identifier for the exception",
             example = "123e4567-e89b-12d3-a456-426614174000",
-            accessMode = Schema.AccessMode.READ_ONLY)
+            accessMode = Schema.AccessMode.READ_ONLY,
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private UUID exceptionId;
 
     @Schema(
@@ -37,31 +38,32 @@ public class TimeEntryException {
 
     @Schema(
             description = "Severity level of the exception",
-            example = "HIGH",
+            example = "BLOCKING",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private ExceptionSeverity severity;
 
     @Schema(
             description = "Current status of the exception",
-            example = "PENDING",
+            example = "OPEN",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private ExceptionStatus status;
 
-    @Schema(description = "Associated time entry identifier", example = "te-12345")
+    @Schema(description = "Associated time entry identifier", example = "te-12345", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String timeEntryId;
 
     @Schema(
             description = "Notes describing resolution or actions taken",
-            example = "Manager manually adjusted time entry")
+            example = "Manager manually adjusted time entry",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String resolutionNotes;
 
-    @Schema(description = "Timestamp when the exception was detected", example = "2026-02-17T08:30:00Z")
+    @Schema(description = "Timestamp when the exception was detected", example = "2026-02-17T08:30:00Z", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant detectedAt;
 
-    @Schema(description = "User who resolved the exception", example = "manager-123")
+    @Schema(description = "User who resolved the exception", example = "manager-123", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String resolvedBy;
 
-    @Schema(description = "Timestamp when the exception was resolved", example = "2026-02-17T09:15:00Z")
+    @Schema(description = "Timestamp when the exception was resolved", example = "2026-02-17T09:15:00Z", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant resolvedAt;
 
     public UUID getExceptionId() {

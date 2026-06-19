@@ -36,28 +36,37 @@ public class EventTypeRequest {
     @NotBlank(message = "description is required")
     private String description;
 
-    @Schema(description = "Whether the event type is active", example = "true")
+    @Schema(
+            description = "Whether the event type is active",
+            example = "true",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private boolean active;
 
-    @Schema(description = "API version for this event type", example = "1")
+    @Schema(
+            description = "API version for this event type",
+            example = "1",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @Pattern(regexp = "^[0-9]+$", message = "apiVersion must be numeric")
     private String apiVersion;
 
     @Schema(
             description = "50th percentile latency threshold in microseconds (default: 10,000,000 = 10s)",
-            example = "500000")
+            example = "500000",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @Positive(message = "p50Micros must be positive")
     private Long p50Micros;
 
     @Schema(
             description = "95th percentile latency threshold in microseconds (default: 10,000,000 = 10s)",
-            example = "1000000")
+            example = "1000000",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @Positive(message = "p95Micros must be positive")
     private Long p95Micros;
 
     @Schema(
             description = "99th percentile latency threshold in microseconds (default: 10,000,000 = 10s)",
-            example = "2000000")
+            example = "2000000",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @Positive(message = "p99Micros must be positive")
     private Long p99Micros;
 

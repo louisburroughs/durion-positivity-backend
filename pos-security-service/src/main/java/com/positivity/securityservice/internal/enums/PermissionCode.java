@@ -420,13 +420,39 @@ public enum PermissionCode {
     PEOPLE__TIMEEXCEPTION__VIEW(326, "people:timeException:view"),
 
     // ── Workorder (new) ────────────────────────────────────────────────────────
-    WORKORDER__OPERATIONALCONTEXT__OVERRIDE(327, "workorder:operationalContext:override");
+    WORKORDER__OPERATIONALCONTEXT__OVERRIDE(327, "workorder:operationalContext:override"),
+    // ── People timekeeping approval (new) ────────────────────────────────────────
+    PEOPLE__TIMEKEEPING__APPROVE(328, "people:timekeeping:approve"),
+    PEOPLE__TIMEKEEPING__REJECT(329, "people:timekeeping:reject"),
+    PEOPLE__TIMEKEEPING__VIEW(330, "people:timekeeping:view"),
+    // ── Promotion (new) ────────────────────────────────────────────────────────
+    PROMOTION__APPLY(331, "Promotion:Apply"),
+    PROMOTION__MANAGE(332, "Promotion:Manage"),
+    PROMOTION__RECORDREDEMPTION(333, "Promotion:RecordRedemption"),
+    PROMOTION__VIEW(334, "Promotion:View"),
+    PROMOTION__VIEWREDEMPTION(335, "Promotion:ViewRedemption"),
+
+    // ── Timeentry (new) ────────────────────────────────────────────────────────
+    TIMEENTRY__APPROVE(336, "TimeEntry:Approve"),
+    TIMEENTRY__REJECT(337, "TimeEntry:Reject"),
+    // ── Crm (new) ──────────────────────────────────────────────────────────────
+    CRM__PROMOTION_REDEMPTION__RECORD(338, "crm:promotion_redemption:record"),
+    CRM__PROMOTION_REDEMPTION__VIEW(339, "crm:promotion_redemption:view"),
+
+    // ── Pricing (new) ──────────────────────────────────────────────────────────
+    PRICING__PROMOTION__APPLY(340, "pricing:promotion:apply"),
+    PRICING__PROMOTION__MANAGE(341, "pricing:promotion:manage"),
+    PRICING__PROMOTION__VIEW(342, "pricing:promotion:view"),
+
+    // ── Workorder (new) ────────────────────────────────────────────────────────
+    WORKORDER__TIMEENTRY__APPROVE(343, "workorder:timeEntry:approve"),
+    WORKORDER__TIMEENTRY__REJECT(344, "workorder:timeEntry:reject");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 10;
+    public static final int CATALOG_VERSION = 13;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

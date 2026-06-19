@@ -1,6 +1,10 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -24,41 +28,57 @@ import org.jspecify.annotations.Nullable;
 public class WorkorderPartUsageEventResponse {
 
     @NonNull
-    @Schema(description = "Usage event identifier", example = "550e8400-e29b-41d4-a716-446655440710")
+    @NotNull
+    @Schema(
+            description = "Usage event identifier",
+            example = "550e8400-e29b-41d4-a716-446655440710",
+            requiredMode = REQUIRED)
     private UUID id;
 
     @NonNull
-    @Schema(description = "Workorder part identifier", example = "550e8400-e29b-41d4-a716-446655440500")
+    @NotNull
+    @Schema(
+            description = "Workorder part identifier",
+            example = "550e8400-e29b-41d4-a716-446655440500",
+            requiredMode = REQUIRED)
     private UUID workorderPartId;
 
     @NonNull
-    @Schema(description = "Workorder identifier", example = "550e8400-e29b-41d4-a716-446655440000")
+    @NotNull
+    @Schema(
+            description = "Workorder identifier",
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = REQUIRED)
     private UUID workorderId;
 
     @NonNull
-    @Schema(description = "Event type", example = "ISSUED")
+    @NotNull
+    @Schema(description = "Event type", example = "ISSUED", requiredMode = REQUIRED)
     private String eventType;
 
     @NonNull
-    @Schema(description = "Quantity associated with event", example = "1")
+    @NotNull
+    @Schema(description = "Quantity associated with event", example = "1", requiredMode = REQUIRED)
     private BigDecimal quantity;
 
     @NonNull
-    @Schema(description = "Actor identifier who performed event", example = "tech@shop.local")
+    @NotNull
+    @Schema(description = "Actor identifier who performed event", example = "tech@shop.local", requiredMode = REQUIRED)
     private String performedBy;
 
     @NonNull
-    @Schema(description = "Event timestamp")
+    @NotNull
+    @Schema(description = "Event timestamp", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
     private Instant performedAt;
 
     @Nullable
-    @Schema(description = "Optional event notes")
+    @Schema(description = "Optional event notes", example = "Issued from main bay", requiredMode = NOT_REQUIRED)
     private String notes;
 
     /**
      * Part description for display purposes
      */
     @Nullable
-    @Schema(description = "Part description for display", example = "Brake Pad Set - Front")
+    @Schema(description = "Part description for display", example = "Brake Pad Set - Front", requiredMode = NOT_REQUIRED)
     private String partDescription;
 }

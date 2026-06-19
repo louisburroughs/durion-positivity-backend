@@ -936,15 +936,21 @@ components:
   schemas:
     RescheduleAppointmentRequest:
       type: object
+      description: Request to reschedule an appointment to a new time window with a mandatory reason
       properties:
         newStartAt:
           type: string
           format: date-time
+          description: New appointment start instant in UTC (ISO-8601)
+          example: 2026-06-19 08:00:00+00:00
         newEndAt:
           type: string
           format: date-time
+          description: New appointment end instant in UTC (ISO-8601); must be after newStartAt
+          example: 2026-06-19 10:00:00+00:00
         reason:
           type: string
+          description: Mandatory reschedule reason code
           enum:
           - CUSTOMER_REQUEST
           - SHOP_CAPACITY
@@ -955,57 +961,99 @@ components:
           - EMERGENCY
           - MANAGER_DISCRETION
           - OTHER
+          example: CUSTOMER_REQUEST
         rescheduleReasonNotes:
           type: string
+          description: Optional notes; required when reason is OTHER or when overriding a hard conflict
+          example: Mechanic out sick; moved to next available slot
           maxLength: 1000
           minLength: 0
         notifyCustomer:
           type: boolean
+          description: Whether to notify the customer of this reschedule (defaults to true)
+          example: true
       required:
       - newEndAt
       - newStartAt
       - reason
     AppointmentResponse:
       type: object
+      description: Response describing a created or retrieved appointment
       properties:
         appointmentId:
           type: string
           format: uuid
+          description: Unique appointment identifier
+          example: 01960003-0000-7000-8000-000000000001
         status:
           type: string
+          description: Current appointment status
+          example: SCHEDULED
         locationId:
           type: string
           format: uuid
+          description: Facility/location identifier of the appointment
+          example: 01960003-0000-7000-8000-000000000003
         resourceId:
           type: string
+          description: Resource (bay or mobile unit) reserved, if any
+          example: BAY-04
         crmCustomerId:
           type: string
           format: uuid
+          description: CRM customer identifier the appointment is booked for
+          example: 01960003-0000-7000-8000-000000000010
         crmVehicleId:
           type: string
           format: uuid
+          description: CRM vehicle identifier the appointment services
+          example: 01960003-0000-7000-8000-000000000020
         startAt:
           type: string
           format: date-time
+          description: Appointment start instant in UTC (ISO-8601)
+          example: 2026-06-18 08:00:00+00:00
         endAt:
           type: string
           format: date-time
+          description: Appointment end instant in UTC (ISO-8601)
+          example: 2026-06-18 10:00:00+00:00
         createdAt:
           type: string
           format: date-time
+          description: Timestamp the appointment was created in UTC (ISO-8601)
+          example: 2026-06-17 15:30:00+00:00
         cancellationReason:
           type: string
+          description: Cancellation reason code when the appointment has been cancelled
+          example: CUSTOMER_REQUEST
         cancellationNotes:
           type: string
+          description: Free-text cancellation notes when the appointment has been cancelled
+          example: Customer rescheduled to next week
         serviceRequestIds:
           type: array
+          description: Service request identifiers included in this appointment
+          example:
+          - 01960003-0000-7000-8000-000000000004
           items:
             type: string
             format: uuid
         customerSnapshot:
           type: object
+          description: Snapshot of customer attributes captured at booking time
         vehicleSnapshot:
           type: object
+          description: Snapshot of vehicle attributes captured at booking time
+      required:
+      - appointmentId
+      - createdAt
+      - crmCustomerId
+      - crmVehicleId
+      - endAt
+      - locationId
+      - startAt
+      - status
     AppointmentCreateRequest:
       type: object
       description: Appointment creation request body
@@ -1013,34 +1061,56 @@ components:
         crmCustomerId:
           type: string
           format: uuid
+          description: CRM customer identifier the appointment is booked for
+          example: 01960003-0000-7000-8000-000000000001
         crmVehicleId:
           type: string
           format: uuid
+          description: CRM vehicle identifier the appointment services
+          example: 01960003-0000-7000-8000-000000000002
         locationId:
           type: string
           format: uuid
+          description: Facility/location identifier where the appointment is scheduled
+          example: 01960003-0000-7000-8000-000000000003
         resourceId:
           type: string
+          description: Optional resource (bay or mobile unit) reserved for the appointment
+          example: BAY-04
         startAt:
           type: string
           format: date-time
+          description: Appointment start instant in UTC (ISO-8601)
+          example: 2026-06-18 08:00:00+00:00
         endAt:
           type: string
           format: date-time
+          description: Appointment end instant in UTC (ISO-8601); must be after startAt
+          example: 2026-06-18 10:00:00+00:00
         serviceRequestIds:
           type: array
+          description: Service request identifiers included in this appointment (at least one required)
+          example:
+          - 01960003-0000-7000-8000-000000000004
           items:
             type: string
             format: uuid
+          minItems: 1
         workorderLinkRef:
           type: string
+          description: Optional reference linking the appointment to a workorder
+          example: WO-2026-000123
         sourceType:
           type: string
+          description: Originating workexec source type; when set, sourceId must also be provided
           enum:
           - ESTIMATE
           - WORK_ORDER
+          example: ESTIMATE
         sourceId:
           type: string
+          description: External identifier of the originating estimate or workorder; required when sourceType is set
+          example: EST-2026-000045
       required:
       - crmCustomerId
       - crmVehicleId
@@ -1055,101 +1125,189 @@ components:
         appointmentId:
           type: string
           format: uuid
+          description: Appointment identifier whose conflict is being overridden
+          example: 01960003-0000-7000-8000-000000000001
         overrideReason:
           type: string
+          description: Non-blank reason justifying the override
+          example: Customer waiting on-site
+          minLength: 1
         conflictDetails:
           type: string
+          description: Optional JSON string describing the conflict being overridden
+          example:
+            type: TECHNICIAN_DOUBLE_BOOKED
+            resourceId: 01960003-0000-7000-8000-000000000010
+      required:
+      - appointmentId
+      - overrideReason
     ConflictOverrideResponse:
       type: object
+      description: Response returned after a successful scheduling conflict override
       properties:
         overrideId:
           type: string
           format: uuid
+          description: Unique override record identifier
+          example: 01960003-0000-7000-8000-000000000001
         appointmentId:
           type: string
           format: uuid
+          description: Appointment identifier whose conflict was overridden
+          example: 01960003-0000-7000-8000-000000000002
         overriddenByUserId:
           type: string
+          description: User identifier of the manager who performed the override
+          example: 01960003-0000-7000-8000-000000000020
         overrideTimestamp:
           type: string
           format: date-time
+          description: Instant the override was performed in UTC (ISO-8601)
+          example: 2026-06-18 08:00:00+00:00
         overrideReason:
           type: string
+          description: Reason recorded for the override
+          example: Customer waiting on-site
+      required:
+      - appointmentId
+      - overriddenByUserId
+      - overrideId
+      - overrideReason
+      - overrideTimestamp
     CreateAssignmentRequest:
       type: object
+      description: Request to assign mechanics and an optional resource to an appointment
       properties:
         appointmentId:
           type: string
           format: uuid
+          description: Appointment identifier the mechanics are assigned to
+          example: 01960003-0000-7000-8000-000000000001
         mechanics:
           type: array
+          description: Mechanics to assign; at least one entry with role LEAD is required
           items:
             $ref: '#/components/schemas/MechanicAssignmentItem'
+          minItems: 1
         resourceId:
           type: string
           format: uuid
+          description: Optional resource (bay or mobile unit) to associate with the assignment
+          example: 01960003-0000-7000-8000-000000000005
         resourceType:
           type: string
+          description: Type of the associated resource (e.g. BAY or MOBILE_UNIT)
+          example: BAY
         override:
           type: boolean
+          description: When true, the caller asserts override authority for detected conflicts
+          example: false
         overrideReason:
           type: string
+          description: Reason for overriding detected conflicts; required when override is true
+          example: Customer waiting on-site
+      required:
+      - appointmentId
+      - mechanics
     MechanicAssignmentItem:
       type: object
+      description: A single mechanic entry within an assignment request
       properties:
         mechanicPersonId:
           type: string
+          description: Person identifier of the mechanic being assigned
+          example: 01960003-0000-7000-8000-000000000010
+          minLength: 1
         role:
           type: string
+          description: Role of the mechanic; defaults to LEAD for single-mechanic assignments when null
           enum:
           - LEAD
           - ASSIST
+          example: LEAD
+      required:
+      - mechanicPersonId
     AssignedMechanicInfo:
       type: object
+      description: Summary of one mechanic included in an assignment response
       properties:
         mechanicId:
           type: string
           format: uuid
+          description: Mechanic identifier
+          example: 01960003-0000-7000-8000-000000000010
         role:
           type: string
+          description: Role of the mechanic in the assignment
           enum:
           - LEAD
           - ASSIST
+          example: LEAD
+      required:
+      - mechanicId
+      - role
     AssignmentResponse:
       type: object
+      description: Representation of a mechanic assignment returned from the API
       properties:
         assignmentId:
           type: string
           format: uuid
+          description: Unique assignment identifier
+          example: 01960003-0000-7000-8000-000000000001
         appointmentId:
           type: string
           format: uuid
+          description: Appointment identifier the assignment belongs to
+          example: 01960003-0000-7000-8000-000000000002
         mechanics:
           type: array
+          description: Mechanics assigned to the appointment
           items:
             $ref: '#/components/schemas/AssignedMechanicInfo'
         resourceId:
           type: string
           format: uuid
+          description: Associated resource (bay or mobile unit) identifier
+          example: 01960003-0000-7000-8000-000000000005
         resourceType:
           type: string
+          description: Type of the associated resource
+          example: BAY
         status:
           type: string
+          description: Current assignment status
           enum:
           - CONFIRMED
           - IN_PROGRESS
           - COMPLETED
           - CANCELLED
+          example: CONFIRMED
         override:
           type: boolean
+          description: Whether the assignment was created with a conflict override
+          example: false
         assignmentNotes:
           type: string
+          description: Optional notes for this assignment (max 500 chars)
+          example: Customer requested senior mechanic
         assignedAt:
           type: string
           format: date-time
+          description: Instant the assignment was first created/confirmed in UTC (ISO-8601)
+          example: 2026-06-18 08:00:00+00:00
         lastUpdatedAt:
           type: string
           format: date-time
+          description: Instant the assignment was last modified in UTC (ISO-8601)
+          example: 2026-06-18 09:30:00+00:00
+      required:
+      - appointmentId
+      - assignedAt
+      - assignmentId
+      - mechanics
+      - override
+      - status
     ShopAuditFilter:
       type: object
       description: Filter criteria for querying the shop audit trail. At least one field must be non-null.
@@ -1157,15 +1315,19 @@ components:
         workorderId:
           type: string
           description: Workorder UUID to filter by - one word per workspace naming policy
+          example: 01960003-0000-7000-8000-000000000001
         appointmentId:
           type: string
           description: Appointment UUID to filter by
+          example: 01960003-0000-7000-8000-000000000002
         mechanicId:
           type: string
           description: Mechanic user ID to filter by
+          example: 01960003-0000-7000-8000-000000000010
         actorUserId:
           type: string
           description: Actor user ID to filter by
+          example: 01960003-0000-7000-8000-000000000020
         eventType:
           type: string
           description: Specific audit event type to filter by
@@ -1175,9 +1337,11 @@ components:
           - SCHEDULE_CANCELLED
           - ASSIGNMENT_CREATED
           - ASSIGNMENT_REMOVED
+          example: SCHEDULE_UPDATED
         locationId:
           type: string
           description: Location ID to filter by
+          example: 01960003-0000-7000-8000-000000000003
         fromDateTime:
           type: string
           format: date-time
@@ -1241,154 +1405,285 @@ components:
           example: must be greater than 0
     ShopAuditEntryResponse:
       type: object
+      description: Read-only shop audit trail entry recording a schedule or assignment change
       properties:
         id:
           type: string
           format: uuid
+          description: Unique audit entry identifier
+          example: 01960003-0000-7000-8000-000000000001
         eventType:
           type: string
+          description: Type of audit event recorded
           enum:
           - SCHEDULE_CREATED
           - SCHEDULE_UPDATED
           - SCHEDULE_CANCELLED
           - ASSIGNMENT_CREATED
           - ASSIGNMENT_REMOVED
+          example: SCHEDULE_UPDATED
         workorderId:
           type: string
+          description: Associated workorder identifier
+          example: 01960003-0000-7000-8000-000000000002
         appointmentId:
           type: string
+          description: Associated appointment identifier
+          example: 01960003-0000-7000-8000-000000000003
         mechanicId:
           type: string
+          description: Mechanic identifier involved in the change
+          example: 01960003-0000-7000-8000-000000000010
         locationId:
           type: string
+          description: Location identifier the change applies to
+          example: 01960003-0000-7000-8000-000000000004
         actorUserId:
           type: string
+          description: User identifier of the actor who made the change
+          example: 01960003-0000-7000-8000-000000000020
         changeSummaryText:
           type: string
+          description: Human-readable summary of the change
+          example: Appointment moved from 08:00 to 11:00
         changePatch:
           type: string
+          description: Machine-readable patch describing the change (JSON)
+          example:
+            startAt:
+              old: 2026-06-18 08:00:00+00:00
+              new: 2026-06-18 11:00:00+00:00
         reasonCode:
           type: string
+          description: Reason code associated with the change
+          example: CUSTOMER_REQUEST
         retentionYears:
           type: integer
           format: int32
+          description: Number of years the entry is retained
+          example: 7
         recordedAt:
           type: string
           format: date-time
+          description: Instant the audit entry was recorded in UTC (ISO-8601)
+          example: 2026-06-18 08:00:00+00:00
+      required:
+      - actorUserId
+      - eventType
+      - id
+      - recordedAt
+      - retentionYears
     PersonDTO:
       type: object
+      description: Person details resolved from the people system
       properties:
         id:
           type: integer
           format: int64
+          description: Internal person identifier
+          example: 1001
         firstName:
           type: string
+          description: Person first name
+          example: Jane
         lastName:
           type: string
+          description: Person last name
+          example: Doe
         primaryEmail:
           type: string
+          description: Primary email address
+          example: jane.doe@example.com
         secondaryEmail:
           type: string
+          description: Secondary email address
+          example: jane.alt@example.com
         phoneNumbers:
           type: array
+          description: Associated phone numbers
+          example:
+          - +1-555-0100
           items:
             type: string
         username:
           type: string
+          description: Login username
+          example: jdoe
+      required:
+      - id
     ServiceEntityDTO:
       type: object
+      description: Service catalog entry resolved from pos-catalog
       properties:
         id:
           type: integer
           format: int64
+          description: Internal service identifier
+          example: 501
         name:
           type: string
+          description: Service display name
+          example: Oil Change
         description:
           type: string
+          description: Service description
+          example: Standard oil and filter replacement
+      required:
+      - id
     ConflictDetails:
       type: object
+      description: Details about a conflict associated with a schedule event
       properties:
         conflictingEventIds:
           type: array
+          description: Identifiers of events that conflict with this event
+          example:
+          - 01960003-0000-7000-8000-000000000002
           items:
             type: string
     ScheduleEventView:
       type: object
+      description: A single event displayed within a resource lane
       properties:
         eventId:
           type: string
+          description: Event identifier
+          example: 01960003-0000-7000-8000-000000000001
         eventType:
           type: string
+          description: Event type (e.g. APPOINTMENT, SHIFT, PTO)
+          example: APPOINTMENT
         subType:
           type: string
+          description: Event sub-type, when applicable
+          example: DIAGNOSTIC
         startTime:
           type: string
           format: date-time
+          description: Event start instant in UTC (ISO-8601)
+          example: 2026-06-18 13:00:00+00:00
         endTime:
           type: string
           format: date-time
+          description: Event end instant in UTC (ISO-8601)
+          example: 2026-06-18 15:00:00+00:00
         title:
           type: string
+          description: Event display title
+          example: Oil change - Jane Doe
         hasConflict:
           type: boolean
+          description: Whether this event has a scheduling conflict
+          example: false
         severity:
           type: string
+          description: Conflict severity when hasConflict is true (HARD or SOFT)
+          example: SOFT
         conflictDetails:
           $ref: '#/components/schemas/ConflictDetails'
+      required:
+      - endTime
+      - eventId
+      - eventType
+      - hasConflict
+      - startTime
     ScheduleResourceView:
       type: object
+      description: A single resource lane within the schedule view
       properties:
         resourceId:
           type: string
+          description: Resource identifier
+          example: 01960003-0000-7000-8000-000000000010
         resourceType:
           type: string
+          description: Resource type (e.g. MECHANIC or BAY)
+          example: MECHANIC
         resourceName:
           type: string
+          description: Display name of the resource
+          example: Jane Doe
         events:
           type: array
+          description: Events scheduled for this resource
           items:
             $ref: '#/components/schemas/ScheduleEventView'
+      required:
+      - events
+      - resourceId
+      - resourceType
     ScheduleViewResponse:
       type: object
+      description: Schedule view for a location and date, grouped by resource with their events
       properties:
         locationId:
           type: string
           format: uuid
+          description: Location identifier the schedule belongs to
+          example: 01960003-0000-7000-8000-000000000003
         date:
           type: string
           format: date
+          description: Calendar date of the schedule view (ISO-8601)
+          example: 2026-06-18
         viewGeneratedAt:
           type: string
           format: date-time
+          description: Instant the view was generated in UTC (ISO-8601)
+          example: 2026-06-18 07:55:00+00:00
         dayStartAt:
           type: string
           format: date-time
+          description: Start of the displayed day window in UTC (ISO-8601)
+          example: 2026-06-18 12:00:00+00:00
         dayEndAt:
           type: string
           format: date-time
+          description: End of the displayed day window in UTC (ISO-8601)
+          example: 2026-06-18 21:00:00+00:00
         availabilityOverlayStatus:
           type: string
+          description: Status of the availability overlay (e.g. AVAILABLE, UNAVAILABLE, SKIPPED)
+          example: AVAILABLE
         warnings:
           type: array
+          description: Non-fatal warnings generated while assembling the view
+          example:
+          - HR availability data was unavailable
           items:
             type: string
         resources:
           type: array
+          description: Resources and their scheduled events
           items:
             $ref: '#/components/schemas/ScheduleResourceView'
+      required:
+      - date
+      - dayEndAt
+      - dayStartAt
+      - locationId
+      - resources
+      - viewGeneratedAt
     CancelAppointmentRequest:
       type: object
+      description: Request to cancel an existing appointment with a mandatory reason code
       properties:
         cancellationReason:
           type: string
+          description: Mandatory cancellation reason code
           enum:
           - CUSTOMER_REQUEST
           - TECHNICIAN_UNAVAILABLE
           - WEATHER
           - VEHICLE_NOT_READY
           - OTHER
+          example: CUSTOMER_REQUEST
         notes:
           type: string
+          description: Optional free-text notes explaining the cancellation
+          example: Customer rescheduled to next week
+          maxLength: 1000
+          minLength: 0
       required:
       - cancellationReason
   securitySchemes:

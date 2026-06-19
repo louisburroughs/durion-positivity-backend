@@ -1,7 +1,11 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.positivity.workorder.internal.entity.Estimate;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -23,87 +27,123 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Response DTO for estimates")
 public class EstimateResponse {
 
-    @Schema(description = "Unique identifier for the estimate", example = "550e8400-e29b-41d4-a716-446655440000")
+    @Schema(
+            description = "Unique identifier for the estimate",
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = REQUIRED)
+    @NotNull
     private UUID id;
 
-    @Schema(description = "Estimate number", example = "EST-2024-1000")
+    @Schema(description = "Estimate number", example = "EST-2024-1000", requiredMode = REQUIRED)
+    @NotNull
     private String estimateNumber;
 
-    @Schema(description = "Customer ID", example = "550e8400-e29b-41d4-a716-446655440001")
+    @Schema(description = "Customer ID", example = "550e8400-e29b-41d4-a716-446655440001", requiredMode = NOT_REQUIRED)
     private UUID customerId;
 
-    @Schema(description = "Vehicle ID", example = "550e8400-e29b-41d4-a716-446655440002")
+    @Schema(description = "Vehicle ID", example = "550e8400-e29b-41d4-a716-446655440002", requiredMode = NOT_REQUIRED)
     private UUID vehicleId;
 
-    @Schema(description = "Location ID", example = "550e8400-e29b-41d4-a716-446655440003")
+    @Schema(description = "Location ID", example = "550e8400-e29b-41d4-a716-446655440003", requiredMode = NOT_REQUIRED)
     private UUID locationId;
 
-    @Schema(description = "Currency UOM ID", example = "USD")
+    @Schema(description = "Currency UOM ID", example = "USD", requiredMode = NOT_REQUIRED)
     private String currencyUomId;
 
-    @Schema(description = "Tax region ID", example = "550e8400-e29b-41d4-a716-446655440004")
+    @Schema(description = "Tax region ID", example = "550e8400-e29b-41d4-a716-446655440004", requiredMode = NOT_REQUIRED)
     private UUID taxRegionId;
 
-    @Schema(description = "Estimate status", example = "DRAFT")
+    @Schema(description = "Estimate status", example = "DRAFT", requiredMode = REQUIRED)
+    @NotNull
     private String status;
 
-    @Schema(description = "Username who created the estimate", example = "john.doe")
+    @Schema(description = "Username who created the estimate", example = "john.doe", requiredMode = NOT_REQUIRED)
     private String createdByUserId;
 
-    @Schema(description = "Date and time the estimate was created")
+    @Schema(description = "Date and time the estimate was created", example = "2026-01-15T09:30:00Z", requiredMode = NOT_REQUIRED)
     private Instant createdAt;
 
-    @Schema(description = "Subtotal amount before tax", example = "150.00")
+    @Schema(description = "Subtotal amount before tax", example = "150.00", requiredMode = NOT_REQUIRED)
     private BigDecimal subtotal;
 
-    @Schema(description = "Tax amount", example = "12.38")
+    @Schema(description = "Tax amount", example = "12.38", requiredMode = NOT_REQUIRED)
     private BigDecimal taxAmount;
 
-    @Schema(description = "Total amount including tax", example = "162.38")
+    @Schema(description = "Total amount including tax", example = "162.38", requiredMode = NOT_REQUIRED)
     private BigDecimal total;
 
     // CAP:003 — Approval workflow fields
 
-    @Schema(description = "Date and time the estimate was submitted for approval")
+    @Schema(
+            description = "Date and time the estimate was submitted for approval",
+            example = "2026-01-15T09:30:00",
+            requiredMode = NOT_REQUIRED)
     private LocalDateTime submittedAt;
 
-    @Schema(description = "Username who submitted the estimate for approval", example = "john.doe")
+    @Schema(
+            description = "Username who submitted the estimate for approval",
+            example = "john.doe",
+            requiredMode = NOT_REQUIRED)
     private String submittedBy;
 
-    @Schema(description = "Date and time the approval window expires")
+    @Schema(
+            description = "Date and time the approval window expires",
+            example = "2026-01-15T09:30:00",
+            requiredMode = NOT_REQUIRED)
     private LocalDateTime expiresAt;
 
-    @Schema(description = "Date and time the estimate was approved")
+    @Schema(
+            description = "Date and time the estimate was approved",
+            example = "2026-01-15T09:30:00",
+            requiredMode = NOT_REQUIRED)
     private LocalDateTime approvedAt;
 
-    @Schema(description = "Customer UUID who approved the estimate", example = "550e8400-e29b-41d4-a716-446655440005")
+    @Schema(
+            description = "Customer UUID who approved the estimate",
+            example = "550e8400-e29b-41d4-a716-446655440005",
+            requiredMode = NOT_REQUIRED)
     private UUID approvedBy;
 
-    @Schema(description = "Base64-encoded signature image")
+    @Schema(description = "Base64-encoded signature image", example = "iVBORw0KGgo=", requiredMode = NOT_REQUIRED)
     private String signatureData;
 
-    @Schema(description = "MIME type of the signature image", example = "image/png")
+    @Schema(description = "MIME type of the signature image", example = "image/png", requiredMode = NOT_REQUIRED)
     private String signatureMimeType;
 
-    @Schema(description = "Name of person who signed")
+    @Schema(description = "Name of person who signed", example = "Jane Customer", requiredMode = NOT_REQUIRED)
     private String signerName;
 
-    @Schema(description = "Additional notes provided at approval time")
+    @Schema(
+            description = "Additional notes provided at approval time",
+            example = "Customer approved all items",
+            requiredMode = NOT_REQUIRED)
     private String approvalNotes;
 
-    @Schema(description = "Purchase order number for commercial accounts", example = "PO-2024-12345")
+    @Schema(
+            description = "Purchase order number for commercial accounts",
+            example = "PO-2024-12345",
+            requiredMode = NOT_REQUIRED)
     private String purchaseOrderNumber;
 
-    @Schema(description = "Optimistic locking version")
+    @Schema(description = "Optimistic locking version", example = "2", requiredMode = NOT_REQUIRED)
     private Integer version;
 
-    @Schema(description = "CRM party identifier", example = "01952f4e-0000-7000-8000-000000000001")
+    @Schema(
+            description = "CRM party identifier",
+            example = "01952f4e-0000-7000-8000-000000000001",
+            requiredMode = NOT_REQUIRED)
     private String crmPartyId;
 
-    @Schema(description = "CRM vehicle identifier", example = "01952f4e-0000-7000-8000-000000000002")
+    @Schema(
+            description = "CRM vehicle identifier",
+            example = "01952f4e-0000-7000-8000-000000000002",
+            requiredMode = NOT_REQUIRED)
     private String crmVehicleId;
 
-    @Schema(description = "List of CRM contact identifiers")
+    @Schema(
+            description = "List of CRM contact identifiers",
+            example = "[\"01952f4e-0000-7000-8000-000000000003\"]",
+            requiredMode = NOT_REQUIRED)
     private List<String> crmContactIds;
 
     /**

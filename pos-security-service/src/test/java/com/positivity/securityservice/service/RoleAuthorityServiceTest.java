@@ -254,4 +254,68 @@ class RoleAuthorityServiceTest {
 
         assertThat(authorities).contains("ROLE_CSR").noneMatch(a -> a.contains("null"));
     }
+
+    @Test
+    void expandRolesToAuthorities_adminIncludesPromotionRedemptionAndTimeEntryApprovalPermissions() {
+        Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(Set.of("ADMIN"));
+
+        assertThat(authorities)
+                .contains("ROLE_ADMIN")
+                .contains(
+                        "pricing:promotion:view",
+                        "pricing:promotion:manage",
+                        "pricing:promotion:apply",
+                        "crm:promotion_redemption:record",
+                        "crm:promotion_redemption:view",
+                        "workorder:timeEntry:approve",
+                        "workorder:timeEntry:reject");
+    }
+
+    @Test
+    void expandRolesToAuthorities_managerIncludesPromotionAndTimeEntryApprovalPermissions() {
+        for (String role : Set.of("MANAGER", "GENERAL_MANAGER")) {
+            assertThat(roleAuthorityService.expandRolesToAuthorities(Set.of(role)))
+                    .as("role %s promotion and time-entry approval grant", role)
+                    .contains(
+                            "pricing:promotion:view",
+                            "pricing:promotion:manage",
+                            "pricing:promotion:apply",
+                            "workorder:timeEntry:approve",
+                            "workorder:timeEntry:reject");
+        }
+    }
+
+    @Test
+    void expandRolesToAuthorities_csrIncludesPromotionRedemptionPermissions() {
+        Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(Set.of("CSR"));
+
+        assertThat(authorities)
+                .contains("ROLE_CSR")
+                .contains(
+                        "crm:promotion_redemption:record",
+                        "crm:promotion_redemption:view",
+                        // #704: CSR views active promotions during a sale
+                        "pricing:promotion:view");
+    }
+
+    @Test
+    void expandRolesToAuthorities_locationManagerIncludesTimeEntryApprovalPermissions() {
+        Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(Set.of("LOCATION_MANAGER"));
+
+        assertThat(authorities)
+                .contains("ROLE_LOCATION_MANAGER")
+                .contains("workorder:timeEntry:approve", "workorder:timeEntry:reject");
+    }
+
+    @Test
+    void expandRolesToAuthorities_serviceAdvisorIncludesPromotionViewAndTimeEntryApproval() {
+        Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(Set.of("SERVICE_ADVISOR"));
+
+        assertThat(authorities)
+                .contains("ROLE_SERVICE_ADVISOR")
+                .contains(
+                        "pricing:promotion:view",
+                        "workorder:timeEntry:approve",
+                        "workorder:timeEntry:reject");
+    }
 }

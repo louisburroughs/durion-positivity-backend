@@ -23,7 +23,7 @@ public final class DownstreamPermissionCatalog {
      * {@code PermissionCode.CATALOG_VERSION}.
      * Updated automatically by {@code scripts/generate-permissions.py --sync}.
      */
-    public static final int CATALOG_VERSION = 10;
+    public static final int CATALOG_VERSION = 13;
 
     /**
      * Index-to-authority mapping. Entry at position N is the {@code PERM_*}-prefixed
@@ -366,7 +366,30 @@ public final class DownstreamPermissionCatalog {
         "PERM_people:timeException:create",                  // 324
         "PERM_people:timeException:resolve",                 // 325
         "PERM_people:timeException:view",                    // 326
-        "PERM_workorder:operationalContext:override"         // 327
+        "PERM_workorder:operationalContext:override",         // 327
+
+        // ── People timekeeping approval (bits 328–330) ────────────────────────
+        "PERM_people:timekeeping:approve",                   // 328
+        "PERM_people:timekeeping:reject",                    // 329
+        "PERM_people:timekeeping:view",                      // 330
+
+        // ── New batch (bits 331–337) ──────────────────────────────────────────
+        "PERM_Promotion:Apply",                              // 331
+        "PERM_Promotion:Manage",                             // 332
+        "PERM_Promotion:RecordRedemption",                   // 333
+        "PERM_Promotion:View",                               // 334
+        "PERM_Promotion:ViewRedemption",                     // 335
+        "PERM_TimeEntry:Approve",                            // 336
+        "PERM_TimeEntry:Reject",                             // 337
+
+        // ── New batch (bits 338–344) ──────────────────────────────────────────
+        "PERM_crm:promotion_redemption:record",              // 338
+        "PERM_crm:promotion_redemption:view",                // 339
+        "PERM_pricing:promotion:apply",                      // 340
+        "PERM_pricing:promotion:manage",                     // 341
+        "PERM_pricing:promotion:view",                       // 342
+        "PERM_workorder:timeEntry:approve",                  // 343
+        "PERM_workorder:timeEntry:reject"                   // 344
     };
 
     public static String authorityForBit(int bitIndex) {
