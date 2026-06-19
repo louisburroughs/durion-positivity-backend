@@ -25,6 +25,19 @@ public interface CustomerService {
     Page<CustomerDTO> getAllCustomers(Pageable pageable);
 
     /**
+     * Searches customers by name and/or email for scalable server-side typeahead.
+     * At least one of {@code name}/{@code email} should be non-blank; when both are
+     * blank the implementation returns an empty page (callers should use
+     * {@link #getAllCustomers(Pageable)} for an unfiltered listing).
+     *
+     * @param name     case-insensitive partial name filter (nullable)
+     * @param email    case-insensitive email filter (nullable)
+     * @param pageable pagination information
+     * @return page of matching customers as DTOs
+     */
+    Page<CustomerDTO> searchCustomers(String name, String email, Pageable pageable);
+
+    /**
      * Retrieves a customer by ID as DTO.
      *
      * @param id the customer ID

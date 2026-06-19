@@ -46,7 +46,9 @@ public class CustomerController {
     @Operation(
             summary = "Get all customers",
             description =
-                    "Retrieve a paginated list of customers by type (PERSON or COMMERCIAL). Defaults to PERSON customers if no type specified.")
+                    "Retrieve a paginated list of customers by type (PERSON or COMMERCIAL). Defaults to PERSON customers"
+                            + " if no type specified. When a name and/or email filter is supplied, performs a"
+                            + " server-side search instead of an unfiltered listing (scalable typeahead).")
     @ApiResponse(responseCode = "200", description = "Page of customers returned successfully.")
     @GetMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -57,16 +59,25 @@ public class CustomerController {
             @Parameter(description = "Customer type filter: PERSON or COMMERCIAL", example = "PERSON")
                     @RequestParam(required = false, defaultValue = "PERSON")
                     String customerType,
+            @Parameter(description = "Case-insensitive partial name filter for typeahead search", example = "doe")
+                    @RequestParam(required = false)
+                    String name,
+            @Parameter(description = "Case-insensitive email filter for typeahead search", example = "jdoe@acme.com")
+                    @RequestParam(required = false)
+                    String email,
             @Parameter(description = "Pagination parameters (page, size, sort)")
                     @PageableDefault(size = 20, sort = "customerNumber")
                     Pageable pageable) {
-        log.info("Fetching customers of type: {} with paging: {}", customerType, pageable);
+        CustomerService service = COMMERCIAL.equalsIgnoreCase(customerType) ? commercialService : personService;
 
-        if (COMMERCIAL.equalsIgnoreCase(customerType)) {
-            return commercialService.getAllCustomers(pageable);
-        } else {
-            return personService.getAllCustomers(pageable);
+        boolean searching = (name != null && !name.isBlank()) || (email != null && !email.isBlank());
+        if (searching) {
+            log.info("Searching {} customers by name={} email={} with paging: {}", customerType, name, email, pageable);
+            return service.searchCustomers(name, email, pageable);
         }
+
+        log.info("Fetching customers of type: {} with paging: {}", customerType, pageable);
+        return service.getAllCustomers(pageable);
     }
 
     @Operation(summary = "Get customer by ID", description = "Retrieve a customer by their unique ID.")

@@ -80,6 +80,26 @@ public class CommercialPartyServiceImpl implements CustomerService {
     }
 
     /**
+     * Searches commercial customers by legal name. Commercial parties hold no local
+     * email, so an email-only query yields an empty page.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CustomerDTO> searchCustomers(String name, String email, @NonNull Pageable pageable) {
+        boolean hasName = name != null && !name.isBlank();
+        if (!hasName) {
+            // Commercial parties have no locally-searchable email; nothing to match.
+            return new PageImpl<>(List.of(), pageable, 0);
+        }
+        List<CustomerDTO> matches = commercialRepository.findByLegalNameContaining(name.trim()).stream()
+                .map(this::toDTO)
+                .toList();
+        int from = Math.min((int) pageable.getOffset(), matches.size());
+        int to = Math.min(from + pageable.getPageSize(), matches.size());
+        return new PageImpl<>(matches.subList(from, to), pageable, matches.size());
+    }
+
+    /**
      * Retrieves a customer by ID as DTO.
      *
      * @param id the customer ID
@@ -181,6 +201,7 @@ public class CommercialPartyServiceImpl implements CustomerService {
         PartyType customerType = determineCustomerType(entity);
         return CustomerDTO.builder()
                 .id(entity.getPartyId())
+                .partyId(entity.getPartyId())
                 .customerNumber(entity.getCustomerNumber())
                 .lastName(entity.getLegalName())
                 .firstName(entity.getDisplayName())

@@ -353,6 +353,31 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
     @Override
     public java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary>
             collectVehiclesForParty(CommercialParty party) {
+        return collectVehicleSummaries(party);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary>>
+            findVehiclesForCustomer(@NonNull UUID customerId) {
+        log.debug("Listing vehicles for customer: {}", customerId);
+        AbstractParty party = personPartyRepository
+                .findById(customerId)
+                .map(p -> (AbstractParty) p)
+                .or(() -> commercialPartyRepository.findById(customerId).map(p -> (AbstractParty) p))
+                .orElse(null);
+        if (party == null) {
+            return Optional.empty();
+        }
+        return Optional.of(collectVehicleSummaries(party));
+    }
+
+    /**
+     * Resolves the VIN set of any party to vehicle summaries, dropping VINs the
+     * vehicle-inventory service cannot resolve.
+     */
+    private java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary>
+            collectVehicleSummaries(AbstractParty party) {
         return party.getVehicleVins().stream()
                 .map(this::fetchVehicleSummaryByVin)
                 .filter(java.util.Objects::nonNull)
