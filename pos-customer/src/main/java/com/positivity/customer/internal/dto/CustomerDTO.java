@@ -28,6 +28,13 @@ public class CustomerDTO {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private UUID id;
 
+    @Schema(
+            description = "CRM party identifier. Equal to id; exposed explicitly so callers can pass it to the CRM"
+                    + " snapshot endpoints (GET /v1/crm/snapshot/party/{partyId}) without assuming the id mapping.",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private UUID partyId;
+
     @Size(max = 50)
     @Schema(
             description = "Unique customer number",
@@ -37,18 +44,12 @@ public class CustomerDTO {
 
     @NotBlank
     @Size(max = 100)
-    @Schema(
-            description = "Last name of the customer",
-            example = "Doe",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Last name of the customer", example = "Doe", requiredMode = Schema.RequiredMode.REQUIRED)
     private String lastName;
 
     @NotBlank
     @Size(max = 100)
-    @Schema(
-            description = "First name of the customer",
-            example = "John",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "First name of the customer", example = "John", requiredMode = Schema.RequiredMode.REQUIRED)
     private String firstName;
 
     @Size(max = 255)

@@ -156,6 +156,46 @@ public class CrmVehiclesController {
         return ResponseEntity.ok(response);
     }
 
+    @Operation(
+            summary = "List vehicles for customer",
+            description = "Retrieve all vehicle summaries (vehicleId, VIN, make/model/year) associated with a customer."
+                    + " Returns the vehicle UUIDs the frontend needs to build estimates for a given Durion customer.")
+    @ApiResponses(
+            value = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Vehicles listed (possibly empty)",
+                        content =
+                                @Content(
+                                        array =
+                                                @io.swagger.v3.oas.annotations.media.ArraySchema(
+                                                        schema =
+                                                                @Schema(
+                                                                        implementation =
+                                                                                com.positivity.customer.internal.dto
+                                                                                        .snapshot.CrmSnapshotDTO
+                                                                                        .VehicleSummary.class)))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Forbidden - insufficient permissions",
+                        content = @Content),
+                @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content)
+            })
+    @GetMapping("/{customerId}/vehicles")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {CrmPermissionRegistry.VEHICLE_VIEW})
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_VIEW + "')")
+    public ResponseEntity<java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary>>
+            listVehiclesForCustomer(
+                    @Parameter(description = "Customer ID", required = true) @PathVariable UUID customerId) {
+        log.info("Listing vehicles for customer: {}", customerId);
+        return crmVehicleService
+                .findVehiclesForCustomer(customerId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @Operation(summary = "Get vehicle for customer", description = "Retrieve a specific vehicle for a given customer")
     @ApiResponses(
             value = {

@@ -484,7 +484,7 @@ paths:
       tags:
       - Customer API
       summary: Get all customers
-      description: Retrieve a paginated list of customers by type (PERSON or COMMERCIAL). Defaults to PERSON customers if no type specified.
+      description: Retrieve a paginated list of customers by type (PERSON or COMMERCIAL). Defaults to PERSON customers if no type specified. When a name and/or email filter is supplied, performs a server-side search instead of an unfiltered listing (scalable typeahead).
       operationId: getAllCustomers
       parameters:
       - name: customerType
@@ -495,6 +495,20 @@ paths:
           type: string
           default: PERSON
         example: PERSON
+      - name: name
+        in: query
+        description: Case-insensitive partial name filter for typeahead search
+        required: false
+        schema:
+          type: string
+        example: doe
+      - name: email
+        in: query
+        description: Case-insensitive email filter for typeahead search
+        required: false
+        schema:
+          type: string
+        example: jdoe@acme.com
       - name: pageable
         in: query
         description: Pagination parameters (page, size, sort)
@@ -538,6 +552,38 @@ paths:
       x-required-permissions:
       - crm:party:create
   /v1/crm/{customerId}/vehicles:
+    get:
+      tags:
+      - CRM Vehicles
+      summary: List vehicles for customer
+      description: Retrieve all vehicle summaries (vehicleId, VIN, make/model/year) associated with a customer. Returns the vehicle UUIDs the frontend needs to build estimates for a given Durion customer.
+      operationId: listVehiclesForCustomer
+      parameters:
+      - name: customerId
+        in: path
+        description: Customer ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Vehicles listed (possibly empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VehicleSummary'
+        '403':
+          description: Forbidden - insufficient permissions
+        '404':
+          description: Customer not found
+      security:
+      - bearerAuth:
+        - crm:vehicle:view
+      x-required-permissions:
+      - crm:vehicle:view
     post:
       tags:
       - CRM Vehicles
@@ -1616,6 +1662,11 @@ components:
           type: string
           format: uuid
           description: Unique identifier of the customer
+          example: 01960003-0000-7000-8000-000000000001
+        partyId:
+          type: string
+          format: uuid
+          description: CRM party identifier. Equal to id; exposed explicitly so callers can pass it to the CRM snapshot endpoints (GET /v1/crm/snapshot/party/{partyId}) without assuming the id mapping.
           example: 01960003-0000-7000-8000-000000000001
         customerNumber:
           type: string
@@ -3102,6 +3153,37 @@ components:
           type: boolean
         unsorted:
           type: boolean
+    VehicleSummary:
+      type: object
+      description: Vehicle summary within a CRM snapshot
+      properties:
+        vehicleId:
+          type: string
+          description: Identifier of the vehicle
+          example: 01960003-0000-7000-8000-000000000030
+        vin:
+          type: string
+          description: Vehicle Identification Number
+          example: 1HGCM82633A004352
+        licensePlate:
+          type: string
+          description: License plate
+          example: ABC-1234
+        make:
+          type: string
+          description: Vehicle make
+          example: Ford
+        model:
+          type: string
+          description: Vehicle model
+          example: Transit 250
+        year:
+          type: integer
+          format: int32
+          description: Model year
+          example: 2019
+      required:
+      - vehicleId
     AccountSummary:
       type: object
       description: Account summary surfaced in a CRM snapshot
@@ -3315,37 +3397,6 @@ components:
       - snapshotId
       - stale
       - version
-    VehicleSummary:
-      type: object
-      description: Vehicle summary within a CRM snapshot
-      properties:
-        vehicleId:
-          type: string
-          description: Identifier of the vehicle
-          example: 01960003-0000-7000-8000-000000000030
-        vin:
-          type: string
-          description: Vehicle Identification Number
-          example: 1HGCM82633A004352
-        licensePlate:
-          type: string
-          description: License plate
-          example: ABC-1234
-        make:
-          type: string
-          description: Vehicle make
-          example: Ford
-        model:
-          type: string
-          description: Vehicle model
-          example: Transit 250
-        year:
-          type: integer
-          format: int32
-          description: Model year
-          example: 2019
-      required:
-      - vehicleId
     ContactPointDto:
       type: object
       description: Contact point details

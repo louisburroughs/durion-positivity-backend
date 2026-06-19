@@ -63,6 +63,42 @@ public class PersonPartyServiceImpl implements CustomerService {
     }
 
     /**
+     * Searches person customers by name and/or email. Names and emails live in
+     * pos-people (ADR-0015 I2; issue #684), so the search delegates to
+     * {@link PeopleClient#searchPersons(String)} and maps the resolved person ids
+     * back to local person parties. Email filtering is applied client-side against
+     * the resolved identities.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CustomerDTO> searchCustomers(String name, String email, @NonNull Pageable pageable) {
+        boolean hasName = name != null && !name.isBlank();
+        boolean hasEmail = email != null && !email.isBlank();
+        String query = hasName ? name.trim() : (hasEmail ? email.trim() : null);
+        if (query == null) {
+            return new PageImpl<>(List.of(), pageable, 0);
+        }
+
+        String emailNeedle = hasEmail ? email.trim().toLowerCase() : null;
+        List<CustomerDTO> matches = new ArrayList<>();
+        for (PeopleClient.PersonIdentity identity : peopleClient.searchPersons(query)) {
+            if (identity.id() == null) {
+                continue;
+            }
+            if (emailNeedle != null
+                    && identity.emails().stream()
+                            .noneMatch(e -> e != null && e.toLowerCase().contains(emailNeedle))) {
+                continue;
+            }
+            customerRepository.findByPersonId(identity.id()).ifPresent(party -> matches.add(toDTO(party, identity)));
+        }
+
+        int from = Math.min((int) pageable.getOffset(), matches.size());
+        int to = Math.min(from + pageable.getPageSize(), matches.size());
+        return new PageImpl<>(matches.subList(from, to), pageable, matches.size());
+    }
+
+    /**
      * Retrieves a customer by ID as DTO.
      *
      * @param id the customer ID
@@ -167,15 +203,24 @@ public class PersonPartyServiceImpl implements CustomerService {
      * @return the customer DTO
      */
     private CustomerDTO toDTO(PersonParty entity) {
-        PartyType customerType = determineCustomerType(entity);
         // Names from pos-people (sole source of truth, ADR-0015 I2; issue #684).
         PeopleClient.PersonIdentity identity = entity.getPersonId() != null
                 ? peopleClient
                         .fetchPersonIdentitiesQuietly(Set.of(entity.getPersonId()))
                         .get(entity.getPersonId())
                 : null;
+        return toDTO(entity, identity);
+    }
+
+    /**
+     * Builds a DTO from an entity and an already-resolved pos-people identity,
+     * avoiding a redundant identity fetch (used by name/email search).
+     */
+    private CustomerDTO toDTO(PersonParty entity, PeopleClient.PersonIdentity identity) {
+        PartyType customerType = determineCustomerType(entity);
         return CustomerDTO.builder()
                 .id(entity.getPartyId())
+                .partyId(entity.getPartyId())
                 .customerNumber(entity.getCustomerNumber())
                 .lastName(identity != null ? identity.lastName() : null)
                 .firstName(identity != null ? identity.firstName() : null)
