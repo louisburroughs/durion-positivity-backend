@@ -3,15 +3,20 @@ package com.positivity.people.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.people.internal.dto.InactivePersonActiveUserResponse;
 import com.positivity.people.internal.dto.LinkUserToPersonRequest;
 import com.positivity.people.internal.dto.PersonResponse;
 import com.positivity.people.internal.dto.UserPersonLinkResponse;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.UserPersonLink;
+import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.enums.UserLinkStatus;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.UserAlreadyLinkedException;
 import com.positivity.people.internal.exception.UserPersonLinkNotFoundException;
@@ -22,12 +27,14 @@ import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -211,5 +218,48 @@ class UserPersonLinkServiceTest {
         List<UUID> userIds = service.findUserIdsByPersonId(testPersonId2);
 
         assertThat(userIds).isEmpty();
+    }
+
+    @Test
+    void findActiveUsersForInactivePersons_mapsViolations() {
+        Person terminated = Person.builder()
+                .id(testPersonId)
+                .firstName("Tina")
+                .lastName("Gone")
+                .status(EmployeeStatus.TERMINATED)
+                .statusEffectiveAt(Instant.parse("2026-01-15T09:30:00Z"))
+                .build();
+        UserPersonLink link = new UserPersonLink();
+        link.setId(UUID.fromString("00000000-0000-0000-0000-0000000000aa"));
+        link.setUserId(testUserId);
+        link.setPerson(terminated);
+        link.setStatus(UserLinkStatus.ACTIVE);
+
+        when(linkRepository.findByStatusAndPerson_StatusIn(eq(UserLinkStatus.ACTIVE), anyCollection()))
+                .thenReturn(List.of(link));
+
+        List<InactivePersonActiveUserResponse> result = service.findActiveUsersForInactivePersons();
+
+        assertThat(result).hasSize(1);
+        InactivePersonActiveUserResponse row = result.get(0);
+        assertThat(row.getUserId()).isEqualTo(testUserId);
+        assertThat(row.getPersonId()).isEqualTo(testPersonId);
+        assertThat(row.getPersonStatus()).isEqualTo(EmployeeStatus.TERMINATED);
+        assertThat(row.getPersonStatusEffectiveAt()).isEqualTo(Instant.parse("2026-01-15T09:30:00Z"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void findActiveUsersForInactivePersons_queriesActiveLinksAndInactiveStatuses() {
+        when(linkRepository.findByStatusAndPerson_StatusIn(eq(UserLinkStatus.ACTIVE), anyCollection()))
+                .thenReturn(List.of());
+
+        assertThat(service.findActiveUsersForInactivePersons()).isEmpty();
+
+        ArgumentCaptor<Collection<EmployeeStatus>> captor = ArgumentCaptor.forClass(Collection.class);
+        verify(linkRepository).findByStatusAndPerson_StatusIn(eq(UserLinkStatus.ACTIVE), captor.capture());
+        assertThat(captor.getValue())
+                .containsExactlyInAnyOrder(
+                        EmployeeStatus.SUSPENDED, EmployeeStatus.TERMINATED, EmployeeStatus.DISABLED);
     }
 }
