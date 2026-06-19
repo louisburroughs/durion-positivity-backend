@@ -16,7 +16,6 @@ import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PartyRelationshipRole;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
-import com.positivity.customer.internal.repository.ContactPointRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PartyRelationshipService;
@@ -72,9 +71,6 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
     @Autowired
     private PartyRelationshipRepository partyRelationshipRepository;
 
-    @Autowired
-    private ContactPointRepository contactPointRepository;
-
     private CommercialParty testParty;
     private PersonParty testPerson1;
     private PersonParty testPerson2;
@@ -83,7 +79,6 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
     void setUp() {
         // Clean up relationships first (due to FK constraints)
         partyRelationshipRepository.deleteAll();
-        contactPointRepository.deleteAll();
         personRepository.deleteAll();
         partyRepository.deleteAll();
 

@@ -108,17 +108,58 @@ public class PeopleClient {
         Map<UUID, PersonIdentity> result = new HashMap<>();
         for (PersonView p : people) {
             if (p.getId() != null) {
-                List<ContactPoint> points = p.getContactPoints() == null
-                        ? List.of()
-                        : p.getContactPoints().stream()
-                                .map(cp -> new ContactPoint(cp.getContactType(), cp.getValue(), cp.isPrimary()))
-                                .toList();
-                result.put(
-                        p.getId(),
-                        new PersonIdentity(p.getId(), p.getFirstName(), p.getLastName(), p.getPrimaryEmail(), points));
+                result.put(p.getId(), toIdentity(p));
             }
         }
         return result;
+    }
+
+    /**
+     * Text-search canonical persons in pos-people (source of truth, ADR-0015 I2).
+     * Delegates to {@code GET /v1/people?q=}, which matches firstName, lastName,
+     * primaryEmail and username case-insensitively. Resilient: returns an empty
+     * list if pos-people is unreachable.
+     *
+     * @param q the search term
+     * @return matching canonical identities (empty if blank query or on failure)
+     */
+    @NonNull
+    public List<PersonIdentity> searchPersons(String q) {
+        if (q == null || q.isBlank()) {
+            return List.of();
+        }
+        try {
+            PersonView[] people = restClient
+                    .get()
+                    .uri(uriBuilder ->
+                            uriBuilder.path("/v1/people").queryParam("q", q).build())
+                    .header("X-User", "pos-customer")
+                    .header("X-Authorities", "people:person:view")
+                    .retrieve()
+                    .body(PersonView[].class);
+            if (people == null) {
+                return List.of();
+            }
+            List<PersonIdentity> result = new java.util.ArrayList<>();
+            for (PersonView p : people) {
+                if (p.getId() != null) {
+                    result.add(toIdentity(p));
+                }
+            }
+            return result;
+        } catch (Exception exception) {
+            log.warn("pos-people search failed for q={}: {}", q, exception.getMessage());
+            return List.of();
+        }
+    }
+
+    private PersonIdentity toIdentity(PersonView p) {
+        List<ContactPoint> points = p.getContactPoints() == null
+                ? List.of()
+                : p.getContactPoints().stream()
+                        .map(cp -> new ContactPoint(cp.getContactType(), cp.getValue(), cp.isPrimary()))
+                        .toList();
+        return new PersonIdentity(p.getId(), p.getFirstName(), p.getLastName(), p.getPrimaryEmail(), points);
     }
 
     /**

@@ -58,7 +58,7 @@ public class CustomerController {
                     @RequestParam(required = false, defaultValue = "PERSON")
                     String customerType,
             @Parameter(description = "Pagination parameters (page, size, sort)")
-                    @PageableDefault(size = 20, sort = "lastName")
+                    @PageableDefault(size = 20, sort = "customerNumber")
                     Pageable pageable) {
         log.info("Fetching customers of type: {} with paging: {}", customerType, pageable);
 

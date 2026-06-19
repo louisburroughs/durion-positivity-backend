@@ -5,13 +5,10 @@ import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
 import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
 import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
 import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.entity.ContactPoint;
 import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
-import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PartyRelationshipRole;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
-import com.positivity.customer.internal.repository.ContactPointRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PartyRelationshipService;
@@ -58,7 +55,6 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
     private final PartyRelationshipRepository partyRelationshipRepository;
     private final CommercialPartyRepository partyRepository;
     private final PersonPartyRepository personRepository;
-    private final ContactPointRepository contactPointRepository;
     private final PeopleClient peopleClient;
     private final Clock clock;
 
@@ -218,25 +214,15 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
                     PeopleClient.PersonIdentity identity =
                             person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
 
-                    // Email/phone from pos-people (source of truth, ADR-0015 I2);
-                    // fall back to the local contact_point copy when absent.
+                    // Email/phone/name from pos-people (sole source of truth, ADR-0015 I2; issue #684).
                     String email = identity != null && !identity.emails().isEmpty()
                             ? identity.emails().get(0)
-                            : getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.EMAIL);
-                    String phone;
-                    if (identity != null && !identity.phones().isEmpty()) {
-                        phone = identity.phones().get(0);
-                    } else {
-                        phone = getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.PHONE_MOBILE);
-                        if (phone == null) {
-                            phone = getPrimaryContactValue(person.getPersonPartyId(), ContactPointType.PHONE_WORK);
-                        }
-                    }
-
+                            : null;
+                    String phone = identity != null && !identity.phones().isEmpty()
+                            ? identity.phones().get(0)
+                            : null;
                     String displayName =
-                            identity != null && !identity.displayName().isBlank()
-                                    ? identity.displayName()
-                                    : person.getDisplayName();
+                            identity != null && !identity.displayName().isBlank() ? identity.displayName() : null;
 
                     return GetCommercialAccountContactsResponse.ContactWithRole.builder()
                             .relationshipId(rel.getPartyRelationshipId())
@@ -330,17 +316,5 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
 
         int demoted = partyRelationshipRepository.demoteExistingPrimaryBillingContact(partyId, relationshipId);
         log.info("Designated relationship {} as primary billing contact, demoted {} existing", relationshipId, demoted);
-    }
-
-    private String getPrimaryContactValue(UUID personId, ContactPointType type) {
-        ContactPoint primary =
-                contactPointRepository.findFirstByPersonPartyIdAndContactTypeAndIsPrimaryTrueOrderByCreatedAtAsc(
-                        personId, type);
-        if (primary != null) {
-            return primary.getValue();
-        }
-        // Fall back to first of that type
-        List<ContactPoint> contacts = contactPointRepository.findByPersonPartyIdAndContactType(personId, type);
-        return contacts.isEmpty() ? null : contacts.get(0).getValue();
     }
 }
