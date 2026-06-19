@@ -4,6 +4,7 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppC
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
@@ -17,6 +18,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -40,8 +43,16 @@ abstract class AbstractWorkexecContractBehaviorIT {
     private static final UUID TEST_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String TEST_USERNAME = "workorder-test-user";
 
-    private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
+    private static final List<SimpleGrantedAuthority> DEFAULT_TEST_AUTHORITIES = List.of(
             new SimpleGrantedAuthority("workorder:labor:view"), new SimpleGrantedAuthority("workorder:labor:add"));
+
+    /** Mutable per-test authority set; reset to the default before each test. Read live by the auth filter. */
+    protected final List<SimpleGrantedAuthority> testAuthorities = new ArrayList<>(DEFAULT_TEST_AUTHORITIES);
+
+    /** Grant an additional authority to the current test's authenticated principal. */
+    protected void grantAuthority(String authority) {
+        testAuthorities.add(new SimpleGrantedAuthority(authority));
+    }
 
     protected MockMvc mockMvc;
 
@@ -71,6 +82,8 @@ abstract class AbstractWorkexecContractBehaviorIT {
 
     @BeforeEach
     void setUpBaseContractTest() {
+        testAuthorities.clear();
+        testAuthorities.addAll(DEFAULT_TEST_AUTHORITIES);
         mockMvc = webAppContextSetup(webApplicationContext)
                 .addFilters(new OncePerRequestFilter() {
                     @Override
@@ -87,8 +100,8 @@ abstract class AbstractWorkexecContractBehaviorIT {
                             }
                         }
 
-                        var authentication =
-                                new UsernamePasswordAuthenticationToken(TEST_USERNAME, null, TEST_AUTHORITIES);
+                        var authentication = new UsernamePasswordAuthenticationToken(
+                                TEST_USERNAME, null, new ArrayList<>(testAuthorities));
                         authentication.setDetails(Map.of(
                                 GatewaySecurityConstants.DETAIL_USER_ID, userId,
                                 GatewaySecurityConstants.DETAIL_USERNAME, TEST_USERNAME));
@@ -127,6 +140,17 @@ abstract class AbstractWorkexecContractBehaviorIT {
                 .description("Contract labor")
                 .build();
         return workorderServiceRepository.save(service);
+    }
+
+    protected TechnicianAssignment seedCurrentAssignment(Workorder workorder, UUID technicianId) {
+        TechnicianAssignment assignment = TechnicianAssignment.builder()
+                .workorder(workorder)
+                .technicianId(technicianId)
+                .current(true)
+                .assignedAt(LocalDateTime.now())
+                .assignedBy(TEST_USERNAME)
+                .build();
+        return technicianAssignmentRepository.save(assignment);
     }
 
     protected void purgeTestData() {

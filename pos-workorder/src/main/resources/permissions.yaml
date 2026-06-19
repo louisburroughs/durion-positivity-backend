@@ -60,6 +60,8 @@ permissions:
     description: "View workorder invoices"
   - name: "workorder:labor:add"
     description: "Add labor entries"
+  - name: "workorder:labor:add_on_behalf"
+    description: "Start/record labor for a technician other than the authenticated actor (Manager only)"
   - name: "workorder:labor:view"
     description: "View labor entries"
   - name: "workorder:operationalContext:override"

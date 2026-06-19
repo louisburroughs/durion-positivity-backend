@@ -28,4 +28,20 @@ public class WorkexecTimerStartRequest {
     @JsonProperty("laborCode")
     @Schema(description = "Optional labor code associated with timer", example = "DIAG")
     private String laborCode;
+
+    @JsonProperty("technicianId")
+    @Schema(
+            description = "Optional technician whose labor this timer tracks. Omit to use the workorder's "
+                    + "current assignment, or yourself if the workorder is unassigned. Supplying a technician "
+                    + "other than yourself or the current assignee requires the 'workorder:labor:add_on_behalf' "
+                    + "authority and a reason.",
+            example = "550e8400-e29b-41d4-a716-446655440099")
+    private UUID technicianId;
+
+    @JsonProperty("reason")
+    @Schema(
+            description = "Required when starting a timer on behalf of a technician other than yourself "
+                    + "or the current assignee.",
+            example = "Lead starting timer for helper technician")
+    private String reason;
 }

@@ -204,8 +204,8 @@ public class WorkexecTimeTrackingController {
     @EmitEvent(id = "WORKEXEC_TIMER_START", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"workorder:labor:add"})
-    @PreAuthorize("hasAuthority('workorder:labor:add')")
+            scopes = {"workorder:labor:add", "workorder:labor:add_on_behalf"})
+    @PreAuthorize("hasAnyAuthority('workorder:labor:add','workorder:labor:add_on_behalf')")
     @Operation(summary = "Start timer", description = "Start a workexec timer entry for the authenticated mechanic")
     @ApiResponse(
             responseCode = "201",
@@ -341,7 +341,11 @@ public class WorkexecTimeTrackingController {
 
     private WorkexecTimeTrackingService.TimerStartRequest toTimerStartRequest(WorkexecTimerStartRequest request) {
         return new WorkexecTimeTrackingService.TimerStartRequest(
-                request.getWorkorderId(), request.getWorkorderItemId(), request.getLaborCode());
+                request.getWorkorderId(),
+                request.getWorkorderItemId(),
+                request.getLaborCode(),
+                request.getTechnicianId(),
+                request.getReason());
     }
 
     private WorkexecTimerEntryResponse toTimerEntryResponse(WorkexecTimeTrackingService.TimerEntry response) {

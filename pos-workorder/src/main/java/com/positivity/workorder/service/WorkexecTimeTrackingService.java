@@ -54,7 +54,8 @@ public interface WorkexecTimeTrackingService {
 
     record LaborPerformedResult(LaborPerformedResponse response, boolean replayed) {}
 
-    record TimerStartRequest(UUID workorderId, UUID workorderItemId, String laborCode) {}
+    record TimerStartRequest(
+            UUID workorderId, UUID workorderItemId, String laborCode, UUID technicianId, String reason) {}
 
     record TimerEntry(
             UUID timeEntryId,
