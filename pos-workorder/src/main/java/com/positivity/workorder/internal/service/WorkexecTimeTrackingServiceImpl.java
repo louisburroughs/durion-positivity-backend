@@ -236,7 +236,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                 .orElse(null);
 
         UUID trackedTechnicianId = resolveTrackedTechnician(request, actorPersonId, assignedTechnicianId);
-        authorizeAttribution(request, actorPersonId, assignedTechnicianId, trackedTechnicianId);
+        boolean onBehalf = authorizeAttribution(request, actorPersonId, assignedTechnicianId, trackedTechnicianId);
 
         // Uniqueness is a property of whose labor is tracked, not who initiated the timer.
         List<WorkorderLaborEntry> active =
@@ -257,6 +257,8 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                 .hoursWorked(BigDecimal.ZERO)
                 .notes(request.laborCode())
                 .createdBy(SecurityContextHelper.getCurrentUsername().orElse(SYSTEM_USER_ID))
+                .onBehalfReason(onBehalf ? request.reason() : null)
+                .actedByUserId(onBehalf ? actorPersonId : null)
                 .createdAt(Instant.now(clock))
                 .build();
 
@@ -281,10 +283,18 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
     }
 
     /**
-     * Base authority covers self-attribution or matching the current assignment. Attributing labor to
-     * anyone else is a manager-grade, audited on-behalf action requiring a reason.
+     * Authorize the labor attribution and report whether it is an on-behalf action.
+     *
+     * <p>The base authority ({@code workorder:labor:add}) covers attributing labor to yourself or to the
+     * workorder's current assignee — the latter is the intended default-attribution path, so a non-assignee
+     * may start a timer for the assigned technician without elevation. Attributing labor to any other
+     * technician requires {@code workorder:labor:add_on_behalf} plus a non-blank reason, and is recorded as
+     * an audited on-behalf entry.
+     *
+     * @return {@code true} when this is an on-behalf attribution (tracked technician differs from both the
+     *     actor and the current assignment); {@code false} for the base path.
      */
-    private static void authorizeAttribution(
+    private static boolean authorizeAttribution(
             WorkexecTimeTrackingService.TimerStartRequest request,
             UUID actorPersonId,
             @Nullable UUID assignedTechnicianId,
@@ -292,7 +302,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
         boolean baseAllowed =
                 trackedTechnicianId.equals(actorPersonId) || trackedTechnicianId.equals(assignedTechnicianId);
         if (baseAllowed) {
-            return;
+            return false;
         }
         if (!SecurityContextHelper.hasAuthority(PERMISSION_LABOR_ADD_ON_BEHALF)) {
             throw new AccessDeniedException(
@@ -302,6 +312,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
             throw new IllegalArgumentException(
                     "reason is required when starting a timer on behalf of another technician");
         }
+        return true;
     }
 
     @Transactional

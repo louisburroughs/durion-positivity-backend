@@ -1,5 +1,6 @@
 package com.positivity.workorder.contract;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -7,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -126,7 +129,8 @@ class WorkexecTimerContractBehaviorIT extends AbstractWorkexecContractBehaviorIT
                         .header("X-User-Id", "00000000-0000-0000-0000-0000000000bb")
                         .content(objectMapper.writeValueAsString(WorkexecContractPayloads.timerStartOnBehalfPayload(
                                 workorder.getId(), otherTech, null))))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
     }
 
     @Test
@@ -146,6 +150,39 @@ class WorkexecTimerContractBehaviorIT extends AbstractWorkexecContractBehaviorIT
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.mechanicId").value(otherTech.toString()));
+
+        // The on-behalf attribution is durably audited: reason + initiating actor are persisted.
+        List<WorkorderLaborEntry> entries =
+                laborEntryRepository.findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(otherTech);
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getOnBehalfReason()).isEqualTo("lead covering for helper");
+        assertThat(entries.get(0).getActedByUserId())
+                .isEqualTo(UUID.fromString("00000000-0000-0000-0000-0000000000bb"));
+    }
+
+    @Test
+    @DisplayName("AC8: actor starting own timer on a workorder assigned to another tech uses the base path")
+    void selfStartWhileDifferentTechAssignedUsesBasePath() throws Exception {
+        Workorder workorder = seedWorkorderInProgress();
+        UUID assignedTech = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        UUID actor = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+        seedCurrentAssignment(workorder, assignedTech);
+
+        // Actor attributes labor to themselves (helper logging own work) — allowed on base authority,
+        // not treated as on-behalf, even though a different technician is assigned.
+        mockMvc.perform(post("/v1/workexec/time-entries/timer/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-User-Id", actor.toString())
+                        .content(objectMapper.writeValueAsString(
+                                WorkexecContractPayloads.timerStartOnBehalfPayload(workorder.getId(), actor, null))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.mechanicId").value(actor.toString()));
+
+        List<WorkorderLaborEntry> entries =
+                laborEntryRepository.findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(actor);
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getOnBehalfReason()).isNull();
+        assertThat(entries.get(0).getActedByUserId()).isNull();
     }
 
     @Test

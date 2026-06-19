@@ -2690,7 +2690,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkexecTimerEntryResponse'
         '400':
-          description: Missing or invalid authenticated user id
+          description: Missing or invalid authenticated user id, or missing reason
+          content:
+            application/json:
+              schema:
+                type: object
+        '403':
+          description: Attributing labor to another technician without workorder:labor:add_on_behalf
           content:
             application/json:
               schema:
@@ -6548,6 +6554,8 @@ components:
           type: string
           description: Required when starting a timer on behalf of a technician other than yourself or the current assignee.
           example: Lead starting timer for helper technician
+          maxLength: 500
+          minLength: 0
       required:
       - workorderId
     LaborQuantity:

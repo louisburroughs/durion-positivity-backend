@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,6 +40,7 @@ public class WorkexecTimerStartRequest {
     private UUID technicianId;
 
     @JsonProperty("reason")
+    @Size(max = 500, message = "reason must not exceed 500 characters")
     @Schema(
             description = "Required when starting a timer on behalf of a technician other than yourself "
                     + "or the current assignee.",
