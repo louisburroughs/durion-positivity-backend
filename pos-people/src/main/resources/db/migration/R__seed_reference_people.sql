@@ -19,6 +19,17 @@ INSERT INTO timekeeping_policy (
 VALUES ('7b1f81a7-34fa-f0f9-7caf-a55541d36a60'::uuid, 'GLOBAL', NULL, 10, NOW(), 'seed-generator', NOW(), NOW())
 ON CONFLICT (timekeeping_policy_id) DO NOTHING;
 
+-- person (System Administrator) — admin.alpha's person record. Required so the
+-- guarded user_person_links insert below fires; without it admin.alpha is a User
+-- with no Person, violating ADR-0015 §3 (durion-positivity-backend#714).
+INSERT INTO person (id, first_name, last_name, legal_name, primary_email, status, status_effective_at, username, created_at, updated_at)
+VALUES (
+    '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid,
+    'System', 'Administrator', 'System Administrator',
+    'admin.alpha@durionpos.org', 'ACTIVE', NOW(), 'admin.alpha', NOW(), NOW()
+)
+ON CONFLICT (id) DO NOTHING;
+
 -- user_person_links (guarded by external person existence)
 DO $$
 BEGIN

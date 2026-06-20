@@ -43,9 +43,12 @@ VALUES ('190cbafe-4c1b-7e5f-768f-4b3c0d58a165'::uuid, 'TECHNICIAN', 'Canonical p
 ON CONFLICT (name) DO NOTHING;
 
 -- Users
-INSERT INTO users (id, username, password, enabled)
-VALUES ('d981cd20-55a1-b43c-9332-0ef2cd630e1a'::uuid, 'admin.alpha', '${seed_admin_password_hash}', TRUE) 
-ON CONFLICT (username) DO UPDATE SET password = EXCLUDED.password, enabled = EXCLUDED.enabled;
+-- person_id mirrors the authoritative pos-people user_person_links row (ADR-0043);
+-- required so admin.alpha's JWT carries a personId claim (ADR-0022) and is not a
+-- User without a Person (ADR-0015 §3; durion-positivity-backend#714).
+INSERT INTO users (id, username, password, enabled, person_id)
+VALUES ('d981cd20-55a1-b43c-9332-0ef2cd630e1a'::uuid, 'admin.alpha', '${seed_admin_password_hash}', TRUE, '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid)
+ON CONFLICT (username) DO UPDATE SET password = EXCLUDED.password, enabled = EXCLUDED.enabled, person_id = EXCLUDED.person_id;
 
 -- Permissions (derived from permissions.yaml)
 INSERT INTO permissions (id, name, description, domain, resource, action, registered_at, registered_by_service, version, bit_index)
