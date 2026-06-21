@@ -41,6 +41,17 @@ def block(text: str, table: str) -> str:
 
 # row tuple parser: top-level (...) groups, comma-split respecting quotes
 ROW_RE = re.compile(r"\(([^()]*)\)")
+UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def is_uuid(cell: str) -> bool:
+    """True only for a real UUID literal cell, e.g. '...'::uuid — rejects column
+    aliases like `customer_id` that appear in `... AS v(customer_id, vin)`."""
+    return UUID_RE.match(uuid_cell(cell)) is not None
+
+
+def is_quoted(cell: str) -> bool:
+    return "'" in cell
 
 
 def cells(row: str):
@@ -86,8 +97,9 @@ def main():
     dup_owner = 0
     for row in ROW_RE.findall(cv):
         c = cells(row)
-        if len(c) != 2 or "select" in row.lower():
-            continue  # skip the idempotency guard subquery
+        # skip guard subqueries and the `AS v(customer_id, vin)` column-alias tuple
+        if len(c) != 2 or "select" in row.lower() or not is_uuid(c[0]) or not is_quoted(c[1]):
+            continue
         cid, vin = c
         v = normalize(str_cell(vin))
         if v in owner:
@@ -99,8 +111,8 @@ def main():
     detail = {}  # vin -> (vehicle_id, make, model, year)
     for row in ROW_RE.findall(vp):
         c = cells(row)
-        if len(c) < 5 or "select" in row.lower():
-            continue
+        if len(c) < 5 or "select" in row.lower() or not is_uuid(c[0]) or not is_quoted(c[1]):
+            continue  # skip guard subqueries and the column-alias tuple
         vid, vin, make, model, year = c[0], c[1], c[2], c[3], c[4]
         v = normalize(str_cell(vin))
         detail[v] = (uuid_cell(vid), str_cell(make), str_cell(model), int_cell(year))
