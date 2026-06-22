@@ -1572,6 +1572,25 @@ paths:
         - people:userLink:view
       x-required-permissions:
       - people:userLink:view
+  /v1/people/user-links/inactive-person-active-user:
+    get:
+      tags:
+      - User-Person Linking API
+      summary: List active users linked to inactive persons
+      description: 'Compliance check (ADR-0015 §4): returns every ACTIVE user-person link whose linked person is in an inactive status (SUSPENDED, TERMINATED, DISABLED). Each row is a user that should have been disabled when the person was disabled/archived. Returns an empty list when none.'
+      operationId: findActiveUsersForInactivePersons
+      responses:
+        '200':
+          description: Offending links returned (possibly empty)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InactivePersonActiveUserResponse'
+      security:
+      - bearerAuth:
+        - people:userLink:view
+      x-required-permissions:
+      - people:userLink:view
   /v1/people/timekeeping/timekeeping-entries:
     get:
       tags:
@@ -3264,6 +3283,45 @@ components:
           example: jane.smith
       required:
       - id
+    InactivePersonActiveUserResponse:
+      type: object
+      description: An active user-person link whose linked person is in an inactive status (ADR-0015 §4 violation)
+      properties:
+        linkId:
+          type: string
+          format: uuid
+          description: User-person link identifier
+          example: 01960012-0000-7000-8000-000000000001
+        userId:
+          type: string
+          format: uuid
+          description: User account identifier with the still-active link
+          example: 01960010-0000-7000-8000-000000000001
+        personId:
+          type: string
+          format: uuid
+          description: Person identifier in an inactive status
+          example: 01960011-0000-7000-8000-000000000001
+        personStatus:
+          type: string
+          description: Inactive status of the linked person
+          enum:
+          - ACTIVE
+          - ON_LEAVE
+          - SUSPENDED
+          - TERMINATED
+          - DISABLED
+          example: TERMINATED
+        personStatusEffectiveAt:
+          type: string
+          format: date-time
+          description: When the person's status last became effective
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - linkId
+      - personId
+      - personStatus
+      - userId
     TimekeepingEntryDto:
       type: object
       description: Timekeeping entry summarizing a worked session pending or resolved for approval

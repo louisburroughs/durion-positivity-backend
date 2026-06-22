@@ -446,13 +446,15 @@ public enum PermissionCode {
 
     // ── Workorder (new) ────────────────────────────────────────────────────────
     WORKORDER__TIMEENTRY__APPROVE(343, "workorder:timeEntry:approve"),
-    WORKORDER__TIMEENTRY__REJECT(344, "workorder:timeEntry:reject");
+    WORKORDER__TIMEENTRY__REJECT(344, "workorder:timeEntry:reject"),
+    // ── Workorder (new) ────────────────────────────────────────────────────────
+    WORKORDER__LABOR__ADD_ON_BEHALF(345, "workorder:labor:add_on_behalf");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 13;
+    public static final int CATALOG_VERSION = 14;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

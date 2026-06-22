@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
@@ -33,6 +34,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +44,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
     private final Clock clock;
 
     private static final String SYSTEM_USER_ID = "system";
+    private static final String PERMISSION_LABOR_ADD_ON_BEHALF = "workorder:labor:add_on_behalf";
     private static final String IDEMPOTENCY_OPERATION_WORKEXEC_LABOR_PERFORMED = "workexec.labor.performed";
     private static final String IDEMPOTENCY_OPERATION_WORKEXEC_TIMER_START = "workexec.timer.start";
 
@@ -223,33 +226,39 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                     "INVALID_STATE", "Workorder is not in a timer-eligible state");
         }
 
-        technicianAssignmentRepository
-                .findByWorkorder_IdAndCurrentTrue(request.workorderId())
-                .ifPresent(assignment -> {
-                    if (!mechanicId.equals(assignment.getTechnicianId())) {
-                        throw new WorkexecTimeTrackingService.WorkexecConflictException(
-                                "INVALID_STATE", "Workorder is currently assigned to a different mechanic");
-                    }
-                });
+        // The authenticated initiator. May differ from the technician whose labor is tracked.
+        UUID actorPersonId = mechanicId;
 
+        // Current assignment is the default attribution target (shopmgmt system of record), not the actor.
+        UUID assignedTechnicianId = technicianAssignmentRepository
+                .findByWorkorder_IdAndCurrentTrue(request.workorderId())
+                .map(TechnicianAssignment::getTechnicianId)
+                .orElse(null);
+
+        UUID trackedTechnicianId = resolveTrackedTechnician(request, actorPersonId, assignedTechnicianId);
+        boolean onBehalf = authorizeAttribution(request, actorPersonId, assignedTechnicianId, trackedTechnicianId);
+
+        // Uniqueness is a property of whose labor is tracked, not who initiated the timer.
         List<WorkorderLaborEntry> active =
-                laborEntryRepository.findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(mechanicId);
+                laborEntryRepository.findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(trackedTechnicianId);
         if (!active.isEmpty()) {
             throw new WorkexecTimeTrackingService.WorkexecConflictException(
-                    "TIMER_ALREADY_ACTIVE", "Mechanic already has an active timer");
+                    "TIMER_ALREADY_ACTIVE", "Technician already has an active timer");
         }
 
         WorkorderServiceLine workorderService =
-                resolveOrCreateWorkorderService(workorder, request.workorderItemId(), mechanicId);
+                resolveOrCreateWorkorderService(workorder, request.workorderItemId(), trackedTechnicianId);
 
         WorkorderLaborEntry entry = WorkorderLaborEntry.builder()
                 .workorder(workorder)
                 .workorderService(workorderService)
-                .technicianId(mechanicId)
+                .technicianId(trackedTechnicianId)
                 .startTime(LocalDateTime.now(ZoneOffset.UTC))
                 .hoursWorked(BigDecimal.ZERO)
                 .notes(request.laborCode())
                 .createdBy(SecurityContextHelper.getCurrentUsername().orElse(SYSTEM_USER_ID))
+                .onBehalfReason(onBehalf ? request.reason() : null)
+                .actedByUserId(onBehalf ? actorPersonId : null)
                 .createdAt(Instant.now(clock))
                 .build();
 
@@ -260,6 +269,50 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
         }
 
         return new WorkexecTimeTrackingService.TimerStartResult(toTimerResponse(saved), false);
+    }
+
+    /** Resolve whose labor the timer tracks: explicit override, else current assignment, else self. */
+    private static UUID resolveTrackedTechnician(
+            WorkexecTimeTrackingService.TimerStartRequest request,
+            UUID actorPersonId,
+            @Nullable UUID assignedTechnicianId) {
+        if (request.technicianId() != null) {
+            return request.technicianId();
+        }
+        return assignedTechnicianId != null ? assignedTechnicianId : actorPersonId;
+    }
+
+    /**
+     * Authorize the labor attribution and report whether it is an on-behalf action.
+     *
+     * <p>The base authority ({@code workorder:labor:add}) covers attributing labor to yourself or to the
+     * workorder's current assignee — the latter is the intended default-attribution path, so a non-assignee
+     * may start a timer for the assigned technician without elevation. Attributing labor to any other
+     * technician requires {@code workorder:labor:add_on_behalf} plus a non-blank reason, and is recorded as
+     * an audited on-behalf entry.
+     *
+     * @return {@code true} when this is an on-behalf attribution (tracked technician differs from both the
+     *     actor and the current assignment); {@code false} for the base path.
+     */
+    private static boolean authorizeAttribution(
+            WorkexecTimeTrackingService.TimerStartRequest request,
+            UUID actorPersonId,
+            @Nullable UUID assignedTechnicianId,
+            UUID trackedTechnicianId) {
+        boolean baseAllowed =
+                trackedTechnicianId.equals(actorPersonId) || trackedTechnicianId.equals(assignedTechnicianId);
+        if (baseAllowed) {
+            return false;
+        }
+        if (!SecurityContextHelper.hasAuthority(PERMISSION_LABOR_ADD_ON_BEHALF)) {
+            throw new AccessDeniedException(
+                    "Starting a timer for another technician requires '" + PERMISSION_LABOR_ADD_ON_BEHALF + "'");
+        }
+        if (request.reason() == null || request.reason().isBlank()) {
+            throw new IllegalArgumentException(
+                    "reason is required when starting a timer on behalf of another technician");
+        }
+        return true;
     }
 
     @Transactional

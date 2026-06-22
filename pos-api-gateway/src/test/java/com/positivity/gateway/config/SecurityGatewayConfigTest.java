@@ -1164,13 +1164,13 @@ class SecurityGatewayConfigTest {
         // ── Task-2: new catalog version + extended array tests ───────────────────
 
         @Test
-        @DisplayName("CATALOG_VERSION is 13")
-        void catalogVersionIsThirteen() {
-                assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(13);
+        @DisplayName("CATALOG_VERSION is 14")
+        void catalogVersionIsFourteen() {
+                assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(14);
         }
 
         @Test
-        @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 344")
+        @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 345")
         void authorityByBitCoversNewEntries() {
                 // batch-2: previously missing (bits 241-261)
                 assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1205,8 +1205,11 @@ class SecurityGatewayConfigTest {
                                 .isEqualTo("PERM_workorder:timeEntry:approve");
                 assertThat(GatewayPermissionCatalog.authorityForBit(344))
                                 .isEqualTo("PERM_workorder:timeEntry:reject");
+                // catalog v14 (#711): on-behalf labor authority appended (bit 345)
+                assertThat(GatewayPermissionCatalog.authorityForBit(345))
+                                .isEqualTo("PERM_workorder:labor:add_on_behalf");
                 // beyond array must return null
-                assertThat(GatewayPermissionCatalog.authorityForBit(345)).isNull();
+                assertThat(GatewayPermissionCatalog.authorityForBit(346)).isNull();
         }
 
         @Test
