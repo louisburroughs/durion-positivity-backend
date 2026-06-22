@@ -79,7 +79,6 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
         testParty.setPartyType(PartyType.COMMERCIAL);
         testParty.setLegalName("Test Party");
         testParty.setDisplayName("Test Party");
-        testParty.setPartyNumber("PARTY-TEST-" + System.currentTimeMillis());
         testParty.setCustomerNumber("CUST-TEST-" + System.currentTimeMillis());
         testParty.setStatus(AccountStatus.ACTIVE);
 

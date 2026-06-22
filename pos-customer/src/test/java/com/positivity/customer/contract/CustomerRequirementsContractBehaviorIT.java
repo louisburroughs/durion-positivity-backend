@@ -32,7 +32,6 @@ class CustomerRequirementsContractBehaviorIT extends BaseContractIntegrationTest
         party.setPartyType(PartyType.COMMERCIAL);
         party.setLegalName("Requirements Test Corp");
         party.setDisplayName("Requirements Corp");
-        party.setPartyNumber("REQ-" + UUID.randomUUID());
         party.setCustomerNumber("CUST-REQ-" + UUID.randomUUID().toString().substring(0, 8));
         party.setStatus(status);
 

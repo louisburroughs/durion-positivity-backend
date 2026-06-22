@@ -58,7 +58,7 @@ class CrmVehicleServiceImplTest {
     private CommercialParty commercialParty(UUID id) {
         CommercialParty party = new CommercialParty();
         party.setPartyId(id);
-        party.setPartyNumber("PARTY-" + id.toString().substring(0, 8));
+        party.setCustomerNumber("CUST-" + id.toString().substring(0, 8));
         party.setLegalName("Acme Fleet");
         party.setDisplayName("Acme");
         party.setPartyType(PartyType.COMMERCIAL);
