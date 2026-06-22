@@ -334,7 +334,6 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
         CommercialParty party = new CommercialParty();
         party.setCustomerNumber("CUST-2001");
-        party.setPartyNumber("PARTY-2001");
         party.setLegalName("Acme Logistics");
         party.setDisplayName("Acme Logistics");
         commercialPartyRepository.save(party);

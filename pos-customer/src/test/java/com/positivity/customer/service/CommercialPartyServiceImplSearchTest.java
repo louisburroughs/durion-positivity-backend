@@ -31,7 +31,6 @@ class CommercialPartyServiceImplSearchTest {
     private CommercialParty party(UUID id, String legalName) {
         CommercialParty p = new CommercialParty();
         p.setPartyId(id);
-        p.setPartyNumber("PARTY-" + id.toString().substring(0, 8));
         p.setCustomerNumber("CUST-" + id.toString().substring(0, 8));
         p.setLegalName(legalName);
         p.setDisplayName("Acme");

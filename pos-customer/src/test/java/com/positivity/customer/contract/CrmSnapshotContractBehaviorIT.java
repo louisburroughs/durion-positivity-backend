@@ -58,7 +58,6 @@ class CrmSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
         party.setPartyType(PartyType.COMMERCIAL);
         party.setLegalName("Snapshot Test Corp");
         party.setDisplayName("Snapshot Corp");
-        party.setPartyNumber("SNAP-" + UUID.fromString("00000000-0000-0000-0000-000000000001"));
         party.setCustomerNumber("CUST-SNAP-"
                 + UUID.fromString("00000000-0000-0000-0000-000000000001")
                         .toString()

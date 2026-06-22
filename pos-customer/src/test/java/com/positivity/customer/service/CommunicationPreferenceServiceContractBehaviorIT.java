@@ -61,7 +61,6 @@ class CommunicationPreferenceServiceContractBehaviorIT extends BaseContractInteg
         testParty = new CommercialParty();
         testParty.setLegalName("Test Party");
         testParty.setDisplayName("Test Party");
-        testParty.setPartyNumber("PARTY-TEST-" + sequence);
         testParty.setCustomerNumber("CUST-TEST-" + sequence);
         testParty.setStatus(AccountStatus.ACTIVE);
 

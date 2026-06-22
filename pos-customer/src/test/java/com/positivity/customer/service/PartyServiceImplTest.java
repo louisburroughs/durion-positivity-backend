@@ -101,7 +101,7 @@ class PartyServiceImplTest {
     private CommercialParty party(UUID id) {
         CommercialParty p = new CommercialParty();
         p.setPartyId(id);
-        p.setPartyNumber("PARTY-001");
+        p.setCustomerNumber("CUST-001");
         p.setLegalName("Acme Corp");
         p.setDisplayName("Acme");
         p.setPartyType(PartyType.COMMERCIAL);
@@ -247,10 +247,10 @@ class PartyServiceImplTest {
     }
 
     @Test
-    void buildSnapshotForParty_throwsIllegalState_whenPartyNumberMissing() {
+    void buildSnapshotForParty_throwsIllegalState_whenCustomerNumberMissing() {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);
-        p.setPartyNumber(" ");
+        p.setCustomerNumber(" ");
 
         when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
@@ -258,7 +258,7 @@ class PartyServiceImplTest {
 
         assertThatThrownBy(() -> service.buildSnapshotForParty(partyId))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("partyNumber");
+                .hasMessageContaining("customerNumber");
     }
 
     @Test
@@ -371,7 +371,7 @@ class PartyServiceImplTest {
         ArgumentCaptor<CommercialParty> partyCaptor = ArgumentCaptor.forClass(CommercialParty.class);
         verify(partyRepository).save(partyCaptor.capture());
         assertThat(partyCaptor.getValue().getPartyType()).isEqualTo(PartyType.COMMERCIAL);
-        assertThat(partyCaptor.getValue().getPartyNumber()).startsWith("PARTY-");
+        assertThat(partyCaptor.getValue().getCustomerNumber()).startsWith("CUST-");
         assertThat(partyCaptor.getValue().getExternalIdentifiers()).containsEntry("erp", "A-100");
     }
 

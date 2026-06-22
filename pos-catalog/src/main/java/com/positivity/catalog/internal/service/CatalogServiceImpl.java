@@ -74,6 +74,17 @@ public class CatalogServiceImpl implements CatalogService {
                 .toList();
     }
 
+    public List<ServiceDto> searchServices(String q, int limit) {
+        if (q == null || q.isBlank()) {
+            return Collections.emptyList();
+        }
+        int capped = Math.max(1, Math.min(limit, 100));
+        return serviceRepository.findByNameContainingIgnoreCaseOrderByNameAsc(q.trim()).stream()
+                .map(this::toServiceDto)
+                .limit(capped)
+                .toList();
+    }
+
     public Optional<NonInventoryProductDto> getNonInventoryProductById(UUID productId) {
         return nonInventoryProductRepository.findById(productId).map(this::toNonInventoryProductDto);
     }

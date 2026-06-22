@@ -24,6 +24,7 @@ import com.positivity.catalog.service.ProductSearchService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -328,6 +329,30 @@ public class ProductController {
 
         log.debug("Product detail view generated with confidence={}", productDetail.getConfidence());
         return ResponseEntity.ok(productDetail);
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+    @GetMapping("/services/search")
+    @Operation(
+            summary = "Search catalog services",
+            description = "Free-text substring search over service names for typeahead selection.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Matching services",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = ServiceDto.class))))
+    public ResponseEntity<List<ServiceDto>> searchServices(
+            @Parameter(description = "Free-text query matching service name (case-insensitive substring)")
+                    @RequestParam(required = false)
+                    String q,
+            @Parameter(description = "Maximum number of results (1–100)") @RequestParam(defaultValue = "20")
+                    int limit) {
+        return ResponseEntity.ok(catalogService.searchServices(q, limit));
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")

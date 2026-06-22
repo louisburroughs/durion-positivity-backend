@@ -10,7 +10,7 @@ SET TIME ZONE 'UTC';
 
 
 
-CREATE TABLE commercial_party ( party_type smallint NOT NULL, status smallint NOT NULL, tier smallint NOT NULL, tier_manual_override boolean NOT NULL, created_at timestamp(6) with time zone NOT NULL, tier_assigned_at timestamp(6) with time zone, updated_at timestamp(6) with time zone NOT NULL, customer_id uuid NOT NULL, parent_party_id uuid, billing_terms_id character varying(255), customer_number character varying(255) NOT NULL, display_name character varying(255), email character varying(255), legal_name character varying(255) NOT NULL, party_number character varying(255) NOT NULL, phone_number character varying(255), primary_address character varying(255), tax_id character varying(255), tier_assigned_by character varying(255), CONSTRAINT commercial_party_party_type_check CHECK (((party_type >= 0) AND (party_type <= 2))), CONSTRAINT commercial_party_status_check CHECK (((status >= 0) AND (status <= 3))), CONSTRAINT commercial_party_tier_check CHECK (((tier >= 0) AND (tier <= 5))) );
+CREATE TABLE commercial_party ( party_type smallint NOT NULL, status smallint NOT NULL, tier smallint NOT NULL, tier_manual_override boolean NOT NULL, created_at timestamp(6) with time zone NOT NULL, tier_assigned_at timestamp(6) with time zone, updated_at timestamp(6) with time zone NOT NULL, customer_id uuid NOT NULL, parent_party_id uuid, billing_terms_id character varying(255), customer_number character varying(255) NOT NULL, display_name character varying(255), email character varying(255), legal_name character varying(255) NOT NULL, phone_number character varying(255), primary_address character varying(255), tax_id character varying(255), tier_assigned_by character varying(255), CONSTRAINT commercial_party_party_type_check CHECK (((party_type >= 0) AND (party_type <= 2))), CONSTRAINT commercial_party_status_check CHECK (((status >= 0) AND (status <= 3))), CONSTRAINT commercial_party_tier_check CHECK (((tier >= 0) AND (tier <= 5))) );
 
 CREATE TABLE communication_preference ( created_at timestamp(6) with time zone NOT NULL, updated_at timestamp(6) with time zone NOT NULL, version bigint NOT NULL, party_id uuid NOT NULL, preference_id uuid NOT NULL, email_preference character varying(20), marketing_preference character varying(20), phone_preference character varying(20), sms_preference character varying(20), update_source character varying(20), preferences_note character varying(1000) );
 
@@ -48,7 +48,6 @@ CREATE TABLE vehicle_projection ( vehicle_year integer, last_event_at timestamp(
 
 ALTER TABLE commercial_party ADD CONSTRAINT commercial_party_customer_number_key UNIQUE (customer_number);
 
-ALTER TABLE commercial_party ADD CONSTRAINT commercial_party_party_number_key UNIQUE (party_number);
 
 ALTER TABLE commercial_party ADD CONSTRAINT commercial_party_pkey PRIMARY KEY (customer_id);
 

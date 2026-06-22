@@ -48,11 +48,6 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
                 "Organization or company doing business with the service provider. Supports hierarchy and requires at least one contact.")
 public class CommercialParty extends AbstractParty {
 
-    @Column(unique = true, nullable = false)
-    @NotBlank
-    @Schema(description = "Unique party number", example = "PARTY-1001")
-    private String partyNumber;
-
     @Column(nullable = false)
     @NotBlank
     @Schema(description = "Legal name of the organization", example = "Acme Corporation")

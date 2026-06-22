@@ -76,7 +76,6 @@ class BillingRulesContractBehaviorIT extends BaseContractIntegrationTest {
         party.setPartyType(PartyType.COMMERCIAL);
         party.setLegalName("Billing Rules Test Corp");
         party.setDisplayName("Billing Corp");
-        party.setPartyNumber("BR-" + UUID.fromString("00000000-0000-0000-0000-000000000001"));
         party.setCustomerNumber("CUST-BR-"
                 + UUID.fromString("00000000-0000-0000-0000-000000000001")
                         .toString()
