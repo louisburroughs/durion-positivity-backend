@@ -2,7 +2,6 @@ package com.positivity.customer.internal.repository;
 
 import com.positivity.customer.internal.entity.CommercialParty;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -14,8 +13,6 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public interface CommercialPartyRepository extends JpaRepository<CommercialParty, UUID> {
-    Optional<CommercialParty> findByPartyNumber(String partyNumber);
-
     CommercialParty findByPartyId(UUID partyId);
 
     @Query(

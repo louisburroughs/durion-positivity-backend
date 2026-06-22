@@ -102,22 +102,22 @@ public class PartyServiceImpl implements PartyService {
                         ? PartyType.valueOf(request.getPartyType())
                         : PartyType.COMMERCIAL);
         party.setStatus(AccountStatus.ACTIVE);
-        party.setPartyNumber(generatePartyNumber());
+        party.setCustomerNumber(generateCustomerNumber());
         if (request.getExternalIdentifiers() != null) {
             party.getExternalIdentifiers().putAll(request.getExternalIdentifiers());
         }
 
         CommercialParty saved = partyRepository.save(party);
         log.info(
-                "Created commercial account with partyId: {}, partyNumber: {}",
+                "Created commercial account with partyId: {}, customerNumber: {}",
                 saved.getPartyId(),
-                saved.getPartyNumber());
+                saved.getCustomerNumber());
 
         return CreateCommercialAccountResponse.builder()
                 .partyId(String.valueOf(saved.getPartyId()))
                 .legalName(saved.getLegalName())
                 .status(saved.getStatus().toString())
-                .customerNumber(saved.getPartyNumber())
+                .customerNumber(saved.getCustomerNumber())
                 .displayName(saved.getDisplayName())
                 .partyType(saved.getPartyType() != null ? saved.getPartyType().toString() : null)
                 .taxId(saved.getTaxId())
@@ -155,8 +155,8 @@ public class PartyServiceImpl implements PartyService {
         return party;
     }
 
-    private String generatePartyNumber() {
-        return "PARTY-" + UUIDv7Generator.generate().toString().substring(0, 8).toUpperCase(Locale.US);
+    private String generateCustomerNumber() {
+        return "CUST-" + UUIDv7Generator.generate().toString().substring(0, 8).toUpperCase(Locale.US);
     }
 
     @Override
@@ -769,14 +769,14 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private AccountSummary buildAccountSummary(CommercialParty party) {
-        String partyNumber = requireText(party.getPartyNumber(), "partyNumber");
+        String customerNumber = requireText(party.getCustomerNumber(), "customerNumber");
         String legalName = requireText(party.getLegalName(), "legalName");
         PartyType partyType = requireNonNullField(party.getPartyType(), "partyType");
         String id = party.getPartyId().toString();
         String name = StringUtils.hasText(party.getDisplayName()) ? party.getDisplayName() : legalName;
         String type = partyType.name();
 
-        return new AccountSummary(id, partyNumber, name, type);
+        return new AccountSummary(id, customerNumber, name, type);
     }
 
     private String requireText(String value, String fieldName) {

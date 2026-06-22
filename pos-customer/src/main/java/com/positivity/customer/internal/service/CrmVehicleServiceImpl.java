@@ -333,7 +333,7 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
         com.positivity.customer.internal.dto.snapshot.AccountSummary acct =
                 new com.positivity.customer.internal.dto.snapshot.AccountSummary(
                         party.getPartyId().toString(),
-                        party.getPartyNumber() != null ? party.getPartyNumber() : "N/A",
+                        party.getCustomerNumber() != null ? party.getCustomerNumber() : "N/A",
                         party.getDisplayName() != null ? party.getDisplayName() : party.getLegalName(),
                         party.getPartyType().name());
 

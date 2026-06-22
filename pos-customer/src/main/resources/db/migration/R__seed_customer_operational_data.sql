@@ -249,7 +249,7 @@ ON CONFLICT (customer_id) DO NOTHING;
 --   PartyType: COMMERCIAL = 1
 -- =========================================================================
 
-INSERT INTO commercial_party (customer_id, customer_number, party_number,
+INSERT INTO commercial_party (customer_id, customer_number,
                                legal_name, display_name, tax_id, billing_terms_id,
                                party_type, status, tier, tier_manual_override, parent_party_id,
                                primary_address,
@@ -257,56 +257,56 @@ INSERT INTO commercial_party (customer_id, customer_number, party_number,
 VALUES
     -- STANDARD tier (rows 1–8)
     ('01960021-0000-7000-8000-000000000001'::uuid,
-     'CUST-CP-001', 'PARTY-CP-001',
+     'CUST-CP-001',
      'Piedmont Freight Carriers LLC', 'Piedmont Freight',
      '27-4481203', 'NET-30', 1, 0, 0, false, NULL,
      '3501 Trailer Park Dr, Charlotte, NC 28269',
      NOW(), NOW()),
 
     ('01960021-0000-7000-8000-000000000002'::uuid,
-     'CUST-CP-002', 'PARTY-CP-002',
+     'CUST-CP-002',
      'Carolina Concrete Supply Co.', 'Carolina Concrete',
      '46-3215872', 'NET-30', 1, 0, 0, false, NULL,
      '8200 Old Concord Rd, Concord, NC 28027',
      NOW(), NOW()),
 
     ('01960021-0000-7000-8000-000000000003'::uuid,
-     'CUST-CP-003', 'PARTY-CP-003',
+     'CUST-CP-003',
      'Queen City Waste Management Inc.', 'QC Waste',
      '35-2198043', 'NET-45', 1, 0, 0, false, NULL,
      '4801 Wilkinson Blvd, Charlotte, NC 28208',
      NOW(), NOW()),
 
     ('01960021-0000-7000-8000-000000000004'::uuid,
-     'CUST-CP-004', 'PARTY-CP-004',
+     'CUST-CP-004',
      'Blue Ridge Landscaping Services LLC', 'Blue Ridge Landscaping',
      '82-1563489', 'NET-30', 1, 0, 0, false, NULL,
      '201 Brawley School Rd, Mooresville, NC 28117',
      NOW(), NOW()),
 
     ('01960021-0000-7000-8000-000000000005'::uuid,
-     'CUST-CP-005', 'PARTY-CP-005',
+     'CUST-CP-005',
      'Tarheel Logistics Group LLC', 'Tarheel Logistics',
      '61-7832941', 'NET-45', 1, 0, 0, false, NULL,
      '1120 Armstrong Rd, Gastonia, NC 28052',
      NOW(), NOW()),
 
     ('01960021-0000-7000-8000-000000000006'::uuid,
-     'CUST-CP-006', 'PARTY-CP-006',
+     'CUST-CP-006',
      'Mecklenburg Plumbing & Mechanical LLC', 'Meck Plumbing',
      '47-9210583', 'NET-30', 1, 0, 0, false, NULL,
      '6120 Old Pineville Rd, Charlotte, NC 28217',
      NOW(), NOW()),
 
     ('01960021-0000-7000-8000-000000000007'::uuid,
-     'CUST-CP-007', 'PARTY-CP-007',
+     'CUST-CP-007',
      'Piedmont Ready Mix Corp.', 'Piedmont Ready Mix',
      '56-3841027', 'NET-60', 1, 0, 0, false, NULL,
      '2505 Dale Earnhardt Blvd, Kannapolis, NC 28083',
      NOW(), NOW()),
 
     ('01960021-0000-7000-8000-000000000008'::uuid,
-     'CUST-CP-008', 'PARTY-CP-008',
+     'CUST-CP-008',
      'Carolina Power & Electrical Services Inc.', 'Carolina Power',
      '29-6713854', 'NET-30', 1, 0, 0, false, NULL,
      '16345 Old Statesville Rd, Huntersville, NC 28078',
@@ -314,35 +314,35 @@ VALUES
 
     -- BRONZE tier (rows 9–13)
     ('01960021-0000-7000-8000-000000000009'::uuid,
-     'CUST-CP-009', 'PARTY-CP-009',
+     'CUST-CP-009',
      'Blue Stone Aggregate & Gravel LLC', 'Blue Stone Aggregate',
      '74-5291836', 'NET-45', 1, 0, 1, false, NULL,
      '808 E Broad St, Statesville, NC 28677',
      NOW(), NOW()),
 
     ('01960021-0000-7000-8000-00000000000a'::uuid,
-     'CUST-CP-010', 'PARTY-CP-010',
+     'CUST-CP-010',
      'Cabarrus Industrial Cleaning Corp.', 'Cabarrus Cleaning',
      '31-4827653', 'NET-30', 1, 0, 1, false, NULL,
      '4540 Poplar Tent Rd, Concord, NC 28027',
      NOW(), NOW()),
 
     ('01960021-0000-7000-8000-00000000000b'::uuid,
-     'CUST-CP-011', 'PARTY-CP-011',
+     'CUST-CP-011',
      'Southeast Delivery Solutions LLC', 'SE Delivery',
      '68-9201374', 'NET-30', 1, 0, 1, false, NULL,
      '7302 Albemarle Rd, Charlotte, NC 28212',
      NOW(), NOW()),
 
     ('01960021-0000-7000-8000-00000000000c'::uuid,
-     'CUST-CP-012', 'PARTY-CP-012',
+     'CUST-CP-012',
      'Carolinas Crane & Rigging Co.', 'Carolinas Crane',
      '45-7832016', 'NET-45', 1, 0, 1, false, NULL,
      '2120 Southend Dr, Charlotte, NC 28203',
      NOW(), NOW()),
 
     ('01960021-0000-7000-8000-00000000000d'::uuid,
-     'CUST-CP-013', 'PARTY-CP-013',
+     'CUST-CP-013',
      'Lake Norman Propane & Fuels LLC', 'LKN Propane',
      '52-1938476', 'COD', 1, 0, 1, false, NULL,
      '1003 Harbor Rd, Mooresville, NC 28117',
@@ -350,28 +350,28 @@ VALUES
 
     -- SILVER tier (rows 14–17)
     ('01960021-0000-7000-8000-00000000000e'::uuid,
-     'CUST-CP-014', 'PARTY-CP-014',
+     'CUST-CP-014',
      'Rowan County Road Services LLC', 'Rowan Road Services',
      '73-4826015', 'NET-45', 1, 0, 2, false, NULL,
      '505 N Main St, Salisbury, NC 28144',
      NOW(), NOW()),
 
     ('01960021-0000-7000-8000-00000000000f'::uuid,
-     'CUST-CP-015', 'PARTY-CP-015',
+     'CUST-CP-015',
      'Carolina Fresh Produce Distribution Inc.', 'Carolina Fresh',
      '28-5943016', 'NET-30', 1, 0, 2, false, NULL,
      '3900 Morningside Industrial Dr, Charlotte, NC 28215',
      NOW(), NOW()),
 
     ('01960021-0000-7000-8000-000000000010'::uuid,
-     'CUST-CP-016', 'PARTY-CP-016',
+     'CUST-CP-016',
      'Piedmont Steel & Metal Recycling LLC', 'Piedmont Metals',
      '34-8710253', 'NET-60', 1, 0, 2, false, NULL,
      '1205 Industrial Ave, Gastonia, NC 28052',
      NOW(), NOW()),
 
     ('01960021-0000-7000-8000-000000000011'::uuid,
-     'CUST-CP-017', 'PARTY-CP-017',
+     'CUST-CP-017',
      'Union County Grading & Excavation Inc.', 'Union Grading',
      '67-2194830', 'NET-45', 1, 0, 2, false, NULL,
      '2301 N Rocky River Rd, Monroe, NC 28112',
@@ -379,7 +379,7 @@ VALUES
 
     -- GOLD tier (rows 18–19)
     ('01960021-0000-7000-8000-000000000012'::uuid,
-     'CUST-CP-018', 'PARTY-CP-018',
+     'CUST-CP-018',
      'Carolina Septic & Environmental LLC', 'Carolina Septic',
      '49-8023174', 'NET-30', 1, 0, 3, false, NULL,
      '5820 Poplar Tent Rd, Concord, NC 28027',
@@ -387,7 +387,7 @@ VALUES
 
     -- INACTIVE (status=1), GOLD tier
     ('01960021-0000-7000-8000-000000000013'::uuid,
-     'CUST-CP-019', 'PARTY-CP-019',
+     'CUST-CP-019',
      'Mecklenburg Tree Service & Timber Inc.', 'Meck Tree',
      '83-5012967', 'NET-30', 1, 1, 3, false, NULL,
      '6401 Beatties Ford Rd, Charlotte, NC 28216',
@@ -395,7 +395,7 @@ VALUES
 
     -- ON_HOLD (status=2), PLATINUM tier
     ('01960021-0000-7000-8000-000000000014'::uuid,
-     'CUST-CP-020', 'PARTY-CP-020',
+     'CUST-CP-020',
      'Highland Moving & Storage LLC', 'Highland Moving',
      '55-1874392', 'NET-60', 1, 2, 4, false, NULL,
      '1801 Cross Beam Dr, Charlotte, NC 28217',

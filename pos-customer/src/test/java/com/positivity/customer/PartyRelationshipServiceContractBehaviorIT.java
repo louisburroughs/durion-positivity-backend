@@ -84,10 +84,6 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
 
         // Create test party (commercial account)
         testParty = new CommercialParty();
-        testParty.setPartyNumber("TEST-"
-                + UUID.fromString("00000000-0000-0000-0000-000000000001")
-                        .toString()
-                        .substring(0, 8));
         testParty.setLegalName("Test Commercial Account");
         testParty.setDisplayName("Test Commercial Account");
         testParty.setCustomerNumber("CUST-TEST-"
