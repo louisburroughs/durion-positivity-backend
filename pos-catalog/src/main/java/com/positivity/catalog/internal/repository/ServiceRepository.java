@@ -8,5 +8,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ServiceRepository extends JpaRepository<ServiceEntity, UUID> {
     List<ServiceEntity> findByName(String name);
 
-    List<ServiceEntity> findByNameContainingIgnoreCase(String name);
+    List<ServiceEntity> findByNameContainingIgnoreCaseOrderByNameAsc(String name);
 }

@@ -55,7 +55,7 @@ class CatalogServiceImplTest {
 
     @Test
     void searchServices_mapsMatchesToDtos() {
-        when(serviceRepository.findByNameContainingIgnoreCase("brake"))
+        when(serviceRepository.findByNameContainingIgnoreCaseOrderByNameAsc("brake"))
                 .thenReturn(List.of(service("Brake pad replacement"), service("Brake fluid flush")));
 
         List<ServiceDto> result = catalogService.searchServices("brake", 20);
@@ -66,7 +66,7 @@ class CatalogServiceImplTest {
 
     @Test
     void searchServices_trimsQuery() {
-        when(serviceRepository.findByNameContainingIgnoreCase("oil")).thenReturn(List.of(service("Oil change")));
+        when(serviceRepository.findByNameContainingIgnoreCaseOrderByNameAsc("oil")).thenReturn(List.of(service("Oil change")));
 
         assertThat(catalogService.searchServices("  oil  ", 20)).hasSize(1);
     }
@@ -75,7 +75,7 @@ class CatalogServiceImplTest {
     void searchServices_capsResultsToLimit() {
         List<ServiceEntity> many =
                 IntStream.range(0, 50).mapToObj(i -> service("Service " + i)).toList();
-        when(serviceRepository.findByNameContainingIgnoreCase("service")).thenReturn(many);
+        when(serviceRepository.findByNameContainingIgnoreCaseOrderByNameAsc("service")).thenReturn(many);
 
         assertThat(catalogService.searchServices("service", 5)).hasSize(5);
     }

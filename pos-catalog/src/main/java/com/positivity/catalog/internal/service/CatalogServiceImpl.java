@@ -76,7 +76,7 @@ public class CatalogServiceImpl implements CatalogService {
             return Collections.emptyList();
         }
         int capped = Math.max(1, Math.min(limit, 100));
-        return serviceRepository.findByNameContainingIgnoreCase(q.trim()).stream()
+        return serviceRepository.findByNameContainingIgnoreCaseOrderByNameAsc(q.trim()).stream()
                 .map(this::toServiceDto)
                 .limit(capped)
                 .toList();
