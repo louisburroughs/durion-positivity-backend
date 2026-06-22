@@ -1034,11 +1034,8 @@ paths:
             application/json:
               schema:
                 type: array
-                additionalProperties: {}
-                contains: {}
                 items:
                   $ref: '#/components/schemas/UomConversionDto'
-                unevaluatedItems: {}
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1665,6 +1662,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ServiceDto'
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
+  /v1/products/services/search:
+    get:
+      tags:
+      - Products API
+      summary: Search catalog services
+      description: Free-text substring search over service names for typeahead selection.
+      operationId: searchServices
+      parameters:
+      - name: q
+        in: query
+        description: Free-text query matching service name (case-insensitive substring)
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        description: Maximum number of results (1–100)
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Matching services
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceDto'
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -4109,10 +4142,10 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
         first:
           type: boolean
         last:
@@ -4128,16 +4161,16 @@ components:
         offset:
           type: integer
           format: int64
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        pageSize:
+          type: integer
+          format: int32
         paged:
           type: boolean
         pageNumber:
           type: integer
           format: int32
-        pageSize:
-          type: integer
-          format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
     SortObject:
@@ -4168,10 +4201,10 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
         first:
           type: boolean
         last:

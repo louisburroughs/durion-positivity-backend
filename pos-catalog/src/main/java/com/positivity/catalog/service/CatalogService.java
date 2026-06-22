@@ -20,6 +20,8 @@ public interface CatalogService {
 
     List<ServiceDto> getServicesByName(String name);
 
+    List<ServiceDto> searchServices(String q, int limit);
+
     Optional<NonInventoryProductDto> getNonInventoryProductById(UUID productId);
 
     List<NonInventoryProductDto> getNonInventoryProductsByName(String name);
