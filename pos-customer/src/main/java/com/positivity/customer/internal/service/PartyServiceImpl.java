@@ -212,10 +212,13 @@ public class PartyServiceImpl implements PartyService {
     private boolean matchesBrowseFilter(
             SearchPartiesResponse.PartySummary s, String name, String status, String partyType, String customerNumber) {
         if (StringUtils.hasText(name)) {
+            // Unified typeahead term: match legal name, display name, OR customer number
+            // so a single query box finds customers by name or by account number.
             String needle = name.toLowerCase(java.util.Locale.ROOT);
             String legal = s.getLegalName() != null ? s.getLegalName().toLowerCase(java.util.Locale.ROOT) : "";
             String display = s.getDisplayName() != null ? s.getDisplayName().toLowerCase(java.util.Locale.ROOT) : "";
-            if (!legal.contains(needle) && !display.contains(needle)) {
+            String number = s.getCustomerNumber() != null ? s.getCustomerNumber().toLowerCase(java.util.Locale.ROOT) : "";
+            if (!legal.contains(needle) && !display.contains(needle) && !number.contains(needle)) {
                 return false;
             }
         }
