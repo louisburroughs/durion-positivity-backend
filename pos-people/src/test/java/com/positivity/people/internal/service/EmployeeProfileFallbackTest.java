@@ -1,9 +1,12 @@
 package com.positivity.people.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.enums.EmployeeStatus;
@@ -18,6 +21,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -89,5 +93,38 @@ class EmployeeProfileFallbackTest {
         EmployeeProfileDto profile = service().getEmployee(PERSON_ID);
 
         assertThat(profile.getLegalName()).isEqualTo("Marcus Aurelius Webb");
+    }
+
+    private CreateEmployeeRequest createRequest(String legalName) {
+        CreateEmployeeRequest request = new CreateEmployeeRequest();
+        request.setLegalName(legalName);
+        request.setEmployeeNumber("EMP-0001");
+        request.setStatus(EmployeeStatus.ACTIVE);
+        request.setHireDate(LocalDate.parse("2024-01-01"));
+        return request;
+    }
+
+    @Test
+    void createEmployee_syncsFirstAndLastNameFromLegalName() {
+        when(personRepository.save(any(Person.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service().createEmployee(createRequest("Marcus Webb"));
+
+        ArgumentCaptor<Person> captor = ArgumentCaptor.forClass(Person.class);
+        verify(personRepository).save(captor.capture());
+        assertThat(captor.getValue().getFirstName()).isEqualTo("Marcus");
+        assertThat(captor.getValue().getLastName()).isEqualTo("Webb");
+    }
+
+    @Test
+    void createEmployee_putsTrailingTokensInLastName() {
+        when(personRepository.save(any(Person.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service().createEmployee(createRequest("Marcus Aurelius Webb"));
+
+        ArgumentCaptor<Person> captor = ArgumentCaptor.forClass(Person.class);
+        verify(personRepository).save(captor.capture());
+        assertThat(captor.getValue().getFirstName()).isEqualTo("Marcus");
+        assertThat(captor.getValue().getLastName()).isEqualTo("Aurelius Webb");
     }
 }

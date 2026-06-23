@@ -210,6 +210,28 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .anyMatch(person -> employeeId == null || !person.getId().equals(employeeId));
     }
 
+    /**
+     * Keep the typed {@code firstName}/{@code lastName} columns in sync with {@code legalName} so a
+     * person created or edited through the Employee path also surfaces a name in the directory and
+     * the people typeahead (which read first/last). The first whitespace-delimited token becomes the
+     * first name and the remainder the last name — a heuristic split, but it keeps both views
+     * consistent. The structured {@code legalName} remains the authoritative value.
+     */
+    private void applyStructuredName(Person entity, String legalName) {
+        if (legalName == null || legalName.isBlank()) {
+            return;
+        }
+        String trimmed = legalName.trim();
+        int firstSpace = trimmed.indexOf(' ');
+        if (firstSpace < 0) {
+            entity.setFirstName(trimmed);
+            entity.setLastName("");
+        } else {
+            entity.setFirstName(trimmed.substring(0, firstSpace));
+            entity.setLastName(trimmed.substring(firstSpace + 1).trim());
+        }
+    }
+
     private void applyEmployeeFields(Person entity, EmployeeFieldSet fields) {
         String legalName = fields.legalName();
         String preferredName = fields.preferredName();
@@ -221,6 +243,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         entity.setLegalName(legalName);
         entity.setPreferredName(preferredName);
+        applyStructuredName(entity, legalName);
         entity.setEmployeeNumber(employeeNumber);
         entity.setStatus(status);
         entity.setHireDate(hireDate);
