@@ -296,6 +296,8 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .terminationDate(person.getTerminationDate())
                 .contactInfo(resolveContactInfo(person))
                 .statusEffectiveAt(person.getStatusEffectiveAt())
+                .createdAt(person.getCreatedAt())
+                .updatedAt(person.getUpdatedAt())
                 .warnings(warnings)
                 .build();
     }

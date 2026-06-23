@@ -59,8 +59,20 @@ class EmployeeProfileFallbackTest {
         person.setEmployeeNumber("EMP-0001");
         person.setStatus(EmployeeStatus.ACTIVE);
         person.setHireDate(LocalDate.parse("2024-01-01"));
+        person.setCreatedAt(Instant.parse("2024-01-01T09:30:00Z"));
+        person.setUpdatedAt(Instant.parse("2024-02-01T14:05:00Z"));
         // legalName and contactInfoJson intentionally left null (People-path / seed record).
         return person;
+    }
+
+    @Test
+    void getEmployee_mapsCreatedAndUpdatedTimestamps() {
+        when(personRepository.findById(PERSON_ID)).thenReturn(Optional.of(columnSourcedPerson()));
+
+        EmployeeProfileDto profile = service().getEmployee(PERSON_ID);
+
+        assertThat(profile.getCreatedAt()).isEqualTo(Instant.parse("2024-01-01T09:30:00Z"));
+        assertThat(profile.getUpdatedAt()).isEqualTo(Instant.parse("2024-02-01T14:05:00Z"));
     }
 
     @Test

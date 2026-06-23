@@ -2434,6 +2434,16 @@ components:
           format: date-time
           description: Timestamp the current status became effective
           example: 2026-01-15 09:30:00+00:00
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp the employee record was created
+          example: 2026-01-15 09:30:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp the employee record was last updated
+          example: 2026-02-01 14:05:00+00:00
         warnings:
           type: array
           description: Non-fatal warnings raised while resolving the profile
