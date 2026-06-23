@@ -22,6 +22,12 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    /** Free-text search for workorders by customer name or workorder id */
+    public static final EventTypeRegistration WORKORDER_SEARCH = EventTypeRegistration.search(
+                    "WORKORDER_SEARCH", "Free-text search for workorders by customer name or workorder id")
+            .apiVersion("1")
+            .build();
+
     /** Create a new workorder */
     public static final EventTypeRegistration WORKORDER_CREATE = EventTypeRegistration.write(
                     "WORKORDER_CREATE", "Create a new workorder in the system")
@@ -483,6 +489,7 @@ public final class EventTypes {
     public static final List<EventTypeRegistration> ALL_EVENT_TYPES = List.of(
             // Workorder events
             WORKORDER_LIST,
+            WORKORDER_SEARCH,
             WORKORDER_CREATE,
             WORKORDER_DELETE,
             WORKORDER_START,

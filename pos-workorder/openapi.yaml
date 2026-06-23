@@ -14,6 +14,8 @@ tags:
   description: Workorder detail with role-based visibility
 - name: Travel Segment API
   description: Endpoints for capturing mobile travel segments
+- name: Workorder Search
+  description: Workorder search and retrieval
 - name: Estimates from Appointments
   description: Create estimates from shop appointments
 - name: Work Session API
@@ -3147,11 +3149,8 @@ paths:
             application/json:
               schema:
                 type: array
-                additionalProperties: {}
-                contains: {}
                 items:
                   $ref: '#/components/schemas/WorkorderPickedItemResponse'
-                unevaluatedItems: {}
         '403':
           description: Forbidden
           content:
@@ -3224,11 +3223,8 @@ paths:
             application/json:
               schema:
                 type: array
-                additionalProperties: {}
-                contains: {}
                 items:
                   $ref: '#/components/schemas/WorkorderPickTaskResponse'
-                unevaluatedItems: {}
         '403':
           description: Forbidden
           content:
@@ -3487,6 +3483,37 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - AUTHENTICATED
+  /v1/workorders/search:
+    get:
+      tags:
+      - Workorder Search
+      summary: Search workorders
+      description: Paginated free-text search for workorders matching customer name or workorder id.
+      operationId: searchWorkorders
+      parameters:
+      - name: q
+        in: query
+        description: Free-text query matching customer name or workorder id (optional)
+        required: false
+        schema:
+          type: string
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
+      responses:
+        '200':
+          description: Page of workorder search results returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageWorkorderSearchResult'
+      security:
+      - bearerAuth:
+        - workorder:workorder:view
+      x-required-permissions:
+      - workorder:workorder:view
   /v1/workorders/estimates/{estimateId}/summary:
     get:
       tags:
@@ -3543,7 +3570,6 @@ paths:
               schema:
                 type: string
                 format: binary
-                additionalProperties: {}
         '404':
           description: Estimate not found
           content:
@@ -3862,6 +3888,12 @@ paths:
       description: Paginated search for estimates filtered by optional customerId and/or vehicleId.
       operationId: searchEstimates
       parameters:
+      - name: q
+        in: query
+        description: Free-text query matching estimate number, customer name, or estimate id (optional)
+        required: false
+        schema:
+          type: string
       - name: customerId
         in: query
         description: Filter by customer UUID (optional)
@@ -4652,12 +4684,21 @@ components:
         referenceId:
           type: string
           description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
         nextAction:
           type: string
           description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
         supportAction:
           type: string
           description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
     FieldError:
       type: object
       description: Validation error for a specific request field
@@ -4670,6 +4711,9 @@ components:
           type: string
           description: Validation failure message
           example: must be greater than 0
+      required:
+      - field
+      - message
     ResolveScanRequest:
       type: object
       description: Request to resolve a scanned SKU and location against a pick task
@@ -5205,6 +5249,14 @@ components:
           format: date-time
           description: Creation timestamp (UTC).
           example: 2026-02-27 12:00:00+00:00
+      required:
+      - createdAt
+      - invoiceId
+      - status
+      - subtotal
+      - taxAmount
+      - totalAmount
+      - workorderId
     CompleteWorkorderRequest:
       type: object
       description: Request payload to complete a workorder
@@ -7195,6 +7247,114 @@ components:
       - canComplete
       - currentStatus
       - workorderId
+    Pageable:
+      type: object
+      properties:
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        size:
+          type: integer
+          format: int32
+          minimum: 1
+        sort:
+          type: array
+          items:
+            type: string
+    PageWorkorderSearchResult:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkorderSearchResult'
+        number:
+          type: integer
+          format: int32
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+    PageableObject:
+      type: object
+      properties:
+        offset:
+          type: integer
+          format: int64
+        paged:
+          type: boolean
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        unpaged:
+          type: boolean
+    SortObject:
+      type: object
+      properties:
+        empty:
+          type: boolean
+        sorted:
+          type: boolean
+        unsorted:
+          type: boolean
+    WorkorderSearchResult:
+      type: object
+      description: Lightweight workorder search result enriched with customer name
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder identifier
+          example: 550e8400-e29b-41d4-a716-446655440000
+        status:
+          type: string
+          description: Current workorder status
+          enum:
+          - DRAFT
+          - APPROVED
+          - ASSIGNED
+          - WORK_IN_PROGRESS
+          - AWAITING_PARTS
+          - AWAITING_APPROVAL
+          - READY_FOR_PICKUP
+          - COMPLETED
+          - CANCELLED
+          example: DRAFT
+        customerName:
+          type: string
+          description: Resolved customer display name
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - status
+      - workorderId
     EstimateSummaryResponse:
       type: object
       description: Customer-facing estimate summary with grouped items and totals
@@ -7223,6 +7383,9 @@ components:
           format: uuid
           description: Customer identifier
           example: 550e8400-e29b-41d4-a716-446655440001
+        customerName:
+          type: string
+          description: Resolved customer display name
         vehicleId:
           type: string
           format: uuid
@@ -7279,21 +7442,6 @@ components:
       - estimateNumber
       - id
       - status
-    Pageable:
-      type: object
-      properties:
-        page:
-          type: integer
-          format: int32
-          minimum: 0
-        size:
-          type: integer
-          format: int32
-          minimum: 1
-        sort:
-          type: array
-          items:
-            type: string
     PageWorkorderStatusView:
       type: object
       properties:
@@ -7325,33 +7473,6 @@ components:
           type: integer
           format: int32
         empty:
-          type: boolean
-    PageableObject:
-      type: object
-      properties:
-        offset:
-          type: integer
-          format: int64
-        paged:
-          type: boolean
-        pageNumber:
-          type: integer
-          format: int32
-        pageSize:
-          type: integer
-          format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
-        unpaged:
-          type: boolean
-    SortObject:
-      type: object
-      properties:
-        empty:
-          type: boolean
-        sorted:
-          type: boolean
-        unsorted:
           type: boolean
     WorkorderStatusView:
       type: object

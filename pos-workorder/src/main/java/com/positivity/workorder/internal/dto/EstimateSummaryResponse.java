@@ -29,7 +29,10 @@ import org.jspecify.annotations.NonNull;
 @Schema(description = "Customer-facing estimate summary with grouped items and totals")
 public class EstimateSummaryResponse {
 
-    @Schema(description = "Estimate identifier", example = "550e8400-e29b-41d4-a716-446655440000", requiredMode = REQUIRED)
+    @Schema(
+            description = "Estimate identifier",
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = REQUIRED)
     @NotNull
     private UUID id;
 
@@ -43,13 +46,25 @@ public class EstimateSummaryResponse {
     @Schema(description = "Estimate expiry timestamp", example = "2026-01-15T09:30:00", requiredMode = NOT_REQUIRED)
     private LocalDateTime expiresAt;
 
-    @Schema(description = "Customer identifier", example = "550e8400-e29b-41d4-a716-446655440001", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Customer identifier",
+            example = "550e8400-e29b-41d4-a716-446655440001",
+            requiredMode = NOT_REQUIRED)
     private UUID customerId;
 
-    @Schema(description = "Vehicle identifier", example = "550e8400-e29b-41d4-a716-446655440002", requiredMode = NOT_REQUIRED)
+    @Schema(description = "Resolved customer display name", requiredMode = NOT_REQUIRED)
+    private String customerName;
+
+    @Schema(
+            description = "Vehicle identifier",
+            example = "550e8400-e29b-41d4-a716-446655440002",
+            requiredMode = NOT_REQUIRED)
     private UUID vehicleId;
 
-    @Schema(description = "Location identifier", example = "550e8400-e29b-41d4-a716-446655440003", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Location identifier",
+            example = "550e8400-e29b-41d4-a716-446655440003",
+            requiredMode = NOT_REQUIRED)
     private UUID locationId;
 
     /** Current lifecycle status of the estimate. */

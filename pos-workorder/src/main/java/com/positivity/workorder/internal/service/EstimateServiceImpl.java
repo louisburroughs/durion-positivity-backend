@@ -77,6 +77,7 @@ public class EstimateServiceImpl implements EstimateService {
     private final PeopleLocationClient peopleLocationClient;
     private final DocumentClient documentClient;
     private final ObjectMapper objectMapper;
+    private final CustomerReferenceService customerReferenceService;
 
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
@@ -137,6 +138,51 @@ public class EstimateServiceImpl implements EstimateService {
         }
 
         return estimates.map(this::toEstimateSummaryResponse);
+    }
+
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public Page<EstimateSummaryResponse> findEstimatesByQuery(@NonNull String q, @NonNull Pageable pageable) {
+        // Resolve customer ids whose display name matches the query.
+        List<UUID> nameMatchIds = customerReferenceService.searchIdsByName(q, 10).stream()
+                .map(CustomerReferenceService.CustomerRef::customerId)
+                .toList();
+
+        // JPQL IN requires a non-empty collection; use a sentinel that cannot match a real id.
+        List<UUID> customerIds = nameMatchIds.isEmpty() ? List.of(new UUID(0, 0)) : nameMatchIds;
+
+        // Treat the query as an estimate id when it parses as a UUID.
+        UUID idQuery = parseUuidOrNull(q);
+
+        Page<Estimate> page = estimateRepository.searchByQuery(q, customerIds, idQuery, pageable);
+
+        // Enrich each summary row with the resolved customer display name.
+        List<UUID> pageCustomerIds = page.getContent().stream()
+                .map(Estimate::getCustomerId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<UUID, CustomerReferenceService.CustomerContact> contacts =
+                customerReferenceService.resolveAll(pageCustomerIds);
+
+        return page.map(estimate -> {
+            EstimateSummaryResponse summary = toEstimateSummaryResponse(estimate);
+            CustomerReferenceService.CustomerContact contact = contacts.get(estimate.getCustomerId());
+            if (contact != null) {
+                summary.setCustomerName(contact.name());
+            }
+            return summary;
+        });
+    }
+
+    @Nullable
+    private static UUID parseUuidOrNull(@NonNull String value) {
+        try {
+            return UUID.fromString(value.trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     /**
