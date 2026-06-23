@@ -210,6 +210,28 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .anyMatch(person -> employeeId == null || !person.getId().equals(employeeId));
     }
 
+    /**
+     * Keep the typed {@code firstName}/{@code lastName} columns in sync with {@code legalName} so a
+     * person created or edited through the Employee path also surfaces a name in the directory and
+     * the people typeahead (which read first/last). The first whitespace-delimited token becomes the
+     * first name and the remainder the last name — a heuristic split, but it keeps both views
+     * consistent. The structured {@code legalName} remains the authoritative value.
+     */
+    private void applyStructuredName(Person entity, String legalName) {
+        if (legalName == null || legalName.isBlank()) {
+            return;
+        }
+        String trimmed = legalName.trim();
+        int firstSpace = trimmed.indexOf(' ');
+        if (firstSpace < 0) {
+            entity.setFirstName(trimmed);
+            entity.setLastName("");
+        } else {
+            entity.setFirstName(trimmed.substring(0, firstSpace));
+            entity.setLastName(trimmed.substring(firstSpace + 1).trim());
+        }
+    }
+
     private void applyEmployeeFields(Person entity, EmployeeFieldSet fields) {
         String legalName = fields.legalName();
         String preferredName = fields.preferredName();
@@ -221,6 +243,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         entity.setLegalName(legalName);
         entity.setPreferredName(preferredName);
+        applyStructuredName(entity, legalName);
         entity.setEmployeeNumber(employeeNumber);
         entity.setStatus(status);
         entity.setHireDate(hireDate);
@@ -265,16 +288,66 @@ public class EmployeeServiceImpl implements EmployeeService {
     private EmployeeProfileDto toEmployeeProfile(Person person, List<String> warnings) {
         return EmployeeProfileDto.builder()
                 .id(person.getId())
-                .legalName(person.getLegalName())
+                .legalName(resolveLegalName(person))
                 .preferredName(person.getPreferredName())
                 .employeeNumber(person.getEmployeeNumber())
                 .status(person.getStatus())
                 .hireDate(person.getHireDate())
                 .terminationDate(person.getTerminationDate())
-                .contactInfo(readContactInfo(person.getContactInfoJson()))
+                .contactInfo(resolveContactInfo(person))
                 .statusEffectiveAt(person.getStatusEffectiveAt())
+                .createdAt(person.getCreatedAt())
+                .updatedAt(person.getUpdatedAt())
                 .warnings(warnings)
                 .build();
+    }
+
+    /**
+     * The employee profile historically read {@code legalName}, but persons created via the
+     * People path (and seed data) populate only {@code firstName}/{@code lastName}. Fall back to
+     * the composed first/last name so the profile is never blank for those records.
+     */
+    private String resolveLegalName(Person person) {
+        String legalName = person.getLegalName();
+        if (legalName != null && !legalName.isBlank()) {
+            return legalName;
+        }
+        String composed = java.util.stream.Stream.of(person.getFirstName(), person.getLastName())
+                .filter(value -> value != null && !value.isBlank())
+                .collect(java.util.stream.Collectors.joining(" "));
+        return composed.isBlank() ? legalName : composed;
+    }
+
+    /**
+     * Prefer the structured {@code contactInfoJson} blob, but fall back to the typed contact
+     * columns ({@code primaryEmail}/{@code secondaryEmail}/{@code phoneNumbers}) when the blob is
+     * absent — as it is for column-sourced persons (People path and seed data).
+     */
+    private EmployeeContactInfoDto resolveContactInfo(Person person) {
+        EmployeeContactInfoDto fromJson = readContactInfo(person.getContactInfoJson());
+        if (fromJson != null) {
+            return fromJson;
+        }
+        return contactInfoFromColumns(person);
+    }
+
+    private EmployeeContactInfoDto contactInfoFromColumns(Person person) {
+        String primaryEmail = normalize(person.getPrimaryEmail());
+        String secondaryEmail = normalize(person.getSecondaryEmail());
+        List<String> phones = person.getPhoneNumbers() == null ? List.of() : person.getPhoneNumbers();
+        String primaryPhone = phones.size() > 0 ? normalize(phones.get(0)) : null;
+        String secondaryPhone = phones.size() > 1 ? normalize(phones.get(1)) : null;
+
+        if (primaryEmail == null && secondaryEmail == null && primaryPhone == null && secondaryPhone == null) {
+            return null;
+        }
+
+        EmployeeContactInfoDto dto = new EmployeeContactInfoDto();
+        dto.setPrimaryEmail(primaryEmail);
+        dto.setSecondaryEmail(secondaryEmail);
+        dto.setPrimaryPhone(primaryPhone);
+        dto.setSecondaryPhone(secondaryPhone);
+        return dto;
     }
 
     private EmployeeContactInfoDto readContactInfo(String contactInfoJson) {

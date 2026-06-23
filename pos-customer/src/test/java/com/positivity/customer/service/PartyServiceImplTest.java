@@ -514,6 +514,23 @@ class PartyServiceImplTest {
     }
 
     @Test
+    void browseParties_nameTerm_alsoMatchesCustomerNumber() {
+        when(partyRepository.findAll())
+                .thenReturn(List.of(
+                        browseable("01", "Acme Industrial", "CUST-100", AccountStatus.ACTIVE),
+                        browseable("02", "Beta Supplies", "CUST-200", AccountStatus.ACTIVE)));
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
+
+        // A single typeahead term routed through `name` finds a customer by account number.
+        SearchPartiesResponse response =
+                service.browseParties(Pageable.unpaged(), "cust-200", null, null, null, null, null);
+
+        assertThat(response.getResults())
+                .extracting(SearchPartiesResponse.PartySummary::getLegalName)
+                .containsExactly("Beta Supplies");
+    }
+
+    @Test
     void browseParties_filtersByStatusAndCustomerNumber() {
         when(partyRepository.findAll())
                 .thenReturn(List.of(
