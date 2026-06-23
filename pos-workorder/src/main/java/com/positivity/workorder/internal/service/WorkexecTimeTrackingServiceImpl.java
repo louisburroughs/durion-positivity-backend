@@ -195,7 +195,9 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
     @Transactional(readOnly = true)
     @NonNull
     public List<WorkexecTimeTrackingService.TimerEntry> getActiveTimers(@NonNull UUID mechanicId) {
-        return laborEntryRepository.findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(mechanicId).stream()
+        // Mirror stopTimers: surface timers the actor tracks or initiated, so the active list and the
+        // stop operation agree for default-attribution / on-behalf entries.
+        return laborEntryRepository.findActiveByTechnicianOrActor(mechanicId).stream()
                 .map(this::toTimerResponse)
                 .toList();
     }
@@ -258,7 +260,10 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                 .notes(request.laborCode())
                 .createdBy(SecurityContextHelper.getCurrentUsername().orElse(SYSTEM_USER_ID))
                 .onBehalfReason(onBehalf ? request.reason() : null)
-                .actedByUserId(onBehalf ? actorPersonId : null)
+                // Record the initiating actor whenever the tracked technician differs from the actor
+                // (default-attribution and on-behalf paths). This is what lets the initiator stop the
+                // timer they started: stop/active resolve by tracked technician OR initiating actor.
+                .actedByUserId(trackedTechnicianId.equals(actorPersonId) ? null : actorPersonId)
                 .createdAt(Instant.now(clock))
                 .build();
 
@@ -318,8 +323,9 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
     @Transactional
     @NonNull
     public List<WorkexecTimeTrackingService.TimerEntry> stopTimers(@NonNull UUID mechanicId) {
-        List<WorkorderLaborEntry> active =
-                laborEntryRepository.findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(mechanicId);
+        // Resolve by tracked technician OR initiating actor so a timer started via the
+        // default-attribution path (tracked technician != actor) can be stopped by its initiator.
+        List<WorkorderLaborEntry> active = laborEntryRepository.findActiveByTechnicianOrActor(mechanicId);
         if (active.isEmpty()) {
             throw new WorkexecTimeTrackingService.WorkexecConflictException(
                     "NO_ACTIVE_TIMER", "No active timer exists for mechanic");

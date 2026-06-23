@@ -99,6 +99,41 @@ class WorkexecTimerContractBehaviorIT extends AbstractWorkexecContractBehaviorIT
     }
 
     @Test
+    @DisplayName("#729: a default-attribution timer can be stopped by its initiator")
+    void defaultAttributionTimerCanBeStoppedByInitiator() throws Exception {
+        Workorder workorder = seedWorkorderInProgress();
+        UUID assignedTech = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        UUID actor = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+        seedCurrentAssignment(workorder, assignedTech);
+
+        // Actor (not the assigned tech) starts a timer; labor is tracked under the assigned technician.
+        mockMvc.perform(post("/v1/workexec/time-entries/timer/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-User-Id", actor.toString())
+                        .content(objectMapper.writeValueAsString(
+                                WorkexecContractPayloads.timerStartPayload(workorder.getId()))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.mechanicId").value(assignedTech.toString()));
+
+        // The initiator's active list surfaces the timer they started for the assigned technician.
+        mockMvc.perform(get("/v1/workexec/time-entries/timer/active").header("X-User-Id", actor.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$[0].mechanicId").value(assignedTech.toString()));
+
+        // Regression: the initiator can stop it (previously 409 NO_ACTIVE_TIMER, leaving it open forever).
+        mockMvc.perform(post("/v1/workexec/time-entries/timer/stop").header("X-User-Id", actor.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stopped[0].status").value("COMPLETED"))
+                .andExpect(jsonPath("$.stopped[0].mechanicId").value(assignedTech.toString()));
+
+        // The assigned technician's labor entry is now closed.
+        List<WorkorderLaborEntry> openForTech =
+                laborEntryRepository.findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(assignedTech);
+        assertThat(openForTech).isEmpty();
+    }
+
+    @Test
     @DisplayName("AC5: on-behalf start for a third technician without authority returns 403")
     void onBehalfWithoutAuthorityForbidden() throws Exception {
         Workorder workorder = seedWorkorderInProgress();
