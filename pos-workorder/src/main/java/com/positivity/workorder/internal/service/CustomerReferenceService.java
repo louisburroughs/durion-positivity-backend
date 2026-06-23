@@ -1,7 +1,9 @@
 package com.positivity.workorder.internal.service;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -74,6 +76,53 @@ public class CustomerReferenceService {
         return resolved;
     }
 
+    public @NonNull List<CustomerRef> searchIdsByName(@Nullable String name, int limit) {
+        if (!StringUtils.hasText(name)) {
+            return List.of();
+        }
+
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = customerRestClient
+                    .get()
+                    .uri("/v1/crm/accounts/parties?name={name}&size={size}", name, limit)
+                    .header("X-User", "pos-workorder")
+                    .header("X-Authorities", "crm:party:view")
+                    .retrieve()
+                    .body(Map.class);
+
+            if (body == null) {
+                return List.of();
+            }
+
+            Object resultsObj = body.get("results");
+            if (!(resultsObj instanceof Collection<?> results)) {
+                return List.of();
+            }
+
+            List<CustomerRef> refs = new ArrayList<>();
+            for (Object rowObj : results) {
+                if (!(rowObj instanceof Map<?, ?> rowMap)) {
+                    continue;
+                }
+                @SuppressWarnings("unchecked")
+                Map<String, Object> row = (Map<String, Object>) rowMap;
+                String partyId = extract(row, "partyId");
+                if (!StringUtils.hasText(partyId)) {
+                    continue;
+                }
+                UUID id = UUID.fromString(partyId.trim());
+                String displayName =
+                        firstNonBlank(extract(row, "displayName"), extract(row, "legalName"), "customer-" + id);
+                refs.add(new CustomerRef(id, displayName));
+            }
+            return refs;
+        } catch (Exception ex) {
+            log.debug("Unable to search customers by name '{}': {}", name, ex.getMessage());
+            return List.of();
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private Map<String, Object> unwrapData(Map<String, Object> body) {
         Object data = body.get("data");
@@ -106,4 +155,7 @@ public class CustomerReferenceService {
             return new CustomerContact("", null);
         }
     }
+
+    public record CustomerRef(
+            @NonNull UUID customerId, @NonNull String customerName) {}
 }
