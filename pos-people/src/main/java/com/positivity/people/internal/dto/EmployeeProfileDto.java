@@ -41,6 +41,12 @@ public class EmployeeProfileDto {
     @Schema(description = "Timestamp the current status became effective", example = "2026-01-15T09:30:00Z", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant statusEffectiveAt;
 
+    @Schema(description = "Timestamp the employee record was created", example = "2026-01-15T09:30:00Z", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private Instant createdAt;
+
+    @Schema(description = "Timestamp the employee record was last updated", example = "2026-02-01T14:05:00Z", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private Instant updatedAt;
+
     @Schema(
             description = "Non-fatal warnings raised while resolving the profile",
             example = "[\"Potential duplicate employee number\"]",
