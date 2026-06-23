@@ -32,6 +32,8 @@ tags:
   description: Manage journal entries including posting and reversal.
 - name: GL Accounts
   description: Manage chart of accounts including lifecycle actions.
+- name: Location Cost Reporting
+  description: Read-only location Labor & Overhead Cost Report (CAP-316)
 - name: AP Payments
   description: Accounts Payable vendor payment operations
 - name: Financial Reporting
@@ -2418,6 +2420,68 @@ paths:
         - accounting:ap:view
       x-required-permissions:
       - accounting:ap:view
+  /v1/accounting/reports/location/labor-overhead:
+    get:
+      tags:
+      - Location Cost Reporting
+      summary: Generate Labor & Overhead Cost Report
+      description: Return the canonical Labor & Overhead cost-line matrix (12 monthly amounts + YTD, with section subtotals) for a location and fiscal year, derived from posted GL data.
+      operationId: generateLaborOverheadReport
+      parameters:
+      - name: locationId
+        in: query
+        description: Location/dealer identifier (accounting locationId dimension)
+        required: true
+        schema:
+          type: string
+          minLength: 1
+        example: LOC-107
+      - name: fiscalYear
+        in: query
+        description: Fiscal year
+        required: true
+        schema:
+          type: integer
+          format: int32
+        example: 2026
+      - name: asOfMonth
+        in: query
+        description: Highest elapsed month bounding YTD (1-12); defaults to 12
+        required: false
+        schema:
+          type: integer
+          format: int32
+        example: 6
+      responses:
+        '200':
+          description: Report generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborOverheadCostReport'
+        '400':
+          description: Invalid locationId, fiscalYear, or asOfMonth
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborOverheadCostReport'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborOverheadCostReport'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborOverheadCostReport'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reports/financial/income-statement:
     get:
       tags:
@@ -5263,6 +5327,14 @@ components:
           format: date-time
           description: Creation timestamp (UTC).
           example: 2026-02-27 12:00:00+00:00
+      required:
+      - createdAt
+      - invoiceId
+      - status
+      - subtotal
+      - taxAmount
+      - totalAmount
+      - workorderId
     GLAccountCreateRequest:
       type: object
       description: Request to create a new GL account
@@ -6253,6 +6325,119 @@ components:
       - candidateId
       - invoiceEventId
       - vendorBillId
+    LaborOverheadCostReport:
+      type: object
+      description: Read-only Labor & Overhead Cost Report (CAP-316) for a location and fiscal year
+      properties:
+        locationId:
+          type: string
+          description: Location/dealer identifier (accounting locationId dimension)
+          example: LOC-107
+        locationLabel:
+          type: string
+          description: Human-readable location label
+          example: Smetzer's Wooster
+        fiscalYear:
+          type: integer
+          format: int32
+          description: Fiscal year
+          example: 2026
+        asOfMonth:
+          type: integer
+          format: int32
+          description: Highest elapsed month bounding YTD (1-12)
+          example: 12
+        currency:
+          type: string
+          description: Currency of the amounts (line 2.11.4 is always USD)
+          example: USD
+        localCurrencyPerUsd:
+          type: number
+          description: Local currency units per USD (1.00 for US plants)
+          example: 1.0
+        averageRate:
+          type: number
+          description: Average conversion rate used for the year (1.00 for US plants)
+          example: 1.0
+        lines:
+          type: array
+          description: Cost lines in canonical order (Labor §1, Overhead §2, totals)
+          items:
+            $ref: '#/components/schemas/LaborOverheadReportLine'
+      required:
+      - asOfMonth
+      - averageRate
+      - currency
+      - fiscalYear
+      - lines
+      - localCurrencyPerUsd
+      - locationId
+    LaborOverheadReportLine:
+      type: object
+      description: A single Labor & Overhead cost line with monthly amounts and YTD
+      properties:
+        code:
+          type: string
+          description: Canonical line code
+          example: 1.1.1
+        label:
+          type: string
+          description: Display label
+          example: Hourly wages and bonuses
+        parentCode:
+          type: string
+          description: Parent line code, if any
+          example: '1.1'
+        level:
+          type: integer
+          format: int32
+          description: Hierarchy depth (totals = 1, N.M = 2, N.M.K = 3)
+          example: 3
+        costType:
+          type: string
+          description: Fixed/Variable classification; absent when the source shows none
+          enum:
+          - FIXED
+          - VARIABLE
+          - FIXED_IF_LOW_VOLUME
+        definition:
+          type: string
+          description: Include/exclude guidance from the Definitions tab
+        monthly:
+          type: array
+          description: 12 monthly amounts in canonical order (index 0 = January)
+          example:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 62645
+          - 0
+          - 0
+          items:
+            type: number
+        ytd:
+          type: number
+          description: Year-to-date total over elapsed months
+          example: 62645
+        subtotal:
+          type: boolean
+        isSubtotal:
+          type: boolean
+          description: True for computed roll-up rows; false for GL-mapped leaf lines
+          example: false
+      required:
+      - code
+      - isSubtotal
+      - label
+      - level
+      - monthly
+      - ytd
     IncomeStatementReport:
       type: object
       description: Income statement (Profit & Loss) report built from POSTED journal entries
