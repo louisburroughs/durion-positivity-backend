@@ -1,6 +1,8 @@
 -- Repeatable seed migration for pos-people operational data.
--- 16 employees across 7 roles for Durion Positivity (medium truck mechanical repair corporation).
--- Locations: CLT-MAIN-001, CLT-SOUTH-001, CLT-NORTH-001, CORP-HQ-001
+-- 39 employees across 7 roles for Durion Positivity (medium truck mechanical repair corporation).
+-- Service centers carry the full shop-operational role set and are staffed with
+-- at least one technician per bay (±2); corporate roles remain at CORP-HQ-001.
+-- Locations: CLT-MAIN-001, CLT-SOUTH-001, CLT-NORTH-001, CLT-MOB-HUB-001, CORP-HQ-001
 --
 -- Additional person rows (non-employees) for cross-service FK alignment:
 --   01960024-*: 50 customer persons (person_party.person_id in pos-customer)
@@ -352,3 +354,102 @@ VALUES
     ('01960030-0000-7000-8000-000000000014'::uuid, '01960025-0000-7000-8000-000000000014'::uuid, 'EMAIL', 's.davenport@highlandmoving.example.com', true, NOW(), NOW()),
     ('01960031-0000-7000-8000-000000000014'::uuid, '01960025-0000-7000-8000-000000000014'::uuid, 'PHONE_WORK', '980-555-3020', true, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
+
+-- =========================================================================
+-- OPERATIONAL FILL: additional staffing so every service center carries the
+-- full shop-operational role set (LOCATION_MANAGER, DISPATCHER,
+-- SERVICE_ADVISOR, TECHNICIAN) and at least one technician per bay (±2).
+-- Corporate roles (SYSTEM_ADMINISTRATOR, ACCOUNTING_*) remain at CORP-HQ-001.
+--
+-- Technician sizing per location (target == capacity, within the ±2 band):
+--   CLT-MAIN-001  : 8 bays          → 8 techs (3 existing + 5 here)
+--   CLT-SOUTH-001 : 7 bays          → 7 techs (2 existing + 5 here)
+--   CLT-NORTH-001 : 6 bays          → 6 techs (2 existing + 4 here)
+--   CLT-MOB-HUB-001: 2 mobile units → 2 techs (0 existing + 2 here)
+--
+-- New employees EMP-0017..EMP-0039 (person ids 01960011-*-0011..0027).
+-- Appended fill — idempotent via ON CONFLICT; does not alter rows above.
+-- These are staffing records only; no security users / logins are seeded.
+-- =========================================================================
+
+INSERT INTO person (id, first_name, last_name, username, employee_number, primary_email, status, hire_date, created_at, updated_at)
+VALUES
+    -- CLT-MAIN-001 technicians (+5 → 8 total)
+    ('01960011-0000-7000-8000-000000000011'::uuid, 'Hector',  'Alvarez',    'hector.alvarez',  'EMP-0017', 'hector.alvarez@durion.internal',  'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000012'::uuid, 'Naomi',   'Ford',       'naomi.ford',      'EMP-0018', 'naomi.ford@durion.internal',      'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000013'::uuid, 'Trevor',  'Quinn',      'trevor.quinn',    'EMP-0019', 'trevor.quinn@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000014'::uuid, 'Camille', 'Boyd',       'camille.boyd',    'EMP-0020', 'camille.boyd@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000015'::uuid, 'Andre',   'Foster',     'andre.foster',    'EMP-0021', 'andre.foster@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    -- CLT-SOUTH-001 technicians (+5 → 7 total)
+    ('01960011-0000-7000-8000-000000000016'::uuid, 'Lila',    'Montgomery', 'lila.montgomery', 'EMP-0022', 'lila.montgomery@durion.internal', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000017'::uuid, 'Desmond', 'Pace',       'desmond.pace',    'EMP-0023', 'desmond.pace@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000018'::uuid, 'Brooke',  'Hadley',     'brooke.hadley',   'EMP-0024', 'brooke.hadley@durion.internal',   'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000019'::uuid, 'Felix',   'Romano',     'felix.romano',    'EMP-0025', 'felix.romano@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000001a'::uuid, 'Gina',    'Vaughn',     'gina.vaughn',     'EMP-0026', 'gina.vaughn@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    -- CLT-NORTH-001 technicians (+4 → 6 total)
+    ('01960011-0000-7000-8000-00000000001b'::uuid, 'Omar',    'Haddad',     'omar.haddad',     'EMP-0027', 'omar.haddad@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000001c'::uuid, 'Sierra',  'Lowe',       'sierra.lowe',     'EMP-0028', 'sierra.lowe@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000001d'::uuid, 'Russell', 'Pike',       'russell.pike',    'EMP-0029', 'russell.pike@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000001e'::uuid, 'Maya',    'Devlin',     'maya.devlin',     'EMP-0030', 'maya.devlin@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    -- CLT-MOB-HUB-001 technicians (+2 → 2 total, sized to 2 mobile units)
+    ('01960011-0000-7000-8000-00000000001f'::uuid, 'Caleb',   'Frost',      'caleb.frost',     'EMP-0031', 'caleb.frost@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000020'::uuid, 'Yvonne',  'Marsh',      'yvonne.marsh',    'EMP-0032', 'yvonne.marsh@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    -- Role coverage: LOCATION_MANAGER for SOUTH / NORTH / MOB-HUB
+    ('01960011-0000-7000-8000-000000000021'::uuid, 'Bernard', 'Cole',       'bernard.cole',    'EMP-0033', 'bernard.cole@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000022'::uuid, 'Gloria',  'Mensah',     'gloria.mensah',   'EMP-0034', 'gloria.mensah@durion.internal',   'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000023'::uuid, 'Victor',  'Salazar',    'victor.salazar',  'EMP-0035', 'victor.salazar@durion.internal',  'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    -- Role coverage: DISPATCHER for NORTH / MOB-HUB
+    ('01960011-0000-7000-8000-000000000024'::uuid, 'Renee',   'Albright',   'renee.albright',  'EMP-0036', 'renee.albright@durion.internal',  'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000025'::uuid, 'Curtis',  'Benton',     'curtis.benton',   'EMP-0037', 'curtis.benton@durion.internal',   'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    -- Role coverage: SERVICE_ADVISOR for NORTH / MOB-HUB
+    ('01960011-0000-7000-8000-000000000026'::uuid, 'Paula',   'Knight',     'paula.knight',    'EMP-0038', 'paula.knight@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000027'::uuid, 'Simon',   'Hayes',      'simon.hayes',     'EMP-0039', 'simon.hayes@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+-- person_location_assignment for the additional staff (guarded by location existence).
+-- effective_from = CURRENT_DATE keeps each row distinct under the
+-- (person_id, location_id, role, effective_from) unique key.
+DO $$
+BEGIN
+    IF to_regclass('public.person') IS NOT NULL
+       AND to_regclass('public.location') IS NOT NULL
+    THEN
+        INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
+        SELECT v.id, v.person_id, v.location_id, v.role, TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
+        FROM (
+            VALUES
+                -- CLT-MAIN-001 technicians
+                ('01960013-0000-7000-8000-000000000011'::uuid, '01960011-0000-7000-8000-000000000011'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'TECHNICIAN'),
+                ('01960013-0000-7000-8000-000000000012'::uuid, '01960011-0000-7000-8000-000000000012'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'TECHNICIAN'),
+                ('01960013-0000-7000-8000-000000000013'::uuid, '01960011-0000-7000-8000-000000000013'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'TECHNICIAN'),
+                ('01960013-0000-7000-8000-000000000014'::uuid, '01960011-0000-7000-8000-000000000014'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'TECHNICIAN'),
+                ('01960013-0000-7000-8000-000000000015'::uuid, '01960011-0000-7000-8000-000000000015'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'TECHNICIAN'),
+                -- CLT-SOUTH-001 technicians
+                ('01960013-0000-7000-8000-000000000016'::uuid, '01960011-0000-7000-8000-000000000016'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'TECHNICIAN'),
+                ('01960013-0000-7000-8000-000000000017'::uuid, '01960011-0000-7000-8000-000000000017'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'TECHNICIAN'),
+                ('01960013-0000-7000-8000-000000000018'::uuid, '01960011-0000-7000-8000-000000000018'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'TECHNICIAN'),
+                ('01960013-0000-7000-8000-000000000019'::uuid, '01960011-0000-7000-8000-000000000019'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'TECHNICIAN'),
+                ('01960013-0000-7000-8000-00000000001a'::uuid, '01960011-0000-7000-8000-00000000001a'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'TECHNICIAN'),
+                -- CLT-NORTH-001 technicians
+                ('01960013-0000-7000-8000-00000000001b'::uuid, '01960011-0000-7000-8000-00000000001b'::uuid, '01960003-0000-7000-8000-000000000003'::uuid, 'TECHNICIAN'),
+                ('01960013-0000-7000-8000-00000000001c'::uuid, '01960011-0000-7000-8000-00000000001c'::uuid, '01960003-0000-7000-8000-000000000003'::uuid, 'TECHNICIAN'),
+                ('01960013-0000-7000-8000-00000000001d'::uuid, '01960011-0000-7000-8000-00000000001d'::uuid, '01960003-0000-7000-8000-000000000003'::uuid, 'TECHNICIAN'),
+                ('01960013-0000-7000-8000-00000000001e'::uuid, '01960011-0000-7000-8000-00000000001e'::uuid, '01960003-0000-7000-8000-000000000003'::uuid, 'TECHNICIAN'),
+                -- CLT-MOB-HUB-001 technicians
+                ('01960013-0000-7000-8000-00000000001f'::uuid, '01960011-0000-7000-8000-00000000001f'::uuid, '01960003-0000-7000-8000-000000000004'::uuid, 'TECHNICIAN'),
+                ('01960013-0000-7000-8000-000000000020'::uuid, '01960011-0000-7000-8000-000000000020'::uuid, '01960003-0000-7000-8000-000000000004'::uuid, 'TECHNICIAN'),
+                -- LOCATION_MANAGER coverage
+                ('01960013-0000-7000-8000-000000000021'::uuid, '01960011-0000-7000-8000-000000000021'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'LOCATION_MANAGER'),
+                ('01960013-0000-7000-8000-000000000022'::uuid, '01960011-0000-7000-8000-000000000022'::uuid, '01960003-0000-7000-8000-000000000003'::uuid, 'LOCATION_MANAGER'),
+                ('01960013-0000-7000-8000-000000000023'::uuid, '01960011-0000-7000-8000-000000000023'::uuid, '01960003-0000-7000-8000-000000000004'::uuid, 'LOCATION_MANAGER'),
+                -- DISPATCHER coverage
+                ('01960013-0000-7000-8000-000000000024'::uuid, '01960011-0000-7000-8000-000000000024'::uuid, '01960003-0000-7000-8000-000000000003'::uuid, 'DISPATCHER'),
+                ('01960013-0000-7000-8000-000000000025'::uuid, '01960011-0000-7000-8000-000000000025'::uuid, '01960003-0000-7000-8000-000000000004'::uuid, 'DISPATCHER'),
+                -- SERVICE_ADVISOR coverage
+                ('01960013-0000-7000-8000-000000000026'::uuid, '01960011-0000-7000-8000-000000000026'::uuid, '01960003-0000-7000-8000-000000000003'::uuid, 'SERVICE_ADVISOR'),
+                ('01960013-0000-7000-8000-000000000027'::uuid, '01960011-0000-7000-8000-000000000027'::uuid, '01960003-0000-7000-8000-000000000004'::uuid, 'SERVICE_ADVISOR')
+        ) AS v(id, person_id, location_id, role)
+        WHERE EXISTS (SELECT 1 FROM public.location l WHERE l.id = v.location_id)
+        ON CONFLICT (id) DO NOTHING;
+    END IF;
+END $$;
