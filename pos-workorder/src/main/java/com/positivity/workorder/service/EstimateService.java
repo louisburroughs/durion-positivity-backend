@@ -44,6 +44,18 @@ public interface EstimateService {
             @Nullable UUID customerId, @Nullable UUID vehicleId, @NonNull Pageable pageable);
 
     /**
+     * Free-text search for estimates by query string matching the estimate number,
+     * customer name (resolved to customer ids), or the estimate id directly. Resulting
+     * rows are enriched with the resolved customer display name.
+     *
+     * @param q        free-text query (estimate number, customer name, or estimate id)
+     * @param pageable pagination and sorting configuration
+     * @return page of estimate summaries enriched with {@code customerName}
+     */
+    @NonNull
+    Page<EstimateSummaryResponse> findEstimatesByQuery(@NonNull String q, @NonNull Pageable pageable);
+
+    /**
      * Create a new draft estimate with proper validation and defaulting
      *
      * @param request         The create estimate request with customer and vehicle
