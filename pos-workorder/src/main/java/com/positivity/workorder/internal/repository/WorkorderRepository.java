@@ -11,6 +11,8 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -61,4 +63,18 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
      */
     @NonNull
     List<Workorder> findByScheduledDateAndLocationId(@NonNull LocalDate scheduledDate, @NonNull UUID locationId);
+
+    /**
+     * Free-text workorder search matching either a resolved customer id (from a name
+     * search) or the workorder id directly.
+     *
+     * @param customerIds customer ids resolved from a name search (must be non-empty for JPQL IN)
+     * @param idQuery     the query parsed as a UUID, or {@code null} if not a UUID
+     * @param pageable    pagination configuration
+     * @return page of matching workorders
+     */
+    @Query("SELECT w FROM Workorder w WHERE w.customerId IN :customerIds "
+            + "OR (:idQuery IS NOT NULL AND w.id = :idQuery)")
+    Page<Workorder> searchByQuery(
+            @Param("customerIds") Collection<UUID> customerIds, @Param("idQuery") UUID idQuery, Pageable pageable);
 }
