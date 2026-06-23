@@ -121,6 +121,12 @@ public final class EventTypes {
                                 "Drill down from GL account to source journal entries")
                         .build(),
 
+                // LaborOverheadReportController - 1 event (CAP-316)
+                EventTypeRegistration.search(
+                                "REPORT_LABOR_OVERHEAD_GENERATE",
+                                "Generate Labor & Overhead cost report for a location and fiscal year")
+                        .build(),
+
                 // GLMappingController - 2 events (GL Mapping)
                 EventTypeRegistration.write(
                                 "ACCOUNTING_GL_MAPPING_CREATE", "Create GL mapping from external code to GL account")

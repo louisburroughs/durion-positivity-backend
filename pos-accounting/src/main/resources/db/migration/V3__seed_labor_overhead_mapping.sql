@@ -13,13 +13,13 @@ ALTER TABLE statement_line_mappings
         CHECK (statement_type IN ('INCOME_STATEMENT', 'BALANCE_SHEET', 'LABOR_OVERHEAD'));
 
 -- Representative GL accounts for retread-plant labor & overhead lines.
-INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, created_at, created_by, modified_at, modified_by)
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, version, created_at, created_by, modified_at, modified_by)
 VALUES
-    ('a1000000-0000-7000-8000-000000000001'::uuid, '6010', 'Retread Plant Hourly Wages', 'EXPENSE', NOW(), 'seed-generator', NOW(), 'seed-generator'),
-    ('a1000000-0000-7000-8000-000000000002'::uuid, '6110', 'Retread Plant FICA Expense', 'EXPENSE', NOW(), 'seed-generator', NOW(), 'seed-generator'),
-    ('a1000000-0000-7000-8000-000000000003'::uuid, '6400', 'Retread Plant Utilities', 'EXPENSE', NOW(), 'seed-generator', NOW(), 'seed-generator'),
-    ('a1000000-0000-7000-8000-000000000004'::uuid, '6450', 'Retread MRT Equipment Depreciation (USD)', 'EXPENSE', NOW(), 'seed-generator', NOW(), 'seed-generator'),
-    ('a1000000-0000-7000-8000-000000000005'::uuid, '6900', 'Rubber Dust Sales Income', 'REVENUE', NOW(), 'seed-generator', NOW(), 'seed-generator')
+    ('a1000000-0000-7000-8000-000000000001'::uuid, '6010', 'Retread Plant Hourly Wages', 'EXPENSE', 0, NOW(), 'seed-generator', NOW(), 'seed-generator'),
+    ('a1000000-0000-7000-8000-000000000002'::uuid, '6110', 'Retread Plant FICA Expense', 'EXPENSE', 0, NOW(), 'seed-generator', NOW(), 'seed-generator'),
+    ('a1000000-0000-7000-8000-000000000003'::uuid, '6400', 'Retread Plant Utilities', 'EXPENSE', 0, NOW(), 'seed-generator', NOW(), 'seed-generator'),
+    ('a1000000-0000-7000-8000-000000000004'::uuid, '6450', 'Retread MRT Equipment Depreciation (USD)', 'EXPENSE', 0, NOW(), 'seed-generator', NOW(), 'seed-generator'),
+    ('a1000000-0000-7000-8000-000000000005'::uuid, '6900', 'Rubber Dust Sales Income', 'REVENUE', 0, NOW(), 'seed-generator', NOW(), 'seed-generator')
 ON CONFLICT (account_code) DO UPDATE SET
     account_name = EXCLUDED.account_name,
     account_type = EXCLUDED.account_type,

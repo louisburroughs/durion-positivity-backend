@@ -51,6 +51,13 @@ public class LaborOverheadReportLine {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private boolean isSubtotal;
 
+    @JsonProperty("usdOnly")
+    @Schema(
+            description = "True for line 2.11.4, which is reported in USD even on local-currency plants",
+            example = "false",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    private boolean usdOnly;
+
     @Schema(
             description = "Include/exclude guidance from the Definitions tab",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)

@@ -38,7 +38,10 @@ class LaborOverheadReportServiceImplTest {
     private static final int FISCAL_YEAR = 2026;
 
     private static final UUID ACCT_WAGES = UUID.fromString("a1000000-0000-7000-8000-000000000001");
+    private static final UUID ACCT_WAGES_2 = UUID.fromString("a1000000-0000-7000-8000-00000000000a");
     private static final UUID ACCT_FICA = UUID.fromString("a1000000-0000-7000-8000-000000000002");
+    private static final UUID ACCT_UTIL = UUID.fromString("a1000000-0000-7000-8000-000000000003");
+    private static final UUID ACCT_INV = UUID.fromString("a1000000-0000-7000-8000-000000000004");
     private static final UUID ACCT_DUST = UUID.fromString("a1000000-0000-7000-8000-000000000005");
 
     @Mock
@@ -207,5 +210,106 @@ class LaborOverheadReportServiceImplTest {
         assertThat(report.getAverageRate()).isEqualByComparingTo("1.00");
         assertThat(report.getAsOfMonth()).isEqualTo(12); // null defaults to December
         assertThat(report.getLocationId()).isEqualTo(LOCATION);
+    }
+
+    @Test
+    void generate_rollsUpOverheadAndGrandTotalFromDistinctSections() {
+        mappings(mapping("1.1.1", ACCT_WAGES), mapping("2.10", ACCT_UTIL));
+        postedLines(
+                line(ACCT_WAGES, 1, LOCATION, money("1000"), BigDecimal.ZERO),
+                line(ACCT_UTIL, 1, LOCATION, money("250"), BigDecimal.ZERO));
+
+        LaborOverheadCostReport report = service.generate(LOCATION, FISCAL_YEAR, 12);
+
+        assertThat(find(report, LaborOverheadTaxonomy.TOTAL_LABOR).getMonthly().get(0))
+                .isEqualByComparingTo("1000");
+        assertThat(find(report, LaborOverheadTaxonomy.TOTAL_OVERHEAD)
+                        .getMonthly()
+                        .get(0))
+                .isEqualByComparingTo("250");
+        assertThat(find(report, LaborOverheadTaxonomy.TOTAL_LABOR_OVERHEAD)
+                        .getMonthly()
+                        .get(0))
+                .isEqualByComparingTo("1250"); // labor + overhead, distinct sections
+    }
+
+    @Test
+    void generate_negativeIncomeLineReducesOverheadTotal() {
+        mappings(mapping("2.10", ACCT_UTIL), mapping("2.13", ACCT_INV));
+        postedLines(
+                line(ACCT_UTIL, 2, LOCATION, money("300"), BigDecimal.ZERO),
+                line(ACCT_INV, 2, LOCATION, BigDecimal.ZERO, money("50"))); // credit -> interest income
+
+        LaborOverheadCostReport report = service.generate(LOCATION, FISCAL_YEAR, 12);
+
+        assertThat(find(report, "2.13").getMonthly().get(1)).isEqualByComparingTo("-50");
+        assertThat(find(report, LaborOverheadTaxonomy.TOTAL_OVERHEAD)
+                        .getMonthly()
+                        .get(1))
+                .isEqualByComparingTo("250"); // 300 - 50, sign survives roll-up
+    }
+
+    @Test
+    void generate_sumsMultipleAccountsMappedToOneLine() {
+        mappings(mapping("1.1.1", ACCT_WAGES), mapping("1.1.1", ACCT_WAGES_2));
+        postedLines(
+                line(ACCT_WAGES, 1, LOCATION, money("1000"), BigDecimal.ZERO),
+                line(ACCT_WAGES_2, 1, LOCATION, money("400"), BigDecimal.ZERO));
+
+        LaborOverheadReportLine wages = find(service.generate(LOCATION, FISCAL_YEAR, 12), "1.1.1");
+
+        assertThat(wages.getMonthly().get(0)).isEqualByComparingTo("1400"); // both accounts summed
+    }
+
+    @Test
+    void generate_ytdLowerBoundAsOfMonthOne() {
+        mappings(mapping("1.1.1", ACCT_WAGES));
+        postedLines(
+                line(ACCT_WAGES, 1, LOCATION, money("100"), BigDecimal.ZERO),
+                line(ACCT_WAGES, 2, LOCATION, money("200"), BigDecimal.ZERO));
+
+        LaborOverheadReportLine wages = find(service.generate(LOCATION, FISCAL_YEAR, 1), "1.1.1");
+
+        assertThat(wages.getMonthly().get(1)).isEqualByComparingTo("200"); // February still populated
+        assertThat(wages.getYtd()).isEqualByComparingTo("100"); // YTD only January
+    }
+
+    @Test
+    void generate_ytdDefaultSumsFullYear() {
+        mappings(mapping("1.1.1", ACCT_WAGES));
+        postedLines(
+                line(ACCT_WAGES, 1, LOCATION, money("100"), BigDecimal.ZERO),
+                line(ACCT_WAGES, 6, LOCATION, money("60"), BigDecimal.ZERO),
+                line(ACCT_WAGES, 12, LOCATION, money("12"), BigDecimal.ZERO));
+
+        LaborOverheadReportLine wages = find(service.generate(LOCATION, FISCAL_YEAR, null), "1.1.1");
+
+        assertThat(wages.getYtd()).isEqualByComparingTo("172"); // null asOfMonth -> all 12 months
+    }
+
+    @Test
+    void generate_excludesLinesWithoutMatchingLocationDimension() {
+        mappings(mapping("1.1.1", ACCT_WAGES));
+        JournalEntryLine nullDimensions = line(ACCT_WAGES, 1, LOCATION, money("100"), BigDecimal.ZERO);
+        nullDimensions.setDimensions(null);
+        JournalEntryLine missingLocationKey = line(ACCT_WAGES, 1, LOCATION, money("200"), BigDecimal.ZERO);
+        missingLocationKey.setDimensions(Map.of("costCenterId", "CC-1"));
+        postedLines(nullDimensions, missingLocationKey, line(ACCT_WAGES, 1, LOCATION, money("5"), BigDecimal.ZERO));
+
+        LaborOverheadReportLine wages = find(service.generate(LOCATION, FISCAL_YEAR, 12), "1.1.1");
+
+        assertThat(wages.getMonthly().get(0)).isEqualByComparingTo("5"); // only the matching-location line counts
+    }
+
+    @Test
+    void generate_flagsUsdOnlyOnLine2_11_4() {
+        when(statementLineMappingRepository.findByStatementTypeOrderByDisplayOrder(any()))
+                .thenReturn(List.of());
+
+        LaborOverheadCostReport report = service.generate(LOCATION, FISCAL_YEAR, 12);
+
+        assertThat(find(report, "2.11.4").isUsdOnly()).isTrue();
+        assertThat(find(report, "2.11.5").isUsdOnly()).isFalse();
+        assertThat(find(report, "1.1.1").isUsdOnly()).isFalse();
     }
 }

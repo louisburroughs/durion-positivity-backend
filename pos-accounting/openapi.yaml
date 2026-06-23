@@ -6431,12 +6431,17 @@ components:
           type: boolean
           description: True for computed roll-up rows; false for GL-mapped leaf lines
           example: false
+        usdOnly:
+          type: boolean
+          description: True for line 2.11.4, which is reported in USD even on local-currency plants
+          example: false
       required:
       - code
       - isSubtotal
       - label
       - level
       - monthly
+      - usdOnly
       - ytd
     IncomeStatementReport:
       type: object

@@ -83,6 +83,32 @@ class LaborOverheadReportContractBehaviorIT extends BaseContractIntegrationTest 
         assertThat(line(report, "2.5").getYtd()).isEqualByComparingTo("0");
     }
 
+    @Test
+    @DisplayName("Only POSTED entries contribute: DRAFT and REVERSED on the same account/period are excluded")
+    void excludesNonPostedEntries() throws Exception {
+        // Distinct location: the contract IT shares one H2 instance across tests with no per-test
+        // reset, and line-code mappings are global, so each test scopes its postings by location.
+        String location = "LOC-IT-316-NONPOSTED";
+        GLAccount account = seedAccount("6010-IT2", "Retread Plant Hourly Wages (IT2)");
+        seedMapping("1.1.1", account);
+        seedPostedExpense(account, 3, location, new BigDecimal("1000.00"));
+        seedExpense(account, 3, location, new BigDecimal("500.00"), JournalEntryStatus.DRAFT);
+        seedExpense(account, 3, location, new BigDecimal("700.00"), JournalEntryStatus.REVERSED);
+
+        String json = mockMvc.perform(withAuth(get(PATH)
+                        .param("locationId", location)
+                        .param("fiscalYear", String.valueOf(FISCAL_YEAR))
+                        .param("asOfMonth", "12")))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        LaborOverheadReportLine wages = line(objectMapper.readValue(json, LaborOverheadCostReport.class), "1.1.1");
+        assertThat(wages.getMonthly().get(2)).isEqualByComparingTo("1000.00"); // draft + reversed not counted
+        assertThat(wages.getYtd()).isEqualByComparingTo("1000.00");
+    }
+
     private GLAccount seedAccount(String code, String name) {
         GLAccount account = new GLAccount();
         account.setAccountCode(code);
@@ -105,8 +131,13 @@ class LaborOverheadReportContractBehaviorIT extends BaseContractIntegrationTest 
     }
 
     private void seedPostedExpense(GLAccount account, int month, String location, BigDecimal amount) {
+        seedExpense(account, month, location, amount, JournalEntryStatus.POSTED);
+    }
+
+    private void seedExpense(
+            GLAccount account, int month, String location, BigDecimal amount, JournalEntryStatus status) {
         JournalEntry entry = new JournalEntry();
-        entry.setStatus(JournalEntryStatus.POSTED);
+        entry.setStatus(status);
         entry.setTransactionDate(LocalDateTime.of(FISCAL_YEAR, month, 15, 0, 0));
         entry.setTotalDebits(amount);
         entry.setTotalCredits(amount);

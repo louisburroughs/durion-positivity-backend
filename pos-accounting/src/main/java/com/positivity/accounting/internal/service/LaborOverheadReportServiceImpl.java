@@ -193,6 +193,7 @@ public class LaborOverheadReportServiceImpl implements LaborOverheadReportServic
                 .level(def.level())
                 .costType(def.costType())
                 .isSubtotal(def.isSubtotal())
+                .usdOnly(def.usdOnly())
                 .definition(def.definition())
                 .monthly(List.of(monthly))
                 .ytd(ytd)
