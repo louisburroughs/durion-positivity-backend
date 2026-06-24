@@ -167,14 +167,13 @@ public class EstimateServiceImpl implements EstimateService {
         Map<UUID, CustomerReferenceService.CustomerContact> contacts =
                 customerReferenceService.resolveAll(pageCustomerIds);
 
-        // Enrich with vehicle label + VIN for the finder dropdown.
-        List<UUID> pageVehicleIds = page.getContent().stream()
-                .map(Estimate::getVehicleId)
-                .filter(java.util.Objects::nonNull)
-                .distinct()
+        // Enrich with vehicle label + VIN for the finder dropdown. Vehicles are mastered under
+        // the owning CRM account, so resolution is keyed by (customerId, vehicleId).
+        List<VehicleReferenceService.VehicleKey> vehicleKeys = page.getContent().stream()
+                .filter(e -> e.getVehicleId() != null)
+                .map(e -> new VehicleReferenceService.VehicleKey(e.getCustomerId(), e.getVehicleId()))
                 .toList();
-        Map<UUID, VehicleReferenceService.VehicleReference> vehicles =
-                vehicleReferenceService.resolveAll(pageVehicleIds);
+        Map<UUID, VehicleReferenceService.VehicleReference> vehicles = vehicleReferenceService.resolveAll(vehicleKeys);
 
         return page.map(estimate -> {
             EstimateSummaryResponse summary = toEstimateSummaryResponse(estimate);

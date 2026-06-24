@@ -155,9 +155,9 @@ class WipServiceImplTest {
                 .thenAnswer(invocation ->
                         new CustomerReferenceService.CustomerContact("customer-" + invocation.getArgument(0), null));
         lenient()
-                .when(vehicleReferenceService.resolve(any(UUID.class)))
+                .when(vehicleReferenceService.resolve(any(), any(UUID.class)))
                 .thenAnswer(invocation ->
-                        new VehicleReferenceService.VehicleReference("vehicle-" + invocation.getArgument(0), null));
+                        new VehicleReferenceService.VehicleReference("vehicle-" + invocation.getArgument(1), null));
     }
 
     // -------------------------------------------------------------------------

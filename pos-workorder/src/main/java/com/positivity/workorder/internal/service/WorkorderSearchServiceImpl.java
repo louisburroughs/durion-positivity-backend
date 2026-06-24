@@ -54,13 +54,11 @@ public class WorkorderSearchServiceImpl implements WorkorderSearchService {
                 .toList();
         Map<UUID, CustomerReferenceService.CustomerContact> contacts =
                 customerReferenceService.resolveAll(pageCustomerIds);
-        List<UUID> pageVehicleIds = page.getContent().stream()
-                .map(Workorder::getVehicleId)
-                .filter(Objects::nonNull)
-                .distinct()
+        List<VehicleReferenceService.VehicleKey> vehicleKeys = page.getContent().stream()
+                .filter(w -> w.getVehicleId() != null)
+                .map(w -> new VehicleReferenceService.VehicleKey(w.getCustomerId(), w.getVehicleId()))
                 .toList();
-        Map<UUID, VehicleReferenceService.VehicleReference> vehicles =
-                vehicleReferenceService.resolveAll(pageVehicleIds);
+        Map<UUID, VehicleReferenceService.VehicleReference> vehicles = vehicleReferenceService.resolveAll(vehicleKeys);
 
         return page.map(workorder -> {
             CustomerReferenceService.CustomerContact contact =
