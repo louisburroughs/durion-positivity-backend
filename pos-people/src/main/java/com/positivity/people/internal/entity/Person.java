@@ -82,11 +82,8 @@ public class Person {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
-    private String primaryEmail;
-
-    private String secondaryEmail;
-
-    // Phone numbers consolidated into person_contact_point (PHONE_WORK); see PersonWorkPhoneService.
+    // Email + phone numbers consolidated into person_contact_point (EMAIL / PHONE_WORK);
+    // see PersonEmailService / PersonWorkPhoneService.
 
     /** Optional, validated externally - stick with username not userName */
     private String username;

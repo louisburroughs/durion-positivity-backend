@@ -42,8 +42,7 @@ class PersonSpecificationsTest {
         Root<Person> root = mockRoot();
         CriteriaBuilder cb = mockCb();
 
-        PersonSpecifications.directoryFilter("EMPLOYEE", null)
-                .toPredicate(root, mock(CriteriaQuery.class), cb);
+        PersonSpecifications.directoryFilter("EMPLOYEE", null).toPredicate(root, mock(CriteriaQuery.class), cb);
 
         verify(root).get("employeeNumber");
         verify(cb).isNotNull(any());
@@ -55,8 +54,7 @@ class PersonSpecificationsTest {
         Root<Person> root = mockRoot();
         CriteriaBuilder cb = mockCb();
 
-        PersonSpecifications.directoryFilter("ACTIVE", null)
-                .toPredicate(root, mock(CriteriaQuery.class), cb);
+        PersonSpecifications.directoryFilter("ACTIVE", null).toPredicate(root, mock(CriteriaQuery.class), cb);
 
         verify(root).get("employeeNumber");
         verify(root).get("status");
@@ -67,8 +65,7 @@ class PersonSpecificationsTest {
         Root<Person> root = mockRoot();
         CriteriaBuilder cb = mockCb();
 
-        PersonSpecifications.directoryFilter("ALL", null)
-                .toPredicate(root, mock(CriteriaQuery.class), cb);
+        PersonSpecifications.directoryFilter("ALL", null).toPredicate(root, mock(CriteriaQuery.class), cb);
 
         verify(root, never()).get("employeeNumber");
         verify(root, never()).get("status");

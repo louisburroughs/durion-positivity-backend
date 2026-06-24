@@ -47,6 +47,8 @@ public class PersonServiceImpl implements PersonService {
 
     private final PersonWorkPhoneService workPhoneService;
 
+    private final PersonEmailService emailService;
+
     private final SecurityServiceClient securityServiceClient;
 
     @Value("${pos.people.matching.threshold:30}")
@@ -120,6 +122,7 @@ public class PersonServiceImpl implements PersonService {
         com.positivity.people.internal.entity.Person saved = personRepository.save(toEntity(person));
         workPhoneService.replaceWorkPhones(
                 saved.getId(), person.getPhoneNumbers() == null ? List.of() : person.getPhoneNumbers());
+        emailService.replaceEmails(saved.getId(), person.getPrimaryEmail(), person.getSecondaryEmail());
         return toDto(saved);
     }
 
@@ -140,12 +143,12 @@ public class PersonServiceImpl implements PersonService {
         Map<UUID, ScoredCandidate> candidates = new HashMap<>();
 
         if (email != null) {
-            personRepository
-                    .findByPrimaryEmailIgnoreCase(email)
-                    .ifPresent(person -> addScore(candidates, person, EMAIL_WEIGHT, "EMAIL"));
-            personRepository
-                    .findBySecondaryEmailIgnoreCase(email)
-                    .ifPresent(person -> addScore(candidates, person, EMAIL_WEIGHT, "EMAIL"));
+            List<UUID> emailMatchIds = emailService.findPersonIdsByEmail(email);
+            if (!emailMatchIds.isEmpty()) {
+                personRepository
+                        .findAllById(emailMatchIds)
+                        .forEach(person -> addScore(candidates, person, EMAIL_WEIGHT, "EMAIL"));
+            }
         }
 
         if (phone != null) {
@@ -186,7 +189,8 @@ public class PersonServiceImpl implements PersonService {
                     .matchedBy(new ArrayList<>(matched.getMatchedBy()))
                     .firstName(matched.getPerson().getFirstName())
                     .lastName(matched.getPerson().getLastName())
-                    .primaryEmail(matched.getPerson().getPrimaryEmail())
+                    .primaryEmail(
+                            emailService.getEmails(matched.getPerson().getId()).primary())
                     .phoneNumbers(
                             workPhoneService.getWorkPhones(matched.getPerson().getId()))
                     .build();
@@ -195,11 +199,11 @@ public class PersonServiceImpl implements PersonService {
         com.positivity.people.internal.entity.Person entity = new com.positivity.people.internal.entity.Person();
         entity.setFirstName(firstName);
         entity.setLastName(lastName);
-        entity.setPrimaryEmail(email);
 
         com.positivity.people.internal.entity.Person created = personRepository.save(entity);
         List<String> createdPhones = phone != null ? List.of(phone) : List.of();
         workPhoneService.replaceWorkPhones(created.getId(), createdPhones);
+        emailService.replaceEmails(created.getId(), email, null);
         return ResolvePersonResponse.builder()
                 .personId(created.getId())
                 .matchedExisting(false)
@@ -208,7 +212,7 @@ public class PersonServiceImpl implements PersonService {
                 .matchedBy(List.of("CREATED"))
                 .firstName(created.getFirstName())
                 .lastName(created.getLastName())
-                .primaryEmail(created.getPrimaryEmail())
+                .primaryEmail(email)
                 .phoneNumbers(createdPhones)
                 .build();
     }
@@ -270,8 +274,9 @@ public class PersonServiceImpl implements PersonService {
         dto.setId(entity.getId());
         dto.setFirstName(entity.getFirstName());
         dto.setLastName(entity.getLastName());
-        dto.setPrimaryEmail(entity.getPrimaryEmail());
-        dto.setSecondaryEmail(entity.getSecondaryEmail());
+        PersonEmailService.EmailPair emails = emailService.getEmails(entity.getId());
+        dto.setPrimaryEmail(emails.primary());
+        dto.setSecondaryEmail(emails.secondary());
         dto.setPhoneNumbers(workPhoneService.getWorkPhones(entity.getId()));
         dto.setUsername(entity.getUsername());
         dto.setEmployeeStatus(entity.getStatus());
@@ -283,9 +288,7 @@ public class PersonServiceImpl implements PersonService {
         entity.setId(dto.getId());
         entity.setFirstName(dto.getFirstName());
         entity.setLastName(dto.getLastName());
-        entity.setPrimaryEmail(dto.getPrimaryEmail());
-        entity.setSecondaryEmail(dto.getSecondaryEmail());
-        // phoneNumbers persisted separately as PHONE_WORK contact points (see savePerson).
+        // email + phoneNumbers persisted separately as EMAIL / PHONE_WORK contact points (see savePerson).
         entity.setUsername(dto.getUsername());
         return entity;
     }
