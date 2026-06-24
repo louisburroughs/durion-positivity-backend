@@ -1,4 +1,9 @@
 -- Repeatable seed migration for pos-people operational data.
+-- Re-run marker 2026-06-24: bump checksum so Flyway re-applies this repeatable.
+-- person_location_assignment rows are guarded by `WHERE EXISTS (location id=...)`; on the
+-- first run the location rows did not yet exist (cross-module seed ordering), so every
+-- assignment was skipped and the repeatable did not retry. Re-applying now that locations
+-- are present populates them (idempotent via ON CONFLICT DO NOTHING).
 -- 39 employees across 7 roles for Durion Positivity (medium truck mechanical repair corporation).
 -- Service centers carry the full shop-operational role set and are staffed with
 -- at least one technician per bay (±2); corporate roles remain at CORP-HQ-001.
