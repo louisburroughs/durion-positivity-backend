@@ -32,18 +32,20 @@ class TimekeepingApprovalContractIT extends BaseIntegrationTest {
 
     @Autowired
     private PersonRepository personRepository;
+
     @Autowired
     private TimePeriodRepository timePeriodRepository;
+
     @Autowired
     private TimekeepingEntryRepository timekeepingEntryRepository;
 
     private Person seedPerson() {
-        return personRepository.findById(PERSON_ID).orElseGet(() ->
-                personRepository.save(Person.builder()
+        return personRepository
+                .findById(PERSON_ID)
+                .orElseGet(() -> personRepository.save(Person.builder()
                         .id(PERSON_ID)
                         .firstName("Jane")
                         .lastName("Approver")
-                        .primaryEmail("jane.approver@example.com")
                         .build()));
     }
 
@@ -74,9 +76,7 @@ class TimekeepingApprovalContractIT extends BaseIntegrationTest {
     @DisplayName("CP-664-001: GET /approvals/people returns employees with timekeeping entries")
     void listApprovalPeople_returnsEmployees() throws Exception {
         seedPerson();
-        seedEntry(PERSON_ID,
-                Instant.parse("2026-06-05T09:00:00Z"),
-                Instant.parse("2026-06-05T17:00:00Z"));
+        seedEntry(PERSON_ID, Instant.parse("2026-06-05T09:00:00Z"), Instant.parse("2026-06-05T17:00:00Z"));
 
         mockMvc.perform(withAuth(get("/v1/people/timekeeping/approvals/people"), TIMEKEEPING_AUTHORITIES))
                 .andExpect(status().isOk())
@@ -104,9 +104,7 @@ class TimekeepingApprovalContractIT extends BaseIntegrationTest {
     void listTimekeepingEntries_returnsEntries() throws Exception {
         seedPerson();
         TimePeriod period = seedTimePeriod();
-        seedEntry(PERSON_ID,
-                Instant.parse("2026-06-10T08:00:00Z"),
-                Instant.parse("2026-06-10T16:00:00Z"));
+        seedEntry(PERSON_ID, Instant.parse("2026-06-10T08:00:00Z"), Instant.parse("2026-06-10T16:00:00Z"));
 
         mockMvc.perform(withAuth(
                         get("/v1/people/timekeeping/timekeeping-entries")
@@ -124,9 +122,7 @@ class TimekeepingApprovalContractIT extends BaseIntegrationTest {
     void getTimePeriodApproval_returnsSummary() throws Exception {
         seedPerson();
         TimePeriod period = seedTimePeriod();
-        seedEntry(PERSON_ID,
-                Instant.parse("2026-06-15T08:00:00Z"),
-                Instant.parse("2026-06-15T16:00:00Z"));
+        seedEntry(PERSON_ID, Instant.parse("2026-06-15T08:00:00Z"), Instant.parse("2026-06-15T16:00:00Z"));
 
         mockMvc.perform(withAuth(
                         get("/v1/people/timekeeping/time-period-approvals")
@@ -144,13 +140,13 @@ class TimekeepingApprovalContractIT extends BaseIntegrationTest {
     void approvePeriod_approvesEntries() throws Exception {
         seedPerson();
         TimePeriod period = seedTimePeriod();
-        seedEntry(PERSON_ID,
-                Instant.parse("2026-06-20T08:00:00Z"),
-                Instant.parse("2026-06-20T16:00:00Z"));
+        seedEntry(PERSON_ID, Instant.parse("2026-06-20T08:00:00Z"), Instant.parse("2026-06-20T16:00:00Z"));
 
         mockMvc.perform(withAuth(
-                        post("/v1/people/timekeeping/time-periods/{timePeriodId}/people/{personId}/approve",
-                                period.getTimePeriodId(), PERSON_ID),
+                        post(
+                                "/v1/people/timekeeping/time-periods/{timePeriodId}/people/{personId}/approve",
+                                period.getTimePeriodId(),
+                                PERSON_ID),
                         TIMEKEEPING_AUTHORITIES))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.processedCount", greaterThanOrEqualTo(1)))
@@ -162,17 +158,17 @@ class TimekeepingApprovalContractIT extends BaseIntegrationTest {
     void rejectPeriod_rejectsEntries() throws Exception {
         seedPerson();
         TimePeriod period = seedTimePeriod();
-        seedEntry(PERSON_ID,
-                Instant.parse("2026-06-25T08:00:00Z"),
-                Instant.parse("2026-06-25T16:00:00Z"));
+        seedEntry(PERSON_ID, Instant.parse("2026-06-25T08:00:00Z"), Instant.parse("2026-06-25T16:00:00Z"));
 
         String body = """
                 { "reason": "Discrepancy with shop records" }
                 """;
 
         mockMvc.perform(withAuth(
-                        post("/v1/people/timekeeping/time-periods/{timePeriodId}/people/{personId}/reject",
-                                period.getTimePeriodId(), PERSON_ID)
+                        post(
+                                        "/v1/people/timekeeping/time-periods/{timePeriodId}/people/{personId}/reject",
+                                        period.getTimePeriodId(),
+                                        PERSON_ID)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(body),
                         TIMEKEEPING_AUTHORITIES))
@@ -188,8 +184,10 @@ class TimekeepingApprovalContractIT extends BaseIntegrationTest {
         TimePeriod period = seedTimePeriod();
 
         mockMvc.perform(withAuth(
-                        post("/v1/people/timekeeping/time-periods/{timePeriodId}/people/{personId}/reject",
-                                period.getTimePeriodId(), PERSON_ID)
+                        post(
+                                        "/v1/people/timekeeping/time-periods/{timePeriodId}/people/{personId}/reject",
+                                        period.getTimePeriodId(),
+                                        PERSON_ID)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{}"),
                         TIMEKEEPING_AUTHORITIES))
@@ -210,7 +208,6 @@ class TimekeepingApprovalContractIT extends BaseIntegrationTest {
     @Test
     @DisplayName("VE-664-003: endpoints require authentication (no auth header → 401)")
     void endpoints_withoutAuth_return401() throws Exception {
-        mockMvc.perform(get("/v1/people/timekeeping/approvals/people"))
-                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/v1/people/timekeeping/approvals/people")).andExpect(status().isUnauthorized());
     }
 }

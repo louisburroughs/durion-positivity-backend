@@ -40,13 +40,17 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
 
     private final PersonWorkPhoneService workPhoneService;
 
+    private final PersonEmailService emailService;
+
     public UserPersonLinkServiceImpl(
             @NonNull UserPersonLinkRepository linkRepository,
             @NonNull PersonRepository personRepository,
-            @NonNull PersonWorkPhoneService workPhoneService) {
+            @NonNull PersonWorkPhoneService workPhoneService,
+            @NonNull PersonEmailService emailService) {
         this.linkRepository = linkRepository;
         this.personRepository = personRepository;
         this.workPhoneService = workPhoneService;
+        this.emailService = emailService;
     }
 
     @Override
@@ -201,12 +205,13 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     }
 
     private PersonResponse toPersonResponse(Person person) {
+        PersonEmailService.EmailPair emails = emailService.getEmails(person.getId());
         return PersonResponse.builder()
                 .id(person.getId())
                 .firstName(person.getFirstName())
                 .lastName(person.getLastName())
-                .primaryEmail(person.getPrimaryEmail())
-                .secondaryEmail(person.getSecondaryEmail())
+                .primaryEmail(emails.primary())
+                .secondaryEmail(emails.secondary())
                 .phoneNumbers(workPhoneService.getWorkPhones(person.getId()))
                 .username(person.getUsername())
                 .build();

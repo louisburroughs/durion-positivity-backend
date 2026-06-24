@@ -27,6 +27,12 @@ public interface PersonContactPointRepository extends JpaRepository<PersonContac
 
     List<PersonContactPoint> findByContactTypeAndValue(@NonNull ContactPointType contactType, @NonNull String value);
 
+    List<PersonContactPoint> findByContactTypeAndValueIgnoreCase(
+            @NonNull ContactPointType contactType, @NonNull String value);
+
+    List<PersonContactPoint> findByContactTypeAndIsPrimaryAndValueIgnoreCase(
+            @NonNull ContactPointType contactType, boolean isPrimary, @NonNull String value);
+
     void deleteByPersonId(@NonNull UUID personId);
 
     @Modifying

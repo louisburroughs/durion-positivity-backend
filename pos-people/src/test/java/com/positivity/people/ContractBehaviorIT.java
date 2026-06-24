@@ -503,7 +503,6 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 .id(technicianId)
                 .firstName(firstName)
                 .lastName(lastName)
-                .primaryEmail(firstName.toLowerCase() + "@example.com")
                 .build();
         personRepository.save(person);
     }

@@ -86,7 +86,6 @@ class TimeEntryAdjustmentContractIT extends BaseContractIntegrationTest {
                         .id(personId)
                         .firstName("Contract")
                         .lastName("User")
-                        .primaryEmail("contract-user@example.com")
                         .build()));
 
         TimeEntry timeEntry = new TimeEntry();
