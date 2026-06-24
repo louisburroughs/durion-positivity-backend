@@ -3,12 +3,15 @@ package com.positivity.workorder.internal.repository;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -64,4 +67,22 @@ public interface EstimateRepository extends JpaRepository<Estimate, UUID> {
      * @return list of expired estimates in the given status
      */
     List<Estimate> findByStatusAndExpiresAtBefore(EstimateStatus status, LocalDateTime expiresAtBefore);
+
+    /**
+     * Searches estimates by free-text query matching the estimate number (case-insensitive),
+     * a set of customer ids resolved from a customer-name search, or the estimate id directly.
+     *
+     * @param q           free-text query matched against the estimate number
+     * @param customerIds customer ids resolved from a name search (must be non-empty for JPQL IN)
+     * @param idQuery     the query parsed as a UUID, or {@code null} if not a UUID
+     * @param pageable    pagination configuration
+     * @return page of matching estimates
+     */
+    @Query("SELECT e FROM Estimate e WHERE LOWER(e.estimateNumber) LIKE LOWER(CONCAT('%', :q, '%')) "
+            + "OR e.customerId IN :customerIds OR (:idQuery IS NOT NULL AND e.id = :idQuery)")
+    Page<Estimate> searchByQuery(
+            @Param("q") String q,
+            @Param("customerIds") Collection<UUID> customerIds,
+            @Param("idQuery") UUID idQuery,
+            Pageable pageable);
 }

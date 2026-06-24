@@ -53,6 +53,21 @@ public interface WorkorderLaborEntryRepository extends JpaRepository<WorkorderLa
     @NonNull
     List<WorkorderLaborEntry> findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(@NonNull UUID technicianId);
 
+    /**
+     * Find active (not stopped) labor entries the actor is responsible for: those tracking the actor as
+     * the technician (self path) or those the actor initiated (default-attribution / on-behalf paths,
+     * where the tracked technician differs from the actor and the actor is recorded in
+     * {@code actedByUserId}). Ordered by start time descending.
+     *
+     * @param actor the authenticated actor id (user id)
+     * @return active labor entries the actor tracks or initiated
+     */
+    @NonNull
+    @Query("SELECT e FROM WorkorderLaborEntry e WHERE e.endTime IS NULL "
+            + "AND (e.technicianId = :actor OR e.actedByUserId = :actor) "
+            + "ORDER BY e.startTime DESC")
+    List<WorkorderLaborEntry> findActiveByTechnicianOrActor(@Param("actor") @NonNull UUID actor);
+
     @NonNull
     List<WorkorderLaborEntry> findByEndTimeIsNotNullAndEndTimeBetween(
             @NonNull LocalDateTime startInclusive, @NonNull LocalDateTime endExclusive);

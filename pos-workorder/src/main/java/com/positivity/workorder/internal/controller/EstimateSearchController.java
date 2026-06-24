@@ -39,12 +39,21 @@ public class EstimateSearchController {
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH", apiVersion = "1")
     public Page<EstimateSummaryResponse> searchEstimates(
+            @Parameter(
+                            description =
+                                    "Free-text query matching estimate number, customer name, or estimate id (optional)")
+                    @RequestParam(required = false)
+                    @Nullable
+                    String q,
             @Parameter(description = "Filter by customer UUID (optional)") @RequestParam(required = false) @Nullable
                     UUID customerId,
             @Parameter(description = "Filter by vehicle UUID (optional)") @RequestParam(required = false) @Nullable
                     UUID vehicleId,
             @Parameter(schema = @Schema(implementation = Pageable.class)) @PageableDefault(size = 25)
                     Pageable pageable) {
+        if (q != null && !q.isBlank()) {
+            return estimateService.findEstimatesByQuery(q.trim(), pageable);
+        }
         return estimateService.searchEstimates(customerId, vehicleId, pageable);
     }
 }

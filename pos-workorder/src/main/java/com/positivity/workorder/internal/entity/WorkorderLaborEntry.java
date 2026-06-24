@@ -119,8 +119,13 @@ public class WorkorderLaborEntry {
     private String onBehalfReason;
 
     /**
-     * Stable user id (UUID) of the actor who initiated an on-behalf timer start; null for
-     * self/assignment-default starts. The actor's username is captured separately in {@code createdBy}.
+     * Stable user id (UUID) of the actor who initiated this entry when the tracked {@code technicianId}
+     * differs from the actor — i.e. both the default-attribution path (timer started for the workorder's
+     * assigned technician) and the on-behalf path. Null for self starts, where {@code technicianId} already
+     * identifies the actor. Recording the initiator here is what lets that initiator stop/list the timer
+     * they started (see {@code findActiveByTechnicianOrActor}). The on-behalf path is distinguished by a
+     * non-null {@code onBehalfReason}, not by the presence of this field. The actor's username is captured
+     * separately in {@code createdBy}.
      */
     @Nullable
     @Column(updatable = false, columnDefinition = "UUID")

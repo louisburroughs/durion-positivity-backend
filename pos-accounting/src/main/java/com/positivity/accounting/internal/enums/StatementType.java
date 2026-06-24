@@ -8,5 +8,8 @@ public enum StatementType {
     INCOME_STATEMENT,
 
     /** Balance Sheet (Statement of Financial Position) */
-    BALANCE_SHEET
+    BALANCE_SHEET,
+
+    /** CAP-316 Labor & Overhead Cost Report line-to-account mapping. */
+    LABOR_OVERHEAD
 }
