@@ -3,6 +3,7 @@ package com.positivity.workorder.service;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
 import com.positivity.workorder.internal.dto.OperationalContextResponse;
+import com.positivity.workorder.internal.dto.WorkorderItemCompletionResponse;
 import com.positivity.workorder.internal.dto.WorkorderStartResponse;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
@@ -24,6 +25,33 @@ public interface WorkorderService {
     Optional<Workorder> getWorkorderById(UUID id);
 
     Workorder createWorkorder(UUID estimateId, UUID customerId);
+
+    /**
+     * Mark a single workorder service line as COMPLETED. Allowed from active item states
+     * (OPEN / READY_TO_EXECUTE / IN_PROGRESS); rejected for CANCELLED or PENDING_APPROVAL.
+     * Completing an already-COMPLETED item is idempotent.
+     *
+     * @param workorderId   owning workorder
+     * @param serviceLineId service line to complete
+     * @param actorId       acting user
+     * @return completion result with the resulting item status
+     */
+    @NonNull
+    WorkorderItemCompletionResponse completeServiceItem(
+            @NonNull UUID workorderId, @NonNull UUID serviceLineId, @NonNull String actorId);
+
+    /**
+     * Mark a single workorder part as COMPLETED. Same transition rules as
+     * {@link #completeServiceItem}.
+     *
+     * @param workorderId owning workorder
+     * @param partId      part to complete
+     * @param actorId     acting user
+     * @return completion result with the resulting item status
+     */
+    @NonNull
+    WorkorderItemCompletionResponse completePartItem(
+            @NonNull UUID workorderId, @NonNull UUID partId, @NonNull String actorId);
 
     /**
      * Create a workorder with idempotency key support.

@@ -65,6 +65,18 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    /** Complete a single workorder service line */
+    public static final EventTypeRegistration WORKORDER_SERVICE_ITEM_COMPLETE = EventTypeRegistration.write(
+                    "WORKORDER_SERVICE_ITEM_COMPLETE", "Mark a workorder service line as COMPLETED")
+            .apiVersion("1")
+            .build();
+
+    /** Complete a single workorder part */
+    public static final EventTypeRegistration WORKORDER_PART_ITEM_COMPLETE = EventTypeRegistration.write(
+                    "WORKORDER_PART_ITEM_COMPLETE", "Mark a workorder part as COMPLETED")
+            .apiVersion("1")
+            .build();
+
     /** Generate invoice draft from completed workorder */
     public static final EventTypeRegistration WORKORDER_INVOICE_GENERATE = EventTypeRegistration.write(
                     "WORKORDER_INVOICE_GENERATE", "Generate invoice draft from completed workorder")
@@ -496,6 +508,8 @@ public final class EventTypes {
             WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE,
             WORKORDER_APPROVE,
             WORKORDER_COMPLETE,
+            WORKORDER_SERVICE_ITEM_COMPLETE,
+            WORKORDER_PART_ITEM_COMPLETE,
             WORKORDER_INVOICE_GENERATE,
             WORKORDER_REOPEN,
             // Technician assignment events (CAP:005 Story #161)

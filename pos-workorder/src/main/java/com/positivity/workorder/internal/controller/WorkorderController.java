@@ -10,6 +10,7 @@ import com.positivity.workorder.internal.dto.CompletionPreconditionsResponse;
 import com.positivity.workorder.internal.dto.CreateWorkorderRequest;
 import com.positivity.workorder.internal.dto.ReopenWorkorderRequest;
 import com.positivity.workorder.internal.dto.ReopenWorkorderResponse;
+import com.positivity.workorder.internal.dto.WorkorderItemCompletionResponse;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
 import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
@@ -387,6 +388,58 @@ public class WorkorderController {
                             .workorderId(workorderId)
                             .message(e.getMessage())
                             .build());
+        }
+    }
+
+    @Operation(
+            summary = "Complete a workorder service line",
+            description = "Mark a single service line as COMPLETED. Allowed from OPEN/READY_TO_EXECUTE/IN_PROGRESS; "
+                    + "rejected for CANCELLED or PENDING_APPROVAL items.")
+    @ApiResponse(responseCode = "200", description = "Service line completed.")
+    @ApiResponse(responseCode = "400", description = "Item not completable in its current status.")
+    @ApiResponse(responseCode = "404", description = "Workorder or service line not found.")
+    @PostMapping("/{workorderId}/services/{serviceLineId}/complete")
+    @EmitEvent(id = "WORKORDER_SERVICE_ITEM_COMPLETE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:workorder:complete"})
+    @PreAuthorize("hasAuthority('workorder:workorder:complete')")
+    public ResponseEntity<WorkorderItemCompletionResponse> completeServiceItem(
+            @Parameter(description = "Workorder ID") @PathVariable UUID workorderId,
+            @Parameter(description = "Service line ID") @PathVariable UUID serviceLineId) {
+        try {
+            return ResponseEntity.ok(
+                    workorderService.completeServiceItem(workorderId, serviceLineId, resolveCurrentActorUserId()));
+        } catch (IllegalArgumentException _) {
+            return ResponseEntity.notFound().build();
+        } catch (IllegalStateException _) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @Operation(
+            summary = "Complete a workorder part",
+            description = "Mark a single part as COMPLETED. Allowed from OPEN/READY_TO_EXECUTE/IN_PROGRESS; "
+                    + "rejected for CANCELLED or PENDING_APPROVAL items.")
+    @ApiResponse(responseCode = "200", description = "Part completed.")
+    @ApiResponse(responseCode = "400", description = "Item not completable in its current status.")
+    @ApiResponse(responseCode = "404", description = "Workorder or part not found.")
+    @PostMapping("/{workorderId}/parts/{partId}/complete")
+    @EmitEvent(id = "WORKORDER_PART_ITEM_COMPLETE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:workorder:complete"})
+    @PreAuthorize("hasAuthority('workorder:workorder:complete')")
+    public ResponseEntity<WorkorderItemCompletionResponse> completePartItem(
+            @Parameter(description = "Workorder ID") @PathVariable UUID workorderId,
+            @Parameter(description = "Part ID") @PathVariable UUID partId) {
+        try {
+            return ResponseEntity.ok(
+                    workorderService.completePartItem(workorderId, partId, resolveCurrentActorUserId()));
+        } catch (IllegalArgumentException _) {
+            return ResponseEntity.notFound().build();
+        } catch (IllegalStateException _) {
+            return ResponseEntity.badRequest().build();
         }
     }
 

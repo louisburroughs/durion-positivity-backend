@@ -57,6 +57,11 @@ public class WorkorderStateMachine {
     private static final Set<WorkorderItemStatus> TERMINAL_ITEM_STATUSES =
             Set.of(WorkorderItemStatus.COMPLETED, WorkorderItemStatus.CANCELLED);
 
+    // Active item states that are auto-completed when the workorder is completed (issue #736).
+    // PENDING_APPROVAL is intentionally excluded so unapproved change-request items still block.
+    private static final Set<WorkorderItemStatus> AUTO_COMPLETABLE_ITEM_STATUSES =
+            Set.of(WorkorderItemStatus.OPEN, WorkorderItemStatus.READY_TO_EXECUTE, WorkorderItemStatus.IN_PROGRESS);
+
     private static final Set<WorkorderItemStatus> EXCLUDED_BILLABLE_TOTAL_STATUSES =
             Set.of(WorkorderItemStatus.CANCELLED);
 
@@ -98,6 +103,32 @@ public class WorkorderStateMachine {
         recordTransition(workorderId, fromStatus, toStatus, actorId, reason);
 
         log.info("Workorder {} transitioned from {} to {} by user {}", workorderId, fromStatus, toStatus, actorId);
+    }
+
+    private void autoCompleteOutstandingItems(UUID workorderId, String actorId) {
+        int updated = 0;
+        for (com.positivity.workorder.internal.entity.WorkorderServiceLine service :
+                workorderServiceRepository.findByWorkOrder_Id(workorderId)) {
+            if (AUTO_COMPLETABLE_ITEM_STATUSES.contains(service.getStatus())) {
+                service.setStatus(WorkorderItemStatus.COMPLETED);
+                workorderServiceRepository.save(service);
+                updated++;
+            }
+        }
+        for (WorkorderPart part : loadDeduplicatedWorkorderParts(workorderId)) {
+            if (AUTO_COMPLETABLE_ITEM_STATUSES.contains(part.getStatus())) {
+                part.setStatus(WorkorderItemStatus.COMPLETED);
+                workorderPartRepository.save(part);
+                updated++;
+            }
+        }
+        if (updated > 0) {
+            log.info(
+                    "Auto-completed {} outstanding item(s) on workorder {} during completion by {}",
+                    updated,
+                    workorderId,
+                    actorId);
+        }
     }
 
     private void validateCompletionRequirements(UUID workorderId) {
@@ -241,6 +272,10 @@ public class WorkorderStateMachine {
                     "Workorder %s cannot be completed from status %s. Must be one of: %s",
                     workorderId, currentStatus, COMPLETION_ELIGIBLE_STATUSES));
         }
+
+        // Auto-complete any outstanding work items so completion is not deadlocked (issue #736).
+        // Items that were explicitly completed/cancelled, or are PENDING_APPROVAL, are left as-is.
+        autoCompleteOutstandingItems(workorderId, actorId);
 
         // Finalize immutable billable scope snapshot before completion transition
         captureBillableScopeSnapshot(workorder, actorId, completionNotes);
