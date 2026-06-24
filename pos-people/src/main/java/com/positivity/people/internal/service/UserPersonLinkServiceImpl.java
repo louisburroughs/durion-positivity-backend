@@ -38,10 +38,15 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
 
     private final PersonRepository personRepository;
 
+    private final PersonWorkPhoneService workPhoneService;
+
     public UserPersonLinkServiceImpl(
-            @NonNull UserPersonLinkRepository linkRepository, @NonNull PersonRepository personRepository) {
+            @NonNull UserPersonLinkRepository linkRepository,
+            @NonNull PersonRepository personRepository,
+            @NonNull PersonWorkPhoneService workPhoneService) {
         this.linkRepository = linkRepository;
         this.personRepository = personRepository;
+        this.workPhoneService = workPhoneService;
     }
 
     @Override
@@ -202,7 +207,7 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
                 .lastName(person.getLastName())
                 .primaryEmail(person.getPrimaryEmail())
                 .secondaryEmail(person.getSecondaryEmail())
-                .phoneNumbers(person.getPhoneNumbers())
+                .phoneNumbers(workPhoneService.getWorkPhones(person.getId()))
                 .username(person.getUsername())
                 .build();
     }

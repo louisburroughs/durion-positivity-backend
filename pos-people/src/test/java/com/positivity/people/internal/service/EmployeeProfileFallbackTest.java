@@ -45,8 +45,12 @@ class EmployeeProfileFallbackTest {
     @Mock
     private EmployeeOffboardingRetryRepository offboardingRetryRepository;
 
+    @Mock
+    private PersonWorkPhoneService workPhoneService;
+
     private EmployeeServiceImpl service() {
-        return new EmployeeServiceImpl(TEST_CLOCK, personRepository, offboardingRetryRepository, new ObjectMapper());
+        return new EmployeeServiceImpl(
+                TEST_CLOCK, personRepository, workPhoneService, offboardingRetryRepository, new ObjectMapper());
     }
 
     private Person columnSourcedPerson() {
@@ -55,7 +59,6 @@ class EmployeeProfileFallbackTest {
         person.setFirstName("Marcus");
         person.setLastName("Webb");
         person.setPrimaryEmail("marcus.webb@durion.internal");
-        person.setPhoneNumbers(List.of("555-0100", "555-0101"));
         person.setEmployeeNumber("EMP-0001");
         person.setStatus(EmployeeStatus.ACTIVE);
         person.setHireDate(LocalDate.parse("2024-01-01"));
@@ -87,6 +90,7 @@ class EmployeeProfileFallbackTest {
     @Test
     void getEmployee_fallsBackToContactColumnsWhenJsonMissing() {
         when(personRepository.findById(PERSON_ID)).thenReturn(Optional.of(columnSourcedPerson()));
+        when(workPhoneService.getWorkPhones(PERSON_ID)).thenReturn(List.of("555-0100", "555-0101"));
 
         EmployeeProfileDto profile = service().getEmployee(PERSON_ID);
 

@@ -45,6 +45,8 @@ public class PersonServiceImpl implements PersonService {
 
     private final PersonContactPointRepository personContactPointRepository;
 
+    private final PersonWorkPhoneService workPhoneService;
+
     private final SecurityServiceClient securityServiceClient;
 
     @Value("${pos.people.matching.threshold:30}")
@@ -116,6 +118,8 @@ public class PersonServiceImpl implements PersonService {
         }
 
         com.positivity.people.internal.entity.Person saved = personRepository.save(toEntity(person));
+        workPhoneService.replaceWorkPhones(
+                saved.getId(), person.getPhoneNumbers() == null ? List.of() : person.getPhoneNumbers());
         return toDto(saved);
     }
 
@@ -145,9 +149,12 @@ public class PersonServiceImpl implements PersonService {
         }
 
         if (phone != null) {
-            personRepository
-                    .findByPhoneNumbersContains(phone)
-                    .forEach(person -> addScore(candidates, person, PHONE_WEIGHT, "PHONE"));
+            List<UUID> phoneMatchIds = workPhoneService.findPersonIdsByWorkPhone(phone);
+            if (!phoneMatchIds.isEmpty()) {
+                personRepository
+                        .findAllById(phoneMatchIds)
+                        .forEach(person -> addScore(candidates, person, PHONE_WEIGHT, "PHONE"));
+            }
         }
 
         if (lastName != null) {
@@ -180,7 +187,8 @@ public class PersonServiceImpl implements PersonService {
                     .firstName(matched.getPerson().getFirstName())
                     .lastName(matched.getPerson().getLastName())
                     .primaryEmail(matched.getPerson().getPrimaryEmail())
-                    .phoneNumbers(matched.getPerson().getPhoneNumbers())
+                    .phoneNumbers(
+                            workPhoneService.getWorkPhones(matched.getPerson().getId()))
                     .build();
         }
 
@@ -188,13 +196,10 @@ public class PersonServiceImpl implements PersonService {
         entity.setFirstName(firstName);
         entity.setLastName(lastName);
         entity.setPrimaryEmail(email);
-        if (phone != null) {
-            entity.setPhoneNumbers(new ArrayList<>(List.of(phone)));
-        } else {
-            entity.setPhoneNumbers(new ArrayList<>());
-        }
 
         com.positivity.people.internal.entity.Person created = personRepository.save(entity);
+        List<String> createdPhones = phone != null ? List.of(phone) : List.of();
+        workPhoneService.replaceWorkPhones(created.getId(), createdPhones);
         return ResolvePersonResponse.builder()
                 .personId(created.getId())
                 .matchedExisting(false)
@@ -204,7 +209,7 @@ public class PersonServiceImpl implements PersonService {
                 .firstName(created.getFirstName())
                 .lastName(created.getLastName())
                 .primaryEmail(created.getPrimaryEmail())
-                .phoneNumbers(created.getPhoneNumbers())
+                .phoneNumbers(createdPhones)
                 .build();
     }
 
@@ -267,7 +272,7 @@ public class PersonServiceImpl implements PersonService {
         dto.setLastName(entity.getLastName());
         dto.setPrimaryEmail(entity.getPrimaryEmail());
         dto.setSecondaryEmail(entity.getSecondaryEmail());
-        dto.setPhoneNumbers(entity.getPhoneNumbers());
+        dto.setPhoneNumbers(workPhoneService.getWorkPhones(entity.getId()));
         dto.setUsername(entity.getUsername());
         dto.setEmployeeStatus(entity.getStatus());
         return dto;
@@ -280,7 +285,7 @@ public class PersonServiceImpl implements PersonService {
         entity.setLastName(dto.getLastName());
         entity.setPrimaryEmail(dto.getPrimaryEmail());
         entity.setSecondaryEmail(dto.getSecondaryEmail());
-        entity.setPhoneNumbers(dto.getPhoneNumbers());
+        // phoneNumbers persisted separately as PHONE_WORK contact points (see savePerson).
         entity.setUsername(dto.getUsername());
         return entity;
     }

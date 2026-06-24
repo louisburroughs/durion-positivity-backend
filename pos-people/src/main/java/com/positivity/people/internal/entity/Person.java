@@ -4,7 +4,6 @@ import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
-import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -16,7 +15,6 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -88,8 +86,7 @@ public class Person {
 
     private String secondaryEmail;
 
-    @ElementCollection
-    private List<String> phoneNumbers;
+    // Phone numbers consolidated into person_contact_point (PHONE_WORK); see PersonWorkPhoneService.
 
     /** Optional, validated externally - stick with username not userName */
     private String username;
