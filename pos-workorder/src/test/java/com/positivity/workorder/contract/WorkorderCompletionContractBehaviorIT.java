@@ -169,13 +169,40 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
     }
 
     @Test
-    @DisplayName("CWC-003: complete workorder is blocked when service/part items are not terminal")
-    void completeWorkorder_ShouldBlockWhenItemsNotTerminal() {
+    @DisplayName("CWC-003: complete workorder auto-completes outstanding OPEN items (issue #736)")
+    void completeWorkorder_ShouldAutoCompleteOutstandingItems() {
         UUID workorderId = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, false);
-        seedServiceItem(workorderId, WorkorderItemStatus.OPEN, new BigDecimal("95.00"));
+        UUID serviceId = seedServiceItem(workorderId, WorkorderItemStatus.OPEN, new BigDecimal("95.00"));
+        UUID partId = seedPartItem(workorderId, WorkorderItemStatus.OPEN, new BigDecimal("40.00"));
 
         Map<String, Object> request =
-                Map.of("userId", SYSTEM_USER_ID, "completionNotes", "Attempt completion with open items");
+                Map.of("userId", SYSTEM_USER_ID, "completionNotes", "Complete with outstanding open items");
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(request)
+                .when()
+                .post("/v1/workorders/{workorderId}/complete", workorderId)
+                .then()
+                .statusCode(200)
+                .body("currentStatus", equalTo("COMPLETED"));
+
+        assertThat(workorderRepository.findById(workorderId).orElseThrow().getStatus())
+                .isEqualTo(WorkorderStatus.COMPLETED);
+        assertThat(workorderServiceRepository.findById(serviceId).orElseThrow().getStatus())
+                .isEqualTo(WorkorderItemStatus.COMPLETED);
+        assertThat(workorderPartRepository.findById(partId).orElseThrow().getStatus())
+                .isEqualTo(WorkorderItemStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("CWC-003B: complete workorder is still blocked by PENDING_APPROVAL items")
+    void completeWorkorder_ShouldBlockWhenItemsPendingApproval() {
+        UUID workorderId = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, false);
+        seedServiceItem(workorderId, WorkorderItemStatus.PENDING_APPROVAL, new BigDecimal("95.00"));
+
+        Map<String, Object> request =
+                Map.of("userId", SYSTEM_USER_ID, "completionNotes", "Attempt completion with unapproved item");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -186,8 +213,45 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
                 .statusCode(400)
                 .body("message", notNullValue());
 
-        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
-        assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.WORK_IN_PROGRESS);
+        assertThat(workorderRepository.findById(workorderId).orElseThrow().getStatus())
+                .isEqualTo(WorkorderStatus.WORK_IN_PROGRESS);
+    }
+
+    @Test
+    @DisplayName("CWC-007: per-item complete endpoints transition service/part items to COMPLETED")
+    void completeItemEndpoints_ShouldMarkItemsCompleted() {
+        UUID workorderId = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, false);
+        UUID serviceId = seedServiceItem(workorderId, WorkorderItemStatus.OPEN, new BigDecimal("95.00"));
+        UUID partId = seedPartItem(workorderId, WorkorderItemStatus.OPEN, new BigDecimal("40.00"));
+
+        givenWithGatewayAuth()
+                .when()
+                .post("/v1/workorders/{workorderId}/services/{serviceLineId}/complete", workorderId, serviceId)
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("COMPLETED"));
+
+        givenWithGatewayAuth()
+                .when()
+                .post("/v1/workorders/{workorderId}/parts/{partId}/complete", workorderId, partId)
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("COMPLETED"));
+
+        assertThat(workorderServiceRepository.findById(serviceId).orElseThrow().getStatus())
+                .isEqualTo(WorkorderItemStatus.COMPLETED);
+        assertThat(workorderPartRepository.findById(partId).orElseThrow().getStatus())
+                .isEqualTo(WorkorderItemStatus.COMPLETED);
+
+        // With items terminal, completion succeeds.
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("userId", SYSTEM_USER_ID, "completionNotes", "Done"))
+                .when()
+                .post("/v1/workorders/{workorderId}/complete", workorderId)
+                .then()
+                .statusCode(200)
+                .body("currentStatus", equalTo("COMPLETED"));
     }
 
     @Test
@@ -288,7 +352,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
         return saved.getId();
     }
 
-    private void seedServiceItem(UUID workorderId, WorkorderItemStatus status, BigDecimal lineTotal) {
+    private UUID seedServiceItem(UUID workorderId, WorkorderItemStatus status, BigDecimal lineTotal) {
         Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
 
         WorkorderServiceLine service = WorkorderServiceLine.builder()
@@ -304,10 +368,10 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
                 .isEmergencySafety(false)
                 .build();
 
-        workorderServiceRepository.save(service);
+        return workorderServiceRepository.save(service).getId();
     }
 
-    private void seedPartItem(UUID workorderId, WorkorderItemStatus status, BigDecimal lineTotal) {
+    private UUID seedPartItem(UUID workorderId, WorkorderItemStatus status, BigDecimal lineTotal) {
         Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
 
         WorkorderPart part = WorkorderPart.builder()
@@ -325,7 +389,7 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
                 .quantityReturned(BigDecimal.ZERO)
                 .build();
 
-        workorderPartRepository.save(part);
+        return workorderPartRepository.save(part).getId();
     }
 
     private void seedPendingApprovalGatedChangeRequest(UUID workorderId) {

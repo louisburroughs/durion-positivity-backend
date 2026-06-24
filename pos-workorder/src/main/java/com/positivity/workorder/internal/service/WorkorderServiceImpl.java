@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
 import com.positivity.workorder.internal.dto.OperationalContextResponse;
+import com.positivity.workorder.internal.dto.WorkorderItemCompletionResponse;
 import com.positivity.workorder.internal.dto.WorkorderStartResponse;
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.Estimate;
@@ -15,6 +16,7 @@ import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
+import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
@@ -468,6 +470,78 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .findById(workorderId)
                 .map(Workorder::getCompletedAt)
                 .orElse(null);
+    }
+
+    @Override
+    @Transactional
+    public WorkorderItemCompletionResponse completeServiceItem(UUID workorderId, UUID serviceLineId, String actorId) {
+        WorkorderServiceLine line = workorderServiceRepository
+                .findById(serviceLineId)
+                .orElseThrow(() -> new IllegalArgumentException("Service line not found: " + serviceLineId));
+        if (line.getWorkOrder() == null
+                || !workorderId.equals(line.getWorkOrder().getId())) {
+            throw new IllegalArgumentException(
+                    "Service line " + serviceLineId + " does not belong to workorder " + workorderId);
+        }
+        WorkorderItemStatus status = completeItemStatus(line.getStatus(), "service line", serviceLineId);
+        if (status != line.getStatus()) {
+            line.setStatus(status);
+            workorderServiceRepository.save(line);
+            log.info("Service line {} on workorder {} marked COMPLETED by {}", serviceLineId, workorderId, actorId);
+        }
+        return WorkorderItemCompletionResponse.builder()
+                .workorderId(workorderId)
+                .itemId(serviceLineId)
+                .itemType(WorkorderItemCompletionResponse.ItemType.SERVICE)
+                .status(status)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public WorkorderItemCompletionResponse completePartItem(UUID workorderId, UUID partId, String actorId) {
+        WorkorderPart part = workorderPartRepository
+                .findById(partId)
+                .orElseThrow(() -> new IllegalArgumentException("Part not found: " + partId));
+        if (!partBelongsToWorkorder(part, workorderId)) {
+            throw new IllegalArgumentException("Part " + partId + " does not belong to workorder " + workorderId);
+        }
+        WorkorderItemStatus status = completeItemStatus(part.getStatus(), "part", partId);
+        if (status != part.getStatus()) {
+            part.setStatus(status);
+            workorderPartRepository.save(part);
+            log.info("Part {} on workorder {} marked COMPLETED by {}", partId, workorderId, actorId);
+        }
+        return WorkorderItemCompletionResponse.builder()
+                .workorderId(workorderId)
+                .itemId(partId)
+                .itemType(WorkorderItemCompletionResponse.ItemType.PART)
+                .status(status)
+                .build();
+    }
+
+    /**
+     * Validate an item is completable and return COMPLETED. Idempotent when already
+     * COMPLETED; rejects CANCELLED and PENDING_APPROVAL (unapproved) items.
+     */
+    private WorkorderItemStatus completeItemStatus(@Nullable WorkorderItemStatus current, String label, UUID itemId) {
+        if (current == WorkorderItemStatus.COMPLETED) {
+            return WorkorderItemStatus.COMPLETED;
+        }
+        if (current == WorkorderItemStatus.CANCELLED || current == WorkorderItemStatus.PENDING_APPROVAL) {
+            throw new IllegalStateException("Cannot complete " + label + " " + itemId + " in status " + current);
+        }
+        return WorkorderItemStatus.COMPLETED;
+    }
+
+    private boolean partBelongsToWorkorder(WorkorderPart part, UUID workorderId) {
+        if (part.getWorkorder() != null
+                && workorderId.equals(part.getWorkorder().getId())) {
+            return true;
+        }
+        return part.getWorkOrderService() != null
+                && part.getWorkOrderService().getWorkOrder() != null
+                && workorderId.equals(part.getWorkOrderService().getWorkOrder().getId());
     }
 
     @Override

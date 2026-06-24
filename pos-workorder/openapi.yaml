@@ -522,6 +522,50 @@ paths:
         - workorder:start
       x-required-permissions:
       - workorder:start
+  /v1/workorders/{workorderId}/services/{serviceLineId}/complete:
+    post:
+      tags:
+      - Work Order API
+      summary: Complete a workorder service line
+      description: Mark a single service line as COMPLETED. Allowed from OPEN/READY_TO_EXECUTE/IN_PROGRESS; rejected for CANCELLED or PENDING_APPROVAL items.
+      operationId: completeServiceItem
+      parameters:
+      - name: workorderId
+        in: path
+        description: Workorder ID
+        required: true
+        schema:
+          type: string
+      - name: serviceLineId
+        in: path
+        description: Service line ID
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Service line completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderItemCompletionResponse'
+        '400':
+          description: Item not completable in its current status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderItemCompletionResponse'
+        '404':
+          description: Workorder or service line not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderItemCompletionResponse'
+      security:
+      - bearerAuth:
+        - workorder:workorder:complete
+      x-required-permissions:
+      - workorder:workorder:complete
   /v1/workorders/{workorderId}/services/{serviceId}/labor/start:
     post:
       tags:
@@ -883,6 +927,50 @@ paths:
         - inventory:pick_list:execute
       x-required-permissions:
       - inventory:pick_list:execute
+  /v1/workorders/{workorderId}/parts/{partId}/complete:
+    post:
+      tags:
+      - Work Order API
+      summary: Complete a workorder part
+      description: Mark a single part as COMPLETED. Allowed from OPEN/READY_TO_EXECUTE/IN_PROGRESS; rejected for CANCELLED or PENDING_APPROVAL items.
+      operationId: completePartItem
+      parameters:
+      - name: workorderId
+        in: path
+        description: Workorder ID
+        required: true
+        schema:
+          type: string
+      - name: partId
+        in: path
+        description: Part ID
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Part completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderItemCompletionResponse'
+        '400':
+          description: Item not completable in its current status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderItemCompletionResponse'
+        '404':
+          description: Workorder or part not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderItemCompletionResponse'
+      security:
+      - bearerAuth:
+        - workorder:workorder:complete
+      x-required-permissions:
+      - workorder:workorder:complete
   /v1/workorders/{workorderId}/parts/substitute:
     post:
       tags:
@@ -4508,6 +4596,41 @@ components:
           example: Work started on workorder
       required:
       - currentStatus
+      - workorderId
+    WorkorderItemCompletionResponse:
+      type: object
+      description: Result of completing a workorder line item
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder identifier
+        itemId:
+          type: string
+          format: uuid
+          description: Line item identifier
+        itemType:
+          type: string
+          description: Item kind
+          enum:
+          - SERVICE
+          - PART
+          example: SERVICE
+        status:
+          type: string
+          description: Resulting item status
+          enum:
+          - PENDING_APPROVAL
+          - OPEN
+          - READY_TO_EXECUTE
+          - IN_PROGRESS
+          - COMPLETED
+          - CANCELLED
+          example: COMPLETED
+      required:
+      - itemId
+      - itemType
+      - status
       - workorderId
     StartLaborRequest:
       type: object
