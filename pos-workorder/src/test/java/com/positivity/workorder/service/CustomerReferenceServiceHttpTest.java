@@ -39,6 +39,45 @@ class CustomerReferenceServiceHttpTest {
     }
 
     @Test
+    void resolve_usesLegalName_forCommercialPartyRepresentation() throws Exception {
+        // The /v1/crm/{id} representation emits firstName/lastName (no customerName/displayName);
+        // for commercial parties lastName carries the full legal name.
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        String payload =
+                "{\"firstName\":\"Blue Ridge Landscaping\",\"lastName\":\"Blue Ridge Landscaping Services LLC\"}";
+        AtomicInteger callCount = new AtomicInteger();
+        HttpServer server = startServer("/v1/crm/" + customerId, 200, payload, callCount);
+        try {
+            String serviceId = "localhost:" + server.getAddress().getPort();
+            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
+
+            CustomerReferenceService.CustomerContact contact = service.resolve(customerId);
+
+            assertThat(contact.name()).isEqualTo("Blue Ridge Landscaping Services LLC");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void resolve_joinsFirstAndLastName_forIndividualParty() throws Exception {
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        String payload = "{\"firstName\":\"Jane\",\"lastName\":\"Smith\"}";
+        AtomicInteger callCount = new AtomicInteger();
+        HttpServer server = startServer("/v1/crm/" + customerId, 200, payload, callCount);
+        try {
+            String serviceId = "localhost:" + server.getAddress().getPort();
+            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
+
+            CustomerReferenceService.CustomerContact contact = service.resolve(customerId);
+
+            assertThat(contact.name()).isEqualTo("Jane Smith");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void resolve_returnsFallback_whenRemoteReturns404() throws Exception {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AtomicInteger callCount = new AtomicInteger();

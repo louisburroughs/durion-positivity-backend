@@ -50,11 +50,15 @@ public class CustomerReferenceService {
             }
 
             Map<String, Object> payload = unwrapData(body);
+            // The /v1/crm/{id} representation returns firstName/lastName (lastName carries the
+            // legal/organization name for commercial parties); the browse representation returns
+            // displayName/legalName. Cover both so resolution does not fall back to "customer-<id>".
             String name = firstNonBlank(
                     extract(payload, "customerName"),
                     extract(payload, "displayName"),
-                    extract(payload, "name"),
                     extract(payload, "legalName"),
+                    extract(payload, "name"),
+                    composeName(extract(payload, "firstName"), extract(payload, "lastName")),
                     fallbackName);
             String phone = firstNonBlank(
                     extract(payload, "phoneNumber"), extract(payload, "phone"), extract(payload, "mobilePhone"));
@@ -135,6 +139,34 @@ public class CustomerReferenceService {
     private @Nullable String extract(Map<String, Object> payload, String key) {
         Object value = payload.get(key);
         return value != null ? value.toString() : null;
+    }
+
+    /**
+     * Compose a display name from first/last parts. For commercial parties {@code lastName}
+     * already carries the full legal name (and {@code firstName} is a prefix of it), so the
+     * longer value is returned to avoid duplication; for individuals the two parts are joined.
+     */
+    private @Nullable String composeName(@Nullable String firstName, @Nullable String lastName) {
+        boolean hasFirst = StringUtils.hasText(firstName);
+        boolean hasLast = StringUtils.hasText(lastName);
+        if (!hasFirst && !hasLast) {
+            return null;
+        }
+        if (!hasFirst) {
+            return lastName.trim();
+        }
+        if (!hasLast) {
+            return firstName.trim();
+        }
+        String f = firstName.trim();
+        String l = lastName.trim();
+        if (l.contains(f)) {
+            return l;
+        }
+        if (f.contains(l)) {
+            return f;
+        }
+        return f + " " + l;
     }
 
     private @Nullable String firstNonBlank(String... values) {
