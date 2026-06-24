@@ -166,150 +166,31 @@ BEGIN
     END IF;
 END $$;
 
--- person_location_assignment (guarded by person and location table existence)
--- Each row skipped if its target location does not yet exist (cross-module dependency).
-DO $$
-BEGIN
-    IF to_regclass('public.person') IS NOT NULL
-       AND to_regclass('public.location') IS NOT NULL
-    THEN
-        IF EXISTS (
-            SELECT 1
-            FROM pg_catalog.pg_class c
-            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = 'public'
-              AND c.relname = 'location'
-        ) THEN
-            -- marcus.webb → CORP-HQ-001 (SYSTEM_ADMINISTRATOR)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-000000000001'::uuid, '01960011-0000-7000-8000-000000000001'::uuid, '01960003-0000-7000-8000-000000000005'::uuid, 'SYSTEM_ADMINISTRATOR', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000005'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- diana.rowe → CLT-MAIN-001 (LOCATION_MANAGER)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-000000000002'::uuid, '01960011-0000-7000-8000-000000000002'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'LOCATION_MANAGER', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000001'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- terrence.blake → CLT-MAIN-001 (DISPATCHER)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-000000000003'::uuid, '01960011-0000-7000-8000-000000000003'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'DISPATCHER', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000001'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- sandra.cruz → CLT-SOUTH-001 (DISPATCHER)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-000000000004'::uuid, '01960011-0000-7000-8000-000000000004'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'DISPATCHER', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000002'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- kyle.brennan → CLT-MAIN-001 (TECHNICIAN)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-000000000005'::uuid, '01960011-0000-7000-8000-000000000005'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'TECHNICIAN', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000001'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- deshawn.morris → CLT-MAIN-001 (TECHNICIAN)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-000000000006'::uuid, '01960011-0000-7000-8000-000000000006'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'TECHNICIAN', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000001'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- carlos.ruiz → CLT-MAIN-001 (TECHNICIAN)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-000000000007'::uuid, '01960011-0000-7000-8000-000000000007'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'TECHNICIAN', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000001'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- amber.nguyen → CLT-SOUTH-001 (TECHNICIAN)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-000000000008'::uuid, '01960011-0000-7000-8000-000000000008'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'TECHNICIAN', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000002'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- eddie.vasquez → CLT-SOUTH-001 (TECHNICIAN)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-000000000009'::uuid, '01960011-0000-7000-8000-000000000009'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'TECHNICIAN', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000002'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- priya.patel → CLT-NORTH-001 (TECHNICIAN)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-00000000000a'::uuid, '01960011-0000-7000-8000-00000000000a'::uuid, '01960003-0000-7000-8000-000000000003'::uuid, 'TECHNICIAN', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000003'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- james.okafor → CLT-NORTH-001 (TECHNICIAN)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-00000000000b'::uuid, '01960011-0000-7000-8000-00000000000b'::uuid, '01960003-0000-7000-8000-000000000003'::uuid, 'TECHNICIAN', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000003'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- rachel.kim → CLT-MAIN-001 (SERVICE_ADVISOR)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-00000000000c'::uuid, '01960011-0000-7000-8000-00000000000c'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'SERVICE_ADVISOR', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000001'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- tyrone.williams → CLT-SOUTH-001 (SERVICE_ADVISOR)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-00000000000d'::uuid, '01960011-0000-7000-8000-00000000000d'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'SERVICE_ADVISOR', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000002'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- olivia.chen → CORP-HQ-001 (ACCOUNTING_ASSOCIATE)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-00000000000e'::uuid, '01960011-0000-7000-8000-00000000000e'::uuid, '01960003-0000-7000-8000-000000000005'::uuid, 'ACCOUNTING_ASSOCIATE', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000005'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- harold.sanders → CORP-HQ-001 (ACCOUNTING_ASSOCIATE)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-00000000000f'::uuid, '01960011-0000-7000-8000-00000000000f'::uuid, '01960003-0000-7000-8000-000000000005'::uuid, 'ACCOUNTING_ASSOCIATE', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000005'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-
-            -- irene.torres → CORP-HQ-001 (ACCOUNT_MANAGER)
-            EXECUTE $sql$
-                INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
-                SELECT '01960013-0000-7000-8000-000000000010'::uuid, '01960011-0000-7000-8000-000000000010'::uuid, '01960003-0000-7000-8000-000000000005'::uuid, 'ACCOUNT_MANAGER', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'
-                WHERE EXISTS (SELECT 1 FROM public.location WHERE id = '01960003-0000-7000-8000-000000000005'::uuid)
-                ON CONFLICT (id) DO NOTHING
-            $sql$;
-        END IF;
-    END IF;
-END $$;
+-- person_location_assignment — unconditional idempotent seed.
+-- location_id has no FK, so these are NOT guarded on location existence: a guarded
+-- repeatable that ran before pos-location seeded skipped every row and never retried
+-- (Flyway repeatables only re-run on checksum change), leaving staff unassigned in
+-- every location. Unconditional + ON CONFLICT (id) DO NOTHING is idempotent and
+-- ordering-independent, so fresh environments populate regardless of seed order.
+INSERT INTO person_location_assignment (id, person_id, location_id, role, is_primary, status, effective_from, created_at, updated_at, created_by)
+VALUES
+    ('01960013-0000-7000-8000-000000000001'::uuid, '01960011-0000-7000-8000-000000000001'::uuid, '01960003-0000-7000-8000-000000000005'::uuid, 'SYSTEM_ADMINISTRATOR', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-000000000002'::uuid, '01960011-0000-7000-8000-000000000002'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'LOCATION_MANAGER', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-000000000003'::uuid, '01960011-0000-7000-8000-000000000003'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'DISPATCHER', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-000000000004'::uuid, '01960011-0000-7000-8000-000000000004'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'DISPATCHER', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-000000000005'::uuid, '01960011-0000-7000-8000-000000000005'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'TECHNICIAN', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-000000000006'::uuid, '01960011-0000-7000-8000-000000000006'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'TECHNICIAN', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-000000000007'::uuid, '01960011-0000-7000-8000-000000000007'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'TECHNICIAN', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-000000000008'::uuid, '01960011-0000-7000-8000-000000000008'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'TECHNICIAN', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-000000000009'::uuid, '01960011-0000-7000-8000-000000000009'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'TECHNICIAN', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-00000000000a'::uuid, '01960011-0000-7000-8000-00000000000a'::uuid, '01960003-0000-7000-8000-000000000003'::uuid, 'TECHNICIAN', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-00000000000b'::uuid, '01960011-0000-7000-8000-00000000000b'::uuid, '01960003-0000-7000-8000-000000000003'::uuid, 'TECHNICIAN', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-00000000000c'::uuid, '01960011-0000-7000-8000-00000000000c'::uuid, '01960003-0000-7000-8000-000000000001'::uuid, 'SERVICE_ADVISOR', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-00000000000d'::uuid, '01960011-0000-7000-8000-00000000000d'::uuid, '01960003-0000-7000-8000-000000000002'::uuid, 'SERVICE_ADVISOR', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-00000000000e'::uuid, '01960011-0000-7000-8000-00000000000e'::uuid, '01960003-0000-7000-8000-000000000005'::uuid, 'ACCOUNTING_ASSOCIATE', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-00000000000f'::uuid, '01960011-0000-7000-8000-00000000000f'::uuid, '01960003-0000-7000-8000-000000000005'::uuid, 'ACCOUNTING_ASSOCIATE', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator'),
+    ('01960013-0000-7000-8000-000000000010'::uuid, '01960011-0000-7000-8000-000000000010'::uuid, '01960003-0000-7000-8000-000000000005'::uuid, 'ACCOUNT_MANAGER', TRUE, 'ACTIVE', CURRENT_DATE, NOW(), NOW(), 'seed-generator')
+ON CONFLICT (id) DO NOTHING;
 
 -- =========================================================================
 -- Person contact points (mirrors pos-customer contact_point for the 20
