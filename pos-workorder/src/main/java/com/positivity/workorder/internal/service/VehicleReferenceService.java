@@ -54,7 +54,7 @@ public class VehicleReferenceService {
                     .get()
                     .uri("/v1/crm/{customerId}/vehicles/{vehicleId}", customerId, vehicleId)
                     .header("X-User", "pos-workorder")
-                    .header("X-Authorities", "crm:party:view")
+                    .header("X-Authorities", "crm:vehicle:view")
                     .retrieve()
                     .body(Map.class);
             if (body == null || body.isEmpty()) {
@@ -102,7 +102,7 @@ public class VehicleReferenceService {
                     .get()
                     .uri("/v1/crm/{customerId}/vehicles", customerId)
                     .header("X-User", "pos-workorder")
-                    .header("X-Authorities", "crm:party:view")
+                    .header("X-Authorities", "crm:vehicle:view")
                     .retrieve()
                     .body(List.class);
             if (rows == null || rows.isEmpty()) {
