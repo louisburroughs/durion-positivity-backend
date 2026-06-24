@@ -113,6 +113,11 @@ public class SecurityServiceClient {
                 .get()
                 .uri("/v1/users")
                 .retrieve()
+                .onStatus(statusCode -> statusCode.value() == 401 || statusCode.value() == 403, (request, response) -> {
+                    throw new SecurityServiceException(
+                            "Not authorized to query users in security service",
+                            response.getStatusCode().value());
+                })
                 .onStatus(HttpStatusCode::is5xxServerError, (request, response) -> {
                     throw new SecurityServiceException(
                             "Security service failed while fetching users",
