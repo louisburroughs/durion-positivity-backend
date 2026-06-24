@@ -16,111 +16,375 @@
 SET TIME ZONE 'UTC';
 
 -- person rows
-INSERT INTO person (id, first_name, last_name, username, employee_number, primary_email, status, hire_date, created_at, updated_at)
+INSERT INTO person (id, first_name, last_name, employee_number, status, hire_date, created_at, updated_at)
 VALUES
-    ('01960011-0000-7000-8000-000000000001'::uuid, 'Marcus',   'Webb',     'marcus.webb',     'EMP-0001', 'marcus.webb@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000002'::uuid, 'Diana',    'Rowe',     'diana.rowe',      'EMP-0002', 'diana.rowe@durion.internal',      'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000003'::uuid, 'Terrence', 'Blake',    'terrence.blake',  'EMP-0003', 'terrence.blake@durion.internal',  'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000004'::uuid, 'Sandra',   'Cruz',     'sandra.cruz',     'EMP-0004', 'sandra.cruz@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000005'::uuid, 'Kyle',     'Brennan',  'kyle.brennan',    'EMP-0005', 'kyle.brennan@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000006'::uuid, 'DeShawn',  'Morris',   'deshawn.morris',  'EMP-0006', 'deshawn.morris@durion.internal',  'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000007'::uuid, 'Carlos',   'Ruiz',     'carlos.ruiz',     'EMP-0007', 'carlos.ruiz@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000008'::uuid, 'Amber',    'Nguyen',   'amber.nguyen',    'EMP-0008', 'amber.nguyen@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000009'::uuid, 'Eddie',    'Vasquez',  'eddie.vasquez',   'EMP-0009', 'eddie.vasquez@durion.internal',   'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-00000000000a'::uuid, 'Priya',    'Patel',    'priya.patel',     'EMP-0010', 'priya.patel@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-00000000000b'::uuid, 'James',    'Okafor',   'james.okafor',    'EMP-0011', 'james.okafor@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-00000000000c'::uuid, 'Rachel',   'Kim',      'rachel.kim',      'EMP-0012', 'rachel.kim@durion.internal',      'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-00000000000d'::uuid, 'Tyrone',   'Williams', 'tyrone.williams', 'EMP-0013', 'tyrone.williams@durion.internal', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-00000000000e'::uuid, 'Olivia',   'Chen',     'olivia.chen',     'EMP-0014', 'olivia.chen@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-00000000000f'::uuid, 'Harold',   'Sanders',  'harold.sanders',  'EMP-0015', 'harold.sanders@durion.internal',  'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000010'::uuid, 'Irene',    'Torres',   'irene.torres',    'EMP-0016', 'irene.torres@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW())
+    ('01960011-0000-7000-8000-000000000001'::uuid, 'Marcus', 'Webb', 'EMP-0001', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000002'::uuid, 'Diana', 'Rowe', 'EMP-0002', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000003'::uuid, 'Terrence', 'Blake', 'EMP-0003', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000004'::uuid, 'Sandra', 'Cruz', 'EMP-0004', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000005'::uuid, 'Kyle', 'Brennan', 'EMP-0005', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000006'::uuid, 'DeShawn', 'Morris', 'EMP-0006', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000007'::uuid, 'Carlos', 'Ruiz', 'EMP-0007', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000008'::uuid, 'Amber', 'Nguyen', 'EMP-0008', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000009'::uuid, 'Eddie', 'Vasquez', 'EMP-0009', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000000a'::uuid, 'Priya', 'Patel', 'EMP-0010', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000000b'::uuid, 'James', 'Okafor', 'EMP-0011', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000000c'::uuid, 'Rachel', 'Kim', 'EMP-0012', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000000d'::uuid, 'Tyrone', 'Williams', 'EMP-0013', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000000e'::uuid, 'Olivia', 'Chen', 'EMP-0014', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000000f'::uuid, 'Harold', 'Sanders', 'EMP-0015', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000010'::uuid, 'Irene', 'Torres', 'EMP-0016', 'ACTIVE', CURRENT_DATE, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
+
+-- Re-seed emails as EMAIL contact points (person email columns removed).
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000001'::uuid, 'EMAIL', 'marcus.webb@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000001'::uuid AND contact_type='EMAIL' AND value='marcus.webb@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000002'::uuid, 'EMAIL', 'diana.rowe@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000002'::uuid AND contact_type='EMAIL' AND value='diana.rowe@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000003'::uuid, 'EMAIL', 'terrence.blake@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000003'::uuid AND contact_type='EMAIL' AND value='terrence.blake@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000004'::uuid, 'EMAIL', 'sandra.cruz@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000004'::uuid AND contact_type='EMAIL' AND value='sandra.cruz@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000005'::uuid, 'EMAIL', 'kyle.brennan@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000005'::uuid AND contact_type='EMAIL' AND value='kyle.brennan@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000006'::uuid, 'EMAIL', 'deshawn.morris@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000006'::uuid AND contact_type='EMAIL' AND value='deshawn.morris@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000007'::uuid, 'EMAIL', 'carlos.ruiz@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000007'::uuid AND contact_type='EMAIL' AND value='carlos.ruiz@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000008'::uuid, 'EMAIL', 'amber.nguyen@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000008'::uuid AND contact_type='EMAIL' AND value='amber.nguyen@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000009'::uuid, 'EMAIL', 'eddie.vasquez@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000009'::uuid AND contact_type='EMAIL' AND value='eddie.vasquez@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-00000000000a'::uuid, 'EMAIL', 'priya.patel@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-00000000000a'::uuid AND contact_type='EMAIL' AND value='priya.patel@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-00000000000b'::uuid, 'EMAIL', 'james.okafor@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-00000000000b'::uuid AND contact_type='EMAIL' AND value='james.okafor@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-00000000000c'::uuid, 'EMAIL', 'rachel.kim@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-00000000000c'::uuid AND contact_type='EMAIL' AND value='rachel.kim@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-00000000000d'::uuid, 'EMAIL', 'tyrone.williams@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-00000000000d'::uuid AND contact_type='EMAIL' AND value='tyrone.williams@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-00000000000e'::uuid, 'EMAIL', 'olivia.chen@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-00000000000e'::uuid AND contact_type='EMAIL' AND value='olivia.chen@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-00000000000f'::uuid, 'EMAIL', 'harold.sanders@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-00000000000f'::uuid AND contact_type='EMAIL' AND value='harold.sanders@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000010'::uuid, 'EMAIL', 'irene.torres@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000010'::uuid AND contact_type='EMAIL' AND value='irene.torres@durion.internal');
 
 -- =========================================================================
 -- Group A: 50 customer persons (01960024-*) — person_party.person_id in pos-customer
 -- =========================================================================
 
-INSERT INTO person (id, first_name, last_name, primary_email, status, created_at, updated_at)
+INSERT INTO person (id, first_name, last_name, status, created_at, updated_at)
 VALUES
-    ('01960024-0000-7000-8000-000000000001'::uuid, 'Marcus',   'Patterson', 'marcus.patterson@example.com',   'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000002'::uuid, 'Jennifer', 'Holloway',  'jennifer.holloway@example.com',  'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000003'::uuid, 'Robert',   'Castillo',  'robert.castillo@example.com',    'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000004'::uuid, 'Angela',   'Freeman',   'angela.freeman@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000005'::uuid, 'Derek',    'Washington','derek.washington@example.com',   'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000006'::uuid, 'Patricia', 'Simmons',   'patricia.simmons@example.com',   'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000007'::uuid, 'Kevin',    'Thornton',  'kevin.thornton@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000008'::uuid, 'Linda',    'Guerrero',  'linda.guerrero@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000009'::uuid, 'James',    'Caldwell',  'james.caldwell@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000000a'::uuid, 'Tanya',    'Robinson',  'tanya.robinson@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000000b'::uuid, 'Michael',  'Owens',     'michael.owens@example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000000c'::uuid, 'Cheryl',   'Hawkins',   'cheryl.hawkins@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000000d'::uuid, 'Ronald',   'Jenkins',   'ronald.jenkins@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000000e'::uuid, 'Denise',   'Foster',    'denise.foster@example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000000f'::uuid, 'Anthony',  'Bryant',    'anthony.bryant@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000010'::uuid, 'Brenda',   'Coleman',   'brenda.coleman@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000011'::uuid, 'Steven',   'Gardner',   'steven.gardner@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000012'::uuid, 'Nicole',   'Harrison',  'nicole.harrison@example.com',    'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000013'::uuid, 'Gary',     'Alexander', 'gary.alexander@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000014'::uuid, 'Carolyn',  'Mitchell',  'carolyn.mitchell@example.com',   'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000015'::uuid, 'Timothy',  'Dixon',     'timothy.dixon@example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000016'::uuid, 'Sandra',   'Reeves',    'sandra.reeves@example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000017'::uuid, 'Walter',   'Hughes',    'walter.hughes@example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000018'::uuid, 'Pamela',   'Lewis',     'pamela.lewis@example.com',       'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000019'::uuid, 'Larry',    'Peterson',  'larry.peterson@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000001a'::uuid, 'Deborah',  'Barnes',    'deborah.barnes@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000001b'::uuid, 'Frank',    'Murphy',    'frank.murphy@example.com',       'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000001c'::uuid, 'Sharon',   'Powell',    'sharon.powell@example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000001d'::uuid, 'Raymond',  'Bailey',    'raymond.bailey@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000001e'::uuid, 'Cynthia',  'Ross',      'cynthia.ross@example.com',       'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000001f'::uuid, 'Jose',     'Rivera',    'jose.rivera@example.com',        'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000020'::uuid, 'Gloria',   'Turner',    'gloria.turner@example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000021'::uuid, 'Douglas',  'Stewart',   'douglas.stewart@example.com',    'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000022'::uuid, 'Shirley',  'Flores',    'shirley.flores@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000023'::uuid, 'Henry',    'Griffin',   'henry.griffin@example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000024'::uuid, 'Marie',    'Evans',     'marie.evans@example.com',        'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000025'::uuid, 'Bruce',    'King',      'bruce.king@example.com',         'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000026'::uuid, 'Wanda',    'Sanchez',   'wanda.sanchez@example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000027'::uuid, 'Keith',    'Ward',      'keith.ward@example.com',         'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000028'::uuid, 'Phyllis',  'Long',      'phyllis.long@example.com',       'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000029'::uuid, 'Carl',     'Price',     'carl.price@example.com',         'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000002a'::uuid, 'Martha',   'Scott',     'martha.scott@example.com',       'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000002b'::uuid, 'Albert',   'Rogers',    'albert.rogers@example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000002c'::uuid, 'Virginia', 'Henderson', 'virginia.henderson@example.com', 'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000002d'::uuid, 'Harry',    'Hill',      'harry.hill@example.com',         'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000002e'::uuid, 'Doris',    'Wood',      'doris.wood@example.com',         'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-00000000002f'::uuid, 'Raymond',  'James',     'raymond.james@example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000030'::uuid, 'Betty',    'Crawford',  'betty.crawford@example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000031'::uuid, 'Samuel',   'Reed',      'samuel.reed@example.com',        'ACTIVE', NOW(), NOW()),
-    ('01960024-0000-7000-8000-000000000032'::uuid, 'Dorothy',  'Bell',      'dorothy.bell@example.com',       'ACTIVE', NOW(), NOW())
+    ('01960024-0000-7000-8000-000000000001'::uuid, 'Marcus', 'Patterson', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000002'::uuid, 'Jennifer', 'Holloway', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000003'::uuid, 'Robert', 'Castillo', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000004'::uuid, 'Angela', 'Freeman', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000005'::uuid, 'Derek', 'Washington', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000006'::uuid, 'Patricia', 'Simmons', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000007'::uuid, 'Kevin', 'Thornton', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000008'::uuid, 'Linda', 'Guerrero', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000009'::uuid, 'James', 'Caldwell', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000000a'::uuid, 'Tanya', 'Robinson', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000000b'::uuid, 'Michael', 'Owens', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000000c'::uuid, 'Cheryl', 'Hawkins', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000000d'::uuid, 'Ronald', 'Jenkins', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000000e'::uuid, 'Denise', 'Foster', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000000f'::uuid, 'Anthony', 'Bryant', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000010'::uuid, 'Brenda', 'Coleman', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000011'::uuid, 'Steven', 'Gardner', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000012'::uuid, 'Nicole', 'Harrison', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000013'::uuid, 'Gary', 'Alexander', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000014'::uuid, 'Carolyn', 'Mitchell', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000015'::uuid, 'Timothy', 'Dixon', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000016'::uuid, 'Sandra', 'Reeves', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000017'::uuid, 'Walter', 'Hughes', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000018'::uuid, 'Pamela', 'Lewis', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000019'::uuid, 'Larry', 'Peterson', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000001a'::uuid, 'Deborah', 'Barnes', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000001b'::uuid, 'Frank', 'Murphy', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000001c'::uuid, 'Sharon', 'Powell', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000001d'::uuid, 'Raymond', 'Bailey', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000001e'::uuid, 'Cynthia', 'Ross', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000001f'::uuid, 'Jose', 'Rivera', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000020'::uuid, 'Gloria', 'Turner', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000021'::uuid, 'Douglas', 'Stewart', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000022'::uuid, 'Shirley', 'Flores', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000023'::uuid, 'Henry', 'Griffin', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000024'::uuid, 'Marie', 'Evans', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000025'::uuid, 'Bruce', 'King', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000026'::uuid, 'Wanda', 'Sanchez', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000027'::uuid, 'Keith', 'Ward', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000028'::uuid, 'Phyllis', 'Long', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000029'::uuid, 'Carl', 'Price', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000002a'::uuid, 'Martha', 'Scott', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000002b'::uuid, 'Albert', 'Rogers', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000002c'::uuid, 'Virginia', 'Henderson', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000002d'::uuid, 'Harry', 'Hill', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000002e'::uuid, 'Doris', 'Wood', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-00000000002f'::uuid, 'Raymond', 'James', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000030'::uuid, 'Betty', 'Crawford', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000031'::uuid, 'Samuel', 'Reed', 'ACTIVE', NOW(), NOW()),
+    ('01960024-0000-7000-8000-000000000032'::uuid, 'Dorothy', 'Bell', 'ACTIVE', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
+
+-- Re-seed emails as EMAIL contact points (person email columns removed).
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000001'::uuid, 'EMAIL', 'marcus.patterson@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000001'::uuid AND contact_type='EMAIL' AND value='marcus.patterson@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000002'::uuid, 'EMAIL', 'jennifer.holloway@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000002'::uuid AND contact_type='EMAIL' AND value='jennifer.holloway@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000003'::uuid, 'EMAIL', 'robert.castillo@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000003'::uuid AND contact_type='EMAIL' AND value='robert.castillo@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000004'::uuid, 'EMAIL', 'angela.freeman@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000004'::uuid AND contact_type='EMAIL' AND value='angela.freeman@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000005'::uuid, 'EMAIL', 'derek.washington@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000005'::uuid AND contact_type='EMAIL' AND value='derek.washington@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000006'::uuid, 'EMAIL', 'patricia.simmons@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000006'::uuid AND contact_type='EMAIL' AND value='patricia.simmons@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000007'::uuid, 'EMAIL', 'kevin.thornton@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000007'::uuid AND contact_type='EMAIL' AND value='kevin.thornton@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000008'::uuid, 'EMAIL', 'linda.guerrero@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000008'::uuid AND contact_type='EMAIL' AND value='linda.guerrero@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000009'::uuid, 'EMAIL', 'james.caldwell@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000009'::uuid AND contact_type='EMAIL' AND value='james.caldwell@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000000a'::uuid, 'EMAIL', 'tanya.robinson@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000000a'::uuid AND contact_type='EMAIL' AND value='tanya.robinson@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000000b'::uuid, 'EMAIL', 'michael.owens@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000000b'::uuid AND contact_type='EMAIL' AND value='michael.owens@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000000c'::uuid, 'EMAIL', 'cheryl.hawkins@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000000c'::uuid AND contact_type='EMAIL' AND value='cheryl.hawkins@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000000d'::uuid, 'EMAIL', 'ronald.jenkins@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000000d'::uuid AND contact_type='EMAIL' AND value='ronald.jenkins@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000000e'::uuid, 'EMAIL', 'denise.foster@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000000e'::uuid AND contact_type='EMAIL' AND value='denise.foster@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000000f'::uuid, 'EMAIL', 'anthony.bryant@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000000f'::uuid AND contact_type='EMAIL' AND value='anthony.bryant@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000010'::uuid, 'EMAIL', 'brenda.coleman@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000010'::uuid AND contact_type='EMAIL' AND value='brenda.coleman@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000011'::uuid, 'EMAIL', 'steven.gardner@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000011'::uuid AND contact_type='EMAIL' AND value='steven.gardner@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000012'::uuid, 'EMAIL', 'nicole.harrison@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000012'::uuid AND contact_type='EMAIL' AND value='nicole.harrison@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000013'::uuid, 'EMAIL', 'gary.alexander@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000013'::uuid AND contact_type='EMAIL' AND value='gary.alexander@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000014'::uuid, 'EMAIL', 'carolyn.mitchell@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000014'::uuid AND contact_type='EMAIL' AND value='carolyn.mitchell@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000015'::uuid, 'EMAIL', 'timothy.dixon@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000015'::uuid AND contact_type='EMAIL' AND value='timothy.dixon@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000016'::uuid, 'EMAIL', 'sandra.reeves@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000016'::uuid AND contact_type='EMAIL' AND value='sandra.reeves@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000017'::uuid, 'EMAIL', 'walter.hughes@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000017'::uuid AND contact_type='EMAIL' AND value='walter.hughes@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000018'::uuid, 'EMAIL', 'pamela.lewis@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000018'::uuid AND contact_type='EMAIL' AND value='pamela.lewis@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000019'::uuid, 'EMAIL', 'larry.peterson@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000019'::uuid AND contact_type='EMAIL' AND value='larry.peterson@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000001a'::uuid, 'EMAIL', 'deborah.barnes@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000001a'::uuid AND contact_type='EMAIL' AND value='deborah.barnes@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000001b'::uuid, 'EMAIL', 'frank.murphy@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000001b'::uuid AND contact_type='EMAIL' AND value='frank.murphy@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000001c'::uuid, 'EMAIL', 'sharon.powell@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000001c'::uuid AND contact_type='EMAIL' AND value='sharon.powell@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000001d'::uuid, 'EMAIL', 'raymond.bailey@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000001d'::uuid AND contact_type='EMAIL' AND value='raymond.bailey@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000001e'::uuid, 'EMAIL', 'cynthia.ross@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000001e'::uuid AND contact_type='EMAIL' AND value='cynthia.ross@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000001f'::uuid, 'EMAIL', 'jose.rivera@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000001f'::uuid AND contact_type='EMAIL' AND value='jose.rivera@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000020'::uuid, 'EMAIL', 'gloria.turner@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000020'::uuid AND contact_type='EMAIL' AND value='gloria.turner@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000021'::uuid, 'EMAIL', 'douglas.stewart@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000021'::uuid AND contact_type='EMAIL' AND value='douglas.stewart@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000022'::uuid, 'EMAIL', 'shirley.flores@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000022'::uuid AND contact_type='EMAIL' AND value='shirley.flores@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000023'::uuid, 'EMAIL', 'henry.griffin@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000023'::uuid AND contact_type='EMAIL' AND value='henry.griffin@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000024'::uuid, 'EMAIL', 'marie.evans@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000024'::uuid AND contact_type='EMAIL' AND value='marie.evans@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000025'::uuid, 'EMAIL', 'bruce.king@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000025'::uuid AND contact_type='EMAIL' AND value='bruce.king@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000026'::uuid, 'EMAIL', 'wanda.sanchez@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000026'::uuid AND contact_type='EMAIL' AND value='wanda.sanchez@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000027'::uuid, 'EMAIL', 'keith.ward@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000027'::uuid AND contact_type='EMAIL' AND value='keith.ward@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000028'::uuid, 'EMAIL', 'phyllis.long@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000028'::uuid AND contact_type='EMAIL' AND value='phyllis.long@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000029'::uuid, 'EMAIL', 'carl.price@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000029'::uuid AND contact_type='EMAIL' AND value='carl.price@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000002a'::uuid, 'EMAIL', 'martha.scott@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000002a'::uuid AND contact_type='EMAIL' AND value='martha.scott@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000002b'::uuid, 'EMAIL', 'albert.rogers@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000002b'::uuid AND contact_type='EMAIL' AND value='albert.rogers@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000002c'::uuid, 'EMAIL', 'virginia.henderson@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000002c'::uuid AND contact_type='EMAIL' AND value='virginia.henderson@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000002d'::uuid, 'EMAIL', 'harry.hill@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000002d'::uuid AND contact_type='EMAIL' AND value='harry.hill@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000002e'::uuid, 'EMAIL', 'doris.wood@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000002e'::uuid AND contact_type='EMAIL' AND value='doris.wood@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-00000000002f'::uuid, 'EMAIL', 'raymond.james@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-00000000002f'::uuid AND contact_type='EMAIL' AND value='raymond.james@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000030'::uuid, 'EMAIL', 'betty.crawford@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000030'::uuid AND contact_type='EMAIL' AND value='betty.crawford@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000031'::uuid, 'EMAIL', 'samuel.reed@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000031'::uuid AND contact_type='EMAIL' AND value='samuel.reed@example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960024-0000-7000-8000-000000000032'::uuid, 'EMAIL', 'dorothy.bell@example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960024-0000-7000-8000-000000000032'::uuid AND contact_type='EMAIL' AND value='dorothy.bell@example.com');
 
 -- =========================================================================
 -- Group B: 20 commercial primary contact persons (01960025-*) — contact.person_id in pos-customer
 -- =========================================================================
 
-INSERT INTO person (id, first_name, last_name, primary_email, status, created_at, updated_at)
+INSERT INTO person (id, first_name, last_name, status, created_at, updated_at)
 VALUES
-    ('01960025-0000-7000-8000-000000000001'::uuid, 'Greg',      'Whitfield',  'g.whitfield@piedmontfreight.example.com',   'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-000000000002'::uuid, 'Teresa',    'Mullen',     't.mullen@carolinaconcrete.example.com',     'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-000000000003'::uuid, 'Darnell',   'Okafor',     'd.okafor@qcwaste.example.com',              'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-000000000004'::uuid, 'Brittany',  'Norris',     'b.norris@blueridgelandscaping.example.com', 'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-000000000005'::uuid, 'Marcus',    'Tillman',    'm.tillman@tarheellogistics.example.com',    'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-000000000006'::uuid, 'Christine', 'Walters',    'c.walters@meckplumbing.example.com',        'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-000000000007'::uuid, 'Donald',    'Frazier',    'd.frazier@piedmontreadymix.example.com',    'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-000000000008'::uuid, 'Alicia',    'Stephens',   'a.stephens@carolinapower.example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-000000000009'::uuid, 'Keith',     'Burnham',    'k.burnham@bluestoneaggregate.example.com',  'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-00000000000a'::uuid, 'Tamara',    'McPherson',  't.mcpherson@cabarruscleaning.example.com',  'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-00000000000b'::uuid, 'Wesley',    'Parrish',    'w.parrish@sedelivery.example.com',          'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-00000000000c'::uuid, 'Renee',     'Holt',       'r.holt@carolinascrane.example.com',         'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-00000000000d'::uuid, 'Calvin',    'Dunmore',    'c.dunmore@lknpropane.example.com',          'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-00000000000e'::uuid, 'Latasha',   'Gooden',     'l.gooden@rowanroad.example.com',            'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-00000000000f'::uuid, 'Bryan',     'Cantrell',   'b.cantrell@carolinafresh.example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-000000000010'::uuid, 'Monica',    'Byrd',       'm.byrd@piedmontmetals.example.com',         'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-000000000011'::uuid, 'Cedric',    'Blackwell',  'c.blackwell@uniongrading.example.com',      'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-000000000012'::uuid, 'Veronica',  'Pratt',      'v.pratt@carolinaseptic.example.com',        'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-000000000013'::uuid, 'Jonathon',  'Culpepper',  'j.culpepper@mecktree.example.com',          'ACTIVE', NOW(), NOW()),
-    ('01960025-0000-7000-8000-000000000014'::uuid, 'Sheryl',    'Davenport',  's.davenport@highlandmoving.example.com',    'ACTIVE', NOW(), NOW())
+    ('01960025-0000-7000-8000-000000000001'::uuid, 'Greg', 'Whitfield', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000002'::uuid, 'Teresa', 'Mullen', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000003'::uuid, 'Darnell', 'Okafor', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000004'::uuid, 'Brittany', 'Norris', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000005'::uuid, 'Marcus', 'Tillman', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000006'::uuid, 'Christine', 'Walters', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000007'::uuid, 'Donald', 'Frazier', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000008'::uuid, 'Alicia', 'Stephens', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000009'::uuid, 'Keith', 'Burnham', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-00000000000a'::uuid, 'Tamara', 'McPherson', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-00000000000b'::uuid, 'Wesley', 'Parrish', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-00000000000c'::uuid, 'Renee', 'Holt', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-00000000000d'::uuid, 'Calvin', 'Dunmore', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-00000000000e'::uuid, 'Latasha', 'Gooden', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-00000000000f'::uuid, 'Bryan', 'Cantrell', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000010'::uuid, 'Monica', 'Byrd', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000011'::uuid, 'Cedric', 'Blackwell', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000012'::uuid, 'Veronica', 'Pratt', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000013'::uuid, 'Jonathon', 'Culpepper', 'ACTIVE', NOW(), NOW()),
+    ('01960025-0000-7000-8000-000000000014'::uuid, 'Sheryl', 'Davenport', 'ACTIVE', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
+
+-- Re-seed emails as EMAIL contact points (person email columns removed).
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-000000000001'::uuid, 'EMAIL', 'g.whitfield@piedmontfreight.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-000000000001'::uuid AND contact_type='EMAIL' AND value='g.whitfield@piedmontfreight.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-000000000002'::uuid, 'EMAIL', 't.mullen@carolinaconcrete.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-000000000002'::uuid AND contact_type='EMAIL' AND value='t.mullen@carolinaconcrete.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-000000000003'::uuid, 'EMAIL', 'd.okafor@qcwaste.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-000000000003'::uuid AND contact_type='EMAIL' AND value='d.okafor@qcwaste.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-000000000004'::uuid, 'EMAIL', 'b.norris@blueridgelandscaping.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-000000000004'::uuid AND contact_type='EMAIL' AND value='b.norris@blueridgelandscaping.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-000000000005'::uuid, 'EMAIL', 'm.tillman@tarheellogistics.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-000000000005'::uuid AND contact_type='EMAIL' AND value='m.tillman@tarheellogistics.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-000000000006'::uuid, 'EMAIL', 'c.walters@meckplumbing.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-000000000006'::uuid AND contact_type='EMAIL' AND value='c.walters@meckplumbing.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-000000000007'::uuid, 'EMAIL', 'd.frazier@piedmontreadymix.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-000000000007'::uuid AND contact_type='EMAIL' AND value='d.frazier@piedmontreadymix.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-000000000008'::uuid, 'EMAIL', 'a.stephens@carolinapower.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-000000000008'::uuid AND contact_type='EMAIL' AND value='a.stephens@carolinapower.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-000000000009'::uuid, 'EMAIL', 'k.burnham@bluestoneaggregate.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-000000000009'::uuid AND contact_type='EMAIL' AND value='k.burnham@bluestoneaggregate.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-00000000000a'::uuid, 'EMAIL', 't.mcpherson@cabarruscleaning.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-00000000000a'::uuid AND contact_type='EMAIL' AND value='t.mcpherson@cabarruscleaning.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-00000000000b'::uuid, 'EMAIL', 'w.parrish@sedelivery.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-00000000000b'::uuid AND contact_type='EMAIL' AND value='w.parrish@sedelivery.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-00000000000c'::uuid, 'EMAIL', 'r.holt@carolinascrane.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-00000000000c'::uuid AND contact_type='EMAIL' AND value='r.holt@carolinascrane.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-00000000000d'::uuid, 'EMAIL', 'c.dunmore@lknpropane.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-00000000000d'::uuid AND contact_type='EMAIL' AND value='c.dunmore@lknpropane.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-00000000000e'::uuid, 'EMAIL', 'l.gooden@rowanroad.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-00000000000e'::uuid AND contact_type='EMAIL' AND value='l.gooden@rowanroad.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-00000000000f'::uuid, 'EMAIL', 'b.cantrell@carolinafresh.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-00000000000f'::uuid AND contact_type='EMAIL' AND value='b.cantrell@carolinafresh.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-000000000010'::uuid, 'EMAIL', 'm.byrd@piedmontmetals.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-000000000010'::uuid AND contact_type='EMAIL' AND value='m.byrd@piedmontmetals.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-000000000011'::uuid, 'EMAIL', 'c.blackwell@uniongrading.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-000000000011'::uuid AND contact_type='EMAIL' AND value='c.blackwell@uniongrading.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-000000000012'::uuid, 'EMAIL', 'v.pratt@carolinaseptic.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-000000000012'::uuid AND contact_type='EMAIL' AND value='v.pratt@carolinaseptic.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-000000000013'::uuid, 'EMAIL', 'j.culpepper@mecktree.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-000000000013'::uuid AND contact_type='EMAIL' AND value='j.culpepper@mecktree.example.com');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960025-0000-7000-8000-000000000014'::uuid, 'EMAIL', 's.davenport@highlandmoving.example.com', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960025-0000-7000-8000-000000000014'::uuid AND contact_type='EMAIL' AND value='s.davenport@highlandmoving.example.com');
 
 -- =========================================================================
 -- Group C (REMOVED): the 20 commercial billing contacts (01960026-*) were
@@ -258,39 +522,103 @@ ON CONFLICT (id) DO NOTHING;
 -- These are staffing records only; no security users / logins are seeded.
 -- =========================================================================
 
-INSERT INTO person (id, first_name, last_name, username, employee_number, primary_email, status, hire_date, created_at, updated_at)
+INSERT INTO person (id, first_name, last_name, employee_number, status, hire_date, created_at, updated_at)
 VALUES
-    -- CLT-MAIN-001 technicians (+5 → 8 total)
-    ('01960011-0000-7000-8000-000000000011'::uuid, 'Hector',  'Alvarez',    'hector.alvarez',  'EMP-0017', 'hector.alvarez@durion.internal',  'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000012'::uuid, 'Naomi',   'Ford',       'naomi.ford',      'EMP-0018', 'naomi.ford@durion.internal',      'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000013'::uuid, 'Trevor',  'Quinn',      'trevor.quinn',    'EMP-0019', 'trevor.quinn@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000014'::uuid, 'Camille', 'Boyd',       'camille.boyd',    'EMP-0020', 'camille.boyd@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000015'::uuid, 'Andre',   'Foster',     'andre.foster',    'EMP-0021', 'andre.foster@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    -- CLT-SOUTH-001 technicians (+5 → 7 total)
-    ('01960011-0000-7000-8000-000000000016'::uuid, 'Lila',    'Montgomery', 'lila.montgomery', 'EMP-0022', 'lila.montgomery@durion.internal', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000017'::uuid, 'Desmond', 'Pace',       'desmond.pace',    'EMP-0023', 'desmond.pace@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000018'::uuid, 'Brooke',  'Hadley',     'brooke.hadley',   'EMP-0024', 'brooke.hadley@durion.internal',   'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000019'::uuid, 'Felix',   'Romano',     'felix.romano',    'EMP-0025', 'felix.romano@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-00000000001a'::uuid, 'Gina',    'Vaughn',     'gina.vaughn',     'EMP-0026', 'gina.vaughn@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    -- CLT-NORTH-001 technicians (+4 → 6 total)
-    ('01960011-0000-7000-8000-00000000001b'::uuid, 'Omar',    'Haddad',     'omar.haddad',     'EMP-0027', 'omar.haddad@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-00000000001c'::uuid, 'Sierra',  'Lowe',       'sierra.lowe',     'EMP-0028', 'sierra.lowe@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-00000000001d'::uuid, 'Russell', 'Pike',       'russell.pike',    'EMP-0029', 'russell.pike@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-00000000001e'::uuid, 'Maya',    'Devlin',     'maya.devlin',     'EMP-0030', 'maya.devlin@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    -- CLT-MOB-HUB-001 technicians (+2 → 2 total, sized to 2 mobile units)
-    ('01960011-0000-7000-8000-00000000001f'::uuid, 'Caleb',   'Frost',      'caleb.frost',     'EMP-0031', 'caleb.frost@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000020'::uuid, 'Yvonne',  'Marsh',      'yvonne.marsh',    'EMP-0032', 'yvonne.marsh@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    -- Role coverage: LOCATION_MANAGER for SOUTH / NORTH / MOB-HUB
-    ('01960011-0000-7000-8000-000000000021'::uuid, 'Bernard', 'Cole',       'bernard.cole',    'EMP-0033', 'bernard.cole@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000022'::uuid, 'Gloria',  'Mensah',     'gloria.mensah',   'EMP-0034', 'gloria.mensah@durion.internal',   'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000023'::uuid, 'Victor',  'Salazar',    'victor.salazar',  'EMP-0035', 'victor.salazar@durion.internal',  'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    -- Role coverage: DISPATCHER for NORTH / MOB-HUB
-    ('01960011-0000-7000-8000-000000000024'::uuid, 'Renee',   'Albright',   'renee.albright',  'EMP-0036', 'renee.albright@durion.internal',  'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000025'::uuid, 'Curtis',  'Benton',     'curtis.benton',   'EMP-0037', 'curtis.benton@durion.internal',   'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    -- Role coverage: SERVICE_ADVISOR for NORTH / MOB-HUB
-    ('01960011-0000-7000-8000-000000000026'::uuid, 'Paula',   'Knight',     'paula.knight',    'EMP-0038', 'paula.knight@durion.internal',    'ACTIVE', CURRENT_DATE, NOW(), NOW()),
-    ('01960011-0000-7000-8000-000000000027'::uuid, 'Simon',   'Hayes',      'simon.hayes',     'EMP-0039', 'simon.hayes@durion.internal',     'ACTIVE', CURRENT_DATE, NOW(), NOW())
+    ('01960011-0000-7000-8000-000000000011'::uuid, 'Hector', 'Alvarez', 'EMP-0017', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000012'::uuid, 'Naomi', 'Ford', 'EMP-0018', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000013'::uuid, 'Trevor', 'Quinn', 'EMP-0019', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000014'::uuid, 'Camille', 'Boyd', 'EMP-0020', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000015'::uuid, 'Andre', 'Foster', 'EMP-0021', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000016'::uuid, 'Lila', 'Montgomery', 'EMP-0022', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000017'::uuid, 'Desmond', 'Pace', 'EMP-0023', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000018'::uuid, 'Brooke', 'Hadley', 'EMP-0024', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000019'::uuid, 'Felix', 'Romano', 'EMP-0025', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000001a'::uuid, 'Gina', 'Vaughn', 'EMP-0026', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000001b'::uuid, 'Omar', 'Haddad', 'EMP-0027', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000001c'::uuid, 'Sierra', 'Lowe', 'EMP-0028', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000001d'::uuid, 'Russell', 'Pike', 'EMP-0029', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000001e'::uuid, 'Maya', 'Devlin', 'EMP-0030', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-00000000001f'::uuid, 'Caleb', 'Frost', 'EMP-0031', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000020'::uuid, 'Yvonne', 'Marsh', 'EMP-0032', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000021'::uuid, 'Bernard', 'Cole', 'EMP-0033', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000022'::uuid, 'Gloria', 'Mensah', 'EMP-0034', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000023'::uuid, 'Victor', 'Salazar', 'EMP-0035', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000024'::uuid, 'Renee', 'Albright', 'EMP-0036', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000025'::uuid, 'Curtis', 'Benton', 'EMP-0037', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000026'::uuid, 'Paula', 'Knight', 'EMP-0038', 'ACTIVE', CURRENT_DATE, NOW(), NOW()),
+    ('01960011-0000-7000-8000-000000000027'::uuid, 'Simon', 'Hayes', 'EMP-0039', 'ACTIVE', CURRENT_DATE, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
+
+-- Re-seed emails as EMAIL contact points (person email columns removed).
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000011'::uuid, 'EMAIL', 'hector.alvarez@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000011'::uuid AND contact_type='EMAIL' AND value='hector.alvarez@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000012'::uuid, 'EMAIL', 'naomi.ford@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000012'::uuid AND contact_type='EMAIL' AND value='naomi.ford@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000013'::uuid, 'EMAIL', 'trevor.quinn@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000013'::uuid AND contact_type='EMAIL' AND value='trevor.quinn@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000014'::uuid, 'EMAIL', 'camille.boyd@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000014'::uuid AND contact_type='EMAIL' AND value='camille.boyd@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000015'::uuid, 'EMAIL', 'andre.foster@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000015'::uuid AND contact_type='EMAIL' AND value='andre.foster@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000016'::uuid, 'EMAIL', 'lila.montgomery@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000016'::uuid AND contact_type='EMAIL' AND value='lila.montgomery@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000017'::uuid, 'EMAIL', 'desmond.pace@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000017'::uuid AND contact_type='EMAIL' AND value='desmond.pace@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000018'::uuid, 'EMAIL', 'brooke.hadley@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000018'::uuid AND contact_type='EMAIL' AND value='brooke.hadley@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000019'::uuid, 'EMAIL', 'felix.romano@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000019'::uuid AND contact_type='EMAIL' AND value='felix.romano@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-00000000001a'::uuid, 'EMAIL', 'gina.vaughn@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-00000000001a'::uuid AND contact_type='EMAIL' AND value='gina.vaughn@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-00000000001b'::uuid, 'EMAIL', 'omar.haddad@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-00000000001b'::uuid AND contact_type='EMAIL' AND value='omar.haddad@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-00000000001c'::uuid, 'EMAIL', 'sierra.lowe@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-00000000001c'::uuid AND contact_type='EMAIL' AND value='sierra.lowe@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-00000000001d'::uuid, 'EMAIL', 'russell.pike@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-00000000001d'::uuid AND contact_type='EMAIL' AND value='russell.pike@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-00000000001e'::uuid, 'EMAIL', 'maya.devlin@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-00000000001e'::uuid AND contact_type='EMAIL' AND value='maya.devlin@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-00000000001f'::uuid, 'EMAIL', 'caleb.frost@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-00000000001f'::uuid AND contact_type='EMAIL' AND value='caleb.frost@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000020'::uuid, 'EMAIL', 'yvonne.marsh@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000020'::uuid AND contact_type='EMAIL' AND value='yvonne.marsh@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000021'::uuid, 'EMAIL', 'bernard.cole@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000021'::uuid AND contact_type='EMAIL' AND value='bernard.cole@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000022'::uuid, 'EMAIL', 'gloria.mensah@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000022'::uuid AND contact_type='EMAIL' AND value='gloria.mensah@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000023'::uuid, 'EMAIL', 'victor.salazar@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000023'::uuid AND contact_type='EMAIL' AND value='victor.salazar@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000024'::uuid, 'EMAIL', 'renee.albright@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000024'::uuid AND contact_type='EMAIL' AND value='renee.albright@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000025'::uuid, 'EMAIL', 'curtis.benton@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000025'::uuid AND contact_type='EMAIL' AND value='curtis.benton@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000026'::uuid, 'EMAIL', 'paula.knight@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000026'::uuid AND contact_type='EMAIL' AND value='paula.knight@durion.internal');
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000027'::uuid, 'EMAIL', 'simon.hayes@durion.internal', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000027'::uuid AND contact_type='EMAIL' AND value='simon.hayes@durion.internal');
 
 -- person_location_assignment for the additional staff (guarded by location existence).
 -- effective_from = CURRENT_DATE keeps each row distinct under the
