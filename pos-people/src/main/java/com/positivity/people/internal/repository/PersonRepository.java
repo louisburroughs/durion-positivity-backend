@@ -28,6 +28,4 @@ public interface PersonRepository extends JpaRepository<Person, UUID>, JpaSpecif
     List<Person> findByLastNameIgnoreCase(String lastName);
 
     List<Person> findByFirstNameIgnoreCase(String firstName);
-
-    List<Person> findByPhoneNumbersContains(String phoneNumber);
 }

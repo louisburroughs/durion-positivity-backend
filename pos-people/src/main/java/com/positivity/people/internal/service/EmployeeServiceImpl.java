@@ -40,6 +40,8 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     private final PersonRepository personRepository;
 
+    private final PersonWorkPhoneService workPhoneService;
+
     private final EmployeeOffboardingRetryRepository offboardingRetryRepository;
 
     private final ObjectMapper objectMapper;
@@ -68,6 +70,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                         request.getContactInfo()));
 
         Person saved = personRepository.save(entity);
+        workPhoneService.replaceWorkPhones(saved.getId(), extractPhones(request.getContactInfo()));
         return toEmployeeProfile(saved, warnings);
     }
 
@@ -112,6 +115,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
 
         Person saved = personRepository.save(entity);
+        workPhoneService.replaceWorkPhones(saved.getId(), extractPhones(request.getContactInfo()));
         return toEmployeeProfile(saved, warnings);
     }
 
@@ -256,17 +260,23 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (contactInfo != null) {
             entity.setPrimaryEmail(normalize(contactInfo.getPrimaryEmail()));
             entity.setSecondaryEmail(normalize(contactInfo.getSecondaryEmail()));
-
-            List<String> phones = java.util.stream.Stream.of(
-                            normalize(contactInfo.getPrimaryPhone()), normalize(contactInfo.getSecondaryPhone()))
-                    .filter(value -> value != null && !value.isBlank())
-                    .toList();
-            entity.setPhoneNumbers(new ArrayList<>(phones));
             entity.setContactInfoJson(writeContactInfo(contactInfo));
         } else {
             entity.setContactInfoJson(null);
-            entity.setPhoneNumbers(new ArrayList<>());
         }
+        // Phone numbers are persisted separately as PHONE_WORK contact points after save
+        // (see createEmployee/updateEmployee); not stored on the Person entity.
+    }
+
+    /** Primary + secondary phone from contact info, normalized and blank-filtered. */
+    private List<String> extractPhones(EmployeeContactInfoDto contactInfo) {
+        if (contactInfo == null) {
+            return List.of();
+        }
+        return java.util.stream.Stream.of(
+                        normalize(contactInfo.getPrimaryPhone()), normalize(contactInfo.getSecondaryPhone()))
+                .filter(value -> value != null && !value.isBlank())
+                .toList();
     }
 
     private boolean hasDuplicatePhone(UUID employeeId, String primaryPhone, String secondaryPhone) {
@@ -281,8 +291,8 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (phoneValue == null || phoneValue.isBlank()) {
             return false;
         }
-        return personRepository.findByPhoneNumbersContains(phoneValue).stream()
-                .anyMatch(person -> employeeId == null || !person.getId().equals(employeeId));
+        return workPhoneService.findPersonIdsByWorkPhone(phoneValue).stream()
+                .anyMatch(personId -> employeeId == null || !personId.equals(employeeId));
     }
 
     private EmployeeProfileDto toEmployeeProfile(Person person, List<String> warnings) {
@@ -334,7 +344,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     private EmployeeContactInfoDto contactInfoFromColumns(Person person) {
         String primaryEmail = normalize(person.getPrimaryEmail());
         String secondaryEmail = normalize(person.getSecondaryEmail());
-        List<String> phones = person.getPhoneNumbers() == null ? List.of() : person.getPhoneNumbers();
+        List<String> phones = workPhoneService.getWorkPhones(person.getId());
         String primaryPhone = phones.size() > 0 ? normalize(phones.get(0)) : null;
         String secondaryPhone = phones.size() > 1 ? normalize(phones.get(1)) : null;
 

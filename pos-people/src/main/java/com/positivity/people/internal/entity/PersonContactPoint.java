@@ -53,7 +53,9 @@ public class PersonContactPoint {
     @Column(name = "contact_type", nullable = false, length = 20)
     private ContactPointType contactType;
 
-    @Column(name = "value", nullable = false, length = 255)
+    // `value` is a reserved word in H2 (and some dialects); backtick-quote so Hibernate
+    // emits a dialect-quoted identifier that maps to the existing lowercase `value` column.
+    @Column(name = "`value`", nullable = false, length = 255)
     private String value;
 
     @Column(name = "is_primary", nullable = false)
