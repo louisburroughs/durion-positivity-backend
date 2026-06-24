@@ -36,6 +36,8 @@ public interface UserPersonLinkRepository extends JpaRepository<UserPersonLink, 
 
     List<UserPersonLink> findByPerson_Id(@NonNull UUID personId);
 
+    List<UserPersonLink> findByPerson_IdIn(@NonNull Collection<UUID> personIds);
+
     Optional<UserPersonLink> findByPerson_IdAndStatus(@NonNull UUID personId, @NonNull UserLinkStatus status);
 
     Optional<UserPersonLink> findFirstByPerson_IdAndStatusOrderByCreatedAtDesc(

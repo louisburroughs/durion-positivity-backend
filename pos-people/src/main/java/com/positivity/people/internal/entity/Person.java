@@ -84,9 +84,7 @@ public class Person {
 
     // Email + phone numbers consolidated into person_contact_point (EMAIL / PHONE_WORK);
     // see PersonEmailService / PersonWorkPhoneService.
-
-    /** Optional, validated externally - stick with username not userName */
-    private String username;
+    // Username is owned by pos-security and resolved via user_person_link; see PersonUsernameService.
 
     @PreUpdate
     public void ensureStatusEffectiveAt() {

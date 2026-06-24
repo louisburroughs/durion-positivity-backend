@@ -22,13 +22,23 @@ ON CONFLICT (timekeeping_policy_id) DO NOTHING;
 -- person (System Administrator) — admin.alpha's person record. Required so the
 -- guarded user_person_links insert below fires; without it admin.alpha is a User
 -- with no Person, violating ADR-0015 §3 (durion-positivity-backend#714).
-INSERT INTO person (id, first_name, last_name, legal_name, primary_email, status, status_effective_at, username, created_at, updated_at)
+INSERT INTO person (id, first_name, last_name, legal_name, status, status_effective_at, created_at, updated_at)
 VALUES (
     '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid,
     'System', 'Administrator', 'System Administrator',
-    'admin.alpha@durionpos.org', 'ACTIVE', NOW(), 'admin.alpha', NOW(), NOW()
+    'ACTIVE', NOW(), NOW(), NOW()
 )
 ON CONFLICT (id) DO NOTHING;
+
+-- Email now lives in person_contact_point (EMAIL); username is resolved via
+-- user_person_links → pos-security. Re-seed admin.alpha's email here.
+INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
+SELECT gen_random_uuid(), '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid, 'EMAIL', 'admin.alpha@durionpos.org', TRUE, NOW(), NOW()
+WHERE NOT EXISTS (
+    SELECT 1 FROM person_contact_point
+    WHERE person_id = '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid
+      AND contact_type = 'EMAIL'
+      AND value = 'admin.alpha@durionpos.org');
 
 -- user_person_links (guarded by external person existence)
 DO $$

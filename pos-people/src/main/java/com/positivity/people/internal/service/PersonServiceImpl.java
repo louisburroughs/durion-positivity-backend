@@ -1,6 +1,5 @@
 package com.positivity.people.internal.service;
 
-import com.positivity.people.internal.client.SecurityServiceClient;
 import com.positivity.people.internal.dto.Person;
 import com.positivity.people.internal.dto.ResolvePersonRequest;
 import com.positivity.people.internal.dto.ResolvePersonResponse;
@@ -49,7 +48,7 @@ public class PersonServiceImpl implements PersonService {
 
     private final PersonEmailService emailService;
 
-    private final SecurityServiceClient securityServiceClient;
+    private final PersonUsernameService usernameService;
 
     @Value("${pos.people.matching.threshold:30}")
     private int defaultMatchingThreshold;
@@ -57,15 +56,22 @@ public class PersonServiceImpl implements PersonService {
     @Override
     @NonNull
     public List<Person> getAllPeople(@Nullable String type, @Nullable String q) {
-        return personRepository.findAll(PersonSpecifications.directoryFilter(type, q)).stream()
+        List<Person> people = personRepository.findAll(PersonSpecifications.directoryFilter(type, q)).stream()
                 .map(this::toDto)
                 .toList();
+        Map<UUID, String> usernames = usernameService.usernamesByPersonId(
+                people.stream().map(Person::getId).toList());
+        people.forEach(p -> p.setUsername(usernames.get(p.getId())));
+        return people;
     }
 
     @Override
     @NonNull
     public Optional<Person> getPersonById(@NonNull UUID id) {
-        return personRepository.findById(id).map(this::toDto);
+        return personRepository.findById(id).map(this::toDto).map(dto -> {
+            dto.setUsername(usernameService.usernameForPerson(id));
+            return dto;
+        });
     }
 
     @Override
@@ -87,6 +93,9 @@ public class PersonServiceImpl implements PersonService {
                                                 cp.getContactType(), cp.getValue(), cp.isPrimary()),
                                         Collectors.toList())));
         people.forEach(p -> p.setContactPoints(contactsByPerson.getOrDefault(p.getId(), List.of())));
+
+        Map<UUID, String> usernames = usernameService.usernamesByPersonId(ids);
+        people.forEach(p -> p.setUsername(usernames.get(p.getId())));
         return people;
     }
 
@@ -113,17 +122,15 @@ public class PersonServiceImpl implements PersonService {
     @Transactional
     @NonNull
     public Person savePerson(@NonNull Person person) {
-        if (person.getUsername() != null
-                && !person.getUsername().isBlank()
-                && !validateUsernameWithSecurityService(person.getUsername())) {
-            throw new IllegalArgumentException("Username is not valid or does not exist in security service");
-        }
-
+        // Username is owned by pos-security and linked via user_person_link; it is not a
+        // Person attribute and is not persisted here.
         com.positivity.people.internal.entity.Person saved = personRepository.save(toEntity(person));
         workPhoneService.replaceWorkPhones(
                 saved.getId(), person.getPhoneNumbers() == null ? List.of() : person.getPhoneNumbers());
         emailService.replaceEmails(saved.getId(), person.getPrimaryEmail(), person.getSecondaryEmail());
-        return toDto(saved);
+        Person dto = toDto(saved);
+        dto.setUsername(usernameService.usernameForPerson(saved.getId()));
+        return dto;
     }
 
     @Override
@@ -222,11 +229,6 @@ public class PersonServiceImpl implements PersonService {
         personRepository.deleteById(id);
     }
 
-    private boolean validateUsernameWithSecurityService(String username) {
-        return securityServiceClient.getUserByUsername(username).isPresent()
-                && !personRepository.existsByUsername(username);
-    }
-
     private int resolveThreshold(Integer thresholdOverride) {
         int threshold = thresholdOverride != null ? thresholdOverride : defaultMatchingThreshold;
         return Math.max(0, threshold);
@@ -278,7 +280,7 @@ public class PersonServiceImpl implements PersonService {
         dto.setPrimaryEmail(emails.primary());
         dto.setSecondaryEmail(emails.secondary());
         dto.setPhoneNumbers(workPhoneService.getWorkPhones(entity.getId()));
-        dto.setUsername(entity.getUsername());
+        // username resolved from pos-security via user_person_link by the caller (single or batched).
         dto.setEmployeeStatus(entity.getStatus());
         return dto;
     }
@@ -288,8 +290,7 @@ public class PersonServiceImpl implements PersonService {
         entity.setId(dto.getId());
         entity.setFirstName(dto.getFirstName());
         entity.setLastName(dto.getLastName());
-        // email + phoneNumbers persisted separately as EMAIL / PHONE_WORK contact points (see savePerson).
-        entity.setUsername(dto.getUsername());
+        // email + phoneNumbers persisted separately as contact points; username owned by pos-security.
         return entity;
     }
 

@@ -47,6 +47,11 @@ class UserPersonLinkControllerIT {
     @Autowired
     private UserPersonLinkRepository userPersonLinkRepository;
 
+    // Username is resolved from pos-security; mock the client so the IT does not make a
+    // real cross-service call (getUserById/getUsernamesByIds default to empty).
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.positivity.people.internal.client.SecurityServiceClient securityServiceClient;
+
     @BeforeEach
     void resetData() {
         userPersonLinkRepository.deleteAll();
