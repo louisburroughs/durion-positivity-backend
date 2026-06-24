@@ -33,6 +33,7 @@ import com.positivity.workorder.service.PromotionValidationService;
 import com.positivity.workorder.service.WorkorderService;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.Year;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -43,6 +44,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -56,6 +58,9 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     private static final String SYSTEM_ACTOR = "system";
     private static final String IDEMPOTENCY_OPERATION_WORKORDER_CREATE = "workorder.create";
+    private static final String ESTIMATE_PREFIX = "EST-";
+    private static final String WORKORDER_PREFIX = "WO-";
+    private static final int WORKORDER_NUMBER_SEQUENCE_START = 1000;
 
     private final Clock clock;
     private final WorkorderRepository workorderRepository;
@@ -100,6 +105,7 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         Workorder workorder = Workorder.builder()
                 .estimate(estimate)
+                .workorderNumber(generateWorkorderNumber(estimate))
                 .customerId(customerId)
                 .status(WorkorderStatus.DRAFT)
                 .crmPartyId(estimate != null ? estimate.getCrmPartyId() : null)
@@ -110,6 +116,39 @@ public class WorkorderServiceImpl implements WorkorderService {
                                 : new ArrayList<>())
                 .build();
         return createWorkorderInternal(workorder);
+    }
+
+    /**
+     * Generate the human workorder number. When created from an estimate, swap the
+     * estimate's prefix (EST-... -> WO-...) if that value is globally free; otherwise
+     * fall back to an independent WO-YYYY-NNNN sequence. This keeps the workorder number
+     * "matching the estimate number except the prefix" for the common 1:1 case while
+     * guaranteeing global uniqueness for estimate-less or revision cases.
+     */
+    @NonNull
+    private String generateWorkorderNumber(@Nullable Estimate estimate) {
+        if (estimate != null
+                && estimate.getEstimateNumber() != null
+                && estimate.getEstimateNumber().startsWith(ESTIMATE_PREFIX)) {
+            String swapped = WORKORDER_PREFIX + estimate.getEstimateNumber().substring(ESTIMATE_PREFIX.length());
+            if (!workorderRepository.existsByWorkorderNumber(swapped)) {
+                return swapped;
+            }
+            log.debug("Workorder number {} already taken; falling back to sequence", swapped);
+        }
+        return generateSequentialWorkorderNumber();
+    }
+
+    @NonNull
+    private String generateSequentialWorkorderNumber() {
+        String prefix = WORKORDER_PREFIX + Year.now(clock).getValue() + "-";
+        int sequence = WORKORDER_NUMBER_SEQUENCE_START;
+        String candidate;
+        do {
+            candidate = prefix + sequence;
+            sequence++;
+        } while (workorderRepository.existsByWorkorderNumber(candidate));
+        return candidate;
     }
 
     /**

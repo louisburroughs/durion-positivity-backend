@@ -61,6 +61,9 @@ class EstimateSearchByQueryTest {
     @Mock
     private CustomerReferenceService customerReferenceService;
 
+    @Mock
+    private VehicleReferenceService vehicleReferenceService;
+
     @InjectMocks
     private EstimateServiceImpl estimateService;
 
