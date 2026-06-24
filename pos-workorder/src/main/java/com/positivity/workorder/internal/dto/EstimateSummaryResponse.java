@@ -55,6 +55,15 @@ public class EstimateSummaryResponse {
     @Schema(description = "Resolved customer display name", requiredMode = NOT_REQUIRED)
     private String customerName;
 
+    @Schema(description = "Resolved vehicle label", example = "2019 Ford F-150", requiredMode = NOT_REQUIRED)
+    private String vehicleLabel;
+
+    @Schema(
+            description = "Vehicle VIN (full; truncate for display)",
+            example = "1FTFW1E50KFA12345",
+            requiredMode = NOT_REQUIRED)
+    private String vin;
+
     @Schema(
             description = "Vehicle identifier",
             example = "550e8400-e29b-41d4-a716-446655440002",

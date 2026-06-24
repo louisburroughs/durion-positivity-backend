@@ -7330,6 +7330,14 @@ components:
           format: uuid
           description: Workorder identifier
           example: 550e8400-e29b-41d4-a716-446655440000
+        workorderNumber:
+          type: string
+          description: Human workorder number
+          example: WO-2026-1001
+        estimateNumber:
+          type: string
+          description: Linked estimate number, if created from an estimate
+          example: EST-2026-1001
         status:
           type: string
           description: Current workorder status
@@ -7344,9 +7352,25 @@ components:
           - COMPLETED
           - CANCELLED
           example: DRAFT
+        customerId:
+          type: string
+          format: uuid
+          description: Customer identifier
         customerName:
           type: string
           description: Resolved customer display name
+        vehicleId:
+          type: string
+          format: uuid
+          description: Vehicle identifier
+        vehicleLabel:
+          type: string
+          description: Resolved vehicle label
+          example: 2019 Ford F-150
+        vin:
+          type: string
+          description: Vehicle VIN (full; truncate for display)
+          example: 1FTFW1E50KFA12345
         createdAt:
           type: string
           format: date-time
@@ -7386,6 +7410,14 @@ components:
         customerName:
           type: string
           description: Resolved customer display name
+        vehicleLabel:
+          type: string
+          description: Resolved vehicle label
+          example: 2019 Ford F-150
+        vin:
+          type: string
+          description: Vehicle VIN (full; truncate for display)
+          example: 1FTFW1E50KFA12345
         vehicleId:
           type: string
           format: uuid

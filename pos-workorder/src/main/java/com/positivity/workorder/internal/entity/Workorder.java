@@ -15,7 +15,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -31,6 +33,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
+@Table(name = "workorder", uniqueConstraints = @UniqueConstraint(columnNames = {"workorderNumber"}))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -42,6 +45,9 @@ public class Workorder {
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
+
+    @Column(unique = false) // Uniqueness enforced at DB level via unique index on workorderNumber
+    private String workorderNumber; // Human-readable identifier (e.g., WO-2026-1001)
 
     @LastModifiedDate
     @Column(nullable = false)

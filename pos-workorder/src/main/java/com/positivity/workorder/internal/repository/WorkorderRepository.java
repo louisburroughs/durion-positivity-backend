@@ -65,16 +65,30 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
     List<Workorder> findByScheduledDateAndLocationId(@NonNull LocalDate scheduledDate, @NonNull UUID locationId);
 
     /**
-     * Free-text workorder search matching either a resolved customer id (from a name
-     * search) or the workorder id directly.
+     * Free-text workorder search matching the workorder number (contains), a resolved
+     * customer id (from a name search), or the workorder id directly.
      *
+     * @param q           free-text term matched against workorderNumber (case-insensitive contains)
      * @param customerIds customer ids resolved from a name search (must be non-empty for JPQL IN)
      * @param idQuery     the query parsed as a UUID, or {@code null} if not a UUID
      * @param pageable    pagination configuration
      * @return page of matching workorders
      */
-    @Query("SELECT w FROM Workorder w WHERE w.customerId IN :customerIds "
+    @Query("SELECT w FROM Workorder w WHERE LOWER(w.workorderNumber) LIKE LOWER(CONCAT('%', :q, '%')) "
+            + "OR w.customerId IN :customerIds "
             + "OR (:idQuery IS NOT NULL AND w.id = :idQuery)")
     Page<Workorder> searchByQuery(
-            @Param("customerIds") Collection<UUID> customerIds, @Param("idQuery") UUID idQuery, Pageable pageable);
+            @Param("q") String q,
+            @Param("customerIds") Collection<UUID> customerIds,
+            @Param("idQuery") UUID idQuery,
+            Pageable pageable);
+
+    /**
+     * Whether a workorder already carries the given human number. Used by number
+     * generation to guarantee global uniqueness.
+     *
+     * @param workorderNumber candidate human number
+     * @return true if any workorder already uses it
+     */
+    boolean existsByWorkorderNumber(@NonNull String workorderNumber);
 }
