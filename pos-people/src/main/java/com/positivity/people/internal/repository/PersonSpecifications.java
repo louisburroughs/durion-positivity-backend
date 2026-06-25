@@ -49,7 +49,8 @@ public final class PersonSpecifications {
             if (q != null && !q.isBlank()) {
                 String pattern = "%" + q.trim().toLowerCase() + "%";
                 // Email now lives in person_contact_point; match it via a correlated subquery
-                // on EMAIL contact-point values.
+                // on EMAIL contact-point values. Username is owned by pos-security (resolved
+                // via user_person_link) and is not a Person column, so it is not searchable here.
                 Subquery<UUID> emailMatch = query.subquery(UUID.class);
                 Root<PersonContactPoint> cp = emailMatch.from(PersonContactPoint.class);
                 emailMatch
@@ -60,7 +61,6 @@ public final class PersonSpecifications {
                 predicates.add(cb.or(
                         cb.like(cb.lower(root.get("firstName")), pattern),
                         cb.like(cb.lower(root.get("lastName")), pattern),
-                        cb.like(cb.lower(root.get("username")), pattern),
                         root.get("id").in(emailMatch)));
             }
 
