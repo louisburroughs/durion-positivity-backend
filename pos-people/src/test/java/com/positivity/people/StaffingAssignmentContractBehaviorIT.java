@@ -12,8 +12,8 @@ import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
-import com.positivity.people.internal.repository.PersonLocationAssignmentRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,7 +58,7 @@ class StaffingAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
     private EmployeeRepository employeeRepository;
 
     @Autowired
-    private PersonLocationAssignmentRepository assignmentRepository;
+    private EmployeeLocationAssignmentRepository assignmentRepository;
 
     @MockitoBean
     private LocationReferenceClient locationReferenceClient;

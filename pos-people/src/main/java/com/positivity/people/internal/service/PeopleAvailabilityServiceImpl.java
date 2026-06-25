@@ -1,9 +1,9 @@
 package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.dto.PeopleAvailabilityResponse;
+import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.entity.Person;
-import com.positivity.people.internal.entity.PersonLocationAssignment;
-import com.positivity.people.internal.repository.PersonLocationAssignmentRepository;
+import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.service.PeopleAvailabilityService;
 import com.positivity.people.service.UserPersonTranslationService;
@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService {
 
-    private final PersonLocationAssignmentRepository assignmentRepository;
+    private final EmployeeLocationAssignmentRepository assignmentRepository;
 
     private final PersonRepository personRepository;
 
@@ -39,12 +39,12 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
         LocalDate targetDate = date != null ? date : LocalDate.now(clock);
         UUID resolvedLocationId = locationId != null ? locationId : resolveRequesterLocationId(targetDate);
 
-        List<PersonLocationAssignment> assignments =
+        List<EmployeeLocationAssignment> assignments =
                 assignmentRepository.findActiveByDateAndOptionalLocation(targetDate, resolvedLocationId);
 
         Map<UUID, Person> peopleById = personRepository
                 .findAllById(assignments.stream()
-                        .map(PersonLocationAssignment::getPersonId)
+                        .map(EmployeeLocationAssignment::getPersonId)
                         .collect(Collectors.toSet()))
                 .stream()
                 .collect(Collectors.toMap(Person::getId, person -> person));
@@ -85,7 +85,7 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
 
         return assignmentRepository.findActiveByPersonIdAndDate(personId, targetDate).stream()
                 .findFirst()
-                .map(PersonLocationAssignment::getLocationId)
+                .map(EmployeeLocationAssignment::getLocationId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "locationId was not provided and no active location assignment exists for requester on "
                                 + targetDate));
