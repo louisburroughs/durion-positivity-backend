@@ -53,7 +53,8 @@ public class UserPersonLinkController {
     public ResponseEntity<UserPersonLinkResponse> linkUserToPerson(
             @Valid @RequestBody LinkUserToPersonRequest request) {
 
-        boolean alreadyLinked = linkService.linkExistsByUserIdAndPersonId(request.getUserId(), request.getPersonId());
+        boolean alreadyLinked =
+                linkService.linkExistsByUsernameAndPersonId(request.getUsername(), request.getPersonId());
 
         UserPersonLinkResponse response = linkService.linkUserToPerson(request);
         return alreadyLinked
@@ -83,14 +84,15 @@ public class UserPersonLinkController {
     @PreAuthorize("hasAuthority('people:userLink:write')")
     public ResponseEntity<UserPersonLinkResponse> createUserPersonLink(
             @Valid @RequestBody CreateUserLinkRequest request) {
-        boolean alreadyLinked = linkService.linkExistsByUserIdAndPersonId(request.getUserId(), request.getPersonId());
-        UserPersonLinkResponse response = linkService.createUserLink(request.getUserId(), request.getPersonId());
+        boolean alreadyLinked =
+                linkService.linkExistsByUsernameAndPersonId(request.getUsername(), request.getPersonId());
+        UserPersonLinkResponse response = linkService.createUserLink(request.getUsername(), request.getPersonId());
         return alreadyLinked
                 ? ResponseEntity.ok(response)
                 : ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @DeleteMapping("/users/{userId}/link")
+    @DeleteMapping("/users/{username}/link")
     @EmitEvent(id = "PEOPLE_USER_PERSON_LINK_DELETE", apiVersion = "1")
     @Operation(summary = "Unlink user from person", description = "Remove the link between a user and person")
     @ApiResponse(responseCode = "204", description = "Link deleted successfully")
@@ -100,14 +102,14 @@ public class UserPersonLinkController {
             scopes = {"people:userLink:write"})
     @PreAuthorize("hasAuthority('people:userLink:write')")
     public ResponseEntity<Void> unlinkUserFromPerson(
-            @Parameter(description = "User ID", required = true) @PathVariable UUID userId) {
+            @Parameter(description = "Username", required = true) @PathVariable String username) {
 
-        linkService.unlinkUserFromPerson(userId);
+        linkService.unlinkUserFromPerson(username);
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/users/{userId}/person")
-    @Operation(summary = "Get person by user ID", description = "Retrieve the person record linked to a user")
+    @GetMapping("/users/{username}/person")
+    @Operation(summary = "Get person by username", description = "Retrieve the person record linked to a user")
     @ApiResponse(
             responseCode = "200",
             description = "Person found",
@@ -117,26 +119,26 @@ public class UserPersonLinkController {
             name = "bearerAuth",
             scopes = {"people:userLink:view"})
     @PreAuthorize("hasAuthority('people:userLink:view')")
-    public ResponseEntity<PersonResponse> getPersonByUserId(
-            @Parameter(description = "User ID", required = true) @PathVariable UUID userId) {
+    public ResponseEntity<PersonResponse> getPersonByUsername(
+            @Parameter(description = "Username", required = true) @PathVariable String username) {
 
-        PersonResponse person = linkService.findPersonByUserId(userId);
+        PersonResponse person = linkService.findPersonByUsername(username);
         return ResponseEntity.ok(person);
     }
 
     @GetMapping("/{personId}/users")
-    @Operation(summary = "Get users linked to person", description = "Retrieve all user IDs linked to a person record")
-    @ApiResponse(responseCode = "200", description = "User IDs returned")
+    @Operation(summary = "Get users linked to person", description = "Retrieve all usernames linked to a person record")
+    @ApiResponse(responseCode = "200", description = "Usernames returned")
     @ApiResponse(responseCode = "404", description = "Person not found")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:userLink:view"})
     @PreAuthorize("hasAuthority('people:userLink:view')")
-    public ResponseEntity<List<UUID>> getUserIdsByPersonId(
+    public ResponseEntity<List<String>> getUsernamesByPersonId(
             @Parameter(description = "Person ID", required = true) @PathVariable UUID personId) {
 
-        List<UUID> userIds = linkService.findUserIdsByPersonId(personId);
-        return ResponseEntity.ok(userIds);
+        List<String> usernames = linkService.findUsernamesByPersonId(personId);
+        return ResponseEntity.ok(usernames);
     }
 
     @GetMapping("/user-links/inactive-person-active-user")

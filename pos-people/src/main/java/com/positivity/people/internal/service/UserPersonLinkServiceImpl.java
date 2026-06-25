@@ -67,31 +67,31 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     }
 
     @Override
-    public boolean linkExistsByUserId(@NonNull UUID userId) {
-        return linkRepository.existsByUserId(userId);
+    public boolean linkExistsByUsername(@NonNull String username) {
+        return linkRepository.existsByUsername(username);
     }
 
     @Override
-    public boolean linkExistsByUserIdAndPersonId(@NonNull UUID userId, @NonNull UUID personId) {
-        return linkRepository.existsByUserIdAndPerson_Id(userId, personId);
+    public boolean linkExistsByUsernameAndPersonId(@NonNull String username, @NonNull UUID personId) {
+        return linkRepository.existsByUsernameAndPerson_Id(username, personId);
     }
 
     @Override
     @NonNull
-    public UserPersonLinkResponse createUserLink(@NonNull UUID userId, @NonNull UUID personId) {
+    public UserPersonLinkResponse createUserLink(@NonNull String username, @NonNull UUID personId) {
         Person person = personRepository.findById(personId).orElseThrow(() -> new PersonNotFoundException(personId));
 
-        if (linkRepository.existsByUserId(userId)) {
+        if (linkRepository.existsByUsername(username)) {
             UserPersonLink existingLink =
-                    linkRepository.findByUserId(userId).orElseThrow(() -> new UserAlreadyLinkedException(userId));
+                    linkRepository.findByUsername(username).orElseThrow(() -> new UserAlreadyLinkedException(username));
             if (existingLink.getPersonId().equals(personId)) {
                 return toResponse(existingLink);
             }
-            throw new UserAlreadyLinkedException(userId, existingLink.getPersonId(), personId);
+            throw new UserAlreadyLinkedException(username, existingLink.getPersonId(), personId);
         }
 
         UserPersonLink link = new UserPersonLink();
-        link.setUserId(userId);
+        link.setUsername(username);
         link.setPerson(person);
         link.setLinkType("PRIMARY");
         link.setCreatedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER));
@@ -99,11 +99,12 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
             UserPersonLink saved = linkRepository.save(link);
             return toResponse(saved);
         } catch (DataIntegrityViolationException e) {
-            UserPersonLink existingLink = linkRepository.findByUserId(userId).orElseThrow(() -> e);
+            UserPersonLink existingLink =
+                    linkRepository.findByUsername(username).orElseThrow(() -> e);
             if (existingLink.getPersonId().equals(personId)) {
                 return toResponse(existingLink);
             }
-            throw new UserAlreadyLinkedException(userId, existingLink.getPersonId(), personId);
+            throw new UserAlreadyLinkedException(username, existingLink.getPersonId(), personId);
         }
     }
 
@@ -121,9 +122,9 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     @Override
     @NonNull
     public UserPersonLinkResponse linkUserToPerson(@NonNull LinkUserToPersonRequest request) {
-        UserPersonLinkResponse response = createUserLink(request.getUserId(), request.getPersonId());
+        UserPersonLinkResponse response = createUserLink(request.getUsername(), request.getPersonId());
         if (request.getNotes() != null || request.getLinkType() != null) {
-            var existingLink = linkRepository.findByUserId(request.getUserId());
+            var existingLink = linkRepository.findByUsername(request.getUsername());
             if (existingLink.isPresent()) {
                 UserPersonLink link = existingLink.get();
                 if (request.getLinkType() != null && !request.getLinkType().isBlank()) {
@@ -139,19 +140,20 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     }
 
     @Override
-    public void unlinkUserFromPerson(@NonNull UUID userId) {
-        if (!linkRepository.existsByUserId(userId)) {
-            throw new UserPersonLinkNotFoundException(userId);
+    public void unlinkUserFromPerson(@NonNull String username) {
+        if (!linkRepository.existsByUsername(username)) {
+            throw new UserPersonLinkNotFoundException(username);
         }
-        linkRepository.deleteByUserId(userId);
+        linkRepository.deleteByUsername(username);
     }
 
     @Override
     @Transactional(readOnly = true)
     @NonNull
-    public PersonResponse findPersonByUserId(@NonNull UUID userId) {
-        UserPersonLink link =
-                linkRepository.findByUserId(userId).orElseThrow(() -> new UserPersonLinkNotFoundException(userId));
+    public PersonResponse findPersonByUsername(@NonNull String username) {
+        UserPersonLink link = linkRepository
+                .findByUsername(username)
+                .orElseThrow(() -> new UserPersonLinkNotFoundException(username));
 
         Person person = personRepository
                 .findById(link.getPersonId())
@@ -163,11 +165,11 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     @Override
     @Transactional(readOnly = true)
     @NonNull
-    public List<UUID> findUserIdsByPersonId(@NonNull UUID personId) {
+    public List<String> findUsernamesByPersonId(@NonNull UUID personId) {
         personRepository.findById(personId).orElseThrow(() -> new PersonNotFoundException(personId));
 
         return linkRepository.findByPerson_Id(personId).stream()
-                .map(UserPersonLink::getUserId)
+                .map(UserPersonLink::getUsername)
                 .toList();
     }
 
@@ -212,7 +214,7 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     private InactivePersonActiveUserResponse toInactivePersonResponse(UserPersonLink link, Employee employee) {
         return InactivePersonActiveUserResponse.builder()
                 .linkId(link.getId())
-                .userId(link.getUserId())
+                .username(link.getUsername())
                 .personId(link.getPersonId())
                 .personStatus(employee != null ? employee.getStatus() : null)
                 .personStatusEffectiveAt(employee != null ? employee.getStatusEffectiveAt() : null)
@@ -222,7 +224,7 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     private UserPersonLinkResponse toResponse(UserPersonLink link) {
         return UserPersonLinkResponse.builder()
                 .linkId(link.getId())
-                .userId(link.getUserId())
+                .username(link.getUsername())
                 .personId(link.getPersonId())
                 .linkType(link.getLinkType())
                 .createdAt(link.getCreatedAt())

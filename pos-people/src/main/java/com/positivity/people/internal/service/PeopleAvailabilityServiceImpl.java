@@ -76,12 +76,11 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
 
     @NonNull
     private UUID resolveRequesterLocationId(@NonNull LocalDate targetDate) {
-        String currentUserId = SecurityContextHelper.getCurrentUsername()
+        String username = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new EntityNotFoundException(
                         "locationId was not provided and authenticated user context is missing"));
 
-        UUID userId = parseUuid(currentUserId, "authenticated userId");
-        UUID personId = userPersonTranslationService.getPersonUuidForUser(userId);
+        UUID personId = userPersonTranslationService.getPersonUuidForUser(username);
 
         return assignmentRepository.findActiveByPersonIdAndDate(personId, targetDate).stream()
                 .findFirst()
@@ -89,14 +88,5 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
                 .orElseThrow(() -> new EntityNotFoundException(
                         "locationId was not provided and no active location assignment exists for requester on "
                                 + targetDate));
-    }
-
-    @NonNull
-    private UUID parseUuid(@NonNull String value, @NonNull String label) {
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Invalid " + label + ": " + value, ex);
-        }
     }
 }

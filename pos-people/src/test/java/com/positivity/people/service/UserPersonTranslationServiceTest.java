@@ -26,9 +26,9 @@ class UserPersonTranslationServiceTest {
 
     private UUID missingPersonId;
 
-    private UUID testUserId;
+    private String testUsername;
 
-    private UUID missingUserId;
+    private String missingUsername;
 
     @BeforeEach
     void setUp() {
@@ -36,60 +36,61 @@ class UserPersonTranslationServiceTest {
         userPersonTranslationService = new UserPersonTranslationServiceImpl(userPersonLinkRepository);
         testPersonId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         missingPersonId = UUID.fromString("00000000-0000-0000-0000-000000000002");
-        testUserId = UUID.fromString("00000000-0000-0000-0000-000000000003");
-        missingUserId = UUID.fromString("00000000-0000-0000-0000-000000000004");
+        testUsername = "jordan";
+        missingUsername = "nobody";
     }
 
     @Test
     void getPersonUuidForUser_returnsMappedPersonUuid() {
         UserPersonLink link = new UserPersonLink();
         link.setPerson(Person.builder().id(testPersonId).build());
-        link.setUserId(testUserId);
-        when(userPersonLinkRepository.findByUserId(testUserId)).thenReturn(Optional.of(link));
+        link.setUsername(testUsername);
+        when(userPersonLinkRepository.findByUsername(testUsername)).thenReturn(Optional.of(link));
 
-        UUID result = userPersonTranslationService.getPersonUuidForUser(testUserId);
+        UUID result = userPersonTranslationService.getPersonUuidForUser(testUsername);
 
         assertEquals(testPersonId, result);
     }
 
     @Test
     void getPersonUuidForUser_throwsWhenNoLinkExists() {
-        when(userPersonLinkRepository.findByUserId(missingUserId)).thenReturn(Optional.empty());
+        when(userPersonLinkRepository.findByUsername(missingUsername)).thenReturn(Optional.empty());
 
         assertThrows(
-                EntityNotFoundException.class, () -> userPersonTranslationService.getPersonUuidForUser(missingUserId));
+                EntityNotFoundException.class,
+                () -> userPersonTranslationService.getPersonUuidForUser(missingUsername));
     }
 
     @Test
-    void getUserIdForPerson_returnsOptionalUserId() {
+    void getUsernameForPerson_returnsOptionalUsername() {
         UserPersonLink link = new UserPersonLink();
         link.setPerson(Person.builder().id(testPersonId).build());
-        link.setUserId(testUserId);
+        link.setUsername(testUsername);
         link.setStatus(UserLinkStatus.ACTIVE);
         when(userPersonLinkRepository.findByPerson_IdAndStatus(testPersonId, UserLinkStatus.ACTIVE))
                 .thenReturn(Optional.of(link));
 
-        Optional<UUID> result = userPersonTranslationService.getUserIdForPerson(testPersonId);
+        Optional<String> result = userPersonTranslationService.getUsernameForPerson(testPersonId);
 
-        assertEquals(Optional.of(testUserId), result);
+        assertEquals(Optional.of(testUsername), result);
     }
 
     @Test
-    void getUserIdForPerson_returnsEmptyWhenNoLinkExists() {
+    void getUsernameForPerson_returnsEmptyWhenNoLinkExists() {
         when(userPersonLinkRepository.findByPerson_IdAndStatus(missingPersonId, UserLinkStatus.ACTIVE))
                 .thenReturn(Optional.empty());
 
-        Optional<UUID> result = userPersonTranslationService.getUserIdForPerson(missingPersonId);
+        Optional<String> result = userPersonTranslationService.getUsernameForPerson(missingPersonId);
 
         assertEquals(Optional.empty(), result);
     }
 
     @Test
     void isUserLinkedToPerson_returnsTrueWhenLinkExists() {
-        when(userPersonLinkRepository.existsByUserIdAndPerson_Id(testUserId, testPersonId))
+        when(userPersonLinkRepository.existsByUsernameAndPerson_Id(testUsername, testPersonId))
                 .thenReturn(true);
 
-        boolean result = userPersonTranslationService.isUserLinkedToPerson(testUserId, testPersonId);
+        boolean result = userPersonTranslationService.isUserLinkedToPerson(testUsername, testPersonId);
 
         assertEquals(true, result);
     }

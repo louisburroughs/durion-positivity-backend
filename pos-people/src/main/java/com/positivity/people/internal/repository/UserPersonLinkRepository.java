@@ -14,7 +14,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface UserPersonLinkRepository extends JpaRepository<UserPersonLink, UUID> {
 
-    Optional<UserPersonLink> findByUserId(@NonNull UUID userId);
+    Optional<UserPersonLink> findByUsername(@NonNull String username);
 
     /**
      * Compliance check (ADR-0015 §4): links whose user is still ACTIVE but whose
@@ -45,9 +45,9 @@ public interface UserPersonLinkRepository extends JpaRepository<UserPersonLink, 
     Optional<UserPersonLink> findFirstByPerson_IdAndStatusOrderByCreatedAtDesc(
             @NonNull UUID personId, @NonNull UserLinkStatus status);
 
-    boolean existsByUserId(@NonNull UUID userId);
+    boolean existsByUsername(@NonNull String username);
 
-    boolean existsByUserIdAndPerson_Id(@NonNull UUID userId, @NonNull UUID personId);
+    boolean existsByUsernameAndPerson_Id(@NonNull String username, @NonNull UUID personId);
 
-    void deleteByUserId(@NonNull UUID userId);
+    void deleteByUsername(@NonNull String username);
 }

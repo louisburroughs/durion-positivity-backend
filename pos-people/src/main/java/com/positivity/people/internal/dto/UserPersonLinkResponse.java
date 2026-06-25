@@ -18,10 +18,10 @@ public class UserPersonLinkResponse {
     private UUID linkId;
 
     @Schema(
-            description = "User account identifier",
-            example = "01960011-0000-7000-8000-000000000002",
+            description = "Username of the security user account",
+            example = "marcus.webb",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    private UUID userId;
+    private String username;
 
     @Schema(
             description = "Person identifier",
