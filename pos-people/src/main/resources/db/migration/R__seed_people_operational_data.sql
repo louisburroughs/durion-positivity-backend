@@ -408,6 +408,9 @@ UPDATE person
 DO $$
 BEGIN
     IF to_regclass('public.person') IS NOT NULL THEN
+        -- ON CONFLICT (user_id): user_person_links has a UNIQUE(user_id) constraint, so
+        -- guard on user_id (not just the PK id) — a link for any of these users under a
+        -- different id from an earlier seed must not raise a unique violation here.
         INSERT INTO user_person_links (id, user_id, person_id, link_type, status, created_at, created_by)
         VALUES
             ('01960012-0000-7000-8000-000000000001'::uuid, '01960010-0000-7000-8000-000000000001'::uuid, '01960011-0000-7000-8000-000000000001'::uuid, 'PRIMARY', 'ACTIVE', NOW(), 'seed-generator'),
@@ -426,7 +429,7 @@ BEGIN
             ('01960012-0000-7000-8000-00000000000e'::uuid, '01960010-0000-7000-8000-00000000000e'::uuid, '01960011-0000-7000-8000-00000000000e'::uuid, 'PRIMARY', 'ACTIVE', NOW(), 'seed-generator'),
             ('01960012-0000-7000-8000-00000000000f'::uuid, '01960010-0000-7000-8000-00000000000f'::uuid, '01960011-0000-7000-8000-00000000000f'::uuid, 'PRIMARY', 'ACTIVE', NOW(), 'seed-generator'),
             ('01960012-0000-7000-8000-000000000010'::uuid, '01960010-0000-7000-8000-000000000010'::uuid, '01960011-0000-7000-8000-000000000010'::uuid, 'PRIMARY', 'ACTIVE', NOW(), 'seed-generator')
-        ON CONFLICT (id) DO NOTHING;
+        ON CONFLICT (user_id) DO NOTHING;
     END IF;
 END $$;
 
