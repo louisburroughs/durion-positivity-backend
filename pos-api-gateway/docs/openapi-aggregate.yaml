@@ -69,10 +69,10 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1user-links~1{personId}
   /v1/people/users/link:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1users~1link
-  /v1/people/users/{userId}/link:
-    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1users~1{userId}~1link
-  /v1/people/users/{userId}/person:
-    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1users~1{userId}~1person
+  /v1/people/users/{username}/link:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1users~1{username}~1link
+  /v1/people/users/{username}/person:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1users~1{username}~1person
   /v1/people/workSessions/start:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1workSessions~1start
   /v1/people/workSessions/stop:
