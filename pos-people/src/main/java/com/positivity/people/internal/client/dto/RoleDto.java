@@ -21,7 +21,10 @@ public class RoleDto {
     @Schema(description = "Human-readable role name", example = "Technician", requiredMode = NOT_REQUIRED)
     private String name;
 
-    @Schema(description = "Description of the role", example = "Performs service work on vehicles", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Description of the role",
+            example = "Performs service work on vehicles",
+            requiredMode = NOT_REQUIRED)
     private String description;
 
     @Schema(description = "Scope at which the role applies", example = "LOCATION", requiredMode = NOT_REQUIRED)

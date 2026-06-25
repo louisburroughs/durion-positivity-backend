@@ -22,13 +22,13 @@ class UserPersonLinkContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("CP-117-020: Create user-person link -> 201")
     void cp117020_createUserPersonLink_returns201() throws Exception {
         UUID personId = createPerson();
-        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        String userId = "user.one";
 
         mockMvc.perform(withAuth(post("/v1/people/user-links")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(linkPayload(userId, personId))))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.userId").value(userId.toString()))
+                .andExpect(jsonPath("$.username").value(userId))
                 .andExpect(jsonPath("$.personId").value(personId.toString()));
     }
 
@@ -36,7 +36,7 @@ class UserPersonLinkContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("ID-117-020: Duplicate create is idempotent -> 200")
     void id117020_duplicateCreateIdempotent_returns200() throws Exception {
         UUID personId = createPerson();
-        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        String userId = "user.one";
 
         String payload = linkPayload(userId, personId);
 
@@ -49,7 +49,7 @@ class UserPersonLinkContractBehaviorIT extends BaseContractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.userId").value(userId.toString()));
+                .andExpect(jsonPath("$.username").value(userId));
     }
 
     @Test
@@ -57,7 +57,7 @@ class UserPersonLinkContractBehaviorIT extends BaseContractIntegrationTest {
     void ve117020_conflictingPersonLink_returns409() throws Exception {
         UUID personA = createPerson();
         UUID personB = createPerson();
-        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        String userId = "user.one";
 
         mockMvc.perform(withAuth(post("/v1/people/user-links")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -74,8 +74,8 @@ class UserPersonLinkContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("CP-117-021: Get links by person -> 200")
     void cp117021_getLinksByPerson_returns200() throws Exception {
         UUID personId = createPerson();
-        UUID userIdOne = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID userIdTwo = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        String userIdOne = "user.one";
+        String userIdTwo = "user.two";
 
         mockMvc.perform(withAuth(post("/v1/people/user-links")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -91,7 +91,7 @@ class UserPersonLinkContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)))
                 .andExpect(jsonPath("$[*].personId", everyItem(is(personId.toString()))))
-                .andExpect(jsonPath("$[*].userId", containsInAnyOrder(userIdOne.toString(), userIdTwo.toString())));
+                .andExpect(jsonPath("$[*].username", containsInAnyOrder(userIdOne, userIdTwo)));
     }
 
     private UUID createPerson() throws Exception {
@@ -117,14 +117,14 @@ class UserPersonLinkContractBehaviorIT extends BaseContractIntegrationTest {
         return UUID.fromString(objectMapper.readTree(response).get("id").asText());
     }
 
-    private String linkPayload(UUID userId, UUID personId) {
+    private String linkPayload(String username, UUID personId) {
         return """
 				{
-				  "userId": "%s",
+				  "username": "%s",
 				  "personId": "%s",
 				  "linkType": "PRIMARY",
 				  "notes": "created by contract test"
 				}
-				""".formatted(userId, personId);
+				""".formatted(username, personId);
     }
 }

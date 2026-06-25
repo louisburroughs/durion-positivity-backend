@@ -27,7 +27,10 @@ public class TimeEntryExceptionRequest {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String severity;
 
-    @Schema(description = "Time entry identifier associated with the exception", example = "te-12345", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Time entry identifier associated with the exception",
+            example = "te-12345",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String timeEntryId;
 
     @Schema(
@@ -36,7 +39,10 @@ public class TimeEntryExceptionRequest {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String resolutionNotes;
 
-    @Schema(description = "Timestamp when the exception was detected", example = "2026-02-17T08:30:00-05:00", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp when the exception was detected",
+            example = "2026-02-17T08:30:00-05:00",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private OffsetDateTime detectedAt;
 
     public String getEmployeeId() {

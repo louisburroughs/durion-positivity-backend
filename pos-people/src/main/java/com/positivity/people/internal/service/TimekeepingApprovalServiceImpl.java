@@ -9,6 +9,7 @@ import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.TimePeriod;
 import com.positivity.people.internal.entity.TimekeepingEntry;
 import com.positivity.people.internal.enums.ApprovalStatus;
+import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.TimePeriodRepository;
 import com.positivity.people.internal.repository.TimekeepingEntryRepository;
@@ -20,7 +21,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -33,6 +33,7 @@ public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalServic
     private final TimekeepingEntryRepository timekeepingEntryRepository;
     private final TimePeriodRepository timePeriodRepository;
     private final PersonRepository personRepository;
+    private final EmployeeRepository employeeRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -42,11 +43,15 @@ public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalServic
             return List.of();
         }
         List<Person> persons = personRepository.findAllById(employeeIds);
+        java.util.Map<UUID, String> employeeNumbers = new java.util.HashMap<>();
+        employeeRepository
+                .findByPersonIdIn(employeeIds)
+                .forEach(e -> employeeNumbers.put(e.getPersonId(), e.getEmployeeNumber()));
         return persons.stream()
                 .map(p -> ApprovalPersonDto.builder()
                         .personId(p.getId())
                         .displayName(buildDisplayName(p))
-                        .employeeNumber(p.getEmployeeNumber())
+                        .employeeNumber(employeeNumbers.get(p.getId()))
                         .build())
                 .toList();
     }
@@ -69,8 +74,9 @@ public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalServic
         Instant start = toInstant(period.getStartDate());
         Instant end = toInstantEndOfDay(period.getEndDate());
         List<TimekeepingEntry> entries =
-                timekeepingEntryRepository.findByEmployeeIdAndSessionStartTimeGreaterThanEqualAndSessionEndTimeLessThanEqual(
-                        personId, start, end);
+                timekeepingEntryRepository
+                        .findByEmployeeIdAndSessionStartTimeGreaterThanEqualAndSessionEndTimeLessThanEqual(
+                                personId, start, end);
         return entries.stream().map(this::toEntryDto).toList();
     }
 
@@ -83,8 +89,9 @@ public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalServic
         Instant start = toInstant(period.getStartDate());
         Instant end = toInstantEndOfDay(period.getEndDate());
         List<TimekeepingEntry> entries =
-                timekeepingEntryRepository.findByEmployeeIdAndSessionStartTimeGreaterThanEqualAndSessionEndTimeLessThanEqual(
-                        personId, start, end);
+                timekeepingEntryRepository
+                        .findByEmployeeIdAndSessionStartTimeGreaterThanEqualAndSessionEndTimeLessThanEqual(
+                                personId, start, end);
 
         Map<ApprovalStatus, Long> counts = entries.stream()
                 .collect(Collectors.groupingBy(TimekeepingEntry::getApprovalStatus, Collectors.counting()));
@@ -123,8 +130,9 @@ public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalServic
         Instant start = toInstant(period.getStartDate());
         Instant end = toInstantEndOfDay(period.getEndDate());
         List<TimekeepingEntry> pending =
-                timekeepingEntryRepository.findByEmployeeIdAndApprovalStatusAndSessionStartTimeGreaterThanEqualAndSessionEndTimeLessThanEqual(
-                        personId, ApprovalStatus.PENDING_APPROVAL, start, end);
+                timekeepingEntryRepository
+                        .findByEmployeeIdAndApprovalStatusAndSessionStartTimeGreaterThanEqualAndSessionEndTimeLessThanEqual(
+                                personId, ApprovalStatus.PENDING_APPROVAL, start, end);
 
         for (TimekeepingEntry entry : pending) {
             entry.setApprovalStatus(ApprovalStatus.APPROVED);
@@ -148,8 +156,9 @@ public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalServic
         Instant start = toInstant(period.getStartDate());
         Instant end = toInstantEndOfDay(period.getEndDate());
         List<TimekeepingEntry> pending =
-                timekeepingEntryRepository.findByEmployeeIdAndApprovalStatusAndSessionStartTimeGreaterThanEqualAndSessionEndTimeLessThanEqual(
-                        personId, ApprovalStatus.PENDING_APPROVAL, start, end);
+                timekeepingEntryRepository
+                        .findByEmployeeIdAndApprovalStatusAndSessionStartTimeGreaterThanEqualAndSessionEndTimeLessThanEqual(
+                                personId, ApprovalStatus.PENDING_APPROVAL, start, end);
 
         for (TimekeepingEntry entry : pending) {
             entry.setApprovalStatus(ApprovalStatus.REJECTED);

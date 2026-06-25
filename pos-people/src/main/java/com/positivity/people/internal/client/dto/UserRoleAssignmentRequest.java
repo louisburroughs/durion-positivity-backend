@@ -39,9 +39,15 @@ public class UserRoleAssignmentRequest {
             requiredMode = NOT_REQUIRED)
     private UUID locationId;
 
-    @Schema(description = "Date and time the assignment becomes effective", example = "2026-01-01T00:00:00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Date and time the assignment becomes effective",
+            example = "2026-01-01T00:00:00",
+            requiredMode = NOT_REQUIRED)
     private LocalDateTime startDate;
 
-    @Schema(description = "Date and time the assignment ends", example = "2026-12-31T23:59:59", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Date and time the assignment ends",
+            example = "2026-12-31T23:59:59",
+            requiredMode = NOT_REQUIRED)
     private LocalDateTime endDate;
 }

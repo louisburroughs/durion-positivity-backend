@@ -50,6 +50,9 @@ public class RoleAssignment {
     @Schema(description = "Creation timestamp in UTC", example = "2026-01-15T09:30:00Z", requiredMode = NOT_REQUIRED)
     private Instant createdAt;
 
-    @Schema(description = "Identifier of the actor that created the assignment", example = "manager.user", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the actor that created the assignment",
+            example = "manager.user",
+            requiredMode = NOT_REQUIRED)
     private String createdBy;
 }

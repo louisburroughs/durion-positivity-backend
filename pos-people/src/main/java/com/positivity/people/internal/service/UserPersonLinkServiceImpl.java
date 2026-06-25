@@ -4,6 +4,7 @@ import com.positivity.people.internal.dto.InactivePersonActiveUserResponse;
 import com.positivity.people.internal.dto.LinkUserToPersonRequest;
 import com.positivity.people.internal.dto.PersonResponse;
 import com.positivity.people.internal.dto.UserPersonLinkResponse;
+import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.UserPersonLink;
 import com.positivity.people.internal.enums.EmployeeStatus;
@@ -11,12 +12,16 @@ import com.positivity.people.internal.enums.UserLinkStatus;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.UserAlreadyLinkedException;
 import com.positivity.people.internal.exception.UserPersonLinkNotFoundException;
+import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.UserPersonLinkRepository;
 import com.positivity.people.service.UserPersonLinkService;
 import com.positivity.security.common.SecurityContextHelper;
+import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -44,45 +49,49 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
 
     private final PersonUsernameService usernameService;
 
+    private final EmployeeRepository employeeRepository;
+
     public UserPersonLinkServiceImpl(
             @NonNull UserPersonLinkRepository linkRepository,
             @NonNull PersonRepository personRepository,
             @NonNull PersonWorkPhoneService workPhoneService,
             @NonNull PersonEmailService emailService,
-            @NonNull PersonUsernameService usernameService) {
+            @NonNull PersonUsernameService usernameService,
+            @NonNull EmployeeRepository employeeRepository) {
         this.linkRepository = linkRepository;
         this.personRepository = personRepository;
         this.workPhoneService = workPhoneService;
         this.emailService = emailService;
         this.usernameService = usernameService;
+        this.employeeRepository = employeeRepository;
     }
 
     @Override
-    public boolean linkExistsByUserId(@NonNull UUID userId) {
-        return linkRepository.existsByUserId(userId);
+    public boolean linkExistsByUsername(@NonNull String username) {
+        return linkRepository.existsByUsername(username);
     }
 
     @Override
-    public boolean linkExistsByUserIdAndPersonId(@NonNull UUID userId, @NonNull UUID personId) {
-        return linkRepository.existsByUserIdAndPerson_Id(userId, personId);
+    public boolean linkExistsByUsernameAndPersonId(@NonNull String username, @NonNull UUID personId) {
+        return linkRepository.existsByUsernameAndPerson_Id(username, personId);
     }
 
     @Override
     @NonNull
-    public UserPersonLinkResponse createUserLink(@NonNull UUID userId, @NonNull UUID personId) {
+    public UserPersonLinkResponse createUserLink(@NonNull String username, @NonNull UUID personId) {
         Person person = personRepository.findById(personId).orElseThrow(() -> new PersonNotFoundException(personId));
 
-        if (linkRepository.existsByUserId(userId)) {
+        if (linkRepository.existsByUsername(username)) {
             UserPersonLink existingLink =
-                    linkRepository.findByUserId(userId).orElseThrow(() -> new UserAlreadyLinkedException(userId));
+                    linkRepository.findByUsername(username).orElseThrow(() -> new UserAlreadyLinkedException(username));
             if (existingLink.getPersonId().equals(personId)) {
                 return toResponse(existingLink);
             }
-            throw new UserAlreadyLinkedException(userId, existingLink.getPersonId(), personId);
+            throw new UserAlreadyLinkedException(username, existingLink.getPersonId(), personId);
         }
 
         UserPersonLink link = new UserPersonLink();
-        link.setUserId(userId);
+        link.setUsername(username);
         link.setPerson(person);
         link.setLinkType("PRIMARY");
         link.setCreatedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER));
@@ -90,11 +99,12 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
             UserPersonLink saved = linkRepository.save(link);
             return toResponse(saved);
         } catch (DataIntegrityViolationException e) {
-            UserPersonLink existingLink = linkRepository.findByUserId(userId).orElseThrow(() -> e);
+            UserPersonLink existingLink =
+                    linkRepository.findByUsername(username).orElseThrow(() -> e);
             if (existingLink.getPersonId().equals(personId)) {
                 return toResponse(existingLink);
             }
-            throw new UserAlreadyLinkedException(userId, existingLink.getPersonId(), personId);
+            throw new UserAlreadyLinkedException(username, existingLink.getPersonId(), personId);
         }
     }
 
@@ -112,9 +122,9 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     @Override
     @NonNull
     public UserPersonLinkResponse linkUserToPerson(@NonNull LinkUserToPersonRequest request) {
-        UserPersonLinkResponse response = createUserLink(request.getUserId(), request.getPersonId());
+        UserPersonLinkResponse response = createUserLink(request.getUsername(), request.getPersonId());
         if (request.getNotes() != null || request.getLinkType() != null) {
-            var existingLink = linkRepository.findByUserId(request.getUserId());
+            var existingLink = linkRepository.findByUsername(request.getUsername());
             if (existingLink.isPresent()) {
                 UserPersonLink link = existingLink.get();
                 if (request.getLinkType() != null && !request.getLinkType().isBlank()) {
@@ -130,19 +140,20 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     }
 
     @Override
-    public void unlinkUserFromPerson(@NonNull UUID userId) {
-        if (!linkRepository.existsByUserId(userId)) {
-            throw new UserPersonLinkNotFoundException(userId);
+    public void unlinkUserFromPerson(@NonNull String username) {
+        if (!linkRepository.existsByUsername(username)) {
+            throw new UserPersonLinkNotFoundException(username);
         }
-        linkRepository.deleteByUserId(userId);
+        linkRepository.deleteByUsername(username);
     }
 
     @Override
     @Transactional(readOnly = true)
     @NonNull
-    public PersonResponse findPersonByUserId(@NonNull UUID userId) {
-        UserPersonLink link =
-                linkRepository.findByUserId(userId).orElseThrow(() -> new UserPersonLinkNotFoundException(userId));
+    public PersonResponse findPersonByUsername(@NonNull String username) {
+        UserPersonLink link = linkRepository
+                .findByUsername(username)
+                .orElseThrow(() -> new UserPersonLinkNotFoundException(username));
 
         Person person = personRepository
                 .findById(link.getPersonId())
@@ -154,11 +165,11 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     @Override
     @Transactional(readOnly = true)
     @NonNull
-    public List<UUID> findUserIdsByPersonId(@NonNull UUID personId) {
+    public List<String> findUsernamesByPersonId(@NonNull UUID personId) {
         personRepository.findById(personId).orElseThrow(() -> new PersonNotFoundException(personId));
 
         return linkRepository.findByPerson_Id(personId).stream()
-                .map(UserPersonLink::getUserId)
+                .map(UserPersonLink::getUsername)
                 .toList();
     }
 
@@ -180,26 +191,40 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     @Transactional(readOnly = true)
     @NonNull
     public List<InactivePersonActiveUserResponse> findActiveUsersForInactivePersons() {
-        return linkRepository.findByStatusAndPerson_StatusIn(UserLinkStatus.ACTIVE, INACTIVE_PERSON_STATUSES).stream()
-                .map(this::toInactivePersonResponse)
+        List<UserPersonLink> links =
+                linkRepository.findActiveLinksForInactiveEmployees(UserLinkStatus.ACTIVE, INACTIVE_PERSON_STATUSES);
+        Map<UUID, Employee> employeesByPerson = employeesByPersonId(
+                links.stream().map(UserPersonLink::getPersonId).toList());
+        return links.stream()
+                .map(link -> toInactivePersonResponse(link, employeesByPerson.get(link.getPersonId())))
                 .toList();
     }
 
-    private InactivePersonActiveUserResponse toInactivePersonResponse(UserPersonLink link) {
-        Person person = link.getPerson();
+    private Map<UUID, Employee> employeesByPersonId(Collection<UUID> personIds) {
+        if (personIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Employee> result = new HashMap<>();
+        for (Employee e : employeeRepository.findByPersonIdIn(personIds)) {
+            result.put(e.getPersonId(), e);
+        }
+        return result;
+    }
+
+    private InactivePersonActiveUserResponse toInactivePersonResponse(UserPersonLink link, Employee employee) {
         return InactivePersonActiveUserResponse.builder()
                 .linkId(link.getId())
-                .userId(link.getUserId())
+                .username(link.getUsername())
                 .personId(link.getPersonId())
-                .personStatus(person != null ? person.getStatus() : null)
-                .personStatusEffectiveAt(person != null ? person.getStatusEffectiveAt() : null)
+                .personStatus(employee != null ? employee.getStatus() : null)
+                .personStatusEffectiveAt(employee != null ? employee.getStatusEffectiveAt() : null)
                 .build();
     }
 
     private UserPersonLinkResponse toResponse(UserPersonLink link) {
         return UserPersonLinkResponse.builder()
                 .linkId(link.getId())
-                .userId(link.getUserId())
+                .username(link.getUsername())
                 .personId(link.getPersonId())
                 .linkType(link.getLinkType())
                 .createdAt(link.getCreatedAt())

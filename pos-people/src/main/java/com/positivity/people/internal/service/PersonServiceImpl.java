@@ -3,7 +3,10 @@ package com.positivity.people.internal.service;
 import com.positivity.people.internal.dto.Person;
 import com.positivity.people.internal.dto.ResolvePersonRequest;
 import com.positivity.people.internal.dto.ResolvePersonResponse;
+import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.PersonContactPoint;
+import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.PersonContactPointRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.PersonSpecifications;
@@ -44,6 +47,8 @@ public class PersonServiceImpl implements PersonService {
 
     private final PersonContactPointRepository personContactPointRepository;
 
+    private final EmployeeRepository employeeRepository;
+
     private final PersonWorkPhoneService workPhoneService;
 
     private final PersonEmailService emailService;
@@ -59,9 +64,13 @@ public class PersonServiceImpl implements PersonService {
         List<Person> people = personRepository.findAll(PersonSpecifications.directoryFilter(type, q)).stream()
                 .map(this::toDto)
                 .toList();
-        Map<UUID, String> usernames = usernameService.usernamesByPersonId(
-                people.stream().map(Person::getId).toList());
-        people.forEach(p -> p.setUsername(usernames.get(p.getId())));
+        List<UUID> ids = people.stream().map(Person::getId).toList();
+        Map<UUID, String> usernames = usernameService.usernamesByPersonId(ids);
+        Map<UUID, EmployeeStatus> statuses = employeeStatusByPersonId(ids);
+        people.forEach(p -> {
+            p.setUsername(usernames.get(p.getId()));
+            p.setEmployeeStatus(statuses.get(p.getId()));
+        });
         return people;
     }
 
@@ -70,8 +79,26 @@ public class PersonServiceImpl implements PersonService {
     public Optional<Person> getPersonById(@NonNull UUID id) {
         return personRepository.findById(id).map(this::toDto).map(dto -> {
             dto.setUsername(usernameService.usernameForPerson(id));
+            dto.setEmployeeStatus(employeeRepository
+                    .findByPersonId(id)
+                    .map(Employee::getStatus)
+                    .orElse(null));
             return dto;
         });
+    }
+
+    /** Batch personId → employment status from the Employee table; absent if not an employee. */
+    private Map<UUID, EmployeeStatus> employeeStatusByPersonId(Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, EmployeeStatus> result = new HashMap<>();
+        for (Employee e : employeeRepository.findByPersonIdIn(ids)) {
+            if (e.getStatus() != null) {
+                result.put(e.getPersonId(), e.getStatus());
+            }
+        }
+        return result;
     }
 
     @Override
@@ -95,7 +122,11 @@ public class PersonServiceImpl implements PersonService {
         people.forEach(p -> p.setContactPoints(contactsByPerson.getOrDefault(p.getId(), List.of())));
 
         Map<UUID, String> usernames = usernameService.usernamesByPersonId(ids);
-        people.forEach(p -> p.setUsername(usernames.get(p.getId())));
+        Map<UUID, EmployeeStatus> statuses = employeeStatusByPersonId(ids);
+        people.forEach(p -> {
+            p.setUsername(usernames.get(p.getId()));
+            p.setEmployeeStatus(statuses.get(p.getId()));
+        });
         return people;
     }
 
@@ -280,8 +311,8 @@ public class PersonServiceImpl implements PersonService {
         dto.setPrimaryEmail(emails.primary());
         dto.setSecondaryEmail(emails.secondary());
         dto.setPhoneNumbers(workPhoneService.getWorkPhones(entity.getId()));
-        // username resolved from pos-security via user_person_link by the caller (single or batched).
-        dto.setEmployeeStatus(entity.getStatus());
+        // username + employeeStatus resolved by the caller (single or batched) from
+        // user_person_link / the Employee table; not stored on the Person entity.
         return dto;
     }
 

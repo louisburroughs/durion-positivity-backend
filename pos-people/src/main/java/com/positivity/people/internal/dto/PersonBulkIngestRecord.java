@@ -9,10 +9,16 @@ import lombok.Data;
 public class PersonBulkIngestRecord {
 
     @NotBlank
-    @Schema(description = "Legal name of the person", example = "Jane Smith", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Legal name of the person",
+            example = "Jane Smith",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private String legalName;
 
-    @Schema(description = "Preferred name of the person", example = "Jane", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Preferred name of the person",
+            example = "Jane",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String preferredName;
 
     @NotBlank
@@ -20,12 +26,21 @@ public class PersonBulkIngestRecord {
     private String employeeNumber;
 
     @NotBlank
-    @Schema(description = "Date the person was hired (ISO 8601 date)", example = "2026-01-15", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Date the person was hired (ISO 8601 date)",
+            example = "2026-01-15",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private String hireDate;
 
-    @Schema(description = "Primary email address", example = "jane.smith@example.com", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Primary email address",
+            example = "jane.smith@example.com",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String primaryEmail;
 
-    @Schema(description = "Primary phone number", example = "+1-555-123-4567", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Primary phone number",
+            example = "+1-555-123-4567",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String primaryPhone;
 }

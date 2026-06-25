@@ -10,12 +10,12 @@ import org.jspecify.annotations.NonNull;
 
 public interface UserPersonLinkService {
 
-    boolean linkExistsByUserId(@NonNull UUID userId);
+    boolean linkExistsByUsername(@NonNull String username);
 
-    boolean linkExistsByUserIdAndPersonId(@NonNull UUID userId, @NonNull UUID personId);
+    boolean linkExistsByUsernameAndPersonId(@NonNull String username, @NonNull UUID personId);
 
     @NonNull
-    UserPersonLinkResponse createUserLink(@NonNull UUID userId, @NonNull UUID personId);
+    UserPersonLinkResponse createUserLink(@NonNull String username, @NonNull UUID personId);
 
     @NonNull
     List<UserPersonLinkResponse> getUserLinks(@NonNull UUID personId);
@@ -23,13 +23,13 @@ public interface UserPersonLinkService {
     @NonNull
     UserPersonLinkResponse linkUserToPerson(@NonNull LinkUserToPersonRequest request);
 
-    void unlinkUserFromPerson(@NonNull UUID userId);
+    void unlinkUserFromPerson(@NonNull String username);
 
     @NonNull
-    PersonResponse findPersonByUserId(@NonNull UUID userId);
+    PersonResponse findPersonByUsername(@NonNull String username);
 
     @NonNull
-    List<UUID> findUserIdsByPersonId(@NonNull UUID personId);
+    List<String> findUsernamesByPersonId(@NonNull UUID personId);
 
     @NonNull
     UserPersonLinkResponse findLinkByPersonId(@NonNull UUID personId);
