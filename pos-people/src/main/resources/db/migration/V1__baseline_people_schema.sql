@@ -1,93 +1,235 @@
--- Collapsed baseline for pos-accounting generated from emitted Postgres schema.
+-- pos-people baseline schema (collapsed 2026-06).
+-- Single source of truth, generated from the JPA entities (PostgreSQL dialect) and curated.
+-- Supersedes the pre-collapse V1..V10 chain (archived under db/archive/people-collapse-2026-06/).
+-- Identity (person) is separate from employment (employee); assignments reference employee;
+-- user_person_links is keyed by username; contact_info_json is a derived @Formula (not stored).
 
--- Source dump: /tmp/pos_people_baseline_emitted.sql
+create table person (
+    id UUID not null,
+    first_name varchar(255),
+    last_name varchar(255),
+    legal_name varchar(255),
+    preferred_name varchar(255),
+    created_at timestamp(6) with time zone,
+    updated_at timestamp(6) with time zone,
+    primary key (id)
+);
 
--- Repeatable seed/data migrations remain separate and are not folded into this file.
+create table employee (
+    id UUID not null,
+    person_id uuid not null unique,
+    employee_number varchar(255),
+    status varchar(255) check ((status in ('ACTIVE','ON_LEAVE','SUSPENDED','TERMINATED','DISABLED'))),
+    hire_date date,
+    termination_date date,
+    status_effective_at timestamp(6) with time zone,
+    created_at timestamp(6) with time zone,
+    updated_at timestamp(6) with time zone,
+    primary key (id),
+    constraint fk_employee_person foreign key (person_id) references person
+);
 
+create table person_contact_point (
+    id UUID not null,
+    person_id uuid not null,
+    contact_type varchar(20) not null check ((contact_type in ('EMAIL','PHONE_MOBILE','PHONE_HOME','PHONE_WORK'))),
+    "value" varchar(255) not null,
+    is_primary boolean not null,
+    created_at timestamp(6) with time zone,
+    updated_at timestamp(6) with time zone,
+    primary key (id)
+);
 
+create table user_person_links (
+    id UUID not null,
+    person_id UUID not null,
+    username varchar(255) not null unique,
+    status varchar(20) not null check ((status in ('ACTIVE','INACTIVE'))),
+    link_type varchar(50),
+    notes varchar(1000),
+    created_by varchar(255),
+    created_at timestamp(6) with time zone not null,
+    updated_at timestamp(6) with time zone,
+    primary key (id),
+    constraint fk_user_person_links_person foreign key (person_id) references person
+);
 
-SET TIME ZONE 'UTC';
+create table employee_location_assignment (
+    id UUID not null,
+    employee_id UUID not null,
+    location_id uuid not null,
+    role varchar(255) not null,
+    is_primary boolean not null,
+    effective_from date not null,
+    effective_to date,
+    status varchar(255) not null check ((status in ('ACTIVE','ENDED'))),
+    created_by varchar(255),
+    created_at timestamp(6) with time zone not null,
+    updated_at timestamp(6) with time zone,
+    primary key (id),
+    unique (employee_id, location_id, role, effective_from),
+    constraint fk_employee_location_assignment_employee foreign key (employee_id) references employee
+);
 
+create table employee_offboarding_retry_queue (
+    id UUID not null,
+    employee_id UUID not null,
+    assignment_policy varchar(255) not null check ((assignment_policy in ('IMMEDIATE','GRACE_PERIOD'))),
+    disable_reason varchar(255),
+    actor_id varchar(255) not null,
+    failure_reason varchar(255) not null,
+    attempts integer not null,
+    next_attempt_at timestamp(6) with time zone not null,
+    created_at timestamp(6) with time zone not null,
+    updated_at timestamp(6) with time zone,
+    primary key (id),
+    constraint fk_employee_offboarding_person foreign key (employee_id) references person
+);
 
+create table work_session (
+    session_id uuid not null,
+    person_id UUID not null,
+    status varchar(32) not null,
+    actor varchar(128),
+    started_at timestamp(6) with time zone not null,
+    ended_at timestamp(6) with time zone,
+    submitted_at timestamp(6) with time zone,
+    billable_minutes integer,
+    break_minutes integer,
+    created_at timestamp(6) with time zone,
+    updated_at timestamp(6) with time zone,
+    primary key (session_id),
+    constraint fk_work_session_person foreign key (person_id) references person
+);
 
-CREATE TABLE employee_offboarding_retry_queue ( attempts integer NOT NULL, created_at timestamp(6) with time zone NOT NULL, next_attempt_at timestamp(6) with time zone NOT NULL, updated_at timestamp(6) with time zone, employee_id uuid NOT NULL, id uuid NOT NULL, actor_id character varying(255) NOT NULL, assignment_policy character varying(255) NOT NULL, disable_reason character varying(255), failure_reason character varying(255) NOT NULL, CONSTRAINT employee_offboarding_retry_queue_assignment_policy_check CHECK (((assignment_policy)::text = ANY ((ARRAY['IMMEDIATE'::character varying, 'GRACE_PERIOD'::character varying])::text[]))) );
+create table work_session_break (
+    break_id uuid not null,
+    session_id uuid not null,
+    actor varchar(128),
+    started_at timestamp(6) with time zone not null,
+    ended_at timestamp(6) with time zone,
+    created_at timestamp(6) with time zone,
+    updated_at timestamp(6) with time zone,
+    primary key (break_id),
+    constraint fk_work_session_break_session foreign key (session_id) references work_session
+);
 
-CREATE TABLE person ( hire_date date, termination_date date, created_at timestamp(6) with time zone, status_effective_at timestamp(6) with time zone, updated_at timestamp(6) with time zone, id uuid NOT NULL, employee_number character varying(255), first_name character varying(255), last_name character varying(255), legal_name character varying(255), preferred_name character varying(255), primary_email character varying(255), secondary_email character varying(255), status character varying(255), username character varying(255), contact_info_json oid, CONSTRAINT person_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'ON_LEAVE'::character varying, 'SUSPENDED'::character varying, 'TERMINATED'::character varying, 'DISABLED'::character varying])::text[]))) );
+create table time_period (
+    time_period_id UUID not null,
+    tenant_id UUID not null,
+    start_date date not null,
+    end_date date not null,
+    status varchar(50) not null check ((status in ('OPEN','SUBMISSION_CLOSED','PAYROLL_CLOSED'))),
+    created_at timestamp(6) with time zone not null,
+    updated_at timestamp(6) with time zone not null,
+    primary key (time_period_id)
+);
 
-CREATE TABLE person_location_assignment ( effective_from date NOT NULL, effective_to date, is_primary boolean NOT NULL, created_at timestamp(6) with time zone NOT NULL, updated_at timestamp(6) with time zone, id uuid NOT NULL, location_id uuid NOT NULL, person_id uuid NOT NULL, created_by character varying(255), role character varying(255) NOT NULL, status character varying(255) NOT NULL, CONSTRAINT person_location_assignment_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'ENDED'::character varying])::text[]))) );
+create table time_entry (
+    time_entry_id UUID not null,
+    person_id UUID,
+    location_id uuid,
+    timesheet_id varchar(255),
+    status varchar(255) check ((status in ('DRAFT','SUBMITTED','PENDING_APPROVAL','APPROVED','REJECTED'))),
+    attendance_start_at timestamp(6) with time zone,
+    attendance_end_at timestamp(6) with time zone,
+    approved_at timestamp(6) with time zone,
+    approved_by varchar(255),
+    rejected_at timestamp(6) with time zone,
+    rejected_by varchar(255),
+    rejection_reason varchar(500),
+    created_at timestamp(6) with time zone,
+    updated_at timestamp(6) with time zone,
+    primary key (time_entry_id)
+);
 
-CREATE TABLE person_phone_numbers ( person_id uuid NOT NULL, phone_numbers character varying(255) );
+create table time_entry_adjustment (
+    adjustment_id UUID not null,
+    time_entry_id UUID not null,
+    status varchar(50) check ((status in ('PROPOSED','PENDING','APPROVED','REJECTED'))),
+    reason_code varchar(200),
+    minutes_delta integer,
+    proposed_start_at timestamp(6) with time zone,
+    proposed_end_at timestamp(6) with time zone,
+    notes TEXT,
+    created_by varchar(255),
+    created_at timestamp(6) with time zone,
+    decided_by varchar(255),
+    decided_at timestamp(6) with time zone,
+    updated_at timestamp(6) with time zone,
+    primary key (adjustment_id),
+    constraint fk_time_entry_adjustment_entry foreign key (time_entry_id) references time_entry
+);
 
-CREATE TABLE time_entry ( approved_at timestamp(6) with time zone, attendance_end_at timestamp(6) with time zone, attendance_start_at timestamp(6) with time zone, created_at timestamp(6) with time zone, rejected_at timestamp(6) with time zone, updated_at timestamp(6) with time zone, location_id uuid, person_id uuid, time_entry_id uuid NOT NULL, rejection_reason character varying(500), approved_by character varying(255), rejected_by character varying(255), status character varying(255), timesheet_id character varying(255), CONSTRAINT time_entry_status_check CHECK (((status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SUBMITTED'::character varying, 'PENDING_APPROVAL'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying])::text[]))) );
+create table time_entry_audit (
+    audit_id UUID not null,
+    time_entry_id varchar(255) not null,
+    action varchar(100) not null,
+    actor_id varchar(255),
+    correlation_id varchar(100),
+    details TEXT,
+    timestamp timestamp(6) with time zone not null,
+    created_at timestamp(6) with time zone,
+    updated_at timestamp(6) with time zone,
+    primary key (audit_id)
+);
 
-CREATE TABLE time_entry_adjustment ( minutes_delta integer, created_at timestamp(6) with time zone, decided_at timestamp(6) with time zone, proposed_end_at timestamp(6) with time zone, proposed_start_at timestamp(6) with time zone, updated_at timestamp(6) with time zone, adjustment_id uuid NOT NULL, time_entry_id uuid NOT NULL, status character varying(50), reason_code character varying(200), created_by character varying(255), decided_by character varying(255), notes text, CONSTRAINT time_entry_adjustment_status_check CHECK (((status)::text = ANY ((ARRAY['PROPOSED'::character varying, 'PENDING'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying])::text[]))) );
+create table time_entry_exception (
+    exception_id UUID not null,
+    employee_id varchar(255) not null,
+    time_entry_id varchar(255),
+    exception_code varchar(200),
+    severity varchar(50) check ((severity in ('WARNING','BLOCKING'))),
+    status varchar(50) check ((status in ('OPEN','ACKNOWLEDGED','RESOLVED','WAIVED'))),
+    work_date date,
+    detected_at timestamp(6) with time zone,
+    resolved_at timestamp(6) with time zone,
+    resolved_by varchar(255),
+    resolution_notes TEXT,
+    created_at timestamp(6) with time zone,
+    updated_at timestamp(6) with time zone,
+    primary key (exception_id)
+);
 
-CREATE TABLE time_entry_audit ( created_at timestamp(6) with time zone, "timestamp" timestamp(6) with time zone NOT NULL, updated_at timestamp(6) with time zone, audit_id uuid NOT NULL, action character varying(100) NOT NULL, correlation_id character varying(100), actor_id character varying(255), details text, time_entry_id character varying(255) NOT NULL );
+create table timekeeping_entry (
+    timekeeping_entry_id UUID not null,
+    tenant_id UUID not null,
+    employee_id UUID not null,
+    source_system varchar(50) not null,
+    source_session_id UUID not null,
+    original_source_session_id uuid,
+    associated_work_order_id UUID,
+    session_start_time timestamp(6) with time zone not null,
+    session_end_time timestamp(6) with time zone not null,
+    approval_status varchar(50) not null check ((approval_status in ('PENDING_APPROVAL','APPROVED','REJECTED'))),
+    correction_id uuid,
+    correction_reason TEXT,
+    created_at timestamp(6) with time zone not null,
+    primary key (timekeeping_entry_id),
+    unique (tenant_id, source_system, source_session_id)
+);
 
-CREATE TABLE time_entry_exception ( work_date date, created_at timestamp(6) with time zone, detected_at timestamp(6) with time zone, resolved_at timestamp(6) with time zone, updated_at timestamp(6) with time zone, exception_id uuid NOT NULL, severity character varying(50), status character varying(50), exception_code character varying(200), employee_id character varying(255) NOT NULL, resolution_notes text, resolved_by character varying(255), time_entry_id character varying(255), CONSTRAINT time_entry_exception_severity_check CHECK (((severity)::text = ANY ((ARRAY['WARNING'::character varying, 'BLOCKING'::character varying])::text[]))), CONSTRAINT time_entry_exception_status_check CHECK (((status)::text = ANY ((ARRAY['OPEN'::character varying, 'ACKNOWLEDGED'::character varying, 'RESOLVED'::character varying, 'WAIVED'::character varying])::text[]))) );
+create table timekeeping_policy (
+    timekeeping_policy_id UUID not null,
+    scope_type varchar(16) not null check ((scope_type in ('GLOBAL','LOCATION'))),
+    scope_id uuid,
+    job_time_discrepancy_threshold_minutes integer not null,
+    effective_start_at timestamp(6) with time zone,
+    effective_end_at timestamp(6) with time zone,
+    updated_by varchar(255),
+    created_at timestamp(6) with time zone,
+    updated_at timestamp(6) with time zone not null,
+    primary key (timekeeping_policy_id)
+);
 
-CREATE TABLE timekeeping_entry ( created_at timestamp(6) with time zone NOT NULL, session_end_time timestamp(6) with time zone NOT NULL, session_start_time timestamp(6) with time zone NOT NULL, associated_work_order_id uuid, correction_id uuid, employee_id uuid NOT NULL, original_source_session_id uuid, source_session_id uuid NOT NULL, tenant_id uuid NOT NULL, timekeeping_entry_id uuid NOT NULL, approval_status character varying(50) NOT NULL, source_system character varying(50) NOT NULL, correction_reason text, CONSTRAINT timekeeping_entry_approval_status_check CHECK (((approval_status)::text = ANY ((ARRAY['PENDING_APPROVAL'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying])::text[]))) );
-
-CREATE TABLE timekeeping_policy ( job_time_discrepancy_threshold_minutes integer NOT NULL, created_at timestamp(6) with time zone, effective_end_at timestamp(6) with time zone, effective_start_at timestamp(6) with time zone, updated_at timestamp(6) with time zone NOT NULL, scope_id uuid, scope_type character varying(16) NOT NULL, timekeeping_policy_id uuid NOT NULL, updated_by character varying(255), CONSTRAINT timekeeping_policy_scope_type_check CHECK (((scope_type)::text = ANY ((ARRAY['GLOBAL'::character varying, 'LOCATION'::character varying])::text[]))) );
-
-CREATE TABLE user_person_links ( created_at timestamp(6) with time zone NOT NULL, updated_at timestamp(6) with time zone, id uuid NOT NULL, person_id uuid NOT NULL, user_id uuid NOT NULL, status character varying(20) NOT NULL, link_type character varying(50), notes character varying(1000), created_by character varying(255), CONSTRAINT user_person_links_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'INACTIVE'::character varying])::text[]))) );
-
-CREATE TABLE work_session ( created_at timestamp(6) with time zone, ended_at timestamp(6) with time zone, started_at timestamp(6) with time zone NOT NULL, updated_at timestamp(6) with time zone, person_id uuid NOT NULL, session_id uuid NOT NULL, status character varying(32) NOT NULL, actor character varying(128) );
-
-CREATE TABLE work_session_break ( created_at timestamp(6) with time zone, ended_at timestamp(6) with time zone, started_at timestamp(6) with time zone NOT NULL, updated_at timestamp(6) with time zone, break_id uuid NOT NULL, session_id uuid NOT NULL, actor character varying(128) );
-
-ALTER TABLE employee_offboarding_retry_queue ADD CONSTRAINT employee_offboarding_retry_queue_pkey PRIMARY KEY (id);
-
-ALTER TABLE person_location_assignment ADD CONSTRAINT person_location_assignment_person_id_location_id_role_effec_key UNIQUE (person_id, location_id, role, effective_from);
-
-ALTER TABLE person_location_assignment ADD CONSTRAINT person_location_assignment_pkey PRIMARY KEY (id);
-
-ALTER TABLE person ADD CONSTRAINT person_pkey PRIMARY KEY (id);
-
-ALTER TABLE time_entry_adjustment ADD CONSTRAINT time_entry_adjustment_pkey PRIMARY KEY (adjustment_id);
-
-ALTER TABLE time_entry_audit ADD CONSTRAINT time_entry_audit_pkey PRIMARY KEY (audit_id);
-
-ALTER TABLE time_entry_exception ADD CONSTRAINT time_entry_exception_pkey PRIMARY KEY (exception_id);
-
-ALTER TABLE time_entry ADD CONSTRAINT time_entry_pkey PRIMARY KEY (time_entry_id);
-
-ALTER TABLE timekeeping_entry ADD CONSTRAINT timekeeping_entry_pkey PRIMARY KEY (timekeeping_entry_id);
-
-ALTER TABLE timekeeping_entry ADD CONSTRAINT timekeeping_entry_tenant_id_source_system_source_session_id_key UNIQUE (tenant_id, source_system, source_session_id);
-
-ALTER TABLE timekeeping_policy ADD CONSTRAINT timekeeping_policy_pkey PRIMARY KEY (timekeeping_policy_id);
-
-ALTER TABLE user_person_links ADD CONSTRAINT user_person_links_pkey PRIMARY KEY (id);
-
-ALTER TABLE user_person_links ADD CONSTRAINT user_person_links_user_id_key UNIQUE (user_id);
-
-ALTER TABLE work_session_break ADD CONSTRAINT work_session_break_pkey PRIMARY KEY (break_id);
-
-ALTER TABLE work_session ADD CONSTRAINT work_session_pkey PRIMARY KEY (session_id);
-
-CREATE INDEX idx_time_entry_attendance_window ON time_entry USING btree (attendance_start_at, attendance_end_at);
-
-CREATE INDEX idx_time_entry_location_start ON time_entry USING btree (location_id, attendance_start_at);
-
-CREATE INDEX idx_time_entry_person_start ON time_entry USING btree (person_id, attendance_start_at);
-
-CREATE INDEX idx_timekeeping_policy_scope ON timekeeping_policy USING btree (scope_type, scope_id);
-
-CREATE INDEX idx_timekeeping_policy_scope_effective_updated ON timekeeping_policy USING btree (scope_type, scope_id, effective_start_at, effective_end_at, updated_at);
-
-CREATE INDEX idx_user_person_links_person_id ON user_person_links USING btree (person_id);
-
-ALTER TABLE work_session_break ADD CONSTRAINT fk4frye7mf37xweamedysh2lgkt FOREIGN KEY (session_id) REFERENCES work_session(session_id);
-
-ALTER TABLE work_session ADD CONSTRAINT fkagbjpp19kgt2auo2wxofmmdbk FOREIGN KEY (person_id) REFERENCES person(id);
-
-ALTER TABLE employee_offboarding_retry_queue ADD CONSTRAINT fkc0d3sdmlk84d64hdrbch44la6 FOREIGN KEY (employee_id) REFERENCES person(id);
-
-ALTER TABLE person_phone_numbers ADD CONSTRAINT fkiaw204pko4dbjbh7bt2p4qbbo FOREIGN KEY (person_id) REFERENCES person(id);
-
-ALTER TABLE time_entry_adjustment ADD CONSTRAINT fkls70vixxyk0xncsnq2x2jphjq FOREIGN KEY (time_entry_id) REFERENCES time_entry(time_entry_id);
-
-ALTER TABLE user_person_links ADD CONSTRAINT fkmgja1yh7vx99k7rh0fh1tvhb5 FOREIGN KEY (person_id) REFERENCES person(id);
-
-ALTER TABLE person_location_assignment ADD CONSTRAINT fkqhx0ssgkqmikua0r6ruxwpbe3 FOREIGN KEY (person_id) REFERENCES person(id);
+create index idx_employee_status on employee (status);
+create index idx_person_contact_point_person on person_contact_point (person_id);
+create index idx_person_contact_point_type on person_contact_point (contact_type);
+create index idx_user_person_links_person_id on user_person_links (person_id);
+create index idx_time_entry_attendance_window on time_entry (attendance_start_at, attendance_end_at);
+create index idx_time_entry_location_start on time_entry (location_id, attendance_start_at);
+create index idx_time_entry_person_start on time_entry (person_id, attendance_start_at);
+create index idx_time_period_tenant_status on time_period (tenant_id, status);
+create index idx_time_period_dates on time_period (start_date, end_date);
+create index idx_timekeeping_policy_scope on timekeeping_policy (scope_type, scope_id);
+create index idx_timekeeping_policy_scope_effective_updated on timekeeping_policy (scope_type, scope_id, effective_start_at, effective_end_at, updated_at);
