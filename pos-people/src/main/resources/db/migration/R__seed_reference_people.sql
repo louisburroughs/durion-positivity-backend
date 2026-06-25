@@ -46,6 +46,9 @@ BEGIN
     IF to_regclass('public.person') IS NOT NULL
        AND EXISTS (SELECT 1 FROM person WHERE id = '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid)
     THEN
+        -- ON CONFLICT (user_id): user_person_links has a UNIQUE(user_id) constraint, so
+        -- guard on user_id (not just the PK id) — a link for this user under a different
+        -- id from an earlier seed must not raise a unique violation here.
         INSERT INTO user_person_links (id, user_id, person_id, link_type, status, created_at, created_by)
         VALUES (
             '4790360f-65ab-20e9-88e3-7bf9277bf2b9'::uuid,
@@ -56,7 +59,7 @@ BEGIN
             NOW(),
             'seed-generator'
         )
-        ON CONFLICT (id) DO NOTHING;
+        ON CONFLICT (user_id) DO NOTHING;
     END IF;
 END $$;
 
