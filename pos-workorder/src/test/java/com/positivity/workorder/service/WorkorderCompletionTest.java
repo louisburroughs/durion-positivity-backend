@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.workorder.internal.client.CustomerValidationClient;
+import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.ChangeRequest;
@@ -109,6 +110,9 @@ class WorkorderCompletionTest {
     @Mock
     private ShopmgrOperationalContextClient shopmgrClient;
 
+    @Mock
+    private PeopleLocationClient peopleLocationClient;
+
     @InjectMocks
     private WorkorderStateMachine stateMachine;
 
@@ -162,7 +166,8 @@ class WorkorderCompletionTest {
                 auditEventRepository,
                 idempotencyService,
                 promotionValidationService,
-                shopmgrClient);
+                shopmgrClient,
+                peopleLocationClient);
     }
 
     @AfterEach
