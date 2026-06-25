@@ -10,7 +10,11 @@ import com.positivity.people.internal.client.dto.UserRoleAssignmentRequest;
 import com.positivity.people.internal.client.dto.UserRoleDto;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -65,6 +69,71 @@ public class SecurityServiceClient {
         return users.stream()
                 .filter(user -> user.getUsername() != null && username.equalsIgnoreCase(user.getUsername()))
                 .findFirst();
+    }
+
+    /** Fetch a user by id; empty when not found (404). */
+    @NonNull
+    public Optional<User> getUserById(@NonNull UUID userId) {
+        log.debug("Fetching user by id: {}", userId);
+        try {
+            User user = restClient
+                    .get()
+                    .uri("/v1/users/{id}", userId)
+                    .retrieve()
+                    .onStatus(
+                            statusCode -> statusCode.value() == 401 || statusCode.value() == 403,
+                            (request, response) -> {
+                                throw new SecurityServiceException(
+                                        "Not authorized to query users in security service",
+                                        response.getStatusCode().value());
+                            })
+                    .onStatus(HttpStatusCode::is5xxServerError, (request, response) -> {
+                        throw new SecurityServiceException(
+                                "Security service failed while fetching user",
+                                response.getStatusCode().value());
+                    })
+                    .body(User.class);
+            return Optional.ofNullable(user);
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound notFound) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Batch-resolve usernames for the given user ids (single list call, filtered locally).
+     * Ids without a user are absent from the result.
+     */
+    @NonNull
+    public Map<UUID, String> getUsernamesByIds(@NonNull Collection<UUID> userIds) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        Set<UUID> wanted = new HashSet<>(userIds);
+        List<User> users = restClient
+                .get()
+                .uri("/v1/users")
+                .retrieve()
+                .onStatus(statusCode -> statusCode.value() == 401 || statusCode.value() == 403, (request, response) -> {
+                    throw new SecurityServiceException(
+                            "Not authorized to query users in security service",
+                            response.getStatusCode().value());
+                })
+                .onStatus(HttpStatusCode::is5xxServerError, (request, response) -> {
+                    throw new SecurityServiceException(
+                            "Security service failed while fetching users",
+                            response.getStatusCode().value());
+                })
+                .body(new ParameterizedTypeReference<List<User>>() {});
+        if (users == null) {
+            return Map.of();
+        }
+        Map<UUID, String> byId = new HashMap<>();
+        for (User user : users) {
+            if (user.getId() != null && user.getUsername() != null && wanted.contains(user.getId())) {
+                byId.put(user.getId(), user.getUsername());
+            }
+        }
+        return byId;
     }
 
     /**

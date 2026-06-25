@@ -24,16 +24,28 @@ public class Person {
     @Schema(description = "Last name of the person", example = "Smith", requiredMode = Schema.RequiredMode.REQUIRED)
     private String lastName;
 
-    @Schema(description = "Primary email address", example = "jane.smith@example.com", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Primary email address",
+            example = "jane.smith@example.com",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String primaryEmail;
 
-    @Schema(description = "Secondary email address", example = "jane.alt@example.com", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Secondary email address",
+            example = "jane.alt@example.com",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String secondaryEmail;
 
-    @Schema(description = "Phone numbers on record", example = "[\"+1-555-123-4567\"]", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Phone numbers on record",
+            example = "[\"+1-555-123-4567\"]",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private List<String> phoneNumbers;
 
-    @Schema(description = "Linked username, if any", example = "jane.smith", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Linked username, if any",
+            example = "jane.smith",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String username;
 
     @Schema(
@@ -125,14 +137,20 @@ public class Person {
         @Schema(description = "Type of contact point", example = "EMAIL", requiredMode = Schema.RequiredMode.REQUIRED)
         private ContactPointType contactType;
 
-        @Schema(description = "Contact point value", example = "jane.smith@example.com", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Contact point value",
+                example = "jane.smith@example.com",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         private String value;
 
         // Pin the JSON name to "primary" for BOTH directions. The isPrimary() getter
         // serializes as "primary", but without this the field deserializes from
         // "isPrimary" — an asymmetry that 400'd the contact-point write endpoint.
         @JsonProperty("primary")
-        @Schema(description = "Whether this is the primary contact point of its type", example = "true", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Whether this is the primary contact point of its type",
+                example = "true",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         private boolean isPrimary;
 
         public ContactPointDto() {}

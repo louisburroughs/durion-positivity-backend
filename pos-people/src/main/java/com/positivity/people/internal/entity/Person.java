@@ -4,7 +4,6 @@ import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
-import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -16,7 +15,6 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -84,15 +82,9 @@ public class Person {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
-    private String primaryEmail;
-
-    private String secondaryEmail;
-
-    @ElementCollection
-    private List<String> phoneNumbers;
-
-    /** Optional, validated externally - stick with username not userName */
-    private String username;
+    // Email + phone numbers consolidated into person_contact_point (EMAIL / PHONE_WORK);
+    // see PersonEmailService / PersonWorkPhoneService.
+    // Username is owned by pos-security and resolved via user_person_link; see PersonUsernameService.
 
     @PreUpdate
     public void ensureStatusEffectiveAt() {

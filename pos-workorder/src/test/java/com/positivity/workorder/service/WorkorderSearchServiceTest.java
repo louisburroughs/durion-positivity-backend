@@ -13,6 +13,7 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.service.CustomerReferenceService;
+import com.positivity.workorder.internal.service.VehicleReferenceService;
 import com.positivity.workorder.internal.service.WorkorderSearchServiceImpl;
 import java.time.Instant;
 import java.util.Collection;
@@ -49,6 +50,9 @@ class WorkorderSearchServiceTest {
     @Mock
     private CustomerReferenceService customerReferenceService;
 
+    @Mock
+    private VehicleReferenceService vehicleReferenceService;
+
     @InjectMocks
     private WorkorderSearchServiceImpl workorderSearchService;
 
@@ -68,10 +72,11 @@ class WorkorderSearchServiceTest {
 
         when(customerReferenceService.searchIdsByName(eq("Acme"), anyInt()))
                 .thenReturn(List.of(new CustomerReferenceService.CustomerRef(CUSTOMER_A, "Acme Auto")));
-        when(workorderRepository.searchByQuery(any(), any(), eq(pageable)))
+        when(workorderRepository.searchByQuery(any(), any(), any(), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(workorder)));
         when(customerReferenceService.resolveAll(any()))
                 .thenReturn(Map.of(CUSTOMER_A, new CustomerReferenceService.CustomerContact("Acme Auto", null)));
+        when(vehicleReferenceService.resolveAll(any())).thenReturn(Map.of());
 
         Page<WorkorderSearchResult> result = workorderSearchService.search("Acme", pageable);
 
@@ -89,17 +94,19 @@ class WorkorderSearchServiceTest {
         Workorder workorder = buildWorkorder(WORKORDER_ID, CUSTOMER_A, WorkorderStatus.DRAFT);
 
         when(customerReferenceService.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
-        when(workorderRepository.searchByQuery(any(), any(), eq(pageable)))
+        when(workorderRepository.searchByQuery(any(), any(), any(), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(workorder)));
         when(customerReferenceService.resolveAll(any()))
                 .thenReturn(Map.of(CUSTOMER_A, new CustomerReferenceService.CustomerContact("Acme Auto", null)));
+        when(vehicleReferenceService.resolveAll(any())).thenReturn(Map.of());
 
         workorderSearchService.search(q, pageable);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<UUID>> customerIdsCaptor = ArgumentCaptor.forClass(Collection.class);
         ArgumentCaptor<UUID> idQueryCaptor = ArgumentCaptor.forClass(UUID.class);
-        verify(workorderRepository).searchByQuery(customerIdsCaptor.capture(), idQueryCaptor.capture(), eq(pageable));
+        verify(workorderRepository)
+                .searchByQuery(anyString(), customerIdsCaptor.capture(), idQueryCaptor.capture(), eq(pageable));
 
         assertThat(idQueryCaptor.getValue()).isEqualTo(WORKORDER_ID);
         // empty name match → sentinel id that cannot match a real workorder

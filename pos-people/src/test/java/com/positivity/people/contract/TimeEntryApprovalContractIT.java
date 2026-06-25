@@ -105,7 +105,6 @@ class TimeEntryApprovalContractIT extends BaseContractIntegrationTest {
                         .id(personId)
                         .firstName("Contract")
                         .lastName("Approver")
-                        .primaryEmail("contract-approver@example.com")
                         .build()));
 
         TimeEntry timeEntry = new TimeEntry();

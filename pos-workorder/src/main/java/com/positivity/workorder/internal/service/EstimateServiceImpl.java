@@ -78,6 +78,7 @@ public class EstimateServiceImpl implements EstimateService {
     private final DocumentClient documentClient;
     private final ObjectMapper objectMapper;
     private final CustomerReferenceService customerReferenceService;
+    private final VehicleReferenceService vehicleReferenceService;
 
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
@@ -166,11 +167,25 @@ public class EstimateServiceImpl implements EstimateService {
         Map<UUID, CustomerReferenceService.CustomerContact> contacts =
                 customerReferenceService.resolveAll(pageCustomerIds);
 
+        // Enrich with vehicle label + VIN for the finder dropdown. Vehicles are mastered under
+        // the owning CRM account, so resolution is keyed by (customerId, vehicleId).
+        List<VehicleReferenceService.VehicleKey> vehicleKeys = page.getContent().stream()
+                .filter(e -> e.getVehicleId() != null)
+                .map(e -> new VehicleReferenceService.VehicleKey(e.getCustomerId(), e.getVehicleId()))
+                .toList();
+        Map<UUID, VehicleReferenceService.VehicleReference> vehicles = vehicleReferenceService.resolveAll(vehicleKeys);
+
         return page.map(estimate -> {
             EstimateSummaryResponse summary = toEstimateSummaryResponse(estimate);
             CustomerReferenceService.CustomerContact contact = contacts.get(estimate.getCustomerId());
             if (contact != null) {
                 summary.setCustomerName(contact.name());
+            }
+            VehicleReferenceService.VehicleReference vehicle =
+                    estimate.getVehicleId() != null ? vehicles.get(estimate.getVehicleId()) : null;
+            if (vehicle != null) {
+                summary.setVehicleLabel(vehicle.vehicleInfo());
+                summary.setVin(vehicle.vin());
             }
             return summary;
         });

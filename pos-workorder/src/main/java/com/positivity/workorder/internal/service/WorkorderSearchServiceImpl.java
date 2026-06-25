@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.workorder.internal.dto.WorkorderSearchResult;
+import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.WorkorderSearchService;
@@ -28,6 +29,7 @@ public class WorkorderSearchServiceImpl implements WorkorderSearchService {
 
     private final WorkorderRepository workorderRepository;
     private final CustomerReferenceService customerReferenceService;
+    private final VehicleReferenceService vehicleReferenceService;
 
     @Override
     public @NonNull Page<WorkorderSearchResult> search(@NonNull String q, @NonNull Pageable pageable) {
@@ -42,9 +44,9 @@ public class WorkorderSearchServiceImpl implements WorkorderSearchService {
         // Treat the query as a workorder id when it parses as a UUID.
         UUID idQuery = parseUuidOrNull(q);
 
-        Page<Workorder> page = workorderRepository.searchByQuery(customerIds, idQuery, pageable);
+        Page<Workorder> page = workorderRepository.searchByQuery(q, customerIds, idQuery, pageable);
 
-        // Enrich each row with the resolved customer display name.
+        // Enrich each row with the resolved customer display name and vehicle label/VIN.
         List<UUID> pageCustomerIds = page.getContent().stream()
                 .map(Workorder::getCustomerId)
                 .filter(Objects::nonNull)
@@ -52,13 +54,28 @@ public class WorkorderSearchServiceImpl implements WorkorderSearchService {
                 .toList();
         Map<UUID, CustomerReferenceService.CustomerContact> contacts =
                 customerReferenceService.resolveAll(pageCustomerIds);
+        List<VehicleReferenceService.VehicleKey> vehicleKeys = page.getContent().stream()
+                .filter(w -> w.getVehicleId() != null)
+                .map(w -> new VehicleReferenceService.VehicleKey(w.getCustomerId(), w.getVehicleId()))
+                .toList();
+        Map<UUID, VehicleReferenceService.VehicleReference> vehicles = vehicleReferenceService.resolveAll(vehicleKeys);
 
         return page.map(workorder -> {
-            CustomerReferenceService.CustomerContact contact = contacts.get(workorder.getCustomerId());
+            CustomerReferenceService.CustomerContact contact =
+                    workorder.getCustomerId() != null ? contacts.get(workorder.getCustomerId()) : null;
+            VehicleReferenceService.VehicleReference vehicle =
+                    workorder.getVehicleId() != null ? vehicles.get(workorder.getVehicleId()) : null;
+            Estimate estimate = workorder.getEstimate();
             return WorkorderSearchResult.builder()
                     .workorderId(workorder.getId())
+                    .workorderNumber(workorder.getWorkorderNumber())
+                    .estimateNumber(estimate != null ? estimate.getEstimateNumber() : null)
                     .status(workorder.getStatus())
+                    .customerId(workorder.getCustomerId())
                     .customerName(contact != null ? contact.name() : null)
+                    .vehicleId(workorder.getVehicleId())
+                    .vehicleLabel(vehicle != null ? vehicle.vehicleInfo() : null)
+                    .vin(vehicle != null ? vehicle.vin() : null)
                     .createdAt(workorder.getCreatedAt())
                     .build();
         });

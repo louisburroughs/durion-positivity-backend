@@ -45,8 +45,27 @@ class EmployeeProfileFallbackTest {
     @Mock
     private EmployeeOffboardingRetryRepository offboardingRetryRepository;
 
+    @Mock
+    private PersonWorkPhoneService workPhoneService;
+
+    @Mock
+    private PersonEmailService emailService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void defaultEmailStub() {
+        org.mockito.Mockito.lenient()
+                .when(emailService.getEmails(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new PersonEmailService.EmailPair(null, null));
+    }
+
     private EmployeeServiceImpl service() {
-        return new EmployeeServiceImpl(TEST_CLOCK, personRepository, offboardingRetryRepository, new ObjectMapper());
+        return new EmployeeServiceImpl(
+                TEST_CLOCK,
+                personRepository,
+                workPhoneService,
+                emailService,
+                offboardingRetryRepository,
+                new ObjectMapper());
     }
 
     private Person columnSourcedPerson() {
@@ -54,8 +73,6 @@ class EmployeeProfileFallbackTest {
         person.setId(PERSON_ID);
         person.setFirstName("Marcus");
         person.setLastName("Webb");
-        person.setPrimaryEmail("marcus.webb@durion.internal");
-        person.setPhoneNumbers(List.of("555-0100", "555-0101"));
         person.setEmployeeNumber("EMP-0001");
         person.setStatus(EmployeeStatus.ACTIVE);
         person.setHireDate(LocalDate.parse("2024-01-01"));
@@ -87,6 +104,9 @@ class EmployeeProfileFallbackTest {
     @Test
     void getEmployee_fallsBackToContactColumnsWhenJsonMissing() {
         when(personRepository.findById(PERSON_ID)).thenReturn(Optional.of(columnSourcedPerson()));
+        when(workPhoneService.getWorkPhones(PERSON_ID)).thenReturn(List.of("555-0100", "555-0101"));
+        when(emailService.getEmails(PERSON_ID))
+                .thenReturn(new PersonEmailService.EmailPair("marcus.webb@durion.internal", null));
 
         EmployeeProfileDto profile = service().getEmployee(PERSON_ID);
 

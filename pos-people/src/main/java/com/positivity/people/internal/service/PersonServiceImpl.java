@@ -1,6 +1,5 @@
 package com.positivity.people.internal.service;
 
-import com.positivity.people.internal.client.SecurityServiceClient;
 import com.positivity.people.internal.dto.Person;
 import com.positivity.people.internal.dto.ResolvePersonRequest;
 import com.positivity.people.internal.dto.ResolvePersonResponse;
@@ -45,7 +44,11 @@ public class PersonServiceImpl implements PersonService {
 
     private final PersonContactPointRepository personContactPointRepository;
 
-    private final SecurityServiceClient securityServiceClient;
+    private final PersonWorkPhoneService workPhoneService;
+
+    private final PersonEmailService emailService;
+
+    private final PersonUsernameService usernameService;
 
     @Value("${pos.people.matching.threshold:30}")
     private int defaultMatchingThreshold;
@@ -53,15 +56,22 @@ public class PersonServiceImpl implements PersonService {
     @Override
     @NonNull
     public List<Person> getAllPeople(@Nullable String type, @Nullable String q) {
-        return personRepository.findAll(PersonSpecifications.directoryFilter(type, q)).stream()
+        List<Person> people = personRepository.findAll(PersonSpecifications.directoryFilter(type, q)).stream()
                 .map(this::toDto)
                 .toList();
+        Map<UUID, String> usernames = usernameService.usernamesByPersonId(
+                people.stream().map(Person::getId).toList());
+        people.forEach(p -> p.setUsername(usernames.get(p.getId())));
+        return people;
     }
 
     @Override
     @NonNull
     public Optional<Person> getPersonById(@NonNull UUID id) {
-        return personRepository.findById(id).map(this::toDto);
+        return personRepository.findById(id).map(this::toDto).map(dto -> {
+            dto.setUsername(usernameService.usernameForPerson(id));
+            return dto;
+        });
     }
 
     @Override
@@ -83,6 +93,9 @@ public class PersonServiceImpl implements PersonService {
                                                 cp.getContactType(), cp.getValue(), cp.isPrimary()),
                                         Collectors.toList())));
         people.forEach(p -> p.setContactPoints(contactsByPerson.getOrDefault(p.getId(), List.of())));
+
+        Map<UUID, String> usernames = usernameService.usernamesByPersonId(ids);
+        people.forEach(p -> p.setUsername(usernames.get(p.getId())));
         return people;
     }
 
@@ -109,14 +122,15 @@ public class PersonServiceImpl implements PersonService {
     @Transactional
     @NonNull
     public Person savePerson(@NonNull Person person) {
-        if (person.getUsername() != null
-                && !person.getUsername().isBlank()
-                && !validateUsernameWithSecurityService(person.getUsername())) {
-            throw new IllegalArgumentException("Username is not valid or does not exist in security service");
-        }
-
+        // Username is owned by pos-security and linked via user_person_link; it is not a
+        // Person attribute and is not persisted here.
         com.positivity.people.internal.entity.Person saved = personRepository.save(toEntity(person));
-        return toDto(saved);
+        workPhoneService.replaceWorkPhones(
+                saved.getId(), person.getPhoneNumbers() == null ? List.of() : person.getPhoneNumbers());
+        emailService.replaceEmails(saved.getId(), person.getPrimaryEmail(), person.getSecondaryEmail());
+        Person dto = toDto(saved);
+        dto.setUsername(usernameService.usernameForPerson(saved.getId()));
+        return dto;
     }
 
     @Override
@@ -136,18 +150,21 @@ public class PersonServiceImpl implements PersonService {
         Map<UUID, ScoredCandidate> candidates = new HashMap<>();
 
         if (email != null) {
-            personRepository
-                    .findByPrimaryEmailIgnoreCase(email)
-                    .ifPresent(person -> addScore(candidates, person, EMAIL_WEIGHT, "EMAIL"));
-            personRepository
-                    .findBySecondaryEmailIgnoreCase(email)
-                    .ifPresent(person -> addScore(candidates, person, EMAIL_WEIGHT, "EMAIL"));
+            List<UUID> emailMatchIds = emailService.findPersonIdsByEmail(email);
+            if (!emailMatchIds.isEmpty()) {
+                personRepository
+                        .findAllById(emailMatchIds)
+                        .forEach(person -> addScore(candidates, person, EMAIL_WEIGHT, "EMAIL"));
+            }
         }
 
         if (phone != null) {
-            personRepository
-                    .findByPhoneNumbersContains(phone)
-                    .forEach(person -> addScore(candidates, person, PHONE_WEIGHT, "PHONE"));
+            List<UUID> phoneMatchIds = workPhoneService.findPersonIdsByWorkPhone(phone);
+            if (!phoneMatchIds.isEmpty()) {
+                personRepository
+                        .findAllById(phoneMatchIds)
+                        .forEach(person -> addScore(candidates, person, PHONE_WEIGHT, "PHONE"));
+            }
         }
 
         if (lastName != null) {
@@ -179,22 +196,21 @@ public class PersonServiceImpl implements PersonService {
                     .matchedBy(new ArrayList<>(matched.getMatchedBy()))
                     .firstName(matched.getPerson().getFirstName())
                     .lastName(matched.getPerson().getLastName())
-                    .primaryEmail(matched.getPerson().getPrimaryEmail())
-                    .phoneNumbers(matched.getPerson().getPhoneNumbers())
+                    .primaryEmail(
+                            emailService.getEmails(matched.getPerson().getId()).primary())
+                    .phoneNumbers(
+                            workPhoneService.getWorkPhones(matched.getPerson().getId()))
                     .build();
         }
 
         com.positivity.people.internal.entity.Person entity = new com.positivity.people.internal.entity.Person();
         entity.setFirstName(firstName);
         entity.setLastName(lastName);
-        entity.setPrimaryEmail(email);
-        if (phone != null) {
-            entity.setPhoneNumbers(new ArrayList<>(List.of(phone)));
-        } else {
-            entity.setPhoneNumbers(new ArrayList<>());
-        }
 
         com.positivity.people.internal.entity.Person created = personRepository.save(entity);
+        List<String> createdPhones = phone != null ? List.of(phone) : List.of();
+        workPhoneService.replaceWorkPhones(created.getId(), createdPhones);
+        emailService.replaceEmails(created.getId(), email, null);
         return ResolvePersonResponse.builder()
                 .personId(created.getId())
                 .matchedExisting(false)
@@ -203,19 +219,14 @@ public class PersonServiceImpl implements PersonService {
                 .matchedBy(List.of("CREATED"))
                 .firstName(created.getFirstName())
                 .lastName(created.getLastName())
-                .primaryEmail(created.getPrimaryEmail())
-                .phoneNumbers(created.getPhoneNumbers())
+                .primaryEmail(email)
+                .phoneNumbers(createdPhones)
                 .build();
     }
 
     @Override
     public void deletePerson(@NonNull UUID id) {
         personRepository.deleteById(id);
-    }
-
-    private boolean validateUsernameWithSecurityService(String username) {
-        return securityServiceClient.getUserByUsername(username).isPresent()
-                && !personRepository.existsByUsername(username);
     }
 
     private int resolveThreshold(Integer thresholdOverride) {
@@ -265,10 +276,11 @@ public class PersonServiceImpl implements PersonService {
         dto.setId(entity.getId());
         dto.setFirstName(entity.getFirstName());
         dto.setLastName(entity.getLastName());
-        dto.setPrimaryEmail(entity.getPrimaryEmail());
-        dto.setSecondaryEmail(entity.getSecondaryEmail());
-        dto.setPhoneNumbers(entity.getPhoneNumbers());
-        dto.setUsername(entity.getUsername());
+        PersonEmailService.EmailPair emails = emailService.getEmails(entity.getId());
+        dto.setPrimaryEmail(emails.primary());
+        dto.setSecondaryEmail(emails.secondary());
+        dto.setPhoneNumbers(workPhoneService.getWorkPhones(entity.getId()));
+        // username resolved from pos-security via user_person_link by the caller (single or batched).
         dto.setEmployeeStatus(entity.getStatus());
         return dto;
     }
@@ -278,10 +290,7 @@ public class PersonServiceImpl implements PersonService {
         entity.setId(dto.getId());
         entity.setFirstName(dto.getFirstName());
         entity.setLastName(dto.getLastName());
-        entity.setPrimaryEmail(dto.getPrimaryEmail());
-        entity.setSecondaryEmail(dto.getSecondaryEmail());
-        entity.setPhoneNumbers(dto.getPhoneNumbers());
-        entity.setUsername(dto.getUsername());
+        // email + phoneNumbers persisted separately as contact points; username owned by pos-security.
         return entity;
     }
 

@@ -32,7 +32,6 @@ import com.positivity.people.service.TimeEntryService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -504,8 +503,6 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 .id(technicianId)
                 .firstName(firstName)
                 .lastName(lastName)
-                .primaryEmail(firstName.toLowerCase() + "@example.com")
-                .phoneNumbers(new ArrayList<>())
                 .build();
         personRepository.save(person);
     }

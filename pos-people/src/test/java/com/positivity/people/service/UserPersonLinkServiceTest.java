@@ -51,6 +51,15 @@ class UserPersonLinkServiceTest {
     @Mock
     private PersonRepository personRepository;
 
+    @Mock
+    private com.positivity.people.internal.service.PersonWorkPhoneService workPhoneService;
+
+    @Mock
+    private com.positivity.people.internal.service.PersonEmailService emailService;
+
+    @Mock
+    private com.positivity.people.internal.service.PersonUsernameService usernameService;
+
     private UserPersonLinkServiceImpl service;
 
     // Fixed UUIDs for deterministic tests
@@ -64,7 +73,8 @@ class UserPersonLinkServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new UserPersonLinkServiceImpl(linkRepository, personRepository);
+        service = new UserPersonLinkServiceImpl(
+                linkRepository, personRepository, workPhoneService, emailService, usernameService);
 
         // Initialize fixed test UUIDs
         testPersonId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -166,11 +176,14 @@ class UserPersonLinkServiceTest {
                 .id(testPersonId)
                 .firstName("Jordan")
                 .lastName("Case")
-                .primaryEmail("jordan@example.com")
                 .build();
 
         when(linkRepository.findByUserId(testUserId)).thenReturn(Optional.of(link));
         when(personRepository.findById(testPersonId)).thenReturn(Optional.of(person));
+        when(workPhoneService.getWorkPhones(testPersonId)).thenReturn(java.util.List.of());
+        when(emailService.getEmails(testPersonId))
+                .thenReturn(new com.positivity.people.internal.service.PersonEmailService.EmailPair(
+                        "jordan@example.com", null));
 
         PersonResponse response = service.findPersonByUserId(testUserId);
 

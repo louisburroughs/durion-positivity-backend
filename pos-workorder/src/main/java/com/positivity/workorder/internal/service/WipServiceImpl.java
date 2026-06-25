@@ -113,7 +113,8 @@ public class WipServiceImpl implements WipService {
             customerContact = new CustomerReferenceService.CustomerContact(
                     wo.getCustomerId() != null ? "customer-" + wo.getCustomerId() : "", null);
         }
-        VehicleReferenceService.VehicleReference vehicleReference = vehicleReferenceService.resolve(wo.getVehicleId());
+        VehicleReferenceService.VehicleReference vehicleReference =
+                vehicleReferenceService.resolve(wo.getCustomerId(), wo.getVehicleId());
         if (vehicleReference == null) {
             vehicleReference = new VehicleReferenceService.VehicleReference(
                     wo.getVehicleId() != null ? "vehicle-" + wo.getVehicleId() : "", null);
@@ -155,9 +156,9 @@ public class WipServiceImpl implements WipService {
                         .collect(java.util.stream.Collectors.toSet()));
         Map<UUID, VehicleReferenceService.VehicleReference> vehicleById =
                 vehicleReferenceService.resolveAll(content.stream()
-                        .map(Workorder::getVehicleId)
-                        .filter(java.util.Objects::nonNull)
-                        .collect(java.util.stream.Collectors.toSet()));
+                        .filter(w -> w.getVehicleId() != null)
+                        .map(w -> new VehicleReferenceService.VehicleKey(w.getCustomerId(), w.getVehicleId()))
+                        .toList());
         final Map<UUID, CustomerReferenceService.CustomerContact> customerLookup = customerById;
         final Map<UUID, VehicleReferenceService.VehicleReference> vehicleLookup = vehicleById;
 

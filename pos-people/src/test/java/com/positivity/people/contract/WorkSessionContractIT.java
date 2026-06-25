@@ -164,8 +164,7 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
 
         String sessionId = objectMapper.readTree(stopResponse).get("sessionId").asText();
 
-        String submitPayload =
-                """
+        String submitPayload = """
 				{
 				  "billableMinutes": 450,
 				  "breakMinutes": 30,
@@ -185,8 +184,7 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("VE-120-003: submitting a non-existent session returns 404")
     void VE_120_003_submitWorkSession_nonExistentSession_returns404() throws Exception {
-        String submitPayload =
-                """
+        String submitPayload = """
 				{
 				  "billableMinutes": 60,
 				  "breakMinutes": 0,
@@ -215,8 +213,7 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
 
         String sessionId = objectMapper.readTree(startResponse).get("sessionId").asText();
 
-        String submitPayload =
-                """
+        String submitPayload = """
 				{
 				  "billableMinutes": 60,
 				  "breakMinutes": 0,
@@ -243,8 +240,7 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
 
         String sessionId = objectMapper.readTree(response).get("sessionId").asText();
 
-        String invalidPayload =
-                """
+        String invalidPayload = """
 				{
 				  "billableMinutes": -1,
 				  "breakMinutes": 0,
@@ -266,7 +262,6 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
                 .id(personId)
                 .firstName(firstName)
                 .lastName(lastName)
-                .primaryEmail(firstName.toLowerCase() + "." + lastName.toLowerCase() + "@example.com")
                 .employeeNumber("EMP-" + personId.toString().substring(0, 8))
                 .status(EmployeeStatus.ACTIVE)
                 .build());

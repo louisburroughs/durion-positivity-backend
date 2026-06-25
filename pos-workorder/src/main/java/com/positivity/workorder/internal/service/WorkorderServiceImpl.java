@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
 import com.positivity.workorder.internal.dto.OperationalContextResponse;
+import com.positivity.workorder.internal.dto.WorkorderItemCompletionResponse;
 import com.positivity.workorder.internal.dto.WorkorderStartResponse;
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.Estimate;
@@ -15,6 +16,7 @@ import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
+import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
@@ -33,6 +35,7 @@ import com.positivity.workorder.service.PromotionValidationService;
 import com.positivity.workorder.service.WorkorderService;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.Year;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -43,6 +46,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -56,6 +60,9 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     private static final String SYSTEM_ACTOR = "system";
     private static final String IDEMPOTENCY_OPERATION_WORKORDER_CREATE = "workorder.create";
+    private static final String ESTIMATE_PREFIX = "EST-";
+    private static final String WORKORDER_PREFIX = "WO-";
+    private static final int WORKORDER_NUMBER_SEQUENCE_START = 1000;
 
     private final Clock clock;
     private final WorkorderRepository workorderRepository;
@@ -100,6 +107,7 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         Workorder workorder = Workorder.builder()
                 .estimate(estimate)
+                .workorderNumber(generateWorkorderNumber(estimate))
                 .customerId(customerId)
                 .status(WorkorderStatus.DRAFT)
                 .crmPartyId(estimate != null ? estimate.getCrmPartyId() : null)
@@ -110,6 +118,39 @@ public class WorkorderServiceImpl implements WorkorderService {
                                 : new ArrayList<>())
                 .build();
         return createWorkorderInternal(workorder);
+    }
+
+    /**
+     * Generate the human workorder number. When created from an estimate, swap the
+     * estimate's prefix (EST-... -> WO-...) if that value is globally free; otherwise
+     * fall back to an independent WO-YYYY-NNNN sequence. This keeps the workorder number
+     * "matching the estimate number except the prefix" for the common 1:1 case while
+     * guaranteeing global uniqueness for estimate-less or revision cases.
+     */
+    @NonNull
+    private String generateWorkorderNumber(@Nullable Estimate estimate) {
+        if (estimate != null
+                && estimate.getEstimateNumber() != null
+                && estimate.getEstimateNumber().startsWith(ESTIMATE_PREFIX)) {
+            String swapped = WORKORDER_PREFIX + estimate.getEstimateNumber().substring(ESTIMATE_PREFIX.length());
+            if (!workorderRepository.existsByWorkorderNumber(swapped)) {
+                return swapped;
+            }
+            log.debug("Workorder number {} already taken; falling back to sequence", swapped);
+        }
+        return generateSequentialWorkorderNumber();
+    }
+
+    @NonNull
+    private String generateSequentialWorkorderNumber() {
+        String prefix = WORKORDER_PREFIX + Year.now(clock).getValue() + "-";
+        int sequence = WORKORDER_NUMBER_SEQUENCE_START;
+        String candidate;
+        do {
+            candidate = prefix + sequence;
+            sequence++;
+        } while (workorderRepository.existsByWorkorderNumber(candidate));
+        return candidate;
     }
 
     /**
@@ -429,6 +470,78 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .findById(workorderId)
                 .map(Workorder::getCompletedAt)
                 .orElse(null);
+    }
+
+    @Override
+    @Transactional
+    public WorkorderItemCompletionResponse completeServiceItem(UUID workorderId, UUID serviceLineId, String actorId) {
+        WorkorderServiceLine line = workorderServiceRepository
+                .findById(serviceLineId)
+                .orElseThrow(() -> new IllegalArgumentException("Service line not found: " + serviceLineId));
+        if (line.getWorkOrder() == null
+                || !workorderId.equals(line.getWorkOrder().getId())) {
+            throw new IllegalArgumentException(
+                    "Service line " + serviceLineId + " does not belong to workorder " + workorderId);
+        }
+        WorkorderItemStatus status = completeItemStatus(line.getStatus(), "service line", serviceLineId);
+        if (status != line.getStatus()) {
+            line.setStatus(status);
+            workorderServiceRepository.save(line);
+            log.info("Service line {} on workorder {} marked COMPLETED by {}", serviceLineId, workorderId, actorId);
+        }
+        return WorkorderItemCompletionResponse.builder()
+                .workorderId(workorderId)
+                .itemId(serviceLineId)
+                .itemType(WorkorderItemCompletionResponse.ItemType.SERVICE)
+                .status(status)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public WorkorderItemCompletionResponse completePartItem(UUID workorderId, UUID partId, String actorId) {
+        WorkorderPart part = workorderPartRepository
+                .findById(partId)
+                .orElseThrow(() -> new IllegalArgumentException("Part not found: " + partId));
+        if (!partBelongsToWorkorder(part, workorderId)) {
+            throw new IllegalArgumentException("Part " + partId + " does not belong to workorder " + workorderId);
+        }
+        WorkorderItemStatus status = completeItemStatus(part.getStatus(), "part", partId);
+        if (status != part.getStatus()) {
+            part.setStatus(status);
+            workorderPartRepository.save(part);
+            log.info("Part {} on workorder {} marked COMPLETED by {}", partId, workorderId, actorId);
+        }
+        return WorkorderItemCompletionResponse.builder()
+                .workorderId(workorderId)
+                .itemId(partId)
+                .itemType(WorkorderItemCompletionResponse.ItemType.PART)
+                .status(status)
+                .build();
+    }
+
+    /**
+     * Validate an item is completable and return COMPLETED. Idempotent when already
+     * COMPLETED; rejects CANCELLED and PENDING_APPROVAL (unapproved) items.
+     */
+    private WorkorderItemStatus completeItemStatus(@Nullable WorkorderItemStatus current, String label, UUID itemId) {
+        if (current == WorkorderItemStatus.COMPLETED) {
+            return WorkorderItemStatus.COMPLETED;
+        }
+        if (current == WorkorderItemStatus.CANCELLED || current == WorkorderItemStatus.PENDING_APPROVAL) {
+            throw new IllegalStateException("Cannot complete " + label + " " + itemId + " in status " + current);
+        }
+        return WorkorderItemStatus.COMPLETED;
+    }
+
+    private boolean partBelongsToWorkorder(WorkorderPart part, UUID workorderId) {
+        if (part.getWorkorder() != null
+                && workorderId.equals(part.getWorkorder().getId())) {
+            return true;
+        }
+        return part.getWorkOrderService() != null
+                && part.getWorkOrderService().getWorkOrder() != null
+                && workorderId.equals(part.getWorkOrderService().getWorkOrder().getId());
     }
 
     @Override
