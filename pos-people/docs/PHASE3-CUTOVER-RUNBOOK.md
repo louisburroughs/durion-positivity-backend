@@ -36,12 +36,12 @@ docker ps --format '{{.Names}}\t{{.Image}}' | grep -iE 'postgres|people'
 
 # 2. Open a psql shell in that container. Use the DB role + db name from the deploy env
 #    (SPRING_DATASOURCE_URL / POSTGRES_USER / POSTGRES_DB). Common form:
-docker exec -it <pg-container> psql -U pos_user -d positivity
+docker exec -it postgres-positivity psql -U pos_user -d pos_people_db
 #    (-it = interactive; password via PGPASSWORD env on the container, or add -W to be prompted.)
 
 # Non-interactive one-off (run a single statement / .sql file):
-docker exec -i <pg-container> psql -U pos_user -d positivity -v ON_ERROR_STOP=1 -c "SELECT current_database();"
-docker exec -i <pg-container> psql -U pos_user -d positivity -v ON_ERROR_STOP=1 < reset.sql
+docker exec -i postgres-positivity psql -U pos_user -d positivity -v ON_ERROR_STOP=1 -c "SELECT current_database();"
+docker exec -i postgres-positivity psql -U pos_user -d positivity -v ON_ERROR_STOP=1 < reset.sql
 ```
 
 If Postgres is a managed instance (RDS) rather than a container, connect with `psql "$PEOPLE_DATABASE_URL"`
@@ -64,12 +64,13 @@ WHERE table_schema = 'public' ORDER BY table_name;   -- only pos-people tables +
 ```sh
 # Containerized Postgres: dump inside the container, then copy out.
 TS=$(date -u +%Y%m%dT%H%M%SZ)
-docker exec <pg-container> pg_dump -U pos_user -d positivity --no-owner --format=custom \
+docker exec postgres-positivity pg_dump -U pos_user -d pos_people_db --no-owner --format=custom \
   -f /tmp/pos-people-preclear-$TS.dump
-docker cp <pg-container>:/tmp/pos-people-preclear-$TS.dump ./pos-people-preclear-$TS.dump
+docker cp postgres-positivity:/tmp/pos-people-preclear-$TS.dump ./pos-people-preclear-$TS.dump
 
 # Managed/RDS: pg_dump "$PEOPLE_DATABASE_URL" --no-owner -Fc -f pos-people-preclear-$TS.dump
 ```
+
 - [ ] Backup file exists and is non-empty.
 
 ---
@@ -90,7 +91,7 @@ all data, and `flyway_schema_history` in one shot, so the new `V1` runs from emp
 DB is pos-people's alone.
 
 ```sh
-docker exec -i <pg-container> psql -U pos_user -d positivity -v ON_ERROR_STOP=1 <<'SQL'
+docker exec -i postgres-positivity psql -U pos_user -d pos_people_db -v ON_ERROR_STOP=1 <<'SQL'
 DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 GRANT ALL ON SCHEMA public TO pos_user;   -- adjust to the pos-people DB role
@@ -136,6 +137,7 @@ SELECT count(*) FROM information_schema.columns
 ```
 
 App-level:
+
 - [ ] `GET /api/people/v1/people?q=<name>` returns names + email/phone (people search).
 - [ ] CRM `/app/crm/customers` shows person names + primary contact again (pos-people identity restored).
 - [ ] Login as a seeded user (e.g. `marcus.webb`) resolves their person via the username link.
@@ -150,6 +152,7 @@ pos-location is up.
 ## 7. Rollback
 
 If startup fails or verification fails:
+
 1. Scale pos-people to 0.
 2. Restore the backup:
    ```sh
@@ -179,4 +182,5 @@ DROP TABLE IF EXISTS
   flyway_schema_history
 CASCADE;
 ```
+
 Safe here because this is pos-people's own database (one Flyway history per db/service).
