@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.workorder.internal.client.CustomerValidationClient;
+import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
@@ -79,6 +80,9 @@ class WorkorderNumberGenerationTest {
 
     @Mock
     private ShopmgrOperationalContextClient shopmgrClient;
+
+    @Mock
+    private PeopleLocationClient peopleLocationClient;
 
     @InjectMocks
     private com.positivity.workorder.internal.service.WorkorderServiceImpl service;
