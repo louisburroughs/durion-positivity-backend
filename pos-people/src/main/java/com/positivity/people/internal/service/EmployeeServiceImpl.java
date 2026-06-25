@@ -257,15 +257,16 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
     }
 
-    /** Person identity: legal/preferred names, derived first/last, contact-info blob. */
+    /** Person identity: legal/preferred names, derived first/last. */
     private void applyIdentity(
             Person entity, String legalName, String preferredName, EmployeeContactInfoDto contactInfo) {
         entity.setLegalName(legalName);
         entity.setPreferredName(preferredName);
         applyStructuredName(entity, legalName);
-        entity.setContactInfoJson(contactInfo != null ? writeContactInfo(contactInfo) : null);
-        // Email + phone numbers are persisted separately as EMAIL / PHONE_WORK contact points
-        // after save (see createEmployee/updateEmployee); not stored on the Person entity.
+        // Email + phone are persisted as EMAIL / PHONE_WORK contact points after save (see
+        // createEmployee/updateEmployee); contactInfoJson is a read-only @Formula derived from
+        // those contact points, so nothing is written here. (contactInfo is consumed by the
+        // contact-point writes in the caller.)
     }
 
     /** Employment attributes on the Employee record. */
@@ -386,14 +387,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         } catch (JsonProcessingException exception) {
             log.warn("Failed to deserialize contact info JSON. Returning null. reason={}", exception.getMessage());
             return null;
-        }
-    }
-
-    private String writeContactInfo(EmployeeContactInfoDto contactInfo) {
-        try {
-            return objectMapper.writeValueAsString(contactInfo);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Unable to persist contactInfo", exception);
         }
     }
 
