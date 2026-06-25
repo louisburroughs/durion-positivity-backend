@@ -7,13 +7,22 @@ import java.util.UUID;
 @Schema(description = "Break taken within a work session")
 public class BreakDto {
 
-    @Schema(description = "Work session the break belongs to", example = "01960011-0000-7000-8000-000000000001", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Work session the break belongs to",
+            example = "01960011-0000-7000-8000-000000000001",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID sessionId;
 
-    @Schema(description = "Timestamp the break started", example = "2026-02-16T12:00:00Z", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Timestamp the break started",
+            example = "2026-02-16T12:00:00Z",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private Instant startedAt;
 
-    @Schema(description = "Timestamp the break ended", example = "2026-02-16T12:30:00Z", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp the break ended",
+            example = "2026-02-16T12:30:00Z",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant endedAt;
 
     public BreakDto() {}

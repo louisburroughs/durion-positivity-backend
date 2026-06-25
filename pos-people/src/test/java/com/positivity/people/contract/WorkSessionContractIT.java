@@ -5,8 +5,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.people.BaseContractIntegrationTest;
+import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
 import com.positivity.people.internal.repository.WorkSessionRepository;
@@ -28,6 +30,9 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
 
     @Autowired
     private PersonRepository personRepository;
+
+    @Autowired
+    private EmployeeRepository employeeRepository;
 
     private static final UUID PERSON_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private static final UUID ISOLATED_PERSON_ID = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
@@ -258,10 +263,13 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
         if (personRepository.existsById(personId)) {
             return;
         }
-        personRepository.save(Person.builder()
+        Person person = personRepository.save(Person.builder()
                 .id(personId)
                 .firstName(firstName)
                 .lastName(lastName)
+                .build());
+        employeeRepository.save(Employee.builder()
+                .personId(person.getId())
                 .employeeNumber("EMP-" + personId.toString().substring(0, 8))
                 .status(EmployeeStatus.ACTIVE)
                 .build());

@@ -8,10 +8,6 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 public interface PersonRepository extends JpaRepository<Person, UUID>, JpaSpecificationExecutor<Person> {
 
-    boolean existsByEmployeeNumberIgnoreCase(String employeeNumber);
-
-    boolean existsByEmployeeNumberIgnoreCaseAndIdNot(String employeeNumber, UUID id);
-
     List<Person> findByLegalNameIgnoreCase(String legalName);
 
     List<Person> findByLastNameIgnoreCase(String lastName);

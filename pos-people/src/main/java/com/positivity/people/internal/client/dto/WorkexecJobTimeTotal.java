@@ -19,10 +19,16 @@ public class WorkexecJobTimeTotal {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID locationId;
 
-    @Schema(description = "Local calendar date for the aggregation", example = "2026-02-16", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Local calendar date for the aggregation",
+            example = "2026-02-16",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate localDate;
 
-    @Schema(description = "Total approved job minutes for the date", example = "480", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Total approved job minutes for the date",
+            example = "480",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private Integer totalJobMinutes;
 
     public UUID getTechnicianId() {

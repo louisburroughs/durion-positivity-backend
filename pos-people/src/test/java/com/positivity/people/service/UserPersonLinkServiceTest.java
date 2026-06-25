@@ -13,6 +13,7 @@ import com.positivity.people.internal.dto.InactivePersonActiveUserResponse;
 import com.positivity.people.internal.dto.LinkUserToPersonRequest;
 import com.positivity.people.internal.dto.PersonResponse;
 import com.positivity.people.internal.dto.UserPersonLinkResponse;
+import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.UserPersonLink;
 import com.positivity.people.internal.enums.EmployeeStatus;
@@ -20,6 +21,7 @@ import com.positivity.people.internal.enums.UserLinkStatus;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.UserAlreadyLinkedException;
 import com.positivity.people.internal.exception.UserPersonLinkNotFoundException;
+import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.UserPersonLinkRepository;
 import com.positivity.people.internal.service.UserPersonLinkServiceImpl;
@@ -60,6 +62,9 @@ class UserPersonLinkServiceTest {
     @Mock
     private com.positivity.people.internal.service.PersonUsernameService usernameService;
 
+    @Mock
+    private EmployeeRepository employeeRepository;
+
     private UserPersonLinkServiceImpl service;
 
     // Fixed UUIDs for deterministic tests
@@ -74,7 +79,7 @@ class UserPersonLinkServiceTest {
     @BeforeEach
     void setUp() {
         service = new UserPersonLinkServiceImpl(
-                linkRepository, personRepository, workPhoneService, emailService, usernameService);
+                linkRepository, personRepository, workPhoneService, emailService, usernameService, employeeRepository);
 
         // Initialize fixed test UUIDs
         testPersonId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -239,8 +244,6 @@ class UserPersonLinkServiceTest {
                 .id(testPersonId)
                 .firstName("Tina")
                 .lastName("Gone")
-                .status(EmployeeStatus.TERMINATED)
-                .statusEffectiveAt(Instant.parse("2026-01-15T09:30:00Z"))
                 .build();
         UserPersonLink link = new UserPersonLink();
         link.setId(UUID.fromString("00000000-0000-0000-0000-0000000000aa"));
@@ -248,8 +251,15 @@ class UserPersonLinkServiceTest {
         link.setPerson(terminated);
         link.setStatus(UserLinkStatus.ACTIVE);
 
-        when(linkRepository.findByStatusAndPerson_StatusIn(eq(UserLinkStatus.ACTIVE), anyCollection()))
+        Employee terminatedEmployee = Employee.builder()
+                .personId(testPersonId)
+                .status(EmployeeStatus.TERMINATED)
+                .statusEffectiveAt(Instant.parse("2026-01-15T09:30:00Z"))
+                .build();
+
+        when(linkRepository.findActiveLinksForInactiveEmployees(eq(UserLinkStatus.ACTIVE), anyCollection()))
                 .thenReturn(List.of(link));
+        when(employeeRepository.findByPersonIdIn(anyCollection())).thenReturn(List.of(terminatedEmployee));
 
         List<InactivePersonActiveUserResponse> result = service.findActiveUsersForInactivePersons();
 
@@ -264,13 +274,13 @@ class UserPersonLinkServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void findActiveUsersForInactivePersons_queriesActiveLinksAndInactiveStatuses() {
-        when(linkRepository.findByStatusAndPerson_StatusIn(eq(UserLinkStatus.ACTIVE), anyCollection()))
+        when(linkRepository.findActiveLinksForInactiveEmployees(eq(UserLinkStatus.ACTIVE), anyCollection()))
                 .thenReturn(List.of());
 
         assertThat(service.findActiveUsersForInactivePersons()).isEmpty();
 
         ArgumentCaptor<Collection<EmployeeStatus>> captor = ArgumentCaptor.forClass(Collection.class);
-        verify(linkRepository).findByStatusAndPerson_StatusIn(eq(UserLinkStatus.ACTIVE), captor.capture());
+        verify(linkRepository).findActiveLinksForInactiveEmployees(eq(UserLinkStatus.ACTIVE), captor.capture());
         assertThat(captor.getValue())
                 .containsExactlyInAnyOrder(
                         EmployeeStatus.SUSPENDED, EmployeeStatus.TERMINATED, EmployeeStatus.DISABLED);

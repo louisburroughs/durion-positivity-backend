@@ -17,10 +17,7 @@ import lombok.NoArgsConstructor;
 @Schema(description = "User reference as returned by the security service")
 public class User {
 
-    @Schema(
-            description = "User identifier",
-            example = "01960011-0000-7000-8000-000000000001",
-            requiredMode = REQUIRED)
+    @Schema(description = "User identifier", example = "01960011-0000-7000-8000-000000000001", requiredMode = REQUIRED)
     private UUID id;
 
     @Schema(description = "Username", example = "jane.smith", requiredMode = NOT_REQUIRED)

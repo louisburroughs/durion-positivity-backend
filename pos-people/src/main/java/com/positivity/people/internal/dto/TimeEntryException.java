@@ -48,7 +48,10 @@ public class TimeEntryException {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private ExceptionStatus status;
 
-    @Schema(description = "Associated time entry identifier", example = "te-12345", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Associated time entry identifier",
+            example = "te-12345",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String timeEntryId;
 
     @Schema(
@@ -57,13 +60,22 @@ public class TimeEntryException {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String resolutionNotes;
 
-    @Schema(description = "Timestamp when the exception was detected", example = "2026-02-17T08:30:00Z", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp when the exception was detected",
+            example = "2026-02-17T08:30:00Z",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant detectedAt;
 
-    @Schema(description = "User who resolved the exception", example = "manager-123", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "User who resolved the exception",
+            example = "manager-123",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String resolvedBy;
 
-    @Schema(description = "Timestamp when the exception was resolved", example = "2026-02-17T09:15:00Z", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp when the exception was resolved",
+            example = "2026-02-17T09:15:00Z",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant resolvedAt;
 
     public UUID getExceptionId() {

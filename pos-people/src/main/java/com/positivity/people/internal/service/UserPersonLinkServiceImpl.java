@@ -4,6 +4,7 @@ import com.positivity.people.internal.dto.InactivePersonActiveUserResponse;
 import com.positivity.people.internal.dto.LinkUserToPersonRequest;
 import com.positivity.people.internal.dto.PersonResponse;
 import com.positivity.people.internal.dto.UserPersonLinkResponse;
+import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.UserPersonLink;
 import com.positivity.people.internal.enums.EmployeeStatus;
@@ -11,12 +12,16 @@ import com.positivity.people.internal.enums.UserLinkStatus;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.UserAlreadyLinkedException;
 import com.positivity.people.internal.exception.UserPersonLinkNotFoundException;
+import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.UserPersonLinkRepository;
 import com.positivity.people.service.UserPersonLinkService;
 import com.positivity.security.common.SecurityContextHelper;
+import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -44,17 +49,21 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
 
     private final PersonUsernameService usernameService;
 
+    private final EmployeeRepository employeeRepository;
+
     public UserPersonLinkServiceImpl(
             @NonNull UserPersonLinkRepository linkRepository,
             @NonNull PersonRepository personRepository,
             @NonNull PersonWorkPhoneService workPhoneService,
             @NonNull PersonEmailService emailService,
-            @NonNull PersonUsernameService usernameService) {
+            @NonNull PersonUsernameService usernameService,
+            @NonNull EmployeeRepository employeeRepository) {
         this.linkRepository = linkRepository;
         this.personRepository = personRepository;
         this.workPhoneService = workPhoneService;
         this.emailService = emailService;
         this.usernameService = usernameService;
+        this.employeeRepository = employeeRepository;
     }
 
     @Override
@@ -180,19 +189,33 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     @Transactional(readOnly = true)
     @NonNull
     public List<InactivePersonActiveUserResponse> findActiveUsersForInactivePersons() {
-        return linkRepository.findByStatusAndPerson_StatusIn(UserLinkStatus.ACTIVE, INACTIVE_PERSON_STATUSES).stream()
-                .map(this::toInactivePersonResponse)
+        List<UserPersonLink> links =
+                linkRepository.findActiveLinksForInactiveEmployees(UserLinkStatus.ACTIVE, INACTIVE_PERSON_STATUSES);
+        Map<UUID, Employee> employeesByPerson = employeesByPersonId(
+                links.stream().map(UserPersonLink::getPersonId).toList());
+        return links.stream()
+                .map(link -> toInactivePersonResponse(link, employeesByPerson.get(link.getPersonId())))
                 .toList();
     }
 
-    private InactivePersonActiveUserResponse toInactivePersonResponse(UserPersonLink link) {
-        Person person = link.getPerson();
+    private Map<UUID, Employee> employeesByPersonId(Collection<UUID> personIds) {
+        if (personIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Employee> result = new HashMap<>();
+        for (Employee e : employeeRepository.findByPersonIdIn(personIds)) {
+            result.put(e.getPersonId(), e);
+        }
+        return result;
+    }
+
+    private InactivePersonActiveUserResponse toInactivePersonResponse(UserPersonLink link, Employee employee) {
         return InactivePersonActiveUserResponse.builder()
                 .linkId(link.getId())
                 .userId(link.getUserId())
                 .personId(link.getPersonId())
-                .personStatus(person != null ? person.getStatus() : null)
-                .personStatusEffectiveAt(person != null ? person.getStatusEffectiveAt() : null)
+                .personStatus(employee != null ? employee.getStatus() : null)
+                .personStatusEffectiveAt(employee != null ? employee.getStatusEffectiveAt() : null)
                 .build();
     }
 

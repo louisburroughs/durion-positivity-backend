@@ -9,8 +9,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.people.internal.client.LocationReferenceClient;
+import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.PersonLocationAssignmentRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import java.util.UUID;
@@ -53,6 +55,9 @@ class StaffingAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
     private PersonRepository personRepository;
 
     @Autowired
+    private EmployeeRepository employeeRepository;
+
+    @Autowired
     private PersonLocationAssignmentRepository assignmentRepository;
 
     @MockitoBean
@@ -61,21 +66,22 @@ class StaffingAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
     @BeforeEach
     void setUpReferenceData() {
         assignmentRepository.deleteAll();
+        employeeRepository.deleteAll();
 
         UUID personId = UUID.fromString(VALID_PERSON_ID);
         personRepository
                 .findById(personId)
                 .ifPresentOrElse(
-                        existing -> {
-                            existing.setStatus(EmployeeStatus.ACTIVE);
-                            personRepository.save(existing);
-                        },
+                        existing -> personRepository.save(existing),
                         () -> personRepository.save(Person.builder()
                                 .id(personId)
                                 .firstName("Valid")
                                 .lastName("Person")
-                                .status(EmployeeStatus.ACTIVE)
                                 .build()));
+        employeeRepository.save(Employee.builder()
+                .personId(personId)
+                .status(EmployeeStatus.ACTIVE)
+                .build());
 
         when(locationReferenceClient.isLocationActive(UUID.fromString(VALID_LOCATION_ID)))
                 .thenReturn(true);
@@ -580,6 +586,9 @@ class StaffingAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
                 .id(inactivePersonId)
                 .firstName("Inactive")
                 .lastName("Person")
+                .build());
+        employeeRepository.save(Employee.builder()
+                .personId(inactivePersonId)
                 .status(EmployeeStatus.TERMINATED)
                 .build());
 

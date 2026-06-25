@@ -37,74 +37,84 @@ public class TimekeepingApprovalController {
             summary = "List employees with timekeeping entries",
             description = "Returns distinct employees who have at least one timekeeping entry.")
     @ApiResponse(responseCode = "200", description = "List of employees")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {"people:timekeeping:view"})
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:timekeeping:view"})
     @PreAuthorize("hasAuthority('people:timekeeping:view')")
     public ResponseEntity<List<ApprovalPersonDto>> listApprovalPeople() {
         return ResponseEntity.ok(timekeepingApprovalService.listApprovalPeople());
     }
 
     @GetMapping("/time-periods")
-    @Operation(
-            summary = "List time periods",
-            description = "Returns all pay periods, optionally scoped to a tenant.")
+    @Operation(summary = "List time periods", description = "Returns all pay periods, optionally scoped to a tenant.")
     @ApiResponse(responseCode = "200", description = "List of time periods")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {"people:timekeeping:view"})
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:timekeeping:view"})
     @PreAuthorize("hasAuthority('people:timekeeping:view')")
-    public ResponseEntity<List<TimePeriodDto>> listTimePeriods(
-            @RequestParam(required = false) UUID tenantId) {
+    public ResponseEntity<List<TimePeriodDto>> listTimePeriods(@RequestParam(required = false) UUID tenantId) {
         return ResponseEntity.ok(timekeepingApprovalService.listTimePeriods(tenantId));
     }
 
     @GetMapping("/timekeeping-entries")
     @Operation(
             summary = "List timekeeping entries for a person in a period",
-            description = "Returns all timekeeping entries for the given person within the given time period's date range.")
+            description =
+                    "Returns all timekeeping entries for the given person within the given time period's date range.")
     @ApiResponse(responseCode = "200", description = "List of timekeeping entries")
     @ApiResponse(responseCode = "404", description = "Time period not found")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {"people:timekeeping:view"})
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:timekeeping:view"})
     @PreAuthorize("hasAuthority('people:timekeeping:view')")
     public ResponseEntity<List<TimekeepingEntryDto>> listTimekeepingEntries(
-            @RequestParam UUID personId,
-            @RequestParam UUID timePeriodId) {
+            @RequestParam UUID personId, @RequestParam UUID timePeriodId) {
         return ResponseEntity.ok(timekeepingApprovalService.listTimekeepingEntries(personId, timePeriodId));
     }
 
     @GetMapping("/time-period-approvals")
     @Operation(
             summary = "Get approval summary for a person in a period",
-            description = "Returns the approval status counts and overall status for the given person in the given period.")
+            description =
+                    "Returns the approval status counts and overall status for the given person in the given period.")
     @ApiResponse(responseCode = "200", description = "Approval summary")
     @ApiResponse(responseCode = "404", description = "Time period not found")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {"people:timekeeping:view"})
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:timekeeping:view"})
     @PreAuthorize("hasAuthority('people:timekeeping:view')")
     public ResponseEntity<TimePeriodApprovalDto> getTimePeriodApproval(
-            @RequestParam UUID personId,
-            @RequestParam UUID timePeriodId) {
+            @RequestParam UUID personId, @RequestParam UUID timePeriodId) {
         return ResponseEntity.ok(timekeepingApprovalService.getTimePeriodApproval(personId, timePeriodId));
     }
 
     @PostMapping("/time-periods/{timePeriodId}/people/{personId}/approve")
     @Operation(
             summary = "Approve all pending timekeeping entries for a person in a period",
-            description = "Bulk-approves all PENDING_APPROVAL timekeeping entries for the given employee in the given period.")
+            description =
+                    "Bulk-approves all PENDING_APPROVAL timekeeping entries for the given employee in the given period.")
     @ApiResponse(responseCode = "200", description = "Entries approved")
     @ApiResponse(responseCode = "404", description = "Time period not found")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {"people:timekeeping:approve"})
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:timekeeping:approve"})
     @PreAuthorize("hasAuthority('people:timekeeping:approve')")
     public ResponseEntity<TimePeriodDecisionResponse> approvePeriod(
-            @PathVariable UUID timePeriodId,
-            @PathVariable UUID personId) {
+            @PathVariable UUID timePeriodId, @PathVariable UUID personId) {
         return ResponseEntity.ok(timekeepingApprovalService.approvePeriod(timePeriodId, personId));
     }
 
     @PostMapping("/time-periods/{timePeriodId}/people/{personId}/reject")
     @Operation(
             summary = "Reject all pending timekeeping entries for a person in a period",
-            description = "Bulk-rejects all PENDING_APPROVAL timekeeping entries for the given employee in the given period.")
+            description =
+                    "Bulk-rejects all PENDING_APPROVAL timekeeping entries for the given employee in the given period.")
     @ApiResponse(responseCode = "200", description = "Entries rejected")
     @ApiResponse(responseCode = "400", description = "Reason is required")
     @ApiResponse(responseCode = "404", description = "Time period not found")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {"people:timekeeping:reject"})
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:timekeeping:reject"})
     @PreAuthorize("hasAuthority('people:timekeeping:reject')")
     public ResponseEntity<TimePeriodDecisionResponse> rejectPeriod(
             @PathVariable UUID timePeriodId,

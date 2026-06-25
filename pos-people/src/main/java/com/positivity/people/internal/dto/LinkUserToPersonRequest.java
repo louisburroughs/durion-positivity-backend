@@ -14,17 +14,29 @@ import lombok.NoArgsConstructor;
 public class LinkUserToPersonRequest {
 
     @NotNull(message = "userId is required")
-    @Schema(description = "User account identifier", example = "01960011-0000-7000-8000-000000000001", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "User account identifier",
+            example = "01960011-0000-7000-8000-000000000001",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID userId;
 
     @NotNull(message = "personId is required")
-    @Schema(description = "Person identifier", example = "01960011-0000-7000-8000-000000000002", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Person identifier",
+            example = "01960011-0000-7000-8000-000000000002",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID personId;
 
-    @Schema(description = "Type of link between user and person", example = "PRIMARY", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Type of link between user and person",
+            example = "PRIMARY",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String linkType = "PRIMARY";
 
-    @Schema(description = "Optional notes describing the link", example = "Linked during onboarding", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Optional notes describing the link",
+            example = "Linked during onboarding",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String notes;
 
     public LinkUserToPersonRequest(UUID userId, UUID personId) {

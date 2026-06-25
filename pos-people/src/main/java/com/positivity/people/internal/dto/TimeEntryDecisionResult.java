@@ -5,16 +5,28 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "Outcome of an approve/reject decision for a single time entry")
 public class TimeEntryDecisionResult {
 
-    @Schema(description = "Time entry identifier", example = "01960011-0000-7000-8000-000000000001", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Time entry identifier",
+            example = "01960011-0000-7000-8000-000000000001",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private String timeEntryId;
 
-    @Schema(description = "Whether the decision was applied successfully", example = "true", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Whether the decision was applied successfully",
+            example = "true",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private boolean success;
 
-    @Schema(description = "Error code when the decision failed", example = "ENTRY_NOT_FOUND", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Error code when the decision failed",
+            example = "ENTRY_NOT_FOUND",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String errorCode;
 
-    @Schema(description = "Human-readable message describing the outcome", example = "Time entry approved", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Human-readable message describing the outcome",
+            example = "Time entry approved",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String message;
 
     public TimeEntryDecisionResult() {}

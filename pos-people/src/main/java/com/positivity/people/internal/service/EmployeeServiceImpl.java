@@ -7,6 +7,7 @@ import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
+import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
@@ -15,6 +16,7 @@ import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
+import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.service.EmployeeService;
 import com.positivity.security.common.SecurityContextHelper;
@@ -40,6 +42,8 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     private final PersonRepository personRepository;
 
+    private final EmployeeRepository employeeRepository;
+
     private final PersonWorkPhoneService workPhoneService;
 
     private final PersonEmailService emailService;
@@ -59,37 +63,30 @@ public class EmployeeServiceImpl implements EmployeeService {
                 request.getContactInfo(),
                 request.getLegalName());
 
-        Person entity = new Person();
-        applyEmployeeFields(
-                entity,
-                new EmployeeFieldSet(
-                        request.getLegalName(),
-                        request.getPreferredName(),
-                        request.getEmployeeNumber(),
-                        request.getStatus(),
-                        request.getHireDate(),
-                        request.getTerminationDate(),
-                        request.getContactInfo()));
+        Person person = new Person();
+        applyIdentity(person, request.getLegalName(), request.getPreferredName(), request.getContactInfo());
+        Person savedPerson = personRepository.save(person);
 
-        Person saved = personRepository.save(entity);
-        workPhoneService.replaceWorkPhones(saved.getId(), extractPhones(request.getContactInfo()));
-        emailService.replaceEmails(
-                saved.getId(),
-                request.getContactInfo() == null
-                        ? null
-                        : normalize(request.getContactInfo().getPrimaryEmail()),
-                request.getContactInfo() == null
-                        ? null
-                        : normalize(request.getContactInfo().getSecondaryEmail()));
-        return toEmployeeProfile(saved, warnings);
+        Employee employee = Employee.builder().personId(savedPerson.getId()).build();
+        applyEmployment(
+                employee,
+                request.getEmployeeNumber(),
+                request.getStatus(),
+                request.getHireDate(),
+                request.getTerminationDate());
+        Employee savedEmployee = employeeRepository.save(employee);
+
+        replaceContactPoints(savedPerson.getId(), request.getContactInfo());
+        return toEmployeeProfile(savedPerson, savedEmployee, warnings);
     }
 
     @Override
     @Transactional(readOnly = true)
     public @NonNull EmployeeProfileDto getEmployee(@NonNull UUID employeeId) {
-        Person entity =
+        Person person =
                 personRepository.findById(employeeId).orElseThrow(() -> new PersonNotFoundException(employeeId));
-        return toEmployeeProfile(entity, List.of());
+        Employee employee = employeeRepository.findByPersonId(employeeId).orElse(null);
+        return toEmployeeProfile(person, employee, List.of());
     }
 
     @Override
@@ -98,7 +95,7 @@ public class EmployeeServiceImpl implements EmployeeService {
             @NonNull UUID employeeId, @NonNull UpdateEmployeeRequest request) {
         validateEmployeeRequest(request.getHireDate(), request.getTerminationDate());
 
-        Person entity =
+        Person person =
                 personRepository.findById(employeeId).orElseThrow(() -> new PersonNotFoundException(employeeId));
 
         List<String> warnings = evaluateDuplicatePolicy(
@@ -108,43 +105,39 @@ public class EmployeeServiceImpl implements EmployeeService {
                 request.getContactInfo(),
                 request.getLegalName());
 
-        EmployeeStatus previousStatus = entity.getStatus();
-        applyEmployeeFields(
-                entity,
-                new EmployeeFieldSet(
-                        request.getLegalName(),
-                        request.getPreferredName(),
-                        request.getEmployeeNumber(),
-                        request.getStatus(),
-                        request.getHireDate(),
-                        request.getTerminationDate(),
-                        request.getContactInfo()));
+        applyIdentity(person, request.getLegalName(), request.getPreferredName(), request.getContactInfo());
+        Person savedPerson = personRepository.save(person);
 
+        Employee employee = employeeRepository
+                .findByPersonId(employeeId)
+                .orElseGet(() -> Employee.builder().personId(employeeId).build());
+        EmployeeStatus previousStatus = employee.getStatus();
+        applyEmployment(
+                employee,
+                request.getEmployeeNumber(),
+                request.getStatus(),
+                request.getHireDate(),
+                request.getTerminationDate());
         if (previousStatus != request.getStatus()) {
-            entity.setStatusEffectiveAt(Instant.now(clock));
+            employee.setStatusEffectiveAt(Instant.now(clock));
         }
+        Employee savedEmployee = employeeRepository.save(employee);
 
-        Person saved = personRepository.save(entity);
-        workPhoneService.replaceWorkPhones(saved.getId(), extractPhones(request.getContactInfo()));
-        emailService.replaceEmails(
-                saved.getId(),
-                request.getContactInfo() == null
-                        ? null
-                        : normalize(request.getContactInfo().getPrimaryEmail()),
-                request.getContactInfo() == null
-                        ? null
-                        : normalize(request.getContactInfo().getSecondaryEmail()));
-        return toEmployeeProfile(saved, warnings);
+        replaceContactPoints(savedPerson.getId(), request.getContactInfo());
+        return toEmployeeProfile(savedPerson, savedEmployee, warnings);
     }
 
     @Override
     @Transactional
     public @NonNull EmployeeProfileDto disableEmployee(
             @NonNull UUID employeeId, @NonNull DisableEmployeeRequestDto request) {
-        Person entity =
+        Person person =
                 personRepository.findById(employeeId).orElseThrow(() -> new PersonNotFoundException(employeeId));
+        Employee employee = employeeRepository
+                .findByPersonId(employeeId)
+                .orElseThrow(() -> new PersonNotFoundException(employeeId));
 
-        EmployeeStatus currentStatus = entity.getStatus();
+        EmployeeStatus currentStatus = employee.getStatus();
         if (currentStatus == EmployeeStatus.DISABLED || currentStatus == EmployeeStatus.TERMINATED) {
             throw new IllegalArgumentException("Employee is already DISABLED or TERMINATED");
         }
@@ -152,22 +145,31 @@ public class EmployeeServiceImpl implements EmployeeService {
             throw new IllegalArgumentException("Only ACTIVE employees can be disabled");
         }
 
-        entity.setStatus(EmployeeStatus.DISABLED);
-        entity.setStatusEffectiveAt(Instant.now(clock));
-        Person saved = personRepository.save(entity);
+        employee.setStatus(EmployeeStatus.DISABLED);
+        employee.setStatusEffectiveAt(Instant.now(clock));
+        Employee savedEmployee = employeeRepository.save(employee);
 
         String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
         try {
-            applyAssignmentPolicy(saved, request, actorId);
+            applyAssignmentPolicy(employeeId, request, actorId);
         } catch (Exception exception) {
             log.warn(
                     "Offboarding downstream action failed for employee {}. Queuing retry. Reason: {}",
                     employeeId,
                     exception.getMessage());
-            queueOffboardingRetry(saved.getId(), request, actorId, exception.getMessage());
+            queueOffboardingRetry(employeeId, request, actorId, exception.getMessage());
         }
 
-        return toEmployeeProfile(saved, List.of());
+        return toEmployeeProfile(person, savedEmployee, List.of());
+    }
+
+    /** Persist email + phone contact points from the request's contact info (replaces existing). */
+    private void replaceContactPoints(UUID personId, EmployeeContactInfoDto contactInfo) {
+        workPhoneService.replaceWorkPhones(personId, extractPhones(contactInfo));
+        emailService.replaceEmails(
+                personId,
+                contactInfo == null ? null : normalize(contactInfo.getPrimaryEmail()),
+                contactInfo == null ? null : normalize(contactInfo.getSecondaryEmail()));
     }
 
     private void validateEmployeeRequest(java.time.LocalDate hireDate, java.time.LocalDate terminationDate) {
@@ -211,9 +213,11 @@ public class EmployeeServiceImpl implements EmployeeService {
         String primaryPhone = contactInfo != null ? normalize(contactInfo.getPrimaryPhone()) : null;
         String secondaryPhone = contactInfo != null ? normalize(contactInfo.getSecondaryPhone()) : null;
 
-        boolean duplicateEmployeeNumber = employeeId == null
-                ? personRepository.existsByEmployeeNumberIgnoreCase(employeeNumber)
-                : personRepository.existsByEmployeeNumberIgnoreCaseAndIdNot(employeeNumber, employeeId);
+        boolean duplicateEmployeeNumber = employeeNumber != null
+                && (employeeId == null
+                        ? employeeRepository.existsByEmployeeNumberIgnoreCase(employeeNumber)
+                        : employeeRepository.existsByEmployeeNumberIgnoreCaseAndPersonIdNot(
+                                employeeNumber, employeeId));
 
         boolean duplicatePrimaryEmail = primaryEmail != null
                 && emailService.findPersonIdsByPrimaryEmail(primaryEmail).stream()
@@ -253,34 +257,31 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
     }
 
-    private void applyEmployeeFields(Person entity, EmployeeFieldSet fields) {
-        String legalName = fields.legalName();
-        String preferredName = fields.preferredName();
-        String employeeNumber = fields.employeeNumber();
-        EmployeeStatus status = fields.status();
-        java.time.LocalDate hireDate = fields.hireDate();
-        java.time.LocalDate terminationDate = fields.terminationDate();
-        EmployeeContactInfoDto contactInfo = fields.contactInfo();
-
+    /** Person identity: legal/preferred names, derived first/last, contact-info blob. */
+    private void applyIdentity(
+            Person entity, String legalName, String preferredName, EmployeeContactInfoDto contactInfo) {
         entity.setLegalName(legalName);
         entity.setPreferredName(preferredName);
         applyStructuredName(entity, legalName);
-        entity.setEmployeeNumber(employeeNumber);
-        entity.setStatus(status);
-        entity.setHireDate(hireDate);
-        entity.setTerminationDate(terminationDate);
-
-        if (entity.getStatusEffectiveAt() == null) {
-            entity.setStatusEffectiveAt(Instant.now(clock));
-        }
-
-        if (contactInfo != null) {
-            entity.setContactInfoJson(writeContactInfo(contactInfo));
-        } else {
-            entity.setContactInfoJson(null);
-        }
+        entity.setContactInfoJson(contactInfo != null ? writeContactInfo(contactInfo) : null);
         // Email + phone numbers are persisted separately as EMAIL / PHONE_WORK contact points
         // after save (see createEmployee/updateEmployee); not stored on the Person entity.
+    }
+
+    /** Employment attributes on the Employee record. */
+    private void applyEmployment(
+            Employee employee,
+            String employeeNumber,
+            EmployeeStatus status,
+            java.time.LocalDate hireDate,
+            java.time.LocalDate terminationDate) {
+        employee.setEmployeeNumber(employeeNumber);
+        employee.setStatus(status);
+        employee.setHireDate(hireDate);
+        employee.setTerminationDate(terminationDate);
+        if (employee.getStatusEffectiveAt() == null) {
+            employee.setStatusEffectiveAt(Instant.now(clock));
+        }
     }
 
     /** Primary + secondary phone from contact info, normalized and blank-filtered. */
@@ -310,17 +311,17 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .anyMatch(personId -> employeeId == null || !personId.equals(employeeId));
     }
 
-    private EmployeeProfileDto toEmployeeProfile(Person person, List<String> warnings) {
+    private EmployeeProfileDto toEmployeeProfile(Person person, Employee employee, List<String> warnings) {
         return EmployeeProfileDto.builder()
                 .id(person.getId())
                 .legalName(resolveLegalName(person))
                 .preferredName(person.getPreferredName())
-                .employeeNumber(person.getEmployeeNumber())
-                .status(person.getStatus())
-                .hireDate(person.getHireDate())
-                .terminationDate(person.getTerminationDate())
+                .employeeNumber(employee != null ? employee.getEmployeeNumber() : null)
+                .status(employee != null ? employee.getStatus() : null)
+                .hireDate(employee != null ? employee.getHireDate() : null)
+                .terminationDate(employee != null ? employee.getTerminationDate() : null)
                 .contactInfo(resolveContactInfo(person))
-                .statusEffectiveAt(person.getStatusEffectiveAt())
+                .statusEffectiveAt(employee != null ? employee.getStatusEffectiveAt() : null)
                 .createdAt(person.getCreatedAt())
                 .updatedAt(person.getUpdatedAt())
                 .warnings(warnings)
@@ -396,21 +397,18 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
     }
 
-    private void applyAssignmentPolicy(Person employee, DisableEmployeeRequestDto request, String actorId) {
+    private void applyAssignmentPolicy(UUID employeeId, DisableEmployeeRequestDto request, String actorId) {
         AssignmentTerminationPolicy policy = request.getAssignmentPolicy() != null
                 ? request.getAssignmentPolicy()
                 : AssignmentTerminationPolicy.IMMEDIATE;
 
         switch (policy) {
             case IMMEDIATE ->
-                log.info(
-                        "Applying IMMEDIATE assignment offboarding for employee {} by actor {}",
-                        employee.getId(),
-                        actorId);
+                log.info("Applying IMMEDIATE assignment offboarding for employee {} by actor {}", employeeId, actorId);
             case GRACE_PERIOD ->
                 log.info(
                         "Applying GRACE_PERIOD assignment offboarding for employee {} with assignmentEndDate {} by actor {}",
-                        employee.getId(),
+                        employeeId,
                         request.getAssignmentEndDate(),
                         actorId);
             default -> throw new IllegalStateException("Unsupported assignment policy");
@@ -440,15 +438,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         String normalized = value.trim();
         return normalized.isEmpty() ? null : normalized;
     }
-
-    private record EmployeeFieldSet(
-            String legalName,
-            String preferredName,
-            String employeeNumber,
-            EmployeeStatus status,
-            java.time.LocalDate hireDate,
-            java.time.LocalDate terminationDate,
-            EmployeeContactInfoDto contactInfo) {}
 
     private record DuplicateSignals(
             boolean duplicateEmployeeNumber, boolean duplicatePrimaryEmail, boolean duplicatePhone) {

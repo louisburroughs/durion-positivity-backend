@@ -7,6 +7,7 @@ import com.positivity.people.internal.dto.UpdateStaffingAssignmentRequest;
 import com.positivity.people.internal.entity.PersonLocationAssignment;
 import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.PersonLocationAssignmentRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.service.StaffingAssignmentService;
@@ -31,6 +32,8 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
     private final PersonLocationAssignmentRepository repository;
 
     private final PersonRepository personRepository;
+
+    private final EmployeeRepository employeeRepository;
 
     private final LocationReferenceClient locationReferenceClient;
 
@@ -206,11 +209,15 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
     }
 
     private void validatePersonAndLocation(@NonNull UUID personId, @NonNull UUID locationId) {
-        var person = personRepository
+        personRepository
                 .findById(personId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found: " + personId));
 
-        if (person.getStatus() != EmployeeStatus.ACTIVE) {
+        EmployeeStatus status = employeeRepository
+                .findByPersonId(personId)
+                .map(com.positivity.people.internal.entity.Employee::getStatus)
+                .orElse(null);
+        if (status != EmployeeStatus.ACTIVE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Person is not active: " + personId);
         }
 
