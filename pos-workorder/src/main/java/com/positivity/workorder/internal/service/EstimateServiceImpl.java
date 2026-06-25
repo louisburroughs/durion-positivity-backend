@@ -83,11 +83,8 @@ public class EstimateServiceImpl implements EstimateService {
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
     private static final String DEFAULT_TAX_REGION_ID_PROPERTY = "workorder.estimate.default-tax-region-id";
-    private static final String FALLBACK_LOCATION_ID_PROPERTY = "workorder.estimate.fallback-location-id";
     private static final UUID DEFAULT_TAX_REGION_ID =
             UUID.fromString(System.getProperty(DEFAULT_TAX_REGION_ID_PROPERTY, "00000000-0000-0000-0000-000000000001"));
-    private static final UUID FALLBACK_LOCATION_ID =
-            UUID.fromString(System.getProperty(FALLBACK_LOCATION_ID_PROPERTY, "00000000-0000-0000-0000-000000000001"));
 
     // Tax category constants
     private static final String TAX_CATEGORY_GOODS = "GOODS";
@@ -246,10 +243,18 @@ public class EstimateServiceImpl implements EstimateService {
 
         validateCreateEstimateRequest(request);
 
-        // Apply defaults
+        // Apply defaults. An estimate must belong to a real location — staffing, approval
+        // configuration and downstream workorder technician rosters are all keyed on it.
+        // Prefer the request's location, else the creator's primary location. Never fabricate
+        // a placeholder location: a non-existent location silently breaks every downstream
+        // consumer (e.g. the assign page finds no technicians staffed there).
         UUID locationId = request.getLocationId() != null
                 ? request.getLocationId()
-                : peopleLocationClient.resolveCurrentUserPrimaryLocation().orElse(FALLBACK_LOCATION_ID);
+                : peopleLocationClient
+                        .resolveCurrentUserPrimaryLocation()
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "locationId is required: none was provided and the current user has no primary "
+                                        + "location assignment to derive one from"));
         String currencyUomId = request.getCurrencyUomId() != null ? request.getCurrencyUomId() : DEFAULT_CURRENCY;
         UUID taxRegionId = request.getTaxRegionId() != null ? request.getTaxRegionId() : DEFAULT_TAX_REGION_ID;
 

@@ -169,6 +169,7 @@ class EstimateServiceImplTest {
         CreateEstimateRequest request = CreateEstimateRequest.builder()
                 .customerId(LOCAL_CUSTOMER_ID)
                 .vehicleId(LOCAL_VEHICLE_ID)
+                .locationId(UUID.fromString("01960003-0000-7000-8000-000000000001"))
                 .build();
         ApprovalConfiguration config =
                 ApprovalConfiguration.builder().id(CONFIG_ID).build();
@@ -181,6 +182,21 @@ class EstimateServiceImplTest {
         assertEquals(LOCAL_CUSTOMER_ID, result.getCustomerId());
         assertEquals(LOCAL_VEHICLE_ID, result.getVehicleId());
         assertEquals(EstimateStatus.DRAFT.toString(), result.getStatus());
+    }
+
+    @Test
+    void createEstimate_noLocationAndNoPrimaryLocation_throwsException() {
+        // No request location and the creator has no primary location to derive one from:
+        // reject rather than fabricating a placeholder location that has no staffing.
+        CreateEstimateRequest request = CreateEstimateRequest.builder()
+                .customerId(LOCAL_CUSTOMER_ID)
+                .vehicleId(LOCAL_VEHICLE_ID)
+                .build();
+        when(peopleLocationClient.resolveCurrentUserPrimaryLocation()).thenReturn(java.util.Optional.empty());
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> estimateService.createEstimate(request, "testuser"));
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("locationId is required"));
     }
 
     @Test
