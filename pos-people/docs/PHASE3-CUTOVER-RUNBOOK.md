@@ -28,6 +28,25 @@ pos-people has its **own database/service** with its own `flyway_schema_history`
 db/service). So the reset is self-contained: nothing else lives in this DB. The only gate is making
 sure you are pointed at the right database before dropping.
 
+### Connect to the Postgres container
+
+```sh
+# 1. Find the pos-people Postgres container (compose deploys show a 'pos-people' / 'postgres' name).
+docker ps --format '{{.Names}}\t{{.Image}}' | grep -iE 'postgres|people'
+
+# 2. Open a psql shell in that container. Use the DB role + db name from the deploy env
+#    (SPRING_DATASOURCE_URL / POSTGRES_USER / POSTGRES_DB). Common form:
+docker exec -it <pg-container> psql -U pos_user -d positivity
+#    (-it = interactive; password via PGPASSWORD env on the container, or add -W to be prompted.)
+
+# Non-interactive one-off (run a single statement / .sql file):
+docker exec -i <pg-container> psql -U pos_user -d positivity -v ON_ERROR_STOP=1 -c "SELECT current_database();"
+docker exec -i <pg-container> psql -U pos_user -d positivity -v ON_ERROR_STOP=1 < reset.sql
+```
+
+If Postgres is a managed instance (RDS) rather than a container, connect with `psql "$PEOPLE_DATABASE_URL"`
+instead of `docker exec`. Everything below is the same once you have a psql session.
+
 From the deploy's `SPRING_DATASOURCE_URL`, connect to the pos-people DB and confirm:
 
 ```sql
@@ -43,9 +62,13 @@ WHERE table_schema = 'public' ORDER BY table_name;   -- only pos-people tables +
 ## 2. Backup
 
 ```sh
-# Whole DB (simplest) or just the pos-people schema.
-pg_dump "$PEOPLE_DATABASE_URL" --schema='<pos-people-schema>' --no-owner --format=custom \
-  --file=pos-people-preclear-$(date -u +%Y%m%dT%H%M%SZ).dump
+# Containerized Postgres: dump inside the container, then copy out.
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+docker exec <pg-container> pg_dump -U pos_user -d positivity --no-owner --format=custom \
+  -f /tmp/pos-people-preclear-$TS.dump
+docker cp <pg-container>:/tmp/pos-people-preclear-$TS.dump ./pos-people-preclear-$TS.dump
+
+# Managed/RDS: pg_dump "$PEOPLE_DATABASE_URL" --no-owner -Fc -f pos-people-preclear-$TS.dump
 ```
 - [ ] Backup file exists and is non-empty.
 
@@ -66,11 +89,13 @@ Dropping `public` removes the old tables (incl. the pre-collapse `person_locatio
 all data, and `flyway_schema_history` in one shot, so the new `V1` runs from empty. Safe because the
 DB is pos-people's alone.
 
-```sql
+```sh
+docker exec -i <pg-container> psql -U pos_user -d positivity -v ON_ERROR_STOP=1 <<'SQL'
 DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 GRANT ALL ON SCHEMA public TO pos_user;   -- adjust to the pos-people DB role
 GRANT ALL ON SCHEMA public TO public;
+SQL
 ```
 
 `gen_random_uuid()` is built into Postgres 13+ (pgcore) — no extension needed. If your cluster is
