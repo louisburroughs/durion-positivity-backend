@@ -1470,8 +1470,8 @@ paths:
       tags:
       - User-Person Linking API
       summary: Get users linked to person
-      description: Retrieve all user IDs linked to a person record
-      operationId: getUserIdsByPersonId
+      description: Retrieve all usernames linked to a person record
+      operationId: getUsernamesByPersonId
       parameters:
       - name: personId
         in: path
@@ -1482,14 +1482,13 @@ paths:
           format: uuid
       responses:
         '200':
-          description: User IDs returned
+          description: Usernames returned
           content:
             application/json:
               schema:
                 type: array
                 items:
                   type: string
-                  format: uuid
         '404':
           description: Person not found
           content:
@@ -1498,27 +1497,25 @@ paths:
                 type: array
                 items:
                   type: string
-                  format: uuid
       security:
       - bearerAuth:
         - people:userLink:view
       x-required-permissions:
       - people:userLink:view
-  /v1/people/users/{userId}/person:
+  /v1/people/users/{username}/person:
     get:
       tags:
       - User-Person Linking API
-      summary: Get person by user ID
+      summary: Get person by username
       description: Retrieve the person record linked to a user
-      operationId: getPersonByUserId
+      operationId: getPersonByUsername
       parameters:
-      - name: userId
+      - name: username
         in: path
-        description: User ID
+        description: Username
         required: true
         schema:
           type: string
-          format: uuid
       responses:
         '200':
           description: Person found
@@ -2047,7 +2044,7 @@ paths:
         - people:role:revoke
       x-required-permissions:
       - people:role:revoke
-  /v1/people/users/{userId}/link:
+  /v1/people/users/{username}/link:
     delete:
       tags:
       - User-Person Linking API
@@ -2055,13 +2052,12 @@ paths:
       description: Remove the link between a user and person
       operationId: unlinkUserFromPerson
       parameters:
-      - name: userId
+      - name: username
         in: path
-        description: User ID
+        description: Username
         required: true
         schema:
           type: string
-          format: uuid
       responses:
         '204':
           description: Link deleted successfully
@@ -2643,11 +2639,10 @@ components:
       type: object
       description: Request to link a user account to a person record
       properties:
-        userId:
+        username:
           type: string
-          format: uuid
-          description: User account identifier
-          example: 01960011-0000-7000-8000-000000000001
+          description: Username of the security user account
+          example: marcus.webb
         personId:
           type: string
           format: uuid
@@ -2663,7 +2658,7 @@ components:
           example: Linked during onboarding
       required:
       - personId
-      - userId
+      - username
     UserPersonLinkResponse:
       type: object
       description: Response describing a link between a user account and a person record
@@ -2673,11 +2668,10 @@ components:
           format: uuid
           description: Link identifier
           example: 01960011-0000-7000-8000-000000000001
-        userId:
+        username:
           type: string
-          format: uuid
-          description: User account identifier
-          example: 01960011-0000-7000-8000-000000000002
+          description: Username of the security user account
+          example: marcus.webb
         personId:
           type: string
           format: uuid
@@ -2703,16 +2697,15 @@ components:
       required:
       - linkId
       - personId
-      - userId
+      - username
     CreateUserLinkRequest:
       type: object
       description: Request to link a user account to a person record
       properties:
-        userId:
+        username:
           type: string
-          format: uuid
-          description: User account identifier
-          example: 01960011-0000-7000-8000-000000000001
+          description: Username of the security user account
+          example: marcus.webb
         personId:
           type: string
           format: uuid
@@ -2720,7 +2713,7 @@ components:
           example: 01960011-0000-7000-8000-000000000002
       required:
       - personId
-      - userId
+      - username
     RejectTimePeriodRequest:
       type: object
       description: Request to reject a time period approval
@@ -3302,11 +3295,10 @@ components:
           format: uuid
           description: User-person link identifier
           example: 01960012-0000-7000-8000-000000000001
-        userId:
+        username:
           type: string
-          format: uuid
-          description: User account identifier with the still-active link
-          example: 01960010-0000-7000-8000-000000000001
+          description: Username of the security user account with the still-active link
+          example: marcus.webb
         personId:
           type: string
           format: uuid
@@ -3331,7 +3323,7 @@ components:
       - linkId
       - personId
       - personStatus
-      - userId
+      - username
     TimekeepingEntryDto:
       type: object
       description: Timekeeping entry summarizing a worked session pending or resolved for approval
