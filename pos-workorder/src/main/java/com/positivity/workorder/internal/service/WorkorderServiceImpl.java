@@ -105,10 +105,17 @@ public class WorkorderServiceImpl implements WorkorderService {
             log.debug("Fetched customerId {} from estimate {}", customerId, estimateId);
         }
 
+        // shop_id and location_id are the same concept (a shop is a location); the estimate
+        // carries it as location_id. Seed both from the estimate so the workorder has a shop
+        // from creation — the assign page resolves its technician roster from shop_id.
+        UUID estimateLocationId = estimate != null ? estimate.getLocationId() : null;
+
         Workorder workorder = Workorder.builder()
                 .estimate(estimate)
                 .workorderNumber(generateWorkorderNumber(estimate))
                 .customerId(customerId)
+                .shopId(estimateLocationId)
+                .locationId(estimateLocationId)
                 .status(WorkorderStatus.DRAFT)
                 .crmPartyId(estimate != null ? estimate.getCrmPartyId() : null)
                 .crmVehicleId(estimate != null ? estimate.getCrmVehicleId() : null)
