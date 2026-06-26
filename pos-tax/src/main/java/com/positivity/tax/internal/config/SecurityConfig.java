@@ -22,6 +22,16 @@ import org.springframework.security.web.SecurityFilterChain;
  * {@code @PreAuthorize} annotations on controllers are not evaluated and do not block these
  * internal, unauthenticated service-to-service calls.
  * </p>
+ *
+ * <p>
+ * TODO(security): Revisit pos-tax authorization before any external exposure. This blanket
+ * permitAll also leaves the actuator endpoints exposed (health, info, metrics, prometheus)
+ * without authentication, whereas the shared {@code GatewaySecurityConfig} kept
+ * {@code /actuator/prometheus} behind credentials and denied the rest. When reintroducing
+ * service-to-service authentication (e.g. internal mTLS or a signed service token per
+ * ADR-0014), also restore actuator hardening and method-level authorization on the
+ * tax endpoints.
+ * </p>
  */
 @Configuration
 @EnableWebSecurity
