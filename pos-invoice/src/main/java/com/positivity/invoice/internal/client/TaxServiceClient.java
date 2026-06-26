@@ -35,6 +35,12 @@ public class TaxServiceClient {
                 .post()
                 .uri("/calculate")
                 .contentType(MediaType.APPLICATION_JSON)
+                // pos-tax is internal-only and guards /v1/tax/calculate with
+                // @PreAuthorize('tax:calculate'). Propagate the required authority via the
+                // gateway authorities header for this service-to-service call (see
+                // GatewayAuthoritiesFilter and the pos-accounting client pattern).
+                .header("X-User", "pos-invoice")
+                .header("X-Authorities", "tax:calculate")
                 .body(Map.of("subtotal", subtotal, "partyId", partyId == null ? "" : partyId))
                 .retrieve()
                 .body(TaxCalculationResponse.class);

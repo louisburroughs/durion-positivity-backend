@@ -125,6 +125,11 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  pos-tax:
+    image: ${ECR_REGISTRY}/durion/pos-tax:${BACKEND_TAG}
+    restart: unless-stopped
+    logging: *logging
+
   pos-vehicle-inventory:
     image: ${ECR_REGISTRY}/durion/pos-vehicle-inventory:${BACKEND_TAG}
     restart: unless-stopped
