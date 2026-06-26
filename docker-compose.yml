@@ -460,8 +460,6 @@ services:
         condition: service_healthy
       pos-security-service:
         condition: service_healthy
-      pos-tax:
-        condition: service_healthy
     logging: *logging
     networks:
       - pos-network
@@ -495,9 +493,10 @@ services:
       - pos-network
     healthcheck:
       test: [ "CMD-SHELL", "wget -qO- http://localhost:8091/actuator/health || exit 1" ]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
 
   pos-location:
     build:
