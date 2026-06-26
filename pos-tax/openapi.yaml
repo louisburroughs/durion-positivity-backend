@@ -66,11 +66,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaxCalculationResponse'
-      security:
-      - bearerAuth:
-        - tax:calculate
-      x-required-permissions:
-      - tax:calculate
   /v1/tax/mode:
     get:
       tags:
@@ -85,11 +80,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ModeResponse'
-      security:
-      - bearerAuth:
-        - tax:mode:view
-      x-required-permissions:
-      - tax:mode:view
 components:
   schemas:
     TaxAddress:
@@ -410,8 +400,3 @@ components:
       required:
       - mode
       - testMode
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
