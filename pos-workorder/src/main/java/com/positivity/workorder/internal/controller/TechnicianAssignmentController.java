@@ -118,8 +118,18 @@ public class TechnicianAssignmentController {
             return ResponseEntity.notFound().build();
         } catch (IllegalStateException e) {
             log.warn("Assignment failed - invalid state: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
+            // Surface the reason (e.g. workorder status not assignable) so the client can show
+            // it instead of an empty 400.
+            return ResponseEntity.badRequest().body(errorResponse(workorderId, e.getMessage()));
         }
+    }
+
+    /** Build a minimal response carrying just the failure reason for error status codes. */
+    private TechnicianAssignmentResponse errorResponse(UUID workorderId, String message) {
+        return TechnicianAssignmentResponse.builder()
+                .workorderId(workorderId.toString())
+                .message(message)
+                .build();
     }
 
     /**
@@ -201,7 +211,7 @@ public class TechnicianAssignmentController {
             return ResponseEntity.notFound().build();
         } catch (IllegalStateException e) {
             log.warn("Reassignment failed - invalid state: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(errorResponse(workorderId, e.getMessage()));
         }
     }
 

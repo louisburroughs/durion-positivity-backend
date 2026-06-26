@@ -256,7 +256,9 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 .then()
                 .log()
                 .ifValidationFails()
-                .statusCode(400); // Bad request due to invalid state
+                .statusCode(400) // Bad request due to invalid state
+                // The reason is surfaced in the body, not an empty 400.
+                .body("message", org.hamcrest.Matchers.containsString("Cannot assign technician"));
 
         // Then: Verify no assignment was created
         List<TechnicianAssignment> assignments =
