@@ -93,6 +93,10 @@ class EstimateServiceTest {
 
         when(estimateRepository.existsByLocationIdAndEstimateNumber(any(UUID.class), anyString()))
                 .thenReturn(false);
+
+        // Requests without an explicit location resolve the creator's primary location.
+        when(peopleLocationClient.resolveCurrentUserPrimaryLocation())
+                .thenReturn(java.util.Optional.of(UUID.fromString("01960003-0000-7000-8000-000000000001")));
     }
 
     @Test
