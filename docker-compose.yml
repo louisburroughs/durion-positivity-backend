@@ -460,11 +460,41 @@ services:
         condition: service_healthy
       pos-security-service:
         condition: service_healthy
+      pos-tax:
+        condition: service_healthy
     logging: *logging
     networks:
       - pos-network
     healthcheck:
       test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Internal-only tax calculation service. Never routed through the gateway (ADR-0014);
+  # reached directly over pos-network by pos-invoice at http://pos-tax:8091/v1/tax.
+  # Stateless: no datasource configured, so Spring Boot uses an embedded H2; Flyway off.
+  pos-tax:
+    build:
+      context: ./pos-tax
+      dockerfile: Dockerfile
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      SERVER_PORT: 8091
+      MANAGEMENT_SERVER_PORT: 8091
+      SPRING_FLYWAY_ENABLED: "false"
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      pos-security-service:
+        condition: service_healthy
+    logging: *logging
+    networks:
+      - pos-network
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8091/actuator/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 20
