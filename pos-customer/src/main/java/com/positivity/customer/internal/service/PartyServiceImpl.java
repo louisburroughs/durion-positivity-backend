@@ -156,7 +156,7 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private String generateCustomerNumber() {
-        return "CUST-" + UUIDv7Generator.generate().toString().substring(0, 8).toUpperCase(Locale.US);
+        return "CUST-" + UUIDv7Generator.generate().toString().replace("-", "").substring(20).toUpperCase(Locale.US);
     }
 
     @Override
