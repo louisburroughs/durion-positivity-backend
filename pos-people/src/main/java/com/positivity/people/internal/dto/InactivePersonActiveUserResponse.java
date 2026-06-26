@@ -24,10 +24,10 @@ public class InactivePersonActiveUserResponse {
     private UUID linkId;
 
     @Schema(
-            description = "User account identifier with the still-active link",
-            example = "01960010-0000-7000-8000-000000000001",
+            description = "Username of the security user account with the still-active link",
+            example = "marcus.webb",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    private UUID userId;
+    private String username;
 
     @Schema(
             description = "Person identifier in an inactive status",

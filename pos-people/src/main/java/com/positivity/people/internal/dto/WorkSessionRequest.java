@@ -14,7 +14,10 @@ public class WorkSessionRequest {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID personId;
 
-    @Schema(description = "Actor performing the action", example = "manager.user", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Actor performing the action",
+            example = "manager.user",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String actor;
 
     public UUID getPersonId() {

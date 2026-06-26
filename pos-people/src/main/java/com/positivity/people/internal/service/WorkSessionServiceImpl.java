@@ -159,11 +159,12 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
         WorkSession session = workSessionRepository
                 .findById(sessionId)
-                .orElseThrow(() -> new WorkSessionNotFoundException("No work session found for sessionId=" + sessionId));
+                .orElseThrow(
+                        () -> new WorkSessionNotFoundException("No work session found for sessionId=" + sessionId));
 
         if (!STATUS_ENDED.equals(session.getStatus())) {
-            throw new IllegalStateException(
-                    "Only an ENDED session can be submitted; sessionId=" + sessionId + " status=" + session.getStatus());
+            throw new IllegalStateException("Only an ENDED session can be submitted; sessionId=" + sessionId
+                    + " status=" + session.getStatus());
         }
 
         session.setStatus(STATUS_SUBMITTED);

@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.service;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.client.CustomerValidationClient;
+import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
@@ -76,6 +77,7 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final IdempotencyService idempotencyService;
     private final PromotionValidationService promotionValidationService;
     private final ShopmgrOperationalContextClient shopmgrClient;
+    private final PeopleLocationClient peopleLocationClient;
 
     @Override
     public List<Workorder> getAllWorkorders() {
@@ -105,10 +107,24 @@ public class WorkorderServiceImpl implements WorkorderService {
             log.debug("Fetched customerId {} from estimate {}", customerId, estimateId);
         }
 
+        // shop_id and location_id are the same concept (a shop is a location); the estimate
+        // carries it as location_id. Seed both so the workorder has a shop from creation —
+        // the assign page resolves its technician roster from shop_id. Prefer the estimate's
+        // location; for estimate-less creation (or a legacy estimate with no location), fall
+        // back to the creating user's primary location. Leave null when neither resolves
+        // rather than inventing a sentinel shop — the assign page reports "no shop assigned"
+        // honestly instead of loading an empty roster for a nonexistent location.
+        UUID estimateLocationId = estimate != null ? estimate.getLocationId() : null;
+        UUID resolvedLocationId = estimateLocationId != null
+                ? estimateLocationId
+                : peopleLocationClient.resolveCurrentUserPrimaryLocation().orElse(null);
+
         Workorder workorder = Workorder.builder()
                 .estimate(estimate)
                 .workorderNumber(generateWorkorderNumber(estimate))
                 .customerId(customerId)
+                .shopId(resolvedLocationId)
+                .locationId(resolvedLocationId)
                 .status(WorkorderStatus.DRAFT)
                 .crmPartyId(estimate != null ? estimate.getCrmPartyId() : null)
                 .crmVehicleId(estimate != null ? estimate.getCrmVehicleId() : null)

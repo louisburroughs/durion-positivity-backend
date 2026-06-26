@@ -13,17 +13,19 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
- * Entity representing a link between a user and a person. Enforces a unique
- * constraint on
- * userId to ensure one-to-one mapping between users and persons. Allows
- * multiple links
- * per person to support scenarios like multiple authentication methods.
+ * Entity representing a link between a security user and a person. The user is identified by
+ * its {@code username} (the credential identifier owned by pos-security), enforced unique to
+ * keep a one-to-one mapping between users and persons. Resolving a person's username reads
+ * this link directly — no pos-security round-trip.
  */
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(
         name = "user_person_links",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id"}),
+        uniqueConstraints =
+                @UniqueConstraint(
+                        name = "uq_user_person_links_username",
+                        columnNames = {"username"}),
         indexes = @Index(name = "idx_user_person_links_person_id", columnList = "person_id"))
 @Getter
 @Setter
@@ -35,9 +37,9 @@ public class UserPersonLink {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
-    @Column(name = "user_id", nullable = false, unique = true)
+    @Column(name = "username", nullable = false, unique = true, length = 255)
     @NonNull
-    private UUID userId;
+    private String username;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "person_id", nullable = false)

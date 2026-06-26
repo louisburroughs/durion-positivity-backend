@@ -1,9 +1,12 @@
 package com.positivity.people.internal.repository;
 
+import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.PersonContactPoint;
 import com.positivity.people.internal.enums.ContactPointType;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
@@ -21,25 +24,24 @@ public final class PersonSpecifications {
             List<Predicate> predicates = new ArrayList<>();
 
             if (type != null) {
-                // employee_number is the discriminator for "is an employee". The person
-                // table also holds customer individuals and commercial contacts (ADR-0015
-                // person unification), so status alone is not sufficient — those records
-                // may carry an EmployeeStatus without being employees.
+                // "Is an employee" = has an Employee row (employment lives on the employee
+                // table now). The person table also holds customer individuals / commercial
+                // contacts (ADR-0015 person unification) which have no Employee row, so they
+                // are excluded by the existence subquery.
                 switch (type.toUpperCase()) {
-                    case "EMPLOYEE" -> predicates.add(cb.isNotNull(root.get("employeeNumber")));
-                    case "ACTIVE" -> {
-                        predicates.add(cb.isNotNull(root.get("employeeNumber")));
-                        predicates.add(cb.equal(root.get("status"), EmployeeStatus.ACTIVE));
-                    }
-                    case "INACTIVE" -> {
-                        predicates.add(cb.isNotNull(root.get("employeeNumber")));
-                        predicates.add(root.get("status")
-                                .in(
-                                        EmployeeStatus.ON_LEAVE,
-                                        EmployeeStatus.SUSPENDED,
-                                        EmployeeStatus.TERMINATED,
-                                        EmployeeStatus.DISABLED));
-                    }
+                    case "EMPLOYEE" -> predicates.add(root.get("id").in(employeeMatch(query, cb, null)));
+                    case "ACTIVE" ->
+                        predicates.add(root.get("id").in(employeeMatch(query, cb, List.of(EmployeeStatus.ACTIVE))));
+                    case "INACTIVE" ->
+                        predicates.add(root.get("id")
+                                .in(employeeMatch(
+                                        query,
+                                        cb,
+                                        List.of(
+                                                EmployeeStatus.ON_LEAVE,
+                                                EmployeeStatus.SUSPENDED,
+                                                EmployeeStatus.TERMINATED,
+                                                EmployeeStatus.DISABLED))));
                     default -> {
                         /* ALL or unrecognised — no predicate */
                     }
@@ -66,5 +68,20 @@ public final class PersonSpecifications {
 
             return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    /**
+     * Subquery of person ids that have an Employee row. When {@code statuses} is null the
+     * subquery matches any employment record; otherwise it restricts to the given statuses.
+     */
+    private static Subquery<UUID> employeeMatch(
+            CriteriaQuery<?> query, CriteriaBuilder cb, List<EmployeeStatus> statuses) {
+        Subquery<UUID> sub = query.subquery(UUID.class);
+        Root<Employee> e = sub.from(Employee.class);
+        sub.select(e.get("personId"));
+        if (statuses != null) {
+            sub.where(e.get("status").in(statuses));
+        }
+        return sub;
     }
 }

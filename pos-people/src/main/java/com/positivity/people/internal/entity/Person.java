@@ -1,20 +1,12 @@
 package com.positivity.people.internal.entity;
 
-import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.shared.id.UUIDv7Id;
-import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,6 +16,12 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+/**
+ * Person identity. Employment attributes (employee number, status, hire/termination dates)
+ * live on {@link Employee} ({@code employee.person_id}). Email + phone consolidated into
+ * person_contact_point (EMAIL / PHONE_WORK); username is owned by pos-security and resolved
+ * via user_person_link.
+ */
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Data
@@ -38,13 +36,6 @@ public class Person {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
-    @PrePersist
-    public void generateId() {
-        if (status != null && statusEffectiveAt == null) {
-            statusEffectiveAt = TimeSource.instant();
-        }
-    }
-
     private String firstName;
 
     private String lastName;
@@ -55,24 +46,23 @@ public class Person {
     @Column(name = "preferred_name")
     private String preferredName;
 
-    @Column(name = "employee_number")
-    private String employeeNumber;
-
-    @Enumerated(EnumType.STRING)
-    private EmployeeStatus status;
-
-    @Column(name = "hire_date")
-    private LocalDate hireDate;
-
-    @Column(name = "termination_date")
-    private LocalDate terminationDate;
-
-    @Lob
-    @Column(name = "contact_info_json")
+    // Derived, read-only: the legacy contact-info blob is no longer stored. It is computed
+    // from person_contact_point (EMAIL / PHONE_WORK, primary + secondary) so existing readers
+    // keep working without a duplicate column. JSON is assembled with portable string ops
+    // (no DB-specific JSON functions) so it works on both Postgres and the H2 test DB. Values
+    // are emails/phones (no embedded quotes), so manual JSON assembly is safe.
+    @org.hibernate.annotations.Formula(
+            "(select '{\"primaryEmail\":' || coalesce('\"' || max(case when cp.contact_type = 'EMAIL'"
+                    + " and cp.is_primary then cp.\"value\" end) || '\"', 'null')"
+                    + " || ',\"secondaryEmail\":' || coalesce('\"' || max(case when cp.contact_type = 'EMAIL'"
+                    + " and not cp.is_primary then cp.\"value\" end) || '\"', 'null')"
+                    + " || ',\"primaryPhone\":' || coalesce('\"' || max(case when cp.contact_type = 'PHONE_WORK'"
+                    + " and cp.is_primary then cp.\"value\" end) || '\"', 'null')"
+                    + " || ',\"secondaryPhone\":' || coalesce('\"' || max(case when cp.contact_type = 'PHONE_WORK'"
+                    + " and not cp.is_primary then cp.\"value\" end) || '\"', 'null')"
+                    + " || '}'"
+                    + " from person_contact_point cp where cp.person_id = id having count(*) > 0)")
     private String contactInfoJson;
-
-    @Column(name = "status_effective_at")
-    private Instant statusEffectiveAt;
 
     @CreatedDate
     @Column(name = "created_at", updatable = false)
@@ -81,15 +71,4 @@ public class Person {
     @LastModifiedDate
     @Column(name = "updated_at")
     private Instant updatedAt;
-
-    // Email + phone numbers consolidated into person_contact_point (EMAIL / PHONE_WORK);
-    // see PersonEmailService / PersonWorkPhoneService.
-    // Username is owned by pos-security and resolved via user_person_link; see PersonUsernameService.
-
-    @PreUpdate
-    public void ensureStatusEffectiveAt() {
-        if (status != null && statusEffectiveAt == null) {
-            statusEffectiveAt = TimeSource.instant();
-        }
-    }
 }

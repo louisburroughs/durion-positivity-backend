@@ -18,7 +18,10 @@ public class TimeEntryExceptionResponse {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private boolean success;
 
-    @Schema(description = "Human-readable message describing the outcome", example = "Exception created successfully", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Human-readable message describing the outcome",
+            example = "Exception created successfully",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String message;
 
     public TimeEntryExceptionResponse() {}

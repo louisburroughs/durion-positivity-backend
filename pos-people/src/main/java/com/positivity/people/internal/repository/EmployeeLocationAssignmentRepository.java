@@ -1,6 +1,6 @@
 package com.positivity.people.internal.repository;
 
-import com.positivity.people.internal.entity.PersonLocationAssignment;
+import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.enums.AssignmentStatus;
 import java.time.LocalDate;
 import java.util.List;
@@ -11,40 +11,40 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface PersonLocationAssignmentRepository extends JpaRepository<PersonLocationAssignment, UUID> {
+public interface EmployeeLocationAssignmentRepository extends JpaRepository<EmployeeLocationAssignment, UUID> {
 
-    List<PersonLocationAssignment> findByPerson_Id(@NonNull UUID personId);
+    List<EmployeeLocationAssignment> findByEmployee_PersonId(@NonNull UUID personId);
 
-    Optional<PersonLocationAssignment> findFirstByPerson_IdAndIsPrimaryTrueAndStatus(
+    Optional<EmployeeLocationAssignment> findFirstByEmployee_PersonIdAndIsPrimaryTrueAndStatus(
             @NonNull UUID personId, @NonNull AssignmentStatus status);
 
     @Query("""
-            SELECT a FROM PersonLocationAssignment a
+            SELECT a FROM EmployeeLocationAssignment a
             WHERE a.status = 'ACTIVE'
               AND a.effectiveFrom <= :date
               AND (a.effectiveTo IS NULL OR a.effectiveTo >= :date)
               AND (:locationId IS NULL OR a.locationId = :locationId)
-            ORDER BY a.locationId, a.person.id, a.effectiveFrom DESC
+            ORDER BY a.locationId, a.employee.personId, a.effectiveFrom DESC
             """)
     @NonNull
-    List<PersonLocationAssignment> findActiveByDateAndOptionalLocation(
+    List<EmployeeLocationAssignment> findActiveByDateAndOptionalLocation(
             @Param("date") @NonNull LocalDate date, @Param("locationId") UUID locationId);
 
     @Query("""
-            SELECT a FROM PersonLocationAssignment a
-            WHERE a.person.id = :personId
+            SELECT a FROM EmployeeLocationAssignment a
+            WHERE a.employee.personId = :personId
               AND a.status = 'ACTIVE'
               AND a.effectiveFrom <= :date
               AND (a.effectiveTo IS NULL OR a.effectiveTo >= :date)
             ORDER BY a.isPrimary DESC, a.effectiveFrom DESC
             """)
     @NonNull
-    List<PersonLocationAssignment> findActiveByPersonIdAndDate(
+    List<EmployeeLocationAssignment> findActiveByPersonIdAndDate(
             @Param("personId") @NonNull UUID personId, @Param("date") @NonNull LocalDate date);
 
     @Query("""
-            SELECT COUNT(a) > 0 FROM PersonLocationAssignment a
-            WHERE a.person.id = :personId
+            SELECT COUNT(a) > 0 FROM EmployeeLocationAssignment a
+            WHERE a.employee.personId = :personId
               AND a.locationId = :locationId
               AND a.role = :role
               AND a.status = 'ACTIVE'
@@ -59,9 +59,9 @@ public interface PersonLocationAssignmentRepository extends JpaRepository<Person
             @Param("effectiveTo") LocalDate effectiveTo);
 
     @Query("""
-            SELECT COUNT(a) > 0 FROM PersonLocationAssignment a
+            SELECT COUNT(a) > 0 FROM EmployeeLocationAssignment a
             WHERE a.id <> :assignmentId
-              AND a.person.id = :personId
+              AND a.employee.personId = :personId
               AND a.locationId = :locationId
               AND a.role = :role
               AND a.status = 'ACTIVE'

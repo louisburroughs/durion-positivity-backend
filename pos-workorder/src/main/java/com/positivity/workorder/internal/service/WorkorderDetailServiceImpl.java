@@ -7,9 +7,11 @@ import com.positivity.workorder.internal.dto.WorkorderServiceResponse;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
+import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.WorkorderDetailService;
 import java.math.BigDecimal;
@@ -17,6 +19,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -37,6 +40,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
     private final WorkorderRepository workorderRepository;
     private final TechnicianAssignmentRepository technicianAssignmentRepository;
     private final WorkorderLaborEntryRepository laborEntryRepository;
+    private final WorkorderPartRepository workorderPartRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -62,7 +66,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
 
         // Build part line items
         List<WorkorderPartResponse> partResponses =
-                buildPartResponses(workorder.getServices(), capabilities.isCanViewFinancials());
+                buildPartResponses(workorder, capabilities.isCanViewFinancials());
 
         // Calculate derived status fields
         boolean isStarted = isWorkorderStarted(workorder.getStatus());
@@ -72,9 +76,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
         // Build response
         WorkorderDetailResponse.WorkorderDetailResponseBuilder builder = WorkorderDetailResponse.builder()
                 .workorderId(workorder.getId())
-                .workorderNumber(generateWorkorderNumber(workorder.getId())) // Placeholder - implement
-                // sequence lookup
-                // if needed
+                .workorderNumber(workorder.getWorkorderNumber())
                 .status(workorder.getStatus())
                 .customerId(workorder.getCustomerId())
                 .customerName(lookupCustomerName(workorder.getCustomerId()))
@@ -163,41 +165,47 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                 .toList();
     }
 
-    private List<WorkorderPartResponse> buildPartResponses(
-            List<com.positivity.workorder.internal.entity.WorkorderServiceLine> services, boolean includeFinancials) {
+    private List<WorkorderPartResponse> buildPartResponses(Workorder workorder, boolean includeFinancials) {
+        // Parts attach either under a service line (work_order_service_id) or directly to the
+        // workorder as standalone parts (work_order_id, no service) — the latter is how
+        // estimate-promoted PART items are stored. Collect both so the detail screen shows every
+        // part. The standalone finder filters work_order_service_id IS NULL to avoid duplicating
+        // service-nested parts.
+        Stream<WorkorderPart> serviceNested = workorder.getServices() == null
+                ? Stream.empty()
+                : workorder.getServices().stream()
+                        .flatMap(service -> service.getParts() != null ? service.getParts().stream() : Stream.empty());
 
-        if (services == null || services.isEmpty()) {
-            return List.of();
+        Stream<WorkorderPart> standalone =
+                workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorder.getId()).stream();
+
+        return Stream.concat(serviceNested, standalone)
+                .map(part -> toPartResponse(part, includeFinancials))
+                .toList();
+    }
+
+    private WorkorderPartResponse toPartResponse(WorkorderPart part, boolean includeFinancials) {
+        WorkorderPartResponse.WorkorderPartResponseBuilder builder = WorkorderPartResponse.builder()
+                .id(part.getId())
+                .productEntityId(part.getProductEntityId())
+                .description(part.getDescription())
+                .status(part.getStatus())
+                .quantity(part.getQuantity())
+                .quantityIssued(part.getQuantityIssued())
+                .quantityConsumed(part.getQuantityConsumed())
+                .quantityReturned(part.getQuantityReturned());
+
+        if (includeFinancials) {
+            BigDecimal partCost = (part.getQuantity() != null && part.getUnitPrice() != null)
+                    ? part.getQuantity().multiply(part.getUnitPrice())
+                    : BigDecimal.ZERO;
+
+            builder.unitPrice(part.getUnitPrice())
+                    .partCost(partCost)
+                    .lineTotal(part.getLineTotal());
         }
 
-        // Collect all parts from services
-        return services.stream()
-                .flatMap(service ->
-                        service.getParts() != null ? service.getParts().stream() : java.util.stream.Stream.empty())
-                .map(part -> {
-                    WorkorderPartResponse.WorkorderPartResponseBuilder builder = WorkorderPartResponse.builder()
-                            .id(part.getId())
-                            .productEntityId(part.getProductEntityId())
-                            .description(part.getDescription())
-                            .status(part.getStatus())
-                            .quantity(part.getQuantity())
-                            .quantityIssued(part.getQuantityIssued())
-                            .quantityConsumed(part.getQuantityConsumed())
-                            .quantityReturned(part.getQuantityReturned());
-
-                    if (includeFinancials) {
-                        BigDecimal partCost = (part.getQuantity() != null && part.getUnitPrice() != null)
-                                ? part.getQuantity().multiply(part.getUnitPrice())
-                                : BigDecimal.ZERO;
-
-                        builder.unitPrice(part.getUnitPrice())
-                                .partCost(partCost)
-                                .lineTotal(part.getLineTotal());
-                    }
-
-                    return builder.build();
-                })
-                .toList();
+        return builder.build();
     }
 
     private boolean isWorkorderStarted(WorkorderStatus status) {
@@ -218,11 +226,6 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                 .map(WorkorderPartResponse::getPartCost)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private String generateWorkorderNumber(UUID workorderId) {
-        // Placeholder - implement proper sequence lookup if needed
-        return "WO-" + workorderId.toString().substring(0, 8).toUpperCase();
     }
 
     private String lookupCustomerName(UUID customerId) {

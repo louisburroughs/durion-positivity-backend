@@ -14,10 +14,16 @@ import lombok.Data;
 public class UpdateEmployeeRequest {
 
     @NotBlank(message = "legalName is required")
-    @Schema(description = "Legal name of the employee", example = "Jane Smith", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Legal name of the employee",
+            example = "Jane Smith",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private String legalName;
 
-    @Schema(description = "Preferred name of the employee", example = "Jane", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Preferred name of the employee",
+            example = "Jane",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String preferredName;
 
     @NotBlank(message = "employeeNumber is required")
@@ -25,14 +31,23 @@ public class UpdateEmployeeRequest {
     private String employeeNumber;
 
     @NotNull(message = "status is required")
-    @Schema(description = "Employment status of the employee", example = "ACTIVE", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Employment status of the employee",
+            example = "ACTIVE",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private EmployeeStatus status;
 
     @NotNull(message = "hireDate is required")
-    @Schema(description = "Date the employee was hired", example = "2026-01-15", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Date the employee was hired",
+            example = "2026-01-15",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate hireDate;
 
-    @Schema(description = "Date the employee was terminated, if applicable", example = "2026-12-31", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Date the employee was terminated, if applicable",
+            example = "2026-12-31",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private LocalDate terminationDate;
 
     @Valid

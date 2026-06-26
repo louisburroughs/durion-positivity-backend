@@ -7,10 +7,10 @@ import org.jspecify.annotations.NonNull;
 public interface UserPersonTranslationService {
 
     @NonNull
-    UUID getPersonUuidForUser(@NonNull UUID userId);
+    UUID getPersonUuidForUser(@NonNull String username);
 
     @NonNull
-    Optional<UUID> getUserIdForPerson(@NonNull UUID personUuid);
+    Optional<String> getUsernameForPerson(@NonNull UUID personUuid);
 
-    boolean isUserLinkedToPerson(@NonNull UUID userId, @NonNull UUID personUuid);
+    boolean isUserLinkedToPerson(@NonNull String username, @NonNull UUID personUuid);
 }

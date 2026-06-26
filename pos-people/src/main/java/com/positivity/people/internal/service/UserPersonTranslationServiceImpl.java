@@ -23,23 +23,23 @@ public class UserPersonTranslationServiceImpl implements UserPersonTranslationSe
 
     @Override
     @NonNull
-    public UUID getPersonUuidForUser(@NonNull UUID userId) {
+    public UUID getPersonUuidForUser(@NonNull String username) {
         return userPersonLinkRepository
-                .findByUserId(userId)
-                .map(link -> link.getPersonId())
-                .orElseThrow(() -> new EntityNotFoundException("No person link found for userId: " + userId));
+                .findByUsername(username)
+                .map(UserPersonLink::getPersonId)
+                .orElseThrow(() -> new EntityNotFoundException("No person link found for username: " + username));
     }
 
     @Override
     @NonNull
-    public Optional<UUID> getUserIdForPerson(@NonNull UUID personUuid) {
+    public Optional<String> getUsernameForPerson(@NonNull UUID personUuid) {
         return userPersonLinkRepository
                 .findByPerson_IdAndStatus(personUuid, UserLinkStatus.ACTIVE)
-                .map(UserPersonLink::getUserId);
+                .map(UserPersonLink::getUsername);
     }
 
     @Override
-    public boolean isUserLinkedToPerson(@NonNull UUID userId, @NonNull UUID personUuid) {
-        return userPersonLinkRepository.existsByUserIdAndPerson_Id(userId, personUuid);
+    public boolean isUserLinkedToPerson(@NonNull String username, @NonNull UUID personUuid) {
+        return userPersonLinkRepository.existsByUsernameAndPerson_Id(username, personUuid);
     }
 }

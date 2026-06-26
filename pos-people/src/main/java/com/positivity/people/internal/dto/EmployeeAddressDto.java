@@ -7,7 +7,10 @@ import lombok.Data;
 @Schema(description = "Postal address for an employee")
 public class EmployeeAddressDto {
 
-    @Schema(description = "First address line", example = "123 Main St", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "First address line",
+            example = "123 Main St",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String line1;
 
     @Schema(description = "Second address line", example = "Suite 200", requiredMode = Schema.RequiredMode.NOT_REQUIRED)

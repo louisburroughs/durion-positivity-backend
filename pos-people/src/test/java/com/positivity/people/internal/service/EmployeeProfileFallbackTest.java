@@ -8,9 +8,11 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
+import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
+import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -43,6 +45,9 @@ class EmployeeProfileFallbackTest {
     private PersonRepository personRepository;
 
     @Mock
+    private EmployeeRepository employeeRepository;
+
+    @Mock
     private EmployeeOffboardingRetryRepository offboardingRetryRepository;
 
     @Mock
@@ -62,6 +67,7 @@ class EmployeeProfileFallbackTest {
         return new EmployeeServiceImpl(
                 TEST_CLOCK,
                 personRepository,
+                employeeRepository,
                 workPhoneService,
                 emailService,
                 offboardingRetryRepository,
@@ -73,13 +79,20 @@ class EmployeeProfileFallbackTest {
         person.setId(PERSON_ID);
         person.setFirstName("Marcus");
         person.setLastName("Webb");
-        person.setEmployeeNumber("EMP-0001");
-        person.setStatus(EmployeeStatus.ACTIVE);
-        person.setHireDate(LocalDate.parse("2024-01-01"));
         person.setCreatedAt(Instant.parse("2024-01-01T09:30:00Z"));
         person.setUpdatedAt(Instant.parse("2024-02-01T14:05:00Z"));
         // legalName and contactInfoJson intentionally left null (People-path / seed record).
         return person;
+    }
+
+    /** Employment record carrying the employee-specific attributes that moved off Person. */
+    private Employee columnSourcedEmployee() {
+        return Employee.builder()
+                .personId(PERSON_ID)
+                .employeeNumber("EMP-0001")
+                .status(EmployeeStatus.ACTIVE)
+                .hireDate(LocalDate.parse("2024-01-01"))
+                .build();
     }
 
     @Test

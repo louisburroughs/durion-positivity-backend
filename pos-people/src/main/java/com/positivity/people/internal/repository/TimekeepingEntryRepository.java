@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 
 public interface TimekeepingEntryRepository extends JpaRepository<TimekeepingEntry, UUID> {
 
@@ -19,9 +18,7 @@ public interface TimekeepingEntryRepository extends JpaRepository<TimekeepingEnt
     List<TimekeepingEntry> findByEmployeeIdAndSessionStartTimeGreaterThanEqualAndSessionEndTimeLessThanEqual(
             UUID employeeId, Instant periodStart, Instant periodEnd);
 
-    List<TimekeepingEntry> findByEmployeeIdAndApprovalStatusAndSessionStartTimeGreaterThanEqualAndSessionEndTimeLessThanEqual(
-            UUID employeeId,
-            ApprovalStatus approvalStatus,
-            Instant periodStart,
-            Instant periodEnd);
+    List<TimekeepingEntry>
+            findByEmployeeIdAndApprovalStatusAndSessionStartTimeGreaterThanEqualAndSessionEndTimeLessThanEqual(
+                    UUID employeeId, ApprovalStatus approvalStatus, Instant periodStart, Instant periodEnd);
 }

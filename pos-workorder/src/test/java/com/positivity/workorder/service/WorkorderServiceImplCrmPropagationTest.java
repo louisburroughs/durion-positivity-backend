@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.positivity.workorder.internal.client.CustomerValidationClient;
+import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
@@ -89,6 +90,9 @@ class WorkorderServiceImplCrmPropagationTest {
 
     @Mock
     private ShopmgrOperationalContextClient shopmgrClient;
+
+    @Mock
+    private PeopleLocationClient peopleLocationClient;
 
     @InjectMocks
     private WorkorderServiceImpl workorderService;
@@ -211,6 +215,50 @@ class WorkorderServiceImplCrmPropagationTest {
         workorderService.createWorkorder(ESTIMATE_ID, CUSTOMER_ID);
 
         assertThat(workorderCaptor.getValue().getCrmContactIds()).isNotNull().isEmpty();
+    }
+
+    // =====================================================================
+    // shop_id / location_id resolution
+    // =====================================================================
+
+    @Test
+    @DisplayName("createWorkorder(estimateId, ...) — shopId and locationId come from the estimate's location")
+    void createWorkorder_withEstimateId_shopIdAndLocationIdFromEstimateLocation() {
+        UUID estimateLocation = UUID.fromString("30000000-0000-0000-0000-000000000001");
+        Estimate estimate = buildEstimateWithCrmFields(CRM_PARTY_ID, CRM_VEHICLE_ID, List.of());
+        estimate.setLocationId(estimateLocation);
+        when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.of(estimate));
+
+        ArgumentCaptor<Workorder> workorderCaptor = ArgumentCaptor.forClass(Workorder.class);
+        when(workorderRepository.save(workorderCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        workorderService.createWorkorder(ESTIMATE_ID, CUSTOMER_ID);
+
+        assertThat(workorderCaptor.getValue().getShopId()).isEqualTo(estimateLocation);
+        assertThat(workorderCaptor.getValue().getLocationId()).isEqualTo(estimateLocation);
+    }
+
+    @Test
+    @DisplayName("createWorkorder(null, ...) — estimate-less falls back to the creator's primary location")
+    void createWorkorder_nullEstimateId_shopIdFromPrimaryLocation() {
+        UUID primaryLocation = UUID.fromString("30000000-0000-0000-0000-000000000002");
+        when(peopleLocationClient.resolveCurrentUserPrimaryLocation()).thenReturn(Optional.of(primaryLocation));
+
+        Workorder result = workorderService.createWorkorder(null, CUSTOMER_ID);
+
+        assertThat(result.getShopId()).isEqualTo(primaryLocation);
+        assertThat(result.getLocationId()).isEqualTo(primaryLocation);
+    }
+
+    @Test
+    @DisplayName("createWorkorder(null, ...) — no primary location leaves shopId null (no sentinel shop)")
+    void createWorkorder_nullEstimateId_noPrimaryLocation_shopIdNull() {
+        when(peopleLocationClient.resolveCurrentUserPrimaryLocation()).thenReturn(Optional.empty());
+
+        Workorder result = workorderService.createWorkorder(null, CUSTOMER_ID);
+
+        assertThat(result.getShopId()).isNull();
+        assertThat(result.getLocationId()).isNull();
     }
 
     // =====================================================================

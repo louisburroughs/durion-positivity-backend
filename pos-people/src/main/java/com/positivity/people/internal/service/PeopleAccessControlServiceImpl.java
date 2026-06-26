@@ -92,9 +92,13 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
 
     @NonNull
     private UUID resolveUserId(@NonNull UUID personUuid) {
-        return userPersonTranslationService
-                .getUserIdForPerson(personUuid)
+        String username = userPersonTranslationService
+                .getUsernameForPerson(personUuid)
                 .orElseThrow(() -> new EntityNotFoundException("No user link found for personUuid: " + personUuid));
+        return securityServiceClient
+                .getUserByUsername(username)
+                .map(com.positivity.people.internal.client.dto.User::getId)
+                .orElseThrow(() -> new EntityNotFoundException("No security user found for username: " + username));
     }
 
     private void validateDateWindow(LocalDateTime startDate, LocalDateTime endDate) {

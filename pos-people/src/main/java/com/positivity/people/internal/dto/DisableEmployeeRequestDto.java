@@ -9,7 +9,10 @@ import lombok.Data;
 @Schema(description = "Request to disable an employee and govern handling of their staffing assignments")
 public class DisableEmployeeRequestDto {
 
-    @Schema(description = "Reason the employee is being disabled", example = "Voluntary resignation", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Reason the employee is being disabled",
+            example = "Voluntary resignation",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String disableReason;
 
     @Schema(

@@ -17,13 +17,19 @@ import lombok.NoArgsConstructor;
 @Schema(description = "User role assignment as exposed by the security service")
 public class UserRoleDto {
 
-    @Schema(description = "User identifier", example = "01960011-0000-7000-8000-000000000001", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "User identifier",
+            example = "01960011-0000-7000-8000-000000000001",
+            requiredMode = NOT_REQUIRED)
     private String userId;
 
     @Schema(description = "Stable role code", example = "TECHNICIAN", requiredMode = NOT_REQUIRED)
     private String roleCode;
 
-    @Schema(description = "Location identifier the role is scoped to", example = "01960011-0000-7000-8000-000000000010", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Location identifier the role is scoped to",
+            example = "01960011-0000-7000-8000-000000000010",
+            requiredMode = NOT_REQUIRED)
     private UUID locationId;
 
     @Schema(description = "Date the assignment becomes effective", example = "2026-01-01", requiredMode = NOT_REQUIRED)

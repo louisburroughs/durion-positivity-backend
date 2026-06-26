@@ -28,16 +28,21 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+/**
+ * Assignment of an {@link Employee} to a location for a role over a date range. References the
+ * employment record ({@code employee_id}); the person id remains derivable via the employee for
+ * API/back-compat ({@link #getPersonId()}).
+ */
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(
-        name = "person_location_assignment",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"person_id", "location_id", "role", "effective_from"}))
+        name = "employee_location_assignment",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"employee_id", "location_id", "role", "effective_from"}))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PersonLocationAssignment {
+public class EmployeeLocationAssignment {
 
     @Id
     @GeneratedValue
@@ -46,12 +51,16 @@ public class PersonLocationAssignment {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "person_id", nullable = false)
+    @JoinColumn(name = "employee_id", nullable = false)
     @NonNull
-    private Person person;
+    private Employee employee;
+
+    public UUID getEmployeeId() {
+        return employee != null ? employee.getId() : null;
+    }
 
     public UUID getPersonId() {
-        return person != null ? person.getId() : null;
+        return employee != null ? employee.getPersonId() : null;
     }
 
     @NonNull

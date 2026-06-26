@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.people.internal.client.SecurityServiceClient;
 import com.positivity.people.internal.client.dto.RoleDto;
+import com.positivity.people.internal.client.dto.User;
 import com.positivity.people.internal.client.dto.UserRoleDto;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.repository.PersonRepository;
@@ -31,10 +32,12 @@ class PeopleAccessControlServiceTest {
 
     private PeopleAccessControlService peopleAccessControlService;
 
-    // Fixed UUIDs for deterministic tests
+    // Fixed test values for deterministic tests
     private UUID testPersonId;
 
     private UUID testUserId;
+
+    private String testUsername;
 
     private UUID testLocationId;
 
@@ -46,10 +49,18 @@ class PeopleAccessControlServiceTest {
         peopleAccessControlService = new PeopleAccessControlServiceImpl(
                 userPersonTranslationService, securityServiceClient, personRepository);
 
-        // Initialize fixed test UUIDs
+        // Initialize fixed test values
         testPersonId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         testUserId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        testUsername = "some.user";
         testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+    }
+
+    private User userWithId() {
+        User user = new User();
+        user.setId(testUserId);
+        user.setUsername(testUsername);
+        return user;
     }
 
     @Test
@@ -80,14 +91,15 @@ class PeopleAccessControlServiceTest {
     @Test
     void getPersonRoleAssignments_translatesPersonAndFetchesAssignments() {
         UserRoleDto assignment = UserRoleDto.builder().roleCode("MANAGER").build();
-        when(userPersonTranslationService.getUserIdForPerson(testPersonId)).thenReturn(Optional.of(testUserId));
+        when(userPersonTranslationService.getUsernameForPerson(testPersonId)).thenReturn(Optional.of(testUsername));
+        when(securityServiceClient.getUserByUsername(testUsername)).thenReturn(Optional.of(userWithId()));
         when(securityServiceClient.getUserRoleAssignments(testUserId, true, null))
                 .thenReturn(List.of(assignment));
 
         List<UserRoleDto> result = peopleAccessControlService.getPersonRoleAssignments(testPersonId, true, null);
 
         assertEquals(1, result.size());
-        verify(userPersonTranslationService).getUserIdForPerson(testPersonId);
+        verify(userPersonTranslationService).getUsernameForPerson(testPersonId);
         verify(securityServiceClient).getUserRoleAssignments(testUserId, true, null);
     }
 
@@ -95,7 +107,8 @@ class PeopleAccessControlServiceTest {
     void assignRoleToPerson_translatesPersonAndCreatesAssignment() {
         UserRoleDto created = UserRoleDto.builder().roleCode("MANAGER").build();
 
-        when(userPersonTranslationService.getUserIdForPerson(testPersonId)).thenReturn(Optional.of(testUserId));
+        when(userPersonTranslationService.getUsernameForPerson(testPersonId)).thenReturn(Optional.of(testUsername));
+        when(securityServiceClient.getUserByUsername(testUsername)).thenReturn(Optional.of(userWithId()));
         when(securityServiceClient.assignRole(any())).thenReturn(created);
 
         UserRoleDto result = peopleAccessControlService.assignRoleToPerson(
@@ -108,7 +121,8 @@ class PeopleAccessControlServiceTest {
     @Test
     void revokeRoleFromPerson_callsSecurityClient() {
         LocalDateTime endDate = LocalDateTime.parse("2026-02-16T11:00:00");
-        when(userPersonTranslationService.getUserIdForPerson(testPersonId)).thenReturn(Optional.of(testUserId));
+        when(userPersonTranslationService.getUsernameForPerson(testPersonId)).thenReturn(Optional.of(testUsername));
+        when(securityServiceClient.getUserByUsername(testUsername)).thenReturn(Optional.of(userWithId()));
 
         peopleAccessControlService.revokeRoleFromPerson(testPersonId, "MANAGER", endDate);
 
@@ -117,7 +131,7 @@ class PeopleAccessControlServiceTest {
 
     @Test
     void personMethods_throwWhenNoUserLinkExists() {
-        when(userPersonTranslationService.getUserIdForPerson(testPersonId)).thenReturn(Optional.empty());
+        when(userPersonTranslationService.getUsernameForPerson(testPersonId)).thenReturn(Optional.empty());
 
         assertThrows(
                 EntityNotFoundException.class,

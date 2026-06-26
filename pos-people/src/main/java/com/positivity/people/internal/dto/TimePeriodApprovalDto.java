@@ -11,16 +11,28 @@ import lombok.Data;
 @Schema(description = "Aggregated approval state for a person within a time period")
 public class TimePeriodApprovalDto {
 
-    @Schema(description = "Person identifier", example = "01960011-0000-7000-8000-000000000001", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Person identifier",
+            example = "01960011-0000-7000-8000-000000000001",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID personId;
 
-    @Schema(description = "Time period identifier", example = "01960011-0000-7000-8000-000000000010", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Time period identifier",
+            example = "01960011-0000-7000-8000-000000000010",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID timePeriodId;
 
-    @Schema(description = "Total number of entries in the period", example = "10", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Total number of entries in the period",
+            example = "10",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private int totalCount;
 
-    @Schema(description = "Number of entries still pending approval", example = "3", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Number of entries still pending approval",
+            example = "3",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private int pendingCount;
 
     @Schema(description = "Number of approved entries", example = "6", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -29,6 +41,9 @@ public class TimePeriodApprovalDto {
     @Schema(description = "Number of rejected entries", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
     private int rejectedCount;
 
-    @Schema(description = "Overall approval status for the person in the period", example = "PENDING_APPROVAL", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Overall approval status for the person in the period",
+            example = "PENDING_APPROVAL",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private ApprovalStatus overallStatus;
 }
