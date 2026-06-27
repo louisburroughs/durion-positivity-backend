@@ -25,7 +25,7 @@ public class LocationServiceClient {
 
     public LocationServiceClient(
             RestClient.Builder restClientBuilder,
-            @Value("${invoice.location.base-url:http://pos-location:8084/v1/locations}") String locationBaseUrl) {
+            @Value("${invoice.location.base-url:http://pos-location:8080/v1/locations}") String locationBaseUrl) {
         this.restClient = restClientBuilder.baseUrl(locationBaseUrl).build();
     }
 
