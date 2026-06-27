@@ -181,7 +181,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setAdjustments(adjustmentTotal);
         invoice.setAdjustmentsAmount(adjustmentTotal);
 
-        BigDecimal tax = calculateTax(invoice, adjustmentTotal);
+        BigDecimal tax = calculateTax(invoice);
         invoice.setTax(tax);
 
         BigDecimal total = invoice.getSubtotal().add(tax).add(adjustmentTotal).setScale(4, RoundingMode.HALF_UP);
@@ -196,13 +196,14 @@ public class InvoiceServiceImpl implements InvoiceService {
     /**
      * Calculate tax for the invoice against its shop-location jurisdiction.
      *
-     * <p>Tax is computed on the invoice line items plus a synthetic line representing the
-     * net adjustment, so the taxable base equals {@code subtotal + adjustments} (matching the
-     * prior behaviour). When there is nothing taxable the tax service is not called.
+     * <p>Tax is computed on the invoice line items (the goods/services sold), matching the
+     * estimate flow. Invoice-level adjustments (discounts/fees) are applied to the total
+     * after tax and are not part of the taxable base. When there is nothing taxable the tax
+     * service is not called.
      */
     @NonNull
-    private BigDecimal calculateTax(@NonNull Invoice invoice, @NonNull BigDecimal adjustmentTotal) {
-        List<TaxLineItem> taxLineItems = buildTaxLineItems(invoice, adjustmentTotal);
+    private BigDecimal calculateTax(@NonNull Invoice invoice) {
+        List<TaxLineItem> taxLineItems = buildTaxLineItems(invoice);
         if (taxLineItems.isEmpty()) {
             return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
         }
@@ -220,31 +221,25 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     @NonNull
-    private List<TaxLineItem> buildTaxLineItems(@NonNull Invoice invoice, @NonNull BigDecimal adjustmentTotal) {
+    private List<TaxLineItem> buildTaxLineItems(@NonNull Invoice invoice) {
         List<TaxLineItem> taxLineItems = new ArrayList<>();
         int index = 0;
         for (InvoiceItem item : invoice.getItems()) {
+            BigDecimal quantity = safeMoney(item.getQuantity(), BigDecimal.ONE);
+            BigDecimal unitPrice = safeMoney(item.getUnitPrice(), BigDecimal.ZERO);
+            // pos-tax requires positive quantity and unit price; non-positive lines contribute
+            // no tax, so skip them rather than tripping bean validation (400) on the request.
+            if (quantity.signum() <= 0 || unitPrice.signum() <= 0) {
+                continue;
+            }
             taxLineItems.add(TaxLineItem.builder()
                     .lineItemId(String.valueOf(++index))
                     .description(item.getDescription())
-                    .quantity(safeMoney(item.getQuantity(), BigDecimal.ONE))
-                    .unitPrice(safeMoney(item.getUnitPrice(), BigDecimal.ZERO))
+                    .quantity(quantity)
+                    .unitPrice(unitPrice)
                     .taxExempt(false)
                     .build());
         }
-
-        // Represent net adjustments (discounts/fees/corrections) as a single synthetic line so
-        // the taxable base stays subtotal + adjustments.
-        if (adjustmentTotal.signum() != 0) {
-            taxLineItems.add(TaxLineItem.builder()
-                    .lineItemId(String.valueOf(++index))
-                    .description("Invoice adjustments")
-                    .quantity(BigDecimal.ONE)
-                    .unitPrice(adjustmentTotal)
-                    .taxExempt(false)
-                    .build());
-        }
-
         return taxLineItems;
     }
 

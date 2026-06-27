@@ -10,6 +10,7 @@ import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
@@ -192,6 +193,32 @@ class InvoiceServiceImplTest {
 
     @Test
     void applyAdjustment_shouldAddAdjustmentToInvoice() {
+        AdjustmentRequest request = new AdjustmentRequest();
+        request.setType(InvoiceAdjustmentType.DISCOUNT);
+        request.setAmount(BigDecimal.valueOf(10));
+        request.setReason("Customer loyalty discount");
+        request.setAuthorizedBy("manager1");
+
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+        when(invoiceRepository.save(any())).thenReturn(draftInvoice);
+
+        InvoiceDetailsResponse result = invoiceService.applyAdjustment(invoiceId, request);
+
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    void applyAdjustment_discountOnInvoiceWithLineItems_calculatesTaxFromLineItemsOnly() {
+        // Regression: a discount must not be folded into the tax request as a negative-priced
+        // line (pos-tax @Positive would reject it). Tax is computed from the positive line
+        // items; the discount is applied to the total after tax.
+        InvoiceItem item = new InvoiceItem();
+        item.setDescription("Brake pads");
+        item.setQuantity(BigDecimal.ONE);
+        item.setUnitPrice(BigDecimal.valueOf(100));
+        item.setLineTotal(BigDecimal.valueOf(100));
+        draftInvoice.addItem(item);
+
         AdjustmentRequest request = new AdjustmentRequest();
         request.setType(InvoiceAdjustmentType.DISCOUNT);
         request.setAmount(BigDecimal.valueOf(10));
