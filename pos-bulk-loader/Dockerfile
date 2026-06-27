@@ -14,6 +14,6 @@ ARG OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 ENV OTEL_EXPORTER_OTLP_ENDPOINT=$OTEL_EXPORTER_OTLP_ENDPOINT
 ENV OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 
-COPY target/pos-bulk-loader-*.jar pos-bulk-loader.jar
+COPY target/pos-bulk-loader.jar pos-bulk-loader.jar
 EXPOSE 8080
 ENTRYPOINT ["sh", "-c", "exec java -javaagent:/opt/grafana-opentelemetry-java.jar $JAVA_OPTS -jar pos-bulk-loader.jar"]

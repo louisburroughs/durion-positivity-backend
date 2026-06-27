@@ -17,6 +17,6 @@ ENV OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 # Default endpoint (otel-collector:4318) does not require authentication
 
 WORKDIR /app
-COPY target/pos-workorder-*.jar pos-workorder.jar
+COPY target/pos-workorder.jar pos-workorder.jar
 EXPOSE 8090
 ENTRYPOINT ["sh", "-c", "exec java -javaagent:/opt/grafana-opentelemetry-java.jar $JAVA_OPTS -jar pos-workorder.jar"]

@@ -16,6 +16,6 @@ ENV OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 # Optional: Set OTEL_EXPORTER_OTLP_HEADERS at runtime if your OTLP endpoint requires authentication
 # Default endpoint (otel-collector:4318) does not require authentication
 
-COPY target/pos-tax-*.jar pos-tax.jar
+COPY target/pos-tax.jar pos-tax.jar
 EXPOSE 8091
 ENTRYPOINT ["sh", "-c", "exec java -javaagent:/opt/grafana-opentelemetry-java.jar $JAVA_OPTS -jar pos-tax.jar"]
