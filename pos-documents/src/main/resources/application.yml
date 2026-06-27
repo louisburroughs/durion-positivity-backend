@@ -3,7 +3,7 @@ spring:
     name: documents
 
 server:
-  port: 0
+  port: ${SERVER_PORT:8092}
   tomcat:
     max-http-header-size: 65536
 
