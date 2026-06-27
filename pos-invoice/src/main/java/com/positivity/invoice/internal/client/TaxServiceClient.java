@@ -1,8 +1,14 @@
 package com.positivity.invoice.internal.client;
 
+import com.positivity.tax.common.dto.TaxCalculationRequest;
+import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
+import com.positivity.tax.common.dto.TaxCalculationResponse;
+import com.positivity.tax.common.dto.TaxLineItem;
+import com.positivity.tax.common.enums.TaxReferenceType;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.Map;
+import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -17,6 +23,8 @@ public class TaxServiceClient {
 
     private static final Logger log = LoggerFactory.getLogger(TaxServiceClient.class);
 
+    private static final String DEFAULT_CURRENCY = "USD";
+
     private final RestClient restClient;
 
     public TaxServiceClient(
@@ -25,11 +33,32 @@ public class TaxServiceClient {
         this.restClient = restClientBuilder.baseUrl(taxServiceBaseUrl).build();
     }
 
+    /**
+     * Calculate tax for an invoice against the shop-location jurisdiction.
+     *
+     * @param lineItems   the taxable line items
+     * @param destination the tax jurisdiction address (shop location)
+     * @param referenceId the source invoice/workorder identifier, for traceability
+     * @return the total tax amount
+     */
     @NonNull
-    public BigDecimal calculateTax(@NonNull BigDecimal subtotal, String partyId) {
+    public BigDecimal calculateTax(
+            @NonNull List<TaxLineItem> lineItems, @NonNull TaxAddress destination, @Nullable UUID referenceId) {
         if (log.isDebugEnabled()) {
-            log.debug("Calculating tax for subtotal {} and partyId(mask) {}", subtotal, maskForLog(partyId));
+            log.debug(
+                    "Calculating tax for {} line item(s) in jurisdiction {}/{}",
+                    lineItems.size(),
+                    destination.getCountryCode(),
+                    destination.getPostalCode());
         }
+
+        TaxCalculationRequest request = TaxCalculationRequest.builder()
+                .lineItems(lineItems)
+                .destinationAddress(destination)
+                .currencyCode(DEFAULT_CURRENCY)
+                .referenceId(referenceId)
+                .referenceType(TaxReferenceType.INVOICE)
+                .build();
 
         TaxCalculationResponse response = restClient
                 .post()
@@ -41,7 +70,7 @@ public class TaxServiceClient {
                 // GatewayAuthoritiesFilter and the pos-accounting client pattern).
                 .header("X-User", "pos-invoice")
                 .header("X-Authorities", "tax:calculate")
-                .body(Map.of("subtotal", subtotal, "partyId", partyId == null ? "" : partyId))
+                .body(request)
                 .retrieve()
                 .body(TaxCalculationResponse.class);
 
@@ -49,29 +78,15 @@ public class TaxServiceClient {
             throw new IllegalStateException("Tax service returned a null response for tax calculation");
         }
 
-        BigDecimal taxAmount = response.getTaxAmount();
-        return safeMoney(taxAmount, BigDecimal.ZERO);
+        return safeMoney(response.getTotalTax(), BigDecimal.ZERO);
     }
 
     @NonNull
     private BigDecimal safeMoney(@Nullable BigDecimal value, @NonNull BigDecimal fallback) {
         if (value == null) {
-            log.warn("Tax service returned null taxAmount, using fallback value: {}", fallback);
+            log.warn("Tax service returned null totalTax, using fallback value: {}", fallback);
             return fallback.setScale(4, RoundingMode.HALF_UP);
         }
         return value.setScale(4, RoundingMode.HALF_UP);
-    }
-
-    private String maskForLog(Object value) {
-        if (value == null) {
-            return "null";
-        }
-        String sanitized =
-                value.toString().replace('\r', '_').replace('\n', '_').replace('\t', '_');
-        int length = sanitized.length();
-        if (length <= 4) {
-            return "****";
-        }
-        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 }

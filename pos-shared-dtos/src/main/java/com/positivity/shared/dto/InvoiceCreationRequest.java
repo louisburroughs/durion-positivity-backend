@@ -38,6 +38,12 @@ public class InvoiceCreationRequest {
     private UUID approvalId;
 
     @Schema(
+            description = "Shop location where the sale is made; used to resolve the tax jurisdiction address.",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private UUID locationId;
+
+    @Schema(
             description = "Idempotency key to prevent duplicate invoice creation.",
             example = "inv-create-wo-1234",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)

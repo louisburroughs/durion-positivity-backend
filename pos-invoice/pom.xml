@@ -63,6 +63,12 @@
                 </exclusion>
             </exclusions>
         </dependency>
+        <!-- pos-tax-common for the canonical TaxCalculationRequest/Response contract -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-tax-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- JSpecify for null safety -->
         <dependency>
             <groupId>org.jspecify</groupId>
