@@ -68,7 +68,6 @@ class WorkorderDetailServiceImplTest {
 
         assertThat(response.getWorkorderId()).isEqualTo(workorderId);
         assertThat(response.getAssignedTechnicianId()).isNull();
-        assertThat(response.getAssignedTechnicianName()).isNull();
         assertThat(response.getCapabilities().isCanViewFinancials()).isFalse();
     }
 

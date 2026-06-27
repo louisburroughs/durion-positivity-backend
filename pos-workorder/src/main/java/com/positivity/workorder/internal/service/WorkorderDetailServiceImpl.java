@@ -93,9 +93,9 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                 .isInProgress(isInProgress)
                 .isCompleted(isCompleted)
                 .startedAt(null) // Will be populated from state transitions if available
+                // The technician's display name lives in the People domain; the workorder only
+                // stores the id. Callers resolve the name by id rather than denormalizing it here.
                 .assignedTechnicianId(currentAssignment != null ? currentAssignment.getTechnicianId() : null)
-                .assignedTechnicianName(
-                        currentAssignment != null ? "Technician-" + currentAssignment.getTechnicianId() : null)
                 .services(serviceResponses)
                 .parts(partResponses)
                 .capabilities(capabilities);
