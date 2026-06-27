@@ -50,7 +50,9 @@ springdoc:
 pos:
   tax:
     test-mode:
-      enabled: ${TAX_TEST_MODE:false}
+      # Default to the built-in test calculator until a real external tax service is wired.
+      # Set TAX_TEST_MODE=false (and configure external-service.base-url) to route externally.
+      enabled: ${TAX_TEST_MODE:true}
       default-rates:
         STATE: 0.0725 # 7.25% state tax
         COUNTY: 0.01 # 1% county tax
