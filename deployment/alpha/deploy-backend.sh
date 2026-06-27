@@ -81,6 +81,7 @@ BACKEND_SERVICES=(
   pos-price
   pos-security-service
   pos-shop-manager
+  pos-tax
   pos-vehicle-inventory
   pos-workorder
 )
