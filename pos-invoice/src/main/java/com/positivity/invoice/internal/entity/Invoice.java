@@ -51,6 +51,9 @@ public class Invoice {
     @Column(name = "approval_id", columnDefinition = "UUID")
     private UUID approvalId;
 
+    @Column(name = "location_id", columnDefinition = "UUID")
+    private UUID locationId;
+
     @Column(name = "customer_id", length = 64)
     private String partyId;
 

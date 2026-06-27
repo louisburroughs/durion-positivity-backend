@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.positivity.invoice.internal.client.LocationServiceClient;
 import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
@@ -17,6 +18,7 @@ import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
+import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -46,17 +48,32 @@ class InvoiceServiceImplTest {
     @Mock
     private TaxServiceClient taxServiceClient;
 
+    @Mock
+    private LocationServiceClient locationServiceClient;
+
     @InjectMocks
     private InvoiceServiceImpl invoiceService;
 
     private Invoice draftInvoice;
     private UUID invoiceId;
     private UUID workorderId;
+    private UUID locationId;
+
+    private static TaxAddress sampleTaxAddress() {
+        return TaxAddress.builder()
+                .countryCode("US")
+                .regionCode("NC")
+                .city("Charlotte")
+                .postalCode("28202")
+                .line1("100 Trade Street")
+                .build();
+    }
 
     @BeforeEach
     void setUp() {
         invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        locationId = UUID.fromString("01960003-0000-7000-8000-000000000001");
 
         draftInvoice = new Invoice();
         draftInvoice.setId(invoiceId);
@@ -66,6 +83,7 @@ class InvoiceServiceImplTest {
         draftInvoice.setAdjustmentsAmount(BigDecimal.ZERO);
         draftInvoice.setTax(BigDecimal.ZERO);
         draftInvoice.setTotal(BigDecimal.valueOf(100));
+        draftInvoice.setLocationId(locationId);
     }
 
     // ---- getInvoice ----
@@ -95,7 +113,6 @@ class InvoiceServiceImplTest {
         request.setWorkorderId(workorderId);
 
         when(invoiceRepository.findByWorkorderId(workorderId)).thenReturn(Optional.empty());
-        when(taxServiceClient.calculateTax(any(), any())).thenReturn(BigDecimal.ZERO);
         when(invoiceRepository.save(any())).thenReturn(draftInvoice);
 
         InvoiceGenerationResponse response = invoiceService.createInvoice(request);
@@ -135,11 +152,13 @@ class InvoiceServiceImplTest {
 
         InvoiceCreationRequest request = InvoiceCreationRequest.builder()
                 .workorderId(workorderId)
+                .locationId(locationId)
                 .lineItems(List.of(lineItem))
                 .build();
 
         when(invoiceRepository.findByWorkorderId(workorderId)).thenReturn(Optional.empty());
-        when(taxServiceClient.calculateTax(any(), any())).thenReturn(BigDecimal.valueOf(5));
+        when(locationServiceClient.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
+        when(taxServiceClient.calculateTax(any(), any(), any())).thenReturn(BigDecimal.valueOf(5));
         when(invoiceRepository.save(any())).thenReturn(draftInvoice);
 
         InvoiceGenerationResponse response = invoiceService.createInvoice(request);
@@ -180,7 +199,8 @@ class InvoiceServiceImplTest {
         request.setAuthorizedBy("manager1");
 
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
-        when(taxServiceClient.calculateTax(any(), any())).thenReturn(BigDecimal.valueOf(8));
+        when(locationServiceClient.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
+        when(taxServiceClient.calculateTax(any(), any(), any())).thenReturn(BigDecimal.valueOf(8));
         when(invoiceRepository.save(any())).thenReturn(draftInvoice);
 
         InvoiceDetailsResponse result = invoiceService.applyAdjustment(invoiceId, request);

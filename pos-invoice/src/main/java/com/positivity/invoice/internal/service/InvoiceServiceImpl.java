@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.client.LocationServiceClient;
 import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
@@ -18,6 +19,8 @@ import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
+import com.positivity.tax.common.dto.TaxLineItem;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -39,12 +42,17 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
     private final TaxServiceClient taxServiceClient;
+    private final LocationServiceClient locationServiceClient;
 
     public InvoiceServiceImpl(
-            @NonNull InvoiceRepository invoiceRepository, @NonNull TaxServiceClient taxServiceClient, Clock clock) {
+            @NonNull InvoiceRepository invoiceRepository,
+            @NonNull TaxServiceClient taxServiceClient,
+            @NonNull LocationServiceClient locationServiceClient,
+            Clock clock) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.taxServiceClient = taxServiceClient;
+        this.locationServiceClient = locationServiceClient;
     }
 
     @Override
@@ -112,6 +120,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setWorkorderId(request.getWorkorderId());
         invoice.setEstimateId(request.getEstimateId());
         invoice.setApprovalId(request.getApprovalId());
+        invoice.setLocationId(request.getLocationId());
         invoice.setStatus(InvoiceStatus.DRAFT);
         invoice.setAdjustments(BigDecimal.ZERO);
         invoice.setAdjustmentsAmount(BigDecimal.ZERO);
@@ -172,14 +181,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setAdjustments(adjustmentTotal);
         invoice.setAdjustmentsAmount(adjustmentTotal);
 
-        BigDecimal taxableSubtotal = invoice.getSubtotal().add(adjustmentTotal);
-        if (taxableSubtotal.compareTo(BigDecimal.ZERO) < 0) {
-            taxableSubtotal = BigDecimal.ZERO;
-        }
-
-        BigDecimal tax = taxServiceClient
-                .calculateTax(taxableSubtotal, invoice.getPartyId())
-                .setScale(4, RoundingMode.HALF_UP);
+        BigDecimal tax = calculateTax(invoice, adjustmentTotal);
         invoice.setTax(tax);
 
         BigDecimal total = invoice.getSubtotal().add(tax).add(adjustmentTotal).setScale(4, RoundingMode.HALF_UP);
@@ -189,6 +191,61 @@ public class InvoiceServiceImpl implements InvoiceService {
                     "invoice total cannot be negative; adjustments would require a credit memo");
         }
         invoice.setTotal(total);
+    }
+
+    /**
+     * Calculate tax for the invoice against its shop-location jurisdiction.
+     *
+     * <p>Tax is computed on the invoice line items plus a synthetic line representing the
+     * net adjustment, so the taxable base equals {@code subtotal + adjustments} (matching the
+     * prior behaviour). When there is nothing taxable the tax service is not called.
+     */
+    @NonNull
+    private BigDecimal calculateTax(@NonNull Invoice invoice, @NonNull BigDecimal adjustmentTotal) {
+        List<TaxLineItem> taxLineItems = buildTaxLineItems(invoice, adjustmentTotal);
+        if (taxLineItems.isEmpty()) {
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        }
+
+        UUID locationId = invoice.getLocationId();
+        if (locationId == null) {
+            throw new IllegalStateException(
+                    "invoice has taxable line items but no locationId to resolve the tax jurisdiction");
+        }
+
+        TaxAddress destination = locationServiceClient.resolveTaxAddress(locationId);
+        return taxServiceClient
+                .calculateTax(taxLineItems, destination, invoice.getWorkorderId())
+                .setScale(4, RoundingMode.HALF_UP);
+    }
+
+    @NonNull
+    private List<TaxLineItem> buildTaxLineItems(@NonNull Invoice invoice, @NonNull BigDecimal adjustmentTotal) {
+        List<TaxLineItem> taxLineItems = new ArrayList<>();
+        int index = 0;
+        for (InvoiceItem item : invoice.getItems()) {
+            taxLineItems.add(TaxLineItem.builder()
+                    .lineItemId(String.valueOf(++index))
+                    .description(item.getDescription())
+                    .quantity(safeMoney(item.getQuantity(), BigDecimal.ONE))
+                    .unitPrice(safeMoney(item.getUnitPrice(), BigDecimal.ZERO))
+                    .taxExempt(false)
+                    .build());
+        }
+
+        // Represent net adjustments (discounts/fees/corrections) as a single synthetic line so
+        // the taxable base stays subtotal + adjustments.
+        if (adjustmentTotal.signum() != 0) {
+            taxLineItems.add(TaxLineItem.builder()
+                    .lineItemId(String.valueOf(++index))
+                    .description("Invoice adjustments")
+                    .quantity(BigDecimal.ONE)
+                    .unitPrice(adjustmentTotal)
+                    .taxExempt(false)
+                    .build());
+        }
+
+        return taxLineItems;
     }
 
     @NonNull

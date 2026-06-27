@@ -612,6 +612,7 @@ components:
           example: 01960003-0000-7000-8000-000000000002
         purchaseOrderRequired:
           type: boolean
+          default: false
           description: Whether a purchase order is required before invoicing
           example: true
         paymentTermsCode:
@@ -682,6 +683,11 @@ components:
           format: uuid
           description: Approval identifier used for billing authorization.
           example: 550e8400-e29b-41d4-a716-446655440002
+        locationId:
+          type: string
+          format: uuid
+          description: Shop location where the sale is made; used to resolve the tax jurisdiction address.
+          example: 01960003-0000-7000-8000-000000000001
         idempotencyKey:
           type: string
           description: Idempotency key to prevent duplicate invoice creation.
@@ -761,6 +767,14 @@ components:
           format: date-time
           description: Creation timestamp (UTC).
           example: 2026-02-27 12:00:00+00:00
+      required:
+      - createdAt
+      - invoiceId
+      - status
+      - subtotal
+      - taxAmount
+      - totalAmount
+      - workorderId
     RevertRequest:
       type: object
       description: Request payload for reverting a finalized invoice back to DRAFT
