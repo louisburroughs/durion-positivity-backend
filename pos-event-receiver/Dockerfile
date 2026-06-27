@@ -16,6 +16,6 @@ ENV OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 # Optional: Set OTEL_EXPORTER_OTLP_HEADERS at runtime if your OTLP endpoint requires authentication
 # Default endpoint (otel-collector:4318) does not require authentication
 
-COPY target/pos-event-receiver-*.jar pos-event-receiver.jar
+COPY target/pos-event-receiver.jar pos-event-receiver.jar
 EXPOSE 9002
 ENTRYPOINT ["sh", "-c", "exec java -javaagent:/opt/grafana-opentelemetry-java.jar $JAVA_OPTS -jar pos-event-receiver.jar"]

@@ -13,6 +13,7 @@
     <artifactId>pos-tax</artifactId>
     <name>POS Tax Service</name>
     <description>Tax calculation service with external API passthrough and test mode support</description>
+    <packaging>jar</packaging>
 
     <dependencies>
         <!-- Spring Boot Starters -->
@@ -149,6 +150,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
+                    <skip>false</skip>
                     <excludes>
                         <exclude>
                             <groupId>org.projectlombok</groupId>
@@ -158,7 +160,6 @@
                 </configuration>
                 <executions>
                     <execution>
-                        <id>repackage</id>
                         <goals>
                             <goal>repackage</goal>
                         </goals>

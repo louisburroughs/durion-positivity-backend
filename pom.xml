@@ -354,6 +354,11 @@
 	</properties>
 
 	<build>
+		<!-- Stable, version-independent artifact name so each module emits e.g. pos-tax.jar.
+		     Keeps target/ deterministic and lets Dockerfiles COPY an exact filename, immune to
+		     leftover versioned jars from prior builds. finalName affects only the target/ file
+		     name, not the installed artifact coordinates, so inter-module resolution is unchanged. -->
+		<finalName>${project.artifactId}</finalName>
 		<pluginManagement>
 			<plugins>
 				<plugin>
