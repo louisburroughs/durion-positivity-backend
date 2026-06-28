@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.entity.Employee;
@@ -28,15 +27,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * Unit tests for {@link EmployeeServiceImpl#getEmployee} name/contact fallback.
- *
- * Persons created via the People path (and seed data) populate the typed
- * {@code firstName}/{@code lastName} and contact columns, but not the
- * employee-specific {@code legalName}/{@code contactInfoJson}. The profile must
- * still surface a name and contact for those records.
+ * Unit tests for {@link EmployeeServiceImpl#getEmployee} / create mapping under the unified name
+ * model: the structured {@code firstName}/{@code lastName} columns are authoritative, and contact
+ * is read from person_contact_point (EMAIL / PHONE_WORK). There is no {@code legalName} or
+ * {@code contactInfoJson} fallback any longer.
  */
 @ExtendWith(MockitoExtension.class)
-class EmployeeProfileFallbackTest {
+class EmployeeProfileMappingTest {
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
     private static final UUID PERSON_ID = UUID.fromString("01960011-0000-7000-8000-000000000001");
@@ -70,23 +67,21 @@ class EmployeeProfileFallbackTest {
                 employeeRepository,
                 workPhoneService,
                 emailService,
-                offboardingRetryRepository,
-                new ObjectMapper());
+                offboardingRetryRepository);
     }
 
-    private Person columnSourcedPerson() {
+    private Person person() {
         Person person = new Person();
         person.setId(PERSON_ID);
         person.setFirstName("Marcus");
         person.setLastName("Webb");
         person.setCreatedAt(Instant.parse("2024-01-01T09:30:00Z"));
         person.setUpdatedAt(Instant.parse("2024-02-01T14:05:00Z"));
-        // legalName and contactInfoJson intentionally left null (People-path / seed record).
         return person;
     }
 
-    /** Employment record carrying the employee-specific attributes that moved off Person. */
-    private Employee columnSourcedEmployee() {
+    /** Employment record carrying the employee-specific attributes that live on Employee. */
+    private Employee employee() {
         return Employee.builder()
                 .personId(PERSON_ID)
                 .employeeNumber("EMP-0001")
@@ -97,7 +92,7 @@ class EmployeeProfileFallbackTest {
 
     @Test
     void getEmployee_mapsCreatedAndUpdatedTimestamps() {
-        when(personRepository.findById(PERSON_ID)).thenReturn(Optional.of(columnSourcedPerson()));
+        when(personRepository.findById(PERSON_ID)).thenReturn(Optional.of(person()));
 
         EmployeeProfileDto profile = service().getEmployee(PERSON_ID);
 
@@ -106,17 +101,18 @@ class EmployeeProfileFallbackTest {
     }
 
     @Test
-    void getEmployee_fallsBackToFirstLastNameWhenLegalNameMissing() {
-        when(personRepository.findById(PERSON_ID)).thenReturn(Optional.of(columnSourcedPerson()));
+    void getEmployee_mapsFirstAndLastName() {
+        when(personRepository.findById(PERSON_ID)).thenReturn(Optional.of(person()));
 
         EmployeeProfileDto profile = service().getEmployee(PERSON_ID);
 
-        assertThat(profile.getLegalName()).isEqualTo("Marcus Webb");
+        assertThat(profile.getFirstName()).isEqualTo("Marcus");
+        assertThat(profile.getLastName()).isEqualTo("Webb");
     }
 
     @Test
-    void getEmployee_fallsBackToContactColumnsWhenJsonMissing() {
-        when(personRepository.findById(PERSON_ID)).thenReturn(Optional.of(columnSourcedPerson()));
+    void getEmployee_mapsContactFromContactPoints() {
+        when(personRepository.findById(PERSON_ID)).thenReturn(Optional.of(person()));
         when(workPhoneService.getWorkPhones(PERSON_ID)).thenReturn(List.of("555-0100", "555-0101"));
         when(emailService.getEmails(PERSON_ID))
                 .thenReturn(new PersonEmailService.EmailPair("marcus.webb@durion.internal", null));
@@ -129,20 +125,10 @@ class EmployeeProfileFallbackTest {
         assertThat(profile.getContactInfo().getSecondaryPhone()).isEqualTo("555-0101");
     }
 
-    @Test
-    void getEmployee_prefersExplicitLegalNameOverFirstLast() {
-        Person person = columnSourcedPerson();
-        person.setLegalName("Marcus Aurelius Webb");
-        when(personRepository.findById(PERSON_ID)).thenReturn(Optional.of(person));
-
-        EmployeeProfileDto profile = service().getEmployee(PERSON_ID);
-
-        assertThat(profile.getLegalName()).isEqualTo("Marcus Aurelius Webb");
-    }
-
-    private CreateEmployeeRequest createRequest(String legalName) {
+    private CreateEmployeeRequest createRequest(String firstName, String lastName) {
         CreateEmployeeRequest request = new CreateEmployeeRequest();
-        request.setLegalName(legalName);
+        request.setFirstName(firstName);
+        request.setLastName(lastName);
         request.setEmployeeNumber("EMP-0001");
         request.setStatus(EmployeeStatus.ACTIVE);
         request.setHireDate(LocalDate.parse("2024-01-01"));
@@ -150,26 +136,14 @@ class EmployeeProfileFallbackTest {
     }
 
     @Test
-    void createEmployee_syncsFirstAndLastNameFromLegalName() {
+    void createEmployee_persistsFirstAndLastNameDirectly() {
         when(personRepository.save(any(Person.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        service().createEmployee(createRequest("Marcus Webb"));
+        service().createEmployee(createRequest("Marcus", "Webb"));
 
         ArgumentCaptor<Person> captor = ArgumentCaptor.forClass(Person.class);
         verify(personRepository).save(captor.capture());
         assertThat(captor.getValue().getFirstName()).isEqualTo("Marcus");
         assertThat(captor.getValue().getLastName()).isEqualTo("Webb");
-    }
-
-    @Test
-    void createEmployee_putsTrailingTokensInLastName() {
-        when(personRepository.save(any(Person.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        service().createEmployee(createRequest("Marcus Aurelius Webb"));
-
-        ArgumentCaptor<Person> captor = ArgumentCaptor.forClass(Person.class);
-        verify(personRepository).save(captor.capture());
-        assertThat(captor.getValue().getFirstName()).isEqualTo("Marcus");
-        assertThat(captor.getValue().getLastName()).isEqualTo("Aurelius Webb");
     }
 }
