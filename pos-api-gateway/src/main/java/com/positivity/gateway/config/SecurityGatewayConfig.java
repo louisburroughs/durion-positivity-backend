@@ -453,10 +453,16 @@ public class SecurityGatewayConfig {
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/swagger-resources")
                 || path.startsWith("/eureka")
+                || ARTIFACT_DOWNLOAD_PATH.matcher(path).matches()
                 || isPathMatch(path, authProperties.getAuthPathRoot(), authProperties.getAuthPathPrefix())
                 || isPathMatch(
                         path, authProperties.getStrippedAuthPathRoot(), authProperties.getStrippedAuthPathPrefix());
     }
+
+    // Public, token-authorized invoice artifact download (browser direct-download link cannot carry
+    // a JWT). Authorization is enforced by the signed token in pos-invoice, not at the gateway.
+    private static final java.util.regex.Pattern ARTIFACT_DOWNLOAD_PATH =
+            java.util.regex.Pattern.compile("^/invoice/v1/invoices/[^/]+/artifacts/[^/]+/download$");
 
     private static boolean isPathMatch(String path, String root, String prefix) {
         return (StringUtils.hasText(root) && path.equals(root))
