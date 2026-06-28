@@ -7,6 +7,7 @@ import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.common.enums.TaxReferenceType;
 import com.positivity.workorder.internal.client.DocumentClient;
+import com.positivity.workorder.internal.client.LocationClient;
 import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
@@ -74,6 +75,7 @@ public class EstimateServiceImpl implements EstimateService {
     private final ApplicationEventPublisher eventPublisher;
     private final BillingRulesClientService billingRulesClientService;
     private final TaxClient taxClient;
+    private final LocationClient locationClient;
     private final PeopleLocationClient peopleLocationClient;
     private final DocumentClient documentClient;
     private final ObjectMapper objectMapper;
@@ -89,9 +91,6 @@ public class EstimateServiceImpl implements EstimateService {
     // Tax category constants
     private static final String TAX_CATEGORY_GOODS = "GOODS";
     private static final String TAX_CATEGORY_SERVICES = "SERVICES";
-
-    // Default postal code - should be replaced with location service lookup
-    private static final String DEFAULT_POSTAL_CODE = "78701"; // Austin, TX
 
     @Override
     public List<EstimateResponse> getAllEstimates() {
@@ -1041,32 +1040,26 @@ public class EstimateServiceImpl implements EstimateService {
         List<TaxLineItem> taxLineItems =
                 items.stream().map(this::buildTaxLineItemFromEstimateItem).toList();
 
-        // Get postal code from estimate's location
-        // NOTE: Currently using default postal code. Should integrate with pos-location
-        // service
-        // to retrieve actual postal code for estimate.getLocationId()
-        String postalCode = DEFAULT_POSTAL_CODE;
-
-        TaxCalculationRequest taxRequest = TaxCalculationRequest.builder()
-                .lineItems(taxLineItems)
-                .locale("en-US")
-                .currencyCode("USD")
-                .destinationAddress(TaxAddress.builder()
-                        .countryCode("US")
-                        .regionCode("CA")
-                        .postalCode(postalCode)
-                        .build())
-                .customerId(estimate.getCustomerId().toString())
-                .referenceId(estimateId)
-                .referenceType(TaxReferenceType.ESTIMATE)
-                .build();
-
         BigDecimal subtotal;
         BigDecimal taxAmount;
         BigDecimal total;
         boolean testMode = false;
 
         try {
+            // Resolve the estimate's shop-location address from pos-location so tax is
+            // calculated against the real jurisdiction (estimate.getLocationId()).
+            TaxAddress destinationAddress = locationClient.resolveTaxAddress(estimate.getLocationId());
+
+            TaxCalculationRequest taxRequest = TaxCalculationRequest.builder()
+                    .lineItems(taxLineItems)
+                    .locale("en-US")
+                    .currencyCode("USD")
+                    .destinationAddress(destinationAddress)
+                    .customerId(estimate.getCustomerId().toString())
+                    .referenceId(estimateId)
+                    .referenceType(TaxReferenceType.ESTIMATE)
+                    .build();
+
             TaxCalculationResponse taxResponse = taxClient.calculateTax(taxRequest);
             subtotal = taxResponse.getSubtotal();
             taxAmount = taxResponse.getTotalTax();
