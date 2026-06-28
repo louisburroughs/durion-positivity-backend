@@ -202,7 +202,7 @@ public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalServic
         if (p.getFirstName() != null) {
             return p.getFirstName() + " " + p.getLastName();
         }
-        return p.getLegalName() != null ? p.getLegalName() : p.getId().toString();
+        return p.getId().toString();
     }
 
     private Instant toInstant(LocalDate date) {

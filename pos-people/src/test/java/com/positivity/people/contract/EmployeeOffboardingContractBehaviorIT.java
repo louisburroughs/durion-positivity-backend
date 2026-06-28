@@ -82,7 +82,8 @@ class EmployeeOffboardingContractBehaviorIT extends BaseContractIntegrationTest 
         }
         String payload = """
 				{
-				  "legalName": "Offboarding Employee",
+				  "firstName": "Offboarding",
+				  "lastName": "Employee",
 				  "preferredName": "Offboarding",
 				  "employeeNumber": "%s",
 				  "status": "ACTIVE",

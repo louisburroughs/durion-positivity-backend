@@ -21,10 +21,16 @@ public class EmployeeProfileDto {
     private UUID id;
 
     @Schema(
-            description = "Legal name of the employee",
-            example = "Jane Smith",
+            description = "First (given) name of the employee",
+            example = "Jane",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    private String legalName;
+    private String firstName;
+
+    @Schema(
+            description = "Last (family) name of the employee",
+            example = "Smith",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    private String lastName;
 
     @Schema(
             description = "Preferred name of the employee",

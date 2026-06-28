@@ -28,7 +28,8 @@ class EmployeeProfileContractBehaviorIT extends BaseContractIntegrationTest {
                                 employeeNumber, "alex.117.001+" + employeeNumber + "@example.com", "STRICT"))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.employeeNumber").value(employeeNumber))
-                .andExpect(jsonPath("$.legalName").value("Alex Carter"));
+                .andExpect(jsonPath("$.firstName").value("Alex"))
+                .andExpect(jsonPath("$.lastName").value("Carter"));
     }
 
     @Test
@@ -36,7 +37,8 @@ class EmployeeProfileContractBehaviorIT extends BaseContractIntegrationTest {
     void ve117001_invalidDates_returns422() throws Exception {
         String payload = """
 				{
-				  "legalName": "Alex Carter",
+				  "firstName": "Alex",
+				  "lastName": "Carter",
 				  "preferredName": "Alex",
 				  "employeeNumber": "EMP-117-002",
 				  "status": "ACTIVE",
@@ -144,7 +146,8 @@ class EmployeeProfileContractBehaviorIT extends BaseContractIntegrationTest {
 
         String updatePayload = """
 				{
-				  "legalName": "Alex Carter",
+				  "firstName": "Alex",
+				  "lastName": "Carter",
 				  "preferredName": "A. Carter",
 				                                                        "employeeNumber": "%s",
 				  "status": "ON_LEAVE",
@@ -172,7 +175,8 @@ class EmployeeProfileContractBehaviorIT extends BaseContractIntegrationTest {
         }
         return """
 				{
-				  "legalName": "Alex Carter",
+				  "firstName": "Alex",
+				  "lastName": "Carter",
 				  "preferredName": "Alex",
 				  "employeeNumber": "%s",
 				  "status": "ACTIVE",
