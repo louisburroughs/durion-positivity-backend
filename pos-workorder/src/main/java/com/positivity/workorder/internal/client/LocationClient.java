@@ -3,7 +3,6 @@ package com.positivity.workorder.internal.client;
 import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -17,7 +16,6 @@ import org.springframework.web.client.RestClient;
  */
 @Component
 @RequiredArgsConstructor
-@Slf4j
 public class LocationClient {
 
     private final RestClient locationServiceRestClient;
