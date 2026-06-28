@@ -18,6 +18,15 @@ server:
   servlet:
     context-path: /
 
+invoice:
+  documents:
+    base-url: ${INVOICE_DOCUMENTS_BASE_URL:http://pos-documents:8092/v1/documents}
+  artifacts:
+    # Set a stable secret in production for multi-instance/restart-safe download tokens.
+    # When blank, a per-instance random key is generated at startup.
+    signing-secret: ${INVOICE_ARTIFACTS_SIGNING_SECRET:}
+    token-ttl-seconds: ${INVOICE_ARTIFACTS_TOKEN_TTL_SECONDS:300}
+
 management:
   server:
     port: 0

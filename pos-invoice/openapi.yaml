@@ -537,6 +537,42 @@ paths:
       x-required-permissions:
       - invoice:manage
       - invoice:finalize
+  /v1/invoices/{invoiceId}/artifacts/{artifactRefId}/download-token:
+    post:
+      tags:
+      - invoice-artifact-controller
+      summary: Create a short-lived download token for an invoice artifact
+      description: Issues a short-lived signed token bound to the invoice and artifact. The token is presented to the public download endpoint so a browser can fetch the file via a direct link.
+      operationId: createDownloadToken
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: artifactRefId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactDownloadToken'
+        '404':
+          description: Invoice or artifact not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactDownloadToken'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/invoices/{invoiceId}/adjustments:
     post:
       tags:
@@ -595,6 +631,87 @@ paths:
         - invoice:manage
       x-required-permissions:
       - invoice:manage
+  /v1/invoices/{invoiceId}/artifacts:
+    get:
+      tags:
+      - invoice-artifact-controller
+      summary: List the downloadable artifacts (documents) for an invoice
+      description: Returns the documents available for the invoice (the invoice itself and any receipts) as opaque, URL-safe artifact references with suggested file names and MIME types.
+      operationId: listArtifacts
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Artifacts listed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvoiceArtifact'
+        '404':
+          description: Invoice not found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvoiceArtifact'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
+  /v1/invoices/{invoiceId}/artifacts/{artifactRefId}/download:
+    get:
+      tags:
+      - invoice-artifact-download-controller
+      summary: Download an invoice artifact as PDF using a signed download token
+      description: Streams the artifact as application/pdf. Public endpoint authorized solely by the signed download token (query parameter); intended for browser direct-download links.
+      operationId: download
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: artifactRefId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: token
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: PDF returned
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+        '403':
+          description: Missing, invalid, or expired token
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+        '404':
+          description: Invoice or artifact not found
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
 components:
   schemas:
     BillingRulesDTO:
@@ -1267,6 +1384,17 @@ components:
           type: string
           description: Free-text reason for overriding the amount limit
           example: Customer pre-approved by branch manager
+    ArtifactDownloadToken:
+      type: object
+      description: Short-lived signed token for downloading an invoice artifact
+      properties:
+        downloadToken:
+          type: string
+          description: Opaque signed download token
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the token expires
     AdjustmentRequest:
       type: object
       description: Request to apply a monetary adjustment to an invoice
@@ -1299,6 +1427,26 @@ components:
       - authorizedBy
       - reason
       - type
+    InvoiceArtifact:
+      type: object
+      description: A downloadable document associated with an invoice
+      properties:
+        artifactRefId:
+          type: string
+          description: Opaque, URL-safe artifact reference
+          example: aW52b2ljZTo...
+        fileName:
+          type: string
+          description: Suggested download file name
+          example: Invoice-INV-1001.pdf
+        mimeType:
+          type: string
+          description: MIME type of the rendered artifact
+          example: application/pdf
+        createdAt:
+          type: string
+          format: date-time
+          description: When the underlying document was created
   securitySchemes:
     bearerAuth:
       type: http
