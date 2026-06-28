@@ -74,7 +74,10 @@ public class ShopAuditEntryResponse {
             requiredMode = NOT_REQUIRED)
     private String changePatch;
 
-    @Schema(description = "Reason code associated with the change", example = "CUSTOMER_REQUEST", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Reason code associated with the change",
+            example = "CUSTOMER_REQUEST",
+            requiredMode = NOT_REQUIRED)
     private String reasonCode;
 
     @Schema(description = "Number of years the entry is retained", example = "7", requiredMode = REQUIRED)

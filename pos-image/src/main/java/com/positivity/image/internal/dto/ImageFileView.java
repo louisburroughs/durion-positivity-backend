@@ -11,11 +11,12 @@ import jakarta.validation.constraints.NotNull;
 @Schema(description = "Stored image reference exposing its filename and resolvable URL")
 public record ImageFileView(
         @Schema(description = "Filename of the stored image", example = "vehicle-front.jpg", requiredMode = REQUIRED)
-                @NotNull
-                String filename,
+        @NotNull
+        String filename,
+
         @Schema(
-                        description = "Resolvable URL where the image can be retrieved",
-                        example = "https://cdn.example.com/images/vehicle-front.jpg",
-                        requiredMode = REQUIRED)
-                @NotNull
-                String url) {}
+                description = "Resolvable URL where the image can be retrieved",
+                example = "https://cdn.example.com/images/vehicle-front.jpg",
+                requiredMode = REQUIRED)
+        @NotNull
+        String url) {}

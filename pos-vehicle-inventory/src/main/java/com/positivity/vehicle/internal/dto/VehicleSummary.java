@@ -32,7 +32,10 @@ public class VehicleSummary {
             requiredMode = REQUIRED)
     private String vin;
 
-    @Schema(description = "Fleet unit number assigned to the vehicle", example = "UNIT-1042", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Fleet unit number assigned to the vehicle",
+            example = "UNIT-1042",
+            requiredMode = NOT_REQUIRED)
     private String unitNumber;
 
     @Schema(description = "License plate number", example = "ABC1234", requiredMode = NOT_REQUIRED)

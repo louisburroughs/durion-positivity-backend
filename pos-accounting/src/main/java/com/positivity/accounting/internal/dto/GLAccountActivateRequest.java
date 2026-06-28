@@ -21,6 +21,9 @@ import lombok.NoArgsConstructor;
 public class GLAccountActivateRequest {
 
     @NotNull(message = "effectiveDate is required")
-    @Schema(description = "Date the activation takes effect (ISO 8601 date)", example = "2026-06-18", requiredMode = REQUIRED)
+    @Schema(
+            description = "Date the activation takes effect (ISO 8601 date)",
+            example = "2026-06-18",
+            requiredMode = REQUIRED)
     private LocalDate effectiveDate;
 }

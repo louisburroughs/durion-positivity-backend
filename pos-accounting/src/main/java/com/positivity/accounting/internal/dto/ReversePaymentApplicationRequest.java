@@ -82,7 +82,10 @@ public class ReversePaymentApplicationRequest implements Serializable {
     /**
      * User performing reversal
      */
-    @Schema(description = "Identifier of the user performing the reversal", example = "ap.manager", requiredMode = REQUIRED)
+    @Schema(
+            description = "Identifier of the user performing the reversal",
+            example = "ap.manager",
+            requiredMode = REQUIRED)
     @JsonProperty("reversedBy")
     @NotNull(message = "Reversed by user is required")
     @NonNull

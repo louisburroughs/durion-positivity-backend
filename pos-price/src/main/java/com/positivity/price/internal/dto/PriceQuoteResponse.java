@@ -15,7 +15,10 @@ import java.util.UUID;
 @Schema(description = "Calculated contextual price quote response")
 public class PriceQuoteResponse {
 
-    @Schema(description = "Product identifier", example = "7f3c35db-b908-42fa-83f1-2ef46a3c2149", requiredMode = REQUIRED)
+    @Schema(
+            description = "Product identifier",
+            example = "7f3c35db-b908-42fa-83f1-2ef46a3c2149",
+            requiredMode = REQUIRED)
     @NotNull
     private UUID productId;
 

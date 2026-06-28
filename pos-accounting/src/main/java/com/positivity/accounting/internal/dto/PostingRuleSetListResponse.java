@@ -22,7 +22,10 @@ public class PostingRuleSetListResponse {
     @Schema(description = "Posting rule sets on the current page", requiredMode = NOT_REQUIRED)
     private List<PostingRuleSetResponse> ruleSets;
 
-    @Schema(description = "Total number of posting rule sets across all pages", example = "42", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Total number of posting rule sets across all pages",
+            example = "42",
+            requiredMode = NOT_REQUIRED)
     private Integer totalElements;
 
     @Schema(description = "Total number of pages available", example = "5", requiredMode = NOT_REQUIRED)

@@ -32,7 +32,10 @@ public class PriceBookCreateRequestDto {
             requiredMode = NOT_REQUIRED)
     private UUID scopeId;
 
-    @Schema(description = "Whether this is the default price book for the scope", example = "false", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Whether this is the default price book for the scope",
+            example = "false",
+            requiredMode = NOT_REQUIRED)
     private Boolean isDefault;
 
     @Schema(

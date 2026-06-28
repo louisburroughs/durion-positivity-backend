@@ -46,10 +46,7 @@ public class GetPersonResponse {
     @Schema(description = "Display name", example = "John Doe", requiredMode = NOT_REQUIRED)
     private String displayName;
 
-    @Schema(
-            description = "Preferred contact method",
-            example = "EMAIL",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Preferred contact method", example = "EMAIL", requiredMode = NOT_REQUIRED)
     private PreferredContactMethod preferredContactMethod;
 
     @Schema(description = "Contact points (emails, phones)", requiredMode = NOT_REQUIRED)
@@ -103,17 +100,11 @@ public class GetPersonResponse {
         @NotNull
         private UUID contactPointId;
 
-        @Schema(
-                description = "Type of contact point",
-                example = "EMAIL",
-                requiredMode = REQUIRED)
+        @Schema(description = "Type of contact point", example = "EMAIL", requiredMode = REQUIRED)
         @NotNull
         private ContactPointType contactType;
 
-        @Schema(
-                description = "Contact value",
-                example = "john.doe@example.com",
-                requiredMode = REQUIRED)
+        @Schema(description = "Contact value", example = "john.doe@example.com", requiredMode = REQUIRED)
         private String value;
 
         @Schema(

@@ -27,9 +27,7 @@ public class DuplicateCheckResponse {
 
     @Valid
     @NotNull
-    @Schema(
-            description = "List of potential duplicate matches",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "List of potential duplicate matches", requiredMode = Schema.RequiredMode.REQUIRED)
     private List<PartyMatch> potentialDuplicates;
 
     @Data

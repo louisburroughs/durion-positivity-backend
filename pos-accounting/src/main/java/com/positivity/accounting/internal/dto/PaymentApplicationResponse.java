@@ -104,10 +104,7 @@ public class PaymentApplicationResponse {
                 requiredMode = NOT_REQUIRED)
         private BigDecimal invoiceBalanceBefore;
 
-        @Schema(
-                description = "Invoice balance after this application",
-                example = "0.00",
-                requiredMode = NOT_REQUIRED)
+        @Schema(description = "Invoice balance after this application", example = "0.00", requiredMode = NOT_REQUIRED)
         private BigDecimal invoiceBalanceAfter;
 
         @Schema(

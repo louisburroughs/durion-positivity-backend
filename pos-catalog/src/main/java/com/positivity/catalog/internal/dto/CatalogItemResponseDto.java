@@ -13,10 +13,7 @@ import lombok.Data;
 public class CatalogItemResponseDto {
 
     @NotNull
-    @Schema(
-            description = "Item identifier",
-            example = "0196cf6f-c8dd-7ee0-93e7-f48a5698a535",
-            requiredMode = REQUIRED)
+    @Schema(description = "Item identifier", example = "0196cf6f-c8dd-7ee0-93e7-f48a5698a535", requiredMode = REQUIRED)
     private UUID id;
 
     @NotNull

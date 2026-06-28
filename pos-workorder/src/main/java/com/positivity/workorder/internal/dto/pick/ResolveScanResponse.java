@@ -32,7 +32,8 @@ public class ResolveScanResponse {
     private UUID pickListId;
 
     @Schema(
-            description = "Identifier of the SKU resolved for the scan (may differ from scanned SKU after substitution)",
+            description =
+                    "Identifier of the SKU resolved for the scan (may differ from scanned SKU after substitution)",
             example = "01960003-0000-7000-8000-000000000001",
             requiredMode = NOT_REQUIRED)
     private UUID resolvedSkuId;

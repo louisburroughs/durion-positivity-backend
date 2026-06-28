@@ -24,7 +24,9 @@ import org.jspecify.annotations.NonNull;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Balance Sheet report response with assets, liabilities, and equity totals derived from POSTED journal entries")
+@Schema(
+        description =
+                "Balance Sheet report response with assets, liabilities, and equity totals derived from POSTED journal entries")
 public class BalanceSheetReport {
 
     /**

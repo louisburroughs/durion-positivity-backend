@@ -45,13 +45,19 @@ public class CreditMemoResponse {
     @Schema(description = "Tax amount reversed by the credit", example = "100.00", requiredMode = NOT_REQUIRED)
     private BigDecimal taxAmountReversed;
 
-    @Schema(description = "Total amount of the credit memo including tax", example = "1350.00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Total amount of the credit memo including tax",
+            example = "1350.00",
+            requiredMode = NOT_REQUIRED)
     private BigDecimal totalAmount;
 
     @Schema(description = "Reason code for the credit memo", example = "RETURN", requiredMode = NOT_REQUIRED)
     private String reasonCode;
 
-    @Schema(description = "Justification note explaining the credit", example = "Customer returned defective parts", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Justification note explaining the credit",
+            example = "Customer returned defective parts",
+            requiredMode = NOT_REQUIRED)
     private String justificationNote;
 
     @Schema(description = "Current status of the credit memo", example = "POSTED", requiredMode = REQUIRED)
@@ -71,18 +77,30 @@ public class CreditMemoResponse {
             requiredMode = NOT_REQUIRED)
     private Instant postedTimestamp;
 
-    @Schema(description = "Identifier of the user who created the credit memo", example = "user-1042", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the user who created the credit memo",
+            example = "user-1042",
+            requiredMode = NOT_REQUIRED)
     private String createdByUserId;
 
-    @Schema(description = "Whether the credit memo is a prior-period adjustment", example = "false", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Whether the credit memo is a prior-period adjustment",
+            example = "false",
+            requiredMode = NOT_REQUIRED)
     private Boolean priorPeriodAdjustment;
 
-    @Schema(description = "Identifier of the original accounting period", example = "2026-05", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the original accounting period",
+            example = "2026-05",
+            requiredMode = NOT_REQUIRED)
     private String originalPeriodId;
 
     @Schema(description = "ISO 4217 currency code", example = "USD", requiredMode = NOT_REQUIRED)
     private String currency;
 
-    @Schema(description = "Invoice outstanding balance after the credit was applied", example = "0.00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Invoice outstanding balance after the credit was applied",
+            example = "0.00",
+            requiredMode = NOT_REQUIRED)
     private BigDecimal invoiceBalanceAfter;
 }

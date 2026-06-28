@@ -18,7 +18,10 @@ public class CancellationResponse {
     @NotNull
     private String orderId;
 
-    @Schema(description = "Resulting status of the order after cancellation", example = "CANCELLED", requiredMode = REQUIRED)
+    @Schema(
+            description = "Resulting status of the order after cancellation",
+            example = "CANCELLED",
+            requiredMode = REQUIRED)
     @NotNull
     private String status;
 

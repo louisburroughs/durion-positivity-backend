@@ -36,7 +36,10 @@ public class PriceBookDto {
             requiredMode = NOT_REQUIRED)
     private UUID scopeId;
 
-    @Schema(description = "Whether this is the default price book for the scope", example = "false", requiredMode = REQUIRED)
+    @Schema(
+            description = "Whether this is the default price book for the scope",
+            example = "false",
+            requiredMode = REQUIRED)
     private boolean isDefault;
 
     @Schema(
@@ -46,10 +49,16 @@ public class PriceBookDto {
             requiredMode = REQUIRED)
     private PriceBookStatus status;
 
-    @Schema(description = "Timestamp the price book was created", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Timestamp the price book was created",
+            example = "2026-01-15T09:30:00Z",
+            requiredMode = REQUIRED)
     private OffsetDateTime createdAt;
 
-    @Schema(description = "Timestamp the price book was last updated", example = "2026-01-16T11:00:00Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp the price book was last updated",
+            example = "2026-01-16T11:00:00Z",
+            requiredMode = NOT_REQUIRED)
     private OffsetDateTime updatedAt;
 
     @Schema(description = "Version for optimistic locking", example = "1", requiredMode = REQUIRED)

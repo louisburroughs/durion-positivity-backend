@@ -27,10 +27,7 @@ import lombok.NoArgsConstructor;
 public class GLAccountUpdateRequest {
 
     @Size(max = 100, message = "accountName must not exceed 100 characters")
-    @Schema(
-            description = "Updated account name",
-            example = "Accounts Receivable - Trade",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Updated account name", example = "Accounts Receivable - Trade", requiredMode = NOT_REQUIRED)
     private String accountName;
 
     @Size(max = 500, message = "description must not exceed 500 characters")

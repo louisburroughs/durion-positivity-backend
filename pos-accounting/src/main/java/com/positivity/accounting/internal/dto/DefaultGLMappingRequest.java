@@ -30,7 +30,10 @@ public class DefaultGLMappingRequest {
 
     @NotBlank(message = "Event type is required")
     @Size(max = 100, message = "Event type cannot exceed 100 characters")
-    @Schema(description = "Accounting event type the mapping applies to", example = "INVOICE_POSTED", requiredMode = REQUIRED)
+    @Schema(
+            description = "Accounting event type the mapping applies to",
+            example = "INVOICE_POSTED",
+            requiredMode = REQUIRED)
     private String eventType;
 
     @Nullable
@@ -55,7 +58,10 @@ public class DefaultGLMappingRequest {
     private UUID creditAccountId;
 
     @Size(max = 500, message = "Description cannot exceed 500 characters")
-    @Schema(description = "Optional description of the mapping", example = "Default mapping for posted invoices", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Optional description of the mapping",
+            example = "Default mapping for posted invoices",
+            requiredMode = NOT_REQUIRED)
     private String description;
 
     @Builder.Default

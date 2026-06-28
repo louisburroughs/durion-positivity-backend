@@ -65,8 +65,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                 buildServiceResponses(workorder.getServices(), capabilities.isCanViewFinancials());
 
         // Build part line items
-        List<WorkorderPartResponse> partResponses =
-                buildPartResponses(workorder, capabilities.isCanViewFinancials());
+        List<WorkorderPartResponse> partResponses = buildPartResponses(workorder, capabilities.isCanViewFinancials());
 
         // Calculate derived status fields
         boolean isStarted = isWorkorderStarted(workorder.getStatus());
@@ -200,9 +199,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                     ? part.getQuantity().multiply(part.getUnitPrice())
                     : BigDecimal.ZERO;
 
-            builder.unitPrice(part.getUnitPrice())
-                    .partCost(partCost)
-                    .lineTotal(part.getLineTotal());
+            builder.unitPrice(part.getUnitPrice()).partCost(partCost).lineTotal(part.getLineTotal());
         }
 
         return builder.build();

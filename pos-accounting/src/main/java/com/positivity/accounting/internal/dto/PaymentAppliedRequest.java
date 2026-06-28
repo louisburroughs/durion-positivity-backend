@@ -31,7 +31,10 @@ public class PaymentAppliedRequest {
     @NotNull(message = "Invoice ID is required")
     private UUID invoiceId;
 
-    @Schema(description = "External transaction reference for the payment", example = "txn_abc123xyz", requiredMode = REQUIRED)
+    @Schema(
+            description = "External transaction reference for the payment",
+            example = "txn_abc123xyz",
+            requiredMode = REQUIRED)
     @NotBlank(message = "Transaction reference is required")
     private String transactionReference;
 
@@ -45,7 +48,10 @@ public class PaymentAppliedRequest {
     @DecimalMin(value = "0.0", inclusive = false, message = "Invoice total must be positive")
     private BigDecimal invoiceTotal;
 
-    @Schema(description = "Idempotency key preventing duplicate application", example = "pay-applied-20260618-001", requiredMode = REQUIRED)
+    @Schema(
+            description = "Idempotency key preventing duplicate application",
+            example = "pay-applied-20260618-001",
+            requiredMode = REQUIRED)
     @NotBlank(message = "Idempotency key is required")
     private String idempotencyKey;
 

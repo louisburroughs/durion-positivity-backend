@@ -14,16 +14,16 @@ import lombok.Value;
 @Builder
 @Schema(description = "Role definition including its granted permissions and audit metadata")
 public class RoleDto {
-    @Schema(
-            description = "Role identifier",
-            example = "01960003-0000-7000-8000-000000000010",
-            requiredMode = REQUIRED)
+    @Schema(description = "Role identifier", example = "01960003-0000-7000-8000-000000000010", requiredMode = REQUIRED)
     UUID id;
 
     @Schema(description = "Role name", example = "SHOP_MGR", requiredMode = REQUIRED)
     String name;
 
-    @Schema(description = "Human-readable description of the role", example = "Shop manager", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Human-readable description of the role",
+            example = "Shop manager",
+            requiredMode = NOT_REQUIRED)
     String description;
 
     @Schema(description = "Permissions granted to the role", requiredMode = NOT_REQUIRED)

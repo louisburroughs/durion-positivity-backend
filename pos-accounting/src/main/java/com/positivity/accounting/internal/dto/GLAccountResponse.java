@@ -30,10 +30,7 @@ import lombok.experimental.Tolerate;
 @Schema(description = "GL account response with computed status")
 public class GLAccountResponse {
 
-    @Schema(
-            description = "GL account UUID",
-            example = "01960003-0000-7000-8000-000000000001",
-            requiredMode = REQUIRED)
+    @Schema(description = "GL account UUID", example = "01960003-0000-7000-8000-000000000001", requiredMode = REQUIRED)
     @NotNull
     private UUID glAccountId;
 
@@ -46,7 +43,10 @@ public class GLAccountResponse {
     @Schema(description = "Account classification", example = "ASSET", requiredMode = NOT_REQUIRED)
     private AccountType accountType;
 
-    @Schema(description = "GL account description", example = "Primary receivables account", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "GL account description",
+            example = "Primary receivables account",
+            requiredMode = NOT_REQUIRED)
     private String description;
 
     @Schema(

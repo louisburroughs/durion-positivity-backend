@@ -27,7 +27,10 @@ public class ItemCostAuditDto {
             requiredMode = REQUIRED)
     private UUID itemId;
 
-    @Schema(description = "Timestamp the cost change occurred", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Timestamp the cost change occurred",
+            example = "2026-01-15T09:30:00Z",
+            requiredMode = REQUIRED)
     private Instant timestamp;
 
     @Schema(

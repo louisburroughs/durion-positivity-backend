@@ -142,26 +142,29 @@ public class VehiclePreferencesController {
     @Schema(description = "Request to create or fully replace vehicle care preferences")
     public record PreferencesUpsertDto(
             @NotNull
-                    @Schema(
-                            description = "Complete preference map to store for the vehicle",
-                            example = "{\"preferredOil\":\"5W-30\",\"tireRotationInterval\":5000}",
-                            requiredMode = Schema.RequiredMode.REQUIRED)
-                    Map<String, Object> preferences,
             @Schema(
-                            description = "Optional free-text service notes",
-                            example = "Customer prefers synthetic oil only",
-                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-                    String serviceNotes,
+                    description = "Complete preference map to store for the vehicle",
+                    example = "{\"preferredOil\":\"5W-30\",\"tireRotationInterval\":5000}",
+                    requiredMode = Schema.RequiredMode.REQUIRED)
+            Map<String, Object> preferences,
+
             @Schema(
-                            description = "Identifier of the user creating the preferences",
-                            example = "01960003-0000-7000-8000-000000000010",
-                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-                    UUID createdByUserId,
+                    description = "Optional free-text service notes",
+                    example = "Customer prefers synthetic oil only",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            String serviceNotes,
+
             @Schema(
-                            description = "Identifier of the user updating the preferences",
-                            example = "01960003-0000-7000-8000-000000000011",
-                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-                    UUID updatedByUserId) {}
+                    description = "Identifier of the user creating the preferences",
+                    example = "01960003-0000-7000-8000-000000000010",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            UUID createdByUserId,
+
+            @Schema(
+                    description = "Identifier of the user updating the preferences",
+                    example = "01960003-0000-7000-8000-000000000011",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            UUID updatedByUserId) {}
 
     /**
      * DTO for merging preferences.
@@ -169,13 +172,14 @@ public class VehiclePreferencesController {
     @Schema(description = "Request to partially merge fields into existing vehicle care preferences")
     public record PreferencesMergeDto(
             @Schema(
-                            description = "Subset of preference fields to merge into existing preferences",
-                            example = "{\"tireRotationInterval\":7500}",
-                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-                    Map<String, Object> partialPreferences,
+                    description = "Subset of preference fields to merge into existing preferences",
+                    example = "{\"tireRotationInterval\":7500}",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            Map<String, Object> partialPreferences,
+
             @Schema(
-                            description = "Identifier of the user updating the preferences",
-                            example = "01960003-0000-7000-8000-000000000011",
-                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-                    UUID updatedByUserId) {}
+                    description = "Identifier of the user updating the preferences",
+                    example = "01960003-0000-7000-8000-000000000011",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            UUID updatedByUserId) {}
 }

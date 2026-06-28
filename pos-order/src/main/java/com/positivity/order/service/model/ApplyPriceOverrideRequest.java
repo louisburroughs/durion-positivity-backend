@@ -35,12 +35,18 @@ public class ApplyPriceOverrideRequest {
     @NotBlank(message = "Product ID is required")
     private String productId;
 
-    @Schema(description = "Original price of the line before the override", example = "49.99", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Original price of the line before the override",
+            example = "49.99",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "Original price is required")
     @DecimalMin(value = "0.0", inclusive = false, message = "Original price must be greater than 0")
     private BigDecimal originalPrice;
 
-    @Schema(description = "Overridden price to apply to the line", example = "39.99", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Overridden price to apply to the line",
+            example = "39.99",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "Override price is required")
     @DecimalMin(value = "0.0", message = "Override price must be non-negative")
     private BigDecimal overridePrice;

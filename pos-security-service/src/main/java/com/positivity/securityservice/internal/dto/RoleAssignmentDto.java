@@ -37,16 +37,27 @@ public class RoleAssignmentDto {
     @Schema(description = "Scope type that constrains the assignment", example = "GLOBAL", requiredMode = REQUIRED)
     ScopeType scopeType;
 
-    @Schema(description = "Location identifiers the assignment applies to when scopeType is LOCATION", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Location identifiers the assignment applies to when scopeType is LOCATION",
+            requiredMode = NOT_REQUIRED)
     Set<String> scopeLocationIds;
 
-    @Schema(description = "Inclusive start of the effective window", example = "2026-01-15T00:00:00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Inclusive start of the effective window",
+            example = "2026-01-15T00:00:00",
+            requiredMode = NOT_REQUIRED)
     LocalDateTime effectiveStartDate;
 
-    @Schema(description = "Exclusive end of the effective window", example = "2026-12-31T00:00:00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Exclusive end of the effective window",
+            example = "2026-12-31T00:00:00",
+            requiredMode = NOT_REQUIRED)
     LocalDateTime effectiveEndDate;
 
-    @Schema(description = "Timestamp at which the assignment was revoked", example = "2026-06-01T12:00:00Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp at which the assignment was revoked",
+            example = "2026-06-01T12:00:00Z",
+            requiredMode = NOT_REQUIRED)
     Instant revokedAt;
 
     @Schema(description = "Creation timestamp", example = "2026-01-15T09:30:00Z", requiredMode = NOT_REQUIRED)

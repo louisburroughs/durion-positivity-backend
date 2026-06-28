@@ -25,10 +25,7 @@ public class PartFitmentResponse {
     @NotNull
     private UUID id;
 
-    @Schema(
-            description = "Part number identifier the fitment applies to",
-            example = "100245",
-            requiredMode = REQUIRED)
+    @Schema(description = "Part number identifier the fitment applies to", example = "100245", requiredMode = REQUIRED)
     @NotNull
     private Long partNumberId;
 

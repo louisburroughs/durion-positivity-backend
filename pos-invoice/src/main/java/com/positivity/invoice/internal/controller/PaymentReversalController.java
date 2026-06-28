@@ -1,13 +1,13 @@
 package com.positivity.invoice.internal.controller;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.RefundPaymentResponse;
 import com.positivity.invoice.internal.enums.RefundReason;
 import com.positivity.invoice.internal.enums.VoidReason;
 import com.positivity.invoice.service.PaymentReversalService;
-import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
-import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -90,26 +90,38 @@ public class PaymentReversalController {
     @Schema(description = "Request to void an authorized payment before capture")
     private record VoidPaymentRequest(
             @NotNull
-                    @Schema(description = "Reason the payment is being voided", example = "CUSTOMER_REQUEST", requiredMode = REQUIRED)
-                    VoidReason reason,
             @Schema(
-                            description = "Optional free-text notes explaining the void",
-                            example = "Customer cancelled before pickup",
-                            requiredMode = NOT_REQUIRED)
-                    String notes) {}
+                    description = "Reason the payment is being voided",
+                    example = "CUSTOMER_REQUEST",
+                    requiredMode = REQUIRED)
+            VoidReason reason,
+
+            @Schema(
+                    description = "Optional free-text notes explaining the void",
+                    example = "Customer cancelled before pickup",
+                    requiredMode = NOT_REQUIRED)
+            String notes) {}
 
     @Schema(description = "Request to refund a captured payment")
     private record RefundPaymentRequest(
             @NotNull
-                    @Positive
-                    @Schema(description = "Amount to refund from the captured payment", example = "25.00", requiredMode = REQUIRED)
-                    BigDecimal amount,
-            @NotNull
-                    @Schema(description = "Reason the payment is being refunded", example = "CUSTOMER_RETURN", requiredMode = REQUIRED)
-                    RefundReason reason,
+            @Positive
             @Schema(
-                            description = "Optional free-text notes explaining the refund",
-                            example = "Returned damaged part",
-                            requiredMode = NOT_REQUIRED)
-                    String notes) {}
+                    description = "Amount to refund from the captured payment",
+                    example = "25.00",
+                    requiredMode = REQUIRED)
+            BigDecimal amount,
+
+            @NotNull
+            @Schema(
+                    description = "Reason the payment is being refunded",
+                    example = "CUSTOMER_RETURN",
+                    requiredMode = REQUIRED)
+            RefundReason reason,
+
+            @Schema(
+                    description = "Optional free-text notes explaining the refund",
+                    example = "Returned damaged part",
+                    requiredMode = NOT_REQUIRED)
+            String notes) {}
 }

@@ -45,7 +45,10 @@ public class JournalLineDrilldownResponse {
     /**
      * Description/narrative for the journal line.
      */
-    @Schema(description = "Description/narrative for the journal line", example = "Recognize receivable", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Description/narrative for the journal line",
+            example = "Recognize receivable",
+            requiredMode = NOT_REQUIRED)
     private String description;
 
     /**

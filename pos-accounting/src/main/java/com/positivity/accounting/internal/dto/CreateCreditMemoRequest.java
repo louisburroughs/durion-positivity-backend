@@ -47,7 +47,10 @@ public class CreateCreditMemoRequest {
     @JsonProperty("reasonCode")
     @NotBlank(message = "Reason code is required")
     @Size(max = 50, message = "Reason code must be 1-50 characters")
-    @Schema(description = "Reason code for the credit memo (mandatory for audit)", example = "RETURN", requiredMode = REQUIRED)
+    @Schema(
+            description = "Reason code for the credit memo (mandatory for audit)",
+            example = "RETURN",
+            requiredMode = REQUIRED)
     private String reasonCode;
 
     @JsonProperty("justificationNote")

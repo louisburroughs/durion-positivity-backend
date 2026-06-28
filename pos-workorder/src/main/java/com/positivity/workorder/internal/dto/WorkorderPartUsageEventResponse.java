@@ -79,6 +79,9 @@ public class WorkorderPartUsageEventResponse {
      * Part description for display purposes
      */
     @Nullable
-    @Schema(description = "Part description for display", example = "Brake Pad Set - Front", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Part description for display",
+            example = "Brake Pad Set - Front",
+            requiredMode = NOT_REQUIRED)
     private String partDescription;
 }

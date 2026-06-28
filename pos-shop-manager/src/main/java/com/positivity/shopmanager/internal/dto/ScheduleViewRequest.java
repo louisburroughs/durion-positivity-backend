@@ -18,7 +18,10 @@ public class ScheduleViewRequest {
             requiredMode = REQUIRED)
     private UUID locationId;
 
-    @Schema(description = "Calendar date of the schedule view (ISO-8601)", example = "2026-06-18", requiredMode = REQUIRED)
+    @Schema(
+            description = "Calendar date of the schedule view (ISO-8601)",
+            example = "2026-06-18",
+            requiredMode = REQUIRED)
     private LocalDate date;
 
     @Schema(
@@ -39,9 +42,6 @@ public class ScheduleViewRequest {
             requiredMode = NOT_REQUIRED)
     private boolean includeAvailabilityOverlay;
 
-    @Schema(
-            description = "Optional view range hint (e.g. DAY or WEEK)",
-            example = "DAY",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Optional view range hint (e.g. DAY or WEEK)", example = "DAY", requiredMode = NOT_REQUIRED)
     private String range;
 }

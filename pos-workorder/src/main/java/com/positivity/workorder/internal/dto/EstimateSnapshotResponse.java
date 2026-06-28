@@ -26,11 +26,17 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "Response payload for captured estimate snapshots")
 public class EstimateSnapshotResponse {
 
-    @Schema(description = "Snapshot identifier", example = "550e8400-e29b-41d4-a716-446655440030", requiredMode = REQUIRED)
+    @Schema(
+            description = "Snapshot identifier",
+            example = "550e8400-e29b-41d4-a716-446655440030",
+            requiredMode = REQUIRED)
     @NotNull
     private UUID id;
 
-    @Schema(description = "Estimate identifier", example = "550e8400-e29b-41d4-a716-446655440000", requiredMode = REQUIRED)
+    @Schema(
+            description = "Estimate identifier",
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = REQUIRED)
     @NotNull
     private UUID estimateId;
 

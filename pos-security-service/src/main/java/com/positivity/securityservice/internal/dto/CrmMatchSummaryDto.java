@@ -34,6 +34,9 @@ public class CrmMatchSummaryDto {
     @Schema(description = "True when a candidate exactly matched the name", example = "false", requiredMode = REQUIRED)
     boolean exactNameMatch;
 
-    @Schema(description = "True when manual review is required before completing registration", example = "false", requiredMode = REQUIRED)
+    @Schema(
+            description = "True when manual review is required before completing registration",
+            example = "false",
+            requiredMode = REQUIRED)
     boolean reviewRequired;
 }

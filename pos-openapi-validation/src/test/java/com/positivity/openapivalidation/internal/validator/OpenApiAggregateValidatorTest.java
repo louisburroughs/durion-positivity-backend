@@ -1,11 +1,10 @@
 package com.positivity.openapivalidation.internal.validator;
 
-import org.junit.jupiter.api.Test;
-
-import java.nio.file.Path;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.nio.file.Path;
+import org.junit.jupiter.api.Test;
 
 class OpenApiAggregateValidatorTest {
 
@@ -13,8 +12,7 @@ class OpenApiAggregateValidatorTest {
 
     @Test
     void cleanAggregate_returnsNoIssues() {
-        var issues = validator.validate(
-                Path.of("src/test/resources/openapi/fixtures/aggregate/clean-aggregate.yaml"));
+        var issues = validator.validate(Path.of("src/test/resources/openapi/fixtures/aggregate/clean-aggregate.yaml"));
 
         assertThat(issues).isEmpty();
     }
@@ -30,10 +28,11 @@ class OpenApiAggregateValidatorTest {
 
     @Test
     void brokenRefAggregate_returnsIssue() {
-        var issues = validator.validate(
-                Path.of("src/test/resources/openapi/fixtures/aggregate/broken-ref-aggregate.yaml"));
+        var issues =
+                validator.validate(Path.of("src/test/resources/openapi/fixtures/aggregate/broken-ref-aggregate.yaml"));
 
-        assertThat(issues).singleElement()
+        assertThat(issues)
+                .singleElement()
                 .extracting(OpenApiValidationIssue::message)
                 .asString()
                 .contains("/v1/documents")
@@ -51,7 +50,8 @@ class OpenApiAggregateValidatorTest {
         // After fix: returns an unresolved-ref issue without any exception
         var issues = validator.validate(path);
 
-        assertThat(issues).singleElement()
+        assertThat(issues)
+                .singleElement()
                 .extracting(OpenApiValidationIssue::message)
                 .asString()
                 .contains("unresolved ref");

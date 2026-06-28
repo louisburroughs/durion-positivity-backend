@@ -28,7 +28,10 @@ public class AuditExportJobResponse {
     @Schema(description = "Current status of the export job", example = "IN_PROGRESS", requiredMode = REQUIRED)
     private AuditExportStatus status;
 
-    @Schema(description = "Timestamp when the export was requested", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Timestamp when the export was requested",
+            example = "2026-01-15T09:30:00Z",
+            requiredMode = REQUIRED)
     private Instant requestedAt;
 
     @Schema(

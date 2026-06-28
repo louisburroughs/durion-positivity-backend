@@ -29,10 +29,7 @@ public class ResolvePriceResponseDto {
             requiredMode = NOT_REQUIRED)
     private String currency;
 
-    @Schema(
-            description = "Origin of the resolved price",
-            example = "PRICE_BOOK_RULE",
-            requiredMode = REQUIRED)
+    @Schema(description = "Origin of the resolved price", example = "PRICE_BOOK_RULE", requiredMode = REQUIRED)
     private ResolvePriceSource source;
 
     @Schema(

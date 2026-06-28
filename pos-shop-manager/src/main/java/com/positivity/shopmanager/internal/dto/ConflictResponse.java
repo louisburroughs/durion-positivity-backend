@@ -128,7 +128,10 @@ public class ConflictResponse {
         @Schema(description = "Conflict severity (HARD or SOFT)", example = "SOFT", requiredMode = REQUIRED)
         private String severity; // HARD | SOFT (enum)
 
-        @Schema(description = "Machine-readable conflict code", example = "MECHANIC_UNAVAILABLE", requiredMode = REQUIRED)
+        @Schema(
+                description = "Machine-readable conflict code",
+                example = "MECHANIC_UNAVAILABLE",
+                requiredMode = REQUIRED)
         private String code; // e.g., MECHANIC_UNAVAILABLE, OUTSIDE_OPERATING_HOURS
 
         @Schema(

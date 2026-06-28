@@ -15,10 +15,7 @@ import lombok.Data;
 @Schema(description = "Result of content detection over an uploaded file, used to infer the target domain and mappings")
 public class ContentDetectionResult {
 
-    @Schema(
-            description = "Domain detected from the file content",
-            example = "CATALOG_PRODUCT",
-            requiredMode = REQUIRED)
+    @Schema(description = "Domain detected from the file content", example = "CATALOG_PRODUCT", requiredMode = REQUIRED)
     @NotNull
     private DomainType detectedDomain;
 

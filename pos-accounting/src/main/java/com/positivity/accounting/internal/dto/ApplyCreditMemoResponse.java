@@ -41,19 +41,28 @@ public class ApplyCreditMemoResponse implements Serializable {
     @NonNull
     private UUID invoiceId;
 
-    @Schema(description = "Invoice balance before the credit memo was applied", example = "1250.00", requiredMode = REQUIRED)
+    @Schema(
+            description = "Invoice balance before the credit memo was applied",
+            example = "1250.00",
+            requiredMode = REQUIRED)
     @JsonProperty("balanceBefore")
     @NotNull
     @NonNull
     private BigDecimal balanceBefore;
 
-    @Schema(description = "Invoice balance after the credit memo was applied", example = "0.00", requiredMode = REQUIRED)
+    @Schema(
+            description = "Invoice balance after the credit memo was applied",
+            example = "0.00",
+            requiredMode = REQUIRED)
     @JsonProperty("balanceAfter")
     @NotNull
     @NonNull
     private BigDecimal balanceAfter;
 
-    @Schema(description = "Invoice status after the credit memo was applied", example = "PAID_IN_FULL", requiredMode = REQUIRED)
+    @Schema(
+            description = "Invoice status after the credit memo was applied",
+            example = "PAID_IN_FULL",
+            requiredMode = REQUIRED)
     @JsonProperty("status")
     @NotNull
     @NonNull
@@ -81,7 +90,10 @@ public class ApplyCreditMemoResponse implements Serializable {
         }
     }
 
-    @Schema(description = "Amount of the credit memo applied to the invoice", example = "1250.00", requiredMode = REQUIRED)
+    @Schema(
+            description = "Amount of the credit memo applied to the invoice",
+            example = "1250.00",
+            requiredMode = REQUIRED)
     @JsonProperty("creditMemoApplied")
     @NotNull
     @NonNull

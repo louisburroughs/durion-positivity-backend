@@ -37,9 +37,7 @@ public class GetCommercialAccountContactsResponse {
 
     @Valid
     @NotNull
-    @Schema(
-            description = "List of contacts with their roles",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "List of contacts with their roles", requiredMode = Schema.RequiredMode.REQUIRED)
     private List<ContactWithRole> contacts;
 
     /**
@@ -97,9 +95,7 @@ public class GetCommercialAccountContactsResponse {
         private LocalDate effectiveTo;
 
         @Valid
-        @Schema(
-                description = "Individual person details",
-                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        @Schema(description = "Individual person details", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private IndividualDetails individual;
     }
 
@@ -113,10 +109,7 @@ public class GetCommercialAccountContactsResponse {
     @Schema(description = "Individual person details")
     public static class IndividualDetails {
 
-        @Schema(
-                description = "Display name",
-                example = "John Doe",
-                requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Display name", example = "John Doe", requiredMode = Schema.RequiredMode.REQUIRED)
         private String displayName;
 
         @Schema(

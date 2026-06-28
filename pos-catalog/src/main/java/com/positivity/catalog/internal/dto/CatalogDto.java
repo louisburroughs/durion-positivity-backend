@@ -24,7 +24,10 @@ public class CatalogDto {
     @Schema(description = "Catalog name", example = "Winter Catalog", requiredMode = REQUIRED)
     private String name;
 
-    @Schema(description = "Catalog description", example = "Seasonal winter product catalog", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Catalog description",
+            example = "Seasonal winter product catalog",
+            requiredMode = NOT_REQUIRED)
     private String description;
 
     @Schema(

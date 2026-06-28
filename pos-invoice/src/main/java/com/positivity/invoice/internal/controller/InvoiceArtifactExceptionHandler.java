@@ -15,8 +15,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /** Maps invoice-artifact errors to HTTP statuses for the artifact controllers. */
-@RestControllerAdvice(
-        assignableTypes = {InvoiceArtifactController.class, InvoiceArtifactDownloadController.class})
+@RestControllerAdvice(assignableTypes = {InvoiceArtifactController.class, InvoiceArtifactDownloadController.class})
 @RequiredArgsConstructor
 public class InvoiceArtifactExceptionHandler {
     private final Clock clock;
@@ -48,6 +47,8 @@ public class InvoiceArtifactExceptionHandler {
 
     private static String correlationId(HttpServletRequest request) {
         String header = request.getHeader(X_CORRELATION_ID);
-        return (header != null && !header.isBlank()) ? header : UUIDv7Generator.generate().toString();
+        return (header != null && !header.isBlank())
+                ? header
+                : UUIDv7Generator.generate().toString();
     }
 }

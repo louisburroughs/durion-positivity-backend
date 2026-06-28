@@ -56,7 +56,10 @@ public class SalesOrderResponse {
     @NotNull
     private String status;
 
-    @Schema(description = "Subtotal of all order lines before taxes and fees", example = "59.97", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Subtotal of all order lines before taxes and fees",
+            example = "59.97",
+            requiredMode = NOT_REQUIRED)
     private BigDecimal subtotal;
 
     @Schema(

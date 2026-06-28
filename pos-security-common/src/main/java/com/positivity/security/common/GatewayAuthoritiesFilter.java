@@ -107,8 +107,8 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
             String username = userHeader != null ? userHeader : GatewaySecurityConstants.ANONYMOUS_USER;
             Optional<UUID> userId = resolveUserIdFromToken(authorizationHeader, username);
 
-            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(username, null,
-                    authorities);
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(username, null, authorities);
             Map<String, Object> details = new HashMap<>();
             details.put(GatewaySecurityConstants.DETAIL_USERNAME, username);
             userId.ifPresent(id -> details.put(GatewaySecurityConstants.DETAIL_USER_ID, id));
@@ -228,8 +228,10 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
         }
 
         if (permVer != DownstreamPermissionCatalog.CATALOG_VERSION) {
-            loggr.warn("X-Perm-Ver {} does not match local catalog version {}; clearing auth context",
-                    permVer, DownstreamPermissionCatalog.CATALOG_VERSION);
+            loggr.warn(
+                    "X-Perm-Ver {} does not match local catalog version {}; clearing auth context",
+                    permVer,
+                    DownstreamPermissionCatalog.CATALOG_VERSION);
             return null;
         }
 
@@ -242,9 +244,8 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
             return null;
         }
 
-        Stream<String> permStream = DownstreamPermissionCatalog.authoritiesFromBitSet(bits)
-                .stream()
-                .flatMap(this::expandAuthority);
+        Stream<String> permStream =
+                DownstreamPermissionCatalog.authoritiesFromBitSet(bits).stream().flatMap(this::expandAuthority);
         Stream<String> roleStream = csvValues(rolesHeader);
 
         return Stream.concat(permStream, roleStream)

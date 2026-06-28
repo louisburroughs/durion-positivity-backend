@@ -14,8 +14,6 @@ public class ColumnMappingApproveRequest {
 
     @NotEmpty
     @Valid
-    @Schema(
-            description = "Column mappings to approve, one per source column",
-            requiredMode = REQUIRED)
+    @Schema(description = "Column mappings to approve, one per source column", requiredMode = REQUIRED)
     private List<ColumnMappingUpdateRequest> mappings;
 }

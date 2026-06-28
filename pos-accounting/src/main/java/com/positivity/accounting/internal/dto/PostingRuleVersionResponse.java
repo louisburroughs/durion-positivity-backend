@@ -55,7 +55,10 @@ public class PostingRuleVersionResponse {
             requiredMode = NOT_REQUIRED)
     private Instant createdAt;
 
-    @Schema(description = "Identifier of the user who created the version", example = "ap.manager", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the user who created the version",
+            example = "ap.manager",
+            requiredMode = NOT_REQUIRED)
     private String createdBy;
 
     @Schema(
@@ -64,6 +67,9 @@ public class PostingRuleVersionResponse {
             requiredMode = NOT_REQUIRED)
     private Instant modifiedAt;
 
-    @Schema(description = "Identifier of the user who last modified the version", example = "ap.lead", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the user who last modified the version",
+            example = "ap.lead",
+            requiredMode = NOT_REQUIRED)
     private String modifiedBy;
 }

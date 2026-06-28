@@ -32,16 +32,10 @@ public class ReceivingLineResponse {
     @NotNull
     private String productId;
 
-    @Schema(
-            description = "Quantity expected to be received on the line",
-            example = "10",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Quantity expected to be received on the line", example = "10", requiredMode = NOT_REQUIRED)
     private BigDecimal expectedQuantity;
 
-    @Schema(
-            description = "Quantity received so far on the line",
-            example = "8",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Quantity received so far on the line", example = "8", requiredMode = NOT_REQUIRED)
     private BigDecimal receivedQuantity;
 
     @Schema(

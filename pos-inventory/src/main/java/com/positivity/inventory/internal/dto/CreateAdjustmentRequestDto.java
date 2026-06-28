@@ -24,10 +24,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class CreateAdjustmentRequestDto {
 
-    @Schema(
-            description = "Stock-keeping unit of the product to adjust",
-            example = "SKU-10042",
-            requiredMode = REQUIRED)
+    @Schema(description = "Stock-keeping unit of the product to adjust", example = "SKU-10042", requiredMode = REQUIRED)
     @NotBlank
     String productSku;
 

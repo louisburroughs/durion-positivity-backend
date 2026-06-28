@@ -51,7 +51,10 @@ public class AccountingEventResponse {
     @Schema(description = "Source system that emitted the event", example = "POS_ORDER", requiredMode = NOT_REQUIRED)
     private String sourceSystem;
 
-    @Schema(description = "Business transaction timestamp", example = "2026-06-18T10:30:00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Business transaction timestamp",
+            example = "2026-06-18T10:30:00",
+            requiredMode = NOT_REQUIRED)
     private LocalDateTime transactionDate;
 
     @Schema(description = "Event-specific payload content", requiredMode = NOT_REQUIRED)
@@ -67,7 +70,10 @@ public class AccountingEventResponse {
             requiredMode = NOT_REQUIRED)
     private UUID journalEntryId;
 
-    @Schema(description = "Error message when processing failed", example = "Mapping not found for event type", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Error message when processing failed",
+            example = "Mapping not found for event type",
+            requiredMode = NOT_REQUIRED)
     private String errorMessage;
 
     @Schema(
@@ -83,20 +89,32 @@ public class AccountingEventResponse {
             requiredMode = NOT_REQUIRED)
     private Instant processedAt;
 
-    @Schema(description = "Monotonic sequence number assigned to the event", example = "42", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Monotonic sequence number assigned to the event",
+            example = "42",
+            requiredMode = NOT_REQUIRED)
     private Long sequenceNumber;
 
     // ========== Suspense Queue Fields (CAP:055) ==========
-    @Schema(description = "Code categorizing the failure reason", example = "MAPPING_NOT_FOUND", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Code categorizing the failure reason",
+            example = "MAPPING_NOT_FOUND",
+            requiredMode = NOT_REQUIRED)
     private String failureReasonCode;
 
-    @Schema(description = "Detailed failure description", example = "No GL mapping configured for INVOICE_RECEIVED", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Detailed failure description",
+            example = "No GL mapping configured for INVOICE_RECEIVED",
+            requiredMode = NOT_REQUIRED)
     private String failureDetails;
 
     @Schema(description = "Number of processing attempts made", example = "3", requiredMode = NOT_REQUIRED)
     private Integer attemptCount;
 
-    @Schema(description = "Posting reference assigned on final resolution", example = "JE-2026-000456", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Posting reference assigned on final resolution",
+            example = "JE-2026-000456",
+            requiredMode = NOT_REQUIRED)
     private String finalPostingReferenceId;
 
     @Schema(
@@ -117,7 +135,10 @@ public class AccountingEventResponse {
             requiredMode = NOT_REQUIRED)
     private UUID ingestionId;
 
-    @Schema(description = "Domain key associated with the event", example = "INVOICE-2026-000123", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Domain key associated with the event",
+            example = "INVOICE-2026-000123",
+            requiredMode = NOT_REQUIRED)
     private String domainKeyId;
 
     @Schema(

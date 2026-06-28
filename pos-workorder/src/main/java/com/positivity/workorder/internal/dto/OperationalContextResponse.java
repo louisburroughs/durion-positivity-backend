@@ -21,7 +21,10 @@ public class OperationalContextResponse {
     @Schema(description = "Operational context version", example = "3", requiredMode = NOT_REQUIRED)
     private String version;
 
-    @Schema(description = "Location identifier", example = "550e8400-e29b-41d4-a716-446655440300", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Location identifier",
+            example = "550e8400-e29b-41d4-a716-446655440300",
+            requiredMode = NOT_REQUIRED)
     private UUID locationId;
 
     @Schema(description = "Bay identifier", example = "BAY-12", requiredMode = NOT_REQUIRED)

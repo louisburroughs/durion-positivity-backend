@@ -15,10 +15,7 @@ import org.jspecify.annotations.Nullable;
 public class AdjustmentRequest {
 
     @NotNull
-    @Schema(
-            description = "Type of adjustment applied to the invoice",
-            example = "DISCOUNT",
-            requiredMode = REQUIRED)
+    @Schema(description = "Type of adjustment applied to the invoice", example = "DISCOUNT", requiredMode = REQUIRED)
     private InvoiceAdjustmentType type;
 
     @NotNull

@@ -11,18 +11,12 @@ public class CustomerBulkIngestRecord {
 
     @NotBlank
     @Size(max = 100)
-    @Schema(
-            description = "First name of the customer",
-            example = "Jane",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "First name of the customer", example = "Jane", requiredMode = Schema.RequiredMode.REQUIRED)
     private String firstName;
 
     @NotBlank
     @Size(max = 100)
-    @Schema(
-            description = "Last name of the customer",
-            example = "Doe",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Last name of the customer", example = "Doe", requiredMode = Schema.RequiredMode.REQUIRED)
     private String lastName;
 
     // Bulk ingest tolerates dirty legacy data — length-bounded only, no strict

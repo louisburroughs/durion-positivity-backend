@@ -68,7 +68,10 @@ public class VendorBillResponse {
     private VendorBillStatus status;
 
     @Nullable
-    @Schema(description = "Origin event ID (for traceability)", example = "01936e5c-1234-7a3d-8b6e-123456789012", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Origin event ID (for traceability)",
+            example = "01936e5c-1234-7a3d-8b6e-123456789012",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("originEventId")
     private UUID originEventId;
 
@@ -78,12 +81,18 @@ public class VendorBillResponse {
     private String originEventType;
 
     @Nullable
-    @Schema(description = "Journal entry ID (if GL posted)", example = "01936e5e-7890-7a3d-8b6e-4d5678901234", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Journal entry ID (if GL posted)",
+            example = "01936e5e-7890-7a3d-8b6e-4d5678901234",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("journalEntryId")
     private UUID journalEntryId;
 
     @Nullable
-    @Schema(description = "Payment transaction ID (if paid)", example = "01936e5f-abcd-7a3d-8b6e-5e6789012345", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Payment transaction ID (if paid)",
+            example = "01936e5f-abcd-7a3d-8b6e-5e6789012345",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("paymentTransactionId")
     private UUID paymentTransactionId;
 
@@ -97,12 +106,18 @@ public class VendorBillResponse {
     private String createdBy;
 
     @Nullable
-    @Schema(description = "Approval justification (if status = APPROVED)", example = "Approved by AP manager", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Approval justification (if status = APPROVED)",
+            example = "Approved by AP manager",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("approvalJustification")
     private String approvalJustification;
 
     @Nullable
-    @Schema(description = "Rejection reason (if status = REJECTED)", example = "Incorrect invoice amount", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Rejection reason (if status = REJECTED)",
+            example = "Incorrect invoice amount",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("rejectionReason")
     private String rejectionReason;
 }

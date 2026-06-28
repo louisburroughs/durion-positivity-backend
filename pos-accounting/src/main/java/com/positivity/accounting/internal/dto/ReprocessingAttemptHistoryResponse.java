@@ -47,7 +47,10 @@ public class ReprocessingAttemptHistoryResponse {
             requiredMode = NOT_REQUIRED)
     private Instant attemptedAt;
 
-    @Schema(description = "Identifier of the user who triggered the attempt", example = "ap.manager", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the user who triggered the attempt",
+            example = "ap.manager",
+            requiredMode = NOT_REQUIRED)
     private String triggeredByUserId;
 
     @Schema(description = "Outcome of the reprocessing attempt", example = "SUCCESS", requiredMode = NOT_REQUIRED)

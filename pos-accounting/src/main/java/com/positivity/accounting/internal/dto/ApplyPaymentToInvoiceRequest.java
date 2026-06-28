@@ -70,7 +70,10 @@ public class ApplyPaymentToInvoiceRequest implements Serializable {
     /**
      * Currency of payment (must match invoice currency)
      */
-    @Schema(description = "Currency of the payment (ISO 4217, must match invoice currency)", example = "USD", requiredMode = REQUIRED)
+    @Schema(
+            description = "Currency of the payment (ISO 4217, must match invoice currency)",
+            example = "USD",
+            requiredMode = REQUIRED)
     @JsonProperty("currency")
     @NotNull(message = "Currency is required")
     @NonNull
@@ -89,7 +92,10 @@ public class ApplyPaymentToInvoiceRequest implements Serializable {
     /**
      * User applying the payment (from audit context)
      */
-    @Schema(description = "Identifier of the user applying the payment", example = "ap_clerk_1", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the user applying the payment",
+            example = "ap_clerk_1",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("appliedBy")
     private String appliedBy;
 }

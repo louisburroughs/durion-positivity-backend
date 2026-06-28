@@ -23,6 +23,9 @@ public class AuditEventCreatedResponse {
             requiredMode = REQUIRED)
     UUID eventId;
 
-    @Schema(description = "Timestamp recorded for the audit event", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Timestamp recorded for the audit event",
+            example = "2026-01-15T09:30:00Z",
+            requiredMode = REQUIRED)
     Instant timestamp;
 }

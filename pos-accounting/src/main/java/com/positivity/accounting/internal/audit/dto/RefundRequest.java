@@ -55,7 +55,8 @@ public class RefundRequest {
      * actor from authenticated security context.
      */
     @Schema(
-            description = "Legacy client-provided actor identifier; service resolves authoritative actor from security context",
+            description =
+                    "Legacy client-provided actor identifier; service resolves authoritative actor from security context",
             example = "01960003-0000-7000-8000-000000000003",
             requiredMode = NOT_REQUIRED)
     private String actorId;

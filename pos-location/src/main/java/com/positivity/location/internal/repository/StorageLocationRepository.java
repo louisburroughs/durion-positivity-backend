@@ -31,8 +31,7 @@ public interface StorageLocationRepository extends JpaRepository<StorageLocation
             + "WHERE LOWER(s.name) = LOWER(:name) AND s.site.id = :siteId")
     boolean existsByNameIgnoreCaseAndSiteId(@Param("name") String name, @Param("siteId") UUID siteId);
 
-    @Query("SELECT COUNT(s) > 0 FROM StorageLocationEntity s "
-            + "WHERE s.barcode = :barcode AND s.site.id = :siteId")
+    @Query("SELECT COUNT(s) > 0 FROM StorageLocationEntity s " + "WHERE s.barcode = :barcode AND s.site.id = :siteId")
     boolean existsByBarcodeAndSiteId(@Param("barcode") String barcode, @Param("siteId") UUID siteId);
 
     @Query("SELECT COUNT(s) > 0 FROM StorageLocationEntity s "

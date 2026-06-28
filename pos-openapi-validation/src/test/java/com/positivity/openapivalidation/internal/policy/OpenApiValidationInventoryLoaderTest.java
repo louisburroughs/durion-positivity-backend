@@ -54,7 +54,6 @@ class OpenApiValidationInventoryLoaderTest {
         OpenApiValidationInventory inventory =
                 OpenApiValidationInventoryLoader.load(Path.of("src/test/resources/openapi/module-inventory.yaml"));
 
-        assertThatThrownBy(() -> inventory.policyFor("pos-nonexistent"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> inventory.policyFor("pos-nonexistent")).isInstanceOf(IllegalArgumentException.class);
     }
 }

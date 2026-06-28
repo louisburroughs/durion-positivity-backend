@@ -49,6 +49,9 @@ public class ProductCreateRequestDto {
     @Schema(description = "Universal product code", example = "012345678905", requiredMode = NOT_REQUIRED)
     private String upc;
 
-    @Schema(description = "JSON object represented as string", example = "{\"color\":\"black\"}", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "JSON object represented as string",
+            example = "{\"color\":\"black\"}",
+            requiredMode = NOT_REQUIRED)
     private String attributes;
 }

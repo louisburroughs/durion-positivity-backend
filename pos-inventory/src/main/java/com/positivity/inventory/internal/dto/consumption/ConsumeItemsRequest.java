@@ -12,7 +12,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Schema(description = "Request payload to consume inventory items against a workorder, optionally drawn from a specific pick list")
+@Schema(
+        description =
+                "Request payload to consume inventory items against a workorder, optionally drawn from a specific pick list")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -31,8 +33,6 @@ public class ConsumeItemsRequest {
             requiredMode = NOT_REQUIRED)
     private UUID pickListId;
 
-    @Schema(
-            description = "Line items identifying the SKUs and quantities to consume",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Line items identifying the SKUs and quantities to consume", requiredMode = NOT_REQUIRED)
     private List<@Valid ConsumeItemLine> items;
 }

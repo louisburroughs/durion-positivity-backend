@@ -55,10 +55,7 @@ public class CycleCountPlanResponse {
     @NotNull
     private LocalDate scheduledDate;
 
-    @Schema(
-            description = "Current lifecycle status of the plan",
-            example = "SCHEDULED",
-            requiredMode = REQUIRED)
+    @Schema(description = "Current lifecycle status of the plan", example = "SCHEDULED", requiredMode = REQUIRED)
     @NotNull
     private String status;
 

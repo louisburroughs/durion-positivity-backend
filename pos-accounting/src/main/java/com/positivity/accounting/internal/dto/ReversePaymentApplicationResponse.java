@@ -67,21 +67,30 @@ public class ReversePaymentApplicationResponse implements Serializable {
     /**
      * Invoice balance AFTER reversal (restored)
      */
-    @Schema(description = "Invoice balance due after the reversal (restored)", example = "1250.00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Invoice balance due after the reversal (restored)",
+            example = "1250.00",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("balanceDue")
     private BigDecimal balanceDue;
 
     /**
      * Total amount paid on this invoice (after reversal)
      */
-    @Schema(description = "Total amount paid on the invoice after the reversal", example = "0.00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Total amount paid on the invoice after the reversal",
+            example = "0.00",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("totalPaid")
     private BigDecimal totalPaid;
 
     /**
      * Reason for reversal
      */
-    @Schema(description = "Reason recorded for the reversal", example = "Duplicate payment applied in error", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Reason recorded for the reversal",
+            example = "Duplicate payment applied in error",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("reason")
     private String reason;
 

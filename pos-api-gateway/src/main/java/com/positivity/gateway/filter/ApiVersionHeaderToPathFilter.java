@@ -115,8 +115,11 @@ public class ApiVersionHeaderToPathFilter implements GlobalFilter, Ordered {
 
         // STRICT: Require valid X-API-Version header for API calls
         if (version == null || version.isBlank() || !version.matches("\\d+")) {
-            log.warn("400 Bad request: missing/invalid X-API-Version; method={} path={} X-API-Version={}",
-                    req.getMethod().name(), rawPath, version != null ? "'" + version + "'" : "<absent>");
+            log.warn(
+                    "400 Bad request: missing/invalid X-API-Version; method={} path={} X-API-Version={}",
+                    req.getMethod().name(),
+                    rawPath,
+                    version != null ? "'" + version + "'" : "<absent>");
             exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
             return exchange.getResponse().setComplete();
         }

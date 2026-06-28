@@ -40,7 +40,10 @@ public class WorkexecLaborPerformedRequest {
 
     @NotNull
     @JsonProperty("performedAt")
-    @Schema(description = "Timestamp when labor was performed", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Timestamp when labor was performed",
+            example = "2026-01-15T09:30:00Z",
+            requiredMode = REQUIRED)
     private Instant performedAt;
 
     @NotNull
@@ -80,7 +83,10 @@ public class WorkexecLaborPerformedRequest {
     public static class SourceReference {
         @NotBlank
         @JsonProperty("system")
-        @Schema(description = "Identifier of the originating external system", example = "workexec", requiredMode = REQUIRED)
+        @Schema(
+                description = "Identifier of the originating external system",
+                example = "workexec",
+                requiredMode = REQUIRED)
         private String system;
 
         @NotBlank

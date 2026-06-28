@@ -54,16 +54,23 @@ public class CancellationRequest {
      * actor from authenticated security context.
      */
     @Schema(
-            description = "Legacy client-provided actor identifier; service resolves authoritative actor from security context",
+            description =
+                    "Legacy client-provided actor identifier; service resolves authoritative actor from security context",
             example = "01960003-0000-7000-8000-000000000003",
             requiredMode = NOT_REQUIRED)
     private String actorId;
 
-    @Schema(description = "Role of the actor performing the cancellation", example = "STORE_MANAGER", requiredMode = REQUIRED)
+    @Schema(
+            description = "Role of the actor performing the cancellation",
+            example = "STORE_MANAGER",
+            requiredMode = REQUIRED)
     @NotNull(message = "Actor role is required")
     private String actorRole;
 
-    @Schema(description = "Reason for the cancellation", example = "Customer requested cancellation", requiredMode = REQUIRED)
+    @Schema(
+            description = "Reason for the cancellation",
+            example = "Customer requested cancellation",
+            requiredMode = REQUIRED)
     @NotNull(message = "Reason is required")
     private String reason;
 }

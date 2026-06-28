@@ -69,7 +69,10 @@ public class LocationRequestDTO {
             requiredMode = NOT_REQUIRED)
     private Long responsiblePersonId;
 
-    @Schema(description = "IANA timezone identifier for the location", example = "America/Chicago", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "IANA timezone identifier for the location",
+            example = "America/Chicago",
+            requiredMode = NOT_REQUIRED)
     private String timezone;
 
     @Schema(description = "Weekly operating hours for the location", requiredMode = NOT_REQUIRED)

@@ -38,9 +38,7 @@ public class GetContactsWithRolesResponse {
      */
     @Valid
     @NotNull
-    @Schema(
-            description = "List of contacts with assigned roles",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "List of contacts with assigned roles", requiredMode = Schema.RequiredMode.REQUIRED)
     private List<ContactWithRoles> contacts;
 
     /**
@@ -67,10 +65,7 @@ public class GetContactsWithRolesResponse {
         /**
          * Contact name
          */
-        @Schema(
-                description = "Contact name",
-                example = "Jane Doe",
-                requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Contact name", example = "Jane Doe", requiredMode = Schema.RequiredMode.REQUIRED)
         private String contactName;
 
         /**
@@ -85,10 +80,7 @@ public class GetContactsWithRolesResponse {
         /**
          * Phone number
          */
-        @Schema(
-                description = "Phone number",
-                example = "+1-555-0142",
-                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        @Schema(description = "Phone number", example = "+1-555-0142", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private String phone;
 
         /**
@@ -104,9 +96,7 @@ public class GetContactsWithRolesResponse {
          * Assigned roles (BILLING|APPROVER|DRIVER or dynamic list)
          */
         @Valid
-        @Schema(
-                description = "Assigned roles for this contact",
-                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        @Schema(description = "Assigned roles for this contact", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private List<AssignedRole> roles;
 
         /**

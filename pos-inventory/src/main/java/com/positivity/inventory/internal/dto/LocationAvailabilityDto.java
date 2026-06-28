@@ -29,19 +29,13 @@ public class LocationAvailabilityDto {
     @NotNull
     private UUID locationId;
 
-    @Schema(
-            description = "Human-readable name of the location",
-            example = "Main Warehouse",
-            requiredMode = REQUIRED)
+    @Schema(description = "Human-readable name of the location", example = "Main Warehouse", requiredMode = REQUIRED)
     @NotNull
     private String locationName;
 
     @Schema(description = "On-hand quantity at the location", example = "120", requiredMode = REQUIRED)
     private int onHandQuantity;
 
-    @Schema(
-            description = "Available-to-promise quantity at the location",
-            example = "90",
-            requiredMode = REQUIRED)
+    @Schema(description = "Available-to-promise quantity at the location", example = "90", requiredMode = REQUIRED)
     private int availableToPromiseQuantity;
 }

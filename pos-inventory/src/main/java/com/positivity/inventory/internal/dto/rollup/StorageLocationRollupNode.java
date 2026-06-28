@@ -18,12 +18,14 @@ public record StorageLocationRollupNode(
                 requiredMode = Schema.RequiredMode.REQUIRED)
         UUID storageLocationId,
 
-        @Schema(description = "Storage location name", example = "Aisle 3 — Bin 12") String name,
+        @Schema(description = "Storage location name", example = "Aisle 3 — Bin 12")
+        String name,
 
         @Schema(description = "Storage location type (e.g. FLOOR, SHELF, BIN)", example = "BIN")
         String type,
 
-        @Schema(description = "Storage location status", example = "ACTIVE") String status,
+        @Schema(description = "Storage location status", example = "ACTIVE")
+        String status,
 
         @Schema(
                 description = "Quantities recorded directly at this location",

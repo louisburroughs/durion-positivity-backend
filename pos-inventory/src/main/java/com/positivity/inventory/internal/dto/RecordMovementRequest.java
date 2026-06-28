@@ -64,18 +64,12 @@ public class RecordMovementRequest {
             allowableValues = {"RECEIVE", "PUT_AWAY", "PICK", "ISSUE", "RETURN", "TRANSFER"})
     MovementType movementType;
 
-    @Schema(
-            description = "Quantity of units being moved",
-            example = "12",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity of units being moved", example = "12", requiredMode = REQUIRED)
     @NotNull
     @Positive
     Integer quantity;
 
-    @Schema(
-            description = "Unit of measure for the quantity",
-            example = "EACH",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Unit of measure for the quantity", example = "EACH", requiredMode = NOT_REQUIRED)
     String unitOfMeasure;
 
     /** Optional reference to originating system transaction. */

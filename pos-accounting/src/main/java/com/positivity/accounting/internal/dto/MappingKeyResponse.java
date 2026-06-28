@@ -55,7 +55,10 @@ public class MappingKeyResponse {
             requiredMode = NOT_REQUIRED)
     private Instant createdAt;
 
-    @Schema(description = "Identifier of the user who created the mapping key", example = "jdoe", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the user who created the mapping key",
+            example = "jdoe",
+            requiredMode = NOT_REQUIRED)
     private String createdBy;
 
     @Schema(

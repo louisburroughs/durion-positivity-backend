@@ -50,7 +50,10 @@ public class EstimateResponse {
     @Schema(description = "Currency UOM ID", example = "USD", requiredMode = NOT_REQUIRED)
     private String currencyUomId;
 
-    @Schema(description = "Tax region ID", example = "550e8400-e29b-41d4-a716-446655440004", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Tax region ID",
+            example = "550e8400-e29b-41d4-a716-446655440004",
+            requiredMode = NOT_REQUIRED)
     private UUID taxRegionId;
 
     @Schema(description = "Estimate status", example = "DRAFT", requiredMode = REQUIRED)
@@ -60,7 +63,10 @@ public class EstimateResponse {
     @Schema(description = "Username who created the estimate", example = "john.doe", requiredMode = NOT_REQUIRED)
     private String createdByUserId;
 
-    @Schema(description = "Date and time the estimate was created", example = "2026-01-15T09:30:00Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Date and time the estimate was created",
+            example = "2026-01-15T09:30:00Z",
+            requiredMode = NOT_REQUIRED)
     private Instant createdAt;
 
     @Schema(description = "Subtotal amount before tax", example = "150.00", requiredMode = NOT_REQUIRED)

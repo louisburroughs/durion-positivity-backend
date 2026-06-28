@@ -63,7 +63,10 @@ public class LocationPriceOverrideResponseDto {
             requiredMode = REQUIRED)
     private UUID createdByUserId;
 
-    @Schema(description = "Timestamp the override was created", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Timestamp the override was created",
+            example = "2026-01-15T09:30:00Z",
+            requiredMode = REQUIRED)
     private Instant createdAt;
 
     @Schema(
@@ -81,7 +84,10 @@ public class LocationPriceOverrideResponseDto {
             requiredMode = NOT_REQUIRED)
     private UUID approvedByUserId;
 
-    @Schema(description = "Timestamp the override was approved", example = "2026-01-15T10:00:00Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp the override was approved",
+            example = "2026-01-15T10:00:00Z",
+            requiredMode = NOT_REQUIRED)
     private Instant approvedAt;
 
     @Schema(
@@ -90,7 +96,10 @@ public class LocationPriceOverrideResponseDto {
             requiredMode = NOT_REQUIRED)
     private UUID rejectedBy;
 
-    @Schema(description = "Timestamp the override was rejected", example = "2026-01-15T10:05:00Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp the override was rejected",
+            example = "2026-01-15T10:05:00Z",
+            requiredMode = NOT_REQUIRED)
     private Instant rejectedAt;
 
     @Schema(description = "Reason code for rejection", example = "BELOW_MARGIN", requiredMode = NOT_REQUIRED)

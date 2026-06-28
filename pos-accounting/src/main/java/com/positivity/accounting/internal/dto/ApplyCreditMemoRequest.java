@@ -48,7 +48,10 @@ public class ApplyCreditMemoRequest implements Serializable {
     @NonNull
     private BigDecimal totalAmount;
 
-    @Schema(description = "Identifier of the user applying the credit memo", example = "ap_clerk_1", requiredMode = REQUIRED)
+    @Schema(
+            description = "Identifier of the user applying the credit memo",
+            example = "ap_clerk_1",
+            requiredMode = REQUIRED)
     @JsonProperty("appliedBy")
     @NotNull(message = "Applied by user is required")
     @NonNull

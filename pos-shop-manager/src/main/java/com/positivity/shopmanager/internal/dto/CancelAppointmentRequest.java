@@ -13,10 +13,7 @@ import lombok.Data;
 @Schema(description = "Request to cancel an existing appointment with a mandatory reason code")
 public class CancelAppointmentRequest {
 
-    @Schema(
-            description = "Mandatory cancellation reason code",
-            example = "CUSTOMER_REQUEST",
-            requiredMode = REQUIRED)
+    @Schema(description = "Mandatory cancellation reason code", example = "CUSTOMER_REQUEST", requiredMode = REQUIRED)
     @NotNull
     private CancellationReasonCode cancellationReason;
 

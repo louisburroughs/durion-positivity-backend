@@ -37,9 +37,6 @@ public class StorageLocationValidationResponseDTO {
     @Schema(description = "Whether the storage location is active", example = "true", requiredMode = REQUIRED)
     private boolean active;
 
-    @Schema(
-            description = "Maximum unit capacity of the storage location",
-            example = "100",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Maximum unit capacity of the storage location", example = "100", requiredMode = NOT_REQUIRED)
     private Integer maxUnitCapacity;
 }

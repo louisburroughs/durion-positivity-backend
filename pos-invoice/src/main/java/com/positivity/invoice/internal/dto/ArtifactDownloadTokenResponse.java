@@ -11,5 +11,7 @@ import java.time.Instant;
  */
 @Schema(name = "ArtifactDownloadToken", description = "Short-lived signed token for downloading an invoice artifact")
 public record ArtifactDownloadTokenResponse(
-        @Schema(description = "Opaque signed download token") String downloadToken,
+        @Schema(description = "Opaque signed download token")
+        String downloadToken,
+
         @Schema(description = "When the token expires") Instant expiresAt) {}

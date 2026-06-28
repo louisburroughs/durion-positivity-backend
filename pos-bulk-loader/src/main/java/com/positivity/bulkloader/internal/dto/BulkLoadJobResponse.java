@@ -50,10 +50,7 @@ public class BulkLoadJobResponse {
     @NotNull
     private DomainType domainType;
 
-    @Schema(
-            description = "Current lifecycle status of the job",
-            example = "PROCESSING",
-            requiredMode = REQUIRED)
+    @Schema(description = "Current lifecycle status of the job", example = "PROCESSING", requiredMode = REQUIRED)
     @NotNull
     private JobStatus status;
 
@@ -63,22 +60,13 @@ public class BulkLoadJobResponse {
             requiredMode = NOT_REQUIRED)
     private Long totalRows;
 
-    @Schema(
-            description = "Number of rows processed so far",
-            example = "750",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Number of rows processed so far", example = "750", requiredMode = NOT_REQUIRED)
     private Long processedRows;
 
-    @Schema(
-            description = "Number of rows successfully loaded",
-            example = "740",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Number of rows successfully loaded", example = "740", requiredMode = NOT_REQUIRED)
     private Long successCount;
 
-    @Schema(
-            description = "Number of rows that failed processing",
-            example = "10",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Number of rows that failed processing", example = "10", requiredMode = NOT_REQUIRED)
     private Long failureCount;
 
     @Schema(

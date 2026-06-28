@@ -31,7 +31,10 @@ public class LocationRef {
     @NotNull
     private UUID id;
 
-    @Schema(description = "Display name of the location", example = "Downtown Service Center", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Display name of the location",
+            example = "Downtown Service Center",
+            requiredMode = NOT_REQUIRED)
     private String name;
 
     @Schema(description = "Unique business code of the location", example = "LOC-001", requiredMode = NOT_REQUIRED)

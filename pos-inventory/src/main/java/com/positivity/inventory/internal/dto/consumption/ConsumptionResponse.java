@@ -12,7 +12,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Schema(description = "Response describing the outcome of consuming inventory items against a workorder, including the ledger entries created")
+@Schema(
+        description =
+                "Response describing the outcome of consuming inventory items against a workorder, including the ledger entries created")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -38,10 +40,7 @@ public class ConsumptionResponse {
             requiredMode = NOT_REQUIRED)
     private UUID pickListId;
 
-    @Schema(
-            description = "Total number of items consumed in this operation",
-            example = "4",
-            requiredMode = REQUIRED)
+    @Schema(description = "Total number of items consumed in this operation", example = "4", requiredMode = REQUIRED)
     private int totalItemsConsumed;
 
     @Schema(

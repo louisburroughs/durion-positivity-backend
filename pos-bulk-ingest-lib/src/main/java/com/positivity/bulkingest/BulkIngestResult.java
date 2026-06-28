@@ -13,7 +13,10 @@ import lombok.Data;
 @Builder
 public class BulkIngestResult {
 
-    @Schema(description = "Zero-based index of the record within the submitted batch", example = "0", requiredMode = REQUIRED)
+    @Schema(
+            description = "Zero-based index of the record within the submitted batch",
+            example = "0",
+            requiredMode = REQUIRED)
     private int rowIndex;
 
     @Schema(
@@ -25,9 +28,15 @@ public class BulkIngestResult {
     @Schema(description = "Whether this record was ingested successfully", example = "true", requiredMode = REQUIRED)
     private boolean success;
 
-    @Schema(description = "Machine-readable error code when the record failed", example = "VALIDATION_FAILED", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Machine-readable error code when the record failed",
+            example = "VALIDATION_FAILED",
+            requiredMode = NOT_REQUIRED)
     private String errorCode;
 
-    @Schema(description = "Human-readable error detail when the record failed", example = "vin must be 17 characters", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Human-readable error detail when the record failed",
+            example = "vin must be 17 characters",
+            requiredMode = NOT_REQUIRED)
     private String errorMessage;
 }

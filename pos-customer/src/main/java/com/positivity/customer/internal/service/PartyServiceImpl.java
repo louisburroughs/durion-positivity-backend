@@ -217,7 +217,8 @@ public class PartyServiceImpl implements PartyService {
             String needle = name.toLowerCase(java.util.Locale.ROOT);
             String legal = s.getLegalName() != null ? s.getLegalName().toLowerCase(java.util.Locale.ROOT) : "";
             String display = s.getDisplayName() != null ? s.getDisplayName().toLowerCase(java.util.Locale.ROOT) : "";
-            String number = s.getCustomerNumber() != null ? s.getCustomerNumber().toLowerCase(java.util.Locale.ROOT) : "";
+            String number =
+                    s.getCustomerNumber() != null ? s.getCustomerNumber().toLowerCase(java.util.Locale.ROOT) : "";
             if (!legal.contains(needle) && !display.contains(needle) && !number.contains(needle)) {
                 return false;
             }

@@ -11,7 +11,9 @@ import java.util.UUID;
 import lombok.Builder;
 import lombok.Data;
 
-@Schema(description = "Goods receipt representing inventory received against a purchase order, including its received line items and accrued totals")
+@Schema(
+        description =
+                "Goods receipt representing inventory received against a purchase order, including its received line items and accrued totals")
 @Data
 @Builder
 public class GoodsReceiptResponse {

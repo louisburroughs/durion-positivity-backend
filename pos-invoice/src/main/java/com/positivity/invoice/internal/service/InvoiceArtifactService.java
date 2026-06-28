@@ -88,8 +88,10 @@ public class InvoiceArtifactService {
         tokenService.verify(token, invoiceId, artifactRefId);
         ArtifactRef ref = resolveAndValidate(invoiceId, artifactRefId);
         return switch (ref.type()) {
-            case INVOICE -> documentRenderClient.renderPdf(INVOICE_TEMPLATE_ID, invoiceContent(requireInvoice(invoiceId)));
-            case RECEIPT -> documentRenderClient.renderPdf(RECEIPT_TEMPLATE_ID, receiptContent(requireReceipt(ref.id())));
+            case INVOICE ->
+                documentRenderClient.renderPdf(INVOICE_TEMPLATE_ID, invoiceContent(requireInvoice(invoiceId)));
+            case RECEIPT ->
+                documentRenderClient.renderPdf(RECEIPT_TEMPLATE_ID, receiptContent(requireReceipt(ref.id())));
         };
     }
 
@@ -114,7 +116,9 @@ public class InvoiceArtifactService {
             }
             case RECEIPT -> {
                 Receipt receipt = requireReceipt(ref.id());
-                UUID receiptInvoiceId = receipt.getInvoice() == null ? null : receipt.getInvoice().getId();
+                UUID receiptInvoiceId = receipt.getInvoice() == null
+                        ? null
+                        : receipt.getInvoice().getId();
                 if (!invoiceId.equals(receiptInvoiceId)) {
                     throw new ArtifactNotFoundException("Receipt does not belong to invoice " + invoiceId);
                 }

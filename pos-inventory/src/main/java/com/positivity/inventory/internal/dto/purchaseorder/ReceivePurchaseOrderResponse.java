@@ -47,9 +47,7 @@ public class ReceivePurchaseOrderResponse {
             requiredMode = NOT_REQUIRED)
     private String message;
 
-    @Schema(
-            description = "Per-line detail of remaining open quantities after the receipt",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Per-line detail of remaining open quantities after the receipt", requiredMode = NOT_REQUIRED)
     private List<ReceivePurchaseOrderLineDetail> lines;
 
     @Data

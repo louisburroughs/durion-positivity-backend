@@ -77,8 +77,6 @@ public class ReceivingSessionResponse {
     @NotNull
     private Instant createdAt;
 
-    @Schema(
-            description = "Receiving lines belonging to the session",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Receiving lines belonging to the session", requiredMode = NOT_REQUIRED)
     private List<ReceivingLineResponse> lines;
 }

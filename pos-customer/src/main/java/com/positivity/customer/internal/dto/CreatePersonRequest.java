@@ -86,16 +86,10 @@ public class CreatePersonRequest {
     public static class PhoneInput {
         @NotBlank(message = "phone value is required")
         @Size(max = 64)
-        @Schema(
-                description = "Phone number",
-                example = "+1-555-123-4567",
-                requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Phone number", example = "+1-555-123-4567", requiredMode = Schema.RequiredMode.REQUIRED)
         private String value;
 
-        @Schema(
-                description = "Phone type",
-                example = "PHONE_MOBILE",
-                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        @Schema(description = "Phone type", example = "PHONE_MOBILE", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         private ContactPointType type;
 
         @Schema(

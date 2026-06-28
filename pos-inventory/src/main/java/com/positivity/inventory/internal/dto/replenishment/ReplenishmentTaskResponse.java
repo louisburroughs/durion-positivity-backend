@@ -25,10 +25,7 @@ public class ReplenishmentTaskResponse {
     @NotNull
     private String taskId;
 
-    @Schema(
-            description = "SKU of the item to be replenished",
-            example = "SKU-10042",
-            requiredMode = REQUIRED)
+    @Schema(description = "SKU of the item to be replenished", example = "SKU-10042", requiredMode = REQUIRED)
     @NotNull
     private String itemSKU;
 
@@ -51,10 +48,7 @@ public class ReplenishmentTaskResponse {
     @NotNull
     private UUID destinationLocationId;
 
-    @Schema(
-            description = "Current status of the replenishment task",
-            example = "PENDING",
-            requiredMode = REQUIRED)
+    @Schema(description = "Current status of the replenishment task", example = "PENDING", requiredMode = REQUIRED)
     @NotNull
     private String status;
 

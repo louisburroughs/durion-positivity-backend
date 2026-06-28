@@ -43,20 +43,14 @@ public class ReportExportRequest {
      * Period start date (inclusive).
      */
     @NotNull(message = "startDate is required")
-    @Schema(
-            description = "Period start date (inclusive, YYYY-MM-DD)",
-            example = "2026-01-01",
-            requiredMode = REQUIRED)
+    @Schema(description = "Period start date (inclusive, YYYY-MM-DD)", example = "2026-01-01", requiredMode = REQUIRED)
     private LocalDate startDate;
 
     /**
      * Period end date (inclusive).
      */
     @NotNull(message = "endDate is required")
-    @Schema(
-            description = "Period end date (inclusive, YYYY-MM-DD)",
-            example = "2026-03-31",
-            requiredMode = REQUIRED)
+    @Schema(description = "Period end date (inclusive, YYYY-MM-DD)", example = "2026-03-31", requiredMode = REQUIRED)
     private LocalDate endDate;
 
     /**

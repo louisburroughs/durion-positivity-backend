@@ -40,10 +40,7 @@ public class CrossDockResponse {
     @NotNull
     private String workorderLineId;
 
-    @Schema(
-            description = "Quantity of stock that was cross-docked",
-            example = "12",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity of stock that was cross-docked", example = "12", requiredMode = REQUIRED)
     @NotNull
     private BigDecimal crossDockedQuantity;
 

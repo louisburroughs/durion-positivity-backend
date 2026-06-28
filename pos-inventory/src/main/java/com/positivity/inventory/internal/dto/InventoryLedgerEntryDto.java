@@ -41,10 +41,7 @@ public class InventoryLedgerEntryDto {
             requiredMode = NOT_REQUIRED)
     private UUID adjustmentId;
 
-    @Schema(
-            description = "Type of inventory ledger event recorded",
-            example = "GOODS_RECEIPT",
-            requiredMode = REQUIRED)
+    @Schema(description = "Type of inventory ledger event recorded", example = "GOODS_RECEIPT", requiredMode = REQUIRED)
     @NotNull
     private InventoryLedgerEventType eventType;
 
@@ -55,10 +52,7 @@ public class InventoryLedgerEntryDto {
     @NotNull
     private Integer changeInQuantity;
 
-    @Schema(
-            description = "Running quantity after this entry was applied",
-            example = "120",
-            requiredMode = REQUIRED)
+    @Schema(description = "Running quantity after this entry was applied", example = "120", requiredMode = REQUIRED)
     @NotNull
     private Integer quantityAfter;
 
@@ -99,10 +93,7 @@ public class InventoryLedgerEntryDto {
             requiredMode = NOT_REQUIRED)
     private UUID toLocationId;
 
-    @Schema(
-            description = "Reason code explaining the entry",
-            example = "CYCLE_COUNT",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Reason code explaining the entry", example = "CYCLE_COUNT", requiredMode = NOT_REQUIRED)
     private String reasonCode;
 
     @Schema(

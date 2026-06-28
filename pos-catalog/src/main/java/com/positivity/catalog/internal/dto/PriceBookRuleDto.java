@@ -15,10 +15,7 @@ import lombok.Data;
 @Schema(description = "Price book rule detail")
 public class PriceBookRuleDto {
 
-    @Schema(
-            description = "Rule identifier",
-            example = "0196cf6f-c8dd-7ee0-93e7-f48a5698a535",
-            requiredMode = REQUIRED)
+    @Schema(description = "Rule identifier", example = "0196cf6f-c8dd-7ee0-93e7-f48a5698a535", requiredMode = REQUIRED)
     private UUID ruleId;
 
     @Schema(
@@ -40,7 +37,10 @@ public class PriceBookRuleDto {
             requiredMode = NOT_REQUIRED)
     private UUID targetId;
 
-    @Schema(description = "Pricing logic expression applied by the rule", example = "MSRP * 0.9", requiredMode = REQUIRED)
+    @Schema(
+            description = "Pricing logic expression applied by the rule",
+            example = "MSRP * 0.9",
+            requiredMode = REQUIRED)
     private String pricingLogic;
 
     @Schema(
@@ -56,10 +56,16 @@ public class PriceBookRuleDto {
     @Schema(description = "Evaluation priority; lower wins", example = "10", requiredMode = NOT_REQUIRED)
     private Integer priority;
 
-    @Schema(description = "Instant the rule becomes effective", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Instant the rule becomes effective",
+            example = "2026-01-15T09:30:00Z",
+            requiredMode = REQUIRED)
     private OffsetDateTime effectiveStartAt;
 
-    @Schema(description = "Instant the rule stops being effective", example = "2026-12-31T23:59:59Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Instant the rule stops being effective",
+            example = "2026-12-31T23:59:59Z",
+            requiredMode = NOT_REQUIRED)
     private OffsetDateTime effectiveEndAt;
 
     @Schema(
@@ -78,7 +84,10 @@ public class PriceBookRuleDto {
     @Schema(description = "Timestamp the rule was created", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
     private OffsetDateTime createdAt;
 
-    @Schema(description = "Timestamp the rule was last updated", example = "2026-01-16T11:00:00Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp the rule was last updated",
+            example = "2026-01-16T11:00:00Z",
+            requiredMode = NOT_REQUIRED)
     private OffsetDateTime updatedAt;
 
     @Schema(description = "Version for optimistic locking", example = "1", requiredMode = REQUIRED)

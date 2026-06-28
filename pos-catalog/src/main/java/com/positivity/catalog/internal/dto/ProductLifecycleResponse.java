@@ -49,7 +49,10 @@ public class ProductLifecycleResponse {
     @Schema(description = "Lifecycle override reason", example = "Vendor discontinued", requiredMode = NOT_REQUIRED)
     private String lifecycleOverrideReason;
 
-    @Schema(description = "Replacement options for this product lifecycle state", example = "[]", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Replacement options for this product lifecycle state",
+            example = "[]",
+            requiredMode = NOT_REQUIRED)
     private List<ReplacementOption> replacementOptions;
 
     @Getter

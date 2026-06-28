@@ -46,7 +46,10 @@ public class MobileUnitRequest {
             requiredMode = NOT_REQUIRED)
     private UUID travelBufferPolicyId;
 
-    @Schema(description = "Free-text notes about the mobile unit", example = "Equipped with hydraulic lift", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Free-text notes about the mobile unit",
+            example = "Equipped with hydraulic lift",
+            requiredMode = NOT_REQUIRED)
     private String notes;
 
     @Schema(

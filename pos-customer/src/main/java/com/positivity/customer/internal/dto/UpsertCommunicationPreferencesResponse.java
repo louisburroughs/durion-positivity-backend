@@ -36,10 +36,7 @@ public class UpsertCommunicationPreferencesResponse {
     /**
      * Updated version (for optimistic locking)
      */
-    @Schema(
-            description = "Updated version for optimistic locking",
-            example = "6",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Updated version for optimistic locking", example = "6", requiredMode = NOT_REQUIRED)
     private String version;
 
     /**

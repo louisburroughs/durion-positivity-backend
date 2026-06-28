@@ -32,6 +32,9 @@ public class UomConversionCreateRequestDto {
             requiredMode = REQUIRED)
     private BigDecimal conversionFactor;
 
-    @Schema(description = "Identifier of the user creating the conversion", example = "system", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the user creating the conversion",
+            example = "system",
+            requiredMode = NOT_REQUIRED)
     private String createdBy;
 }

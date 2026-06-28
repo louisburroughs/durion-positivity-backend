@@ -61,7 +61,8 @@ class LocationInventoryInquiryServiceImplTest {
     @Test
     void listLocationInventoryItems_returnsEmptyListForLocationWithoutStock() {
         var service = new LocationInventoryInquiryServiceImpl(ledgerRepository);
-        when(ledgerRepository.findPositiveOnHandByLocation(eq(LOCATION_ID), any())).thenReturn(List.of());
+        when(ledgerRepository.findPositiveOnHandByLocation(eq(LOCATION_ID), any()))
+                .thenReturn(List.of());
 
         LocationInventoryItemsResponse response = service.listLocationInventoryItems(LOCATION_ID);
 

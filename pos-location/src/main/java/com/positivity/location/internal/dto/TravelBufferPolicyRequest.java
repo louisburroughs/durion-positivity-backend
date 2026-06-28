@@ -26,7 +26,10 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Request payload for creating or updating a travel buffer policy")
 public class TravelBufferPolicyRequest {
 
-    @Schema(description = "Display name of the travel buffer policy", example = "Standard Metro Buffer", requiredMode = REQUIRED)
+    @Schema(
+            description = "Display name of the travel buffer policy",
+            example = "Standard Metro Buffer",
+            requiredMode = REQUIRED)
     @NotBlank
     private String name;
 
@@ -41,6 +44,9 @@ public class TravelBufferPolicyRequest {
     @PositiveOrZero
     private BigDecimal bufferValue;
 
-    @Schema(description = "Free-text notes about the policy", example = "Applies during peak hours only", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Free-text notes about the policy",
+            example = "Applies during peak hours only",
+            requiredMode = NOT_REQUIRED)
     private String notes;
 }

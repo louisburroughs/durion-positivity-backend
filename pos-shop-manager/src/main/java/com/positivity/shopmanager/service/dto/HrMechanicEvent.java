@@ -73,10 +73,7 @@ public class HrMechanicEvent {
             @Schema(description = "Skill code", example = "BRAKES", requiredMode = REQUIRED)
             private String skillCode;
 
-            @Schema(
-                    description = "Proficiency level for the skill",
-                    example = "4",
-                    requiredMode = REQUIRED)
+            @Schema(description = "Proficiency level for the skill", example = "4", requiredMode = REQUIRED)
             private int proficiencyLevel;
         }
     }

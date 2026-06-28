@@ -11,7 +11,9 @@ import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.Data;
 
-@Schema(description = "Request payload describing a single line item to include when creating an advance shipping notice (ASN)")
+@Schema(
+        description =
+                "Request payload describing a single line item to include when creating an advance shipping notice (ASN)")
 @Data
 public class CreateAsnLineRequest {
 
@@ -36,18 +38,12 @@ public class CreateAsnLineRequest {
     @NotBlank
     private String sku;
 
-    @Schema(
-            description = "Quantity of the SKU declared as shipped on the ASN",
-            example = "12",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity of the SKU declared as shipped on the ASN", example = "12", requiredMode = REQUIRED)
     @NotNull
     @Positive
     private BigDecimal quantityShipped;
 
-    @Schema(
-            description = "Unit of measure for the shipped quantity",
-            example = "EA",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Unit of measure for the shipped quantity", example = "EA", requiredMode = NOT_REQUIRED)
     private String unitOfMeasure;
 
     @Schema(

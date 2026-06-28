@@ -42,9 +42,7 @@ public class GeneratePickListRequest {
     @PositiveOrZero
     private int basePriority;
 
-    @Schema(
-            description = "Line items describing the SKUs and quantities to be picked",
-            requiredMode = REQUIRED)
+    @Schema(description = "Line items describing the SKUs and quantities to be picked", requiredMode = REQUIRED)
     @NotNull
     @Valid
     private List<PickLineItem> lineItems;
@@ -68,17 +66,11 @@ public class GeneratePickListRequest {
                 requiredMode = NOT_REQUIRED)
         private UUID reservationId;
 
-        @Schema(
-                description = "Stock keeping unit code to be picked",
-                example = "SKU-10042",
-                requiredMode = REQUIRED)
+        @Schema(description = "Stock keeping unit code to be picked", example = "SKU-10042", requiredMode = REQUIRED)
         @NotBlank
         private String sku;
 
-        @Schema(
-                description = "Quantity of the SKU to be picked",
-                example = "12",
-                requiredMode = REQUIRED)
+        @Schema(description = "Quantity of the SKU to be picked", example = "12", requiredMode = REQUIRED)
         @Positive
         private int quantity;
     }

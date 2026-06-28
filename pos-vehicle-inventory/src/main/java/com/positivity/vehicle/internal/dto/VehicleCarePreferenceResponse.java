@@ -63,9 +63,6 @@ public class VehicleCarePreferenceResponse {
             requiredMode = REQUIRED)
     Instant updatedAt;
 
-    @Schema(
-            description = "Optimistic-locking version of the preference record",
-            example = "1",
-            requiredMode = REQUIRED)
+    @Schema(description = "Optimistic-locking version of the preference record", example = "1", requiredMode = REQUIRED)
     Long version;
 }

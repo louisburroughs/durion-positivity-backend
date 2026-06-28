@@ -1,12 +1,11 @@
 package com.positivity.openapivalidation.internal.validator;
 
-import com.positivity.openapivalidation.internal.policy.OpenApiModulePolicy;
-import org.junit.jupiter.api.Test;
-
-import java.nio.file.Path;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.positivity.openapivalidation.internal.policy.OpenApiModulePolicy;
+import java.nio.file.Path;
+import org.junit.jupiter.api.Test;
 
 class OpenApiModuleValidatorTest {
 
@@ -19,7 +18,8 @@ class OpenApiModuleValidatorTest {
                 Path.of("src/test/resources/openapi/fixtures/module/missing-summary.yaml"),
                 new OpenApiModulePolicy(OpenApiModulePolicy.Mode.REPORT_ONLY, "baseline gap"));
 
-        assertThat(issues).extracting(OpenApiValidationIssue::message)
+        assertThat(issues)
+                .extracting(OpenApiValidationIssue::message)
                 .contains(
                         "pos-documents GET /v1/documents: missing summary",
                         "pos-documents GET /v1/documents: missing description");
@@ -32,7 +32,8 @@ class OpenApiModuleValidatorTest {
                 Path.of("src/test/resources/openapi/fixtures/module/missing-description.yaml"),
                 new OpenApiModulePolicy(OpenApiModulePolicy.Mode.REPORT_ONLY, "baseline gap"));
 
-        assertThat(issues).extracting(OpenApiValidationIssue::message)
+        assertThat(issues)
+                .extracting(OpenApiValidationIssue::message)
                 .contains("pos-documents GET /v1/documents: missing description")
                 .doesNotContain("pos-documents GET /v1/documents: missing summary");
     }
@@ -44,7 +45,8 @@ class OpenApiModuleValidatorTest {
                 Path.of("src/test/resources/openapi/fixtures/module/missing-paths.yaml"),
                 new OpenApiModulePolicy(OpenApiModulePolicy.Mode.STRICT, null));
 
-        assertThat(issues).singleElement()
+        assertThat(issues)
+                .singleElement()
                 .extracting(OpenApiValidationIssue::message)
                 .isEqualTo("pos-api-gateway: missing paths section");
     }
@@ -52,9 +54,9 @@ class OpenApiModuleValidatorTest {
     @Test
     void throwsForMissingSpecFile() {
         assertThatThrownBy(() -> validator.validate(
-                "pos-order",
-                Path.of("src/test/resources/openapi/fixtures/module/does-not-exist.yaml"),
-                new OpenApiModulePolicy(OpenApiModulePolicy.Mode.STRICT, null)))
+                        "pos-order",
+                        Path.of("src/test/resources/openapi/fixtures/module/does-not-exist.yaml"),
+                        new OpenApiModulePolicy(OpenApiModulePolicy.Mode.STRICT, null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("pos-order")
                 .hasMessageContaining("not found");
@@ -73,9 +75,9 @@ class OpenApiModuleValidatorTest {
     @Test
     void throwsForMalformedSpecFile() {
         assertThatThrownBy(() -> validator.validate(
-                "pos-order",
-                Path.of("src/test/resources/openapi/fixtures/module/malformed.yaml"),
-                new OpenApiModulePolicy(OpenApiModulePolicy.Mode.STRICT, null)))
+                        "pos-order",
+                        Path.of("src/test/resources/openapi/fixtures/module/malformed.yaml"),
+                        new OpenApiModulePolicy(OpenApiModulePolicy.Mode.STRICT, null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("pos-order")
                 .hasMessageContaining("could not be parsed");

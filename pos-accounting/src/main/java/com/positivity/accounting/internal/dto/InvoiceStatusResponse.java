@@ -25,10 +25,7 @@ import lombok.experimental.Tolerate;
 @Schema(description = "Invoice payment status response")
 public class InvoiceStatusResponse {
 
-    @Schema(
-            description = "Invoice UUID",
-            example = "01960003-0000-7000-8000-000000000001",
-            requiredMode = REQUIRED)
+    @Schema(description = "Invoice UUID", example = "01960003-0000-7000-8000-000000000001", requiredMode = REQUIRED)
     @NotNull
     private UUID invoiceId;
 
@@ -42,10 +39,16 @@ public class InvoiceStatusResponse {
     @Schema(description = "Total invoice amount", example = "1250.00", requiredMode = NOT_REQUIRED)
     private BigDecimal invoiceTotal;
 
-    @Schema(description = "Remaining balance (invoice total minus total paid)", example = "0.00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Remaining balance (invoice total minus total paid)",
+            example = "0.00",
+            requiredMode = NOT_REQUIRED)
     private BigDecimal remainingBalance;
 
-    @Schema(description = "Reference of the latest payment transaction", example = "TXN-2026-000123", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Reference of the latest payment transaction",
+            example = "TXN-2026-000123",
+            requiredMode = NOT_REQUIRED)
     private String latestTransactionReference;
 
     @Schema(description = "Last updated timestamp", example = "2026-06-18T08:00:00Z", requiredMode = NOT_REQUIRED)

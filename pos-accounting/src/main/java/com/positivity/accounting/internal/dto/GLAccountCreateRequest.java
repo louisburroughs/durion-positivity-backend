@@ -42,13 +42,22 @@ public class GLAccountCreateRequest {
     @Schema(description = "Type of the GL account", example = "REVENUE", requiredMode = REQUIRED)
     private AccountType accountType;
 
-    @Schema(description = "Optional description of the account", example = "Revenue from service work", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Optional description of the account",
+            example = "Revenue from service work",
+            requiredMode = NOT_REQUIRED)
     private String description;
 
-    @Schema(description = "Identifier of the parent account, if any", example = "01960003-0000-7000-8000-000000000001", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the parent account, if any",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = NOT_REQUIRED)
     private UUID parentAccountId;
 
     @NotNull(message = "activationDate is required")
-    @Schema(description = "Date and time the account becomes active (ISO 8601)", example = "2026-06-18T08:00:00", requiredMode = REQUIRED)
+    @Schema(
+            description = "Date and time the account becomes active (ISO 8601)",
+            example = "2026-06-18T08:00:00",
+            requiredMode = REQUIRED)
     private LocalDateTime activationDate;
 }

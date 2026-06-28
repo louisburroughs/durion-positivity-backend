@@ -11,8 +11,7 @@ import org.yaml.snakeyaml.Yaml;
 
 public final class OpenApiValidationInventoryLoader {
 
-    private OpenApiValidationInventoryLoader() {
-    }
+    private OpenApiValidationInventoryLoader() {}
 
     public static @NonNull OpenApiValidationInventory load(@NonNull Path path) {
         try (var reader = Files.newBufferedReader(path)) {
@@ -24,12 +23,11 @@ public final class OpenApiValidationInventoryLoader {
             Map<String, OpenApiModulePolicy> policies = new HashMap<>();
             for (Map.Entry<?, ?> entry : modulesMap.entrySet()) {
                 if (entry.getKey() == null) {
-                    throw new IllegalArgumentException(
-                            "Expected string module key in " + path + ", got: null");
+                    throw new IllegalArgumentException("Expected string module key in " + path + ", got: null");
                 }
                 if (!(entry.getKey() instanceof String moduleName)) {
-                    throw new IllegalArgumentException(
-                            "Expected string module key in " + path + ", got: " + entry.getKey().getClass().getSimpleName() + " (" + entry.getKey() + ")");
+                    throw new IllegalArgumentException("Expected string module key in " + path + ", got: "
+                            + entry.getKey().getClass().getSimpleName() + " (" + entry.getKey() + ")");
                 }
                 Map<?, ?> policyMap = requireMap(entry.getValue(), "policy for " + moduleName);
                 policies.put(moduleName, toPolicy(policyMap, moduleName));
@@ -53,8 +51,8 @@ public final class OpenApiValidationInventoryLoader {
         } else if (reasonValue instanceof String s) {
             reason = s;
         } else {
-            throw new IllegalArgumentException(
-                    "Expected string reason for module: " + moduleName + ", got: " + reasonValue.getClass().getSimpleName());
+            throw new IllegalArgumentException("Expected string reason for module: " + moduleName + ", got: "
+                    + reasonValue.getClass().getSimpleName());
         }
         return new OpenApiModulePolicy(mode, reason);
     }

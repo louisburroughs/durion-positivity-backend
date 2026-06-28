@@ -98,10 +98,7 @@ public class UpsertCommunicationPreferencesRequest {
      * Source of update (frontend sends constant or backend infers from context).
      * TBD: frontend sends (APP|API|ADMIN) or backend always sets to APP if client.
      */
-    @Schema(
-            description = "Source of update (APP|API|ADMIN)",
-            example = "APP",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Source of update (APP|API|ADMIN)", example = "APP", requiredMode = NOT_REQUIRED)
     @Size(max = 40)
     private String updateSource;
 }

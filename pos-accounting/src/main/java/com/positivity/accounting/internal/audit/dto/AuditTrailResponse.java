@@ -48,7 +48,10 @@ public class AuditTrailResponse {
             requiredMode = NOT_REQUIRED)
     private String actorId;
 
-    @Schema(description = "Role of the actor who performed the action", example = "STORE_MANAGER", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Role of the actor who performed the action",
+            example = "STORE_MANAGER",
+            requiredMode = NOT_REQUIRED)
     private String actorRole;
 
     @Schema(
@@ -58,7 +61,10 @@ public class AuditTrailResponse {
     @NotNull
     private Instant timestamp;
 
-    @Schema(description = "Reason captured for the action", example = "Price matched competitor quote", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Reason captured for the action",
+            example = "Price matched competitor quote",
+            requiredMode = NOT_REQUIRED)
     private String reason;
 
     @Schema(description = "Authorization level applied to the action", example = "MANAGER", requiredMode = NOT_REQUIRED)
@@ -86,10 +92,16 @@ public class AuditTrailResponse {
     @Schema(description = "Adjusted price after override", example = "1100.00", requiredMode = NOT_REQUIRED)
     private BigDecimal adjustedPrice;
 
-    @Schema(description = "Override expressed as an amount or percentage", example = "-12%", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Override expressed as an amount or percentage",
+            example = "-12%",
+            requiredMode = NOT_REQUIRED)
     private String overrideAmountOrPercent;
 
-    @Schema(description = "Forbidden category code that was triggered, if any", example = "BELOW_COST", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Forbidden category code that was triggered, if any",
+            example = "BELOW_COST",
+            requiredMode = NOT_REQUIRED)
     private String forbiddenCategoryCode;
 
     @Schema(description = "Result of policy validation for the event", requiredMode = NOT_REQUIRED)
@@ -114,13 +126,19 @@ public class AuditTrailResponse {
     @Schema(description = "Refund amount", example = "1250.00", requiredMode = NOT_REQUIRED)
     private BigDecimal refundAmount;
 
-    @Schema(description = "Status of the original payment being refunded", example = "SETTLED", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Status of the original payment being refunded",
+            example = "SETTLED",
+            requiredMode = NOT_REQUIRED)
     private RefundPaymentStatus originalPaymentStatus;
 
     @Schema(description = "Method used to issue the refund", example = "CASH_REFUND", requiredMode = NOT_REQUIRED)
     private RefundMethod refundMethod;
 
-    @Schema(description = "Comma-separated linked source identifiers", example = "01960003-0000-7000-8000-000000000007", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Comma-separated linked source identifiers",
+            example = "01960003-0000-7000-8000-000000000007",
+            requiredMode = NOT_REQUIRED)
     private String linkedSourceIds;
 
     // Cancellation fields
@@ -136,7 +154,10 @@ public class AuditTrailResponse {
     @Schema(description = "Partial payment details captured at cancellation (JSON)", requiredMode = NOT_REQUIRED)
     private String partialPaymentInfo;
 
-    @Schema(description = "Status of the GL reversal triggered by the cancellation", example = "COMPLETED", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Status of the GL reversal triggered by the cancellation",
+            example = "COMPLETED",
+            requiredMode = NOT_REQUIRED)
     private String glReversalStatus;
 
     // Accounting fields
@@ -146,7 +167,10 @@ public class AuditTrailResponse {
     @Schema(description = "Accounting status of the event", example = "POSTED", requiredMode = NOT_REQUIRED)
     private AccountingStatus accountingStatus;
 
-    @Schema(description = "Expected accounting outcome description", example = "Net revenue decreased by 150.00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Expected accounting outcome description",
+            example = "Net revenue decreased by 150.00",
+            requiredMode = NOT_REQUIRED)
     private String expectedAccountingOutcome;
 
     @Schema(
@@ -155,6 +179,9 @@ public class AuditTrailResponse {
             requiredMode = NOT_REQUIRED)
     private UUID sourceEventId;
 
-    @Schema(description = "Identifier of the source business document", example = "INV-2026-000123", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the source business document",
+            example = "INV-2026-000123",
+            requiredMode = NOT_REQUIRED)
     private String sourceDocumentId;
 }

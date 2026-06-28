@@ -35,10 +35,7 @@ public class StartTravelSegmentRequest {
     private UUID technicianId;
 
     @NotNull
-    @Schema(
-            description = "Direction or purpose of this travel leg",
-            example = "DEPART_SHOP",
-            requiredMode = REQUIRED)
+    @Schema(description = "Direction or purpose of this travel leg", example = "DEPART_SHOP", requiredMode = REQUIRED)
     private TravelSegmentType segmentType;
 
     @Schema(

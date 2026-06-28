@@ -40,12 +40,18 @@ public class LocationBulkIngestRecord {
     @Schema(description = "ISO 3166-1 alpha-2 country code", example = "US", requiredMode = NOT_REQUIRED)
     private String countryCode;
 
-    @Schema(description = "Primary phone number for the location", example = "+1-217-555-0100", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Primary phone number for the location",
+            example = "+1-217-555-0100",
+            requiredMode = NOT_REQUIRED)
     private String phoneNumber;
 
     @Schema(description = "Whether the location is active", example = "true", requiredMode = NOT_REQUIRED)
     private Boolean active;
 
-    @Schema(description = "Name of the location type to resolve during ingest", example = "STORE", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Name of the location type to resolve during ingest",
+            example = "STORE",
+            requiredMode = NOT_REQUIRED)
     private String locationTypeName;
 }

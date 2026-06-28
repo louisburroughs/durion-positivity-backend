@@ -35,7 +35,9 @@ public class BillMatchResult {
 
     /** Alternative candidates (populated when AMBIGUOUS) */
     @Nullable
-    @Schema(description = "Alternative candidate bills (populated when the match is ambiguous)", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Alternative candidate bills (populated when the match is ambiguous)",
+            requiredMode = NOT_REQUIRED)
     List<ScoredBill> alternativeCandidates;
 
     /** Detailed matching audit trail */

@@ -12,7 +12,9 @@ import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.Data;
 
-@Schema(description = "Request payload describing a single received line item when recording a goods receipt against a purchase order")
+@Schema(
+        description =
+                "Request payload describing a single received line item when recording a goods receipt against a purchase order")
 @Data
 public class CreateGoodsReceiptLineRequest {
 

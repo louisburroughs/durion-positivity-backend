@@ -35,10 +35,7 @@ public class SubmitCountRequest {
     @NotNull(message = "Auditor ID is required")
     private String auditorId;
 
-    @Schema(
-            description = "Quantity physically counted by the auditor",
-            example = "12",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity physically counted by the auditor", example = "12", requiredMode = REQUIRED)
     @NotNull(message = "Actual quantity is required")
     @Min(value = 0, message = "Quantity must be zero or positive")
     private Integer actualQuantity;

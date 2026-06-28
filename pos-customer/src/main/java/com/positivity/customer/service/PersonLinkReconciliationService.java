@@ -31,22 +31,30 @@ public interface PersonLinkReconciliationService {
      */
     @Schema(description = "Outcome of a person-link reconciliation pass against pos-people")
     record PersonLinkReport(
-            @Schema(description = "Count of distinct linked person ids checked", example = "120", requiredMode = Schema.RequiredMode.REQUIRED)
-                    int totalLinks,
             @Schema(
-                            description = "Count of linked ids that exist in pos-people",
-                            example = "118",
-                            requiredMode = Schema.RequiredMode.REQUIRED)
-                    int resolved,
+                    description = "Count of distinct linked person ids checked",
+                    example = "120",
+                    requiredMode = Schema.RequiredMode.REQUIRED)
+            int totalLinks,
+
             @Schema(
-                            description = "Linked person ids with no matching pos-people person (orphans)",
-                            requiredMode = Schema.RequiredMode.REQUIRED)
-                    @NonNull List<UUID> unresolvedPersonIds,
+                    description = "Count of linked ids that exist in pos-people",
+                    example = "118",
+                    requiredMode = Schema.RequiredMode.REQUIRED)
+            int resolved,
+
             @Schema(
-                            description = "False if pos-people could not be reached, in which case resolved/unresolved counts are not meaningful",
-                            example = "true",
-                            requiredMode = Schema.RequiredMode.REQUIRED)
-                    boolean posPeopleReachable) {
+                    description = "Linked person ids with no matching pos-people person (orphans)",
+                    requiredMode = Schema.RequiredMode.REQUIRED)
+            @NonNull
+            List<UUID> unresolvedPersonIds,
+
+            @Schema(
+                    description =
+                            "False if pos-people could not be reached, in which case resolved/unresolved counts are not meaningful",
+                    example = "true",
+                    requiredMode = Schema.RequiredMode.REQUIRED)
+            boolean posPeopleReachable) {
         @Schema(
                 description = "Whether reconciliation is healthy: pos-people reachable and no unresolved orphan links",
                 example = "true",

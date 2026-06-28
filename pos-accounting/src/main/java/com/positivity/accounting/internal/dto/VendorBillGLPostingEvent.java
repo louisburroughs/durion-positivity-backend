@@ -38,7 +38,10 @@ import org.jspecify.annotations.Nullable;
 public class VendorBillGLPostingEvent {
 
     @NonNull
-    @Schema(description = "Event UUID (idempotency key)", example = "01936e5c-1234-7a3d-8b6e-123456789012", requiredMode = REQUIRED)
+    @Schema(
+            description = "Event UUID (idempotency key)",
+            example = "01936e5c-1234-7a3d-8b6e-123456789012",
+            requiredMode = REQUIRED)
     @JsonProperty("eventId")
     private UUID eventId;
 
@@ -53,7 +56,10 @@ public class VendorBillGLPostingEvent {
     private UUID vendorId;
 
     @NonNull
-    @Schema(description = "Organization UUID", example = "00000000-0000-4000-a000-000000000010", requiredMode = REQUIRED)
+    @Schema(
+            description = "Organization UUID",
+            example = "00000000-0000-4000-a000-000000000010",
+            requiredMode = REQUIRED)
     @JsonProperty("organizationId")
     private UUID organizationId;
 
@@ -63,7 +69,10 @@ public class VendorBillGLPostingEvent {
     private String vendorName;
 
     @Nullable
-    @Schema(description = "Purchase order UUID if available", example = "01936e59-abcd-7a3d-8b6e-3c4567890123", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Purchase order UUID if available",
+            example = "01936e59-abcd-7a3d-8b6e-3c4567890123",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("purchaseOrderId")
     private UUID purchaseOrderId;
 
@@ -78,7 +87,10 @@ public class VendorBillGLPostingEvent {
     private String billNumber;
 
     @NonNull
-    @Schema(description = "Bill date (transaction date for posting)", example = "2026-01-15T10:30:00", requiredMode = REQUIRED)
+    @Schema(
+            description = "Bill date (transaction date for posting)",
+            example = "2026-01-15T10:30:00",
+            requiredMode = REQUIRED)
     @JsonProperty("billDate")
     private LocalDateTime billDate;
 
@@ -93,7 +105,10 @@ public class VendorBillGLPostingEvent {
     private List<BillLineItem> lineItems;
 
     @Nullable
-    @Schema(description = "Optional dimensional context for GL mapping", example = "{\"businessUnitId\":\"BU-001\"}", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Optional dimensional context for GL mapping",
+            example = "{\"businessUnitId\":\"BU-001\"}",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("dimensions")
     private Map<String, String> dimensions;
 
@@ -105,7 +120,10 @@ public class VendorBillGLPostingEvent {
     public static class BillLineItem {
 
         @NonNull
-        @Schema(description = "Product/SKU UUID", example = "01936e59-abcd-7a3d-8b6e-3c4567890123", requiredMode = REQUIRED)
+        @Schema(
+                description = "Product/SKU UUID",
+                example = "01936e59-abcd-7a3d-8b6e-3c4567890123",
+                requiredMode = REQUIRED)
         @JsonProperty("productId")
         private UUID productId;
 
@@ -134,7 +152,10 @@ public class VendorBillGLPostingEvent {
         @JsonProperty("lineTotal")
         private BigDecimal lineTotal;
 
-        @Schema(description = "Is this an inventory item (true) or expense item (false)", example = "true", requiredMode = REQUIRED)
+        @Schema(
+                description = "Is this an inventory item (true) or expense item (false)",
+                example = "true",
+                requiredMode = REQUIRED)
         @JsonProperty("isInventoryItem")
         private boolean isInventoryItem;
     }

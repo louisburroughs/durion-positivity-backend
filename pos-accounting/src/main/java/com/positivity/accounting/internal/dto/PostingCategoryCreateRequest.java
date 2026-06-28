@@ -33,7 +33,10 @@ public class PostingCategoryCreateRequest {
     @Size(max = 500, message = "Description must not exceed 500 characters")
     private String description;
 
-    @Schema(description = "Identifier of the user creating the posting category", example = "jdoe", requiredMode = REQUIRED)
+    @Schema(
+            description = "Identifier of the user creating the posting category",
+            example = "jdoe",
+            requiredMode = REQUIRED)
     @NotBlank(message = "Created by is required")
     @Size(max = 50, message = "Created by must not exceed 50 characters")
     private String createdBy;

@@ -16,7 +16,9 @@ import java.util.UUID;
  * <p>
  * Represents the clerk's scan data and optional override information.
  */
-@Schema(description = "Request to execute a putaway move from staging to storage, with optional business-rule overrides")
+@Schema(
+        description =
+                "Request to execute a putaway move from staging to storage, with optional business-rule overrides")
 public class PutawayExecutionRequest {
 
     @Schema(
@@ -40,10 +42,7 @@ public class PutawayExecutionRequest {
     @NotNull
     private UUID destinationLocationId;
 
-    @Schema(
-            description = "Quantity of units to move",
-            example = "12",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity of units to move", example = "12", requiredMode = REQUIRED)
     @Positive
     private int quantity;
 

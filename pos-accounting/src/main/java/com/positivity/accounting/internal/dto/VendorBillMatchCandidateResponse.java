@@ -42,7 +42,10 @@ public class VendorBillMatchCandidateResponse {
     UUID vendorBillId;
 
     /** Vendor ID. */
-    @Schema(description = "Identifier of the vendor", example = "01960003-0000-7000-8000-000000000004", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the vendor",
+            example = "01960003-0000-7000-8000-000000000004",
+            requiredMode = NOT_REQUIRED)
     UUID vendorId;
 
     /** Bill number for display. */
@@ -58,7 +61,10 @@ public class VendorBillMatchCandidateResponse {
     int matchScore;
 
     /** Score breakdown details. */
-    @Schema(description = "Human-readable breakdown of the match score", example = "amount:40, date:25, vendor:20", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Human-readable breakdown of the match score",
+            example = "amount:40, date:25, vendor:20",
+            requiredMode = NOT_REQUIRED)
     String scoreBreakdown;
 
     /** Whether this candidate has been resolved. */

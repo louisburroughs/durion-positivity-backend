@@ -93,7 +93,8 @@ public class AppointmentCreateRequest {
      * Required when {@code sourceType} is set.
      */
     @Schema(
-            description = "External identifier of the originating estimate or workorder; required when sourceType is set",
+            description =
+                    "External identifier of the originating estimate or workorder; required when sourceType is set",
             example = "EST-2026-000045",
             requiredMode = NOT_REQUIRED)
     private String sourceId;

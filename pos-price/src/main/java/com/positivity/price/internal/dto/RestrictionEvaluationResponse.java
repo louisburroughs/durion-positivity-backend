@@ -9,4 +9,5 @@ import java.util.List;
 @Schema(description = "Batch response containing one restriction-evaluation result per requested item")
 public record RestrictionEvaluationResponse(
         @Schema(description = "Per-item restriction evaluation results", example = "[]", requiredMode = REQUIRED)
-                @NotNull List<RestrictionEvaluationResult> results) {}
+        @NotNull
+        List<RestrictionEvaluationResult> results) {}

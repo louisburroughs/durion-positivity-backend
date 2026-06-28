@@ -19,10 +19,16 @@ public class PersonDTO {
     @Schema(description = "Last name of the person", example = "Doe", requiredMode = NOT_REQUIRED)
     private String lastName;
 
-    @Schema(description = "Primary email address of the person", example = "jane.doe@example.com", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Primary email address of the person",
+            example = "jane.doe@example.com",
+            requiredMode = NOT_REQUIRED)
     private String primaryEmail;
 
-    @Schema(description = "Secondary email address of the person", example = "jane.d@example.com", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Secondary email address of the person",
+            example = "jane.d@example.com",
+            requiredMode = NOT_REQUIRED)
     private String secondaryEmail;
 
     @Schema(

@@ -36,10 +36,7 @@ public class PurchaseOrderResponse {
     @NotNull
     private UUID vendorId;
 
-    @Schema(
-            description = "Human-readable purchase order number",
-            example = "PO-2026-00042",
-            requiredMode = REQUIRED)
+    @Schema(description = "Human-readable purchase order number", example = "PO-2026-00042", requiredMode = REQUIRED)
     @NotNull
     private String poNumber;
 
@@ -100,10 +97,7 @@ public class PurchaseOrderResponse {
             requiredMode = NOT_REQUIRED)
     private String paymentTermsId;
 
-    @Schema(
-            description = "Date the purchase order was issued",
-            example = "2026-01-15",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Date the purchase order was issued", example = "2026-01-15", requiredMode = NOT_REQUIRED)
     private LocalDate poDate;
 
     @Schema(
@@ -174,8 +168,6 @@ public class PurchaseOrderResponse {
     @NotNull
     private Instant updatedAt;
 
-    @Schema(
-            description = "Line items belonging to this purchase order",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Line items belonging to this purchase order", requiredMode = NOT_REQUIRED)
     private List<PurchaseOrderLineResponse> lines;
 }

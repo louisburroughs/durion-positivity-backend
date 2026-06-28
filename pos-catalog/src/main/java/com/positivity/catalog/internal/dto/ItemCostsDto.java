@@ -12,10 +12,7 @@ import lombok.Data;
 @Schema(description = "Current item costs")
 public class ItemCostsDto {
 
-    @Schema(
-            description = "Item identifier",
-            example = "0196cf6f-c8dd-7ee0-93e7-f48a5698a535",
-            requiredMode = REQUIRED)
+    @Schema(description = "Item identifier", example = "0196cf6f-c8dd-7ee0-93e7-f48a5698a535", requiredMode = REQUIRED)
     private UUID itemId;
 
     @Schema(description = "Current standard cost", example = "5.00", requiredMode = NOT_REQUIRED)

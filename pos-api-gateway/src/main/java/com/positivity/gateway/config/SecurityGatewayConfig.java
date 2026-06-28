@@ -237,10 +237,12 @@ public class SecurityGatewayConfig {
         String rolesHeader = resolveRolesHeader(claims);
         if (legacyAuthoritiesHeader.isPresent()) {
             return Optional.of(new AuthenticatedIdentity(
-                    subject, claims.get("uid", String.class),
-                    "",                              // no perm_bits for legacy tokens
-                    legacyAuthoritiesHeader.get(),   // CSV from legacy authorities claim
-                    rolesHeader, jti));
+                    subject,
+                    claims.get("uid", String.class),
+                    "", // no perm_bits for legacy tokens
+                    legacyAuthoritiesHeader.get(), // CSV from legacy authorities claim
+                    rolesHeader,
+                    jti));
         }
 
         Integer permVer = claims.get(CLAIM_PERMISSION_VERSION, Integer.class);
@@ -263,10 +265,12 @@ public class SecurityGatewayConfig {
 
         String permBits = claims.get("perm_bits", String.class);
         return Optional.of(new AuthenticatedIdentity(
-                subject, claims.get("uid", String.class),
+                subject,
+                claims.get("uid", String.class),
                 permBits != null ? permBits : "",
-                "",       // no legacy CSV for new tokens
-                rolesHeader, jti));
+                "", // no legacy CSV for new tokens
+                rolesHeader,
+                jti));
     }
 
     private Optional<String> resolveLegacyAuthoritiesHeader(Claims claims, AuthRequestContext context, String jti) {
@@ -364,7 +368,8 @@ public class SecurityGatewayConfig {
         if (authProperties.isRejectHeaderTokenMismatch()) {
             boolean mismatch = headerMismatch(context.inboundHeaders().user(), identity.subject())
                     || headerMismatch(context.inboundHeaders().userId(), identity.userId())
-                    || authoritiesHeaderMismatch(context.inboundHeaders().authorities(), identity.legacyAuthoritiesHeader())
+                    || authoritiesHeaderMismatch(
+                            context.inboundHeaders().authorities(), identity.legacyAuthoritiesHeader())
                     || headerMismatch(context.inboundHeaders().permBits(), identity.permBitsHeader());
             if (mismatch) {
                 return rejectAuthentication(

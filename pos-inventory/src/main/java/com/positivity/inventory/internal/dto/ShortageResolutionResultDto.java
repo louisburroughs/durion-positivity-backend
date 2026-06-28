@@ -25,10 +25,7 @@ public class ShortageResolutionResultDto {
     @NotNull
     private UUID allocationId;
 
-    @Schema(
-            description = "Resolution strategy that was applied",
-            example = "SUBSTITUTE",
-            requiredMode = REQUIRED)
+    @Schema(description = "Resolution strategy that was applied", example = "SUBSTITUTE", requiredMode = REQUIRED)
     @NotNull
     private String resolution;
 

@@ -28,10 +28,7 @@ import lombok.NoArgsConstructor;
 @Schema(description = "GL mapping response payload")
 public class GLMappingResponse {
 
-    @Schema(
-            description = "GL mapping UUID",
-            example = "01960003-0000-7000-8000-000000000005",
-            requiredMode = REQUIRED)
+    @Schema(description = "GL mapping UUID", example = "01960003-0000-7000-8000-000000000005", requiredMode = REQUIRED)
     @NotNull
     private UUID glMappingId;
 

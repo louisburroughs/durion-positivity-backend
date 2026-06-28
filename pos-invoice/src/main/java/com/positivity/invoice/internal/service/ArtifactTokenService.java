@@ -121,7 +121,8 @@ public class ArtifactTokenService {
     }
 
     /** A freshly issued token and its expiry. */
-    public record IssuedToken(@NonNull String token, @NonNull Instant expiresAt) {}
+    public record IssuedToken(
+            @NonNull String token, @NonNull Instant expiresAt) {}
 
     /** Raised when a presented download token is invalid, mismatched, or expired. */
     public static class InvalidTokenException extends RuntimeException {

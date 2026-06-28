@@ -70,10 +70,7 @@ public class CreateVehicleForPartyResponse {
     /**
      * License plate
      */
-    @Schema(
-            description = "License plate",
-            example = "ABC-1234",
-            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(description = "License plate", example = "ABC-1234", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String licensePlate;
 
     /**

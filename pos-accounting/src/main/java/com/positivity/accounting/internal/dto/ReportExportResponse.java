@@ -21,7 +21,10 @@ import lombok.*;
 @Schema(description = "Async report export job state")
 public class ReportExportResponse {
 
-    @Schema(description = "Unique export job identifier", example = "01936e5c-7890-7a3d-8b6e-2b3456789012", requiredMode = REQUIRED)
+    @Schema(
+            description = "Unique export job identifier",
+            example = "01936e5c-7890-7a3d-8b6e-2b3456789012",
+            requiredMode = REQUIRED)
     @NotNull
     private UUID exportId;
 

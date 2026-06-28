@@ -15,10 +15,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UpdatePickListStatusRequest {
 
-    @Schema(
-            description = "Target status to apply to the pick list",
-            example = "IN_PROGRESS",
-            requiredMode = REQUIRED)
+    @Schema(description = "Target status to apply to the pick list", example = "IN_PROGRESS", requiredMode = REQUIRED)
     @NotNull
     private PickListStatus status;
 }

@@ -21,12 +21,18 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Request payload for creating a new posting rule set")
 public class PostingRuleSetCreateRequest {
 
-    @Schema(description = "Display name of the posting rule set", example = "Workorder Revenue Posting", requiredMode = REQUIRED)
+    @Schema(
+            description = "Display name of the posting rule set",
+            example = "Workorder Revenue Posting",
+            requiredMode = REQUIRED)
     @NotBlank(message = "Name is required")
     @Size(max = 100, message = "Name must not exceed 100 characters")
     private String name;
 
-    @Schema(description = "Accounting event type the rule set applies to", example = "WORKORDER_COMPLETED", requiredMode = REQUIRED)
+    @Schema(
+            description = "Accounting event type the rule set applies to",
+            example = "WORKORDER_COMPLETED",
+            requiredMode = REQUIRED)
     @NotBlank(message = "Event type is required")
     @Size(max = 100, message = "Event type must not exceed 100 characters")
     private String eventType;
@@ -45,7 +51,10 @@ public class PostingRuleSetCreateRequest {
     @NotBlank(message = "Rules definition is required")
     private String rulesDefinition;
 
-    @Schema(description = "Identifier of the user creating the rule set", example = "ap.manager", requiredMode = REQUIRED)
+    @Schema(
+            description = "Identifier of the user creating the rule set",
+            example = "ap.manager",
+            requiredMode = REQUIRED)
     @NotBlank(message = "Created by is required")
     @Size(max = 50, message = "Created by must not exceed 50 characters")
     private String createdBy;

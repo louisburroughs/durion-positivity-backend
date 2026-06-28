@@ -89,10 +89,7 @@ public class SearchPartiesRequest {
     /**
      * Pagination: page number (1-indexed, default 1)
      */
-    @Schema(
-            description = "Pagination: page number (1-indexed, default 1)",
-            example = "1",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Pagination: page number (1-indexed, default 1)", example = "1", requiredMode = NOT_REQUIRED)
     @Min(1)
     private Integer pageNumber;
 

@@ -21,10 +21,16 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Schema(description = "Filter criteria for audit event search; all fields are optional")
 public class AuditEventSearchFilter {
-    @Schema(description = "Inclusive start timestamp (ISO-8601)", example = "2026-01-01T00:00:00Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Inclusive start timestamp (ISO-8601)",
+            example = "2026-01-01T00:00:00Z",
+            requiredMode = NOT_REQUIRED)
     private Instant fromDate;
 
-    @Schema(description = "Exclusive end timestamp (ISO-8601)", example = "2026-12-31T23:59:59Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Exclusive end timestamp (ISO-8601)",
+            example = "2026-12-31T23:59:59Z",
+            requiredMode = NOT_REQUIRED)
     private Instant toDate;
 
     @Schema(description = "Actor username/service principal", example = "jane.doe", requiredMode = NOT_REQUIRED)
@@ -36,7 +42,10 @@ public class AuditEventSearchFilter {
             requiredMode = NOT_REQUIRED)
     private UUID workorderId;
 
-    @Schema(description = "Movement UUID", example = "01960003-0000-7000-8000-000000000031", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Movement UUID",
+            example = "01960003-0000-7000-8000-000000000031",
+            requiredMode = NOT_REQUIRED)
     private UUID movementId;
 
     @Schema(description = "Product UUID", example = "01960003-0000-7000-8000-000000000032", requiredMode = NOT_REQUIRED)
@@ -60,7 +69,10 @@ public class AuditEventSearchFilter {
     @Schema(description = "Reason code string", example = "MANUAL_ADJUSTMENT", requiredMode = NOT_REQUIRED)
     private String reasonCode;
 
-    @Schema(description = "Cursor token for page-based navigation", example = "eyJvZmZzZXQiOjEwMH0", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Cursor token for page-based navigation",
+            example = "eyJvZmZzZXQiOjEwMH0",
+            requiredMode = NOT_REQUIRED)
     private String pageToken;
 
     @Schema(

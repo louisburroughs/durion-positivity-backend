@@ -15,11 +15,8 @@ import jakarta.validation.constraints.NotNull;
  */
 @Schema(description = "Event count grouped by event type for a given timeframe")
 public record EventSummaryResponse(
-        @Schema(description = "Event type identifier", example = "ORDER_ORDER_CREATE", requiredMode = REQUIRED)
-                @NotNull
-                String eventTypeId,
-        @Schema(
-                        description = "Number of events of this type in the timeframe",
-                        example = "42",
-                        requiredMode = REQUIRED)
-                long count) {}
+        @Schema(description = "Event type identifier", example = "ORDER_ORDER_CREATE", requiredMode = REQUIRED) @NotNull
+        String eventTypeId,
+
+        @Schema(description = "Number of events of this type in the timeframe", example = "42", requiredMode = REQUIRED)
+        long count) {}

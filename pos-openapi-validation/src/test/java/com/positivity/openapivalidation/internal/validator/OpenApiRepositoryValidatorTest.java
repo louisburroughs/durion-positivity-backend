@@ -1,13 +1,12 @@
 package com.positivity.openapivalidation.internal.validator;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.positivity.openapivalidation.internal.policy.OpenApiModulePolicy;
 import com.positivity.openapivalidation.internal.policy.OpenApiValidationInventory;
-import org.junit.jupiter.api.Test;
-
 import java.nio.file.Path;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 class OpenApiRepositoryValidatorTest {
 
@@ -27,7 +26,8 @@ class OpenApiRepositoryValidatorTest {
                 OpenApiValidationMode.REPORT);
 
         assertThat(result.blockingIssues()).isEmpty();
-        assertThat(result.reportOnlyIssues()).extracting(OpenApiValidationIssue::message)
+        assertThat(result.reportOnlyIssues())
+                .extracting(OpenApiValidationIssue::message)
                 .contains(
                         "pos-location GET /v1/locations: missing summary",
                         "pos-location GET /v1/locations: missing description");
@@ -112,7 +112,8 @@ class OpenApiRepositoryValidatorTest {
                 OpenApiValidationMode.REPORT);
 
         assertThat(result.reportOnlyIssues()).isEmpty();
-        assertThat(result.blockingIssues()).singleElement()
+        assertThat(result.blockingIssues())
+                .singleElement()
                 .extracting(OpenApiValidationIssue::message)
                 .asString()
                 .contains("unresolved ref");

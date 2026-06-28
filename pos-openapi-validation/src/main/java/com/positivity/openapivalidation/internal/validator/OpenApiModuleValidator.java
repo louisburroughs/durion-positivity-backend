@@ -1,24 +1,21 @@
 package com.positivity.openapivalidation.internal.validator;
 
 import com.positivity.openapivalidation.internal.policy.OpenApiModulePolicy;
-import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.Operation;
-import org.jspecify.annotations.NonNull;
-
+import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.parser.OpenAPIV3Parser;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.NonNull;
 
 public class OpenApiModuleValidator {
 
     public @NonNull List<OpenApiValidationIssue> validate(
-            @NonNull String module,
-            @NonNull Path specPath,
-            @NonNull OpenApiModulePolicy policy) {
+            @NonNull String module, @NonNull Path specPath, @NonNull OpenApiModulePolicy policy) {
         if (!Files.exists(specPath)) {
             throw new IllegalStateException(module + ": spec file not found: " + specPath);
         }
@@ -35,7 +32,8 @@ public class OpenApiModuleValidator {
             String path = pathEntry.getKey();
             PathItem pathItem = pathEntry.getValue();
             if (pathItem.readOperationsMap() == null) continue;
-            for (Map.Entry<PathItem.HttpMethod, Operation> opEntry : pathItem.readOperationsMap().entrySet()) {
+            for (Map.Entry<PathItem.HttpMethod, Operation> opEntry :
+                    pathItem.readOperationsMap().entrySet()) {
                 String method = opEntry.getKey().name();
                 Operation operation = opEntry.getValue();
                 String prefix = module + " " + method + " " + path + ":";

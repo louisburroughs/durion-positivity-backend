@@ -58,7 +58,8 @@ class ArtifactTokenServiceTest {
 
     @Test
     void verify_rejectsExpiredToken() {
-        String token = service(fixed("2026-01-01T00:00:00Z")).issue(INVOICE, REF).token();
+        String token =
+                service(fixed("2026-01-01T00:00:00Z")).issue(INVOICE, REF).token();
         ArtifactTokenService later = service(fixed("2026-01-01T00:05:01Z"));
 
         assertThatThrownBy(() -> later.verify(token, INVOICE, REF)).isInstanceOf(InvalidTokenException.class);
@@ -66,8 +67,9 @@ class ArtifactTokenServiceTest {
 
     @Test
     void verify_rejectsTokenSignedWithDifferentSecret() {
-        String token =
-                new ArtifactTokenService(fixed("2026-01-01T00:00:00Z"), "other-secret", 300).issue(INVOICE, REF).token();
+        String token = new ArtifactTokenService(fixed("2026-01-01T00:00:00Z"), "other-secret", 300)
+                .issue(INVOICE, REF)
+                .token();
 
         assertThatThrownBy(() -> service(fixed("2026-01-01T00:00:00Z")).verify(token, INVOICE, REF))
                 .isInstanceOf(InvalidTokenException.class);
@@ -102,8 +104,7 @@ class ArtifactTokenServiceTest {
 
     @Test
     void artifactRef_decode_rejectsGarbage() {
-        assertThatThrownBy(() -> ArtifactRef.decode("!!!not-base64!!!"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ArtifactRef.decode("!!!not-base64!!!")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> ArtifactRef.decode(Duration.ZERO.toString()))
                 .isInstanceOf(IllegalArgumentException.class);
     }

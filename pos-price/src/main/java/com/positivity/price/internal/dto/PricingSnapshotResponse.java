@@ -17,7 +17,10 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "Response payload for immutable pricing snapshot retrieval")
 public class PricingSnapshotResponse {
 
-    @Schema(description = "Snapshot identifier", example = "4fd2de29-650f-4d97-9b80-01b476d9ce31", requiredMode = REQUIRED)
+    @Schema(
+            description = "Snapshot identifier",
+            example = "4fd2de29-650f-4d97-9b80-01b476d9ce31",
+            requiredMode = REQUIRED)
     @NotNull
     private UUID snapshotId;
 

@@ -26,7 +26,10 @@ public class InitiatePaymentResponse {
     private UUID paymentIntentId;
 
     @NotNull
-    @Schema(description = "Current lifecycle status of the payment intent", example = "AUTHORIZED", requiredMode = REQUIRED)
+    @Schema(
+            description = "Current lifecycle status of the payment intent",
+            example = "AUTHORIZED",
+            requiredMode = REQUIRED)
     private PaymentIntentStatus status;
 
     @Schema(description = "Amount authorized on the card", example = "149.99", requiredMode = NOT_REQUIRED)

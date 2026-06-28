@@ -48,7 +48,10 @@ public class IncomeStatementReport {
      */
     @NonNull
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'", timezone = "UTC")
-    @Schema(description = "Timestamp when the report was generated", example = "2026-06-18T08:00:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Timestamp when the report was generated",
+            example = "2026-06-18T08:00:00Z",
+            requiredMode = REQUIRED)
     private Instant generatedAt;
 
     /**

@@ -19,6 +19,7 @@ public record PermissionDecodeRequest(
                 example = "AQID",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         String permBits,
+
         @JsonProperty("perm_ver")
         @Schema(
                 description = "Catalog version that was in effect when permBits was encoded",

@@ -16,10 +16,7 @@ import lombok.Data;
 @Schema(description = "Billing rules snapshot returned by pos-customer for a customer account")
 public class BillingRuleRefResponse {
 
-    @Schema(
-            description = "Whether a purchase order is required for billing",
-            example = "true",
-            requiredMode = REQUIRED)
+    @Schema(description = "Whether a purchase order is required for billing", example = "true", requiredMode = REQUIRED)
     private boolean poRequired;
 
     @Schema(description = "Whether the customer is tax exempt", example = "false", requiredMode = REQUIRED)
@@ -31,13 +28,13 @@ public class BillingRuleRefResponse {
     @Schema(description = "Credit limit extended to the customer", example = "50000.00", requiredMode = NOT_REQUIRED)
     private BigDecimal creditLimit;
 
-    @Schema(description = "Whether the customer is currently on credit hold", example = "false", requiredMode = REQUIRED)
+    @Schema(
+            description = "Whether the customer is currently on credit hold",
+            example = "false",
+            requiredMode = REQUIRED)
     private boolean creditHold;
 
-    @Schema(
-            description = "Method used to deliver invoices",
-            example = "EMAIL",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Method used to deliver invoices", example = "EMAIL", requiredMode = NOT_REQUIRED)
     private String invoiceDeliveryMethod;
 
     @Schema(
@@ -49,7 +46,10 @@ public class BillingRuleRefResponse {
     @Schema(description = "Whether automatic payment is enabled", example = "false", requiredMode = REQUIRED)
     private boolean autoPayEnabled;
 
-    @Schema(description = "Reference to the applicable discount policy", example = "STD-2026", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Reference to the applicable discount policy",
+            example = "STD-2026",
+            requiredMode = NOT_REQUIRED)
     private String discountPolicyRef;
 
     @Schema(description = "ISO 4217 currency code", example = "USD", requiredMode = NOT_REQUIRED)

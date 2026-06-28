@@ -7,8 +7,7 @@ import org.junit.jupiter.api.Test;
 
 class TestSourceDuplicateGuardTest {
 
-    private static final Path TEST_SOURCES =
-            Path.of("src/test/java/com/positivity/openapivalidation");
+    private static final Path TEST_SOURCES = Path.of("src/test/java/com/positivity/openapivalidation");
 
     @Test
     void openApiModulePolicy_isNotDuplicatedInTestSources() {

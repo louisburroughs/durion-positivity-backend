@@ -2,19 +2,18 @@ package com.positivity.openapivalidation.internal.validator;
 
 import com.positivity.openapivalidation.internal.policy.OpenApiModulePolicy;
 import com.positivity.openapivalidation.internal.policy.OpenApiValidationInventory;
-import org.jspecify.annotations.NonNull;
-
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import org.jspecify.annotations.NonNull;
 
 public class OpenApiRepositoryValidator {
 
     private final OpenApiModuleValidator moduleValidator;
     private final OpenApiAggregateValidator aggregateValidator;
 
-    public OpenApiRepositoryValidator(OpenApiModuleValidator moduleValidator,
-            OpenApiAggregateValidator aggregateValidator) {
+    public OpenApiRepositoryValidator(
+            OpenApiModuleValidator moduleValidator, OpenApiAggregateValidator aggregateValidator) {
         this.moduleValidator = moduleValidator;
         this.aggregateValidator = aggregateValidator;
     }
@@ -49,8 +48,6 @@ public class OpenApiRepositoryValidator {
 
         blockingIssues.addAll(aggregateValidator.validate(aggregatePath));
 
-        return new OpenApiRepositoryValidationResult(
-                List.copyOf(blockingIssues),
-                List.copyOf(reportOnlyIssues));
+        return new OpenApiRepositoryValidationResult(List.copyOf(blockingIssues), List.copyOf(reportOnlyIssues));
     }
 }
