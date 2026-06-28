@@ -2015,6 +2015,33 @@ paths:
         - workorder:timeEntry:approve
       x-required-permissions:
       - workorder:timeEntry:approve
+  /v1/workorders/numbers:resolve:
+    post:
+      tags:
+      - Workorder Search
+      summary: Resolve workorder numbers
+      description: Batch-resolves a set of workorder ids to their human workorder numbers. Consumed server-side by sibling services that store only the workorder id and need the human number for finder/search enrichment.
+      operationId: resolveNumbers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkorderNumberResolveRequest'
+        required: true
+      responses:
+        '200':
+          description: Resolved workorder id-to-number pairings returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkorderNumberRef'
+      security:
+      - bearerAuth:
+        - workorder:workorder:view
+      x-required-permissions:
+      - workorder:workorder:view
   /v1/workorders/estimates:
     get:
       tags:
@@ -3237,8 +3264,11 @@ paths:
             application/json:
               schema:
                 type: array
+                additionalProperties: {}
+                contains: {}
                 items:
                   $ref: '#/components/schemas/WorkorderPickedItemResponse'
+                unevaluatedItems: {}
         '403':
           description: Forbidden
           content:
@@ -3311,8 +3341,11 @@ paths:
             application/json:
               schema:
                 type: array
+                additionalProperties: {}
+                contains: {}
                 items:
                   $ref: '#/components/schemas/WorkorderPickTaskResponse'
+                unevaluatedItems: {}
         '403':
           description: Forbidden
           content:
@@ -3658,6 +3691,7 @@ paths:
               schema:
                 type: string
                 format: binary
+                additionalProperties: {}
         '404':
           description: Estimate not found
           content:
@@ -6159,6 +6193,35 @@ components:
       - timeEntryId
       - updatedAt
       - workOrderId
+    WorkorderNumberResolveRequest:
+      type: object
+      description: Batch request to resolve workorder ids to human workorder numbers
+      properties:
+        workorderIds:
+          type: array
+          description: Workorder identifiers to resolve
+          items:
+            type: string
+            format: uuid
+          maxItems: 200
+          minItems: 0
+      required:
+      - workorderIds
+    WorkorderNumberRef:
+      type: object
+      description: Workorder id resolved to its human workorder number
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder identifier
+          example: 550e8400-e29b-41d4-a716-446655440000
+        workorderNumber:
+          type: string
+          description: Human workorder number
+          example: WO-2026-1001
+      required:
+      - workorderId
     CreateEstimateRequest:
       type: object
       description: Request payload for creating an estimate
@@ -7161,10 +7224,6 @@ components:
           format: uuid
           description: Assigned technician ID
           example: 550e8400-e29b-41d4-a716-446655440004
-        assignedTechnicianName:
-          type: string
-          description: Assigned technician name
-          example: Jane Smith
         services:
           type: array
           description: Service line items with labor totals

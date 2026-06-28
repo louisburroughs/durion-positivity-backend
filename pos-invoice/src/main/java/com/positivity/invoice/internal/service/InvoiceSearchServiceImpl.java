@@ -15,7 +15,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * Free-text invoice search resolving the query against invoice numbers, customer names (via
@@ -23,10 +23,14 @@ import org.springframework.transaction.annotation.Transactional;
  * enriching each row with the resolved customer display name and human workorder number.
  *
  * <p>Mirrors the pos-workorder {@code WorkorderSearchServiceImpl} finder pattern.
+ *
+ * <p>No method-level transaction is declared: the search is a single repository read whose
+ * mapping touches only scalar columns (no lazy associations), and the post-query CRM/workorder
+ * enrichment performs remote HTTP calls — running those inside an open transaction would hold a
+ * pooled DB connection for the duration of the remote calls.
  */
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class InvoiceSearchServiceImpl implements InvoiceSearchService {
 
     /** Sentinel that cannot match a real party id, keeping the JPQL IN clause non-empty. */
@@ -41,6 +45,12 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
 
     @Override
     public @NonNull Page<InvoiceSearchResult> search(@NonNull String q, @NonNull Pageable pageable) {
+        // A blank query would degenerate to LIKE '%%' (full-table scan in undefined order); a
+        // finder requires an actual term, so short-circuit to an empty page.
+        if (!StringUtils.hasText(q)) {
+            return Page.empty(pageable);
+        }
+
         // Resolve the query against customer names and workorder numbers in sibling services.
         List<String> nameMatchPartyIds = customerReferenceClient.searchIdsByName(q, 10);
         List<UUID> numberMatchWorkorderIds = workorderReferenceClient.searchIdsByNumber(q, 10);
@@ -49,7 +59,8 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
         List<UUID> workorderIds =
                 numberMatchWorkorderIds.isEmpty() ? List.of(NO_WORKORDER_SENTINEL) : numberMatchWorkorderIds;
 
-        Page<Invoice> page = invoiceRepository.searchByQuery(q, customerIds, workorderIds, pageable);
+        // Escape LIKE wildcards so a query containing % or _ matches literally.
+        Page<Invoice> page = invoiceRepository.searchByQuery(escapeLike(q), customerIds, workorderIds, pageable);
 
         // Enrich each row with the resolved customer display name and human workorder number.
         List<String> pagePartyIds = page.getContent().stream()
@@ -77,5 +88,14 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
                 .total(invoice.getTotal())
                 .createdAt(invoice.getCreatedAt())
                 .build());
+    }
+
+    /**
+     * Escape SQL LIKE metacharacters ({@code \}, {@code %}, {@code _}) so a user query is
+     * matched as a literal substring. Pairs with the {@code ESCAPE '\'} clause in the repository
+     * query.
+     */
+    private static @NonNull String escapeLike(@NonNull String q) {
+        return q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 }

@@ -38,7 +38,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
      * @param pageable     pagination and sorting configuration
      * @return page of matching invoices
      */
-    @Query("SELECT i FROM Invoice i WHERE LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', :q, '%')) "
+    @Query("SELECT i FROM Invoice i WHERE LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', :q, '%')) ESCAPE '\\' "
             + "OR i.partyId IN :customerIds "
             + "OR i.workorderId IN :workorderIds")
     @NonNull

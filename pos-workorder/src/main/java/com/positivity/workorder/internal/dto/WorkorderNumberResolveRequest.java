@@ -1,6 +1,8 @@
 package com.positivity.workorder.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
 
@@ -13,6 +15,8 @@ import java.util.UUID;
 @Schema(description = "Batch request to resolve workorder ids to human workorder numbers")
 public record WorkorderNumberResolveRequest(
         @Schema(description = "Workorder identifiers to resolve", requiredMode = Schema.RequiredMode.REQUIRED)
+                @NotEmpty
+                @Size(max = 200)
                 List<UUID> workorderIds) {
 
     public WorkorderNumberResolveRequest {

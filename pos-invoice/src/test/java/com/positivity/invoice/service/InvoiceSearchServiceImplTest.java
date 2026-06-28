@@ -120,6 +120,50 @@ class InvoiceSearchServiceImplTest {
     }
 
     @Test
+    void search_blankQuery_shortCircuitsWithoutTouchingClientsOrRepository() {
+        Page<InvoiceSearchResult> result = invoiceSearchService.search("  ", PageRequest.of(0, 25));
+
+        assertThat(result.getContent()).isEmpty();
+        verify(customerReferenceClient, org.mockito.Mockito.never()).searchIdsByName(anyString(), anyInt());
+        verify(workorderReferenceClient, org.mockito.Mockito.never()).searchIdsByNumber(anyString(), anyInt());
+        verify(invoiceRepository, org.mockito.Mockito.never()).searchByQuery(any(), any(), any(), any());
+    }
+
+    @Test
+    void search_rowWithNullReferences_doesNotThrowAndOmitsEnrichment() {
+        Pageable pageable = PageRequest.of(0, 25);
+        Invoice invoice = buildInvoice();
+        invoice.setPartyId(null);
+        invoice.setWorkorderId(null);
+
+        when(customerReferenceClient.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
+        when(workorderReferenceClient.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
+        when(invoiceRepository.searchByQuery(any(), any(), any(), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(invoice)));
+        when(customerReferenceClient.resolveNames(any())).thenReturn(Map.of());
+        when(workorderReferenceClient.resolveNumbers(any())).thenReturn(Map.of());
+
+        InvoiceSearchResult row = invoiceSearchService.search("INV", pageable).getContent().get(0);
+
+        assertThat(row.getCustomerName()).isNull();
+        assertThat(row.getWorkorderNumber()).isNull();
+    }
+
+    @Test
+    void search_escapesLikeWildcardsInQuery() {
+        Pageable pageable = PageRequest.of(0, 25);
+        when(customerReferenceClient.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
+        when(workorderReferenceClient.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
+        when(invoiceRepository.searchByQuery(any(), any(), any(), eq(pageable))).thenReturn(new PageImpl<>(List.of()));
+        when(customerReferenceClient.resolveNames(any())).thenReturn(Map.of());
+        when(workorderReferenceClient.resolveNumbers(any())).thenReturn(Map.of());
+
+        invoiceSearchService.search("50%_x", pageable);
+
+        verify(invoiceRepository).searchByQuery(eq("50\\%\\_x"), any(), any(), eq(pageable));
+    }
+
+    @Test
     void search_byWorkorderNumber_resolvesWorkorderIds() {
         Pageable pageable = PageRequest.of(0, 25);
         Invoice invoice = buildInvoice();

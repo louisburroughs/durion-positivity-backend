@@ -740,6 +740,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PageInvoiceSearchResult'
+        '400':
+          description: Invalid pagination parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageInvoiceSearchResult'
+        '403':
+          description: Caller lacks the invoice:manage authority.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageInvoiceSearchResult'
       security:
       - bearerAuth:
         - invoice:manage
