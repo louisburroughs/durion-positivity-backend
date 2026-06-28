@@ -500,6 +500,33 @@ services:
       retries: 12
       start_period: 90s
 
+  # Internal-only PDF rendering service. Never routed through the gateway; reached
+  # directly over pos-network (e.g. by pos-invoice at http://pos-documents:8092/v1/documents).
+  pos-documents:
+    build:
+      context: ./pos-documents
+      dockerfile: Dockerfile
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      SERVER_PORT: 8092
+      MANAGEMENT_SERVER_PORT: 8092
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      pos-security-service:
+        condition: service_healthy
+    logging: *logging
+    networks:
+      - pos-network
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8092/actuator/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+
   pos-location:
     build:
       context: ./pos-location

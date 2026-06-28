@@ -71,6 +71,7 @@ BACKEND_SERVICES=(
   pos-bulk-loader
   pos-catalog
   pos-customer
+  pos-documents
   pos-event-receiver
   pos-image
   pos-inventory

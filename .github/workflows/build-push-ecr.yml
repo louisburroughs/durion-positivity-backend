@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          ALL_SERVICES_JSON='["pos-accounting","pos-api-gateway","pos-bulk-loader","pos-catalog","pos-customer","pos-event-receiver","pos-image","pos-inventory","pos-invoice","pos-location","pos-mcp-server","pos-people","pos-price","pos-security-service","pos-service-discovery","pos-shop-manager","pos-tax","pos-vehicle-inventory","pos-workorder"]'
+          ALL_SERVICES_JSON='["pos-accounting","pos-api-gateway","pos-bulk-loader","pos-catalog","pos-customer","pos-documents","pos-event-receiver","pos-image","pos-inventory","pos-invoice","pos-location","pos-mcp-server","pos-people","pos-price","pos-security-service","pos-service-discovery","pos-shop-manager","pos-tax","pos-vehicle-inventory","pos-workorder"]'
           FORCE_FULL_REBUILD=false
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
