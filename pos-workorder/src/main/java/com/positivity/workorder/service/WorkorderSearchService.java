@@ -1,6 +1,10 @@
 package com.positivity.workorder.service;
 
+import com.positivity.workorder.internal.dto.WorkorderNumberRef;
 import com.positivity.workorder.internal.dto.WorkorderSearchResult;
+import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,4 +25,15 @@ public interface WorkorderSearchService {
      */
     @NonNull
     Page<WorkorderSearchResult> search(@NonNull String q, @NonNull Pageable pageable);
+
+    /**
+     * Resolve a batch of workorder ids to their human workorder numbers. Unknown ids
+     * are omitted from the result. Used by sibling services that store only the
+     * workorder id and need the human number for finder/search enrichment.
+     *
+     * @param workorderIds workorder ids to resolve
+     * @return id-to-number pairings for the ids that exist
+     */
+    @NonNull
+    List<WorkorderNumberRef> resolveNumbers(@NonNull Collection<UUID> workorderIds);
 }

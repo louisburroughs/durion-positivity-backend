@@ -41,6 +41,11 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    public static final EventTypeRegistration INVOICE_SEARCH = EventTypeRegistration.fastRead(
+                    "INVOICE_SEARCH", "Free-text invoice search by invoice number, customer name, or workorder number")
+            .apiVersion("1")
+            .build();
+
     public static final EventTypeRegistration INVOICE_ADJUSTMENT_APPLY = EventTypeRegistration.write(
                     "INVOICE_ADJUSTMENT_APPLY", "Apply adjustment to draft invoice")
             .apiVersion("1")
@@ -133,6 +138,7 @@ public final class EventTypes {
                 BILLING_RULES_UPSERT,
                 INVOICE_CREATE,
                 INVOICE_GET,
+                INVOICE_SEARCH,
                 INVOICE_ADJUSTMENT_APPLY,
                 INVOICE_FINALIZATION_REQUESTED,
                 INVOICE_FINALIZED,
