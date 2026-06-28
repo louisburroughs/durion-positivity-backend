@@ -79,6 +79,8 @@ pos:
     base-url: ${POS_VEHICLE_BASE_URL:http://pos-vehicle:8088}
   tax:
     base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
+  location:
+    base-url: ${POS_LOCATION_BASE_URL:http://pos-location:8080}
   invoice:
     service-id: ${POS_INVOICE_SERVICE_ID:invoice}
   inventory:

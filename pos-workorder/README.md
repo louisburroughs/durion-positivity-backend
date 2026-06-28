@@ -12,7 +12,7 @@ Core workorder service for the Durion Positivity ETSMS platform. Manages the ful
 - Manage part usage, part substitutions, and part pick coordination
 - Apply and validate promotional offers on workorder lines
 - Generate invoices at completion by calling `pos-invoice`
-- Calculate tax on estimate totals via `pos-tax`
+- Calculate tax on estimate totals via `pos-tax`, resolving the estimate's shop-location address from `pos-location` as the tax jurisdiction
 - Emit Kafka events for cross-service consumption (configurable; off by default)
 
 ## Key Classes
@@ -53,6 +53,7 @@ Core workorder service for the Durion Positivity ETSMS platform. Manages the ful
 | `pos.customer.base-url`        | `http://pos-customer:8084` | Customer service URL             |
 | `pos.vehicle.base-url`         | `http://pos-vehicle:8088`  | Vehicle service URL              |
 | `pos.tax.base-url`             | `http://pos-tax:8091`      | Tax service URL                  |
+| `pos.location.base-url`        | `http://pos-location:8080` | Location service URL             |
 | `workorder.kafka.enabled`      | `false`                    | Enable Kafka event emission      |
 | `workorder.kafka.events-topic` | `workorder.events.v1`      | Kafka topic for workorder events |
 
