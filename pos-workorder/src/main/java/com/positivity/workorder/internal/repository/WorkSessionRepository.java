@@ -5,13 +5,11 @@ import com.positivity.workorder.internal.enums.WorkSessionStatus;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for {@link WorkSession} entities.
  * Implements CAP-139 Story #68.
  */
-@Repository
 public interface WorkSessionRepository extends JpaRepository<WorkSession, UUID> {
 
     /**

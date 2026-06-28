@@ -7,13 +7,11 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for PaymentApplicationReversal entity.
  * Supports reversal history queries and validation.
  */
-@Repository
 public interface PaymentApplicationReversalRepository extends JpaRepository<PaymentApplicationReversal, UUID> {
 
     /**

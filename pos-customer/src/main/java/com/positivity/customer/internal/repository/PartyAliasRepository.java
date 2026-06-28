@@ -5,13 +5,11 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for PartyAlias entity operations.
  * Used for ID redirection after merge operations.
  */
-@Repository
 public interface PartyAliasRepository extends JpaRepository<PartyAlias, UUID> {
 
     /**

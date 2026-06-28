@@ -5,12 +5,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for CountEntry entities.
  */
-@Repository
 public interface CountEntryRepository extends JpaRepository<CountEntry, UUID> {
 
     /**

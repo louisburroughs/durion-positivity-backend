@@ -9,13 +9,11 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for DefaultGLMapping entity.
  * Provides fallback GL accounts for event types without explicit posting rules.
  */
-@Repository
 public interface DefaultGLMappingRepository extends JpaRepository<DefaultGLMapping, UUID> {
 
     /**

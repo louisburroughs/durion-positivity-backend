@@ -9,9 +9,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
-@Repository
 public interface LocationParentRepository extends JpaRepository<LocationParent, UUID> {
     boolean existsByChild_IdAndParentType(UUID childId, ParentType parentType);
 

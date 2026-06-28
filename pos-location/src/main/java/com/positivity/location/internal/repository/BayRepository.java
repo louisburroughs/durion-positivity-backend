@@ -7,14 +7,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for bay persistence operations.
  *
  * Issue: CAP-136 #77
  */
-@Repository
 public interface BayRepository extends JpaRepository<BayEntity, UUID> {
 
     Optional<BayEntity> findById(UUID id);

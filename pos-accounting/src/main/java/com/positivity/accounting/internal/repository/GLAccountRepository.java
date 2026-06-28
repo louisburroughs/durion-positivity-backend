@@ -8,7 +8,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for GL Account entity.
@@ -18,7 +17,6 @@ import org.springframework.stereotype.Repository;
  * Note: Entity does not have organizationId field. Multi-tenancy not supported
  * at entity level.
  */
-@Repository
 public interface GLAccountRepository extends JpaRepository<GLAccount, UUID> {
 
     /**

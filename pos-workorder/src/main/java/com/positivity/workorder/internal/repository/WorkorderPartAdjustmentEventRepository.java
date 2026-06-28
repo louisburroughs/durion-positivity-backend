@@ -4,12 +4,10 @@ import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for querying part adjustment event history.
  */
-@Repository
 public interface WorkorderPartAdjustmentEventRepository extends JpaRepository<WorkorderPartAdjustmentEvent, UUID> {
 
     /**

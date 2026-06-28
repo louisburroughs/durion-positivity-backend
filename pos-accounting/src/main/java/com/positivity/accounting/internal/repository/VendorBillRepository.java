@@ -12,13 +12,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for Vendor Bill entity.
  * Supports querying bills by status, date range, and payment tracking.
  */
-@Repository
 public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
 
     /**
