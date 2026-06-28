@@ -24,6 +24,7 @@ import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.dto.snapshot.SnapshotMetadata;
 import com.positivity.customer.internal.entity.BillingRulesEmbeddable;
 import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.CommercialParty_;
 import com.positivity.customer.internal.entity.Party;
 import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
@@ -575,20 +576,23 @@ public class PartyServiceImpl implements PartyService {
 
     private Sort normalizeBrowseSort(@NonNull Sort requestedSort) {
         if (requestedSort.isUnsorted()) {
-            return Sort.by(Sort.Order.asc("legalName").ignoreCase(), Sort.Order.asc("partyId"));
+            return Sort.by(
+                    Sort.Order.asc(CommercialParty_.LEGAL_NAME).ignoreCase(),
+                    Sort.Order.asc(CommercialParty_.PARTY_ID));
         }
 
         List<Sort.Order> orders = new ArrayList<>();
         requestedSort.forEach(order -> {
-            if ("legalName".equals(order.getProperty())) {
+            if (CommercialParty_.LEGAL_NAME.equals(order.getProperty())) {
                 orders.add(order.ignoreCase());
             } else {
                 orders.add(order);
             }
         });
-        boolean hasPartyIdSort = orders.stream().anyMatch(order -> "partyId".equals(order.getProperty()));
+        boolean hasPartyIdSort =
+                orders.stream().anyMatch(order -> CommercialParty_.PARTY_ID.equals(order.getProperty()));
         if (!hasPartyIdSort) {
-            orders.add(Sort.Order.asc("partyId"));
+            orders.add(Sort.Order.asc(CommercialParty_.PARTY_ID));
         }
         return Sort.by(orders);
     }
@@ -812,9 +816,10 @@ public class PartyServiceImpl implements PartyService {
             PartyRelationship rel, Map<UUID, PeopleClient.PersonIdentity> identities) {
         PersonParty person = rel.getToPerson();
         ContactSummary summary = new ContactSummary();
-        summary.setContactId(rel.getPartyRelationshipId().toString());
+        summary.setContactId(
+                Objects.requireNonNull(rel.getPartyRelationshipId(), "partyRelationshipId").toString());
         summary.setPrimary(rel.isPrimaryBillingContact());
-        summary.setName(resolveDisplayName(person, identities));
+        summary.setName(Objects.requireNonNullElse(resolveDisplayName(person, identities), "Unknown"));
         summary.setRoles(Collections.emptyList());
 
         PeopleClient.PersonIdentity identity =
