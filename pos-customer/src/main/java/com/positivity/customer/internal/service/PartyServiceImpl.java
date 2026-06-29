@@ -370,17 +370,18 @@ public class PartyServiceImpl implements PartyService {
             return List.of();
         }
 
-        Map<UUID, String> namesByPartyId = new java.util.LinkedHashMap<>();
+        Map<UUID, PartyNameRef> byPartyId = new java.util.LinkedHashMap<>();
 
-        // Commercial parties: prefer the display/trading name, fall back to the legal name.
+        // Commercial parties: prefer the display/trading name, fall back to the legal name. No phone
+        // is stored on the commercial party record.
         for (CommercialParty party : partyRepository.findAllById(ids)) {
             String name = StringUtils.hasText(party.getDisplayName()) ? party.getDisplayName() : party.getLegalName();
             if (StringUtils.hasText(name)) {
-                namesByPartyId.put(party.getPartyId(), name.trim());
+                byPartyId.put(party.getPartyId(), new PartyNameRef(party.getPartyId(), name.trim(), null));
             }
         }
 
-        // Person parties: the human name lives in pos-people; resolve it in a single batch call.
+        // Person parties: name and phone live in pos-people; resolve them in a single batch call.
         Map<UUID, UUID> personIdByPartyId = new java.util.LinkedHashMap<>();
         for (PersonParty person : personPartyRepository.findAllById(ids)) {
             if (person.getPersonId() != null) {
@@ -393,14 +394,34 @@ public class PartyServiceImpl implements PartyService {
             personIdByPartyId.forEach((partyId, personId) -> {
                 PeopleClient.PersonIdentity identity = identities.get(personId);
                 if (identity != null && StringUtils.hasText(identity.displayName())) {
-                    namesByPartyId.put(partyId, identity.displayName());
+                    byPartyId.put(
+                            partyId,
+                            new PartyNameRef(partyId, identity.displayName(), primaryPhone(identity.contactPoints())));
                 }
             });
         }
 
-        return namesByPartyId.entrySet().stream()
-                .map(entry -> new PartyNameRef(entry.getKey(), entry.getValue()))
-                .toList();
+        return List.copyOf(byPartyId.values());
+    }
+
+    /**
+     * Pick a best-effort phone from a person's contact points: the primary phone-type point if any,
+     * otherwise the first non-blank phone-type point. Phone contact types are prefixed {@code PHONE}.
+     */
+    private static @Nullable String primaryPhone(@NonNull List<PeopleClient.ContactPoint> contactPoints) {
+        PeopleClient.ContactPoint firstPhone = null;
+        for (PeopleClient.ContactPoint cp : contactPoints) {
+            if (cp.contactType() == null || !cp.contactType().startsWith("PHONE") || !StringUtils.hasText(cp.value())) {
+                continue;
+            }
+            if (cp.isPrimary()) {
+                return cp.value().trim();
+            }
+            if (firstPhone == null) {
+                firstPhone = cp;
+            }
+        }
+        return firstPhone != null ? firstPhone.value().trim() : null;
     }
 
     @Override

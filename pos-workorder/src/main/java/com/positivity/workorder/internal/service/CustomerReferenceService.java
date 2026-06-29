@@ -34,47 +34,13 @@ public class CustomerReferenceService {
         if (customerId == null) {
             return CustomerContact.empty();
         }
-
-        try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> body = customerRestClient
-                    .get()
-                    .uri("/v1/crm/{customerId}", customerId)
-                    .header("X-User", "pos-workorder")
-                    .header("X-Authorities", "crm:party:view")
-                    .retrieve()
-                    .body(Map.class);
-
-            String fallbackName = "customer-" + customerId;
-            if (body == null || body.isEmpty()) {
-                return new CustomerContact(fallbackName, null);
-            }
-
-            Map<String, Object> payload = unwrapData(body);
-            // The /v1/crm/{id} representation returns firstName/lastName (lastName carries the
-            // legal/organization name for commercial parties); the browse representation returns
-            // displayName/legalName. Cover both so resolution does not fall back to "customer-<id>".
-            String name = firstNonBlank(
-                    extract(payload, "customerName"),
-                    extract(payload, "displayName"),
-                    extract(payload, "legalName"),
-                    extract(payload, "name"),
-                    composeName(extract(payload, "firstName"), extract(payload, "lastName")),
-                    fallbackName);
-            String phone = firstNonBlank(
-                    extract(payload, "phoneNumber"), extract(payload, "phone"), extract(payload, "mobilePhone"));
-            return new CustomerContact(name, phone);
-        } catch (Exception ex) {
-            log.debug("Unable to resolve customer reference for {}: {}", customerId, ex.getMessage());
-            return new CustomerContact("customer-" + customerId, null);
-        }
+        return resolveAll(List.of(customerId)).getOrDefault(customerId, fallback(customerId));
     }
 
     /**
-     * Resolve display names for a batch of customer ids in a single CRM call (used by finder/search
-     * row enrichment, which needs only the name). Every requested id is present in the result; ids
-     * the CRM cannot resolve fall back to {@code customer-<id>}. Phone is not enriched here — callers
-     * needing it use {@link #resolve(UUID)}.
+     * Resolve display names and best-effort phone for a batch of customer ids in a single CRM call
+     * ({@code POST /v1/crm/accounts/parties:resolve}). Every requested id is present in the result;
+     * ids the CRM cannot resolve fall back to {@code customer-<id>} with a null phone.
      */
     public @NonNull Map<UUID, CustomerContact> resolveAll(@NonNull Collection<UUID> customerIds) {
         List<UUID> ids =
@@ -84,7 +50,7 @@ public class CustomerReferenceService {
             return resolved;
         }
 
-        Map<UUID, String> names = new LinkedHashMap<>();
+        Map<UUID, CustomerContact> fromCrm = new LinkedHashMap<>();
         try {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> rows = customerRestClient
@@ -100,7 +66,7 @@ public class CustomerReferenceService {
                     UUID id = parseUuidOrNull(extract(row, "partyId"));
                     String displayName = extract(row, "displayName");
                     if (id != null && StringUtils.hasText(displayName)) {
-                        names.put(id, displayName.trim());
+                        fromCrm.put(id, new CustomerContact(displayName.trim(), extract(row, "phoneNumber")));
                     }
                 }
             }
@@ -109,10 +75,13 @@ public class CustomerReferenceService {
         }
 
         for (UUID id : ids) {
-            String name = names.get(id);
-            resolved.put(id, new CustomerContact(StringUtils.hasText(name) ? name : "customer-" + id, null));
+            resolved.put(id, fromCrm.getOrDefault(id, fallback(id)));
         }
         return resolved;
+    }
+
+    private static @NonNull CustomerContact fallback(@NonNull UUID customerId) {
+        return new CustomerContact("customer-" + customerId, null);
     }
 
     public @NonNull List<CustomerRef> searchIdsByName(@Nullable String name, int limit) {
@@ -162,15 +131,6 @@ public class CustomerReferenceService {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> unwrapData(Map<String, Object> body) {
-        Object data = body.get("data");
-        if (data instanceof Map<?, ?> dataMap) {
-            return (Map<String, Object>) dataMap;
-        }
-        return body;
-    }
-
     private @Nullable String extract(Map<String, Object> payload, String key) {
         Object value = payload.get(key);
         return value != null ? value.toString() : null;
@@ -185,34 +145,6 @@ public class CustomerReferenceService {
         } catch (IllegalArgumentException ex) {
             return null;
         }
-    }
-
-    /**
-     * Compose a display name from first/last parts. For commercial parties {@code lastName}
-     * already carries the full legal name (and {@code firstName} is a prefix of it), so the
-     * longer value is returned to avoid duplication; for individuals the two parts are joined.
-     */
-    private @Nullable String composeName(@Nullable String firstName, @Nullable String lastName) {
-        boolean hasFirst = StringUtils.hasText(firstName);
-        boolean hasLast = StringUtils.hasText(lastName);
-        if (!hasFirst && !hasLast) {
-            return null;
-        }
-        if (!hasFirst) {
-            return lastName.trim();
-        }
-        if (!hasLast) {
-            return firstName.trim();
-        }
-        String f = firstName.trim();
-        String l = lastName.trim();
-        if (l.contains(f)) {
-            return l;
-        }
-        if (f.contains(l)) {
-            return f;
-        }
-        return f + " " + l;
     }
 
     private @Nullable String firstNonBlank(String... values) {

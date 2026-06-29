@@ -324,7 +324,8 @@ class CrmAccountsControllerTest {
     void resolvePartyNames_returnsPairs() throws Exception {
         UUID p1 = UUID.fromString("11111111-0000-0000-0000-000000000001");
         when(partyService.resolveNames(eq(List.of(p1))))
-                .thenReturn(List.of(new com.positivity.customer.internal.dto.PartyNameRef(p1, "Acme Towing LLC")));
+                .thenReturn(List.of(
+                        new com.positivity.customer.internal.dto.PartyNameRef(p1, "Acme Towing LLC", "+1-555-0100")));
 
         mockMvc.perform(post("/v1/crm/accounts/parties:resolve")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -333,7 +334,8 @@ class CrmAccountsControllerTest {
                         .header("X-Authorities", "crm:party:view"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].partyId").value(p1.toString()))
-                .andExpect(jsonPath("$[0].displayName").value("Acme Towing LLC"));
+                .andExpect(jsonPath("$[0].displayName").value("Acme Towing LLC"))
+                .andExpect(jsonPath("$[0].phoneNumber").value("+1-555-0100"));
 
         verify(partyService).resolveNames(eq(List.of(p1)));
     }

@@ -71,6 +71,11 @@ class PartyServiceImplResolveNamesTest {
         return new PeopleClient.PersonIdentity(personId, first, last, null, List.of());
     }
 
+    private static PeopleClient.PersonIdentity identityWithPhones(
+            UUID personId, String first, String last, List<PeopleClient.ContactPoint> contactPoints) {
+        return new PeopleClient.PersonIdentity(personId, first, last, null, contactPoints);
+    }
+
     @Test
     void emptyInput_returnsEmpty_withoutTouchingRepositories() {
         assertThat(service.resolveNames(List.of())).isEmpty();
@@ -92,7 +97,8 @@ class PartyServiceImplResolveNamesTest {
 
         assertThat(result)
                 .containsExactlyInAnyOrder(
-                        new PartyNameRef(withDisplay, "Acme Supply"), new PartyNameRef(legalOnly, "Legal Only Inc"));
+                        new PartyNameRef(withDisplay, "Acme Supply", null),
+                        new PartyNameRef(legalOnly, "Legal Only Inc", null));
         verify(peopleClient, never()).fetchPersonIdentitiesQuietly(anyCollection());
     }
 
@@ -113,9 +119,32 @@ class PartyServiceImplResolveNamesTest {
 
         assertThat(result)
                 .containsExactlyInAnyOrder(
-                        new PartyNameRef(partyA, "John Smith"), new PartyNameRef(partyB, "Jane Doe"));
+                        new PartyNameRef(partyA, "John Smith", null), new PartyNameRef(partyB, "Jane Doe", null));
         // single batch call, not one per person
         verify(peopleClient).fetchPersonIdentitiesQuietly(anyCollection());
+    }
+
+    @Test
+    void person_picksPrimaryPhoneFromContactPoints() {
+        UUID partyA = UUID.fromString("66666666-0000-0000-0000-000000000001");
+        UUID personA = UUID.fromString("77777777-0000-0000-0000-000000000001");
+        when(partyRepository.findAllById(List.of(partyA))).thenReturn(List.of());
+        when(personPartyRepository.findAllById(List.of(partyA))).thenReturn(List.of(person(partyA, personA)));
+        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+                .thenReturn(Map.of(
+                        personA,
+                        identityWithPhones(
+                                personA,
+                                "John",
+                                "Smith",
+                                List.of(
+                                        new PeopleClient.ContactPoint("EMAIL", "j@x.com", true),
+                                        new PeopleClient.ContactPoint("PHONE_HOME", "+1-555-0001", false),
+                                        new PeopleClient.ContactPoint("PHONE_MOBILE", "+1-555-0002", true)))));
+
+        List<PartyNameRef> result = service.resolveNames(List.of(partyA));
+
+        assertThat(result).containsExactly(new PartyNameRef(partyA, "John Smith", "+1-555-0002"));
     }
 
     @Test
@@ -133,6 +162,6 @@ class PartyServiceImplResolveNamesTest {
 
         List<PartyNameRef> result = service.resolveNames(List.of(known, known, unknown, personNoIdentity));
 
-        assertThat(result).containsExactly(new PartyNameRef(known, "Known Co"));
+        assertThat(result).containsExactly(new PartyNameRef(known, "Known Co", null));
     }
 }

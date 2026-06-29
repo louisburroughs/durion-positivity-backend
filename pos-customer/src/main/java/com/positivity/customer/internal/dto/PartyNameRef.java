@@ -4,9 +4,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
 
 /**
- * Resolved party id to display name pairing.
+ * Resolved party id to display name (and best-effort phone) pairing.
  */
-@Schema(description = "Party id resolved to its display name")
+@Schema(description = "Party id resolved to its display name and best-effort phone")
 public record PartyNameRef(
         @Schema(
                 description = "Party identifier",
@@ -18,4 +18,10 @@ public record PartyNameRef(
                 description = "Resolved display name (commercial display/legal name or person full name)",
                 example = "Acme Towing LLC",
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-        String displayName) {}
+        String displayName,
+
+        @Schema(
+                description = "Best-effort phone (person primary phone contact-point; null for commercial parties)",
+                example = "+1-555-0100",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        String phoneNumber) {}
