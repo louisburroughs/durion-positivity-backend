@@ -249,6 +249,7 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
                         .unitPrice(service.getUnitPrice() == null ? BigDecimal.ZERO : service.getUnitPrice())
                         .amount(resolveLineAmount(
                                 service.getLineTotal(), service.getQuantity(), service.getUnitPrice()))
+                        .type("LABOR")
                         .build()));
 
         // CAP:007 - Load parts avoiding duplicates
@@ -291,6 +292,7 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
                         .quantity(part.getQuantity() == null ? BigDecimal.ONE : part.getQuantity())
                         .unitPrice(part.getUnitPrice() == null ? BigDecimal.ZERO : part.getUnitPrice())
                         .amount(resolveLineAmount(part.getLineTotal(), part.getQuantity(), part.getUnitPrice()))
+                        .type("PART")
                         .build()));
 
         return lineItems;

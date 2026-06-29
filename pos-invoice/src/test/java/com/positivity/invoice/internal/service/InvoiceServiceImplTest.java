@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.invoice.internal.client.LocationServiceClient;
 import com.positivity.invoice.internal.client.TaxServiceClient;
+import com.positivity.invoice.internal.client.WorkorderReferenceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
@@ -52,6 +53,9 @@ class InvoiceServiceImplTest {
     @Mock
     private LocationServiceClient locationServiceClient;
 
+    @Mock
+    private WorkorderReferenceClient workorderReferenceClient;
+
     @InjectMocks
     private InvoiceServiceImpl invoiceService;
 
@@ -72,6 +76,10 @@ class InvoiceServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // getInvoice/applyAdjustment delegate to the transactional mapping method
+        // through the self-reference; in a unit test point it at the real instance.
+        invoiceService.setSelf(invoiceService);
+
         invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         locationId = UUID.fromString("01960003-0000-7000-8000-000000000001");
@@ -104,6 +112,55 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> invoiceService.getInvoice(invoiceId)).isInstanceOf(InvoiceNotFoundException.class);
+    }
+
+    @Test
+    void getInvoice_shouldResolveWorkorderNumber_andRoundTripItemType() {
+        InvoiceItem labor = new InvoiceItem();
+        labor.setDescription("Diagnostics");
+        labor.setQuantity(BigDecimal.ONE);
+        labor.setUnitPrice(BigDecimal.valueOf(100));
+        labor.setLineTotal(BigDecimal.valueOf(100));
+        labor.setType("LABOR");
+        draftInvoice.addItem(labor);
+
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+        when(workorderReferenceClient.resolveNumbers(any())).thenReturn(java.util.Map.of(workorderId, "WO-2026-000045"));
+
+        InvoiceDetailsResponse result = invoiceService.getInvoice(invoiceId);
+
+        assertThat(result.getWorkorderNumber()).isEqualTo("WO-2026-000045");
+        assertThat(result.getItems()).singleElement().satisfies(item -> assertThat(item.getType()).isEqualTo("LABOR"));
+    }
+
+    @Test
+    void getInvoice_shouldLeaveWorkorderNumberNull_whenWorkexecUnresolved() {
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+        when(workorderReferenceClient.resolveNumbers(any())).thenReturn(java.util.Map.of());
+
+        InvoiceDetailsResponse result = invoiceService.getInvoice(invoiceId);
+
+        assertThat(result.getWorkorderNumber()).isNull();
+    }
+
+    @Test
+    void getInvoice_shouldFlagManagerApproval_whenDraftTotalOverThreshold() {
+        draftInvoice.setTotal(new BigDecimal("501.00"));
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+
+        InvoiceDetailsResponse result = invoiceService.getInvoice(invoiceId);
+
+        assertThat(result.isRequiresManagerApproval()).isTrue();
+    }
+
+    @Test
+    void getInvoice_shouldNotFlagManagerApproval_whenDraftTotalAtThreshold() {
+        draftInvoice.setTotal(new BigDecimal("500.00"));
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+
+        InvoiceDetailsResponse result = invoiceService.getInvoice(invoiceId);
+
+        assertThat(result.isRequiresManagerApproval()).isFalse();
     }
 
     // ---- createInvoice(InvoiceGenerationRequest) ----
