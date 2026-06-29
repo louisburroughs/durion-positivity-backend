@@ -12,6 +12,7 @@ import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.GetPartyResponse;
 import com.positivity.customer.internal.dto.MergePartiesRequest;
 import com.positivity.customer.internal.dto.MergePartiesResponse;
+import com.positivity.customer.internal.dto.PartyNameRef;
 import com.positivity.customer.internal.dto.SearchPartiesRequest;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
 import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
@@ -354,6 +355,52 @@ public class PartyServiceImpl implements PartyService {
                 .pageNumber(0)
                 .pageSize(summaries.size())
                 .build();
+    }
+
+    /**
+     * Batch-resolve party ids to display names. Intentionally NOT {@code @Transactional}: each
+     * repository {@code findAllById} runs in its own short transaction and the entities are read as
+     * scalars afterwards, so the pos-people HTTP call below never holds a database connection.
+     */
+    @Override
+    @NonNull
+    public List<PartyNameRef> resolveNames(@NonNull List<UUID> partyIds) {
+        List<UUID> ids = partyIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+
+        Map<UUID, String> namesByPartyId = new java.util.LinkedHashMap<>();
+
+        // Commercial parties: prefer the display/trading name, fall back to the legal name.
+        for (CommercialParty party : partyRepository.findAllById(ids)) {
+            String name = StringUtils.hasText(party.getDisplayName()) ? party.getDisplayName() : party.getLegalName();
+            if (StringUtils.hasText(name)) {
+                namesByPartyId.put(party.getPartyId(), name.trim());
+            }
+        }
+
+        // Person parties: the human name lives in pos-people; resolve it in a single batch call.
+        Map<UUID, UUID> personIdByPartyId = new java.util.LinkedHashMap<>();
+        for (PersonParty person : personPartyRepository.findAllById(ids)) {
+            if (person.getPersonId() != null) {
+                personIdByPartyId.put(person.getPartyId(), person.getPersonId());
+            }
+        }
+        if (!personIdByPartyId.isEmpty()) {
+            Map<UUID, PeopleClient.PersonIdentity> identities =
+                    peopleClient.fetchPersonIdentitiesQuietly(Set.copyOf(personIdByPartyId.values()));
+            personIdByPartyId.forEach((partyId, personId) -> {
+                PeopleClient.PersonIdentity identity = identities.get(personId);
+                if (identity != null && StringUtils.hasText(identity.displayName())) {
+                    namesByPartyId.put(partyId, identity.displayName());
+                }
+            });
+        }
+
+        return namesByPartyId.entrySet().stream()
+                .map(entry -> new PartyNameRef(entry.getKey(), entry.getValue()))
+                .toList();
     }
 
     @Override
@@ -816,8 +863,8 @@ public class PartyServiceImpl implements PartyService {
             PartyRelationship rel, Map<UUID, PeopleClient.PersonIdentity> identities) {
         PersonParty person = rel.getToPerson();
         ContactSummary summary = new ContactSummary();
-        summary.setContactId(
-                Objects.requireNonNull(rel.getPartyRelationshipId(), "partyRelationshipId").toString());
+        summary.setContactId(Objects.requireNonNull(rel.getPartyRelationshipId(), "partyRelationshipId")
+                .toString());
         summary.setPrimary(rel.isPrimaryBillingContact());
         summary.setName(Objects.requireNonNullElse(resolveDisplayName(person, identities), "Unknown"));
         summary.setRoles(Collections.emptyList());

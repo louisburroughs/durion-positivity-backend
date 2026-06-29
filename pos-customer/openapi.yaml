@@ -990,6 +990,37 @@ paths:
         - crm:party:create
       x-required-permissions:
       - crm:party:create
+  /v1/crm/accounts/parties:resolve:
+    post:
+      tags:
+      - CRM Accounts
+      summary: Resolve party display names
+      description: Batch-resolve party ids to display names. Consumed server-side by sibling services (e.g. pos-invoice) that store only the party id and need the display name to enrich finder/search rows. Unknown or unresolvable ids are omitted from the response.
+      operationId: resolvePartyNames
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartyNameResolveRequest'
+        required: true
+      responses:
+        '200':
+          description: Resolved party id-to-name pairs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartyNameRef'
+        '400':
+          description: Invalid resolve request
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:party:view
+      x-required-permissions:
+      - crm:party:view
   /v1/crm/accounts/parties/{partyId}/vehicles:
     post:
       tags:
@@ -1826,6 +1857,17 @@ components:
           format: int64
           description: Optimistic lock version.
           example: 1
+      required:
+      - accountId
+      - createdAt
+      - description
+      - isActive
+      - unitNumber
+      - updatedAt
+      - vehicleId
+      - version
+      - vin
+      - vinNormalized
     VehicleTransferRequest:
       type: object
       description: Transfer request with target customer
@@ -2818,6 +2860,35 @@ components:
       required:
       - legalName
       - matchReason
+      - partyId
+    PartyNameResolveRequest:
+      type: object
+      description: Batch request to resolve party ids to display names
+      properties:
+        partyIds:
+          type: array
+          description: Party identifiers to resolve
+          items:
+            type: string
+            format: uuid
+          maxItems: 200
+          minItems: 0
+      required:
+      - partyIds
+    PartyNameRef:
+      type: object
+      description: Party id resolved to its display name
+      properties:
+        partyId:
+          type: string
+          format: uuid
+          description: Party identifier
+          example: 550e8400-e29b-41d4-a716-446655440000
+        displayName:
+          type: string
+          description: Resolved display name (commercial display/legal name or person full name)
+          example: Acme Towing LLC
+      required:
       - partyId
     CreateVehicleForPartyResponse:
       type: object
