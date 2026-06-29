@@ -97,13 +97,13 @@ class CustomerReferenceServiceHttpTest {
     }
 
     @Test
-    void resolveAll_deDuplicatesRequests_forRepeatedIds() throws Exception {
+    void resolveAll_usesSingleBatchCall_andDeDuplicatesRepeatedIds() throws Exception {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer(
-                "/v1/crm/" + customerId,
+        HttpServer server = startBatchServer(
+                "/v1/crm/accounts/parties:resolve",
                 200,
-                "{\"customerName\":\"Repeated Customer\",\"phone\":\"+1-555-2222\"}",
+                "[{\"partyId\":\"" + customerId + "\",\"displayName\":\"Repeated Customer\"}]",
                 callCount);
         try {
             String serviceId = "localhost:" + server.getAddress().getPort();
@@ -113,10 +113,50 @@ class CustomerReferenceServiceHttpTest {
 
             assertThat(resolved).hasSize(1);
             assertThat(resolved.get(customerId).name()).isEqualTo("Repeated Customer");
+            // one batch POST regardless of repeated input ids
             assertThat(callCount.get()).isEqualTo(1);
         } finally {
             server.stop(0);
         }
+    }
+
+    @Test
+    void resolveAll_fallsBackToCustomerId_whenBatchOmitsId() throws Exception {
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        AtomicInteger callCount = new AtomicInteger();
+        HttpServer server = startBatchServer("/v1/crm/accounts/parties:resolve", 200, "[]", callCount);
+        try {
+            String serviceId = "localhost:" + server.getAddress().getPort();
+            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
+
+            var resolved = service.resolveAll(List.of(customerId));
+
+            assertThat(resolved.get(customerId).name()).isEqualTo("customer-" + customerId);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    private HttpServer startBatchServer(String expectedPath, int status, String body, AtomicInteger callCount)
+            throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/", exchange -> {
+            callCount.incrementAndGet();
+            String requestPath = exchange.getRequestURI().getPath();
+            if (!"POST".equals(exchange.getRequestMethod()) || !expectedPath.equals(requestPath)) {
+                exchange.sendResponseHeaders(404, -1);
+                exchange.close();
+                return;
+            }
+            byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(status, payload.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(payload);
+            }
+        });
+        server.start();
+        return server;
     }
 
     @Test
