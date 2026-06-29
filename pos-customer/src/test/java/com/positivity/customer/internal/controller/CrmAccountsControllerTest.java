@@ -8,6 +8,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -313,6 +314,37 @@ class CrmAccountsControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
                         .header("X-Authorities", "crm:billing_rules:edit"))
+                .andExpect(status().isBadRequest());
+    }
+
+    // ─── POST /v1/crm/accounts/parties:resolve ──────────────────────────────
+
+    @Test
+    @DisplayName("resolve parties returns id-to-displayName pairs")
+    void resolvePartyNames_returnsPairs() throws Exception {
+        UUID p1 = UUID.fromString("11111111-0000-0000-0000-000000000001");
+        when(partyService.resolveNames(eq(List.of(p1))))
+                .thenReturn(List.of(new com.positivity.customer.internal.dto.PartyNameRef(p1, "Acme Towing LLC")));
+
+        mockMvc.perform(post("/v1/crm/accounts/parties:resolve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new com.positivity.customer.internal.dto.PartyNameResolveRequest(List.of(p1))))
+                        .header("X-Authorities", "crm:party:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].partyId").value(p1.toString()))
+                .andExpect(jsonPath("$[0].displayName").value("Acme Towing LLC"));
+
+        verify(partyService).resolveNames(eq(List.of(p1)));
+    }
+
+    @Test
+    @DisplayName("resolve parties rejects an empty id list")
+    void resolvePartyNames_emptyList_isBadRequest() throws Exception {
+        mockMvc.perform(post("/v1/crm/accounts/parties:resolve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"partyIds\":[]}")
+                        .header("X-Authorities", "crm:party:view"))
                 .andExpect(status().isBadRequest());
     }
 }

@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -69,13 +70,47 @@ public class CustomerReferenceService {
         }
     }
 
+    /**
+     * Resolve display names for a batch of customer ids in a single CRM call (used by finder/search
+     * row enrichment, which needs only the name). Every requested id is present in the result; ids
+     * the CRM cannot resolve fall back to {@code customer-<id>}. Phone is not enriched here — callers
+     * needing it use {@link #resolve(UUID)}.
+     */
     public @NonNull Map<UUID, CustomerContact> resolveAll(@NonNull Collection<UUID> customerIds) {
+        List<UUID> ids =
+                customerIds.stream().filter(Objects::nonNull).distinct().toList();
         Map<UUID, CustomerContact> resolved = new LinkedHashMap<>();
-        for (UUID customerId : customerIds) {
-            if (customerId == null || resolved.containsKey(customerId)) {
-                continue;
+        if (ids.isEmpty()) {
+            return resolved;
+        }
+
+        Map<UUID, String> names = new LinkedHashMap<>();
+        try {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> rows = customerRestClient
+                    .post()
+                    .uri("/v1/crm/accounts/parties:resolve")
+                    .header("X-User", "pos-workorder")
+                    .header("X-Authorities", "crm:party:view")
+                    .body(Map.of("partyIds", ids))
+                    .retrieve()
+                    .body(List.class);
+            if (rows != null) {
+                for (Map<String, Object> row : rows) {
+                    UUID id = parseUuidOrNull(extract(row, "partyId"));
+                    String displayName = extract(row, "displayName");
+                    if (id != null && StringUtils.hasText(displayName)) {
+                        names.put(id, displayName.trim());
+                    }
+                }
             }
-            resolved.put(customerId, resolve(customerId));
+        } catch (Exception ex) {
+            log.debug("Unable to resolve {} customer name(s): {}", ids.size(), ex.getMessage());
+        }
+
+        for (UUID id : ids) {
+            String name = names.get(id);
+            resolved.put(id, new CustomerContact(StringUtils.hasText(name) ? name : "customer-" + id, null));
         }
         return resolved;
     }
@@ -139,6 +174,17 @@ public class CustomerReferenceService {
     private @Nullable String extract(Map<String, Object> payload, String key) {
         Object value = payload.get(key);
         return value != null ? value.toString() : null;
+    }
+
+    private static @Nullable UUID parseUuidOrNull(@Nullable String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value.trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     /**

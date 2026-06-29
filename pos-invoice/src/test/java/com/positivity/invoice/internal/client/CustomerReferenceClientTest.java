@@ -6,7 +6,6 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import java.util.List;
 import java.util.Map;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,9 +17,8 @@ import org.springframework.web.client.RestClient;
 
 /**
  * Unit tests for {@link CustomerReferenceClient}. Binds {@link MockRestServiceServer} to the
- * {@link RestClient.Builder} the client builds from, so the data-envelope unwrap, name-field
- * fallback precedence, name composition, and silent-failure behaviour are exercised without a
- * live CRM service.
+ * {@link RestClient.Builder} so the by-name search and the batch {@code parties:resolve} mapping
+ * (and silent-failure behaviour) are exercised without a live CRM service.
  */
 class CustomerReferenceClientTest {
 
@@ -56,74 +54,57 @@ class CustomerReferenceClientTest {
     }
 
     @Test
-    void resolveNames_unwrapsDataEnvelope_andAppliesFieldPrecedence() {
-        // customerName wins over displayName/legalName/name
-        server.expect(requestTo(BASE_URL + "/p-1"))
+    void resolveNames_emptyInput_returnsEmptyWithoutCall() {
+        assertThat(client.resolveNames(java.util.List.of())).isEmpty();
+        server.verify();
+    }
+
+    @Test
+    void resolveNames_batchPost_mapsRows() {
+        server.expect(requestTo(BASE_URL + "/accounts/parties:resolve"))
+                .andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess(
-                        "{\"data\":{\"customerName\":\"Acme Towing LLC\",\"displayName\":\"ignored\"}}",
+                        "[{\"partyId\":\"p-1\",\"displayName\":\" Acme Towing LLC \"},"
+                                + "{\"partyId\":\"p-2\",\"displayName\":\"Beta Co\"}]",
                         MediaType.APPLICATION_JSON));
 
-        assertThat(client.resolveNames(List.of("p-1"))).containsEntry("p-1", "Acme Towing LLC");
+        assertThat(client.resolveNames(java.util.List.of("p-1", "p-2")))
+                .containsExactly(Map.entry("p-1", "Acme Towing LLC"), Map.entry("p-2", "Beta Co"));
         server.verify();
     }
 
     @Test
-    void resolveNames_fallsBackThroughNameFields() {
-        // no customerName -> displayName used
-        server.expect(requestTo(BASE_URL + "/p-1"))
+    void resolveNames_skipsRowsWithBlankNameOrId() {
+        server.expect(requestTo(BASE_URL + "/accounts/parties:resolve"))
+                .andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess(
-                        "{\"displayName\":\"Display Co\",\"legalName\":\"Legal Co\"}", MediaType.APPLICATION_JSON));
+                        "[{\"partyId\":\"p-1\",\"displayName\":\"\"},{\"displayName\":\"orphan\"},"
+                                + "{\"partyId\":\"p-2\",\"displayName\":\"Kept\"}]",
+                        MediaType.APPLICATION_JSON));
 
-        assertThat(client.resolveNames(List.of("p-1"))).containsEntry("p-1", "Display Co");
+        assertThat(client.resolveNames(java.util.List.of("p-1", "p-2"))).containsExactly(Map.entry("p-2", "Kept"));
         server.verify();
     }
 
     @Test
-    void resolveNames_composesFirstLast_whenOnlyPersonFieldsPresent() {
-        server.expect(requestTo(BASE_URL + "/p-1"))
+    void resolveNames_dedupesAndSkipsBlankIds() {
+        // one POST expected; the request body carries the single distinct, non-blank id
+        server.expect(requestTo(BASE_URL + "/accounts/parties:resolve"))
+                .andExpect(method(HttpMethod.POST))
                 .andRespond(
-                        withSuccess("{\"firstName\":\"John\",\"lastName\":\"Smith\"}", MediaType.APPLICATION_JSON));
-
-        assertThat(client.resolveNames(List.of("p-1"))).containsEntry("p-1", "John Smith");
-        server.verify();
-    }
-
-    @Test
-    void resolveNames_dedupesContainedName() {
-        // lastName already contains firstName -> return lastName, not "John John Smith"
-        server.expect(requestTo(BASE_URL + "/p-1"))
-                .andRespond(withSuccess(
-                        "{\"firstName\":\"John\",\"lastName\":\"John Smith\"}", MediaType.APPLICATION_JSON));
-
-        assertThat(client.resolveNames(List.of("p-1"))).containsEntry("p-1", "John Smith");
-        server.verify();
-    }
-
-    @Test
-    void resolveNames_omitsIdWhenBodyEmptyOrUnresolved() {
-        server.expect(requestTo(BASE_URL + "/p-1")).andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
-
-        assertThat(client.resolveNames(List.of("p-1"))).doesNotContainKey("p-1");
-        server.verify();
-    }
-
-    @Test
-    void resolveNames_remoteError_isSwallowed_returningNoEntry() {
-        server.expect(requestTo(BASE_URL + "/p-1")).andRespond(withServerError());
-
-        assertThat(client.resolveNames(List.of("p-1"))).isEmpty();
-        server.verify();
-    }
-
-    @Test
-    void resolveNames_skipsBlankAndDuplicateIds() {
-        // only one HTTP call expected for the single distinct, non-blank id
-        server.expect(requestTo(BASE_URL + "/p-1"))
-                .andRespond(withSuccess("{\"name\":\"Once\"}", MediaType.APPLICATION_JSON));
+                        withSuccess("[{\"partyId\":\"p-1\",\"displayName\":\"Once\"}]", MediaType.APPLICATION_JSON));
 
         Map<String, String> resolved = client.resolveNames(java.util.Arrays.asList("p-1", "p-1", "  ", null));
 
         assertThat(resolved).containsExactly(Map.entry("p-1", "Once"));
+        server.verify();
+    }
+
+    @Test
+    void resolveNames_remoteError_isSwallowed_returningEmptyMap() {
+        server.expect(requestTo(BASE_URL + "/accounts/parties:resolve")).andRespond(withServerError());
+
+        assertThat(client.resolveNames(java.util.List.of("p-1"))).isEmpty();
         server.verify();
     }
 }

@@ -30,6 +30,7 @@ CRM service for the Durion Positivity ETSMS platform. Manages the customer party
 - `GET /v1/customers/{accountId}/tier` — get account tier
 - `GET /v1/parties/{partyId}` — retrieve a party
 - `GET /v1/crm/accounts/parties/duplicate-check?legalName=...` — check potential duplicate commercial parties
+- `POST /v1/crm/accounts/parties:resolve` — batch-resolve party ids to display names (auth: `crm:party:view`); for sibling-service finder enrichment
 - `GET /v1/parties/{partyId}/contacts` — list contact roles
 - `GET /v1/parties/{partyId}/communicationPreferences` — communication preferences
 - `PUT /v1/crm/accounts/parties/{partyId}/billing-rules` — upsert billing rules for a commercial party

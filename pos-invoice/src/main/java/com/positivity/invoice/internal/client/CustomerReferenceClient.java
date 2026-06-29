@@ -89,91 +89,45 @@ public class CustomerReferenceClient {
      * @return party id to display name map
      */
     public @NonNull Map<String, String> resolveNames(@NonNull Collection<String> partyIds) {
-        Map<String, String> resolved = new LinkedHashMap<>();
-        for (String partyId : partyIds) {
-            if (!StringUtils.hasText(partyId) || resolved.containsKey(partyId)) {
-                continue;
-            }
-            String name = resolveName(partyId);
-            if (name != null) {
-                resolved.put(partyId, name);
-            }
+        List<String> ids = partyIds.stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
         }
-        return resolved;
-    }
-
-    private @Nullable String resolveName(@NonNull String partyId) {
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> body = crmRestClient
-                    .get()
-                    .uri("/{partyId}", partyId)
+            List<Map<String, Object>> rows = crmRestClient
+                    .post()
+                    .uri("/accounts/parties:resolve")
                     .header("X-User", "pos-invoice")
                     .header("X-Authorities", "crm:party:view")
+                    .body(Map.of("partyIds", ids))
                     .retrieve()
-                    .body(Map.class);
-            if (body == null || body.isEmpty()) {
-                return null;
-            }
-            Map<String, Object> payload = unwrapData(body);
-            return firstNonBlank(
-                    extract(payload, "customerName"),
-                    extract(payload, "displayName"),
-                    extract(payload, "legalName"),
-                    extract(payload, "name"),
-                    composeName(extract(payload, "firstName"), extract(payload, "lastName")));
-        } catch (Exception ex) {
-            log.debug("Unable to resolve customer reference for {}: {}", partyId, ex.getMessage());
-            return null;
-        }
-    }
+                    .body(List.class);
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> unwrapData(Map<String, Object> body) {
-        Object data = body.get("data");
-        if (data instanceof Map<?, ?> dataMap) {
-            return (Map<String, Object>) dataMap;
+            if (rows == null) {
+                return Map.of();
+            }
+            Map<String, String> resolved = new LinkedHashMap<>();
+            for (Map<String, Object> row : rows) {
+                String partyId = extract(row, "partyId");
+                String displayName = extract(row, "displayName");
+                if (StringUtils.hasText(partyId) && StringUtils.hasText(displayName)) {
+                    resolved.put(partyId.trim(), displayName.trim());
+                }
+            }
+            return resolved;
+        } catch (Exception ex) {
+            log.debug("Unable to resolve {} customer name(s): {}", ids.size(), ex.getMessage());
+            return Map.of();
         }
-        return body;
     }
 
     private @Nullable String extract(Map<String, Object> payload, String key) {
         Object value = payload.get(key);
         return value != null ? value.toString() : null;
-    }
-
-    private @Nullable String composeName(@Nullable String firstName, @Nullable String lastName) {
-        boolean hasFirst = StringUtils.hasText(firstName);
-        boolean hasLast = StringUtils.hasText(lastName);
-        if (!hasFirst && !hasLast) {
-            return null;
-        }
-        if (!hasFirst) {
-            return lastName.trim();
-        }
-        if (!hasLast) {
-            return firstName.trim();
-        }
-        String f = firstName.trim();
-        String l = lastName.trim();
-        if (l.contains(f)) {
-            return l;
-        }
-        if (f.contains(l)) {
-            return f;
-        }
-        return f + " " + l;
-    }
-
-    private @Nullable String firstNonBlank(String... values) {
-        if (values == null) {
-            return null;
-        }
-        for (String value : values) {
-            if (StringUtils.hasText(value)) {
-                return value.trim();
-            }
-        }
-        return null;
     }
 }

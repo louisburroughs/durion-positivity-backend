@@ -9,6 +9,7 @@ import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.GetPartyResponse;
 import com.positivity.customer.internal.dto.MergePartiesRequest;
 import com.positivity.customer.internal.dto.MergePartiesResponse;
+import com.positivity.customer.internal.dto.PartyNameRef;
 import com.positivity.customer.internal.dto.SearchPartiesRequest;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
 import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
@@ -16,6 +17,7 @@ import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesReques
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
 import com.positivity.customer.internal.entity.CommercialParty;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -46,6 +48,14 @@ public interface PartyService {
             String sortOrder);
 
     SearchPartiesResponse searchParties(SearchPartiesRequest request);
+
+    /**
+     * Batch-resolve party ids to display names for sibling-service finder enrichment.
+     * Commercial parties resolve to {@code displayName ?? legalName}; person parties resolve to the
+     * canonical person full name via pos-people. Unknown or unresolvable ids are omitted.
+     */
+    @NonNull
+    List<PartyNameRef> resolveNames(@NonNull List<UUID> partyIds);
 
     MergePartiesResponse mergeParties(UUID survivorPartyId, MergePartiesRequest request);
 
