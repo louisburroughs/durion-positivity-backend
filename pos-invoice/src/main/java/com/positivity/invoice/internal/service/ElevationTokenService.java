@@ -108,10 +108,17 @@ public class ElevationTokenService {
         }
     }
 
+    /** Minimum secret length for HmacSHA256 — a full 256-bit key. */
+    private static final int MIN_SECRET_BYTES = 32;
+
     private void requireSecret() {
         if (secret.length == 0) {
             throw new IllegalStateException(
                     "Elevation token secret is not configured (invoice.elevation.token-secret)");
+        }
+        if (secret.length < MIN_SECRET_BYTES) {
+            throw new IllegalStateException("Elevation token secret is too short; require at least " + MIN_SECRET_BYTES
+                    + " bytes (invoice.elevation.token-secret)");
         }
     }
 

@@ -59,7 +59,9 @@ public class AuthorizationController {
     @ApiResponse(responseCode = "200", description = "Authorization decision returned")
     @ApiResponse(responseCode = "403", description = "Forbidden: authorization decision permission required")
     public ResponseEntity<AuthorizationDecisionResponse> getPersonDecision(
-            @Parameter(description = "Person identifier whose backing user is evaluated", example = "userA")
+            @Parameter(
+                            description = "Person identifier whose backing user is evaluated",
+                            example = "123e4567-e89b-12d3-a456-426614174000")
                     @RequestParam
                     UUID personId,
             @Parameter(description = "Permission key to evaluate", example = "invoice:finalize:override")

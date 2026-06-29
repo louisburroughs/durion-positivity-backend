@@ -304,6 +304,26 @@ class InvoiceFinalizationServiceTest {
         assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
     }
 
+    /**
+     * The core of the manager-approval hardening: a non-blank but INVALID/expired
+     * elevation token above the cap must be rejected (previously any non-blank code
+     * was accepted).
+     */
+    @Test
+    void finalize_throws_whenManagerApprovalTokenInvalid_aboveLimit() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(invoiceRepository.findById(invoiceId))
+                .thenReturn(Optional.of(draftInvoice(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("750.00"))));
+        // Token present but does not verify (wrong scope, tampered, or expired).
+        when(elevationTokenService.verify(any(), any())).thenReturn(Optional.empty());
+        FinalizationRequest request = serviceAdvisorRequest("not-a-valid-token");
+
+        assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageMatching("(?i).*approval code.*");
+    }
+
     // -------------------------------------------------------------------------
     // AC6 — Revert to DRAFT within 24h window, manager approval required
     // -------------------------------------------------------------------------
@@ -359,6 +379,24 @@ class InvoiceFinalizationServiceTest {
         assertThat(response.getStatus()).isEqualTo(InvoiceStatus.DRAFT);
         // ADR-0018: actor from SecurityContext
         assertThat(response.getRevertedBy()).isEqualTo("advisor-001");
+    }
+
+    /**
+     * Revert by a non-override actor must reject an invalid/expired elevation token,
+     * even within the window on a FINALIZED invoice.
+     */
+    @Test
+    void revert_throws_whenManagerApprovalTokenInvalid() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Invoice invoice = finalizedInvoice(workorderId);
+        invoice.setFinalizedAt(Instant.now(TEST_CLOCK).minusSeconds(3600));
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(invoice));
+        when(elevationTokenService.verify(any(), any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.revert(invoiceId, "not-a-valid-token", "Customer dispute"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageMatching("(?i).*approval code.*");
     }
 
     /**

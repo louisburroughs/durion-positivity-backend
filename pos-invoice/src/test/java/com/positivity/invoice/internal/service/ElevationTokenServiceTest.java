@@ -63,7 +63,8 @@ class ElevationTokenServiceTest {
     void verify_returnsEmpty_whenSignedWithDifferentSecret() {
         UUID invoiceId = UUID.randomUUID();
         String token = service(fixedClock(NOW)).mint(invoiceId, UUID.randomUUID()).token();
-        ElevationTokenService otherSecret = new ElevationTokenService(fixedClock(NOW), "a-different-secret", 300);
+        ElevationTokenService otherSecret =
+                new ElevationTokenService(fixedClock(NOW), "a-different-secret-of-sufficient-length", 300);
 
         assertThat(otherSecret.verify(token, invoiceId)).isEmpty();
     }
@@ -103,6 +104,14 @@ class ElevationTokenServiceTest {
         // Both mint and verify require a configured secret; verify on a random string fails fast.
         org.assertj.core.api.Assertions.assertThatThrownBy(
                         () -> noSecret.verify("anything", UUID.randomUUID()))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void verify_failsFast_whenSecretTooShort() {
+        ElevationTokenService shortSecret = new ElevationTokenService(fixedClock(NOW), "too-short", 300);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> shortSecret.verify("anything", UUID.randomUUID()))
                 .isInstanceOf(IllegalStateException.class);
     }
 }

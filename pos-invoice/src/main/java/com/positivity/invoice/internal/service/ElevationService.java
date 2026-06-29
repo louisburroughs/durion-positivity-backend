@@ -45,7 +45,8 @@ public class ElevationService {
         }
 
         ElevationTokenService.MintedToken minted = tokenService.mint(invoiceId, managerPersonId);
-        log.info("Elevation token minted for invoice scope by approving manager");
+        // ADR-0018: audit the approving manager and the invoice the grant authorises.
+        log.info("Elevation token minted: approverPersonId={}, invoiceId={}", managerPersonId, invoiceId);
         return new ElevateResponse(minted.token(), minted.expiresAt());
     }
 }

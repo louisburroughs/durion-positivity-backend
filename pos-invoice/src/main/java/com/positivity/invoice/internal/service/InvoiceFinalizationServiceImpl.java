@@ -201,23 +201,25 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         }
 
         // Actors without the override authority must supply a verified elevation token
-        // scoped to this invoice; a free-text code is no longer accepted.
-        if (!SecurityContextHelper.hasAuthority(OVERRIDE_AUTHORITY)
-                && elevationTokenService.verify(managerApprovalCode, invoiceId).isEmpty()) {
-            throw new IllegalArgumentException("Invalid or expired manager approval code for this invoice");
+        // scoped to this invoice; a free-text code is no longer accepted. When a token is
+        // used, capture the approving manager's person id for audit (non-repudiation).
+        UUID revertApprover = null;
+        if (!SecurityContextHelper.hasAuthority(OVERRIDE_AUTHORITY)) {
+            revertApprover = elevationTokenService
+                    .verify(managerApprovalCode, invoiceId)
+                    .orElseThrow(() ->
+                            new IllegalArgumentException("Invalid or expired manager approval code for this invoice"));
         }
 
         // Transition back to DRAFT
-        // ADR-0018: audit the actor performing the reversion
+        // ADR-0018: audit the actor performing the reversion and the approving manager.
         String revertedBy = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
-        String redactedCode = managerApprovalCode.length() > 4 ? managerApprovalCode.substring(0, 4) + "****" : "****";
-
         if (log.isInfoEnabled()) {
             log.info(
-                    "Invoice reversion: actor(mask)={}, invoiceId(mask)={}, approvalCode={}",
-                    maskForLog(revertedBy),
-                    maskForLog(invoiceId),
-                    redactedCode);
+                    "Invoice reversion: actor={}, approverPersonId={}, invoiceId={}",
+                    revertedBy,
+                    revertApprover,
+                    invoiceId);
         }
 
         invoice.setStatus(InvoiceStatus.DRAFT);
@@ -270,14 +272,16 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Invalid or expired manager approval code for this invoice"));
 
-        // M4: Audit the manager approval override (no secret material logged).
+        // M4 + ADR-0018: Audit the manager approval override. The approving manager's
+        // person id is recorded UNMASKED — it is the non-repudiation value the audit
+        // exists to capture (a person UUID, not secret material).
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         if (log.isInfoEnabled()) {
             log.info(
-                    "Manager approval override applied: actor(mask)={}, approver(mask)={}, invoiceId(mask)={}, amount={}",
-                    maskForLog(actor),
-                    maskForLog(approvingManager),
-                    maskForLog(invoiceId),
+                    "Manager approval override applied: actor={}, approverPersonId={}, invoiceId={}, amount={}",
+                    actor,
+                    approvingManager,
+                    invoiceId,
                     invoiceTotal);
         }
     }
