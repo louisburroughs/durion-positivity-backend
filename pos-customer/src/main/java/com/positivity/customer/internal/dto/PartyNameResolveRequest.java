@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -20,6 +21,8 @@ public record PartyNameResolveRequest(
         List<UUID> partyIds) {
 
     public PartyNameResolveRequest {
-        partyIds = partyIds == null ? List.of() : List.copyOf(partyIds);
+        partyIds = partyIds == null
+                ? List.of()
+                : partyIds.stream().filter(Objects::nonNull).distinct().toList();
     }
 }
