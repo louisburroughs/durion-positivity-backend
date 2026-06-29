@@ -55,10 +55,9 @@ public class WorkorderSearchController {
 
     @Operation(
             summary = "Resolve workorder numbers",
-            description =
-                    "Batch-resolves a set of workorder ids to their human workorder numbers. "
-                            + "Consumed server-side by sibling services that store only the workorder id "
-                            + "and need the human number for finder/search enrichment.")
+            description = "Batch-resolves a set of workorder ids to their human workorder numbers. "
+                    + "Consumed server-side by sibling services that store only the workorder id "
+                    + "and need the human number for finder/search enrichment.")
     @ApiResponse(responseCode = "200", description = "Resolved workorder id-to-number pairings returned.")
     @PostMapping("/numbers:resolve")
     @PreAuthorize("hasAuthority('workorder:workorder:view')")

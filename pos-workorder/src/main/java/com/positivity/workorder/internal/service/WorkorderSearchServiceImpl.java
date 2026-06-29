@@ -85,7 +85,8 @@ public class WorkorderSearchServiceImpl implements WorkorderSearchService {
 
     @Override
     public @NonNull List<WorkorderNumberRef> resolveNumbers(@NonNull Collection<UUID> workorderIds) {
-        List<UUID> ids = workorderIds.stream().filter(Objects::nonNull).distinct().toList();
+        List<UUID> ids =
+                workorderIds.stream().filter(Objects::nonNull).distinct().toList();
         if (ids.isEmpty()) {
             return List.of();
         }

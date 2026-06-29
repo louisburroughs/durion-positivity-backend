@@ -44,9 +44,8 @@ public class InvoiceSearchController {
 
     @Operation(
             summary = "Search invoices",
-            description =
-                    "Paginated free-text search for invoices matching the invoice number, "
-                            + "customer name, or workorder number.")
+            description = "Paginated free-text search for invoices matching the invoice number, "
+                    + "customer name, or workorder number.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Page of invoice search results returned."),
         @ApiResponse(

@@ -83,7 +83,8 @@ class InvoiceSearchControllerTest {
 
     @Test
     void search_trimsQueryBeforeDelegating() throws Exception {
-        when(invoiceSearchService.search(eq("Acme"), any())).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 25), 0));
+        when(invoiceSearchService.search(eq("Acme"), any()))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 25), 0));
 
         mockMvc.perform(get("/v1/invoices/search").param("q", "  Acme  ")).andExpect(status().isOk());
 
@@ -92,7 +93,8 @@ class InvoiceSearchControllerTest {
 
     @Test
     void search_missingQuery_delegatesEmptyString() throws Exception {
-        when(invoiceSearchService.search(eq(""), any())).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 25), 0));
+        when(invoiceSearchService.search(eq(""), any()))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 25), 0));
 
         mockMvc.perform(get("/v1/invoices/search")).andExpect(status().isOk());
 
