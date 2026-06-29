@@ -987,6 +987,17 @@ components:
           format: int64
           description: Optimistic lock version.
           example: 1
+      required:
+      - accountId
+      - createdAt
+      - description
+      - isActive
+      - unitNumber
+      - updatedAt
+      - vehicleId
+      - version
+      - vin
+      - vinNormalized
     SearchVehiclesRequest:
       type: object
       description: Request payload for searching vehicles by free-text query with optional pagination
@@ -1235,14 +1246,17 @@ components:
           type: string
           description: Vehicle VIN.
           example: 1HGCM82633A004352
+          minLength: 1
         unitNumber:
           type: string
           description: Fleet/unit number.
           example: UNIT-1024
+          minLength: 1
         description:
           type: string
           description: Human-readable vehicle description.
           example: 2024 Ford F-150 XL
+          minLength: 1
         licensePlate:
           type: string
           description: License plate value.

@@ -3,6 +3,8 @@ package com.positivity.invoice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.invoice.internal.client.LocationServiceClient;
@@ -222,6 +224,27 @@ class InvoiceServiceImplTest {
         InvoiceGenerationResponse response = invoiceService.createInvoice(request);
 
         assertThat(response).isNotNull();
+    }
+
+    @Test
+    void createInvoice_creationRequest_shouldAssignInvoiceNumberAtDraft() {
+        InvoiceCreationRequest request = InvoiceCreationRequest.builder()
+                .workorderId(workorderId)
+                .locationId(locationId)
+                .lineItems(List.of())
+                .build();
+
+        when(invoiceRepository.findByWorkorderId(workorderId)).thenReturn(Optional.empty());
+        when(invoiceRepository.save(any())).thenReturn(draftInvoice);
+
+        invoiceService.createInvoice(request);
+
+        // The number must be PERSISTED, not just mutated in memory: the entity is saved a
+        // second time after the id-yielding first save assigns the number. Verifying the
+        // second save guards against regressing to an unpersisted in-memory assignment.
+        org.mockito.ArgumentCaptor<Invoice> captor = org.mockito.ArgumentCaptor.forClass(Invoice.class);
+        verify(invoiceRepository, times(2)).save(captor.capture());
+        assertThat(captor.getValue().getInvoiceNumber()).startsWith("INV-");
     }
 
     @Test
