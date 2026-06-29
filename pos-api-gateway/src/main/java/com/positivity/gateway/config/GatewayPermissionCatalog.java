@@ -3,7 +3,7 @@ package com.positivity.gateway.config;
 public final class GatewayPermissionCatalog {
     private GatewayPermissionCatalog() {}
 
-    public static final int CATALOG_VERSION = 14;
+    public static final int CATALOG_VERSION = 15;
 
     protected static final String[] AUTHORITY_BY_BIT = {
         "PERM_accounting:je:view",
@@ -91,6 +91,7 @@ public final class GatewayPermissionCatalog {
         "PERM_invoice:manage",
         "PERM_invoice:billing-rules",
         "PERM_invoice:finalize",
+        "PERM_invoice:finalize:override",
         "PERM_location:read",
         "PERM_location:write",
         "PERM_location:bay:read",

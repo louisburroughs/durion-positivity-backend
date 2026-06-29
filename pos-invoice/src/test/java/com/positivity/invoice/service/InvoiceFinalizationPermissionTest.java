@@ -11,6 +11,7 @@ import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.invoice.internal.service.ElevationTokenService;
 import com.positivity.invoice.internal.service.InvoiceFinalizationServiceImpl;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
@@ -68,6 +69,9 @@ class InvoiceFinalizationPermissionTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private ElevationTokenService elevationTokenService;
+
     @InjectMocks
     private InvoiceFinalizationServiceImpl service;
 
@@ -92,11 +96,16 @@ class InvoiceFinalizationPermissionTest {
     }
 
     /**
-     * Sets up a SHOP_MANAGER role in the security context for tests that need it.
+     * Sets up a manager context holding the {@code invoice:finalize:override} authority
+     * (granted to SHOP_MANAGER/LOCATION_MANAGER/ADMIN) for tests that need it.
      */
     private void withShopManagerContext() {
         var auth = new UsernamePasswordAuthenticationToken(
-                "manager-001", null, List.of(new SimpleGrantedAuthority("ROLE_SHOP_MANAGER")));
+                "manager-001",
+                null,
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_SHOP_MANAGER"),
+                        new SimpleGrantedAuthority("invoice:finalize:override")));
         auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "manager-001"));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
@@ -155,7 +164,9 @@ class InvoiceFinalizationPermissionTest {
                 .thenReturn(Optional.of(draftInvoice(
                         UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("750.00"))));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        FinalizationRequest request = buildRequest("MGR-APPROVAL-XYZ");
+        // A valid elevation token verifies to the approving manager's person id.
+        when(elevationTokenService.verify(any(), any())).thenReturn(Optional.of(UUID.randomUUID()));
+        FinalizationRequest request = buildRequest("MGR-APPROVAL-TOKEN");
 
         InvoiceDetailsResponse response = service.completeInvoice(invoiceId, request);
 

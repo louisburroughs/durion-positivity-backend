@@ -112,6 +112,7 @@ public enum PermissionCode {
     INVOICE__MANAGE(82, "invoice:manage"),
     INVOICE__BILLING_RULES(83, "invoice:billing-rules"),
     INVOICE__FINALIZE(84, "invoice:finalize"),
+    INVOICE__FINALIZE__OVERRIDE(346, "invoice:finalize:override"),
 
     // ── Location ─────────────────────────────────────────────────────────────
     LOCATION__READ(85, "location:read"),
@@ -454,7 +455,7 @@ public enum PermissionCode {
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 14;
+    public static final int CATALOG_VERSION = 15;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

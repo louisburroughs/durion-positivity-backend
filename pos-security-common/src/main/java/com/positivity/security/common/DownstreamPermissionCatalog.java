@@ -23,7 +23,7 @@ public final class DownstreamPermissionCatalog {
      * {@code PermissionCode.CATALOG_VERSION}.
      * Updated automatically by {@code scripts/generate-permissions.py --sync}.
      */
-    public static final int CATALOG_VERSION = 14;
+    public static final int CATALOG_VERSION = 15;
 
     /**
      * Index-to-authority mapping. Entry at position N is the {@code PERM_*}-prefixed
@@ -116,6 +116,7 @@ public final class DownstreamPermissionCatalog {
         "PERM_invoice:manage",
         "PERM_invoice:billing-rules",
         "PERM_invoice:finalize",
+        "PERM_invoice:finalize:override",
         "PERM_location:read",
         "PERM_location:write",
         "PERM_location:bay:read",

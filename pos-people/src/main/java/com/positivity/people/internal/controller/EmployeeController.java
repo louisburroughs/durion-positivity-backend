@@ -3,6 +3,7 @@ package com.positivity.people.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
+import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.service.EmployeeService;
@@ -80,6 +81,24 @@ public class EmployeeController {
     @PreAuthorize("hasAuthority('people:employee:view')")
     public ResponseEntity<EmployeeProfileDto> getEmployee(@PathVariable UUID employeeId) {
         return ResponseEntity.ok(employeeService.getEmployee(employeeId));
+    }
+
+    @GetMapping("/by-number/{employeeNumber}")
+    @Operation(
+            summary = "Resolve employee by employee number",
+            description = "Resolves an employee number to a slim identity projection (person id + employment status)."
+                    + " Used for service-to-service approver resolution, such as manager-approval-by-employee-number.")
+    @ApiResponse(responseCode = "200", description = "Employee resolved")
+    @ApiResponse(responseCode = "404", description = "No employee with that number")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:employee:view"})
+    @PreAuthorize("hasAuthority('people:employee:view')")
+    public ResponseEntity<EmployeeIdentityDto> resolveByNumber(@PathVariable @NonNull String employeeNumber) {
+        return employeeService
+                .resolveByEmployeeNumber(employeeNumber)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping("/{employeeId}/disable")

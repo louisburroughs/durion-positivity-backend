@@ -13,6 +13,7 @@ import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.invoice.internal.service.ElevationTokenService;
 import com.positivity.invoice.internal.service.InvoiceFinalizationServiceImpl;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
@@ -70,6 +71,9 @@ class InvoiceFinalizationServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private ElevationTokenService elevationTokenService;
+
     @InjectMocks
     private InvoiceFinalizationServiceImpl service;
 
@@ -98,7 +102,11 @@ class InvoiceFinalizationServiceTest {
      */
     private void withShopManagerContext() {
         var auth = new UsernamePasswordAuthenticationToken(
-                "manager-001", null, List.of(new SimpleGrantedAuthority("ROLE_SHOP_MANAGER")));
+                "manager-001",
+                null,
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_SHOP_MANAGER"),
+                        new SimpleGrantedAuthority("invoice:finalize:override")));
         auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "manager-001"));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
@@ -288,6 +296,7 @@ class InvoiceFinalizationServiceTest {
                 .thenReturn(Optional.of(draftInvoice(
                         UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("750.00"))));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(elevationTokenService.verify(any(), any())).thenReturn(Optional.of(UUID.randomUUID()));
         FinalizationRequest request = serviceAdvisorRequest("MGR-APPROVAL-001");
 
         InvoiceDetailsResponse response = service.completeInvoice(invoiceId, request);
@@ -343,6 +352,7 @@ class InvoiceFinalizationServiceTest {
         invoice.setFinalizedAt(Instant.now(TEST_CLOCK).minusSeconds(3600)); // 1h ago — within 24h window
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(invoice));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(elevationTokenService.verify(any(), any())).thenReturn(Optional.of(UUID.randomUUID()));
 
         InvoiceDetailsResponse response = service.revert(invoiceId, "MGR-APPROVAL-001", "Customer dispute");
 
