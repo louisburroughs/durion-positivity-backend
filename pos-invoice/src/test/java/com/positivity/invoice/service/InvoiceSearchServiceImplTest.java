@@ -111,8 +111,7 @@ class InvoiceSearchServiceImplTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<UUID>> workorderIdsCaptor = ArgumentCaptor.forClass(Collection.class);
         verify(invoiceRepository)
-                .searchByQuery(
-                        eq("INV-2026"), customerIdsCaptor.capture(), workorderIdsCaptor.capture(), eq(pageable));
+                .searchByQuery(eq("INV-2026"), customerIdsCaptor.capture(), workorderIdsCaptor.capture(), eq(pageable));
 
         // Empty reference matches → non-matching sentinels keep the JPQL IN clauses non-empty.
         assertThat(customerIdsCaptor.getValue()).containsExactly("__none__");
@@ -143,7 +142,8 @@ class InvoiceSearchServiceImplTest {
         when(customerReferenceClient.resolveNames(any())).thenReturn(Map.of());
         when(workorderReferenceClient.resolveNumbers(any())).thenReturn(Map.of());
 
-        InvoiceSearchResult row = invoiceSearchService.search("INV", pageable).getContent().get(0);
+        InvoiceSearchResult row =
+                invoiceSearchService.search("INV", pageable).getContent().get(0);
 
         assertThat(row.getCustomerName()).isNull();
         assertThat(row.getWorkorderNumber()).isNull();

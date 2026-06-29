@@ -91,7 +91,8 @@ public class WorkorderReferenceClient {
      * @return workorder id to human number map
      */
     public @NonNull Map<UUID, String> resolveNumbers(@NonNull Collection<UUID> workorderIds) {
-        List<UUID> ids = workorderIds.stream().filter(Objects::nonNull).distinct().toList();
+        List<UUID> ids =
+                workorderIds.stream().filter(Objects::nonNull).distinct().toList();
         if (ids.isEmpty()) {
             return Map.of();
         }
