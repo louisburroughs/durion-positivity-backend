@@ -34,6 +34,12 @@ public class InvoiceItemResponse {
             requiredMode = NOT_REQUIRED)
     private UUID workorderItemId;
 
+    @Schema(
+            description = "Line item type (e.g. PART, LABOR, FEE, TAX)",
+            example = "LABOR",
+            requiredMode = NOT_REQUIRED)
+    private String type;
+
     @Nullable
     public UUID getId() {
         return id;
@@ -86,5 +92,14 @@ public class InvoiceItemResponse {
 
     public void setWorkorderItemId(@Nullable UUID workorderItemId) {
         this.workorderItemId = workorderItemId;
+    }
+
+    @Nullable
+    public String getType() {
+        return type;
+    }
+
+    public void setType(@Nullable String type) {
+        this.type = type;
     }
 }

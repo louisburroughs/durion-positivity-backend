@@ -32,6 +32,12 @@ public class InvoiceDetailsResponse {
     private UUID workorderId;
 
     @Schema(
+            description = "Human-readable number of the associated workorder",
+            example = "WO-2026-000045",
+            requiredMode = NOT_REQUIRED)
+    private String workorderNumber;
+
+    @Schema(
             description = "Identifier of the source estimate",
             example = "01960003-0000-7000-8000-000000000042",
             requiredMode = NOT_REQUIRED)
@@ -109,6 +115,13 @@ public class InvoiceDetailsResponse {
             requiredMode = NOT_REQUIRED)
     private String revertedBy;
 
+    @Schema(
+            description = "Whether finalizing this invoice requires a manager approval code "
+                    + "(DRAFT total exceeds the service-advisor threshold)",
+            example = "false",
+            requiredMode = NOT_REQUIRED)
+    private boolean requiresManagerApproval;
+
     @Valid
     @Schema(description = "Line items belonging to the invoice", requiredMode = REQUIRED)
     private List<InvoiceItemResponse> items = new ArrayList<>();
@@ -142,6 +155,15 @@ public class InvoiceDetailsResponse {
 
     public void setWorkorderId(@Nullable UUID workorderId) {
         this.workorderId = workorderId;
+    }
+
+    @Nullable
+    public String getWorkorderNumber() {
+        return workorderNumber;
+    }
+
+    public void setWorkorderNumber(@Nullable String workorderNumber) {
+        this.workorderNumber = workorderNumber;
     }
 
     @Nullable
@@ -277,6 +299,14 @@ public class InvoiceDetailsResponse {
 
     public void setRevertedBy(@Nullable String revertedBy) {
         this.revertedBy = revertedBy;
+    }
+
+    public boolean isRequiresManagerApproval() {
+        return requiresManagerApproval;
+    }
+
+    public void setRequiresManagerApproval(boolean requiresManagerApproval) {
+        this.requiresManagerApproval = requiresManagerApproval;
     }
 
     public List<InvoiceItemResponse> getItems() {

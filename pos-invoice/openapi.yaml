@@ -879,6 +879,10 @@ components:
           type: number
           description: Line amount (quantity x unit price).
           example: 90.0
+        type:
+          type: string
+          description: Line item type (e.g. PART, LABOR, FEE, TAX).
+          example: LABOR
       required:
       - amount
       - description
@@ -1006,6 +1010,10 @@ components:
           format: uuid
           description: Identifier of the associated workorder
           example: 01960003-0000-7000-8000-000000000041
+        workorderNumber:
+          type: string
+          description: Human-readable number of the associated workorder
+          example: WO-2026-000045
         estimateId:
           type: string
           format: uuid
@@ -1077,6 +1085,11 @@ components:
           type: string
           description: Identifier of the actor who reverted the invoice
           example: msmith
+        requiresManagerApproval:
+          type: boolean
+          default: false
+          description: Whether finalizing this invoice requires a manager approval code (DRAFT total exceeds the service-advisor threshold)
+          example: false
         items:
           type: array
           description: Line items belonging to the invoice
@@ -1120,6 +1133,10 @@ components:
           format: uuid
           description: Identifier of the source workorder item
           example: 01960003-0000-7000-8000-000000000051
+        type:
+          type: string
+          description: Line item type (e.g. PART, LABOR, FEE, TAX)
+          example: LABOR
     GenerateReceiptRequest:
       type: object
       description: Request to generate a receipt for an invoice payment

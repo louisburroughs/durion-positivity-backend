@@ -45,4 +45,7 @@ public class InvoiceItem {
 
     @Column(name = "workorder_item_id", columnDefinition = "UUID")
     private UUID workorderItemId;
+
+    @Column(name = "type", length = 32)
+    private String type;
 }

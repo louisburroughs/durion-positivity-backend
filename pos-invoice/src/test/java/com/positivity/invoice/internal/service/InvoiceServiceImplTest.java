@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.invoice.internal.client.LocationServiceClient;
 import com.positivity.invoice.internal.client.TaxServiceClient;
+import com.positivity.invoice.internal.client.WorkorderReferenceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
@@ -51,6 +52,9 @@ class InvoiceServiceImplTest {
 
     @Mock
     private LocationServiceClient locationServiceClient;
+
+    @Mock
+    private WorkorderReferenceClient workorderReferenceClient;
 
     @InjectMocks
     private InvoiceServiceImpl invoiceService;

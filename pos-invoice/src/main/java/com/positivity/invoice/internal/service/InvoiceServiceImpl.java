@@ -2,6 +2,7 @@ package com.positivity.invoice.internal.service;
 
 import com.positivity.invoice.internal.client.LocationServiceClient;
 import com.positivity.invoice.internal.client.TaxServiceClient;
+import com.positivity.invoice.internal.client.WorkorderReferenceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -43,16 +45,19 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final TaxServiceClient taxServiceClient;
     private final LocationServiceClient locationServiceClient;
+    private final WorkorderReferenceClient workorderReferenceClient;
 
     public InvoiceServiceImpl(
             @NonNull InvoiceRepository invoiceRepository,
             @NonNull TaxServiceClient taxServiceClient,
             @NonNull LocationServiceClient locationServiceClient,
+            @NonNull WorkorderReferenceClient workorderReferenceClient,
             Clock clock) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.taxServiceClient = taxServiceClient;
         this.locationServiceClient = locationServiceClient;
+        this.workorderReferenceClient = workorderReferenceClient;
     }
 
     @Override
@@ -133,6 +138,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             item.setQuantity(safeMoney(sourceItem.getQuantity(), BigDecimal.ONE));
             item.setUnitPrice(safeMoney(sourceItem.getUnitPrice(), BigDecimal.ZERO));
             item.setLineTotal(resolveLineTotal(sourceItem));
+            item.setType(sourceItem.getType());
             invoice.addItem(item);
         }
 
@@ -295,6 +301,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setInvoiceId(invoice.getId());
         response.setInvoiceNumber(invoice.getInvoiceNumber());
         response.setWorkorderId(invoice.getWorkorderId());
+        response.setWorkorderNumber(resolveWorkorderNumber(invoice.getWorkorderId()));
         response.setEstimateId(invoice.getEstimateId());
         response.setApprovalId(invoice.getApprovalId());
         response.setPartyId(invoice.getPartyId());
@@ -309,6 +316,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setFinalizedBy(invoice.getFinalizedBy());
         response.setRevertedAt(invoice.getRevertedAt());
         response.setReversionReason(invoice.getReversionReason());
+        response.setRequiresManagerApproval(requiresManagerApproval(invoice));
 
         List<InvoiceItemResponse> itemResponses = invoice.getItems().stream()
                 .sorted(Comparator.comparing(
@@ -335,7 +343,36 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setUnitPrice(item.getUnitPrice());
         response.setAmount(item.getLineTotal());
         response.setWorkorderItemId(item.getWorkorderItemId());
+        response.setType(item.getType());
         return response;
+    }
+
+    /**
+     * Resolves the human-readable workorder number for the detail view via the
+     * workorder reference client (the same path the invoice search uses). Returns
+     * {@code null} when the workorder is unknown or unresolved so the UI can fall
+     * back to the identifier.
+     */
+    @Nullable
+    private String resolveWorkorderNumber(@Nullable UUID workorderId) {
+        if (workorderId == null) {
+            return null;
+        }
+        return workorderReferenceClient.resolveNumbers(Set.of(workorderId)).get(workorderId);
+    }
+
+    /**
+     * Whether a DRAFT invoice exceeds the SERVICE_ADVISOR finalization threshold
+     * and therefore requires a manager approval code to be finalized. Mirrors the
+     * eligibility rule enforced by {@link InvoiceFinalizationServiceImpl}.
+     */
+    private boolean requiresManagerApproval(@NonNull Invoice invoice) {
+        if (invoice.getStatus() != InvoiceStatus.DRAFT) {
+            return false;
+        }
+        BigDecimal total = invoice.getTotal();
+        return total != null
+                && total.compareTo(InvoiceFinalizationServiceImpl.SERVICE_ADVISOR_LIMIT) > 0;
     }
 
     @NonNull
