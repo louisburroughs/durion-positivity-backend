@@ -2877,7 +2877,7 @@ components:
       - partyIds
     PartyNameRef:
       type: object
-      description: Party id resolved to its display name
+      description: Party id resolved to its display name and best-effort phone
       properties:
         partyId:
           type: string
@@ -2888,6 +2888,10 @@ components:
           type: string
           description: Resolved display name (commercial display/legal name or person full name)
           example: Acme Towing LLC
+        phoneNumber:
+          type: string
+          description: Best-effort phone (person primary phone contact-point; null for commercial parties)
+          example: +1-555-0100
       required:
       - partyId
     CreateVehicleForPartyResponse:

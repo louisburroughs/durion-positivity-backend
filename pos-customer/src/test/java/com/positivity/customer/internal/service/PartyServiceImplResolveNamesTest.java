@@ -71,6 +71,11 @@ class PartyServiceImplResolveNamesTest {
         return new PeopleClient.PersonIdentity(personId, first, last, null, List.of());
     }
 
+    private static PeopleClient.PersonIdentity identityWithPhones(
+            UUID personId, String first, String last, List<PeopleClient.ContactPoint> contactPoints) {
+        return new PeopleClient.PersonIdentity(personId, first, last, null, contactPoints);
+    }
+
     @Test
     void emptyInput_returnsEmpty_withoutTouchingRepositories() {
         assertThat(service.resolveNames(List.of())).isEmpty();
@@ -92,7 +97,8 @@ class PartyServiceImplResolveNamesTest {
 
         assertThat(result)
                 .containsExactlyInAnyOrder(
-                        new PartyNameRef(withDisplay, "Acme Supply"), new PartyNameRef(legalOnly, "Legal Only Inc"));
+                        new PartyNameRef(withDisplay, "Acme Supply", null),
+                        new PartyNameRef(legalOnly, "Legal Only Inc", null));
         verify(peopleClient, never()).fetchPersonIdentitiesQuietly(anyCollection());
     }
 
@@ -113,9 +119,112 @@ class PartyServiceImplResolveNamesTest {
 
         assertThat(result)
                 .containsExactlyInAnyOrder(
-                        new PartyNameRef(partyA, "John Smith"), new PartyNameRef(partyB, "Jane Doe"));
+                        new PartyNameRef(partyA, "John Smith", null), new PartyNameRef(partyB, "Jane Doe", null));
         // single batch call, not one per person
         verify(peopleClient).fetchPersonIdentitiesQuietly(anyCollection());
+    }
+
+    @Test
+    void person_picksPrimaryPhoneFromContactPoints() {
+        UUID partyA = UUID.fromString("66666666-0000-0000-0000-000000000001");
+        UUID personA = UUID.fromString("77777777-0000-0000-0000-000000000001");
+        when(partyRepository.findAllById(List.of(partyA))).thenReturn(List.of());
+        when(personPartyRepository.findAllById(List.of(partyA))).thenReturn(List.of(person(partyA, personA)));
+        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+                .thenReturn(Map.of(
+                        personA,
+                        identityWithPhones(
+                                personA,
+                                "John",
+                                "Smith",
+                                List.of(
+                                        new PeopleClient.ContactPoint("EMAIL", "j@x.com", true),
+                                        new PeopleClient.ContactPoint("PHONE_HOME", "+1-555-0001", false),
+                                        new PeopleClient.ContactPoint("PHONE_MOBILE", "+1-555-0002", true)))));
+
+        List<PartyNameRef> result = service.resolveNames(List.of(partyA));
+
+        assertThat(result).containsExactly(new PartyNameRef(partyA, "John Smith", "+1-555-0002"));
+    }
+
+    @Test
+    void person_picksFirstPhone_whenNoPrimaryFlagged() {
+        UUID partyA = UUID.fromString("66666666-0000-0000-0000-000000000002");
+        UUID personA = UUID.fromString("77777777-0000-0000-0000-000000000002");
+        when(partyRepository.findAllById(List.of(partyA))).thenReturn(List.of());
+        when(personPartyRepository.findAllById(List.of(partyA))).thenReturn(List.of(person(partyA, personA)));
+        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+                .thenReturn(Map.of(
+                        personA,
+                        identityWithPhones(
+                                personA,
+                                "John",
+                                "Smith",
+                                List.of(
+                                        new PeopleClient.ContactPoint("EMAIL", "j@x.com", false),
+                                        new PeopleClient.ContactPoint("PHONE_WORK", "  +1-555-0009  ", false),
+                                        new PeopleClient.ContactPoint("PHONE_HOME", "+1-555-0010", false)))));
+
+        List<PartyNameRef> result = service.resolveNames(List.of(partyA));
+
+        // no primary -> first phone-type point, trimmed
+        assertThat(result).containsExactly(new PartyNameRef(partyA, "John Smith", "+1-555-0009"));
+    }
+
+    @Test
+    void person_nullPhone_whenNoPhoneContactPoints() {
+        UUID partyA = UUID.fromString("66666666-0000-0000-0000-000000000003");
+        UUID personA = UUID.fromString("77777777-0000-0000-0000-000000000003");
+        when(partyRepository.findAllById(List.of(partyA))).thenReturn(List.of());
+        when(personPartyRepository.findAllById(List.of(partyA))).thenReturn(List.of(person(partyA, personA)));
+        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+                .thenReturn(Map.of(
+                        personA,
+                        identityWithPhones(
+                                personA,
+                                "John",
+                                "Smith",
+                                List.of(
+                                        new PeopleClient.ContactPoint("EMAIL", "j@x.com", true),
+                                        new PeopleClient.ContactPoint("PHONE_MOBILE", "   ", true)))));
+
+        List<PartyNameRef> result = service.resolveNames(List.of(partyA));
+
+        // only a blank-valued phone point -> no phone
+        assertThat(result).containsExactly(new PartyNameRef(partyA, "John Smith", null));
+    }
+
+    @Test
+    void mixedCommercialAndPerson_resolvedTogether() {
+        UUID commercialId = UUID.fromString("88888888-0000-0000-0000-000000000001");
+        UUID personPartyId = UUID.fromString("88888888-0000-0000-0000-000000000002");
+        UUID personId = UUID.fromString("99999999-0000-0000-0000-000000000002");
+        when(partyRepository.findAllById(List.of(commercialId, personPartyId)))
+                .thenReturn(List.of(commercial(commercialId, "Acme Supply", "Acme LLC")));
+        when(personPartyRepository.findAllById(List.of(commercialId, personPartyId)))
+                .thenReturn(List.of(person(personPartyId, personId)));
+        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+                .thenReturn(Map.of(personId, identity(personId, "Jane", "Doe")));
+
+        List<PartyNameRef> result = service.resolveNames(List.of(commercialId, personPartyId));
+
+        assertThat(result)
+                .containsExactlyInAnyOrder(
+                        new PartyNameRef(commercialId, "Acme Supply", null),
+                        new PartyNameRef(personPartyId, "Jane Doe", null));
+    }
+
+    @Test
+    void person_omitted_whenIdentityHasBlankDisplayName() {
+        UUID personPartyId = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
+        UUID personId = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000001");
+        when(partyRepository.findAllById(List.of(personPartyId))).thenReturn(List.of());
+        when(personPartyRepository.findAllById(List.of(personPartyId)))
+                .thenReturn(List.of(person(personPartyId, personId)));
+        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+                .thenReturn(Map.of(personId, identity(personId, "  ", "  ")));
+
+        assertThat(service.resolveNames(List.of(personPartyId))).isEmpty();
     }
 
     @Test
@@ -133,6 +242,6 @@ class PartyServiceImplResolveNamesTest {
 
         List<PartyNameRef> result = service.resolveNames(List.of(known, known, unknown, personNoIdentity));
 
-        assertThat(result).containsExactly(new PartyNameRef(known, "Known Co"));
+        assertThat(result).containsExactly(new PartyNameRef(known, "Known Co", null));
     }
 }
