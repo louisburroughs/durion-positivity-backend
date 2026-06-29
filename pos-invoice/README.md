@@ -48,17 +48,20 @@ Invoice and payment service for the Durion Positivity ETSMS platform. Creates in
 
 ### Manager-approval elevation — operational setup
 
-Finalizing/reverting an invoice above the service-advisor cap requires the
-`invoice:finalize:override` authority. The permission is registered automatically at
-startup from `permissions.yaml`, but **role grants and role assignments are runtime data**
-(this platform never seeds `role_permissions` via SQL). After deploy, an admin must:
+Finalizing/reverting an invoice above the service-advisor cap requires override
+capability. There are two ways to obtain it:
 
-1. Grant `invoice:finalize:override` to `SHOP_MANAGER`, `LOCATION_MANAGER`, and `ADMIN`
-   via the pos-security role-permission admin API.
-2. Ensure managers are assigned those roles via the **user-role** admin API (the
-   `person-decision` check resolves a person's authorities through `User.roles`).
-
-Without step 1+2 no actor holds the override and over-cap finalization will be blocked.
+- **Logged-in manager/admin — auto-approved.** A caller holding the
+  `ROLE_SHOP_MANAGER`, `ROLE_LOCATION_MANAGER`, or `ROLE_ADMIN` role (always present in
+  the JWT) finalizes/reverts directly, no approval code. This needs **no** extra setup.
+- **Service advisor naming a manager (employee-number approval).** The named manager
+  must hold the `invoice:finalize:override` **authority**. The permission is registered
+  at startup from `permissions.yaml`, but **grants are runtime data** (this platform
+  never SQL-seeds `role_permissions`). For this path, an admin must, after deploy:
+  1. Grant `invoice:finalize:override` to the manager/admin roles via the pos-security
+     role-permission admin API.
+  2. Ensure managers are assigned those roles via the **user-role** admin API (the
+     `person-decision` check resolves authorities through `User.roles`).
 
 ## Dependencies
 

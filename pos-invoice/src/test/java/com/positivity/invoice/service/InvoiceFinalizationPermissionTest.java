@@ -198,6 +198,28 @@ class InvoiceFinalizationPermissionTest {
         assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
     }
 
+    /**
+     * Auto-approval: a logged-in manager holding only the role (no override authority
+     * granted yet) finalizes above the cap without an approval code.
+     */
+    @Test
+    void managerRoleAlone_autoApproves_aboveLimit_withoutAuthorityGrant() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        var auth = new UsernamePasswordAuthenticationToken(
+                "manager-002", null, List.of(new SimpleGrantedAuthority("ROLE_SHOP_MANAGER")));
+        auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "manager-002"));
+        SecurityContextHolder.getContext().setAuthentication(auth);
+        when(invoiceRepository.findById(invoiceId))
+                .thenReturn(Optional.of(draftInvoice(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("9999.00"))));
+        when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        FinalizationRequest request = buildRequest(null);
+
+        InvoiceDetailsResponse response = service.completeInvoice(invoiceId, request);
+
+        assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
+    }
+
     // -------------------------------------------------------------------------
     // AC4 — Idempotency guard
     // -------------------------------------------------------------------------

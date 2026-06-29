@@ -58,6 +58,15 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
 
     private static final String OVERRIDE_AUTHORITY = "invoice:finalize:override";
 
+    /**
+     * Roles that grant finalize-override capability. Checked in addition to the
+     * {@link #OVERRIDE_AUTHORITY} so a logged-in manager/admin is auto-approved even
+     * before the (operational) authority grant is applied — the JWT always carries
+     * these roles. The authority remains the forward-compatible, fine-grained path.
+     */
+    private static final java.util.List<String> OVERRIDE_ROLES =
+            java.util.List.of("SHOP_MANAGER", "LOCATION_MANAGER", "ADMIN");
+
     private final InvoiceRepository invoiceRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final ElevationTokenService elevationTokenService;
@@ -204,7 +213,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         // scoped to this invoice; a free-text code is no longer accepted. When a token is
         // used, capture the approving manager's person id for audit (non-repudiation).
         UUID revertApprover = null;
-        if (!SecurityContextHelper.hasAuthority(OVERRIDE_AUTHORITY)) {
+        if (!callerCanOverride()) {
             revertApprover = elevationTokenService
                     .verify(managerApprovalCode, invoiceId)
                     .orElseThrow(() ->
@@ -236,6 +245,24 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     // -------------------------------------------------------------------------
 
     /**
+     * True when the current actor may finalize/revert without a manager approval
+     * token: they hold the {@link #OVERRIDE_AUTHORITY} or one of the
+     * {@link #OVERRIDE_ROLES}. The role fallback keeps manager/admin auto-approval
+     * working independently of the operational authority grant.
+     */
+    private boolean callerCanOverride() {
+        if (SecurityContextHelper.hasAuthority(OVERRIDE_AUTHORITY)) {
+            return true;
+        }
+        for (String role : OVERRIDE_ROLES) {
+            if (SecurityContextHelper.hasRole(role)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * AC3 permission matrix enforcement.
      *
      * <p>
@@ -249,9 +276,9 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
      */
     private void enforcePermissions(
             @NonNull FinalizationRequest request, @NonNull UUID invoiceId, @NonNull BigDecimal invoiceTotal) {
-        // Actors holding the override authority (e.g. SHOP_MANAGER, LOCATION_MANAGER, ADMIN)
-        // finalize without an approval token regardless of amount.
-        if (SecurityContextHelper.hasAuthority(OVERRIDE_AUTHORITY)) {
+        // Managers/admins (override authority or role) finalize without an approval
+        // token regardless of amount — auto-approved.
+        if (callerCanOverride()) {
             return;
         }
 
