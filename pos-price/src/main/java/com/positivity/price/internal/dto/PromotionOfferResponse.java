@@ -60,10 +60,7 @@ public class PromotionOfferResponse {
     @Schema(description = "Optional usage limit", example = "100", nullable = true, requiredMode = NOT_REQUIRED)
     private Integer usageLimit;
 
-    @Schema(
-            description = "Number of times the promotion has been applied",
-            example = "14",
-            requiredMode = REQUIRED)
+    @Schema(description = "Number of times the promotion has been applied", example = "14", requiredMode = REQUIRED)
     private int usageCount;
 
     @Schema(description = "Current promotion status", example = "ACTIVE", requiredMode = REQUIRED)

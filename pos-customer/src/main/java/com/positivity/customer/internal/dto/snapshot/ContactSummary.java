@@ -117,7 +117,10 @@ public class ContactSummary {
         @NonNull
         private String type;
 
-        @Schema(description = "Phone number value", example = "+1-555-0142", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Phone number value",
+                example = "+1-555-0142",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         @NonNull
         private String number;
 

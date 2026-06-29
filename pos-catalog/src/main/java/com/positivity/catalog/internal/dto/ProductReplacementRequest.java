@@ -27,6 +27,9 @@ public class ProductReplacementRequest {
     @Schema(description = "Replacement notes", example = "Direct successor model", requiredMode = NOT_REQUIRED)
     private String notes;
 
-    @Schema(description = "Replacement effective instant", example = "2026-01-15T09:30:00Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Replacement effective instant",
+            example = "2026-01-15T09:30:00Z",
+            requiredMode = NOT_REQUIRED)
     private Instant effectiveAt;
 }

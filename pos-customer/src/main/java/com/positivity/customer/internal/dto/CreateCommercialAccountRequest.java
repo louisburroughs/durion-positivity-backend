@@ -80,16 +80,10 @@ public class CreateCommercialAccountRequest {
 
     @Email
     @Size(max = 255)
-    @Schema(
-            description = "Contact email",
-            example = "jane@acme.com",
-            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(description = "Contact email", example = "jane@acme.com", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String email;
 
     @Size(max = 64)
-    @Schema(
-            description = "Contact phone",
-            example = "+1-555-123-4567",
-            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(description = "Contact phone", example = "+1-555-123-4567", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String phone;
 }

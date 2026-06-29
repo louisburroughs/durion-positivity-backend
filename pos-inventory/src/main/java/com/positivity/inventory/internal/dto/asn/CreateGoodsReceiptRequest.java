@@ -10,7 +10,9 @@ import java.util.List;
 import java.util.UUID;
 import lombok.Data;
 
-@Schema(description = "Request payload to record a goods receipt for inventory received against a purchase order, optionally linked to an ASN")
+@Schema(
+        description =
+                "Request payload to record a goods receipt for inventory received against a purchase order, optionally linked to an ASN")
 @Data
 public class CreateGoodsReceiptRequest {
 

@@ -90,10 +90,7 @@ public class InventoryLedgerFilterParams {
     @Nullable
     private String pageToken;
 
-    @Schema(
-            description = "Maximum number of entries to return per page",
-            example = "50",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Maximum number of entries to return per page", example = "50", requiredMode = NOT_REQUIRED)
     @Min(1)
     @Builder.Default
     private int pageSize = 50;

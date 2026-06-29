@@ -11,10 +11,7 @@ import jakarta.validation.constraints.NotNull;
 @Schema(description = "Request to render document content into a target output format")
 public class RenderRequest {
 
-    @Schema(
-            description = "Target output format for the rendered document",
-            example = "JSON",
-            requiredMode = REQUIRED)
+    @Schema(description = "Target output format for the rendered document", example = "JSON", requiredMode = REQUIRED)
     @NotNull
     private DocumentFormat format;
 

@@ -4,7 +4,6 @@ import com.positivity.customer.internal.entity.ProcessingLog;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /**
  * Spring Data JPA repository for {@link ProcessingLog} entities.
@@ -14,7 +13,6 @@ import org.springframework.stereotype.Repository;
  * to detect duplicate event delivery.
  * </p>
  */
-@Repository
 public interface ProcessingLogRepository extends JpaRepository<ProcessingLog, UUID> {
 
     /**

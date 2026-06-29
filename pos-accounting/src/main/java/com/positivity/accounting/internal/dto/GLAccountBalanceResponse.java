@@ -20,7 +20,10 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Balance of a GL account as of a point in time")
 public class GLAccountBalanceResponse {
 
-    @Schema(description = "Unique identifier of the GL account", example = "01960003-0000-7000-8000-000000000001", requiredMode = REQUIRED)
+    @Schema(
+            description = "Unique identifier of the GL account",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = REQUIRED)
     private UUID glAccountId;
 
     @Schema(description = "Account code of the GL account", example = "4000", requiredMode = NOT_REQUIRED)
@@ -32,6 +35,9 @@ public class GLAccountBalanceResponse {
     @Schema(description = "Balance of the account", example = "1250.00", requiredMode = REQUIRED)
     private BigDecimal balance;
 
-    @Schema(description = "Point in time the balance is computed as of (ISO 8601)", example = "2026-06-18T08:00:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Point in time the balance is computed as of (ISO 8601)",
+            example = "2026-06-18T08:00:00Z",
+            requiredMode = REQUIRED)
     private Instant asOfDate;
 }

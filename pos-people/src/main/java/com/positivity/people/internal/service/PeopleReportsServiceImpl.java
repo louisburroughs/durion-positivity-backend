@@ -359,11 +359,6 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
                         + (person.getLastName() == null ? "" : person.getLastName()))
                 .trim();
         if (displayName.isBlank()
-                && person.getLegalName() != null
-                && !person.getLegalName().isBlank()) {
-            displayName = person.getLegalName();
-        }
-        if (displayName.isBlank()
                 && person.getPreferredName() != null
                 && !person.getPreferredName().isBlank()) {
             displayName = person.getPreferredName();

@@ -77,10 +77,7 @@ public class VehicleUpdatedEvent {
     @Nullable
     private String model;
 
-    @Schema(
-            description = "Origin of the update event",
-            example = "WORKORDER_COMPLETION",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Origin of the update event", example = "WORKORDER_COMPLETION", requiredMode = NOT_REQUIRED)
     @Nullable
     private String source; // e.g., "WORKORDER_COMPLETION"
 }

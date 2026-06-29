@@ -18,10 +18,7 @@ public class CreatePartFitmentRequest {
         this.partNumberId = partNumberId;
     }
 
-    @Schema(
-            description = "Part number identifier the fitment applies to",
-            example = "100245",
-            requiredMode = REQUIRED)
+    @Schema(description = "Part number identifier the fitment applies to", example = "100245", requiredMode = REQUIRED)
     @NotNull
     @NonNull
     private Long partNumberId;

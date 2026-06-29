@@ -5,9 +5,9 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.workorder.internal.dto.WorkorderDetailResponse;
 import com.positivity.workorder.internal.entity.Workorder;
-import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
@@ -68,7 +68,6 @@ class WorkorderDetailServiceImplTest {
 
         assertThat(response.getWorkorderId()).isEqualTo(workorderId);
         assertThat(response.getAssignedTechnicianId()).isNull();
-        assertThat(response.getAssignedTechnicianName()).isNull();
         assertThat(response.getCapabilities().isCanViewFinancials()).isFalse();
     }
 

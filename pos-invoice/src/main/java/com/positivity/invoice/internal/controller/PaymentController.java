@@ -1,11 +1,11 @@
 package com.positivity.invoice.internal.controller;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
 import com.positivity.invoice.service.PaymentService;
-import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -102,13 +102,17 @@ public class PaymentController {
     @Schema(description = "Request to capture all or part of an authorized payment hold")
     private record CaptureAmountRequest(
             @NotNull
-                    @Positive
-                    @Schema(description = "Amount to capture from the authorized hold", example = "89.99", requiredMode = REQUIRED)
-                    BigDecimal amount,
+            @Positive
+            @Schema(
+                    description = "Amount to capture from the authorized hold",
+                    example = "89.99",
+                    requiredMode = REQUIRED)
+            BigDecimal amount,
+
             @NotBlank
-                    @Schema(
-                            description = "Idempotency key ensuring the capture is processed at most once",
-                            example = "capture-550e8400-1",
-                            requiredMode = REQUIRED)
-                    String captureIdempotencyKey) {}
+            @Schema(
+                    description = "Idempotency key ensuring the capture is processed at most once",
+                    example = "capture-550e8400-1",
+                    requiredMode = REQUIRED)
+            String captureIdempotencyKey) {}
 }

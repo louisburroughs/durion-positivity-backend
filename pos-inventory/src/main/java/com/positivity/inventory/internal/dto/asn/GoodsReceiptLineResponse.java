@@ -10,7 +10,9 @@ import java.util.UUID;
 import lombok.Builder;
 import lombok.Data;
 
-@Schema(description = "A single received line item on a goods receipt response, describing one SKU, its received quantity, and accrued cost")
+@Schema(
+        description =
+                "A single received line item on a goods receipt response, describing one SKU, its received quantity, and accrued cost")
 @Data
 @Builder
 public class GoodsReceiptLineResponse {
@@ -35,10 +37,7 @@ public class GoodsReceiptLineResponse {
     @NotNull
     private String sku;
 
-    @Schema(
-            description = "Quantity of the SKU received in this goods receipt",
-            example = "8",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity of the SKU received in this goods receipt", example = "8", requiredMode = REQUIRED)
     @NotNull
     private BigDecimal quantityReceived;
 
@@ -49,7 +48,8 @@ public class GoodsReceiptLineResponse {
     private Long unitCostMinor;
 
     @Schema(
-            description = "Total accrued cost for this line expressed in minor currency units (quantity multiplied by unit cost)",
+            description =
+                    "Total accrued cost for this line expressed in minor currency units (quantity multiplied by unit cost)",
             example = "11992",
             requiredMode = NOT_REQUIRED)
     private Long lineAccruedAmountMinor;

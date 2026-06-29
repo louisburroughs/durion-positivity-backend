@@ -6,7 +6,6 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -68,10 +67,7 @@ public class MergePartiesResponse {
     /**
      * Merge status (COMPLETED|PENDING)
      */
-    @Schema(
-            description = "Merge status",
-            example = "COMPLETED",
-            requiredMode = REQUIRED)
+    @Schema(description = "Merge status", example = "COMPLETED", requiredMode = REQUIRED)
     @NotBlank
     private String status;
 

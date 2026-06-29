@@ -50,7 +50,8 @@ class PersonBulkIngestControllerTest {
     @Test
     void bulkIngest_returnsOkWithResults_whenAllRecordsSucceed() throws Exception {
         PersonBulkIngestRecord ingestRecord = new PersonBulkIngestRecord();
-        ingestRecord.setLegalName("Alice Brown");
+        ingestRecord.setFirstName("Alice");
+        ingestRecord.setLastName("Brown");
         ingestRecord.setEmployeeNumber("EMP-001");
         ingestRecord.setHireDate("2025-01-15");
 
@@ -61,7 +62,8 @@ class PersonBulkIngestControllerTest {
 
         EmployeeProfileDto profile = EmployeeProfileDto.builder()
                 .id(EMPLOYEE_ID)
-                .legalName("Alice Brown")
+                .firstName("Alice")
+                .lastName("Brown")
                 .employeeNumber("EMP-001")
                 .build();
 
@@ -79,7 +81,8 @@ class PersonBulkIngestControllerTest {
     @Test
     void bulkIngest_returnsPartialFailure_whenSomeDatesAreInvalid() throws Exception {
         PersonBulkIngestRecord ingestRecord = new PersonBulkIngestRecord();
-        ingestRecord.setLegalName("Bob Jones");
+        ingestRecord.setFirstName("Bob");
+        ingestRecord.setLastName("Jones");
         ingestRecord.setEmployeeNumber("EMP-002");
         ingestRecord.setHireDate("15-Jan-2025"); // invalid ISO format
 

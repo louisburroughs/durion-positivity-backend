@@ -5,10 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.positivity.invoice.internal.client.LocationServiceClient;
 import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
@@ -17,6 +19,7 @@ import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
+import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -46,17 +49,32 @@ class InvoiceServiceImplTest {
     @Mock
     private TaxServiceClient taxServiceClient;
 
+    @Mock
+    private LocationServiceClient locationServiceClient;
+
     @InjectMocks
     private InvoiceServiceImpl invoiceService;
 
     private Invoice draftInvoice;
     private UUID invoiceId;
     private UUID workorderId;
+    private UUID locationId;
+
+    private static TaxAddress sampleTaxAddress() {
+        return TaxAddress.builder()
+                .countryCode("US")
+                .regionCode("NC")
+                .city("Charlotte")
+                .postalCode("28202")
+                .line1("100 Trade Street")
+                .build();
+    }
 
     @BeforeEach
     void setUp() {
         invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        locationId = UUID.fromString("01960003-0000-7000-8000-000000000001");
 
         draftInvoice = new Invoice();
         draftInvoice.setId(invoiceId);
@@ -66,6 +84,7 @@ class InvoiceServiceImplTest {
         draftInvoice.setAdjustmentsAmount(BigDecimal.ZERO);
         draftInvoice.setTax(BigDecimal.ZERO);
         draftInvoice.setTotal(BigDecimal.valueOf(100));
+        draftInvoice.setLocationId(locationId);
     }
 
     // ---- getInvoice ----
@@ -95,7 +114,6 @@ class InvoiceServiceImplTest {
         request.setWorkorderId(workorderId);
 
         when(invoiceRepository.findByWorkorderId(workorderId)).thenReturn(Optional.empty());
-        when(taxServiceClient.calculateTax(any(), any())).thenReturn(BigDecimal.ZERO);
         when(invoiceRepository.save(any())).thenReturn(draftInvoice);
 
         InvoiceGenerationResponse response = invoiceService.createInvoice(request);
@@ -135,11 +153,13 @@ class InvoiceServiceImplTest {
 
         InvoiceCreationRequest request = InvoiceCreationRequest.builder()
                 .workorderId(workorderId)
+                .locationId(locationId)
                 .lineItems(List.of(lineItem))
                 .build();
 
         when(invoiceRepository.findByWorkorderId(workorderId)).thenReturn(Optional.empty());
-        when(taxServiceClient.calculateTax(any(), any())).thenReturn(BigDecimal.valueOf(5));
+        when(locationServiceClient.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
+        when(taxServiceClient.calculateTax(any(), any(), any())).thenReturn(BigDecimal.valueOf(5));
         when(invoiceRepository.save(any())).thenReturn(draftInvoice);
 
         InvoiceGenerationResponse response = invoiceService.createInvoice(request);
@@ -180,7 +200,34 @@ class InvoiceServiceImplTest {
         request.setAuthorizedBy("manager1");
 
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
-        when(taxServiceClient.calculateTax(any(), any())).thenReturn(BigDecimal.valueOf(8));
+        when(invoiceRepository.save(any())).thenReturn(draftInvoice);
+
+        InvoiceDetailsResponse result = invoiceService.applyAdjustment(invoiceId, request);
+
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    void applyAdjustment_discountOnInvoiceWithLineItems_calculatesTaxFromLineItemsOnly() {
+        // Regression: a discount must not be folded into the tax request as a negative-priced
+        // line (pos-tax @Positive would reject it). Tax is computed from the positive line
+        // items; the discount is applied to the total after tax.
+        InvoiceItem item = new InvoiceItem();
+        item.setDescription("Brake pads");
+        item.setQuantity(BigDecimal.ONE);
+        item.setUnitPrice(BigDecimal.valueOf(100));
+        item.setLineTotal(BigDecimal.valueOf(100));
+        draftInvoice.addItem(item);
+
+        AdjustmentRequest request = new AdjustmentRequest();
+        request.setType(InvoiceAdjustmentType.DISCOUNT);
+        request.setAmount(BigDecimal.valueOf(10));
+        request.setReason("Customer loyalty discount");
+        request.setAuthorizedBy("manager1");
+
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+        when(locationServiceClient.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
+        when(taxServiceClient.calculateTax(any(), any(), any())).thenReturn(BigDecimal.valueOf(8));
         when(invoiceRepository.save(any())).thenReturn(draftInvoice);
 
         InvoiceDetailsResponse result = invoiceService.applyAdjustment(invoiceId, request);

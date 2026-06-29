@@ -35,18 +35,12 @@ public class InvoiceDetails implements Serializable {
 
     @JsonProperty("invoiceId")
     @NonNull
-    @Schema(
-            description = "Invoice UUID",
-            example = "01960003-0000-7000-8000-000000000001",
-            requiredMode = REQUIRED)
+    @Schema(description = "Invoice UUID", example = "01960003-0000-7000-8000-000000000001", requiredMode = REQUIRED)
     private UUID invoiceId;
 
     @JsonProperty("customerId")
     @NonNull
-    @Schema(
-            description = "Customer UUID",
-            example = "01960003-0000-7000-8000-000000000002",
-            requiredMode = REQUIRED)
+    @Schema(description = "Customer UUID", example = "01960003-0000-7000-8000-000000000002", requiredMode = REQUIRED)
     private UUID customerId;
 
     @JsonProperty("invoiceNumber")

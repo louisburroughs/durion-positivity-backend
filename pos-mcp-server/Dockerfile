@@ -14,6 +14,6 @@ ARG OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 ENV OTEL_EXPORTER_OTLP_ENDPOINT=$OTEL_EXPORTER_OTLP_ENDPOINT
 ENV OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 
-COPY target/pos-mcp-server-*.jar pos-mcp-server.jar
+COPY target/pos-mcp-server.jar pos-mcp-server.jar
 EXPOSE 8086
 ENTRYPOINT ["sh", "-c", "exec java -javaagent:/opt/grafana-opentelemetry-java.jar $JAVA_OPTS -jar pos-mcp-server.jar"]

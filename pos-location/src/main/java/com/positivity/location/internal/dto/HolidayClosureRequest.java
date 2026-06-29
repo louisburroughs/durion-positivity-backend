@@ -23,10 +23,7 @@ import lombok.NoArgsConstructor;
 @Schema(description = "A single holiday closure entry for a location")
 public class HolidayClosureRequest {
 
-    @Schema(
-            description = "Date on which the location is closed",
-            example = "2026-12-25",
-            requiredMode = REQUIRED)
+    @Schema(description = "Date on which the location is closed", example = "2026-12-25", requiredMode = REQUIRED)
     @NotNull
     private LocalDate date;
 

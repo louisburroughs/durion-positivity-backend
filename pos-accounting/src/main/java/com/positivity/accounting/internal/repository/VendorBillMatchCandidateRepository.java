@@ -4,14 +4,12 @@ import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for vendor bill match candidates.
  * Used when ambiguous matching produces multiple bill candidates for a single
  * invoice.
  */
-@Repository
 public interface VendorBillMatchCandidateRepository extends JpaRepository<VendorBillMatchCandidate, UUID> {
 
     /**

@@ -168,7 +168,10 @@ public class TechnicianAssignmentResponse {
                 requiredMode = NOT_REQUIRED)
         private String reason;
 
-        @Schema(description = "Assignment notes", example = "Customer requested morning slot", requiredMode = NOT_REQUIRED)
+        @Schema(
+                description = "Assignment notes",
+                example = "Customer requested morning slot",
+                requiredMode = NOT_REQUIRED)
         private String notes;
 
         /**

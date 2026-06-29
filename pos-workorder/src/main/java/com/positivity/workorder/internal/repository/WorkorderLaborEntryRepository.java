@@ -10,7 +10,6 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for WorkorderLaborEntry entities.
@@ -18,7 +17,6 @@ import org.springframework.stereotype.Repository;
  * <p>
  * Implements CAP-005 Story #159 - Record Labor Performed
  */
-@Repository
 public interface WorkorderLaborEntryRepository extends JpaRepository<WorkorderLaborEntry, UUID> {
 
     /**

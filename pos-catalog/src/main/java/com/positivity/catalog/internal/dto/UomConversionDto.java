@@ -53,6 +53,9 @@ public class UomConversionDto {
             requiredMode = NOT_REQUIRED)
     private Instant updatedAt;
 
-    @Schema(description = "Identifier of the user who created the conversion", example = "system", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the user who created the conversion",
+            example = "system",
+            requiredMode = NOT_REQUIRED)
     private String createdBy;
 }

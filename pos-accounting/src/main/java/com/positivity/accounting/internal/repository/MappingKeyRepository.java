@@ -6,13 +6,11 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for Mapping Key entity.
  * Supports querying mapping keys by posting category and name.
  */
-@Repository
 public interface MappingKeyRepository extends JpaRepository<MappingKey, UUID>, JpaSpecificationExecutor<MappingKey> {
 
     /**

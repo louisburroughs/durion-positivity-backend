@@ -30,7 +30,10 @@ public class InitiatePaymentRequest {
 
     @NotNull
     @Positive
-    @Schema(description = "Payment amount (must be positive)", example = "149.99", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Payment amount (must be positive)",
+            example = "149.99",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private BigDecimal amount;
 
     @NotBlank

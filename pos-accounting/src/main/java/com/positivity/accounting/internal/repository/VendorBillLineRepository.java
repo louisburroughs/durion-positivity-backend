@@ -4,12 +4,10 @@ import com.positivity.accounting.internal.entity.VendorBillLine;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for VendorBillLine entity.
  */
-@Repository
 public interface VendorBillLineRepository extends JpaRepository<VendorBillLine, UUID> {
 
     /**

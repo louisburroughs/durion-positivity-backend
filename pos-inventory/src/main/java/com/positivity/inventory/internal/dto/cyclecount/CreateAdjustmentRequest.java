@@ -35,10 +35,7 @@ public class CreateAdjustmentRequest {
     @NotBlank(message = "Reason code is required")
     private String reasonCode;
 
-    @Schema(
-            description = "Quantity physically counted by the auditor",
-            example = "12",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity physically counted by the auditor", example = "12", requiredMode = REQUIRED)
     @NotNull(message = "Counted quantity is required")
     @Min(value = 0, message = "Counted quantity cannot be negative")
     private Integer countedQuantity;

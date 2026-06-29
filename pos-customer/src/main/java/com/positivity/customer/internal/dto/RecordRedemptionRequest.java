@@ -50,26 +50,17 @@ public class RecordRedemptionRequest {
     @Nullable
     private UUID invoiceId;
 
-    @Schema(
-            description = "Discount amount to record for the redemption",
-            example = "25.00",
-            requiredMode = REQUIRED)
+    @Schema(description = "Discount amount to record for the redemption", example = "25.00", requiredMode = REQUIRED)
     @NotNull
     @DecimalMin("0.00")
     private BigDecimal discountAmount;
 
-    @Schema(
-            description = "Type of discount being recorded",
-            example = "PERCENTAGE",
-            requiredMode = REQUIRED)
+    @Schema(description = "Type of discount being recorded", example = "PERCENTAGE", requiredMode = REQUIRED)
     @NotBlank
     @Size(max = 50)
     private String discountType;
 
-    @Schema(
-            description = "Promotion code being redeemed",
-            example = "SUMMER25",
-            requiredMode = REQUIRED)
+    @Schema(description = "Promotion code being redeemed", example = "SUMMER25", requiredMode = REQUIRED)
     @NotBlank
     @Size(max = 100)
     private String promotionCode;

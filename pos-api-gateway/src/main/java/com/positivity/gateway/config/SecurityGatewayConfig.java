@@ -237,10 +237,12 @@ public class SecurityGatewayConfig {
         String rolesHeader = resolveRolesHeader(claims);
         if (legacyAuthoritiesHeader.isPresent()) {
             return Optional.of(new AuthenticatedIdentity(
-                    subject, claims.get("uid", String.class),
-                    "",                              // no perm_bits for legacy tokens
-                    legacyAuthoritiesHeader.get(),   // CSV from legacy authorities claim
-                    rolesHeader, jti));
+                    subject,
+                    claims.get("uid", String.class),
+                    "", // no perm_bits for legacy tokens
+                    legacyAuthoritiesHeader.get(), // CSV from legacy authorities claim
+                    rolesHeader,
+                    jti));
         }
 
         Integer permVer = claims.get(CLAIM_PERMISSION_VERSION, Integer.class);
@@ -263,10 +265,12 @@ public class SecurityGatewayConfig {
 
         String permBits = claims.get("perm_bits", String.class);
         return Optional.of(new AuthenticatedIdentity(
-                subject, claims.get("uid", String.class),
+                subject,
+                claims.get("uid", String.class),
                 permBits != null ? permBits : "",
-                "",       // no legacy CSV for new tokens
-                rolesHeader, jti));
+                "", // no legacy CSV for new tokens
+                rolesHeader,
+                jti));
     }
 
     private Optional<String> resolveLegacyAuthoritiesHeader(Claims claims, AuthRequestContext context, String jti) {
@@ -364,7 +368,8 @@ public class SecurityGatewayConfig {
         if (authProperties.isRejectHeaderTokenMismatch()) {
             boolean mismatch = headerMismatch(context.inboundHeaders().user(), identity.subject())
                     || headerMismatch(context.inboundHeaders().userId(), identity.userId())
-                    || authoritiesHeaderMismatch(context.inboundHeaders().authorities(), identity.legacyAuthoritiesHeader())
+                    || authoritiesHeaderMismatch(
+                            context.inboundHeaders().authorities(), identity.legacyAuthoritiesHeader())
                     || headerMismatch(context.inboundHeaders().permBits(), identity.permBitsHeader());
             if (mismatch) {
                 return rejectAuthentication(
@@ -454,10 +459,16 @@ public class SecurityGatewayConfig {
                 || path.startsWith("/swagger-resources")
                 || path.startsWith("/eureka")
                 || path.equals("/system/time")
+                || ARTIFACT_DOWNLOAD_PATH.matcher(path).matches()
                 || isPathMatch(path, authProperties.getAuthPathRoot(), authProperties.getAuthPathPrefix())
                 || isPathMatch(
                         path, authProperties.getStrippedAuthPathRoot(), authProperties.getStrippedAuthPathPrefix());
     }
+
+    // Public, token-authorized invoice artifact download (browser direct-download link cannot carry
+    // a JWT). Authorization is enforced by the signed token in pos-invoice, not at the gateway.
+    private static final java.util.regex.Pattern ARTIFACT_DOWNLOAD_PATH =
+            java.util.regex.Pattern.compile("^/invoice/v1/invoices/[^/]+/artifacts/[^/]+/download$");
 
     private static boolean isPathMatch(String path, String root, String prefix) {
         return (StringUtils.hasText(root) && path.equals(root))

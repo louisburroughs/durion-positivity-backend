@@ -46,10 +46,7 @@ public class DistributorFeedItemDto {
     @NotBlank
     private String distributorSku;
 
-    @Schema(
-            description = "Quantity reported as available by the distributor",
-            example = "120",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity reported as available by the distributor", example = "120", requiredMode = REQUIRED)
     @NotNull
     @PositiveOrZero
     private Integer quantityAvailable;

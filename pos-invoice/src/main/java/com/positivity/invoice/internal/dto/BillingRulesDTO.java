@@ -51,7 +51,10 @@ public class BillingRulesDTO {
 
     @NonNull
     @NotNull
-    @Schema(description = "Strategy for grouping line items into invoices", example = "PER_WORKORDER", requiredMode = REQUIRED)
+    @Schema(
+            description = "Strategy for grouping line items into invoices",
+            example = "PER_WORKORDER",
+            requiredMode = REQUIRED)
     private InvoiceGroupingStrategy invoiceGroupingStrategy;
 
     @NonNull
@@ -61,17 +64,26 @@ public class BillingRulesDTO {
 
     @NonNull
     @NotNull
-    @Schema(description = "Timestamp when the record was created", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Timestamp when the record was created",
+            example = "2026-01-15T09:30:00Z",
+            requiredMode = REQUIRED)
     private Instant createdAt;
 
     @NonNull
     @NotNull
-    @Schema(description = "Timestamp when the record was last updated", example = "2026-01-16T11:45:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Timestamp when the record was last updated",
+            example = "2026-01-16T11:45:00Z",
+            requiredMode = REQUIRED)
     private Instant updatedAt;
 
     @NonNull
     @NotNull
-    @Schema(description = "Identifier of the actor who last updated the record", example = "jdoe", requiredMode = REQUIRED)
+    @Schema(
+            description = "Identifier of the actor who last updated the record",
+            example = "jdoe",
+            requiredMode = REQUIRED)
     private String updatedBy;
 
     // Constructors

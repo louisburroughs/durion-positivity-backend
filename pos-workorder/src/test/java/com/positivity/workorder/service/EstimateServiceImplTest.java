@@ -2,8 +2,13 @@ package com.positivity.workorder.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.tax.common.dto.TaxCalculationRequest;
+import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
+import com.positivity.tax.common.dto.TaxCalculationResponse;
+import com.positivity.workorder.internal.client.LocationClient;
 import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
@@ -33,6 +38,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -70,6 +76,9 @@ class EstimateServiceImplTest {
 
     @Mock
     private TaxClient taxClient;
+
+    @Mock
+    private LocationClient locationClient;
 
     @Mock
     private PeopleLocationClient peopleLocationClient;
@@ -182,6 +191,57 @@ class EstimateServiceImplTest {
         assertEquals(LOCAL_CUSTOMER_ID, result.getCustomerId());
         assertEquals(LOCAL_VEHICLE_ID, result.getVehicleId());
         assertEquals(EstimateStatus.DRAFT.toString(), result.getStatus());
+    }
+
+    @Test
+    void calculateEstimateTaxesAndTotals_sendsResolvedShopLocationAddressToTax() {
+        UUID locationId = UUID.fromString("01960003-0000-7000-8000-000000000001");
+        Estimate draft = Estimate.builder()
+                .id(ESTIMATE_ID)
+                .customerId(CUSTOMER_ID)
+                .vehicleId(VEHICLE_ID)
+                .locationId(locationId)
+                .status(EstimateStatus.DRAFT)
+                .build();
+        EstimateItem item = EstimateItem.builder()
+                .id(ITEM_ID)
+                .estimate(draft)
+                .itemType(EstimateItemType.PART)
+                .description("Brake pad")
+                .quantity(new BigDecimal("2"))
+                .unitPrice(new BigDecimal("25.00"))
+                .build();
+
+        TaxAddress resolved = TaxAddress.builder()
+                .countryCode("US")
+                .regionCode("WA")
+                .city("Seattle")
+                .postalCode("98101")
+                .line1("123 Pike St")
+                .build();
+
+        when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.of(draft));
+        when(estimateItemRepository.findByEstimate_IdAndDeletedFalse(ESTIMATE_ID))
+                .thenReturn(List.of(item));
+        when(locationClient.resolveTaxAddress(locationId)).thenReturn(resolved);
+        when(taxClient.calculateTax(any(TaxCalculationRequest.class)))
+                .thenReturn(TaxCalculationResponse.builder()
+                        .subtotal(new BigDecimal("50.00"))
+                        .totalTax(new BigDecimal("4.50"))
+                        .total(new BigDecimal("54.50"))
+                        .testMode(false)
+                        .build());
+        when(estimateRepository.save(any(Estimate.class))).thenAnswer(i -> i.getArgument(0));
+
+        estimateService.calculateEstimateTaxesAndTotals(ESTIMATE_ID, "testuser");
+
+        ArgumentCaptor<TaxCalculationRequest> captor = ArgumentCaptor.forClass(TaxCalculationRequest.class);
+        verify(taxClient).calculateTax(captor.capture());
+        TaxAddress sent = captor.getValue().getDestinationAddress();
+        assertEquals("US", sent.getCountryCode());
+        assertEquals("WA", sent.getRegionCode());
+        assertEquals("98101", sent.getPostalCode());
+        assertEquals("Seattle", sent.getCity());
     }
 
     @Test

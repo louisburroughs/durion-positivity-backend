@@ -37,10 +37,7 @@ public class SubstituteLinkResponse {
     private UUID substitutePartId;
 
     @NotNull
-    @Schema(
-            description = "Type of substitution relationship",
-            example = "EQUIVALENT",
-            requiredMode = REQUIRED)
+    @Schema(description = "Type of substitution relationship", example = "EQUIVALENT", requiredMode = REQUIRED)
     private SubstituteType substituteType;
 
     @Schema(
@@ -57,16 +54,10 @@ public class SubstituteLinkResponse {
     private boolean isAutoSuggest;
 
     @JsonProperty("isActive")
-    @Schema(
-            description = "Whether this substitute link is currently active",
-            example = "true",
-            requiredMode = REQUIRED)
+    @Schema(description = "Whether this substitute link is currently active", example = "true", requiredMode = REQUIRED)
     private boolean isActive;
 
-    @Schema(
-            description = "Version for optimistic locking",
-            example = "0",
-            requiredMode = REQUIRED)
+    @Schema(description = "Version for optimistic locking", example = "0", requiredMode = REQUIRED)
     private int version;
 
     @Schema(

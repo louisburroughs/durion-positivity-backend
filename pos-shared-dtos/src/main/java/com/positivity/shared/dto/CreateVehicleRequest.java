@@ -46,10 +46,7 @@ public class CreateVehicleRequest {
             example = "2024 Ford F-150 XL")
     private String description;
 
-    @Schema(
-            description = "License plate value.",
-            example = "ABC1234",
-            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(description = "License plate value.", example = "ABC1234", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String licensePlate;
 
     @Schema(

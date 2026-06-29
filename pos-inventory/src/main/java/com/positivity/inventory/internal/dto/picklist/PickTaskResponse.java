@@ -44,28 +44,16 @@ public class PickTaskResponse {
     @NotNull
     private UUID locationId;
 
-    @Schema(
-            description = "Quantity required to satisfy this pick task",
-            example = "12",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity required to satisfy this pick task", example = "12", requiredMode = REQUIRED)
     private int quantityRequired;
 
-    @Schema(
-            description = "Quantity already picked against this task",
-            example = "8",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity already picked against this task", example = "8", requiredMode = REQUIRED)
     private int quantityPicked;
 
-    @Schema(
-            description = "Current status of the pick task",
-            example = "PENDING",
-            requiredMode = REQUIRED)
+    @Schema(description = "Current status of the pick task", example = "PENDING", requiredMode = REQUIRED)
     @NotNull
     private PickTaskStatus status;
 
-    @Schema(
-            description = "Ordinal position of this task in the pick sequence",
-            example = "1",
-            requiredMode = REQUIRED)
+    @Schema(description = "Ordinal position of this task in the pick sequence", example = "1", requiredMode = REQUIRED)
     private int sortOrder;
 }

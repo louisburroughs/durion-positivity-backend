@@ -38,12 +38,20 @@ public class RoleAssignmentRequest {
     @Schema(description = "Scope type that constrains the assignment", example = "GLOBAL", requiredMode = NOT_REQUIRED)
     private ScopeType scopeType = ScopeType.GLOBAL;
 
-    @Schema(description = "Location identifiers the assignment applies to when scopeType is LOCATION", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Location identifiers the assignment applies to when scopeType is LOCATION",
+            requiredMode = NOT_REQUIRED)
     private Set<String> scopeLocationIds;
 
-    @Schema(description = "Inclusive start of the effective window", example = "2026-01-15T00:00:00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Inclusive start of the effective window",
+            example = "2026-01-15T00:00:00",
+            requiredMode = NOT_REQUIRED)
     private LocalDateTime effectiveStartDate;
 
-    @Schema(description = "Exclusive end of the effective window", example = "2026-12-31T00:00:00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Exclusive end of the effective window",
+            example = "2026-12-31T00:00:00",
+            requiredMode = NOT_REQUIRED)
     private LocalDateTime effectiveEndDate;
 }

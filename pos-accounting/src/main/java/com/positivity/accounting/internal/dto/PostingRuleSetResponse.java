@@ -30,10 +30,16 @@ public class PostingRuleSetResponse {
     @NotNull
     private UUID postingRuleSetId;
 
-    @Schema(description = "Display name of the posting rule set", example = "Workorder Revenue Posting", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Display name of the posting rule set",
+            example = "Workorder Revenue Posting",
+            requiredMode = NOT_REQUIRED)
     private String name;
 
-    @Schema(description = "Accounting event type the rule set applies to", example = "WORKORDER_COMPLETED", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Accounting event type the rule set applies to",
+            example = "WORKORDER_COMPLETED",
+            requiredMode = NOT_REQUIRED)
     private String eventType;
 
     @Schema(
@@ -51,7 +57,10 @@ public class PostingRuleSetResponse {
             requiredMode = NOT_REQUIRED)
     private Instant createdAt;
 
-    @Schema(description = "Identifier of the user who created the rule set", example = "ap.manager", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the user who created the rule set",
+            example = "ap.manager",
+            requiredMode = NOT_REQUIRED)
     private String createdBy;
 
     @Schema(
@@ -60,6 +69,9 @@ public class PostingRuleSetResponse {
             requiredMode = NOT_REQUIRED)
     private Instant modifiedAt;
 
-    @Schema(description = "Identifier of the user who last modified the rule set", example = "ap.lead", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the user who last modified the rule set",
+            example = "ap.lead",
+            requiredMode = NOT_REQUIRED)
     private String modifiedBy;
 }

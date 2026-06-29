@@ -84,7 +84,9 @@ public class InventoryAvailabilityController {
                         content =
                                 @Content(
                                         mediaType = "application/json",
-                                        array = @ArraySchema(schema = @Schema(implementation = AvailabilityView.class)))),
+                                        array =
+                                                @ArraySchema(
+                                                        schema = @Schema(implementation = AvailabilityView.class)))),
                 @ApiResponse(
                         responseCode = "400",
                         description = "Invalid request parameters",
@@ -121,8 +123,7 @@ public class InventoryAvailabilityController {
             @Parameter(description = "Storage location identifier (optional; narrows to sub-location)")
                     @RequestParam(required = false)
                     UUID storageLocationId,
-            @Parameter(description = "Inventory lookup strategy")
-                    @RequestParam(required = false)
+            @Parameter(description = "Inventory lookup strategy") @RequestParam(required = false)
                     InventorySourceType sourceType) {
         log.info("GET /v1/inventory/availability sku={} locationId={} sourceType={}", sku, locationId, sourceType);
         return ResponseEntity.ok(List.of(resolveAvailability(sku, locationId, storageLocationId, sourceType)));

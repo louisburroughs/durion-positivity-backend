@@ -54,7 +54,10 @@ public class AccountingStatusView {
     Instant accountingStatusUpdatedAt;
 
     /** True when the accounting system reported a discrepancy for this invoice. */
-    @Schema(description = "True when the accounting system reported a discrepancy", example = "false", requiredMode = REQUIRED)
+    @Schema(
+            description = "True when the accounting system reported a discrepancy",
+            example = "false",
+            requiredMode = REQUIRED)
     boolean discrepancyDetected;
 
     /**
@@ -71,7 +74,10 @@ public class AccountingStatusView {
      * GL posting reference associated with the current status.
      * May be {@code null} for statuses that do not involve a posting.
      */
-    @Schema(description = "GL posting reference associated with the current status", example = "JE-2026-000456", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "GL posting reference associated with the current status",
+            example = "JE-2026-000456",
+            requiredMode = NOT_REQUIRED)
     String postingReference;
 
     /**

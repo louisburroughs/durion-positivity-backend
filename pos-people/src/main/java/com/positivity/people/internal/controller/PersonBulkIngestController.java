@@ -61,7 +61,8 @@ public class PersonBulkIngestController extends AbstractBulkIngestController<Per
                 LocalDate hireDate = parseHireDate(ingestRecord.getHireDate());
 
                 CreateEmployeeRequest createEmployeeRequest = new CreateEmployeeRequest();
-                createEmployeeRequest.setLegalName(ingestRecord.getLegalName());
+                createEmployeeRequest.setFirstName(ingestRecord.getFirstName());
+                createEmployeeRequest.setLastName(ingestRecord.getLastName());
                 createEmployeeRequest.setPreferredName(ingestRecord.getPreferredName());
                 createEmployeeRequest.setEmployeeNumber(ingestRecord.getEmployeeNumber());
                 createEmployeeRequest.setStatus(EmployeeStatus.ACTIVE);

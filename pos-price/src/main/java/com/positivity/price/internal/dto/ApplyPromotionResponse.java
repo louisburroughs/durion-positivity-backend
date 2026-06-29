@@ -14,10 +14,7 @@ import lombok.Getter;
 @Schema(description = "Response payload after applying a promotion to an estimate")
 public class ApplyPromotionResponse {
 
-    @Schema(
-            description = "Original estimate subtotal before promotions",
-            example = "500.00",
-            requiredMode = REQUIRED)
+    @Schema(description = "Original estimate subtotal before promotions", example = "500.00", requiredMode = REQUIRED)
     @NotNull
     private BigDecimal subtotal;
 
@@ -28,10 +25,7 @@ public class ApplyPromotionResponse {
     @NotNull
     private BigDecimal total;
 
-    @Schema(
-            description = "Adjustments applied during promotion evaluation",
-            example = "[]",
-            requiredMode = REQUIRED)
+    @Schema(description = "Adjustments applied during promotion evaluation", example = "[]", requiredMode = REQUIRED)
     @NotNull
     private List<PricingAdjustment> appliedAdjustments;
 }

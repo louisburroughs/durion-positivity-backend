@@ -42,7 +42,10 @@ public class AccountingStatusChangedEvent {
     UUID invoiceId;
 
     /** New authoritative accounting status for the invoice. */
-    @Schema(description = "New authoritative accounting status for the invoice", example = "POSTED", requiredMode = REQUIRED)
+    @Schema(
+            description = "New authoritative accounting status for the invoice",
+            example = "POSTED",
+            requiredMode = REQUIRED)
     @NotNull
     AccountingStatus newStatus;
 
@@ -70,7 +73,10 @@ public class AccountingStatusChangedEvent {
      * number).
      * May be {@code null} for non-posting statuses such as {@code ON_HOLD}.
      */
-    @Schema(description = "Posting reference for GL traceability", example = "JE-2026-000456", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Posting reference for GL traceability",
+            example = "JE-2026-000456",
+            requiredMode = NOT_REQUIRED)
     String postingReference;
 
     /**

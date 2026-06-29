@@ -35,7 +35,10 @@ public class ServiceAreaResponse {
     @Schema(description = "Display name of the service area", example = "North Metro", requiredMode = NOT_REQUIRED)
     private String name;
 
-    @Schema(description = "Description of the service area", example = "Northern metropolitan coverage zone", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Description of the service area",
+            example = "Northern metropolitan coverage zone",
+            requiredMode = NOT_REQUIRED)
     private String description;
 
     @Schema(description = "Whether the service area is active", example = "true", requiredMode = NOT_REQUIRED)

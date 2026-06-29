@@ -30,17 +30,11 @@ public class CycleCountTaskResponse {
     @NotNull
     private UUID taskId;
 
-    @Schema(
-            description = "Bin or location code where the item is stored",
-            example = "LOC-001",
-            requiredMode = REQUIRED)
+    @Schema(description = "Bin or location code where the item is stored", example = "LOC-001", requiredMode = REQUIRED)
     @NotNull
     private String binLocation;
 
-    @Schema(
-            description = "Stock keeping unit of the item to count",
-            example = "SKU-10042",
-            requiredMode = REQUIRED)
+    @Schema(description = "Stock keeping unit of the item to count", example = "SKU-10042", requiredMode = REQUIRED)
     @NotNull
     private String itemSku;
 
@@ -50,10 +44,7 @@ public class CycleCountTaskResponse {
             requiredMode = NOT_REQUIRED)
     private String itemDescription;
 
-    @Schema(
-            description = "Quantity expected on hand for the item",
-            example = "15",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity expected on hand for the item", example = "15", requiredMode = REQUIRED)
     @NotNull
     private Integer expectedQuantity;
 
@@ -63,10 +54,7 @@ public class CycleCountTaskResponse {
             requiredMode = NOT_REQUIRED)
     private String auditorId;
 
-    @Schema(
-            description = "Current status of the cycle count task",
-            example = "ASSIGNED",
-            requiredMode = REQUIRED)
+    @Schema(description = "Current status of the cycle count task", example = "ASSIGNED", requiredMode = REQUIRED)
     @NotNull
     private TaskStatus status;
 
@@ -76,10 +64,7 @@ public class CycleCountTaskResponse {
             requiredMode = NOT_REQUIRED)
     private UUID latestCountEntryId;
 
-    @Schema(
-            description = "Total number of count entries recorded for the task",
-            example = "2",
-            requiredMode = REQUIRED)
+    @Schema(description = "Total number of count entries recorded for the task", example = "2", requiredMode = REQUIRED)
     @NotNull
     private Integer countEntriesCount;
 

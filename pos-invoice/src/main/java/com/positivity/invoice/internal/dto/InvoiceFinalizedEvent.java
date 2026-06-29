@@ -24,39 +24,40 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "Event emitted when an invoice is finalized")
 public record InvoiceFinalizedEvent(
         @NonNull
-                @NotNull
-                @Schema(
-                        description = "Platform UUID of the finalized invoice",
-                        example = "01960003-0000-7000-8000-000000000040",
-                        requiredMode = REQUIRED)
-                UUID invoiceId,
+        @NotNull
+        @Schema(
+                description = "Platform UUID of the finalized invoice",
+                example = "01960003-0000-7000-8000-000000000040",
+                requiredMode = REQUIRED)
+        UUID invoiceId,
+
         @NonNull
-                @NotNull
-                @Schema(
-                        description = "Platform UUID of the associated workorder",
-                        example = "01960003-0000-7000-8000-000000000041",
-                        requiredMode = REQUIRED)
-                UUID workorderId,
+        @NotNull
+        @Schema(
+                description = "Platform UUID of the associated workorder",
+                example = "01960003-0000-7000-8000-000000000041",
+                requiredMode = REQUIRED)
+        UUID workorderId,
+
         @Nullable
-                @Schema(
-                        description = "Username/actor who performed finalization (null if system-triggered)",
-                        example = "jdoe",
-                        requiredMode = NOT_REQUIRED)
-                String finalizedBy,
+        @Schema(
+                description = "Username/actor who performed finalization (null if system-triggered)",
+                example = "jdoe",
+                requiredMode = NOT_REQUIRED)
+        String finalizedBy,
+
         @NonNull
-                @NotNull
-                @Schema(
-                        description = "Timestamp when finalization occurred",
-                        example = "2026-01-16T12:00:00Z",
-                        requiredMode = REQUIRED)
-                Instant finalizedAt,
+        @NotNull
+        @Schema(
+                description = "Timestamp when finalization occurred",
+                example = "2026-01-16T12:00:00Z",
+                requiredMode = REQUIRED)
+        Instant finalizedAt,
+
         @NonNull
-                @NotNull
-                @Schema(
-                        description = "Total amount of the finalized invoice",
-                        example = "191.00",
-                        requiredMode = REQUIRED)
-                BigDecimal grandTotal) {
+        @NotNull
+        @Schema(description = "Total amount of the finalized invoice", example = "191.00", requiredMode = REQUIRED)
+        BigDecimal grandTotal) {
     // Per ADR-0027: UUID for platform entity IDs; grandTotal as BigDecimal per
     // monetary convention.
 }

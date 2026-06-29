@@ -78,7 +78,10 @@ public class SearchPartiesResponse {
         @Schema(description = "Display name of the party", example = "Acme", requiredMode = NOT_REQUIRED)
         private String displayName;
 
-        @Schema(description = "Party type (ORGANIZATION|INDIVIDUAL)", example = "ORGANIZATION", requiredMode = NOT_REQUIRED)
+        @Schema(
+                description = "Party type (ORGANIZATION|INDIVIDUAL)",
+                example = "ORGANIZATION",
+                requiredMode = NOT_REQUIRED)
         private String partyType;
 
         @Schema(
@@ -87,10 +90,16 @@ public class SearchPartiesResponse {
                 requiredMode = NOT_REQUIRED)
         private String customerNumber;
 
-        @Schema(description = "Party status (ACTIVE|PENDING|SUSPENDED|INACTIVE)", example = "ACTIVE", requiredMode = NOT_REQUIRED)
+        @Schema(
+                description = "Party status (ACTIVE|PENDING|SUSPENDED|INACTIVE)",
+                example = "ACTIVE",
+                requiredMode = NOT_REQUIRED)
         private String status;
 
-        @Schema(description = "Creation timestamp (ISO 8601)", example = "2026-01-15T09:30:00Z", requiredMode = NOT_REQUIRED)
+        @Schema(
+                description = "Creation timestamp (ISO 8601)",
+                example = "2026-01-15T09:30:00Z",
+                requiredMode = NOT_REQUIRED)
         private String createdAt;
 
         /**

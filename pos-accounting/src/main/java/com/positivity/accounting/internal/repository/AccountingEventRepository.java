@@ -7,13 +7,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for AccountingEvent entity.
  * Supports CRUD, status queries, and organization-based pagination.
  */
-@Repository
 public interface AccountingEventRepository
         extends JpaRepository<AccountingEvent, UUID>, JpaSpecificationExecutor<AccountingEvent> {
 

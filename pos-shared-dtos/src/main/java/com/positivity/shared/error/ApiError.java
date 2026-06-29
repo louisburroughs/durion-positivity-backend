@@ -20,57 +20,71 @@ import java.util.List;
 @Schema(description = "Standard error response envelope returned by all Durion backend APIs")
 public record ApiError(
         @Schema(description = "Machine-readable error code", example = "ORDER_NOT_FOUND", requiredMode = REQUIRED)
-                @NotNull
-                String code,
+        @NotNull
+        String code,
+
         @Schema(
-                        description = "Human-readable error message",
-                        example = "Order '550e8400-e29b-41d4-a716-446655440000' was not found",
-                        requiredMode = REQUIRED)
-                @NotNull
-                String message,
-        @Schema(description = "HTTP status code", example = "404", requiredMode = REQUIRED) int status,
+                description = "Human-readable error message",
+                example = "Order '550e8400-e29b-41d4-a716-446655440000' was not found",
+                requiredMode = REQUIRED)
+        @NotNull
+        String message,
+
+        @Schema(description = "HTTP status code", example = "404", requiredMode = REQUIRED)
+        int status,
+
         @Schema(
-                        description = "ISO 8601 UTC timestamp of the error",
-                        example = "2026-03-17T14:30:00.000Z",
-                        requiredMode = REQUIRED)
-                @NotNull
-                String timestamp,
+                description = "ISO 8601 UTC timestamp of the error",
+                example = "2026-03-17T14:30:00.000Z",
+                requiredMode = REQUIRED)
+        @NotNull
+        String timestamp,
+
         @Schema(
-                        description = "Unique correlation ID for distributed request tracing",
-                        example = "550e8400-e29b-41d4-a716-446655440000",
-                        requiredMode = REQUIRED)
-                @NotNull
-                String correlationId,
+                description = "Unique correlation ID for distributed request tracing",
+                example = "550e8400-e29b-41d4-a716-446655440000",
+                requiredMode = REQUIRED)
+        @NotNull
+        String correlationId,
+
         @Schema(
-                        description =
-                                "Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types",
-                        requiredMode = NOT_REQUIRED)
-                List<FieldError> fieldErrors,
+                description =
+                        "Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types",
+                requiredMode = NOT_REQUIRED)
+        List<FieldError> fieldErrors,
+
         @Schema(
-                        description = "Workflow or review-case reference identifier, when applicable",
-                        example = "REVIEW-2026-000123",
-                        requiredMode = NOT_REQUIRED)
-                String referenceId,
+                description = "Workflow or review-case reference identifier, when applicable",
+                example = "REVIEW-2026-000123",
+                requiredMode = NOT_REQUIRED)
+        String referenceId,
+
         @Schema(
-                        description = "Recommended next step for the caller, when applicable",
-                        example = "Retry the request with a valid quantity",
-                        requiredMode = NOT_REQUIRED)
-                String nextAction,
+                description = "Recommended next step for the caller, when applicable",
+                example = "Retry the request with a valid quantity",
+                requiredMode = NOT_REQUIRED)
+        String nextAction,
+
         @Schema(
-                        description = "Support or admin investigation guidance, when applicable",
-                        example = "Contact support with the correlation ID for assistance",
-                        requiredMode = NOT_REQUIRED)
-                String supportAction) {
+                description = "Support or admin investigation guidance, when applicable",
+                example = "Contact support with the correlation ID for assistance",
+                requiredMode = NOT_REQUIRED)
+        String supportAction) {
 
     /**
      * Field-level validation error within an {@link ApiError}.
      */
     @Schema(description = "Validation error for a specific request field")
     public record FieldError(
-            @Schema(description = "Field name", example = "quantity", requiredMode = REQUIRED) @NotNull String field,
-            @Schema(description = "Validation failure message", example = "must be greater than 0", requiredMode = REQUIRED)
-                    @NotNull
-                    String message) {}
+            @Schema(description = "Field name", example = "quantity", requiredMode = REQUIRED) @NotNull
+            String field,
+
+            @Schema(
+                    description = "Validation failure message",
+                    example = "must be greater than 0",
+                    requiredMode = REQUIRED)
+            @NotNull
+            String message) {}
 
     /** Creates an error with no optional fields. */
     public static ApiError of(String code, String message, int status, String timestamp, String correlationId) {

@@ -8,7 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for IdempotencyKey entities.
@@ -18,7 +17,6 @@ import org.springframework.stereotype.Repository;
  * including lookup by key value and cleanup of expired keys.
  * </p>
  */
-@Repository
 public interface IdempotencyKeyRepository extends JpaRepository<IdempotencyKey, UUID> {
 
     /**

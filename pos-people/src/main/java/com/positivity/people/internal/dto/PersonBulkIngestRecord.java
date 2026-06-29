@@ -10,10 +10,17 @@ public class PersonBulkIngestRecord {
 
     @NotBlank
     @Schema(
-            description = "Legal name of the person",
-            example = "Jane Smith",
+            description = "First (given) name of the person",
+            example = "Jane",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    private String legalName;
+    private String firstName;
+
+    @NotBlank
+    @Schema(
+            description = "Last (family) name of the person",
+            example = "Smith",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    private String lastName;
 
     @Schema(
             description = "Preferred name of the person",

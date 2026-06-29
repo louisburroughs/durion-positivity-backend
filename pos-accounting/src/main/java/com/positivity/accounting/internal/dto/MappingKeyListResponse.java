@@ -21,7 +21,10 @@ public class MappingKeyListResponse {
     @Schema(description = "Mapping keys on the current page", requiredMode = REQUIRED)
     private List<MappingKeyResponse> results;
 
-    @Schema(description = "Total number of mapping keys matching the query", example = "42", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Total number of mapping keys matching the query",
+            example = "42",
+            requiredMode = NOT_REQUIRED)
     private Long totalCount;
 
     @Schema(description = "Zero-based index of the current page", example = "0", requiredMode = NOT_REQUIRED)

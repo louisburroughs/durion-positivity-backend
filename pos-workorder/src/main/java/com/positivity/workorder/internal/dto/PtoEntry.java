@@ -15,7 +15,10 @@ public class PtoEntry {
     @Schema(description = "Identifier of the PTO entry", example = "PTO-12345", requiredMode = REQUIRED)
     String ptoId;
 
-    @Schema(description = "Start timestamp of the PTO period", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Start timestamp of the PTO period",
+            example = "2026-01-15T09:30:00Z",
+            requiredMode = REQUIRED)
     Instant start;
 
     @Schema(description = "End timestamp of the PTO period", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)

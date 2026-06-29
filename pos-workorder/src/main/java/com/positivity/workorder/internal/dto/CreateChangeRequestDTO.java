@@ -43,17 +43,11 @@ public class CreateChangeRequestDTO {
     private String exceptionReason;
 
     @Valid
-    @Schema(
-            description = "Service items included in this change request",
-            example = "[]",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Service items included in this change request", example = "[]", requiredMode = NOT_REQUIRED)
     private List<WorkorderItemDTO> services;
 
     @Valid
-    @Schema(
-            description = "Part items included in this change request",
-            example = "[]",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Part items included in this change request", example = "[]", requiredMode = NOT_REQUIRED)
     private List<WorkorderItemDTO> parts;
 
     @AssertTrue(message = "At least one service or part item is required")

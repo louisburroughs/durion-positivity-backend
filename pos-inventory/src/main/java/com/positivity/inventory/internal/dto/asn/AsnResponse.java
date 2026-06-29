@@ -13,7 +13,9 @@ import java.util.UUID;
 import lombok.Builder;
 import lombok.Data;
 
-@Schema(description = "Advance shipping notice (ASN) representing an inbound shipment from a vendor, including its line items and lifecycle status")
+@Schema(
+        description =
+                "Advance shipping notice (ASN) representing an inbound shipment from a vendor, including its line items and lifecycle status")
 @Data
 @Builder
 public class AsnResponse {
@@ -39,17 +41,11 @@ public class AsnResponse {
     @NotNull
     private UUID vendorId;
 
-    @Schema(
-            description = "Current lifecycle status of the ASN",
-            example = "READY_FOR_RECEIPT",
-            requiredMode = REQUIRED)
+    @Schema(description = "Current lifecycle status of the ASN", example = "READY_FOR_RECEIPT", requiredMode = REQUIRED)
     @NotNull
     private AsnStatus status;
 
-    @Schema(
-            description = "Date the shipment left the vendor",
-            example = "2026-01-15",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Date the shipment left the vendor", example = "2026-01-15", requiredMode = NOT_REQUIRED)
     private LocalDate shipDate;
 
     @Schema(

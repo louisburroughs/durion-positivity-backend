@@ -14,6 +14,8 @@ tags:
   description: Card payment initiation and capture endpoints
 - name: Invoice
   description: Invoice generation and lifecycle management
+- name: Invoice Search
+  description: Invoice finder search and retrieval
 - name: Billing Rules
   description: Manage billing rules for commercial accounts
 - name: Receipt
@@ -537,6 +539,42 @@ paths:
       x-required-permissions:
       - invoice:manage
       - invoice:finalize
+  /v1/invoices/{invoiceId}/artifacts/{artifactRefId}/download-token:
+    post:
+      tags:
+      - invoice-artifact-controller
+      summary: Create a short-lived download token for an invoice artifact
+      description: Issues a short-lived signed token bound to the invoice and artifact. The token is presented to the public download endpoint so a browser can fetch the file via a direct link.
+      operationId: createDownloadToken
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: artifactRefId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactDownloadToken'
+        '404':
+          description: Invoice or artifact not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactDownloadToken'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/invoices/{invoiceId}/adjustments:
     post:
       tags:
@@ -595,6 +633,130 @@ paths:
         - invoice:manage
       x-required-permissions:
       - invoice:manage
+  /v1/invoices/{invoiceId}/artifacts:
+    get:
+      tags:
+      - invoice-artifact-controller
+      summary: List the downloadable artifacts (documents) for an invoice
+      description: Returns the documents available for the invoice (the invoice itself and any receipts) as opaque, URL-safe artifact references with suggested file names and MIME types.
+      operationId: listArtifacts
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Artifacts listed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvoiceArtifact'
+        '404':
+          description: Invoice not found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvoiceArtifact'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
+  /v1/invoices/{invoiceId}/artifacts/{artifactRefId}/download:
+    get:
+      tags:
+      - invoice-artifact-download-controller
+      summary: Download an invoice artifact as PDF using a signed download token
+      description: Streams the artifact as application/pdf. Public endpoint authorized solely by the signed download token (query parameter); intended for browser direct-download links.
+      operationId: download
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: artifactRefId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: token
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: PDF returned
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+        '403':
+          description: Missing, invalid, or expired token
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+        '404':
+          description: Invoice or artifact not found
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+  /v1/invoices/search:
+    get:
+      tags:
+      - Invoice Search
+      summary: Search invoices
+      description: Paginated free-text search for invoices matching the invoice number, customer name, or workorder number.
+      operationId: searchInvoices
+      parameters:
+      - name: q
+        in: query
+        description: Free-text query matching invoice number, customer name, or workorder number (optional)
+        required: false
+        schema:
+          type: string
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
+      responses:
+        '200':
+          description: Page of invoice search results returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageInvoiceSearchResult'
+        '400':
+          description: Invalid pagination parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageInvoiceSearchResult'
+        '403':
+          description: Caller lacks the invoice:manage authority.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageInvoiceSearchResult'
+      security:
+      - bearerAuth:
+        - invoice:manage
+      x-required-permissions:
+      - invoice:manage
 components:
   schemas:
     BillingRulesDTO:
@@ -612,6 +774,7 @@ components:
           example: 01960003-0000-7000-8000-000000000002
         purchaseOrderRequired:
           type: boolean
+          default: false
           description: Whether a purchase order is required before invoicing
           example: true
         paymentTermsCode:
@@ -682,6 +845,11 @@ components:
           format: uuid
           description: Approval identifier used for billing authorization.
           example: 550e8400-e29b-41d4-a716-446655440002
+        locationId:
+          type: string
+          format: uuid
+          description: Shop location where the sale is made; used to resolve the tax jurisdiction address.
+          example: 01960003-0000-7000-8000-000000000001
         idempotencyKey:
           type: string
           description: Idempotency key to prevent duplicate invoice creation.
@@ -761,6 +929,14 @@ components:
           format: date-time
           description: Creation timestamp (UTC).
           example: 2026-02-27 12:00:00+00:00
+      required:
+      - createdAt
+      - invoiceId
+      - status
+      - subtotal
+      - taxAmount
+      - totalAmount
+      - workorderId
     RevertRequest:
       type: object
       description: Request payload for reverting a finalized invoice back to DRAFT
@@ -1253,6 +1429,17 @@ components:
           type: string
           description: Free-text reason for overriding the amount limit
           example: Customer pre-approved by branch manager
+    ArtifactDownloadToken:
+      type: object
+      description: Short-lived signed token for downloading an invoice artifact
+      properties:
+        downloadToken:
+          type: string
+          description: Opaque signed download token
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the token expires
     AdjustmentRequest:
       type: object
       description: Request to apply a monetary adjustment to an invoice
@@ -1285,6 +1472,146 @@ components:
       - authorizedBy
       - reason
       - type
+    InvoiceArtifact:
+      type: object
+      description: A downloadable document associated with an invoice
+      properties:
+        artifactRefId:
+          type: string
+          description: Opaque, URL-safe artifact reference
+          example: aW52b2ljZTo...
+        fileName:
+          type: string
+          description: Suggested download file name
+          example: Invoice-INV-1001.pdf
+        mimeType:
+          type: string
+          description: MIME type of the rendered artifact
+          example: application/pdf
+        createdAt:
+          type: string
+          format: date-time
+          description: When the underlying document was created
+    Pageable:
+      type: object
+      properties:
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        size:
+          type: integer
+          format: int32
+          minimum: 1
+        sort:
+          type: array
+          items:
+            type: string
+    InvoiceSearchResult:
+      type: object
+      description: Lightweight invoice search result enriched with customer name and workorder number
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+          description: Invoice identifier
+          example: 550e8400-e29b-41d4-a716-446655440000
+        invoiceNumber:
+          type: string
+          description: Human invoice number
+          example: INV-2026-1001
+        customerName:
+          type: string
+          description: Resolved customer display name
+          example: Acme Towing LLC
+        workorderId:
+          type: string
+          format: uuid
+          description: Linked workorder identifier
+        workorderNumber:
+          type: string
+          description: Resolved human workorder number
+          example: WO-2026-1001
+        status:
+          type: string
+          description: Current invoice status
+          enum:
+          - DRAFT
+          - FINALIZED
+          - POSTED
+          - ERROR
+          example: DRAFT
+        total:
+          type: number
+          description: Invoice grand total
+          example: 249.95
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - invoiceId
+      - status
+    PageInvoiceSearchResult:
+      type: object
+      properties:
+        totalPages:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceSearchResult'
+        number:
+          type: integer
+          format: int32
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+    PageableObject:
+      type: object
+      properties:
+        offset:
+          type: integer
+          format: int64
+        paged:
+          type: boolean
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        unpaged:
+          type: boolean
+    SortObject:
+      type: object
+      properties:
+        empty:
+          type: boolean
+        sorted:
+          type: boolean
+        unsorted:
+          type: boolean
   securitySchemes:
     bearerAuth:
       type: http

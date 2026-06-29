@@ -58,14 +58,13 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
     @Transactional(readOnly = true)
     @NonNull
     public LocationInventoryItemsResponse listLocationInventoryItems(@NonNull UUID locationId) {
-        List<LocationInventoryItemsResponse.Item> items = inventoryLedgerEntryRepository
-                .findPositiveOnHandByLocation(locationId, ON_HAND_EVENT_TYPES)
-                .stream()
-                .map(row -> LocationInventoryItemsResponse.Item.builder()
-                        .stockItemId(row.getStockItemId())
-                        .onHandQuantity(row.getOnHandQuantity() == null ? 0L : row.getOnHandQuantity())
-                        .build())
-                .toList();
+        List<LocationInventoryItemsResponse.Item> items =
+                inventoryLedgerEntryRepository.findPositiveOnHandByLocation(locationId, ON_HAND_EVENT_TYPES).stream()
+                        .map(row -> LocationInventoryItemsResponse.Item.builder()
+                                .stockItemId(row.getStockItemId())
+                                .onHandQuantity(row.getOnHandQuantity() == null ? 0L : row.getOnHandQuantity())
+                                .build())
+                        .toList();
 
         return LocationInventoryItemsResponse.builder()
                 .locationId(locationId)

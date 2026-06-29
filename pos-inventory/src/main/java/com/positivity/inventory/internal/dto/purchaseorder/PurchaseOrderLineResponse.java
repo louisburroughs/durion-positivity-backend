@@ -45,10 +45,7 @@ public class PurchaseOrderLineResponse {
             requiredMode = NOT_REQUIRED)
     private String description;
 
-    @Schema(
-            description = "Quantity ordered on this line",
-            example = "12",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Quantity ordered on this line", example = "12", requiredMode = NOT_REQUIRED)
     private BigDecimal quantityDecimal;
 
     @Schema(
@@ -69,9 +66,6 @@ public class PurchaseOrderLineResponse {
             requiredMode = NOT_REQUIRED)
     private Long taxMinor;
 
-    @Schema(
-            description = "Quantity on this line not yet received",
-            example = "4",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Quantity on this line not yet received", example = "4", requiredMode = NOT_REQUIRED)
     private BigDecimal openQuantityDecimal;
 }

@@ -50,10 +50,16 @@ public class PriceBookRuleCreateRequestDto {
     private Integer priority;
 
     @NotNull
-    @Schema(description = "Instant the rule becomes effective", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Instant the rule becomes effective",
+            example = "2026-01-15T09:30:00Z",
+            requiredMode = REQUIRED)
     private OffsetDateTime effectiveStartAt;
 
-    @Schema(description = "Instant the rule stops being effective", example = "2026-12-31T23:59:59Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Instant the rule stops being effective",
+            example = "2026-12-31T23:59:59Z",
+            requiredMode = NOT_REQUIRED)
     private OffsetDateTime effectiveEndAt;
 
     @NotNull

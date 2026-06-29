@@ -32,7 +32,10 @@ public class StorageLocationRequest {
     @NotBlank
     private String name;
 
-    @Schema(description = "Barcode identifying the storage location", example = "SL-000312", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Barcode identifying the storage location",
+            example = "SL-000312",
+            requiredMode = NOT_REQUIRED)
     private String barcode;
 
     @Schema(description = "Type classification of the storage location", example = "BIN", requiredMode = REQUIRED)

@@ -69,10 +69,7 @@ public class DeactivateLocationResponse {
     @Schema(description = "A single inventory item moved during location deactivation")
     public static class MovedItem {
 
-        @Schema(
-                description = "Identifier of the moved inventory item",
-                example = "SKU-10042",
-                requiredMode = REQUIRED)
+        @Schema(description = "Identifier of the moved inventory item", example = "SKU-10042", requiredMode = REQUIRED)
         @NotNull
         private String itemId;
 

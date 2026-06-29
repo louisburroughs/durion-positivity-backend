@@ -1,12 +1,12 @@
 package com.positivity.invoice.internal.controller;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.ReceiptResponse;
 import com.positivity.invoice.internal.enums.ReceiptDeliveryStatus;
 import com.positivity.invoice.service.Receipt;
 import com.positivity.invoice.service.ReceiptService;
-import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -116,45 +116,51 @@ public class ReceiptController {
     @Schema(description = "Request to generate a receipt for an invoice payment")
     private record GenerateReceiptRequest(
             @NotNull
-                    @Schema(
-                            description = "Payment intent the receipt is generated for",
-                            example = "550e8400-e29b-41d4-a716-446655440000",
-                            requiredMode = REQUIRED)
-                    UUID paymentIntentId,
+            @Schema(
+                    description = "Payment intent the receipt is generated for",
+                    example = "550e8400-e29b-41d4-a716-446655440000",
+                    requiredMode = REQUIRED)
+            UUID paymentIntentId,
+
             @NotBlank
-                    @Schema(description = "Identifier of the terminal producing the receipt", example = "TERM-001", requiredMode = REQUIRED)
-                    String terminalId,
+            @Schema(
+                    description = "Identifier of the terminal producing the receipt",
+                    example = "TERM-001",
+                    requiredMode = REQUIRED)
+            String terminalId,
+
             @NotBlank
-                    @Schema(description = "Receipt template identifier", example = "RECEIPT_DEFAULT", requiredMode = REQUIRED)
-                    String templateId,
-            @NotBlank
-                    @Schema(description = "Receipt template version", example = "1", requiredMode = REQUIRED)
-                    String templateVersion) {}
+            @Schema(description = "Receipt template identifier", example = "RECEIPT_DEFAULT", requiredMode = REQUIRED)
+            String templateId,
+
+            @NotBlank @Schema(description = "Receipt template version", example = "1", requiredMode = REQUIRED)
+            String templateVersion) {}
 
     @Schema(description = "Request to record the delivery status of a printed receipt")
     private record PrintDeliveryRequest(
             @NotNull
-                    @Schema(description = "Print delivery outcome status", example = "SUCCESS", requiredMode = REQUIRED)
-                    ReceiptDeliveryStatus status) {}
+            @Schema(description = "Print delivery outcome status", example = "SUCCESS", requiredMode = REQUIRED)
+            ReceiptDeliveryStatus status) {}
 
     @Schema(description = "Request to email a receipt and record the delivery status")
     private record EmailDeliveryRequest(
             @NotBlank
-                    @Schema(
-                            description = "Recipient email address for the receipt",
-                            example = "customer@example.com",
-                            requiredMode = REQUIRED)
-                    String emailAddress,
+            @Schema(
+                    description = "Recipient email address for the receipt",
+                    example = "customer@example.com",
+                    requiredMode = REQUIRED)
+            String emailAddress,
+
             @NotNull
-                    @Schema(description = "Email delivery outcome status", example = "SUCCESS", requiredMode = REQUIRED)
-                    ReceiptDeliveryStatus status) {}
+            @Schema(description = "Email delivery outcome status", example = "SUCCESS", requiredMode = REQUIRED)
+            ReceiptDeliveryStatus status) {}
 
     @Schema(description = "Request to reprint an existing receipt")
     private record ReprintReceiptRequest(
             @NotBlank
-                    @Schema(
-                            description = "Reason the receipt is being reprinted",
-                            example = "Customer requested a duplicate copy",
-                            requiredMode = REQUIRED)
-                    String reason) {}
+            @Schema(
+                    description = "Reason the receipt is being reprinted",
+                    example = "Customer requested a duplicate copy",
+                    requiredMode = REQUIRED)
+            String reason) {}
 }

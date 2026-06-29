@@ -48,18 +48,12 @@ public class ApplyPriceOverrideRequest {
     @DecimalMin(value = "0.0", inclusive = false, message = "Original price must be greater than 0")
     private BigDecimal originalPrice;
 
-    @Schema(
-            description = "Overridden price to apply to the line",
-            example = "39.99",
-            requiredMode = REQUIRED)
+    @Schema(description = "Overridden price to apply to the line", example = "39.99", requiredMode = REQUIRED)
     @NotNull(message = "Override price is required")
     @DecimalMin(value = "0.0", message = "Override price must be non-negative")
     private BigDecimal overridePrice;
 
-    @Schema(
-            description = "Reason code for the price override",
-            example = "PRICE_MATCH",
-            requiredMode = REQUIRED)
+    @Schema(description = "Reason code for the price override", example = "PRICE_MATCH", requiredMode = REQUIRED)
     @NotBlank
     private String reasonCode;
 

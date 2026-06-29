@@ -9,14 +9,12 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for Journal Entry Line entity.
  * Supports querying lines by journal entry, GL account, and aggregations for
  * balance checks.
  */
-@Repository
 public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLine, UUID> {
 
     /**

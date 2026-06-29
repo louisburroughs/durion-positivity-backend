@@ -10,7 +10,9 @@ import java.util.UUID;
 import lombok.Builder;
 import lombok.Data;
 
-@Schema(description = "A single line item on an advance shipping notice (ASN) response, describing one SKU and its shipped/received quantities")
+@Schema(
+        description =
+                "A single line item on an advance shipping notice (ASN) response, describing one SKU and its shipped/received quantities")
 @Data
 @Builder
 public class AsnLineResponse {
@@ -36,10 +38,7 @@ public class AsnLineResponse {
     @NotNull
     private String sku;
 
-    @Schema(
-            description = "Quantity of the SKU declared as shipped on the ASN",
-            example = "12",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity of the SKU declared as shipped on the ASN", example = "12", requiredMode = REQUIRED)
     @NotNull
     private BigDecimal quantityShipped;
 

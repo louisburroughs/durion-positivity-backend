@@ -23,13 +23,19 @@ public class CatalogBulkIngestRecord {
     @Schema(description = "Display name of the item", example = "Heavy Duty Wrench", requiredMode = REQUIRED)
     private String name;
 
-    @Schema(description = "Long description of the item", example = "Forged steel adjustable wrench", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Long description of the item",
+            example = "Forged steel adjustable wrench",
+            requiredMode = NOT_REQUIRED)
     private String description;
 
     @Schema(description = "Category name to associate the item with", example = "Tools", requiredMode = NOT_REQUIRED)
     private String categoryName;
 
-    @Schema(description = "Subcategory name to associate the item with", example = "Hand Tools", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Subcategory name to associate the item with",
+            example = "Hand Tools",
+            requiredMode = NOT_REQUIRED)
     private String subcategoryName;
 
     @Schema(description = "List price for the item", example = "29.99", requiredMode = NOT_REQUIRED)

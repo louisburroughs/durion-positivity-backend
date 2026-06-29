@@ -1,7 +1,5 @@
 package com.positivity.people.internal.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeContactInfoDto;
@@ -50,8 +48,6 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     private final EmployeeOffboardingRetryRepository offboardingRetryRepository;
 
-    private final ObjectMapper objectMapper;
-
     @Override
     @Transactional
     public @NonNull EmployeeProfileDto createEmployee(@NonNull CreateEmployeeRequest request) {
@@ -61,10 +57,11 @@ public class EmployeeServiceImpl implements EmployeeService {
                 request.getDuplicatePolicy(),
                 request.getEmployeeNumber(),
                 request.getContactInfo(),
-                request.getLegalName());
+                request.getFirstName(),
+                request.getLastName());
 
         Person person = new Person();
-        applyIdentity(person, request.getLegalName(), request.getPreferredName(), request.getContactInfo());
+        applyIdentity(person, request.getFirstName(), request.getLastName(), request.getPreferredName());
         Person savedPerson = personRepository.save(person);
 
         Employee employee = Employee.builder().personId(savedPerson.getId()).build();
@@ -103,9 +100,10 @@ public class EmployeeServiceImpl implements EmployeeService {
                 request.getDuplicatePolicy(),
                 request.getEmployeeNumber(),
                 request.getContactInfo(),
-                request.getLegalName());
+                request.getFirstName(),
+                request.getLastName());
 
-        applyIdentity(person, request.getLegalName(), request.getPreferredName(), request.getContactInfo());
+        applyIdentity(person, request.getFirstName(), request.getLastName(), request.getPreferredName());
         Person savedPerson = personRepository.save(person);
 
         Employee employee = employeeRepository
@@ -183,7 +181,8 @@ public class EmployeeServiceImpl implements EmployeeService {
             DuplicatePolicy duplicatePolicy,
             String employeeNumber,
             EmployeeContactInfoDto contactInfo,
-            String legalName) {
+            String firstName,
+            String lastName) {
         DuplicatePolicy policy = duplicatePolicy != null ? duplicatePolicy : DuplicatePolicy.STRICT;
 
         DuplicateSignals duplicateSignals = collectDuplicateSignals(employeeId, employeeNumber, contactInfo);
@@ -200,8 +199,8 @@ public class EmployeeServiceImpl implements EmployeeService {
             warnings.add("Potential duplicate detected; request accepted due to BALANCED duplicatePolicy");
         }
 
-        if (hasAmbiguousLegalNameMatch(employeeId, legalName)) {
-            warnings.add("Ambiguous duplicate match detected by legalName similarity");
+        if (hasAmbiguousNameMatch(employeeId, firstName, lastName)) {
+            warnings.add("Ambiguous duplicate match detected by name similarity");
         }
 
         return warnings;
@@ -227,46 +226,24 @@ public class EmployeeServiceImpl implements EmployeeService {
         return new DuplicateSignals(duplicateEmployeeNumber, duplicatePrimaryEmail, duplicatePhone);
     }
 
-    private boolean hasAmbiguousLegalNameMatch(UUID employeeId, String legalName) {
-        if (legalName == null || legalName.isBlank()) {
+    private boolean hasAmbiguousNameMatch(UUID employeeId, String firstName, String lastName) {
+        if (firstName == null || firstName.isBlank() || lastName == null || lastName.isBlank()) {
             return false;
         }
-        return personRepository.findByLegalNameIgnoreCase(legalName).stream()
+        return personRepository.findByLastNameIgnoreCase(lastName).stream()
+                .filter(person -> firstName.equalsIgnoreCase(person.getFirstName()))
                 .anyMatch(person -> employeeId == null || !person.getId().equals(employeeId));
     }
 
     /**
-     * Keep the typed {@code firstName}/{@code lastName} columns in sync with {@code legalName} so a
-     * person created or edited through the Employee path also surfaces a name in the directory and
-     * the people typeahead (which read first/last). The first whitespace-delimited token becomes the
-     * first name and the remainder the last name — a heuristic split, but it keeps both views
-     * consistent. The structured {@code legalName} remains the authoritative value.
+     * Person identity: authoritative structured name. Email + phone are persisted as
+     * EMAIL / PHONE_WORK contact points after save (see createEmployee/updateEmployee), so no
+     * contact value is written here.
      */
-    private void applyStructuredName(Person entity, String legalName) {
-        if (legalName == null || legalName.isBlank()) {
-            return;
-        }
-        String trimmed = legalName.trim();
-        int firstSpace = trimmed.indexOf(' ');
-        if (firstSpace < 0) {
-            entity.setFirstName(trimmed);
-            entity.setLastName("");
-        } else {
-            entity.setFirstName(trimmed.substring(0, firstSpace));
-            entity.setLastName(trimmed.substring(firstSpace + 1).trim());
-        }
-    }
-
-    /** Person identity: legal/preferred names, derived first/last. */
-    private void applyIdentity(
-            Person entity, String legalName, String preferredName, EmployeeContactInfoDto contactInfo) {
-        entity.setLegalName(legalName);
-        entity.setPreferredName(preferredName);
-        applyStructuredName(entity, legalName);
-        // Email + phone are persisted as EMAIL / PHONE_WORK contact points after save (see
-        // createEmployee/updateEmployee); contactInfoJson is a read-only @Formula derived from
-        // those contact points, so nothing is written here. (contactInfo is consumed by the
-        // contact-point writes in the caller.)
+    private void applyIdentity(Person entity, String firstName, String lastName, String preferredName) {
+        entity.setFirstName(normalize(firstName));
+        entity.setLastName(normalize(lastName));
+        entity.setPreferredName(normalize(preferredName));
     }
 
     /** Employment attributes on the Employee record. */
@@ -315,13 +292,14 @@ public class EmployeeServiceImpl implements EmployeeService {
     private EmployeeProfileDto toEmployeeProfile(Person person, Employee employee, List<String> warnings) {
         return EmployeeProfileDto.builder()
                 .id(person.getId())
-                .legalName(resolveLegalName(person))
+                .firstName(person.getFirstName())
+                .lastName(person.getLastName())
                 .preferredName(person.getPreferredName())
                 .employeeNumber(employee != null ? employee.getEmployeeNumber() : null)
                 .status(employee != null ? employee.getStatus() : null)
                 .hireDate(employee != null ? employee.getHireDate() : null)
                 .terminationDate(employee != null ? employee.getTerminationDate() : null)
-                .contactInfo(resolveContactInfo(person))
+                .contactInfo(buildContactInfo(person))
                 .statusEffectiveAt(employee != null ? employee.getStatusEffectiveAt() : null)
                 .createdAt(person.getCreatedAt())
                 .updatedAt(person.getUpdatedAt())
@@ -329,36 +307,8 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .build();
     }
 
-    /**
-     * The employee profile historically read {@code legalName}, but persons created via the
-     * People path (and seed data) populate only {@code firstName}/{@code lastName}. Fall back to
-     * the composed first/last name so the profile is never blank for those records.
-     */
-    private String resolveLegalName(Person person) {
-        String legalName = person.getLegalName();
-        if (legalName != null && !legalName.isBlank()) {
-            return legalName;
-        }
-        String composed = java.util.stream.Stream.of(person.getFirstName(), person.getLastName())
-                .filter(value -> value != null && !value.isBlank())
-                .collect(java.util.stream.Collectors.joining(" "));
-        return composed.isBlank() ? legalName : composed;
-    }
-
-    /**
-     * Prefer the structured {@code contactInfoJson} blob, but fall back to the typed contact
-     * columns ({@code primaryEmail}/{@code secondaryEmail}/{@code phoneNumbers}) when the blob is
-     * absent — as it is for column-sourced persons (People path and seed data).
-     */
-    private EmployeeContactInfoDto resolveContactInfo(Person person) {
-        EmployeeContactInfoDto fromJson = readContactInfo(person.getContactInfoJson());
-        if (fromJson != null) {
-            return fromJson;
-        }
-        return contactInfoFromColumns(person);
-    }
-
-    private EmployeeContactInfoDto contactInfoFromColumns(Person person) {
+    /** Read contact info from the authoritative person_contact_point rows (EMAIL / PHONE_WORK). */
+    private EmployeeContactInfoDto buildContactInfo(Person person) {
         PersonEmailService.EmailPair emails = emailService.getEmails(person.getId());
         String primaryEmail = normalize(emails.primary());
         String secondaryEmail = normalize(emails.secondary());
@@ -376,18 +326,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         dto.setPrimaryPhone(primaryPhone);
         dto.setSecondaryPhone(secondaryPhone);
         return dto;
-    }
-
-    private EmployeeContactInfoDto readContactInfo(String contactInfoJson) {
-        if (contactInfoJson == null || contactInfoJson.isBlank()) {
-            return null;
-        }
-        try {
-            return objectMapper.readValue(contactInfoJson, EmployeeContactInfoDto.class);
-        } catch (JsonProcessingException exception) {
-            log.warn("Failed to deserialize contact info JSON. Returning null. reason={}", exception.getMessage());
-            return null;
-        }
     }
 
     private void applyAssignmentPolicy(UUID employeeId, DisableEmployeeRequestDto request, String actorId) {

@@ -11,7 +11,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Schema(description = "Event signalling that parts reserved for a workorder have been confirmed, triggering pick list generation")
+@Schema(
+        description =
+                "Event signalling that parts reserved for a workorder have been confirmed, triggering pick list generation")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -64,10 +66,7 @@ public class WorkOrderPartsReservationConfirmedEvent {
                 requiredMode = REQUIRED)
         private String sku;
 
-        @Schema(
-                description = "Quantity of the SKU reserved on this line",
-                example = "12",
-                requiredMode = REQUIRED)
+        @Schema(description = "Quantity of the SKU reserved on this line", example = "12", requiredMode = REQUIRED)
         private int quantity;
     }
 }

@@ -37,17 +37,11 @@ public class CountResponse {
     @NotNull
     private UUID taskId;
 
-    @Schema(
-            description = "Quantity physically counted by the auditor",
-            example = "12",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity physically counted by the auditor", example = "12", requiredMode = REQUIRED)
     @NotNull
     private Integer actualQuantity;
 
-    @Schema(
-            description = "Quantity expected on hand at the time of the count",
-            example = "15",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity expected on hand at the time of the count", example = "15", requiredMode = REQUIRED)
     @NotNull
     private Integer expectedQuantity;
 

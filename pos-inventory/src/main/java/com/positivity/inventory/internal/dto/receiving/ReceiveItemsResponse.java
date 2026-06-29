@@ -33,10 +33,7 @@ public class ReceiveItemsResponse {
     @NotNull
     private String sessionStatus;
 
-    @Schema(
-            description = "Number of receiving lines processed in this request",
-            example = "3",
-            requiredMode = REQUIRED)
+    @Schema(description = "Number of receiving lines processed in this request", example = "3", requiredMode = REQUIRED)
     private int linesProcessed;
 
     @Schema(
@@ -85,10 +82,7 @@ public class ReceiveItemsResponse {
         @NotNull
         private BigDecimal expectedQuantity;
 
-        @Schema(
-                description = "Quantity actually received on the line",
-                example = "8",
-                requiredMode = REQUIRED)
+        @Schema(description = "Quantity actually received on the line", example = "8", requiredMode = REQUIRED)
         @NotNull
         private BigDecimal receivedQuantity;
     }

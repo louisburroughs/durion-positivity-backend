@@ -91,43 +91,41 @@ public class McpStreamingChatController {
             example = "{\"message\":\"Hello\"}")
     public record StreamChatRequest(
             @Schema(
-                            description = "User chat message to stream to the agent",
-                            example = "Hello",
-                            requiredMode = Schema.RequiredMode.REQUIRED)
-                    @NotBlank
-                    @NonNull
-                    String message) {}
+                    description = "User chat message to stream to the agent",
+                    example = "Hello",
+                    requiredMode = Schema.RequiredMode.REQUIRED)
+            @NotBlank
+            @NonNull
+            String message) {}
 
     @Schema(name = "ServerSentEventString", description = "A Server-Sent Event carrying a string data payload")
     public record ServerSentEventString(
+            @Schema(description = "Event identifier", example = "1", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String id,
+
+            @Schema(description = "Event name", example = "chat", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String event,
+
             @Schema(
-                            description = "Event identifier",
-                            example = "1",
-                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-                    @Nullable
-                    String id,
+                    description = "String data payload of the event, typically a response token",
+                    example = "Hi",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String data,
+
             @Schema(
-                            description = "Event name",
-                            example = "chat",
-                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-                    @Nullable
-                    String event,
+                    description = "Reconnection time in milliseconds the client should wait before retrying",
+                    example = "3000",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            Long retry,
+
             @Schema(
-                            description = "String data payload of the event, typically a response token",
-                            example = "Hi",
-                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-                    @Nullable
-                    String data,
-            @Schema(
-                            description = "Reconnection time in milliseconds the client should wait before retrying",
-                            example = "3000",
-                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-                    @Nullable
-                    Long retry,
-            @Schema(
-                            description = "Comment line carried by the event",
-                            example = "keep-alive",
-                            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-                    @Nullable
-                    String comment) {}
+                    description = "Comment line carried by the event",
+                    example = "keep-alive",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String comment) {}
 }

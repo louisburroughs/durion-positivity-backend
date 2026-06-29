@@ -44,11 +44,17 @@ public class PriceOverrideRequest {
     @NotNull(message = "Adjusted price is required")
     private BigDecimal adjustedPrice;
 
-    @Schema(description = "Role of the actor performing the override", example = "STORE_MANAGER", requiredMode = REQUIRED)
+    @Schema(
+            description = "Role of the actor performing the override",
+            example = "STORE_MANAGER",
+            requiredMode = REQUIRED)
     @NotNull(message = "Actor role is required")
     private String actorRole;
 
-    @Schema(description = "Reason for the price override", example = "Price matched competitor quote", requiredMode = REQUIRED)
+    @Schema(
+            description = "Reason for the price override",
+            example = "Price matched competitor quote",
+            requiredMode = REQUIRED)
     @NotNull(message = "Reason is required")
     private String reason;
 

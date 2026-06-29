@@ -18,13 +18,12 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Request to revise an existing purchase order, replacing its lines and recording a revision reason")
+@Schema(
+        description =
+                "Request to revise an existing purchase order, replacing its lines and recording a revision reason")
 public class RevisePurchaseOrderRequest {
 
-    @Schema(
-            description = "Date the revised purchase order is issued",
-            example = "2026-01-20",
-            requiredMode = REQUIRED)
+    @Schema(description = "Date the revised purchase order is issued", example = "2026-01-20", requiredMode = REQUIRED)
     @NotNull
     private LocalDate poDate;
 
@@ -58,9 +57,7 @@ public class RevisePurchaseOrderRequest {
             requiredMode = NOT_REQUIRED)
     private String comment;
 
-    @Schema(
-            description = "Order lines replacing the existing purchase order lines",
-            requiredMode = REQUIRED)
+    @Schema(description = "Order lines replacing the existing purchase order lines", requiredMode = REQUIRED)
     @NotNull
     @NotEmpty
     @Valid

@@ -52,10 +52,7 @@ public class PutawayExecutionResponse {
     @NotNull
     private UUID destinationLocationId;
 
-    @Schema(
-            description = "Quantity of units moved during the putaway",
-            example = "12",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity of units moved during the putaway", example = "12", requiredMode = REQUIRED)
     private int quantityMoved;
 
     @Schema(
@@ -65,10 +62,7 @@ public class PutawayExecutionResponse {
     @NotNull
     private String transactionType;
 
-    @Schema(
-            description = "Outcome status of the putaway execution",
-            example = "COMPLETED",
-            requiredMode = REQUIRED)
+    @Schema(description = "Outcome status of the putaway execution", example = "COMPLETED", requiredMode = REQUIRED)
     @NotNull
     private String status;
 

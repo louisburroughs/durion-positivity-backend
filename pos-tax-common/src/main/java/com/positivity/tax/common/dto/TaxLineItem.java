@@ -41,7 +41,10 @@ public class TaxLineItem {
      * Description of the item being taxed.
      */
     @NotBlank(message = "Description is required")
-    @Schema(description = "Description of the item being taxed", example = "Oil Change Service", requiredMode = REQUIRED)
+    @Schema(
+            description = "Description of the item being taxed",
+            example = "Oil Change Service",
+            requiredMode = REQUIRED)
     private String description;
 
     /**

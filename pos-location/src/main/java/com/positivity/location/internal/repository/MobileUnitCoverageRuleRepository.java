@@ -6,14 +6,12 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for mobile unit coverage rules.
  *
  * Issue: #76
  */
-@Repository
 public interface MobileUnitCoverageRuleRepository extends JpaRepository<MobileUnitCoverageRuleEntity, UUID> {
 
     List<MobileUnitCoverageRuleEntity> findByMobileUnit_IdOrderByPriorityAsc(UUID mobileUnitId);

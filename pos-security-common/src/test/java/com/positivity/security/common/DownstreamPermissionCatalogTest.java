@@ -11,8 +11,7 @@ class DownstreamPermissionCatalogTest {
     @Test
     void authorityForBit_knownIndex_returnsExpectedString() {
         // Bit 27 = crm:party:view
-        assertThat(DownstreamPermissionCatalog.authorityForBit(27))
-                .isEqualTo("PERM_crm:party:view");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(27)).isEqualTo("PERM_crm:party:view");
     }
 
     @Test
@@ -33,13 +32,13 @@ class DownstreamPermissionCatalogTest {
 
         List<String> result = DownstreamPermissionCatalog.authoritiesFromBitSet(bits);
 
-        assertThat(result)
-                .containsExactly("PERM_crm:party:view", "PERM_crm:party:search");
+        assertThat(result).containsExactly("PERM_crm:party:view", "PERM_crm:party:search");
     }
 
     @Test
     void authoritiesFromBitSet_emptyBitSet_returnsEmptyList() {
-        assertThat(DownstreamPermissionCatalog.authoritiesFromBitSet(new BitSet())).isEmpty();
+        assertThat(DownstreamPermissionCatalog.authoritiesFromBitSet(new BitSet()))
+                .isEmpty();
     }
 
     @Test
@@ -57,6 +56,7 @@ class DownstreamPermissionCatalogTest {
 
     @Test
     void authorityForBit_exactBoundaryIndex_returnsNull() {
-        assertThat(DownstreamPermissionCatalog.authorityForBit(DownstreamPermissionCatalog.AUTHORITY_BY_BIT.length)).isNull();
+        assertThat(DownstreamPermissionCatalog.authorityForBit(DownstreamPermissionCatalog.AUTHORITY_BY_BIT.length))
+                .isNull();
     }
 }

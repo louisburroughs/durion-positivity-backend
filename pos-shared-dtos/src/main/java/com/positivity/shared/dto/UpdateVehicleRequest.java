@@ -21,10 +21,7 @@ import lombok.NoArgsConstructor;
 public class UpdateVehicleRequest {
 
     @Size(max = 255)
-    @Schema(
-            description = "Fleet/unit number.",
-            example = "UNIT-2048",
-            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(description = "Fleet/unit number.", example = "UNIT-2048", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String unitNumber;
 
     @Size(max = 4000)
@@ -55,10 +52,7 @@ public class UpdateVehicleRequest {
     private String make;
 
     @Size(max = 255)
-    @Schema(
-            description = "Vehicle model.",
-            example = "Silverado 1500",
-            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(description = "Vehicle model.", example = "Silverado 1500", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String model;
 
     @Size(max = 255)

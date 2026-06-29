@@ -23,7 +23,10 @@ public class LocationPriceOverrideDecisionRequestDto {
             requiredMode = REQUIRED)
     private UUID actorUserId;
 
-    @Schema(description = "Reason code when rejecting the override", example = "BELOW_MARGIN", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Reason code when rejecting the override",
+            example = "BELOW_MARGIN",
+            requiredMode = NOT_REQUIRED)
     private String rejectionReasonCode;
 
     @Schema(

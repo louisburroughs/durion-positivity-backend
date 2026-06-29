@@ -313,9 +313,6 @@ class RoleAuthorityServiceTest {
 
         assertThat(authorities)
                 .contains("ROLE_SERVICE_ADVISOR")
-                .contains(
-                        "pricing:promotion:view",
-                        "workorder:timeEntry:approve",
-                        "workorder:timeEntry:reject");
+                .contains("pricing:promotion:view", "workorder:timeEntry:approve", "workorder:timeEntry:reject");
     }
 }

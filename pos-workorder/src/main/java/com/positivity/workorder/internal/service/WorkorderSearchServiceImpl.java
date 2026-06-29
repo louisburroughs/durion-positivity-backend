@@ -1,10 +1,12 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.workorder.internal.dto.WorkorderNumberRef;
 import com.positivity.workorder.internal.dto.WorkorderSearchResult;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.WorkorderSearchService;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -79,6 +81,17 @@ public class WorkorderSearchServiceImpl implements WorkorderSearchService {
                     .createdAt(workorder.getCreatedAt())
                     .build();
         });
+    }
+
+    @Override
+    public @NonNull List<WorkorderNumberRef> resolveNumbers(@NonNull Collection<UUID> workorderIds) {
+        List<UUID> ids = workorderIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return workorderRepository.findAllById(ids).stream()
+                .map(w -> new WorkorderNumberRef(w.getId(), w.getWorkorderNumber()))
+                .toList();
     }
 
     private static @Nullable UUID parseUuidOrNull(@NonNull String value) {

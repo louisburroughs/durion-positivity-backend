@@ -40,10 +40,7 @@ public class CreateAsnRequest {
     @NotEmpty
     private List<UUID> relatedPoIds;
 
-    @Schema(
-            description = "Date the shipment left the vendor",
-            example = "2026-01-15",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Date the shipment left the vendor", example = "2026-01-15", requiredMode = NOT_REQUIRED)
     private LocalDate shipDate;
 
     @Schema(
@@ -52,9 +49,7 @@ public class CreateAsnRequest {
             requiredMode = NOT_REQUIRED)
     private LocalDate expectedArrivalDate;
 
-    @Schema(
-            description = "Line items detailing the SKUs and quantities included in this ASN",
-            requiredMode = REQUIRED)
+    @Schema(description = "Line items detailing the SKUs and quantities included in this ASN", requiredMode = REQUIRED)
     @NotNull
     private List<@Valid CreateAsnLineRequest> lineItems;
 }

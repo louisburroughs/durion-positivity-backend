@@ -22,10 +22,10 @@ VALUES ('7b1f81a7-34fa-f0f9-7caf-a55541d36a60'::uuid, 'GLOBAL', NULL, 10, NOW(),
 ON CONFLICT (timekeeping_policy_id) DO NOTHING;
 
 -- person (System Administrator) — admin.alpha's person record (identity only).
-INSERT INTO person (id, first_name, last_name, legal_name, created_at, updated_at)
+INSERT INTO person (id, first_name, last_name, created_at, updated_at)
 VALUES (
     '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid,
-    'System', 'Administrator', 'System Administrator',
+    'System', 'Administrator',
     NOW(), NOW()
 )
 ON CONFLICT (id) DO NOTHING;

@@ -52,7 +52,10 @@ public class InvoiceDetailsResponse {
     @Schema(description = "Current lifecycle status of the invoice", example = "FINALIZED", requiredMode = NOT_REQUIRED)
     private InvoiceStatus status;
 
-    @Schema(description = "Sum of line items before tax and adjustments", example = "200.00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Sum of line items before tax and adjustments",
+            example = "200.00",
+            requiredMode = NOT_REQUIRED)
     private BigDecimal subtotal;
 
     @Schema(description = "Total tax applied to the invoice", example = "16.00", requiredMode = NOT_REQUIRED)
@@ -82,7 +85,10 @@ public class InvoiceDetailsResponse {
             requiredMode = NOT_REQUIRED)
     private Instant finalizedAt;
 
-    @Schema(description = "Identifier of the actor who finalized the invoice", example = "jdoe", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the actor who finalized the invoice",
+            example = "jdoe",
+            requiredMode = NOT_REQUIRED)
     private String finalizedBy;
 
     @Schema(
@@ -97,7 +103,10 @@ public class InvoiceDetailsResponse {
             requiredMode = NOT_REQUIRED)
     private String reversionReason;
 
-    @Schema(description = "Identifier of the actor who reverted the invoice", example = "msmith", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the actor who reverted the invoice",
+            example = "msmith",
+            requiredMode = NOT_REQUIRED)
     private String revertedBy;
 
     @Valid

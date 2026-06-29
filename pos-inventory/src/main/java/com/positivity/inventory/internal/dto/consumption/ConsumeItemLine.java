@@ -10,7 +10,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Schema(description = "A single line in a consumption request, identifying a SKU and quantity to consume against a pick task")
+@Schema(
+        description =
+                "A single line in a consumption request, identifying a SKU and quantity to consume against a pick task")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -30,10 +32,7 @@ public class ConsumeItemLine {
     @NotNull
     private UUID skuId;
 
-    @Schema(
-            description = "Quantity of the SKU to consume",
-            example = "4",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity of the SKU to consume", example = "4", requiredMode = REQUIRED)
     @Positive
     private int quantity;
 }

@@ -16,7 +16,10 @@ import lombok.Data;
 @Schema(description = "Catalog product")
 public class ProductDto {
 
-    @Schema(description = "Product identifier", example = "0196cf6f-c8dd-7ee0-93e7-f48a5698a535", requiredMode = REQUIRED)
+    @Schema(
+            description = "Product identifier",
+            example = "0196cf6f-c8dd-7ee0-93e7-f48a5698a535",
+            requiredMode = REQUIRED)
     private UUID id;
 
     @Schema(description = "Product name", example = "Heavy Duty Wrench", requiredMode = REQUIRED)

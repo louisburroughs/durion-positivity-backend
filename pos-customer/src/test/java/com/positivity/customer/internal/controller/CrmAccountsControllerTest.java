@@ -142,8 +142,7 @@ class CrmAccountsControllerTest {
                 .pageSize(20)
                 .build();
 
-        when(partyService.browseParties(
-                        any(Pageable.class), any(), any(), any(), any(), any(), any()))
+        when(partyService.browseParties(any(Pageable.class), any(), any(), any(), any(), any(), any()))
                 .thenReturn(response);
 
         mockMvc.perform(get("/v1/crm/accounts/parties").header("X-Authorities", "crm:party:view"))
@@ -161,8 +160,7 @@ class CrmAccountsControllerTest {
                 .andExpect(jsonPath("$.pageSize").value(20));
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(partyService).browseParties(
-                pageableCaptor.capture(), any(), any(), any(), any(), any(), any());
+        verify(partyService).browseParties(pageableCaptor.capture(), any(), any(), any(), any(), any(), any());
         assertEquals(0, pageableCaptor.getValue().getPageNumber());
         assertEquals(20, pageableCaptor.getValue().getPageSize());
         assertTrue(pageableCaptor.getValue().getSort().isSorted());
@@ -184,8 +182,7 @@ class CrmAccountsControllerTest {
                 .pageNumber(0)
                 .pageSize(20)
                 .build();
-        when(partyService.browseParties(
-                        any(Pageable.class), any(), any(), any(), any(), any(), any()))
+        when(partyService.browseParties(any(Pageable.class), any(), any(), any(), any(), any(), any()))
                 .thenReturn(response);
 
         mockMvc.perform(get("/v1/crm/accounts/parties")
@@ -198,14 +195,15 @@ class CrmAccountsControllerTest {
                         .header("X-Authorities", "crm:party:view"))
                 .andExpect(status().isOk());
 
-        verify(partyService).browseParties(
-                any(Pageable.class),
-                eq("acme"),
-                eq("ACTIVE"),
-                eq("ORGANIZATION"),
-                eq("CUST-1"),
-                eq("customerNumber"),
-                eq("desc"));
+        verify(partyService)
+                .browseParties(
+                        any(Pageable.class),
+                        eq("acme"),
+                        eq("ACTIVE"),
+                        eq("ORGANIZATION"),
+                        eq("CUST-1"),
+                        eq("customerNumber"),
+                        eq("desc"));
     }
 
     @Test

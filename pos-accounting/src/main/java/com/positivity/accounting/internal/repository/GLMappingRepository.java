@@ -7,14 +7,12 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for GL Mapping entity.
  * Supports temporal effective-dated queries, dimension lookups, and overlap
  * detection.
  */
-@Repository
 public interface GLMappingRepository extends JpaRepository<GLMapping, UUID> {
 
     /**

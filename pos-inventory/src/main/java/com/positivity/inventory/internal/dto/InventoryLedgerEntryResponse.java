@@ -40,10 +40,7 @@ public class InventoryLedgerEntryResponse {
             requiredMode = NOT_REQUIRED)
     UUID adjustmentId;
 
-    @Schema(
-            description = "Type of inventory ledger event recorded",
-            example = "GOODS_RECEIPT",
-            requiredMode = REQUIRED)
+    @Schema(description = "Type of inventory ledger event recorded", example = "GOODS_RECEIPT", requiredMode = REQUIRED)
     @NotNull
     InventoryLedgerEventType eventType;
 
@@ -54,10 +51,7 @@ public class InventoryLedgerEntryResponse {
     @NotNull
     Integer changeInQuantity;
 
-    @Schema(
-            description = "Running quantity after this entry was applied",
-            example = "120",
-            requiredMode = REQUIRED)
+    @Schema(description = "Running quantity after this entry was applied", example = "120", requiredMode = REQUIRED)
     @NotNull
     Integer quantityAfter;
 
@@ -98,10 +92,7 @@ public class InventoryLedgerEntryResponse {
             requiredMode = NOT_REQUIRED)
     UUID toLocationId;
 
-    @Schema(
-            description = "Reason code explaining the entry",
-            example = "CYCLE_COUNT",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Reason code explaining the entry", example = "CYCLE_COUNT", requiredMode = NOT_REQUIRED)
     String reasonCode;
 
     @Schema(

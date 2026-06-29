@@ -29,7 +29,9 @@ public class PostingResult {
     boolean success;
 
     /** Generated journal entry draft (present when success=true) */
-    @Schema(description = "Generated journal entry draft, present when evaluation succeeded", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Generated journal entry draft, present when evaluation succeeded",
+            requiredMode = NOT_REQUIRED)
     @Nullable
     JournalEntry journalEntryDraft;
 

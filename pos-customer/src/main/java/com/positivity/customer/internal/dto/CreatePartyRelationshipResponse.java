@@ -61,10 +61,7 @@ public class CreatePartyRelationshipResponse {
     private boolean isPrimaryBillingContact;
 
     @NotNull
-    @Schema(
-            description = "Effective start date",
-            example = "2026-01-01",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Effective start date", example = "2026-01-01", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate effectiveStartDate;
 
     @Schema(

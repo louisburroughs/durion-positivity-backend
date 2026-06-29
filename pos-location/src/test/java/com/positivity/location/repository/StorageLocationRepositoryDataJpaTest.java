@@ -140,8 +140,10 @@ class StorageLocationRepositoryDataJpaTest {
         Location site = persistSite("SITE-G");
         persistStorage(site, "Main Floor", StorageLocationType.FLOOR, null);
 
-        assertThat(repository.existsByNameIgnoreCaseAndSiteId("main floor", site.getId())).isTrue();
-        assertThat(repository.existsByNameIgnoreCaseAndSiteId("main floor", UUID.randomUUID())).isFalse();
+        assertThat(repository.existsByNameIgnoreCaseAndSiteId("main floor", site.getId()))
+                .isTrue();
+        assertThat(repository.existsByNameIgnoreCaseAndSiteId("main floor", UUID.randomUUID()))
+                .isFalse();
     }
 
     @Test
@@ -152,10 +154,12 @@ class StorageLocationRepositoryDataJpaTest {
         repository.save(inactive);
         persistStorage(site, "Active Bin", StorageLocationType.BIN, null);
 
-        Page<StorageLocationEntity> active = repository.findBySiteIdAndStatus(
-                site.getId(), StorageLocationStatus.ACTIVE, PageRequest.of(0, 20));
+        Page<StorageLocationEntity> active =
+                repository.findBySiteIdAndStatus(site.getId(), StorageLocationStatus.ACTIVE, PageRequest.of(0, 20));
 
-        assertThat(active.getContent()).extracting(StorageLocationEntity::getName).containsExactly("Active Bin");
+        assertThat(active.getContent())
+                .extracting(StorageLocationEntity::getName)
+                .containsExactly("Active Bin");
     }
 
     @Test
@@ -167,7 +171,9 @@ class StorageLocationRepositoryDataJpaTest {
         Page<StorageLocationEntity> shelves =
                 repository.findBySiteIdAndType(site.getId(), StorageLocationType.SHELF, PageRequest.of(0, 20));
 
-        assertThat(shelves.getContent()).extracting(StorageLocationEntity::getName).containsExactly("Shelf I");
+        assertThat(shelves.getContent())
+                .extracting(StorageLocationEntity::getName)
+                .containsExactly("Shelf I");
     }
 
     @Test
@@ -186,8 +192,10 @@ class StorageLocationRepositoryDataJpaTest {
         repository.save(bin);
         em.flush();
 
-        assertThat(repository.existsByBarcodeAndSiteId("BC-J-001", site.getId())).isTrue();
-        assertThat(repository.existsByBarcodeAndSiteId("BC-J-001", UUID.randomUUID())).isFalse();
+        assertThat(repository.existsByBarcodeAndSiteId("BC-J-001", site.getId()))
+                .isTrue();
+        assertThat(repository.existsByBarcodeAndSiteId("BC-J-001", UUID.randomUUID()))
+                .isFalse();
     }
 
     @Test

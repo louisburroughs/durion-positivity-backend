@@ -91,7 +91,8 @@ Person records are the underlying identity layer beneath employee records. They 
 
 For large-scale onboarding (e.g. system migrations or importing from an HRIS), employees can be created in bulk via a single request. Each record in the batch requires:
 
-- `legalName`
+- `firstName`
+- `lastName`
 - `employeeNumber`
 - `hireDate` (format: `YYYY-MM-DD`)
 - `preferredName` (optional)

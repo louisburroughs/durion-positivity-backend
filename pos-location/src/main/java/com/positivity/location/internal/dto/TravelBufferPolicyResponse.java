@@ -32,7 +32,10 @@ public class TravelBufferPolicyResponse {
     @NotNull
     private UUID id;
 
-    @Schema(description = "Display name of the travel buffer policy", example = "Standard Metro Buffer", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Display name of the travel buffer policy",
+            example = "Standard Metro Buffer",
+            requiredMode = NOT_REQUIRED)
     private String name;
 
     @Schema(description = "Type of buffer the policy applies", example = "FIXED_MINUTES", requiredMode = NOT_REQUIRED)
@@ -44,7 +47,10 @@ public class TravelBufferPolicyResponse {
             requiredMode = NOT_REQUIRED)
     private BigDecimal bufferValue;
 
-    @Schema(description = "Free-text notes about the policy", example = "Applies during peak hours only", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Free-text notes about the policy",
+            example = "Applies during peak hours only",
+            requiredMode = NOT_REQUIRED)
     private String notes;
 
     @Schema(

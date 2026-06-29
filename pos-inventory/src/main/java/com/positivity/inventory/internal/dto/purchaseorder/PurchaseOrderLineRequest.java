@@ -41,10 +41,7 @@ public class PurchaseOrderLineRequest {
     @NotBlank
     private String description;
 
-    @Schema(
-            description = "Quantity of the item being ordered on this line",
-            example = "12",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity of the item being ordered on this line", example = "12", requiredMode = REQUIRED)
     @NotNull
     @Positive
     private BigDecimal quantity;

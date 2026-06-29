@@ -134,6 +134,7 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
                 .workorderId(workorder.getId())
                 .estimateId(workorder.getEstimateId())
                 .approvalId(workorder.getApprovalId())
+                .locationId(workorder.getLocationId())
                 .idempotencyKey(idempotencyKey)
                 .lineItems(buildLineItems(workorder.getId()))
                 .build();

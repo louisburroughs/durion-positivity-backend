@@ -628,8 +628,8 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
      * view lists every employee's entries; approve/reject are manager decisions.
      */
     private Set<String> timekeepingApprovalAuthorities() {
-        return new HashSet<>(List.of(
-                "people:timekeeping:view", "people:timekeeping:approve", "people:timekeeping:reject"));
+        return new HashSet<>(
+                List.of("people:timekeeping:view", "people:timekeeping:approve", "people:timekeeping:reject"));
     }
 
     private Set<String> shopAuthorities() {

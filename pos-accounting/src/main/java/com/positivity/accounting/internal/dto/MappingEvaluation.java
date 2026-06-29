@@ -43,21 +43,28 @@ public class MappingEvaluation {
     /**
      * The mapping key that was successfully matched.
      */
-    @Schema(description = "The mapping key that was successfully matched", example = "INVENTORY:SKU-1234", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "The mapping key that was successfully matched",
+            example = "INVENTORY:SKU-1234",
+            requiredMode = NOT_REQUIRED)
     private String mappingKey;
 
     /**
      * List of all keys that were evaluated during the search.
      * Useful for debugging and audit trails.
      */
-    @Schema(description = "All keys evaluated during the search (for debugging and audit trails)", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "All keys evaluated during the search (for debugging and audit trails)",
+            requiredMode = NOT_REQUIRED)
     private List<String> keysEvaluated = new ArrayList<>();
 
     /**
      * Resolved journal entry line definitions from mapping evaluation.
      * Each line specifies a resolved GL account and its debit/credit amount.
      */
-    @Schema(description = "Resolved journal entry line definitions from mapping evaluation", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Resolved journal entry line definitions from mapping evaluation",
+            requiredMode = NOT_REQUIRED)
     private List<ResolvedLine> resolvedLines = new ArrayList<>();
 
     /**

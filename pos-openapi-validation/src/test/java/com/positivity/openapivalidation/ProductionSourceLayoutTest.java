@@ -1,10 +1,9 @@
 package com.positivity.openapivalidation;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 class ProductionSourceLayoutTest {
 
@@ -36,7 +35,8 @@ class ProductionSourceLayoutTest {
 
     @Test
     void openApiRepositoryValidationResult_isCompiledIntoMainSources() {
-        assertThat(classFile("com/positivity/openapivalidation/internal/validator/OpenApiRepositoryValidationResult.class"))
+        assertThat(classFile(
+                        "com/positivity/openapivalidation/internal/validator/OpenApiRepositoryValidationResult.class"))
                 .exists();
     }
 

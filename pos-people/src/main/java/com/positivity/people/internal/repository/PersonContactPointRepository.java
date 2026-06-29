@@ -8,14 +8,12 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Repository for {@link PersonContactPoint}. Supports batch loading by person id
  * for the people directory and cross-service identity reads.
  */
-@Repository
 public interface PersonContactPointRepository extends JpaRepository<PersonContactPoint, UUID> {
 
     List<PersonContactPoint> findByPersonId(@NonNull UUID personId);

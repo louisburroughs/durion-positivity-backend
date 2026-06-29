@@ -20,7 +20,10 @@ public class ScheduleViewResponse {
             requiredMode = REQUIRED)
     private UUID locationId;
 
-    @Schema(description = "Calendar date of the schedule view (ISO-8601)", example = "2026-06-18", requiredMode = REQUIRED)
+    @Schema(
+            description = "Calendar date of the schedule view (ISO-8601)",
+            example = "2026-06-18",
+            requiredMode = REQUIRED)
     private LocalDate date;
 
     @Schema(
@@ -86,7 +89,10 @@ public class ScheduleViewResponse {
                 requiredMode = REQUIRED)
         private String eventId;
 
-        @Schema(description = "Event type (e.g. APPOINTMENT, SHIFT, PTO)", example = "APPOINTMENT", requiredMode = REQUIRED)
+        @Schema(
+                description = "Event type (e.g. APPOINTMENT, SHIFT, PTO)",
+                example = "APPOINTMENT",
+                requiredMode = REQUIRED)
         private String eventType;
 
         @Schema(description = "Event sub-type, when applicable", example = "DIAGNOSTIC", requiredMode = NOT_REQUIRED)
@@ -107,7 +113,10 @@ public class ScheduleViewResponse {
         @Schema(description = "Event display title", example = "Oil change - Jane Doe", requiredMode = NOT_REQUIRED)
         private String title;
 
-        @Schema(description = "Whether this event has a scheduling conflict", example = "false", requiredMode = REQUIRED)
+        @Schema(
+                description = "Whether this event has a scheduling conflict",
+                example = "false",
+                requiredMode = REQUIRED)
         private boolean hasConflict;
 
         @Schema(

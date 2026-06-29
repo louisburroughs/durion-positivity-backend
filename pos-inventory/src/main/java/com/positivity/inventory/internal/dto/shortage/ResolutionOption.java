@@ -31,10 +31,7 @@ public class ResolutionOption {
             requiredMode = NOT_REQUIRED)
     private BigDecimal unitCost;
 
-    @Schema(
-            description = "Estimated lead time in days to obtain the part",
-            example = "5",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Estimated lead time in days to obtain the part", example = "5", requiredMode = NOT_REQUIRED)
     private Integer estimatedLeadTimeDays;
 
     @Schema(
@@ -43,15 +40,9 @@ public class ResolutionOption {
             requiredMode = NOT_REQUIRED)
     private String source;
 
-    @Schema(
-            description = "Confidence level in the resolution option",
-            example = "HIGH",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Confidence level in the resolution option", example = "HIGH", requiredMode = NOT_REQUIRED)
     private String confidence;
 
-    @Schema(
-            description = "Quality tier of the suggested substitute",
-            example = "OEM",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Quality tier of the suggested substitute", example = "OEM", requiredMode = NOT_REQUIRED)
     private String qualityTier;
 }

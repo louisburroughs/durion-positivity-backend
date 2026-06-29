@@ -41,7 +41,10 @@ public class WorkexecLaborPerformedResponse {
     private UUID technicianId;
 
     @JsonProperty("performedAt")
-    @Schema(description = "Timestamp when labor was performed", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Timestamp when labor was performed",
+            example = "2026-01-15T09:30:00Z",
+            requiredMode = REQUIRED)
     private Instant performedAt;
 
     @JsonProperty("quantity")

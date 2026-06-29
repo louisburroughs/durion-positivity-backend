@@ -102,9 +102,6 @@ public class WorkorderDetailResponse {
             requiredMode = NOT_REQUIRED)
     private UUID assignedTechnicianId;
 
-    @Schema(description = "Assigned technician name", example = "Jane Smith", requiredMode = NOT_REQUIRED)
-    private String assignedTechnicianName;
-
     // Line items
     @Schema(description = "Service line items with labor totals", requiredMode = NOT_REQUIRED)
     @Builder.Default

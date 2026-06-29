@@ -25,10 +25,16 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Partial update payload for a storage location; null fields are left unchanged")
 public class StorageLocationPatchRequest {
 
-    @Schema(description = "Display name of the storage location", example = "Aisle 3 Bin 12", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Display name of the storage location",
+            example = "Aisle 3 Bin 12",
+            requiredMode = NOT_REQUIRED)
     private String name;
 
-    @Schema(description = "Barcode identifying the storage location", example = "SL-000312", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Barcode identifying the storage location",
+            example = "SL-000312",
+            requiredMode = NOT_REQUIRED)
     private String barcode;
 
     @Schema(description = "Operational status of the storage location", example = "ACTIVE", requiredMode = NOT_REQUIRED)

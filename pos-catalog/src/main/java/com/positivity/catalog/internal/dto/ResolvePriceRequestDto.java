@@ -32,7 +32,10 @@ public class ResolvePriceRequestDto {
             requiredMode = NOT_REQUIRED)
     private UUID locationId;
 
-    @Schema(description = "Customer tier used to scope price book selection", example = "GOLD", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Customer tier used to scope price book selection",
+            example = "GOLD",
+            requiredMode = NOT_REQUIRED)
     private String customerTier;
 
     @Schema(description = "ISO currency code for the resolved price", example = "USD", requiredMode = NOT_REQUIRED)

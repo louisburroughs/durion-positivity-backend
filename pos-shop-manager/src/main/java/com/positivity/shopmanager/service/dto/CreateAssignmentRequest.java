@@ -30,9 +30,7 @@ public class CreateAssignmentRequest {
     UUID appointmentId;
 
     /** At least one entry with role LEAD is required (AC-4). */
-    @Schema(
-            description = "Mechanics to assign; at least one entry with role LEAD is required",
-            requiredMode = REQUIRED)
+    @Schema(description = "Mechanics to assign; at least one entry with role LEAD is required", requiredMode = REQUIRED)
     @NonNull
     @NotNull
     @NotEmpty

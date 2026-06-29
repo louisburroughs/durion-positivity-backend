@@ -4,9 +4,7 @@ import com.positivity.workorder.internal.entity.WorkorderPart;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
-@Repository
 public interface WorkorderPartRepository extends JpaRepository<WorkorderPart, UUID> {
     List<WorkorderPart> findByChangeRequest_Id(UUID changeRequestId);
 

@@ -65,8 +65,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                 buildServiceResponses(workorder.getServices(), capabilities.isCanViewFinancials());
 
         // Build part line items
-        List<WorkorderPartResponse> partResponses =
-                buildPartResponses(workorder, capabilities.isCanViewFinancials());
+        List<WorkorderPartResponse> partResponses = buildPartResponses(workorder, capabilities.isCanViewFinancials());
 
         // Calculate derived status fields
         boolean isStarted = isWorkorderStarted(workorder.getStatus());
@@ -93,9 +92,9 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                 .isInProgress(isInProgress)
                 .isCompleted(isCompleted)
                 .startedAt(null) // Will be populated from state transitions if available
+                // The technician's display name lives in the People domain; the workorder only
+                // stores the id. Callers resolve the name by id rather than denormalizing it here.
                 .assignedTechnicianId(currentAssignment != null ? currentAssignment.getTechnicianId() : null)
-                .assignedTechnicianName(
-                        currentAssignment != null ? "Technician-" + currentAssignment.getTechnicianId() : null)
                 .services(serviceResponses)
                 .parts(partResponses)
                 .capabilities(capabilities);
@@ -200,9 +199,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                     ? part.getQuantity().multiply(part.getUnitPrice())
                     : BigDecimal.ZERO;
 
-            builder.unitPrice(part.getUnitPrice())
-                    .partCost(partCost)
-                    .lineTotal(part.getLineTotal());
+            builder.unitPrice(part.getUnitPrice()).partCost(partCost).lineTotal(part.getLineTotal());
         }
 
         return builder.build();

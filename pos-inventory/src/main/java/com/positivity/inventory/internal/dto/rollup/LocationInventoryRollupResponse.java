@@ -22,9 +22,7 @@ public record LocationInventoryRollupResponse(
                 requiredMode = Schema.RequiredMode.REQUIRED)
         String parentType,
 
-        @Schema(
-                description = "Grand total across all descendant sites",
-                requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Grand total across all descendant sites", requiredMode = Schema.RequiredMode.REQUIRED)
         RollupQuantities totals,
 
         @Schema(

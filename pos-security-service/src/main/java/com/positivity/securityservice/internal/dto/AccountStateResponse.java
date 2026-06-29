@@ -14,10 +14,7 @@ import org.jspecify.annotations.Nullable;
 @Builder
 @Schema(description = "Lifecycle and lock state of a user account")
 public class AccountStateResponse {
-    @Schema(
-            description = "User identifier",
-            example = "01960003-0000-7000-8000-000000000001",
-            requiredMode = REQUIRED)
+    @Schema(description = "User identifier", example = "01960003-0000-7000-8000-000000000001", requiredMode = REQUIRED)
     UUID userId;
 
     @Schema(description = "True when the account is enabled", example = "true", requiredMode = REQUIRED)
@@ -36,15 +33,24 @@ public class AccountStateResponse {
     int failedLoginAttempts;
 
     @Nullable
-    @Schema(description = "Timestamp at which the account was locked", example = "2026-06-01T12:00:00Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp at which the account was locked",
+            example = "2026-06-01T12:00:00Z",
+            requiredMode = NOT_REQUIRED)
     Instant lockedAt;
 
     @Nullable
-    @Schema(description = "Timestamp until which the account remains locked", example = "2026-06-01T12:30:00Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp until which the account remains locked",
+            example = "2026-06-01T12:30:00Z",
+            requiredMode = NOT_REQUIRED)
     Instant lockedUntil;
 
     @Nullable
-    @Schema(description = "Timestamp at which the account was disabled", example = "2026-05-01T08:00:00Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp at which the account was disabled",
+            example = "2026-05-01T08:00:00Z",
+            requiredMode = NOT_REQUIRED)
     Instant disabledAt;
 
     @Nullable
@@ -52,10 +58,16 @@ public class AccountStateResponse {
     String disabledBy;
 
     @Nullable
-    @Schema(description = "Timestamp at which the account expires", example = "2027-01-01T00:00:00Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp at which the account expires",
+            example = "2027-01-01T00:00:00Z",
+            requiredMode = NOT_REQUIRED)
     Instant accountExpiresAt;
 
     @Nullable
-    @Schema(description = "Timestamp at which the credentials expire", example = "2026-12-01T00:00:00Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp at which the credentials expire",
+            example = "2026-12-01T00:00:00Z",
+            requiredMode = NOT_REQUIRED)
     Instant credentialsExpireAt;
 }

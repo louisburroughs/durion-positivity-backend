@@ -15,19 +15,30 @@ import lombok.Data;
 @Data
 public class BulkIngestRequest<T> {
 
-    @Schema(description = "Identifier of the bulk ingest job", example = "01960003-0000-7000-8000-000000000001", requiredMode = REQUIRED)
+    @Schema(
+            description = "Identifier of the bulk ingest job",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = REQUIRED)
     @NotNull
     private UUID jobId;
 
-    @Schema(description = "Location the records are ingested for", example = "01960003-0000-7000-8000-000000000002", requiredMode = REQUIRED)
+    @Schema(
+            description = "Location the records are ingested for",
+            example = "01960003-0000-7000-8000-000000000002",
+            requiredMode = REQUIRED)
     @NotNull
     private UUID locationId;
 
-    @Schema(description = "The records to ingest (at least one); shape depends on the target domain", requiredMode = REQUIRED)
+    @Schema(
+            description = "The records to ingest (at least one); shape depends on the target domain",
+            requiredMode = REQUIRED)
     @Valid
     @NotEmpty
     private List<T> records;
 
-    @Schema(description = "Identifier of the operator submitting the batch", example = "user-jdoe", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the operator submitting the batch",
+            example = "user-jdoe",
+            requiredMode = NOT_REQUIRED)
     private String operatorId;
 }

@@ -28,7 +28,10 @@ public class BillingRuleRef {
     private boolean poRequired;
 
     /** Whether the customer is tax-exempt. */
-    @Schema(description = "Whether the customer is tax-exempt", example = "false", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Whether the customer is tax-exempt",
+            example = "false",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private boolean taxExempt;
 
     /** Payment terms string, e.g. "Net 30", "Due on Receipt". */

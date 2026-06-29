@@ -7,12 +7,10 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for PersonParty entities (CAP:091 Story #104).
  */
-@Repository
 public interface PersonPartyRepository extends JpaRepository<PersonParty, UUID> {
     Optional<PersonParty> findByPersonId(@NonNull UUID personId);
 

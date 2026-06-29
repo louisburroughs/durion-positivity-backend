@@ -23,13 +23,19 @@ public class PermissionDto {
             requiredMode = REQUIRED)
     UUID id;
 
-    @Schema(description = "Permission name in format domain:resource:action", example = "people:timekeeping:view", requiredMode = REQUIRED)
+    @Schema(
+            description = "Permission name in format domain:resource:action",
+            example = "people:timekeeping:view",
+            requiredMode = REQUIRED)
     String name;
 
     @Schema(description = "Domain that owns the permission", example = "people", requiredMode = REQUIRED)
     String domain;
 
-    @Schema(description = "Human-readable description of the permission", example = "View timekeeping records", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Human-readable description of the permission",
+            example = "View timekeeping records",
+            requiredMode = NOT_REQUIRED)
     String description;
 
     @Schema(description = "True when the permission is deprecated", example = "false", requiredMode = REQUIRED)

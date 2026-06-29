@@ -5,7 +5,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for managing communication preferences.
@@ -19,7 +18,6 @@ import org.springframework.stereotype.Repository;
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/107">Backend
  *      Issue #107</a>
  */
-@Repository
 public interface CommunicationPreferenceRepository extends JpaRepository<CommunicationPreference, UUID> {
 
     /**

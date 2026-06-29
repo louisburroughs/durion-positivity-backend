@@ -14,10 +14,7 @@ import org.jspecify.annotations.Nullable;
 @Builder
 @Schema(description = "User account view returned by user-management endpoints")
 public class UserDto {
-    @Schema(
-            description = "User identifier",
-            example = "01960003-0000-7000-8000-000000000001",
-            requiredMode = REQUIRED)
+    @Schema(description = "User identifier", example = "01960003-0000-7000-8000-000000000001", requiredMode = REQUIRED)
     UUID id;
 
     @Schema(description = "Login username", example = "jane.doe", requiredMode = REQUIRED)

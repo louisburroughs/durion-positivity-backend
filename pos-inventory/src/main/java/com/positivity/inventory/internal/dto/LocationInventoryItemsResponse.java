@@ -31,11 +31,15 @@ public class LocationInventoryItemsResponse {
     @Schema(name = "LocationInventoryItem", description = "A single on-hand stock item line")
     public static class Item {
 
-        @Schema(description = "Stock item identifier (product SKU)", example = "MICH-XC2-0001",
+        @Schema(
+                description = "Stock item identifier (product SKU)",
+                example = "MICH-XC2-0001",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         private String stockItemId;
 
-        @Schema(description = "On-hand quantity of this stock item at the location", example = "24",
+        @Schema(
+                description = "On-hand quantity of this stock item at the location",
+                example = "24",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         private long onHandQuantity;
     }

@@ -15,7 +15,9 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Request to create a replenishment policy defining min/max stock thresholds for an item at a location")
+@Schema(
+        description =
+                "Request to create a replenishment policy defining min/max stock thresholds for an item at a location")
 public class CreateReplenishmentPolicyRequest {
 
     @Schema(

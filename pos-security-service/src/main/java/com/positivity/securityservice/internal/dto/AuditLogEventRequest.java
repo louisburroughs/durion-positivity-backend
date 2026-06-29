@@ -34,7 +34,10 @@ public class AuditLogEventRequest {
             requiredMode = NOT_REQUIRED)
     private String actorId;
 
-    @Schema(description = "Identifier of the affected entity", example = "01960003-0000-7000-8000-000000000001", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Identifier of the affected entity",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = NOT_REQUIRED)
     private String entityId;
 
     @Schema(description = "Type of the affected entity", example = "USER", requiredMode = NOT_REQUIRED)

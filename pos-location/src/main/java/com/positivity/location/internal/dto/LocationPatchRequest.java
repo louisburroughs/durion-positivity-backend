@@ -23,13 +23,19 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Partial update payload for a location; null fields are left unchanged")
 public class LocationPatchRequest {
 
-    @Schema(description = "Display name of the location", example = "Downtown Service Center", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Display name of the location",
+            example = "Downtown Service Center",
+            requiredMode = NOT_REQUIRED)
     private String name;
 
     @Schema(description = "Operational status of the location", example = "ACTIVE", requiredMode = NOT_REQUIRED)
     private String status;
 
-    @Schema(description = "IANA timezone identifier for the location", example = "America/Chicago", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "IANA timezone identifier for the location",
+            example = "America/Chicago",
+            requiredMode = NOT_REQUIRED)
     private String timezone;
 
     @Schema(description = "Weekly operating hours for the location", requiredMode = NOT_REQUIRED)

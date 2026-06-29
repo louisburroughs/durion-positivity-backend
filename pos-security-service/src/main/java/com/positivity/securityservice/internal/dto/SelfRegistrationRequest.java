@@ -11,23 +11,30 @@ import org.jspecify.annotations.Nullable;
 public record SelfRegistrationRequest(
         @NotBlank
         @Email
-        @Schema(description = "Primary email address", example = "jane.smith@example.com", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Primary email address",
+                example = "jane.smith@example.com",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         String email,
 
         @NotBlank
-        @Schema(description = "Password for the new account", example = "Sup3rS3cret!", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Password for the new account",
+                example = "Sup3rS3cret!",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         String password,
 
-        @NotBlank
-        @Schema(description = "Given name", example = "Jane", requiredMode = Schema.RequiredMode.REQUIRED)
+        @NotBlank @Schema(description = "Given name", example = "Jane", requiredMode = Schema.RequiredMode.REQUIRED)
         String firstName,
 
-        @NotBlank
-        @Schema(description = "Family name", example = "Smith", requiredMode = Schema.RequiredMode.REQUIRED)
+        @NotBlank @Schema(description = "Family name", example = "Smith", requiredMode = Schema.RequiredMode.REQUIRED)
         String lastName,
 
         @Nullable
-        @Schema(description = "Optional primary phone number", example = "+1-555-123-4567", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        @Schema(
+                description = "Optional primary phone number",
+                example = "+1-555-123-4567",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         String phone,
 
         @Nullable

@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for reschedule history records.
@@ -14,7 +13,6 @@ import org.springframework.stereotype.Repository;
  * CAP-249 Story #11: used to count reschedules per appointment and store
  * the immutable audit trail.
  */
-@Repository
 public interface RescheduleHistoryRepository extends JpaRepository<RescheduleHistory, UUID> {
 
     /**

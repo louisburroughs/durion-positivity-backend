@@ -11,14 +11,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for storage location persistence and lookup operations.
  *
  * Issue: CAP-214 #39
  */
-@Repository
 public interface StorageLocationRepository extends JpaRepository<StorageLocationEntity, UUID> {
 
     // NOTE: `site` and `parentStorageLocation` are @ManyToOne associations, not
@@ -31,8 +29,7 @@ public interface StorageLocationRepository extends JpaRepository<StorageLocation
             + "WHERE LOWER(s.name) = LOWER(:name) AND s.site.id = :siteId")
     boolean existsByNameIgnoreCaseAndSiteId(@Param("name") String name, @Param("siteId") UUID siteId);
 
-    @Query("SELECT COUNT(s) > 0 FROM StorageLocationEntity s "
-            + "WHERE s.barcode = :barcode AND s.site.id = :siteId")
+    @Query("SELECT COUNT(s) > 0 FROM StorageLocationEntity s " + "WHERE s.barcode = :barcode AND s.site.id = :siteId")
     boolean existsByBarcodeAndSiteId(@Param("barcode") String barcode, @Param("siteId") UUID siteId);
 
     @Query("SELECT COUNT(s) > 0 FROM StorageLocationEntity s "

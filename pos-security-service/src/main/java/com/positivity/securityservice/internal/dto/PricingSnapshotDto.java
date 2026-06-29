@@ -26,10 +26,16 @@ public class PricingSnapshotDto {
             requiredMode = REQUIRED)
     UUID snapshotId;
 
-    @Schema(description = "Timestamp the snapshot was captured", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
+    @Schema(
+            description = "Timestamp the snapshot was captured",
+            example = "2026-01-15T09:30:00Z",
+            requiredMode = REQUIRED)
     Instant timestamp;
 
-    @Schema(description = "Serialized quote context evaluated", example = "{\"customerId\":\"C-1\"}", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Serialized quote context evaluated",
+            example = "{\"customerId\":\"C-1\"}",
+            requiredMode = NOT_REQUIRED)
     String quoteContext;
 
     @Schema(description = "Final computed price", example = "129.99", requiredMode = REQUIRED)

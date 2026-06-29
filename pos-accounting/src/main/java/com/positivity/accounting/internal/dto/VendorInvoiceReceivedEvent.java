@@ -35,12 +35,18 @@ import org.jspecify.annotations.Nullable;
 public class VendorInvoiceReceivedEvent {
 
     @NotNull
-    @Schema(description = "Event UUID (idempotency key)", example = "01936e5d-5678-7a3d-8b6e-456789012345", requiredMode = REQUIRED)
+    @Schema(
+            description = "Event UUID (idempotency key)",
+            example = "01936e5d-5678-7a3d-8b6e-456789012345",
+            requiredMode = REQUIRED)
     @JsonProperty("eventId")
     private UUID eventId;
 
     @NotNull
-    @Schema(description = "Organization UUID", example = "00000000-0000-4000-a000-000000000010", requiredMode = REQUIRED)
+    @Schema(
+            description = "Organization UUID",
+            example = "00000000-0000-4000-a000-000000000010",
+            requiredMode = REQUIRED)
     @JsonProperty("organizationId")
     private UUID organizationId;
 
@@ -78,7 +84,10 @@ public class VendorInvoiceReceivedEvent {
     public static class InvoiceLineItem {
 
         @NotNull
-        @Schema(description = "Product/SKU UUID", example = "01936e59-abcd-7a3d-8b6e-3c4567890123", requiredMode = REQUIRED)
+        @Schema(
+                description = "Product/SKU UUID",
+                example = "01936e59-abcd-7a3d-8b6e-3c4567890123",
+                requiredMode = REQUIRED)
         @JsonProperty("productId")
         private UUID productId;
 

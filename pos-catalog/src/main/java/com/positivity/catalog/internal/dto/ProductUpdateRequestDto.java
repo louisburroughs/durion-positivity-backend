@@ -26,7 +26,10 @@ public class ProductUpdateRequestDto {
     private String description;
 
     @NotBlank
-    @Schema(description = "Unit of measure for the product", example = "EACH", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Unit of measure for the product",
+            example = "EACH",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String unitOfMeasure;
 
     @Schema(
@@ -41,7 +44,10 @@ public class ProductUpdateRequestDto {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private UUID categoryId;
 
-    @Schema(description = "Stock keeping unit", example = "BP-CER-FRT-001", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "Stock keeping unit",
+            example = "BP-CER-FRT-001",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String sku;
 
     @NotBlank

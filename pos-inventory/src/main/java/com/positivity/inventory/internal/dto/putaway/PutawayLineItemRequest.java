@@ -25,10 +25,7 @@ public class PutawayLineItemRequest {
     @NotBlank
     private String productId;
 
-    @Schema(
-            description = "Quantity of the product to be put away",
-            example = "12",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity of the product to be put away", example = "12", requiredMode = REQUIRED)
     @NotNull
     @Min(1)
     private Integer quantity;

@@ -37,7 +37,10 @@ public class ProductMsrpDto {
     @Schema(description = "Timestamp the MSRP was created", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
     private OffsetDateTime createdAt;
 
-    @Schema(description = "Timestamp the MSRP was last updated", example = "2026-01-16T11:00:00Z", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Timestamp the MSRP was last updated",
+            example = "2026-01-16T11:00:00Z",
+            requiredMode = NOT_REQUIRED)
     private OffsetDateTime updatedAt;
 
     @Schema(

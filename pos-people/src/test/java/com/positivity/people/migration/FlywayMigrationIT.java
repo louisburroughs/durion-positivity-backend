@@ -48,6 +48,8 @@ class FlywayMigrationIT {
         assertThat(droppedColumn(jdbc, "person", "employee_number")).isTrue();
         assertThat(droppedColumn(jdbc, "person", "status")).isTrue();
         assertThat(droppedColumn(jdbc, "person", "contact_info_json")).isTrue();
+        // Name model unified on first_name/last_name (#726); redundant legal_name dropped.
+        assertThat(droppedColumn(jdbc, "person", "legal_name")).isTrue();
 
         // Assignments reference employee; user_person_links is keyed by username.
         assertThat(hasColumn(jdbc, "employee_location_assignment", "employee_id"))

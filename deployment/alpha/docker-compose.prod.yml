@@ -130,6 +130,11 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  pos-documents:
+    image: ${ECR_REGISTRY}/durion/pos-documents:${BACKEND_TAG}
+    restart: unless-stopped
+    logging: *logging
+
   pos-vehicle-inventory:
     image: ${ECR_REGISTRY}/durion/pos-vehicle-inventory:${BACKEND_TAG}
     restart: unless-stopped

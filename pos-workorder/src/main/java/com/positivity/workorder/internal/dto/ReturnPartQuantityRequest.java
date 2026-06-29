@@ -46,7 +46,10 @@ public class ReturnPartQuantityRequest {
      * Reason for return (required for audit).
      */
     @NotNull(message = "Reason is required")
-    @Schema(description = "Audit reason for return", example = "Part not needed after inspection", requiredMode = REQUIRED)
+    @Schema(
+            description = "Audit reason for return",
+            example = "Part not needed after inspection",
+            requiredMode = REQUIRED)
     private String reason;
 
     /**

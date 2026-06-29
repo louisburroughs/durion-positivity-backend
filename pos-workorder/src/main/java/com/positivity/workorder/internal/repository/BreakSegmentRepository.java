@@ -5,13 +5,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for {@link BreakSegment} entities.
  * Implements CAP-139 Story #68.
  */
-@Repository
 public interface BreakSegmentRepository extends JpaRepository<BreakSegment, UUID> {
 
     /**

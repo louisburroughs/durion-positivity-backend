@@ -1,11 +1,6 @@
 package com.positivity.openapivalidation.internal.validator;
 
 import com.positivity.openapivalidation.internal.policy.OpenApiModulePolicy;
-import org.jspecify.annotations.NonNull;
-import org.yaml.snakeyaml.LoaderOptions;
-import org.yaml.snakeyaml.Yaml;
-import org.yaml.snakeyaml.constructor.DuplicateKeyException;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,6 +8,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.NonNull;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.DuplicateKeyException;
 
 public class OpenApiAggregateValidator {
 
@@ -35,7 +34,9 @@ public class OpenApiAggregateValidator {
         try (var reader = Files.newBufferedReader(aggregatePath)) {
             root = new Yaml(loaderOptions).load(reader);
         } catch (DuplicateKeyException e) {
-            issues.add(new OpenApiValidationIssue("aggregate", OpenApiModulePolicy.Mode.STRICT,
+            issues.add(new OpenApiValidationIssue(
+                    "aggregate",
+                    OpenApiModulePolicy.Mode.STRICT,
                     "aggregate: duplicate key detected: " + e.getMessage()));
             return issues;
         }
@@ -45,11 +46,8 @@ public class OpenApiAggregateValidator {
     }
 
     private void collectUnresolvedRefs(
-            Path aggregatePath,
-            Object node,
-            Object root,
-            List<OpenApiValidationIssue> issues,
-            String currentPath) throws IOException {
+            Path aggregatePath, Object node, Object root, List<OpenApiValidationIssue> issues, String currentPath)
+            throws IOException {
         if (node instanceof Map<?, ?> mapNode) {
             processMapNode(aggregatePath, mapNode, root, issues, currentPath);
             return;
@@ -61,11 +59,8 @@ public class OpenApiAggregateValidator {
     }
 
     private void processMapNode(
-            Path aggregatePath,
-            Map<?, ?> mapNode,
-            Object root,
-            List<OpenApiValidationIssue> issues,
-            String currentPath) throws IOException {
+            Path aggregatePath, Map<?, ?> mapNode, Object root, List<OpenApiValidationIssue> issues, String currentPath)
+            throws IOException {
         Object refValue = mapNode.get("$ref");
         if (refValue instanceof String ref) {
             validateRef(aggregatePath, root, currentPath, ref, issues);
@@ -85,7 +80,8 @@ public class OpenApiAggregateValidator {
             Collection<?> collectionNode,
             Object root,
             List<OpenApiValidationIssue> issues,
-            String currentPath) throws IOException {
+            String currentPath)
+            throws IOException {
         for (Object item : collectionNode) {
             collectUnresolvedRefs(aggregatePath, item, root, issues, currentPath);
         }
@@ -102,11 +98,8 @@ public class OpenApiAggregateValidator {
     }
 
     private void validateRef(
-            Path aggregatePath,
-            Object root,
-            String currentPath,
-            String ref,
-            List<OpenApiValidationIssue> issues) throws IOException {
+            Path aggregatePath, Object root, String currentPath, String ref, List<OpenApiValidationIssue> issues)
+            throws IOException {
         String[] parts = ref.split("#", 2);
         String filePart = parts[0];
         String fragmentPart = parts.length > 1 ? parts[1] : null;

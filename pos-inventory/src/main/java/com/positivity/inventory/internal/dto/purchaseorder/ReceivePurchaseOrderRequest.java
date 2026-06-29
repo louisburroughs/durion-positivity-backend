@@ -44,10 +44,7 @@ public class ReceivePurchaseOrderRequest {
         @NotNull
         private UUID lineId;
 
-        @Schema(
-                description = "Quantity received for this line",
-                example = "4",
-                requiredMode = REQUIRED)
+        @Schema(description = "Quantity received for this line", example = "4", requiredMode = REQUIRED)
         @NotNull
         @Positive
         @JsonAlias("receivedQty")

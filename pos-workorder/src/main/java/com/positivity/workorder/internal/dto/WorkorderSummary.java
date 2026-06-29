@@ -21,16 +21,10 @@ public class WorkorderSummary {
             requiredMode = REQUIRED)
     UUID workorderId;
 
-    @Schema(
-            description = "Human-readable workorder number",
-            example = "WO-2024-5001",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Human-readable workorder number", example = "WO-2024-5001", requiredMode = NOT_REQUIRED)
     String workorderNumber;
 
-    @Schema(
-            description = "Current workorder status",
-            example = "WORK_IN_PROGRESS",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Current workorder status", example = "WORK_IN_PROGRESS", requiredMode = NOT_REQUIRED)
     String status;
 
     @Schema(description = "Name of the customer", example = "John Doe", requiredMode = NOT_REQUIRED)

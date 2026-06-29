@@ -15,6 +15,7 @@ public record CatalogVersionResponse(
                 example = "7",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         int version,
+
         @Schema(
                 description = "Total number of permissions in the catalog",
                 example = "128",

@@ -55,24 +55,15 @@ public class PromotionRedemptionResponse {
             requiredMode = NOT_REQUIRED)
     private UUID invoiceId;
 
-    @Schema(
-            description = "Discount amount applied by the redemption",
-            example = "25.00",
-            requiredMode = REQUIRED)
+    @Schema(description = "Discount amount applied by the redemption", example = "25.00", requiredMode = REQUIRED)
     @NotNull
     private BigDecimal discountAmount;
 
-    @Schema(
-            description = "Type of discount applied",
-            example = "PERCENTAGE",
-            requiredMode = REQUIRED)
+    @Schema(description = "Type of discount applied", example = "PERCENTAGE", requiredMode = REQUIRED)
     @NotNull
     private String discountType;
 
-    @Schema(
-            description = "Promotion code that was redeemed",
-            example = "SUMMER25",
-            requiredMode = REQUIRED)
+    @Schema(description = "Promotion code that was redeemed", example = "SUMMER25", requiredMode = REQUIRED)
     @NotNull
     private String promotionCode;
 
@@ -88,10 +79,7 @@ public class PromotionRedemptionResponse {
             requiredMode = NOT_REQUIRED)
     private Boolean recordedOverLimit;
 
-    @Schema(
-            description = "Current status of the redemption",
-            example = "RECORDED",
-            requiredMode = REQUIRED)
+    @Schema(description = "Current status of the redemption", example = "RECORDED", requiredMode = REQUIRED)
     @NotNull
     private RedemptionStatus status;
 

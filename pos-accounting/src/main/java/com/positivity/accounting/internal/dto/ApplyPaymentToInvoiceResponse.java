@@ -43,7 +43,10 @@ public class ApplyPaymentToInvoiceResponse implements Serializable {
     /**
      * New invoice status after payment application
      */
-    @Schema(description = "Invoice status after payment application", example = "PARTIALLY_PAID", requiredMode = REQUIRED)
+    @Schema(
+            description = "Invoice status after payment application",
+            example = "PARTIALLY_PAID",
+            requiredMode = REQUIRED)
     @JsonProperty("status")
     @NotNull
     private InvoiceStatus status;
@@ -51,7 +54,10 @@ public class ApplyPaymentToInvoiceResponse implements Serializable {
     /**
      * Invoice balance BEFORE payment application
      */
-    @Schema(description = "Invoice balance before payment application", example = "1250.00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Invoice balance before payment application",
+            example = "1250.00",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("balanceBefore")
     private BigDecimal balanceBefore;
 
@@ -65,7 +71,10 @@ public class ApplyPaymentToInvoiceResponse implements Serializable {
     /**
      * Total amount paid on this invoice (cumulative)
      */
-    @Schema(description = "Cumulative total amount paid on this invoice", example = "1000.00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Cumulative total amount paid on this invoice",
+            example = "1000.00",
+            requiredMode = NOT_REQUIRED)
     @JsonProperty("totalPaid")
     private BigDecimal totalPaid;
 

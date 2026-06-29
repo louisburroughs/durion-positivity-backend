@@ -29,10 +29,7 @@ public class ColumnMappingResponse {
     @NotNull
     private UUID jobId;
 
-    @Schema(
-            description = "Name of the column in the source file",
-            example = "Product SKU",
-            requiredMode = REQUIRED)
+    @Schema(description = "Name of the column in the source file", example = "Product SKU", requiredMode = REQUIRED)
     @NotNull
     private String sourceColumn;
 

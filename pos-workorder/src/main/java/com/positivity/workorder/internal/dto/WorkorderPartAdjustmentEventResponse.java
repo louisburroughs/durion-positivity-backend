@@ -104,7 +104,10 @@ public class WorkorderPartAdjustmentEventResponse {
     /**
      * User who performed the adjustment.
      */
-    @Schema(description = "Actor identifier who performed adjustment", example = "tech@shop.local", requiredMode = REQUIRED)
+    @Schema(
+            description = "Actor identifier who performed adjustment",
+            example = "tech@shop.local",
+            requiredMode = REQUIRED)
     @NotNull
     private String performedBy;
 

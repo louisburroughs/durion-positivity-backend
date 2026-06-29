@@ -8,9 +8,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
-@Repository
 public interface VehicleRecordRepository extends JpaRepository<VehicleRecord, UUID> {
 
     Optional<VehicleRecord> findByVinNormalized(@NonNull String vinNormalized);

@@ -38,9 +38,6 @@ public class StorageLocationDto {
     @Schema(description = "Maximum storage capacity of the location", example = "100", requiredMode = REQUIRED)
     private int capacity;
 
-    @Schema(
-            description = "Whether the storage location is currently active",
-            example = "true",
-            requiredMode = REQUIRED)
+    @Schema(description = "Whether the storage location is currently active", example = "true", requiredMode = REQUIRED)
     private boolean active;
 }

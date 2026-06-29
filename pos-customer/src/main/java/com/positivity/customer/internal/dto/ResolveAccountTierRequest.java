@@ -46,18 +46,12 @@ public class ResolveAccountTierRequest {
     @PositiveOrZero
     private BigDecimal annualRevenue;
 
-    @Schema(
-            description = "Number of active contracts or subscriptions",
-            example = "3",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Number of active contracts or subscriptions", example = "3", requiredMode = NOT_REQUIRED)
     @Nullable
     @PositiveOrZero
     private Integer activeContractCount;
 
-    @Schema(
-            description = "Account age in months",
-            example = "18",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Account age in months", example = "18", requiredMode = NOT_REQUIRED)
     @Nullable
     @PositiveOrZero
     private Integer accountAgeMonths;

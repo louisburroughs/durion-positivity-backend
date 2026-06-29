@@ -7,12 +7,10 @@ import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for managing technician assignments to workorders.
  */
-@Repository
 public interface TechnicianAssignmentRepository extends JpaRepository<TechnicianAssignment, Long> {
 
     /**

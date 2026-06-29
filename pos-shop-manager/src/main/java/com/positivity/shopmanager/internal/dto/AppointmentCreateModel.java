@@ -31,10 +31,7 @@ public class AppointmentCreateModel {
             requiredMode = REQUIRED)
     private String sourceId; // Source document identifier (estimateId or workOrderId)
 
-    @Schema(
-            description = "IANA timezone ID of the facility",
-            example = "America/New_York",
-            requiredMode = REQUIRED)
+    @Schema(description = "IANA timezone ID of the facility", example = "America/New_York", requiredMode = REQUIRED)
     private String facilityTimeZoneId; // IANA timezone ID (e.g., America/New_York)
 
     @Schema(

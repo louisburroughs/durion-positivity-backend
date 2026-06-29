@@ -1,7 +1,8 @@
 package com.positivity.openapivalidation.internal.validator;
 
 public enum OpenApiValidationMode {
-    REPORT, STRICT;
+    REPORT,
+    STRICT;
 
     public static OpenApiValidationMode fromSystemProperty() {
         String value = System.getProperty("openapi.validation.mode", "REPORT");

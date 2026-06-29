@@ -30,10 +30,7 @@ import lombok.NoArgsConstructor;
 public class CatalogSearchResultDto {
 
     @NotNull
-    @Schema(
-            description = "Page of matching product summaries",
-            example = "[]",
-            requiredMode = REQUIRED)
+    @Schema(description = "Page of matching product summaries", example = "[]", requiredMode = REQUIRED)
     private List<ProductSummary> data;
 
     @Schema(

@@ -22,7 +22,10 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Vehicle response payload.")
 public class VehicleResponse {
 
-    @Schema(description = "Vehicle identifier.", example = "550e8400-e29b-41d4-a716-446655440000", requiredMode = REQUIRED)
+    @Schema(
+            description = "Vehicle identifier.",
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = REQUIRED)
     @NotNull
     private UUID vehicleId;
 
@@ -48,17 +51,17 @@ public class VehicleResponse {
     @NotNull
     private String unitNumber;
 
-    @Schema(description = "Human-readable vehicle description.", example = "2024 Ford F-150 XL", requiredMode = REQUIRED)
+    @Schema(
+            description = "Human-readable vehicle description.",
+            example = "2024 Ford F-150 XL",
+            requiredMode = REQUIRED)
     @NotNull
     private String description;
 
     @Schema(description = "License plate value.", example = "ABC1234", requiredMode = NOT_REQUIRED)
     private String licensePlate;
 
-    @Schema(
-            description = "License plate jurisdiction/state or province.",
-            example = "CA",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "License plate jurisdiction/state or province.", example = "CA", requiredMode = NOT_REQUIRED)
     private String licensePlateJurisdiction;
 
     @Schema(description = "Model year.", example = "2024", requiredMode = NOT_REQUIRED)
@@ -85,7 +88,10 @@ public class VehicleResponse {
     @NotNull
     private Instant updatedAt;
 
-    @Schema(description = "Username of the actor who created this record.", example = "jsmith", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Username of the actor who created this record.",
+            example = "jsmith",
+            requiredMode = NOT_REQUIRED)
     private String createdBy;
 
     @Schema(

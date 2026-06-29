@@ -35,10 +35,7 @@ public class ResolveAccountTierResponse {
     @NotBlank
     private String accountId;
 
-    @Schema(
-            description = "Currently assigned tier (before resolution)",
-            example = "SILVER",
-            requiredMode = REQUIRED)
+    @Schema(description = "Currently assigned tier (before resolution)", example = "SILVER", requiredMode = REQUIRED)
     @NonNull
     @NotNull
     private AccountTier currentTier;
@@ -51,10 +48,7 @@ public class ResolveAccountTierResponse {
     @NotNull
     private AccountTier recommendedTier;
 
-    @Schema(
-            description = "Whether the tier was applied to the account",
-            example = "true",
-            requiredMode = REQUIRED)
+    @Schema(description = "Whether the tier was applied to the account", example = "true", requiredMode = REQUIRED)
     private boolean tierApplied;
 
     @Schema(
@@ -70,10 +64,7 @@ public class ResolveAccountTierResponse {
     @Nullable
     private String resolutionReason;
 
-    @Schema(
-            description = "Score or metric used for tier calculation",
-            example = "82",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Score or metric used for tier calculation", example = "82", requiredMode = NOT_REQUIRED)
     @Nullable
     private Integer tierScore;
 }

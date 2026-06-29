@@ -51,7 +51,10 @@ public class AccountDrilldownResponse {
     /**
      * Statement line code this account contributes to.
      */
-    @Schema(description = "Statement line code this account contributes to", example = "1200-100", requiredMode = REQUIRED)
+    @Schema(
+            description = "Statement line code this account contributes to",
+            example = "1200-100",
+            requiredMode = REQUIRED)
     @NonNull
     private String statementLineCode;
 }

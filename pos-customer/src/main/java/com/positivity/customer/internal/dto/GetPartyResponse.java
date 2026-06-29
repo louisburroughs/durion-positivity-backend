@@ -37,48 +37,33 @@ public class GetPartyResponse {
     /**
      * Party type (ORGANIZATION|INDIVIDUAL)
      */
-    @Schema(
-            description = "Party type discriminator",
-            example = "ORGANIZATION",
-            requiredMode = REQUIRED)
+    @Schema(description = "Party type discriminator", example = "ORGANIZATION", requiredMode = REQUIRED)
     @NotBlank
     private String partyType;
 
     /**
      * Legal name
      */
-    @Schema(
-            description = "Legal name of the party",
-            example = "Acme Industrial Supply LLC",
-            requiredMode = REQUIRED)
+    @Schema(description = "Legal name of the party", example = "Acme Industrial Supply LLC", requiredMode = REQUIRED)
     @NotBlank
     private String legalName;
 
     /**
      * Display/trading name
      */
-    @Schema(
-            description = "Display/trading name",
-            example = "Acme Supply",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Display/trading name", example = "Acme Supply", requiredMode = NOT_REQUIRED)
     private String displayName;
 
     /**
      * Tax identification number
      */
-    @Schema(
-            description = "Tax identification number",
-            example = "82-1234567",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Tax identification number", example = "82-1234567", requiredMode = NOT_REQUIRED)
     private String taxId;
 
     /**
      * Current status (ACTIVE|PENDING|SUSPENDED|INACTIVE)
      */
-    @Schema(
-            description = "Current status of the party",
-            example = "ACTIVE",
-            requiredMode = REQUIRED)
+    @Schema(description = "Current status of the party", example = "ACTIVE", requiredMode = REQUIRED)
     @NotBlank
     private String status;
 

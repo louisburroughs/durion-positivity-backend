@@ -32,7 +32,10 @@ public class StorageLocationTopologyResponse {
     @NotNull
     private UUID id;
 
-    @Schema(description = "Display name of the storage location", example = "Aisle 3 Bin 12", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Display name of the storage location",
+            example = "Aisle 3 Bin 12",
+            requiredMode = NOT_REQUIRED)
     private String name;
 
     @Schema(description = "Type classification of the storage location", example = "BIN", requiredMode = NOT_REQUIRED)

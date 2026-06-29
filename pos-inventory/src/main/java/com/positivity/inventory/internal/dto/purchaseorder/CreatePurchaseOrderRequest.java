@@ -28,10 +28,7 @@ public class CreatePurchaseOrderRequest {
     @NotNull
     private UUID vendorId;
 
-    @Schema(
-            description = "Date the purchase order is issued",
-            example = "2026-01-15",
-            requiredMode = REQUIRED)
+    @Schema(description = "Date the purchase order is issued", example = "2026-01-15", requiredMode = REQUIRED)
     @NotNull
     private LocalDate poDate;
 

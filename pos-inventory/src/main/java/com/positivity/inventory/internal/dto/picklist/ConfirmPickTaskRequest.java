@@ -10,7 +10,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Schema(description = "Request to confirm a pick task by recording the scanned SKU, scanned location, and quantity picked")
+@Schema(
+        description =
+                "Request to confirm a pick task by recording the scanned SKU, scanned location, and quantity picked")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

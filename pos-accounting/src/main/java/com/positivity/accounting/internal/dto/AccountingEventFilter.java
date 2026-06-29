@@ -30,11 +30,17 @@ public class AccountingEventFilter {
     @Nullable
     private String eventType;
 
-    @Schema(description = "Restrict to events in this processing status", example = "PROCESSED", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Restrict to events in this processing status",
+            example = "PROCESSED",
+            requiredMode = NOT_REQUIRED)
     @Nullable
     private AccountingEventStatus status;
 
-    @Schema(description = "Restrict to events with this idempotency outcome", example = "NEW", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Restrict to events with this idempotency outcome",
+            example = "NEW",
+            requiredMode = NOT_REQUIRED)
     @Nullable
     private String idempotencyOutcome;
 
@@ -66,7 +72,10 @@ public class AccountingEventFilter {
     @Nullable
     private UUID ingestionId;
 
-    @Schema(description = "Restrict to events for this domain key", example = "INVOICE-2026-000123", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Restrict to events for this domain key",
+            example = "INVOICE-2026-000123",
+            requiredMode = NOT_REQUIRED)
     @Nullable
     private String domainKeyId;
 

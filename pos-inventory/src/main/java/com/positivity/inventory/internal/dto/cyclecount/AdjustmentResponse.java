@@ -67,10 +67,7 @@ public class AdjustmentResponse {
     @NotNull
     private Integer quantityOnHandBefore;
 
-    @Schema(
-            description = "Quantity physically counted by the auditor",
-            example = "12",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity physically counted by the auditor", example = "12", requiredMode = REQUIRED)
     @NotNull
     private Integer countedQuantity;
 
@@ -156,10 +153,7 @@ public class AdjustmentResponse {
             requiredMode = NOT_REQUIRED)
     private String errorMessage;
 
-    @Schema(
-            description = "Monetary value of the counted variance",
-            example = "37.50",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Monetary value of the counted variance", example = "37.50", requiredMode = NOT_REQUIRED)
     private BigDecimal varianceValue;
 
     @Schema(

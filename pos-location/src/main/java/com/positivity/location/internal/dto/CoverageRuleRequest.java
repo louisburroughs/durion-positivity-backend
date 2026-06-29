@@ -45,16 +45,10 @@ public class CoverageRuleRequest {
     @PositiveOrZero
     private Integer priority;
 
-    @Schema(
-            description = "Date from which the rule is effective",
-            example = "2026-06-18",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Date from which the rule is effective", example = "2026-06-18", requiredMode = NOT_REQUIRED)
     private LocalDate validFrom;
 
-    @Schema(
-            description = "Date until which the rule is effective",
-            example = "2026-12-31",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Date until which the rule is effective", example = "2026-12-31", requiredMode = NOT_REQUIRED)
     private LocalDate validTo;
 
     @Schema(

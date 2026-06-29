@@ -49,10 +49,7 @@ public class ProductDetailView {
             requiredMode = REQUIRED)
     private Instant generatedAt;
 
-    @Schema(
-            description = "Overall confidence in the data completeness",
-            example = "HIGH",
-            requiredMode = REQUIRED)
+    @Schema(description = "Overall confidence in the data completeness", example = "HIGH", requiredMode = REQUIRED)
     private DataConfidence confidence;
 
     @Data
@@ -86,7 +83,10 @@ public class ProductDetailView {
         @Schema(description = "Pricing data status", example = "OK", requiredMode = REQUIRED)
         private DataStatus status;
 
-        @Schema(description = "Timestamp of pricing data", example = "2026-01-15T09:30:00Z", requiredMode = NOT_REQUIRED)
+        @Schema(
+                description = "Timestamp of pricing data",
+                example = "2026-01-15T09:30:00Z",
+                requiredMode = NOT_REQUIRED)
         private Instant asOf;
 
         @Schema(description = "Confidence level in pricing data", example = "HIGH", requiredMode = REQUIRED)
@@ -111,7 +111,10 @@ public class ProductDetailView {
         @Schema(description = "Availability data status", example = "OK", requiredMode = REQUIRED)
         private DataStatus status;
 
-        @Schema(description = "Timestamp of availability data", example = "2026-01-15T09:30:00Z", requiredMode = NOT_REQUIRED)
+        @Schema(
+                description = "Timestamp of availability data",
+                example = "2026-01-15T09:30:00Z",
+                requiredMode = NOT_REQUIRED)
         private Instant asOf;
 
         @Schema(description = "Confidence level in availability data", example = "MEDIUM", requiredMode = REQUIRED)
@@ -133,10 +136,16 @@ public class ProductDetailView {
         @Schema(description = "Maximum days for delivery", example = "5", requiredMode = NOT_REQUIRED)
         private Integer maxDays;
 
-        @Schema(description = "Human-readable lead time hint", example = "3-5 business days", requiredMode = NOT_REQUIRED)
+        @Schema(
+                description = "Human-readable lead time hint",
+                example = "3-5 business days",
+                requiredMode = NOT_REQUIRED)
         private String displayText;
 
-        @Schema(description = "Timestamp of lead time data", example = "2026-01-15T09:30:00Z", requiredMode = NOT_REQUIRED)
+        @Schema(
+                description = "Timestamp of lead time data",
+                example = "2026-01-15T09:30:00Z",
+                requiredMode = NOT_REQUIRED)
         private Instant asOf;
 
         @Schema(description = "Confidence in lead time estimate", example = "LOW", requiredMode = REQUIRED)

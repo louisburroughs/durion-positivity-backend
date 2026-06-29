@@ -40,10 +40,7 @@ public class PutawayTaskResponse {
     @NotNull
     private String productId;
 
-    @Schema(
-            description = "Quantity of the product to be put away",
-            example = "12",
-            requiredMode = REQUIRED)
+    @Schema(description = "Quantity of the product to be put away", example = "12", requiredMode = REQUIRED)
     @NotNull
     private Integer quantity;
 
@@ -83,10 +80,7 @@ public class PutawayTaskResponse {
             requiredMode = NOT_REQUIRED)
     private String fallbackReason;
 
-    @Schema(
-            description = "Current status of the putaway task",
-            example = "PENDING",
-            requiredMode = REQUIRED)
+    @Schema(description = "Current status of the putaway task", example = "PENDING", requiredMode = REQUIRED)
     @NotNull
     private String status;
 

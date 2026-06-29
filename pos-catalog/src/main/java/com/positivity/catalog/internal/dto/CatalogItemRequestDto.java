@@ -28,7 +28,10 @@ public class CatalogItemRequestDto {
             requiredMode = NOT_REQUIRED)
     private List<String> images;
 
-    @Schema(description = "Manufacturer part number for product type", example = "MPN-9981", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Manufacturer part number for product type",
+            example = "MPN-9981",
+            requiredMode = NOT_REQUIRED)
     private String manufacturerPartNumber;
 
     @Schema(

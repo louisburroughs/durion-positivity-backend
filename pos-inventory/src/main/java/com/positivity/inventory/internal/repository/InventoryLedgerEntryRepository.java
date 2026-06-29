@@ -13,12 +13,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for {@link InventoryLedgerEntry} entities.
  */
-@Repository
 public interface InventoryLedgerEntryRepository
         extends JpaRepository<InventoryLedgerEntry, UUID>, JpaSpecificationExecutor<InventoryLedgerEntry> {
 

@@ -21,7 +21,10 @@ public class ContractField {
     @Schema(description = "Name of the field", example = "eventId", requiredMode = REQUIRED)
     private String name;
 
-    @Schema(description = "JSON path locating the field within the envelope", example = "$.payload.eventId", requiredMode = REQUIRED)
+    @Schema(
+            description = "JSON path locating the field within the envelope",
+            example = "$.payload.eventId",
+            requiredMode = REQUIRED)
     private String jsonPath;
 
     @Schema(description = "Data type of the field", example = "string", requiredMode = REQUIRED)
@@ -30,10 +33,16 @@ public class ContractField {
     @Schema(description = "Whether the field is required in the envelope", example = "true", requiredMode = REQUIRED)
     private boolean required;
 
-    @Schema(description = "Human-readable description of the field", example = "Unique identifier of the event", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Human-readable description of the field",
+            example = "Unique identifier of the event",
+            requiredMode = NOT_REQUIRED)
     private String description;
 
     @Nullable
-    @Schema(description = "Allowed enum values for the field, if constrained", nullable = true, requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Allowed enum values for the field, if constrained",
+            nullable = true,
+            requiredMode = NOT_REQUIRED)
     private List<String> enumValues;
 }

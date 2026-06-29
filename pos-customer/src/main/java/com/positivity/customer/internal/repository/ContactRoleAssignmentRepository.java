@@ -10,7 +10,6 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 /**
  * Repository for managing contact role assignments.
@@ -25,7 +24,6 @@ import org.springframework.stereotype.Repository;
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/108">Backend
  *      Issue #108</a>
  */
-@Repository
 public interface ContactRoleAssignmentRepository extends JpaRepository<ContactRoleAssignment, ContactRoleAssignmentId> {
 
     /**

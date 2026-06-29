@@ -16,7 +16,10 @@ import lombok.Value;
 @Builder
 @Schema(description = "A single rule-evaluation step recorded in a pricing snapshot trace")
 public class PricingRuleTraceEntryDto {
-    @Schema(description = "Trace entry identifier", example = "01960003-0000-7000-8000-000000000050", requiredMode = REQUIRED)
+    @Schema(
+            description = "Trace entry identifier",
+            example = "01960003-0000-7000-8000-000000000050",
+            requiredMode = REQUIRED)
     String id;
 
     @Schema(description = "Identifier of the evaluated rule", example = "RULE-VOLUME-DISCOUNT", requiredMode = REQUIRED)
@@ -25,9 +28,15 @@ public class PricingRuleTraceEntryDto {
     @Schema(description = "Evaluation status of the rule", example = "APPLIED", requiredMode = REQUIRED)
     String status;
 
-    @Schema(description = "Serialized inputs supplied to the rule", example = "{\"qty\":10}", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Serialized inputs supplied to the rule",
+            example = "{\"qty\":10}",
+            requiredMode = NOT_REQUIRED)
     String inputs;
 
-    @Schema(description = "Serialized outputs produced by the rule", example = "{\"discount\":0.05}", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Serialized outputs produced by the rule",
+            example = "{\"discount\":0.05}",
+            requiredMode = NOT_REQUIRED)
     String outputs;
 }

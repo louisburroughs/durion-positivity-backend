@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.dto.DefaultGLMappingListResponse;
 import com.positivity.accounting.internal.dto.DefaultGLMappingRequest;
 import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
 import com.positivity.accounting.internal.entity.DefaultGLMapping;
+import com.positivity.accounting.internal.entity.DefaultGLMapping_;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
@@ -12,7 +13,9 @@ import com.positivity.accounting.service.GLAccountService;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -112,7 +115,7 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
     @NonNull
     @Transactional(readOnly = true)
     public DefaultGLMappingListResponse listDefaultMappings(int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("eventType"));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(DefaultGLMapping_.EVENT_TYPE));
         Page<DefaultGLMapping> mappingsPage = repository.findAll(pageable);
 
         // Batch-load GL accounts to avoid N+1 query pattern
@@ -199,7 +202,8 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
 
         // Batch-load all accounts in one query
         var accountMap = glAccountRepository.findAllById(accountIds).stream()
-                .collect(Collectors.toMap(GLAccount::getGlAccountId, acc -> acc));
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(GLAccount::getGlAccountId, Function.identity()));
 
         // Map each mapping using the pre-loaded account map
         return mappings.stream()

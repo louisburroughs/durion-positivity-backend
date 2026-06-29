@@ -37,7 +37,10 @@ public class AppointmentResponse {
             requiredMode = REQUIRED)
     private UUID locationId;
 
-    @Schema(description = "Resource (bay or mobile unit) reserved, if any", example = "BAY-04", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Resource (bay or mobile unit) reserved, if any",
+            example = "BAY-04",
+            requiredMode = NOT_REQUIRED)
     private String resourceId;
 
     @Schema(
@@ -88,13 +91,9 @@ public class AppointmentResponse {
             requiredMode = NOT_REQUIRED)
     private List<UUID> serviceRequestIds;
 
-    @Schema(
-            description = "Snapshot of customer attributes captured at booking time",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Snapshot of customer attributes captured at booking time", requiredMode = NOT_REQUIRED)
     private Map<String, Object> customerSnapshot;
 
-    @Schema(
-            description = "Snapshot of vehicle attributes captured at booking time",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Snapshot of vehicle attributes captured at booking time", requiredMode = NOT_REQUIRED)
     private Map<String, Object> vehicleSnapshot;
 }

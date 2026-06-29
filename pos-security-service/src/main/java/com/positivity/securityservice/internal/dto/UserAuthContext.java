@@ -12,10 +12,7 @@ import lombok.Value;
 @Builder
 @Schema(description = "Internal authentication context carrying credentials and roles for a user")
 public class UserAuthContext {
-    @Schema(
-            description = "User identifier",
-            example = "01960003-0000-7000-8000-000000000001",
-            requiredMode = REQUIRED)
+    @Schema(description = "User identifier", example = "01960003-0000-7000-8000-000000000001", requiredMode = REQUIRED)
     UUID id;
 
     @Schema(description = "Login username", example = "jane.doe", requiredMode = REQUIRED)

@@ -42,16 +42,10 @@ public class AuditRecordResponse {
             requiredMode = NOT_REQUIRED)
     private UUID entityId;
 
-    @Schema(
-            description = "One-based row number within the source file",
-            example = "42",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "One-based row number within the source file", example = "42", requiredMode = NOT_REQUIRED)
     private Long rowNumber;
 
-    @Schema(
-            description = "Review status of the audit record",
-            example = "PENDING",
-            requiredMode = REQUIRED)
+    @Schema(description = "Review status of the audit record", example = "PENDING", requiredMode = REQUIRED)
     @NotNull
     private ReviewStatus reviewStatus;
 

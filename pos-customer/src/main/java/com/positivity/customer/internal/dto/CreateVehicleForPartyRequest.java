@@ -51,9 +51,6 @@ public class CreateVehicleForPartyRequest {
     private String licensePlate;
 
     @Size(max = 64)
-    @Schema(
-            description = "License plate region/state",
-            example = "CA",
-            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(description = "License plate region/state", example = "CA", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String licensePlateRegion;
 }
