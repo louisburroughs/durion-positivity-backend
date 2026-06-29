@@ -13,6 +13,7 @@ import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.invoice.internal.service.ElevationTokenService;
 import com.positivity.invoice.internal.service.InvoiceFinalizationServiceImpl;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
@@ -70,6 +71,9 @@ class InvoiceFinalizationServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private ElevationTokenService elevationTokenService;
+
     @InjectMocks
     private InvoiceFinalizationServiceImpl service;
 
@@ -98,7 +102,11 @@ class InvoiceFinalizationServiceTest {
      */
     private void withShopManagerContext() {
         var auth = new UsernamePasswordAuthenticationToken(
-                "manager-001", null, List.of(new SimpleGrantedAuthority("ROLE_SHOP_MANAGER")));
+                "manager-001",
+                null,
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_SHOP_MANAGER"),
+                        new SimpleGrantedAuthority("invoice:finalize:override")));
         auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "manager-001"));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
@@ -288,11 +296,32 @@ class InvoiceFinalizationServiceTest {
                 .thenReturn(Optional.of(draftInvoice(
                         UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("750.00"))));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(elevationTokenService.verify(any(), any())).thenReturn(Optional.of(UUID.randomUUID()));
         FinalizationRequest request = serviceAdvisorRequest("MGR-APPROVAL-001");
 
         InvoiceDetailsResponse response = service.completeInvoice(invoiceId, request);
 
         assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
+    }
+
+    /**
+     * The core of the manager-approval hardening: a non-blank but INVALID/expired
+     * elevation token above the cap must be rejected (previously any non-blank code
+     * was accepted).
+     */
+    @Test
+    void finalize_throws_whenManagerApprovalTokenInvalid_aboveLimit() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(invoiceRepository.findById(invoiceId))
+                .thenReturn(Optional.of(draftInvoice(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("750.00"))));
+        // Token present but does not verify (wrong scope, tampered, or expired).
+        when(elevationTokenService.verify(any(), any())).thenReturn(Optional.empty());
+        FinalizationRequest request = serviceAdvisorRequest("not-a-valid-token");
+
+        assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageMatching("(?i).*approval code.*");
     }
 
     // -------------------------------------------------------------------------
@@ -343,12 +372,31 @@ class InvoiceFinalizationServiceTest {
         invoice.setFinalizedAt(Instant.now(TEST_CLOCK).minusSeconds(3600)); // 1h ago — within 24h window
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(invoice));
         when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(elevationTokenService.verify(any(), any())).thenReturn(Optional.of(UUID.randomUUID()));
 
         InvoiceDetailsResponse response = service.revert(invoiceId, "MGR-APPROVAL-001", "Customer dispute");
 
         assertThat(response.getStatus()).isEqualTo(InvoiceStatus.DRAFT);
         // ADR-0018: actor from SecurityContext
         assertThat(response.getRevertedBy()).isEqualTo("advisor-001");
+    }
+
+    /**
+     * Revert by a non-override actor must reject an invalid/expired elevation token,
+     * even within the window on a FINALIZED invoice.
+     */
+    @Test
+    void revert_throws_whenManagerApprovalTokenInvalid() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Invoice invoice = finalizedInvoice(workorderId);
+        invoice.setFinalizedAt(Instant.now(TEST_CLOCK).minusSeconds(3600));
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(invoice));
+        when(elevationTokenService.verify(any(), any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.revert(invoiceId, "not-a-valid-token", "Customer dispute"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageMatching("(?i).*approval code.*");
     }
 
     /**

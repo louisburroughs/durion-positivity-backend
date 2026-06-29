@@ -39,10 +39,29 @@ Invoice and payment service for the Durion Positivity ETSMS platform. Creates in
 
 ## Configuration
 
-| Property                | Default  | Description                  |
-| ----------------------- | -------- | ---------------------------- |
-| `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
-| `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
+| Property                          | Default  | Description                                                              |
+| --------------------------------- | -------- | ----------------------------------------------------------------------- |
+| `SPRING_DATASOURCE_URL`           | required | PostgreSQL connection URL                                               |
+| `EUREKA_SERVER_URL`               | required | Eureka service discovery URL                                           |
+| `invoice.elevation.token-secret`  | required | HMAC secret for manager-approval elevation tokens (≥32 bytes; service fails fast if unset/short) |
+| `invoice.elevation.token-ttl-seconds` | `300` | Elevation token lifetime in seconds                                  |
+
+### Manager-approval elevation — operational setup
+
+Finalizing/reverting an invoice above the service-advisor cap requires override
+capability. There are two ways to obtain it:
+
+- **Logged-in manager/admin — auto-approved.** A caller holding the
+  `ROLE_SHOP_MANAGER`, `ROLE_LOCATION_MANAGER`, or `ROLE_ADMIN` role (always present in
+  the JWT) finalizes/reverts directly, no approval code. This needs **no** extra setup.
+- **Service advisor naming a manager (employee-number approval).** The named manager
+  must hold the `invoice:finalize:override` **authority**. The permission is registered
+  at startup from `permissions.yaml`, but **grants are runtime data** (this platform
+  never SQL-seeds `role_permissions`). For this path, an admin must, after deploy:
+  1. Grant `invoice:finalize:override` to the manager/admin roles via the pos-security
+     role-permission admin API.
+  2. Ensure managers are assigned those roles via the **user-role** admin API (the
+     `person-decision` check resolves authorities through `User.roles`).
 
 ## Dependencies
 

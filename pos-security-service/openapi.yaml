@@ -4551,6 +4551,77 @@ paths:
         - security:permission:view
       x-required-permissions:
       - security:permission:view
+  /v1/users/authorization/person-decision:
+    get:
+      tags:
+      - Authorization
+      summary: Get authorization decision for a person
+      description: Returns allow or deny for the user backing the given personId and a permission key, evaluated against that user's assigned roles. Used to verify an off-session approver (e.g. a manager identified by employee number) holds a required permission.
+      operationId: getPersonDecision
+      parameters:
+      - name: personId
+        in: query
+        description: Person identifier whose backing user is evaluated
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 123e4567-e89b-12d3-a456-426614174000
+      - name: permission
+        in: query
+        description: Permission key to evaluate
+        required: true
+        schema:
+          type: string
+        example: invoice:finalize:override
+      responses:
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: 'Forbidden: authorization decision permission required'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '200':
+          description: Authorization decision returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizationDecisionResponse'
+      security:
+      - bearerAuth:
+        - security:authorization:decide
+      x-required-permissions:
+      - security:authorization:decide
   /v1/users/authorization/decision:
     get:
       tags:
@@ -5408,12 +5479,21 @@ components:
         referenceId:
           type: string
           description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
         nextAction:
           type: string
           description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
         supportAction:
           type: string
           description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
     FieldError:
       type: object
       description: Validation error for a specific request field
@@ -5426,6 +5506,9 @@ components:
           type: string
           description: Validation failure message
           example: must be greater than 0
+      required:
+      - field
+      - message
     UserDto:
       type: object
       description: User account view returned by user-management endpoints

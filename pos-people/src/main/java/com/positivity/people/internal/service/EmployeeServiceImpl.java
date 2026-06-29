@@ -3,6 +3,7 @@ package com.positivity.people.internal.service;
 import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeContactInfoDto;
+import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
@@ -22,6 +23,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +49,18 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final PersonEmailService emailService;
 
     private final EmployeeOffboardingRetryRepository offboardingRetryRepository;
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull Optional<EmployeeIdentityDto> resolveByEmployeeNumber(@NonNull String employeeNumber) {
+        return employeeRepository.findByEmployeeNumberIgnoreCase(employeeNumber).map(employee -> EmployeeIdentityDto.builder()
+                .employeeId(employee.getId())
+                .personId(employee.getPersonId())
+                .employeeNumber(employee.getEmployeeNumber())
+                .status(employee.getStatus() != null ? employee.getStatus().name() : null)
+                .active(employee.getStatus() == EmployeeStatus.ACTIVE)
+                .build());
+    }
 
     @Override
     @Transactional

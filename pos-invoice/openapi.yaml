@@ -10,6 +10,8 @@ servers:
 - url: http://localhost:8086
   description: Generated server url
 tags:
+- name: Billing Authorization
+  description: Manager-approval elevation for controlled finalization
 - name: Payment
   description: Card payment initiation and capture endpoints
 - name: Invoice
@@ -607,6 +609,43 @@ paths:
         - invoice:manage
       x-required-permissions:
       - invoice:manage
+  /v1/billing/auth/elevate:
+    post:
+      tags:
+      - Billing Authorization
+      summary: Mint a manager-approval elevation token
+      description: Verifies the named manager (by employee number) holds invoice:finalize:override and mints a short-lived token scoped to the given invoice, returned as the managerApprovalCode for finalize.
+      operationId: elevate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ElevateRequest'
+        required: true
+      responses:
+        '200':
+          description: Elevation token minted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElevateResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElevateResponse'
+        '401':
+          description: Manager approval denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElevateResponse'
+      security:
+      - bearerAuth:
+        - invoice:finalize
+      x-required-permissions:
+      - invoice:finalize
   /v1/invoices/{invoiceId}:
     get:
       tags:
@@ -1489,6 +1528,37 @@ components:
       - authorizedBy
       - reason
       - type
+    ElevateRequest:
+      type: object
+      description: Request payload for minting a manager-approval elevation token
+      properties:
+        managerEmployeeNumber:
+          type: string
+          description: Employee number of the approving manager
+          example: EMP-0001
+          minLength: 1
+        invoiceId:
+          type: string
+          format: uuid
+          description: Invoice the elevation token will authorise
+          example: 123e4567-e89b-12d3-a456-426614174000
+      required:
+      - invoiceId
+      - managerEmployeeNumber
+    ElevateResponse:
+      type: object
+      description: Minted manager-approval elevation token
+      properties:
+        elevationToken:
+          type: string
+          description: Signed, short-lived elevation token scoped to the invoice
+        expiresAt:
+          type: string
+          format: date-time
+          description: Instant at which the token expires
+      required:
+      - elevationToken
+      - expiresAt
     InvoiceArtifact:
       type: object
       description: A downloadable document associated with an invoice

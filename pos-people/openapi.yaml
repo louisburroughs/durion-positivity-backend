@@ -1963,6 +1963,37 @@ paths:
         - people:availability:view
       x-required-permissions:
       - people:availability:view
+  /v1/people/employees/by-number/{employeeNumber}:
+    get:
+      tags:
+      - Employee API
+      summary: Resolve employee by employee number
+      description: Resolves an employee number to a slim identity projection (person id + employment status). Used for service-to-service approver resolution, such as manager-approval-by-employee-number.
+      operationId: resolveByNumber
+      parameters:
+      - name: employeeNumber
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Employee resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeIdentityDto'
+        '404':
+          description: No employee with that number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeIdentityDto'
+      security:
+      - bearerAuth:
+        - people:employee:view
+      x-required-permissions:
+      - people:employee:view
   /v1/people/availability:
     get:
       tags:
@@ -3752,6 +3783,38 @@ components:
       - severity
       - status
       - workDate
+    EmployeeIdentityDto:
+      type: object
+      description: Employee identity resolved from an employee number
+      properties:
+        employeeId:
+          type: string
+          format: uuid
+          description: Employee record identifier
+          example: 01960011-0000-7000-8000-000000000001
+        personId:
+          type: string
+          format: uuid
+          description: Stable person identifier the employee maps to
+          example: 01960011-0000-7000-8000-000000000002
+        employeeNumber:
+          type: string
+          description: Employee number
+          example: EMP-0001
+        status:
+          type: string
+          description: Employment status
+          example: ACTIVE
+        active:
+          type: boolean
+          description: True when the employee is in an ACTIVE employment status
+          example: true
+      required:
+      - active
+      - employeeId
+      - employeeNumber
+      - personId
+      - status
     PeopleAvailabilityResponse:
       type: object
       description: Availability of a person at a location for a given date based on staffing assignments
