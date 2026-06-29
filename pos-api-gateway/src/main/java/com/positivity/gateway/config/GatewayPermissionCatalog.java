@@ -91,7 +91,6 @@ public final class GatewayPermissionCatalog {
         "PERM_invoice:manage",
         "PERM_invoice:billing-rules",
         "PERM_invoice:finalize",
-        "PERM_invoice:finalize:override",
         "PERM_location:read",
         "PERM_location:write",
         "PERM_location:bay:read",
@@ -368,7 +367,10 @@ public final class GatewayPermissionCatalog {
         "PERM_workorder:timeEntry:reject", // 344
 
         // ── New batch (bits 345–345) ──────────────────────────────────────────
-        "PERM_workorder:labor:add_on_behalf" // 345
+        "PERM_workorder:labor:add_on_behalf", // 345
+
+        // ── New batch (bits 346–346) ──────────────────────────────────────────
+        "PERM_invoice:finalize:override" // 346
     };
 
     public static String authorityForBit(int bitIndex) {
