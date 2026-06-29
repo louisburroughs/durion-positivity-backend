@@ -341,6 +341,18 @@ class CrmAccountsControllerTest {
     }
 
     @Test
+    @DisplayName("resolve parties without crm:party:view authority → 403")
+    void resolvePartyNames_returns403_whenUnauthorized() throws Exception {
+        UUID p1 = UUID.fromString("11111111-0000-0000-0000-000000000001");
+        mockMvc.perform(post("/v1/crm/accounts/parties:resolve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new com.positivity.customer.internal.dto.PartyNameResolveRequest(List.of(p1))))
+                        .header("X-Authorities", "crm:party:search"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @DisplayName("resolve parties rejects an empty id list")
     void resolvePartyNames_emptyList_isBadRequest() throws Exception {
         mockMvc.perform(post("/v1/crm/accounts/parties:resolve")

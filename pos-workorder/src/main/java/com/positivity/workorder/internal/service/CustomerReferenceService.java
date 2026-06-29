@@ -66,7 +66,11 @@ public class CustomerReferenceService {
                     UUID id = parseUuidOrNull(extract(row, "partyId"));
                     String displayName = extract(row, "displayName");
                     if (id != null && StringUtils.hasText(displayName)) {
-                        fromCrm.put(id, new CustomerContact(displayName.trim(), extract(row, "phoneNumber")));
+                        String phone = extract(row, "phoneNumber");
+                        fromCrm.put(
+                                id,
+                                new CustomerContact(
+                                        displayName.trim(), StringUtils.hasText(phone) ? phone.trim() : null));
                     }
                 }
             }

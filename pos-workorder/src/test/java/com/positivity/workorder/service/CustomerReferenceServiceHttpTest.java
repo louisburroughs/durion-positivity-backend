@@ -114,6 +114,33 @@ class CustomerReferenceServiceHttpTest {
         }
     }
 
+    @Test
+    void resolveAll_partialFallback_forIdsOmittedByBatch() throws Exception {
+        UUID resolvedId = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+        UUID omittedId = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+        AtomicInteger callCount = new AtomicInteger();
+        HttpServer server = startBatchServer(
+                RESOLVE_PATH,
+                200,
+                "[{\"partyId\":\"" + resolvedId + "\",\"displayName\":\"Acme\",\"phoneNumber\":\"+1-555-7777\"}]",
+                callCount);
+        try {
+            String serviceId = "localhost:" + server.getAddress().getPort();
+            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
+
+            var resolved = service.resolveAll(List.of(resolvedId, omittedId));
+
+            assertThat(resolved).hasSize(2);
+            assertThat(resolved.get(resolvedId).name()).isEqualTo("Acme");
+            assertThat(resolved.get(resolvedId).phoneNumber()).isEqualTo("+1-555-7777");
+            assertThat(resolved.get(omittedId).name()).isEqualTo("customer-" + omittedId);
+            assertThat(resolved.get(omittedId).phoneNumber()).isNull();
+            assertThat(callCount.get()).isEqualTo(1);
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private HttpServer startBatchServer(String expectedPath, int status, String body, AtomicInteger callCount)
             throws IOException {
         return startBatchServerCapturingHeaders(expectedPath, status, body, callCount, headers -> {});

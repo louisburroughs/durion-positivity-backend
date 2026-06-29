@@ -148,6 +148,86 @@ class PartyServiceImplResolveNamesTest {
     }
 
     @Test
+    void person_picksFirstPhone_whenNoPrimaryFlagged() {
+        UUID partyA = UUID.fromString("66666666-0000-0000-0000-000000000002");
+        UUID personA = UUID.fromString("77777777-0000-0000-0000-000000000002");
+        when(partyRepository.findAllById(List.of(partyA))).thenReturn(List.of());
+        when(personPartyRepository.findAllById(List.of(partyA))).thenReturn(List.of(person(partyA, personA)));
+        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+                .thenReturn(Map.of(
+                        personA,
+                        identityWithPhones(
+                                personA,
+                                "John",
+                                "Smith",
+                                List.of(
+                                        new PeopleClient.ContactPoint("EMAIL", "j@x.com", false),
+                                        new PeopleClient.ContactPoint("PHONE_WORK", "  +1-555-0009  ", false),
+                                        new PeopleClient.ContactPoint("PHONE_HOME", "+1-555-0010", false)))));
+
+        List<PartyNameRef> result = service.resolveNames(List.of(partyA));
+
+        // no primary -> first phone-type point, trimmed
+        assertThat(result).containsExactly(new PartyNameRef(partyA, "John Smith", "+1-555-0009"));
+    }
+
+    @Test
+    void person_nullPhone_whenNoPhoneContactPoints() {
+        UUID partyA = UUID.fromString("66666666-0000-0000-0000-000000000003");
+        UUID personA = UUID.fromString("77777777-0000-0000-0000-000000000003");
+        when(partyRepository.findAllById(List.of(partyA))).thenReturn(List.of());
+        when(personPartyRepository.findAllById(List.of(partyA))).thenReturn(List.of(person(partyA, personA)));
+        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+                .thenReturn(Map.of(
+                        personA,
+                        identityWithPhones(
+                                personA,
+                                "John",
+                                "Smith",
+                                List.of(
+                                        new PeopleClient.ContactPoint("EMAIL", "j@x.com", true),
+                                        new PeopleClient.ContactPoint("PHONE_MOBILE", "   ", true)))));
+
+        List<PartyNameRef> result = service.resolveNames(List.of(partyA));
+
+        // only a blank-valued phone point -> no phone
+        assertThat(result).containsExactly(new PartyNameRef(partyA, "John Smith", null));
+    }
+
+    @Test
+    void mixedCommercialAndPerson_resolvedTogether() {
+        UUID commercialId = UUID.fromString("88888888-0000-0000-0000-000000000001");
+        UUID personPartyId = UUID.fromString("88888888-0000-0000-0000-000000000002");
+        UUID personId = UUID.fromString("99999999-0000-0000-0000-000000000002");
+        when(partyRepository.findAllById(List.of(commercialId, personPartyId)))
+                .thenReturn(List.of(commercial(commercialId, "Acme Supply", "Acme LLC")));
+        when(personPartyRepository.findAllById(List.of(commercialId, personPartyId)))
+                .thenReturn(List.of(person(personPartyId, personId)));
+        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+                .thenReturn(Map.of(personId, identity(personId, "Jane", "Doe")));
+
+        List<PartyNameRef> result = service.resolveNames(List.of(commercialId, personPartyId));
+
+        assertThat(result)
+                .containsExactlyInAnyOrder(
+                        new PartyNameRef(commercialId, "Acme Supply", null),
+                        new PartyNameRef(personPartyId, "Jane Doe", null));
+    }
+
+    @Test
+    void person_omitted_whenIdentityHasBlankDisplayName() {
+        UUID personPartyId = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
+        UUID personId = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000001");
+        when(partyRepository.findAllById(List.of(personPartyId))).thenReturn(List.of());
+        when(personPartyRepository.findAllById(List.of(personPartyId)))
+                .thenReturn(List.of(person(personPartyId, personId)));
+        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+                .thenReturn(Map.of(personId, identity(personId, "  ", "  ")));
+
+        assertThat(service.resolveNames(List.of(personPartyId))).isEmpty();
+    }
+
+    @Test
     void dedupesIds_andOmitsUnresolvable() {
         UUID known = UUID.fromString("44444444-0000-0000-0000-000000000001");
         UUID unknown = UUID.fromString("44444444-0000-0000-0000-000000000002");
