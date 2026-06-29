@@ -34,7 +34,10 @@ import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -46,6 +49,19 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final TaxServiceClient taxServiceClient;
     private final LocationServiceClient locationServiceClient;
     private final WorkorderReferenceClient workorderReferenceClient;
+
+    /**
+     * Self-reference (lazy to break the construction cycle) used so the public
+     * read/write entry points can invoke the {@code @Transactional} mapping
+     * methods through the Spring proxy and then perform remote enrichment
+     * outside the transaction boundary.
+     */
+    private InvoiceServiceImpl self;
+
+    @Autowired
+    public void setSelf(@Lazy InvoiceServiceImpl self) {
+        this.self = self;
+    }
 
     public InvoiceServiceImpl(
             @NonNull InvoiceRepository invoiceRepository,
@@ -89,9 +105,21 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @NonNull
     public InvoiceDetailsResponse getInvoice(@NonNull UUID invoiceId) {
+        // Load + map inside a read-only transaction (via the proxy so lazy
+        // collections initialize), then resolve the workorder number from the
+        // remote workexec service OUTSIDE the transaction so the DB connection is
+        // not held during the outbound call.
+        InvoiceDetailsResponse response = self.loadInvoiceDetail(invoiceId);
+        response.setWorkorderNumber(resolveWorkorderNumber(response.getWorkorderId()));
+        return response;
+    }
+
+    @Transactional(readOnly = true)
+    @NonNull
+    public InvoiceDetailsResponse loadInvoiceDetail(@NonNull UUID invoiceId) {
         Invoice invoice =
                 invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
         return toDetailsResponse(invoice);
@@ -116,7 +144,9 @@ public class InvoiceServiceImpl implements InvoiceService {
         recalculateTotals(invoice);
 
         Invoice saved = invoiceRepository.save(invoice);
-        return toDetailsResponse(saved);
+        InvoiceDetailsResponse response = toDetailsResponse(saved);
+        response.setWorkorderNumber(resolveWorkorderNumber(saved.getWorkorderId()));
+        return response;
     }
 
     @NonNull
@@ -301,7 +331,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setInvoiceId(invoice.getId());
         response.setInvoiceNumber(invoice.getInvoiceNumber());
         response.setWorkorderId(invoice.getWorkorderId());
-        response.setWorkorderNumber(resolveWorkorderNumber(invoice.getWorkorderId()));
+        // workorderNumber is resolved by the caller outside the transaction.
         response.setEstimateId(invoice.getEstimateId());
         response.setApprovalId(invoice.getApprovalId());
         response.setPartyId(invoice.getPartyId());
@@ -362,9 +392,15 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     /**
-     * Whether a DRAFT invoice exceeds the SERVICE_ADVISOR finalization threshold
-     * and therefore requires a manager approval code to be finalized. Mirrors the
-     * eligibility rule enforced by {@link InvoiceFinalizationServiceImpl}.
+     * Whether a DRAFT invoice exceeds the SERVICE_ADVISOR finalization threshold.
+     *
+     * <p>This flag mirrors the threshold portion of
+     * {@link InvoiceFinalizationServiceImpl#checkEligibility} (role-agnostic): it
+     * reflects whether the invoice total is over the limit, NOT the viewing
+     * actor's authority. A SHOP_MANAGER is exempt from the approval code at
+     * finalize time, but the detail response is computed without a role, so the UI
+     * should treat this as "approval may be required" and rely on the finalize
+     * endpoint for the authoritative enforcement.
      */
     private boolean requiresManagerApproval(@NonNull Invoice invoice) {
         if (invoice.getStatus() != InvoiceStatus.DRAFT) {
