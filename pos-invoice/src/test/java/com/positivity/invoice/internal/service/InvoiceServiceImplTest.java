@@ -225,6 +225,22 @@ class InvoiceServiceImplTest {
     }
 
     @Test
+    void createInvoice_creationRequest_shouldAssignInvoiceNumberAtDraft() {
+        InvoiceCreationRequest request = InvoiceCreationRequest.builder()
+                .workorderId(workorderId)
+                .locationId(locationId)
+                .lineItems(List.of())
+                .build();
+
+        when(invoiceRepository.findByWorkorderId(workorderId)).thenReturn(Optional.empty());
+        when(invoiceRepository.save(any())).thenReturn(draftInvoice);
+
+        invoiceService.createInvoice(request);
+
+        assertThat(draftInvoice.getInvoiceNumber()).startsWith("INV-");
+    }
+
+    @Test
     void createInvoice_creationRequest_shouldReturnExistingInvoice() {
         InvoiceCreationRequest request = InvoiceCreationRequest.builder()
                 .workorderId(workorderId)

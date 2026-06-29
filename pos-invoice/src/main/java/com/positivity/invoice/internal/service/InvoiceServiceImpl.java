@@ -181,6 +181,14 @@ public class InvoiceServiceImpl implements InvoiceService {
         recalculateTotals(invoice);
 
         Invoice saved = invoiceRepository.save(invoice);
+        // Assign the invoice number at draft creation. The number is the invoice's stable
+        // identity for the whole of its lifecycle; deferring it left drafts showing a
+        // placeholder that never resolved. Assigned after the first save so the generated
+        // id is available for the number's id segment.
+        if (saved.getInvoiceNumber() == null || saved.getInvoiceNumber().isBlank()) {
+            saved.setInvoiceNumber(generateInvoiceNumber(saved));
+            saved = invoiceRepository.save(saved);
+        }
         return toGenerationResponse(saved);
     }
 
