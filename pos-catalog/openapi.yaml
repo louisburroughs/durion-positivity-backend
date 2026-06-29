@@ -4142,10 +4142,10 @@ components:
         number:
           type: integer
           format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
         pageable:
           $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
         first:
           type: boolean
         last:
@@ -4161,16 +4161,16 @@ components:
         offset:
           type: integer
           format: int64
-        sort:
-          $ref: '#/components/schemas/SortObject'
-        pageSize:
-          type: integer
-          format: int32
         paged:
           type: boolean
         pageNumber:
           type: integer
           format: int32
+        pageSize:
+          type: integer
+          format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
     SortObject:
@@ -4201,10 +4201,10 @@ components:
         number:
           type: integer
           format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
         pageable:
           $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
         first:
           type: boolean
         last:
