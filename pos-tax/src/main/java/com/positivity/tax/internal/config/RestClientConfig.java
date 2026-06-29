@@ -1,4 +1,4 @@
-package com.positivity.vehiclefitment.internal.config;
+package com.positivity.tax.internal.config;
 
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,20 +8,19 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
+/**
+ * Provides the {@link RestClient.Builder} bean injected by this module's outbound clients
+ * (e.g. the event-type registration in {@code EventTypeInitializer}).
+ *
+ * <p>Spring Boot's auto-configured {@code RestClient.Builder} is absent without service
+ * discovery (e.g. the {@code openapi} profile), so without this bean the context fails to
+ * start with {@code UnsatisfiedDependencyException} on {@code RestClient$Builder}. The module
+ * addresses siblings by direct DNS base-urls, so a plain builder is sufficient; bounded
+ * connect/read timeouts keep a hung sibling from blocking a worker thread.
+ */
 @Configuration
 public class RestClientConfig {
-    @Bean
-    public RestClient restClient() {
-        return RestClient.create();
-    }
 
-    /**
-     * The module's {@code EventTypeInitializer} injects a {@link RestClient.Builder}, but
-     * Spring Boot's auto-configured builder is absent without service discovery (e.g. the
-     * {@code openapi} profile), so the context failed to start with
-     * {@code UnsatisfiedDependencyException} on {@code RestClient$Builder}. Declare it
-     * explicitly with bounded connect/read timeouts.
-     */
     @Bean
     @Primary
     public RestClient.Builder restClientBuilder(
