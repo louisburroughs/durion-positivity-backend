@@ -9,12 +9,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /** Maps invoice-artifact errors to HTTP statuses for the artifact controllers. */
+@Slf4j
 @RestControllerAdvice(assignableTypes = {InvoiceArtifactController.class, InvoiceArtifactDownloadController.class})
 @RequiredArgsConstructor
 public class InvoiceArtifactExceptionHandler {
@@ -24,16 +26,19 @@ public class InvoiceArtifactExceptionHandler {
 
     @ExceptionHandler({InvoiceNotFoundException.class, ArtifactNotFoundException.class})
     public ResponseEntity<ApiError> handleNotFound(RuntimeException ex, HttpServletRequest request) {
+        log.warn("Artifact request returned 404 for {} {}: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
         return error(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request);
     }
 
     @ExceptionHandler(InvalidTokenException.class)
     public ResponseEntity<ApiError> handleInvalidToken(InvalidTokenException ex, HttpServletRequest request) {
+        log.warn("Artifact request returned 403 for {} {}: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
         return error(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage(), request);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleBadRequest(IllegalArgumentException ex, HttpServletRequest request) {
+        log.warn("Artifact request returned 400 for {} {}: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
         return error(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
     }
 
