@@ -20,12 +20,14 @@ hand-written facade, while keeping facade tools working and never leaking tools 
 
 ## Gaps to close (the actual work)
 
-### G3.1 — Execution coordinates are not persisted
-`mcp_tool` stores name/domain/handler_bean/embedding but **not** the HTTP `method` + `path` +
-`serviceId` needed to call a discovered op. Today those exist only in-memory at startup
-(`OpenApiToolMapper` builds handlers from the fetched aggregate spec).
+### G3.1 — Discovered ops are not persisted at all (corrected 2026-06-30)
+**Verified correction:** discovered OpenAPI ops are **not written to `mcp_tool`**. `ToolRegistrationServiceImpl.registerDiscoveredTools()` only calls `mcpAsyncServer.addTool(spec)` — it registers them in the in-memory MCP server, never the DB. No code `INSERT`s `source='openapi'` rows. (The README's "maps operations → mcp_tool rows" is aspirational.) Execution coordinates exist only inside the per-request handler closure built by `OpenApiToolMapper`.
 
-**Fix:** persist them. Migration (pg + h2):
+So G3.1 is **not** a column-population — it must first **add persistence** of discovered ops to `mcp_tool` (row + `source='openapi'` + embedding + coords) so the permission-gated query (`findDiscoveredCandidatesForPermissions`) and `OpenApiToolProvider` have data. That requires the embedding model + DB → **live-dependent, not offline.** The coord columns (V21/V19) are in place and ready.
+
+**Implementation (live):** in `registerDiscoveredTools`, for each discovered op also persist an `mcp_tool` row: name, domain, description, `source='openapi'`, `http_method`, `http_path`, `service_id`, `input_schema`, and an embedding (via the embedding model). Surface method/path/serviceId from `OpenApiToolMapper` (today only `McpSchema.Tool` is returned — add a coord-carrying result). Then `mcp_tool_permission` rows must be seeded/curated for the discovered ops (Gate 7 admin tooling, #785) or they are fail-closed (never selected).
+
+Columns (already shipped — V21 pg / V19 h2):
 ```sql
 ALTER TABLE mcp_tool ADD COLUMN IF NOT EXISTS http_method  VARCHAR(8);
 ALTER TABLE mcp_tool ADD COLUMN IF NOT EXISTS http_path    VARCHAR(512);

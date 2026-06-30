@@ -360,7 +360,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [x] `RequestScopedUserContext` leakage primitive + tests (`OpenApiToolProviderTest`, `RequestScopedUserContextTest`).
 
 **DEFERRED to live (final wiring + verification)**
-- [ ] Populate `http_method/http_path/service_id/input_schema` in `ToolRegistrationService` at discovery.
+- [ ] Persist discovered ops to `mcp_tool` + populate coords (LIVE, not offline — corrected 2026-06-30): `ToolRegistrationServiceImpl` only registers ops with the in-memory `McpAsyncServer`; nothing writes `source='openapi'` rows. Must add row persistence (+ embedding via the model + `mcp_tool_permission` seeding) before coords/`OpenApiToolProvider` have data. Coord columns (V21/V19) ready.
 - [ ] Wire `.toolProvider(openApiToolProvider)` into both managers + holder set/clear around blocking `agent.chat(...)` (constructor change touches `SessionAgentManager` + its test constructors).
 - [ ] Streaming Reactor-context propagation (until then streaming is fail-closed → no discovered tools).
 - [ ] Live tests §B.6 (the gate exit criterion).
