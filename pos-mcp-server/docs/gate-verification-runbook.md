@@ -142,16 +142,16 @@ psql "$MCP_DB_URL" -c "\dt mcp_tool_role*"   # expect only *_deprecated
 **Implemented (committed, unit-tested):** `RequestScopedUserContext`, `DiscoveredOperation` +
 `findDiscoveredCandidatesForPermissions`, exec-coordinate columns (V21/V19), `OpenApiOperationExecutor`,
 `OpenApiToolProvider` (fail-closed, `isDynamic`). **Remaining before this section runs:**
-(1) populate `http_method/http_path/service_id/input_schema` in `ToolRegistrationService` at discovery;
-(2) wire `.toolProvider(openApiToolProvider)` into both managers + `RequestScopedUserContext` set/clear
-around the blocking `agent.chat(...)`; (3) streaming Reactor-context propagation (until then streaming
-stays fail-closed → no discovered tools). See `gate3-openapi-bridge-design.md` G3.1/G3.3.
+(1) **Persist discovered ops to `mcp_tool`** — corrected finding: `ToolRegistrationServiceImpl` only registers ops with the in-memory `McpAsyncServer`; **no `source='openapi'` rows exist in the DB today**. Add row persistence (name/domain/description/`source='openapi'`/`http_method`/`http_path`/`service_id`/`input_schema` + an **embedding** via the model) AND seed `mcp_tool_permission` for them (else fail-closed → never selected). Surface method/path/serviceId from `OpenApiToolMapper`. Coord columns V21/V19 are ready.
+(2) wire `.toolProvider(openApiToolProvider)` into both managers + `RequestScopedUserContext` set/clear around the blocking `agent.chat(...)`; (3) streaming Reactor-context propagation (until then streaming stays fail-closed → no discovered tools). See `gate3-openapi-bridge-design.md` G3.1/G3.3.
 
-Requires the gateway aggregate spec reachable + discovered tools registered with execution
-coordinates persisted (design G3.1). With the service up (`alpha`):
+Requires the gateway aggregate spec reachable + discovered ops persisted with coords + permissions (step 1 above). With the service up (`alpha`):
 ```bash
-# discovered ops carry execution coordinates (G3.1)
-psql "$MCP_DB_URL" -c "SELECT name, source, http_method, http_path FROM mcp_tool WHERE source='openapi' LIMIT 5;"
+# PRECHECK — discovered ops must exist in the DB at all (empty today until step 1 is implemented):
+psql "$MCP_DB_URL" -c "SELECT count(*) FROM mcp_tool WHERE source='openapi';"
+# and carry execution coordinates + permission rows:
+psql "$MCP_DB_URL" -c "SELECT name, http_method, http_path FROM mcp_tool WHERE source='openapi' LIMIT 5;"
+psql "$MCP_DB_URL" -c "SELECT t.name FROM mcp_tool t JOIN mcp_tool_permission p ON p.tool_id=t.id WHERE t.source='openapi' LIMIT 5;"
 ```
 - **End-to-end (positive):** as a user holding the op's permission, send a `/v1/mcp/chat` message that should trigger a `source='openapi'` op **with no facade equivalent**; confirm a real gateway result (not a hallucinated success).
 - **Negative (leakage/permission):** as a user **lacking** that permission, confirm the op never appears in the agent's tools and cannot be executed — including reusing a cached agent that a higher-permission user just used (cached-agent leakage check).
