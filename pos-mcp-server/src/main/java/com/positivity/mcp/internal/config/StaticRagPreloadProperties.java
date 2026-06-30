@@ -15,5 +15,17 @@ public record StaticRagPreloadProperties(List<StaticDocEntry> docs) {
     public record StaticDocEntry(
             @NonNull String id,
             @NonNull String sourcePath,
-            @Nullable String ragScope) {}
+            @Nullable String ragScope,
+            @Nullable List<String> requiredPermissions) {
+
+        /** Gate 5 G5.2: required-permissions are optional; default to none (public/AUTHENTICATED). */
+        public StaticDocEntry {
+            requiredPermissions = requiredPermissions == null ? List.of() : List.copyOf(requiredPermissions);
+        }
+
+        /** Back-compat 3-arg form (no permission metadata). */
+        public StaticDocEntry(@NonNull String id, @NonNull String sourcePath, @Nullable String ragScope) {
+            this(id, sourcePath, ragScope, List.of());
+        }
+    }
 }
