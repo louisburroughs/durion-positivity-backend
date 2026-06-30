@@ -103,7 +103,12 @@ Expect HTTP 200 + `"content":"pong"`. (Observed ~28s — qwen3.5:cloud is a reas
 ```bash
 ./mvnw -o -pl pos-mcp-server spring-boot:run -Dspring-boot.run.profiles=alpha
 ```
-Requires Postgres+pgvector reachable (tunnel) and the embedding host resolvable. On boot, Flyway applies migrations including **V19** (legacy-table rename).
+Requires Postgres+pgvector reachable (tunnel) and the embedding host resolvable. On boot, Flyway applies migrations including **V19** (legacy-table rename) and **V20** (`nlti_session.workflow_state`).
+
+> **Boot dependency (fixed):** context init requires `org.latencyutils:LatencyUtils` (Micrometer
+> `AbstractTimer` → `org.LatencyUtils.PauseDetector`). It is now declared in `pos-mcp-server/pom.xml`
+> (Boot 4.1 BOM does not manage it). Guarded by `ObservabilityTimerSmokeTest`. Without it, every
+> Timer bean in `NltiObservabilityMetricsConfig` fails and the whole context (any live boot) is blocked.
 
 > **Before first boot against a shared DB:** snapshot it. V19/V17 are reversible (`RENAME TO *_deprecated`, `IF EXISTS`) but take the snapshot anyway per the gate rollback policy.
 
