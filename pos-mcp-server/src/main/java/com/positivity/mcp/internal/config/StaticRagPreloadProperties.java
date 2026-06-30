@@ -4,6 +4,7 @@ import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 @ConfigurationProperties(prefix = "mcp.rag.preload")
 public record StaticRagPreloadProperties(List<StaticDocEntry> docs) {
@@ -19,6 +20,7 @@ public record StaticRagPreloadProperties(List<StaticDocEntry> docs) {
             @Nullable List<String> requiredPermissions) {
 
         /** Gate 5 G5.2: required-permissions are optional; default to none (public/AUTHENTICATED). */
+        @ConstructorBinding
         public StaticDocEntry {
             requiredPermissions = requiredPermissions == null ? List.of() : List.copyOf(requiredPermissions);
         }
