@@ -121,6 +121,19 @@ psql "$MCP_DB_URL" -c "\dt mcp_role*"        # expect only *_deprecated
 psql "$MCP_DB_URL" -c "\dt mcp_tool_role*"   # expect only *_deprecated
 ```
 
+### B.6 OpenAPI execution bridge (Gate 3 — after implementation per `gate3-openapi-bridge-design.md`)
+Requires the gateway aggregate spec reachable + discovered tools registered with execution
+coordinates persisted (design G3.1). With the service up (`alpha`):
+```bash
+# discovered ops carry execution coordinates (G3.1)
+psql "$MCP_DB_URL" -c "SELECT name, source, http_method, http_path FROM mcp_tool WHERE source='openapi' LIMIT 5;"
+```
+- **End-to-end (positive):** as a user holding the op's permission, send a `/v1/mcp/chat` message that should trigger a `source='openapi'` op **with no facade equivalent**; confirm a real gateway result (not a hallucinated success).
+- **Negative (leakage/permission):** as a user **lacking** that permission, confirm the op never appears in the agent's tools and cannot be executed — including reusing a cached agent that a higher-permission user just used (cached-agent leakage check).
+- **Streaming parity:** repeat both via `/v1/mcp/chat/stream` (separate Reactor-context propagation path — must enforce the negative case too).
+- **Facade regression:** confirm existing facade tools still work.
+- **Workflow gating (Gate 2C live):** seed `mcp_tool_workflow` for a non-IDLE state, set `NltiSession.workflow_state`, confirm that state's tools activate and IDLE-only tools do not.
+
 ---
 
 ## C. Full module test suite (optional, broader)

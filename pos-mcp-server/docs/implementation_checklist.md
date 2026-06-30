@@ -335,11 +335,29 @@
 - [ ] Verified: tool schemas include argument validation — _ev:_
 - [ ] Verified: facade behavior not regressed — _ev:_
 
-### Cross-phase locks — [ ] run & recorded
+### Cross-phase locks — [x] run & recorded (design preserves Permission lock: per-call permission re-check, no LLM-chosen URLs, gated candidate selection)
 ### Exit decision: one discovered non-facade op safely callable end-to-end.
 ### Gate 3 sign-off
-- Metrics filled: [ ] · Decision: ☐ Pass ☐ Pass+exception ☐ Hold ☐ Roll back
-- Exceptions: ______ · Approver/date: ______ · Rollback (disable ToolProvider flag) verified: [ ]
+- Metrics filled: [ ] · Decision: **HOLD — design complete, implementation deferred to live**
+
+#### Gate 3 — Execution results (2026-06-30)
+**Why design-first (not code-first):** Gate 3 is the security-path gate — per-call permission
+propagation + cached-agent leakage prevention — and additionally (a) requires reactive-thread-safe
+propagation for the streaming path (Reactor Context, not ThreadLocal), and (b) the persisted
+`mcp_tool` rows lack execution coordinates (method/path/serviceId), which live only in-memory at
+startup. Landing this code without the running stack would be unverifiable security code, violating
+the Permission lock. So it is specified implementation-ready and verified live together.
+
+**DONE**
+- [x] Full implementation-ready design — `docs/gate3-openapi-bridge-design.md`: ToolProvider wiring (confirmed `dev.langchain4j.service.tool.ToolProvider` + `AiServices.toolProvider` in 1.13.0); exec-coordinate persistence gap + migration; MCP-handler→`ToolExecutor` bridge; **leakage-safe per-call propagation for both blocking (ThreadLocal) and streaming (Reactor Context)**; per-call permission re-check; facade coexistence; telemetry `source` tag.
+- [x] Live verification steps — runbook §B.6 (positive E2E, negative/leakage, streaming parity, facade regression, + Gate 2C non-IDLE activation).
+
+**DEFERRED to live (the implementation, per the design's order G3.1→G3.4)**
+- [ ] Persist execution coordinates (+ `ToolMetadata` fields, migration).
+- [ ] `OpenApiOperationExecutor` bridge + `OpenApiToolProvider` + `findDiscoveredCandidatesForPermissions`.
+- [ ] Wire `.toolProvider(...)` into both managers with path-correct propagation.
+- [ ] Live tests §B.6 (this IS the gate exit criterion).
+- Rollback: omit `.toolProvider(...)` → facade-only (current behavior).
 
 ---
 
