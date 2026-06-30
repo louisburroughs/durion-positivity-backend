@@ -1,8 +1,19 @@
 {
-  "_comment": "Gate 0 baseline metric snapshot. Captured before any Phase 1+ behavior change. Metric values are PENDING a live model backend (Ollama) + the metric-computation harness; structural-harness and config-hygiene Gate 0 items are complete. Fill the nulls when the runtime harness runs against the alpha backend.",
+  "_comment": "Gate 0 baseline snapshot. Chat backend reachability verified 2026-06-30. DB-dependent metrics (tool-selection hit@5/MRR, RAG recall@k) remain PENDING: they require pgvector + the embedding host, which are not reachable from the CI/agent environment (Postgres is tunnel-only; embedding host 'ollama:11434' is container-internal). Capture these on a host with the DB tunnel + embedding endpoint reachable, then fill the nulls.",
   "schema_version": 1,
-  "captured_at": null,
-  "backend": { "chat_model": "qwen3.5:cloud", "embedding_model": "nomic-embed-text", "ollama_base_url": null },
+  "captured_at": "2026-06-30",
+  "backend": {
+    "chat_base_url": "https://ollama.com",
+    "chat_model": "qwen3.5:cloud",
+    "chat_reachable": true,
+    "embedding_base_url": "http://ollama:11434",
+    "embedding_model": "nomic-embed-text",
+    "embedding_reachable_from_ci": false,
+    "postgres_reachable_from_ci": false
+  },
+  "observations": {
+    "chat_smoke_test": { "prompt": "Reply with the single word: pong", "http": 200, "latency_s": 28.5, "note": "qwen3.5:cloud is a reasoning model; ~28s for a trivial completion confirms it is unsuitable as the T1 router (Gate 4 small-router tier required)." }
+  },
   "fixture_counts": { "tool_selection": 4, "rag_retrieval": 4, "write_safety": 4 },
   "metrics": {
     "tool_selection_hit_at_5": null,
