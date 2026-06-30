@@ -414,7 +414,8 @@ the Permission lock. So it is specified implementation-ready and verified live t
 #### Gate 4 — Execution results (2026-06-30)
 - [x] Implementation-ready design — `docs/gate4-tiered-router-design.md`: T0/T1/T2 tiers; `NltiRouter` (strict JSON, temp 0, validated, **safe default → T2-complex** on bad output); pure tier-selection function; tier→model resolver + cache-key change; `mcp.model.fallback` kept orthogonal; telemetry via the shared per-request pipeline (also serves Gate 1 layers + Gate 2C workflow state).
 - [x] Live verification steps — runbook §B.7 (routing split ≥80%/100%, safe fallback, quality/latency, fallback≠tier).
-- [ ] Implementation (G4.1→G4.4) + live §B.7 — deferred. Rollback: route all → T2-complex via flag.
+- [x] **Decision core implemented + unit-tested (2026-06-30)** — `ModelTier`, `RequestComplexity`, `RouterClassification` (+ safe default), `TierSelector` (pure G4.2 rule; 6 branch tests), `NltiRouter` (G4.1 strict-JSON parse, fence-tolerant, safe default → T2-complex; 4 tests). 33 offline tests green.
+- [ ] Deferred (live + wiring): tier→model resolver (`mcp.model.router/simple/complex` beans); wire router into both managers (cache key + per-request model selection) + shared T0; telemetry emission; live §B.7. Rollback: route all → T2-complex via flag.
 - Note: Gate 4 T0 also reconciles the Gate 2A blocking-vs-streaming `simpleChat` divergence (make T0 shared).
 
 ---

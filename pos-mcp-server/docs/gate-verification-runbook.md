@@ -39,10 +39,10 @@ After this, incremental offline runs work:
 ### Run every implemented gate's tests in one shot
 ```bash
 ./mvnw -o -pl pos-mcp-server test \
-  -Dtest='Eval*,RolePromptAssemblyTest,MasterAgentRegistryLoaderTest,PermissionGatingInvariantTest,WorkflowStateTest,ObservabilityTimerSmokeTest,OpenApiToolProviderTest,RequestScopedUserContextTest' \
+  -Dtest='Eval*,RolePromptAssemblyTest,MasterAgentRegistryLoaderTest,PermissionGatingInvariantTest,WorkflowStateTest,ObservabilityTimerSmokeTest,OpenApiToolProviderTest,RequestScopedUserContextTest,TierSelectorTest,NltiRouterTest' \
   -Dsurefire.failIfNoSpecifiedTests=false
 ```
-Expected: `Tests run: 23, Failures: 0, Errors: 0, Skipped: 1` → `BUILD SUCCESS`.
+Expected: `Tests run: 33, Failures: 0, Errors: 0, Skipped: 1` → `BUILD SUCCESS`.
 (The 1 skipped is the Gate 0 fixture-minimum exit gate — see Gate 0 below.)
 
 ### Format check (drift guard — must be clean before commit)
@@ -159,7 +159,13 @@ psql "$MCP_DB_URL" -c "SELECT name, source, http_method, http_path FROM mcp_tool
 - **Facade regression:** confirm existing facade tools still work.
 - **Workflow gating (Gate 2C live):** seed `mcp_tool_workflow` for a non-IDLE state, set `NltiSession.workflow_state`, confirm that state's tools activate and IDLE-only tools do not.
 
-### B.7 Tiered model router (Gate 4 — after implementation per `gate4-tiered-router-design.md`)
+### B.7 Tiered model router (Gate 4)
+**Implemented (committed, unit-tested):** `ModelTier`, `RequestComplexity`, `RouterClassification`
+(+ safe default), `TierSelector` (pure rule), `NltiRouter` (`@Profile alpha`, strict-JSON parse +
+safe default → T2-complex). **Remaining before this section runs:** (1) tier→model resolver with
+`mcp.model.router/simple/complex` beans; (2) wire the router into both managers (cache key gains the
+tier; per-request model selection) + shared T0; (3) telemetry emission. See `gate4-tiered-router-design.md`.
+
 Requires the T1/T2-simple/T2-complex models configured + reachable.
 - **Routing split:** run the tool-selection fixtures; confirm ≥80% of `single-lookup` route to T2-simple and 100% of write/accounting/tax/admin/security route to T2-complex (read `routing.tier` from telemetry).
 - **Safe fallback:** force malformed router JSON (e.g. point the router at a non-JSON model) → request still completes via the T2-complex safe default; logged.
