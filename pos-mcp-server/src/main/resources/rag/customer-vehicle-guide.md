@@ -1,0 +1,38 @@
+# Customer and Vehicle Guide
+
+## Purpose
+RAG id: `crm.customer-vehicle`  
+RAG scope: `customer`  
+Required permissions: `crm:party:view`, `crm:party:search`, `crm:vehicle:view`, `crm:vehicle:search`, `crm:contact:view`  
+Audience: internal staff.  
+This document is reference context only and grants no access; access is enforced by permission codes at request time.
+
+This guide grounds customer, party, contact, and vehicle questions. It is internal reference context for staff and admins, not customer-facing material.
+
+## Core concepts
+A party is the CRM identity for a person, company, fleet, vendor, or other business participant. A customer is a party in a buying or service relationship. A contact record stores how to reach the party. A vehicle record stores the serviced asset and may include VIN, unit number, make/model, mileage, service history, account relationship, and workorder linkage if available.
+
+The verified CRM/customer/vehicle permissions are `crm:party:view`, `crm:party:search`, `crm:vehicle:view`, `crm:vehicle:search`, and `crm:contact:view`. Use search permissions for lookup-style questions and view permissions for record-detail questions.
+
+## Staff questions and answer patterns
+| Question | Interpretation |
+|---|---|
+| "Find this customer." | Search party/customer records by name, account, phone, email, or known identifier. |
+| "Which vehicles are on this account?" | List vehicles connected to the visible party/account context. |
+| "Show the service history for this VIN." | Use vehicle identifier and workorder/service history only if visible. |
+| "Who should we contact for this fleet?" | Return contact records and role/context if visible. |
+| "Is this the same customer?" | Compare identifiers and advise data cleanup; do not merge without verified authority. |
+
+## Vehicle identifiers
+VIN is a key exact identifier but the bundle does not verify validation rules or canonical storage. Staff may also use unit number, plate, fleet asset number, customer vehicle number, or workorder history. The assistant should ask a clarifying question when a vehicle reference is ambiguous and should not validate VIN structure without source grounding.
+
+## Customer and workorder hand-off
+Customer and vehicle data are prerequisites for service operations. An appointment links a customer, vehicle, time slot, and shop resource. An estimate uses customer and vehicle context before approval. A workorder tracks the vehicle being serviced after estimate approval. Invoice, warranty, claim, and service-history questions often depend on the same customer/vehicle identifiers.
+
+## Privacy and access handling
+The assistant should return only the data visible to the caller's permissions. It should avoid exposing contact details unless the user has the required context and permission. It should not infer identity from partial identifiers when multiple matches exist.
+
+## Error and exception patterns
+Common CRM issues include duplicate party records, stale contact data, vehicle assigned to wrong account, missing VIN/unit number, mismatched account and invoice, ambiguous fleet hierarchy, and customer/vehicle references that do not match the workorder.
+
+> TODO(verify): party type taxonomy, vehicle fields, merge/deduplication rules, fleet hierarchy, and service-history API ownership.

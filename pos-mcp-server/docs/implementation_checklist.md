@@ -466,7 +466,8 @@ the Permission lock. So it is specified implementation-ready and verified live t
 #### Gate 5 — Execution results (2026-06-30)
 - [x] Implementation-ready design — `docs/gate5-rag-hybrid-design.md`: permission-aware filter (replaces `RoleAwareMetadataFilter`, reuses the Gate 3 `RequestScopedUserContext`); `required_permissions` doc metadata + `StaticDocEntry`/ingest field; Postgres FTS retriever merged into the existing Tier-2 hybrid (harness-tuned weights); `bge-m3` 768→1024 dual-column reversible migration; 9-doc authoring table with scope + permission + chunking.
 - [x] Live verification steps — runbook §B.8.
-- [ ] Implementation (G5.1→G5.5) + live §B.8 — deferred. **G5.5 (author the RAG docs) is offline-doable now** (not live-blocked).
+- [x] **G5.5 — 11 RAG docs authored + in repo (2026-06-30)** via offline agent; permission codes corrected against real `permissions.yaml` (tax→`tax:mode:view`; reporting→`accounting:report:export`+`workorder:dashboard:view`; admin→`security:permission:view`+`workorder:approval_config:view`; security-matrix→`security:role:view`+`security:permission:view`; confirmed `invoice:billing-rules`). 11 entries added to `application.yml` preload with `required-permissions` (ignored until G5.2 binds the field). Residual `TODO(verify)` are content gaps (identifier formats, event names) honestly flagged — not permission errors.
+- [ ] Implementation G5.1 (permission-aware filter) / G5.2 (bind `required-permissions` on `StaticDocEntry` + ingest metadata) / G5.3 (FTS hybrid) / G5.4 (bge-m3 1024) + live §B.8 — deferred.
 - Rollback: flip retrieval to the 768 column; retire-not-drop the role filter; snapshot embeddings before migration.
 
 ---

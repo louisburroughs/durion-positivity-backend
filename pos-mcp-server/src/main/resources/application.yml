@@ -43,6 +43,54 @@ mcp:
         - id: "security.guide"
           source-path: "classpath:rag/security-service-guide.md"
           rag-scope: "master"
+        # Gate 5 documents. `required-permissions` is the G5.2 metadata field (not yet bound by
+        # StaticDocEntry — ignored until G5.2 adds the field + permission-aware filter G5.1);
+        # carried here so it is ready and records intent. Permission codes verified against the
+        # service permissions.yaml files.
+        - id: "platform.capability-catalog"
+          source-path: "classpath:rag/capability-catalog.md"
+          rag-scope: "master"
+          required-permissions: ["AUTHENTICATED"]
+        - id: "workflow.cross-domain-playbooks"
+          source-path: "classpath:rag/cross-domain-playbooks.md"
+          rag-scope: "master"
+          required-permissions: ["AUTHENTICATED"]
+        - id: "glossary.identifiers"
+          source-path: "classpath:rag/glossary-identifiers.md"
+          rag-scope: "master"
+          required-permissions: ["AUTHENTICATED"]
+        - id: "order.guide"
+          source-path: "classpath:rag/order-guide.md"
+          rag-scope: "order"
+          required-permissions: ["order:order:view"]
+        - id: "pricing.guide"
+          source-path: "classpath:rag/pricing-guide.md"
+          rag-scope: "pricing"
+          required-permissions: ["pricing:price_book:view", "pricing:rule:view"]
+        - id: "tax.guide"
+          source-path: "classpath:rag/tax-guide.md"
+          rag-scope: "tax"
+          required-permissions: ["tax:mode:view"]
+        - id: "crm.customer-vehicle"
+          source-path: "classpath:rag/customer-vehicle-guide.md"
+          rag-scope: "customer"
+          required-permissions: ["crm:party:view", "crm:party:search", "crm:vehicle:view", "crm:vehicle:search", "crm:contact:view"]
+        - id: "reporting.metrics"
+          source-path: "classpath:rag/reporting-metrics.md"
+          rag-scope: "reporting"
+          required-permissions: ["accounting:report:export", "workorder:dashboard:view"]
+        - id: "admin.governance"
+          source-path: "classpath:rag/admin-governance.md"
+          rag-scope: "admin"
+          required-permissions: ["security:permission:view", "workorder:approval_config:view"]
+        - id: "events.observability"
+          source-path: "classpath:rag/events-observability.md"
+          rag-scope: "events"
+          required-permissions: ["nlti:audit:read"]
+        - id: "security.role-permission-matrix"
+          source-path: "classpath:rag/role-permission-matrix.md"
+          rag-scope: "security"
+          required-permissions: ["security:role:view", "security:permission:view"]
     chunking:
       enabled: ${MCP_RAG_CHUNKING_ENABLED:true}
       max-segment-size: ${MCP_RAG_MAX_SEGMENT_SIZE:2000}
