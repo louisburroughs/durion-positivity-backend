@@ -172,6 +172,14 @@ Requires the T1/T2-simple/T2-complex models configured + reachable.
 - **Quality/latency:** answer-quality eval ≥ Gate 1 baseline; p95 within the soft SLO.
 - **Fallback vs tier:** trigger `mcp.model.fallback` and confirm telemetry shows `fallback_used=true` independent of `routing.tier`.
 
+### B.8 RAG expansion, permission-aware filtering, hybrid retrieval (Gate 5 — after implementation per `gate5-rag-hybrid-design.md`)
+Requires pgvector + the embedding model; run the RAG-retrieval fixtures through the #783 harness.
+- **Recall:** exact WO/invoice/PO/VIN/SKU/account-code/claim fixtures improve recall@k; record dense-only vs hybrid side by side.
+- **Visibility (permission-first):** admin/security docs never returned to non-admin/non-security fixtures; a permission-elevated user retrieves per permissions, not nominal role.
+- **Embedding migration:** with `bge-m3`/1024 active, recall@k ≥ the 768 baseline before switching; 768 column retained until validated.
+- **Chunking:** glossary/identifier docs use small chunks; prose/playbooks larger.
+- Doc hygiene: every preload/ingested doc has deterministic id, content hash, `rag_scope`, `required_permissions`.
+
 ---
 
 ## C. Full module test suite (optional, broader)

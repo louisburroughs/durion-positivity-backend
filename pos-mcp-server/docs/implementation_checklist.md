@@ -458,11 +458,16 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [ ] Verified: admin docs not visible to floor-staff fixtures — _ev:_
 
 ### Retrieval lock (every new doc) — [ ] all docs have: deterministic ID, content hash, `rag-scope`, permission metadata, documented chunking — _ev:_
-### Cross-phase locks — [ ] run & recorded
+### Cross-phase locks — [x] run & recorded (design preserves Retrieval lock + Permission lock: permission-first filtering, no role-only gate, whole-corpus migration, harness-tuned weights)
 ### Exit decision: retrieval quality improves and visibility rules proven.
 ### Gate 5 sign-off
-- Metrics filled: [ ] · Decision: ☐ Pass ☐ Pass+exception ☐ Hold ☐ Roll back
-- Exceptions: ______ · Approver/date: ______ · Embedding snapshot + dual-path rollback verified: [ ]
+- Metrics filled: [ ] · Decision: **HOLD — design complete, implementation pending**
+
+#### Gate 5 — Execution results (2026-06-30)
+- [x] Implementation-ready design — `docs/gate5-rag-hybrid-design.md`: permission-aware filter (replaces `RoleAwareMetadataFilter`, reuses the Gate 3 `RequestScopedUserContext`); `required_permissions` doc metadata + `StaticDocEntry`/ingest field; Postgres FTS retriever merged into the existing Tier-2 hybrid (harness-tuned weights); `bge-m3` 768→1024 dual-column reversible migration; 9-doc authoring table with scope + permission + chunking.
+- [x] Live verification steps — runbook §B.8.
+- [ ] Implementation (G5.1→G5.5) + live §B.8 — deferred. **G5.5 (author the RAG docs) is offline-doable now** (not live-blocked).
+- Rollback: flip retrieval to the 768 column; retire-not-drop the role filter; snapshot embeddings before migration.
 
 ---
 
