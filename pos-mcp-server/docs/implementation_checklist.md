@@ -73,7 +73,7 @@
 
 **HOLD (not met — Gate 0 cannot sign Pass)**
 - [ ] Fixture minimum counts ≥100 / ≥50 / ≥30 — currently seed-only **4 / 4 / 4**. Tracked by `@Disabled minimumFixtureCountsMet`; must be enabled + green to pass. _Largest remaining Gate 0 work item; not blocked._
-- [ ] Baseline metrics (hit@5, MRR, recall@k, write-safety, latency) — PENDING a live model backend (Ollama). `baseline.json` placeholder committed with null metrics. **External dependency — true blocker for this item and for downstream behavioral/metric gates.**
+- [ ] Baseline metrics (hit@5, MRR, recall@k, write-safety, latency) — driver **built** (`BaselineCaptureIT`, live-gated; runbook §B.4); awaiting a live backend run to populate `baseline.json`. RAG-recall + latency portions still follow-up. Live-boot dependency (LatencyUtils) fixed.
 
 **CORRECTION (prior sign-off was wrong)**
 - An earlier draft of this sign-off recorded a "Lombok 1.18.46 + JDK 25" build blocker. That was a **false alarm** caused by a bad maven invocation (`-am compile` without a prior reactor `install`). `./mvnw clean install -am -pl pos-mcp-server` builds cleanly (confirmed on main and in this worktree). **No build blocker exists.**
@@ -352,11 +352,18 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [x] Full implementation-ready design — `docs/gate3-openapi-bridge-design.md`: ToolProvider wiring (confirmed `dev.langchain4j.service.tool.ToolProvider` + `AiServices.toolProvider` in 1.13.0); exec-coordinate persistence gap + migration; MCP-handler→`ToolExecutor` bridge; **leakage-safe per-call propagation for both blocking (ThreadLocal) and streaming (Reactor Context)**; per-call permission re-check; facade coexistence; telemetry `source` tag.
 - [x] Live verification steps — runbook §B.6 (positive E2E, negative/leakage, streaming parity, facade regression, + Gate 2C non-IDLE activation).
 
-**DEFERRED to live (the implementation, per the design's order G3.1→G3.4)**
-- [ ] Persist execution coordinates (+ `ToolMetadata` fields, migration).
-- [ ] `OpenApiOperationExecutor` bridge + `OpenApiToolProvider` + `findDiscoveredCandidatesForPermissions`.
-- [ ] Wire `.toolProvider(...)` into both managers with path-correct propagation.
-- [ ] Live tests §B.6 (this IS the gate exit criterion).
+**IMPLEMENTED (2026-06-30, code-first; unit-tested, 23 offline tests green)**
+- [x] Exec-coordinate columns persisted — Flyway V21 (pg) / V19 (h2).
+- [x] `DiscoveredOperation` + `findDiscoveredCandidatesForPermissions` (source='openapi', permission ∩ workflow gated).
+- [x] `OpenApiOperationExecutor` (MCP-handler→`ToolExecutor` bridge; controlled error, never fabricated success).
+- [x] `OpenApiToolProvider` (`isDynamic`; reads `RequestScopedUserContext`; **fail-closed** when no context).
+- [x] `RequestScopedUserContext` leakage primitive + tests (`OpenApiToolProviderTest`, `RequestScopedUserContextTest`).
+
+**DEFERRED to live (final wiring + verification)**
+- [ ] Populate `http_method/http_path/service_id/input_schema` in `ToolRegistrationService` at discovery.
+- [ ] Wire `.toolProvider(openApiToolProvider)` into both managers + holder set/clear around blocking `agent.chat(...)` (constructor change touches `SessionAgentManager` + its test constructors).
+- [ ] Streaming Reactor-context propagation (until then streaming is fail-closed → no discovered tools).
+- [ ] Live tests §B.6 (the gate exit criterion).
 - Rollback: omit `.toolProvider(...)` → facade-only (current behavior).
 
 ---
@@ -399,11 +406,16 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [ ] Verified: fallback not confused with tier-routing — _ev:_
 - [ ] Verified: no prompt changes bundled without separate eval — _ev:_
 
-### Cross-phase locks — [ ] run & recorded
+### Cross-phase locks — [x] run & recorded (design preserves locks: risky→never small model; router never overrides permission gating; fallback ≠ tier routing)
 ### Exit decision: cost savings measurable, quality/safety preserved.
 ### Gate 4 sign-off
-- Metrics filled: [ ] · Decision: ☐ Pass ☐ Pass+exception ☐ Hold ☐ Roll back
-- Exceptions: ______ · Approver/date: ______ · Rollback (all→T2-complex flag) verified: [ ]
+- Metrics filled: [ ] · Decision: **HOLD — design complete, implementation pending**
+
+#### Gate 4 — Execution results (2026-06-30)
+- [x] Implementation-ready design — `docs/gate4-tiered-router-design.md`: T0/T1/T2 tiers; `NltiRouter` (strict JSON, temp 0, validated, **safe default → T2-complex** on bad output); pure tier-selection function; tier→model resolver + cache-key change; `mcp.model.fallback` kept orthogonal; telemetry via the shared per-request pipeline (also serves Gate 1 layers + Gate 2C workflow state).
+- [x] Live verification steps — runbook §B.7 (routing split ≥80%/100%, safe fallback, quality/latency, fallback≠tier).
+- [ ] Implementation (G4.1→G4.4) + live §B.7 — deferred. Rollback: route all → T2-complex via flag.
+- Note: Gate 4 T0 also reconciles the Gate 2A blocking-vs-streaming `simpleChat` divergence (make T0 shared).
 
 ---
 

@@ -26,6 +26,11 @@ After this, incremental offline runs work:
 ```bash
 ./mvnw -o -pl pos-mcp-server <goal>
 ```
+> **Lombok + JDK 25 gotcha:** a clean module recompile must go through the reactor with `-am`
+> (`./mvnw -o -pl pos-mcp-server -am clean install -DskipTests`). A single broken source file aborts
+> Lombok for the whole module, surfacing as misleading "cannot find symbol: getX()" on *unrelated*
+> `@Data` entities (`NltiIntent`, `LlmApiConfig`). If you see those, find the **first** compile error
+> in a changed file — that's the real cause, not the entity.
 
 ---
 
@@ -34,10 +39,10 @@ After this, incremental offline runs work:
 ### Run every implemented gate's tests in one shot
 ```bash
 ./mvnw -o -pl pos-mcp-server test \
-  -Dtest='Eval*,RolePromptAssemblyTest,MasterAgentRegistryLoaderTest,PermissionGatingInvariantTest' \
+  -Dtest='Eval*,RolePromptAssemblyTest,MasterAgentRegistryLoaderTest,PermissionGatingInvariantTest,WorkflowStateTest,ObservabilityTimerSmokeTest,OpenApiToolProviderTest,RequestScopedUserContextTest' \
   -Dsurefire.failIfNoSpecifiedTests=false
 ```
-Expected: `Tests run: 17, Failures: 0, Errors: 0, Skipped: 1` → `BUILD SUCCESS`.
+Expected: `Tests run: 23, Failures: 0, Errors: 0, Skipped: 1` → `BUILD SUCCESS`.
 (The 1 skipped is the Gate 0 fixture-minimum exit gate — see Gate 0 below.)
 
 ### Format check (drift guard — must be clean before commit)
@@ -112,10 +117,17 @@ Requires Postgres+pgvector reachable (tunnel) and the embedding host resolvable.
 
 > **Before first boot against a shared DB:** snapshot it. V19/V17 are reversible (`RENAME TO *_deprecated`, `IF EXISTS`) but take the snapshot anyway per the gate rollback policy.
 
-### B.4 Baseline capture (Gate 0 HOLD)
-The metric math (`EvalMetrics`) and fixtures exist; the live driver that feeds rankings from the running selector is the remaining wiring. Until then, capture manually against the running service and fill `src/test/resources/eval/baseline.json`:
-- tool-selection hit@5 / MRR — run each `tool-selection` fixture through `/v1/mcp/chat` selection, score with `EvalMetrics`.
-- RAG recall@k — run each `rag-retrieval` query, score retrieved doc ids.
+### B.4 Baseline capture (Gate 0)
+The driver is built: `BaselineCaptureIT` runs the tool-selection fixtures through the real selector
+(`ToolRegistryService.resolveCandidateTools`), scores hit@5 / MRR via `EvalMetrics`, and writes
+`target/eval/baseline-tool-selection.json`. Live-gated (won't run offline). With the stack up:
+```bash
+./mvnw -o -pl pos-mcp-server test -Dtest=BaselineCaptureIT \
+    -Dmcp.eval.live=true -Dspring.profiles.active=alpha
+# -> target/eval/baseline-tool-selection.json ; hard-fails on any forbidden-tool selection
+```
+Copy the numbers into `src/test/resources/eval/baseline.json`. Still manual / follow-up:
+- RAG recall@k — needs the retriever + the doc-id metadata key (TODO in `BaselineCaptureIT`).
 - latency p50/p95 by tier.
 
 ### B.5 Fail-closed spot check (Gate 2B HOLD)
@@ -126,7 +138,15 @@ psql "$MCP_DB_URL" -c "\dt mcp_role*"        # expect only *_deprecated
 psql "$MCP_DB_URL" -c "\dt mcp_tool_role*"   # expect only *_deprecated
 ```
 
-### B.6 OpenAPI execution bridge (Gate 3 — after implementation per `gate3-openapi-bridge-design.md`)
+### B.6 OpenAPI execution bridge (Gate 3)
+**Implemented (committed, unit-tested):** `RequestScopedUserContext`, `DiscoveredOperation` +
+`findDiscoveredCandidatesForPermissions`, exec-coordinate columns (V21/V19), `OpenApiOperationExecutor`,
+`OpenApiToolProvider` (fail-closed, `isDynamic`). **Remaining before this section runs:**
+(1) populate `http_method/http_path/service_id/input_schema` in `ToolRegistrationService` at discovery;
+(2) wire `.toolProvider(openApiToolProvider)` into both managers + `RequestScopedUserContext` set/clear
+around the blocking `agent.chat(...)`; (3) streaming Reactor-context propagation (until then streaming
+stays fail-closed → no discovered tools). See `gate3-openapi-bridge-design.md` G3.1/G3.3.
+
 Requires the gateway aggregate spec reachable + discovered tools registered with execution
 coordinates persisted (design G3.1). With the service up (`alpha`):
 ```bash
@@ -138,6 +158,13 @@ psql "$MCP_DB_URL" -c "SELECT name, source, http_method, http_path FROM mcp_tool
 - **Streaming parity:** repeat both via `/v1/mcp/chat/stream` (separate Reactor-context propagation path — must enforce the negative case too).
 - **Facade regression:** confirm existing facade tools still work.
 - **Workflow gating (Gate 2C live):** seed `mcp_tool_workflow` for a non-IDLE state, set `NltiSession.workflow_state`, confirm that state's tools activate and IDLE-only tools do not.
+
+### B.7 Tiered model router (Gate 4 — after implementation per `gate4-tiered-router-design.md`)
+Requires the T1/T2-simple/T2-complex models configured + reachable.
+- **Routing split:** run the tool-selection fixtures; confirm ≥80% of `single-lookup` route to T2-simple and 100% of write/accounting/tax/admin/security route to T2-complex (read `routing.tier` from telemetry).
+- **Safe fallback:** force malformed router JSON (e.g. point the router at a non-JSON model) → request still completes via the T2-complex safe default; logged.
+- **Quality/latency:** answer-quality eval ≥ Gate 1 baseline; p95 within the soft SLO.
+- **Fallback vs tier:** trigger `mcp.model.fallback` and confirm telemetry shows `fallback_used=true` independent of `routing.tier`.
 
 ---
 
