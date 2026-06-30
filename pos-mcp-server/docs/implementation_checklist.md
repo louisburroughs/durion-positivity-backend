@@ -281,11 +281,23 @@
 - [ ] Verified: non-IDLE tool sets not activated globally — _ev:_
 - [ ] Verified: managers do not default every request to IDLE — _ev:_
 
-### Cross-phase locks — [ ] run & recorded
+### Cross-phase locks — [x] run & recorded (workflow state ≠ permission gate; permission gating still applies within every state; conversation state kept distinct)
 ### Exit decision: non-IDLE workflows testable and permission-safe.
 ### Gate 2C sign-off
-- Metrics filled: [ ] · Decision: ☐ Pass ☐ Pass+exception ☐ Hold ☐ Roll back
-- Exceptions: ______ · Approver/date: ______ · Rollback (flag → IDLE) verified: [ ]
+- Metrics filled: [ ] · Decision: **HOLD** (runtime session propagation + non-IDLE DB activation deferred to live)
+
+#### Gate 2C — Execution results (2026-06-30, code-first)
+**DONE + verified (unit/compile)**
+- [x] `WorkflowState` enum (IDLE, CREATING_PO, RECEIVING_ASN, INVENTORY_RECON, PROCESSING_RETURN; DEFAULT=IDLE), documented as distinct from conversation lifecycle state. _ev: WorkflowStateTest._
+- [x] `NltiSession.workflowState` persisted (`@Enumerated(STRING)`, default IDLE) + Flyway pg `V20` / h2 `V18` (`ADD COLUMN IF NOT EXISTS … DEFAULT 'IDLE'`). _ev: WorkflowStateTest.sessionDefaultsToIdle; 19 tests pass._
+- [x] Workflow state is an **explicit selection input** — `selectRoleTools(role, perms, message, WorkflowState)`; `deriveWorkflowState` now returns the enum (no bare "IDLE" literal) and is the session-less fallback only.
+- [x] `WORKFLOW_IDLE` no longer a hardcoded literal in the selection engine.
+
+**HOLD / deferred (architectural + live)**
+- [ ] Runtime session→selection propagation in the **chat managers**: `/v1/mcp/chat` is session-less (CurrentUserContext has no session id), so workflow state authoritatively belongs to the **NLTI-session path** (`NltiRequestService`), not the raw chat managers. Foundation (persisted field + explicit input) is in place; wiring the session-bearing path to pass `session.getWorkflowState()` is the remaining step.
+- [ ] Non-IDLE activation (CREATING_PO/PROCESSING_RETURN return their gated tools) — needs DB-seeded `mcp_tool_workflow` rows + live run.
+- [ ] Workflow transitions in telemetry — pending the telemetry-emission pipeline (cross-gate, with Gate 1/4).
+- Note: rollback = default `WorkflowState.DEFAULT` (IDLE) everywhere, degrading to current behavior.
 
 ---
 
