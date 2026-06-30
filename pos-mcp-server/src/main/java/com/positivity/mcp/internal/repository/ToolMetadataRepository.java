@@ -18,23 +18,8 @@ public interface ToolMetadataRepository {
     List<ToolMetadata> findEnabledByPermissionsAndWorkflow(
             @NonNull Set<String> permissionCodes, @NonNull String workflowState);
 
-    /**
-     * Returns all role names currently defined in the mcp_role table. Used for role-scoped
-     * domain-tool/RAG-scope resolution ({@link
-     * com.positivity.mcp.internal.service.MasterAgentRegistryLoader}), not for {@code
-     * mcp_tool} candidate gating.
-     */
-    @NonNull
-    List<String> findAllRoleNames();
-
-    /**
-     * Returns enabled tools assigned to {@code role} for {@code workflowState} via {@code
-     * mcp_tool_role}/{@code mcp_role}. Used for role-scoped domain-tool/RAG-scope resolution
-     * ({@link com.positivity.mcp.internal.service.MasterAgentRegistryLoader}), not for {@code
-     * mcp_tool} candidate gating.
-     */
-    @NonNull
-    List<ToolMetadata> findEnabledByRoleAndWorkflow(@NonNull String role, @NonNull String workflowState);
+    // Gate 2B / #780: findAllRoleNames() and findEnabledByRoleAndWorkflow() removed — the legacy
+    // mcp_role / mcp_tool_role role-gating path is retired in favour of permission gating.
 
     @NonNull
     List<ToolMetadata> findEnabledByWorkflow(@NonNull String workflowState);

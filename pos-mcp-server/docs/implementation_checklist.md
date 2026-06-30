@@ -229,11 +229,23 @@
 - [ ] Verified: no destructive migration without rollback/snapshot — _ev:_
 - [ ] Verified: permission behavior identical blocking vs streaming — _ev:_
 
-### Cross-phase locks — [ ] run & recorded
+### Cross-phase locks — [x] run & recorded (Permission lock: gating query has no role; no fail-open path added; rename-not-drop preserves data)
 ### Exit decision: every selected tool explained by `permissionCodes ∩ mcp_tool_permission ∩ workflowState`.
 ### Gate 2B sign-off
-- Metrics filled: [ ] · Decision: ☐ Pass ☐ Pass+exception ☐ Hold ☐ Roll back
-- Exceptions: ______ · Approver/date: ______ · Snapshot + `*_deprecated` rollback verified: [ ]
+- Metrics filled: [ ] · Decision: **HOLD** (live fail-closed run + migration DB test deferred; #781/#782 cross-service)
+
+#### Gate 2B — Execution results (2026-06-30, code-first)
+**DONE + verified (unit/compile, no DB)**
+- [x] Gating query references no role — `findTopKByEmbeddingForPermissions` joins `mcp_tool_permission` + `mcp_workflow_state` only (was already true). Locked by `PermissionGatingInvariantTest`.
+- [x] Legacy role-gating retired — removed `findAllRoleNames` + `findEnabledByRoleAndWorkflow` (interface + impl); `MasterAgentRegistryLoader` builds **empty** roleToolAssignments; deleted `ToolRegistryRoleMapper` (+ its test); registry no longer aliases roles. _ev: 17 tests pass; module compiles._
+- [x] `mcp_tool_permission` is the sole permission-mapping source. 
+- [x] Reversible legacy-table retirement — Flyway `V19` (pg) + `V17` (h2) `ALTER TABLE IF EXISTS … RENAME TO *_deprecated` (rename-not-drop per rollback policy; IF EXISTS = safe no-op on h2).
+- [x] AUTHENTICATED — mcp already injects `AUTHENTICATED` for every authenticated caller (`CurrentUserContext`); fail-closed unchanged.
+
+**HOLD / deferred**
+- [ ] Live fail-closed correctness (no-perm user cannot select tool; legacy tables not consulted at runtime; metrics within threshold) — needs the live DB (path 2 batch).
+- [ ] Rename migration not yet run against a real Postgres — reversible + IF EXISTS lower risk; verify on the tunnel host. **Take the DB snapshot before applying in any shared env.**
+- [ ] #781 (`AUTHENTICATED` sentinel emission across ~18 services + `requiredPermissionsOperationCustomizer` → `pos-security-common`) and #782 (`pos-security-service` role-default-permissions endpoint) are **cross-service**, outside this worktree pass — separate scoped change.
 
 ---
 

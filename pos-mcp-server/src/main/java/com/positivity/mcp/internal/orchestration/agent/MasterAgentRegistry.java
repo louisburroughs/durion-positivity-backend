@@ -2,7 +2,6 @@ package com.positivity.mcp.internal.orchestration.agent;
 
 import com.positivity.mcp.internal.domain.RagScope;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
-import com.positivity.mcp.internal.service.ToolRegistryRoleMapper;
 import java.beans.Introspector;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -71,7 +70,9 @@ public final class MasterAgentRegistry {
 
     public @NonNull List<Object> resolveDomainTools(@NonNull String agentName) {
         List<Object> resolvedTools = new ArrayList<>();
-        String normalizedAgentName = ToolRegistryRoleMapper.normalize(agentName);
+        // Gate 2B / #780: ToolRegistryRoleMapper (legacy role aliasing) retired. roleToolAssignments
+        // is empty under permission gating; lookup retained defensively and resolves via domain agent.
+        String normalizedAgentName = agentName;
         List<Object> assignedTools = roleToolAssignments.get(normalizedAgentName);
         if (assignedTools != null) {
             resolvedTools.addAll(assignedTools);

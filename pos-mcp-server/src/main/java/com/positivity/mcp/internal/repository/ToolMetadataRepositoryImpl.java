@@ -50,30 +50,9 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 this::mapRow);
     }
 
-    @Override
-    public @NonNull List<String> findAllRoleNames() {
-        return jdbcTemplate.queryForList("SELECT name FROM mcp_role ORDER BY name", String.class);
-    }
-
-    @Override
-    public @NonNull List<ToolMetadata> findEnabledByRoleAndWorkflow(
-            @NonNull String role, @NonNull String workflowState) {
-        String sql = """
-                SELECT t.id, t.name, t.display_name, t.description,
-                       t.domain, t.priority, t.cost_level,
-                       t.avg_latency_ms, t.enabled, t.handler_bean
-                FROM mcp_tool t
-                JOIN mcp_tool_role tr ON t.id = tr.tool_id
-                JOIN mcp_role r ON tr.role_id = r.id
-                JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
-                JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
-                WHERE t.enabled = true
-                  AND r.name = ?
-                  AND ws.name = ?
-                """;
-
-        return jdbcTemplate.query(sql, this::mapRow, role, workflowState);
-    }
+    // Gate 2B / #780: findAllRoleNames() and findEnabledByRoleAndWorkflow() removed — the legacy
+    // mcp_role / mcp_tool_role tables are no longer queried at runtime. Candidate gating runs
+    // solely through findTopKByEmbeddingForPermissions (permission codes + workflow state).
 
     @Override
     public @NonNull List<ToolMetadata> findEnabledByWorkflow(@NonNull String workflowState) {
