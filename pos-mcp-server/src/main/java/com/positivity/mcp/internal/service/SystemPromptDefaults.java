@@ -50,6 +50,21 @@ public final class SystemPromptDefaults {
             ROLE_CUSTOMER_PROMPT_NAME,
             ROLE_SELF_SERVICE_CUSTOMER_PROMPT_NAME);
 
+    /**
+     * Canonical set of role identifiers that must be pre-built by both session managers (Gate 2A,
+     * issue #639). Equal to {@link #MCP_ROLE_PRIORITY} plus the {@code ROLE_USER} fallback, so a
+     * caller resolving to any priority role — or the fallback — hits a warm agent. Previously
+     * preload was driven only by configured tool assignments, which omitted ROLE_TECHNICIAN and
+     * ROLE_USER.
+     */
+    public static final List<String> PRELOADABLE_ROLE_IDENTIFIERS = buildPreloadableRoleIdentifiers();
+
+    private static List<String> buildPreloadableRoleIdentifiers() {
+        var roles = new java.util.LinkedHashSet<>(MCP_ROLE_PRIORITY);
+        roles.add(ROLE_USER_PROMPT_NAME);
+        return List.copyOf(roles);
+    }
+
     static final String DEFAULT_PROMPT_TEXT = """
             You are the concise POS assistant for Positivity and the master orchestration agent for Durion operations.
             Help users reach the next correct action quickly, especially when a request spans multiple business domains.

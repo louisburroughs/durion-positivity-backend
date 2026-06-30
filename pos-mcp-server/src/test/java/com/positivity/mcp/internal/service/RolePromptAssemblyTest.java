@@ -93,4 +93,12 @@ class RolePromptAssemblyTest {
         assertThat(out.layers()).containsExactly("BASE", "TOOL_USE");
         assertThat(out.text()).contains("master orchestration agent"); // from built-in DEFAULT_PROMPT_TEXT
     }
+
+    @Test
+    @DisplayName("Gate 2A: preload role set covers MCP_ROLE_PRIORITY + ROLE_TECHNICIAN + ROLE_USER")
+    void preloadCoverage() {
+        assertThat(SystemPromptDefaults.PRELOADABLE_ROLE_IDENTIFIERS)
+                .containsAll(SystemPromptDefaults.MCP_ROLE_PRIORITY)
+                .contains(SystemPromptDefaults.ROLE_TECHNICIAN_PROMPT_NAME, SystemPromptDefaults.ROLE_USER_PROMPT_NAME);
+    }
 }

@@ -175,11 +175,21 @@
 - [ ] Verified: cache behavior documented — _ev:_
 - [ ] Verified: preload fully aligned to `MCP_ROLE_PRIORITY` (not partial) — _ev:_
 
-### Cross-phase locks — [ ] run & recorded
+### Cross-phase locks — [x] run & recorded (no role-only authz; selection unchanged; permission gating untouched)
 ### Exit decision: endpoint behavior functionally identical for same request context.
 ### Gate 2A sign-off
-- Metrics filled: [ ] · Decision: ☐ Pass ☐ Pass+exception ☐ Hold ☐ Roll back
-- Exceptions: ______ · Approver/date: ______ · Rollback (per-manager flag) verified: [ ]
+- Metrics filled: [ ] (live equivalence run deferred) · Decision: **HOLD** (live equivalence pending)
+
+#### Gate 2A — Execution results (2026-06-30)
+**DONE + verified**
+- [x] Tool-selection path already unified — both managers call `toolSelectionEngine.selectRoleTools(role, permissionCodes, message)` + `sharedOrchestrationSupport.mergeTools(...)` + `toolCacheKey(...)`. _ev: SessionAgentManager.chat:158, StreamingSessionAgentManager.streamChat:121._
+- [x] Prompt-resolution path unified — both call `assemble(role, ragScope)` (Gate 1).
+- [x] Role preload fixed — `MasterAgentRegistry.preloadableRoleIdentifiers()` now unions `SystemPromptDefaults.PRELOADABLE_ROLE_IDENTIFIERS` (= MCP_ROLE_PRIORITY + ROLE_USER) with configured assignments; ROLE_TECHNICIAN + ROLE_USER no longer omitted. _ev: RolePromptAssemblyTest.preloadCoverage; 14 tests pass._
+- [x] Cache TTL — both `roleAgentCache` use `expireAfterWrite(mcp.agent.cache-ttl-minutes)`; documented in README §Tool Selection. Pre-existing, verified.
+
+**HOLD / noted**
+- [ ] Live "same request → same tools/prompt/persona/scope/workflow" equivalence — deferred to batched live verification (path 2).
+- Note: blocking path has a `simpleChat` Tier-0 fast-path (`SimpleChatClassifier`) that streaming lacks. This is the formal T0 rule tier; reconciled/aligned in Gate 4 (router), tracked there, not a 2A regression.
 
 ---
 

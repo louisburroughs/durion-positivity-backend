@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.orchestration.agent;
 
 import com.positivity.mcp.internal.domain.RagScope;
+import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import com.positivity.mcp.internal.service.ToolRegistryRoleMapper;
 import java.beans.Introspector;
 import java.util.ArrayList;
@@ -147,7 +148,9 @@ public final class MasterAgentRegistry {
     }
 
     public @NonNull Set<String> preloadableRoleIdentifiers() {
-        Set<String> roleIdentifiers = new TreeSet<>();
+        // Gate 2A / #639: always cover the canonical role set (MCP_ROLE_PRIORITY + ROLE_USER) so
+        // ROLE_TECHNICIAN and ROLE_USER are never omitted, unioned with any configured assignments.
+        Set<String> roleIdentifiers = new TreeSet<>(SystemPromptDefaults.PRELOADABLE_ROLE_IDENTIFIERS);
         roleIdentifiers.addAll(roleToolAssignments.keySet());
         if (!roleIdentifiers.isEmpty()) {
             return roleIdentifiers;
