@@ -27,9 +27,9 @@ Throughput is the number of completed units in a defined period. The unit may be
 Utilization measures scheduled or active use of a resource against available capacity. For bays and mobile units, define available hours, scheduled hours, and active work hours. For technicians, define paid hours, scheduled hours, and labor-entry hours. If HR availability is included in schedule overlay, state that dependency.
 
 ## First-time completion / rework
-First-time completion measures jobs completed without reopen, corrective work, or additional unplanned return. The bundle does not verify a rework metric source, so the assistant should only define the concept and ask for a verified status/event source before calculating.
+First-time completion measures jobs completed without a reopen. Reopen IS a real, verified event: `WORKORDER_REOPEN` ("reopen a completed workorder with mandatory reason," permission `workorder:workorder:reopen_completed`) and `WORKORDER_ESTIMATE_REOPEN` (reopen a declined estimate to DRAFT, `workorder:estimate:reopen`). Note: `WorkorderStatus` has NO `REOPENED` value — `COMPLETED` is terminal and reopen is modeled as an event, not a status. The terms "comeback" / "rework" do NOT exist in the backend; define them only as business concepts and base any metric on the reopen events above.
 
-> TODO(verify): reopened/comeback/rework event definitions.
+_Verified: `pos-workorder` `EventTypes.java` (`WORKORDER_REOPEN`, `WORKORDER_ESTIMATE_REOPEN`); `WorkorderStatus` (no REOPENED)._
 
 ## Parts-related metrics
 Inventory metrics from the existing inventory RAG include inventory turnover, DIO, fill rate, stockout rate, and shrinkage. For shop reporting, parts blockers include waiting-for-parts count, pick-list completion, stockout-related delay, and parts consumption by workorder. The assistant should separate operational availability from financial inventory valuation.

@@ -38,4 +38,10 @@ The assistant should use precise language:
 ## Error and exception patterns
 Common pricing problems include missing SKU, expired price book, conflicting rules, wrong account context, wrong location, date mismatch, unit-of-measure mismatch, manual override without approval, and price differences between estimate and invoice.
 
-> TODO(verify): pricing rule precedence, price override permissions, effective-date semantics, and whether tax/fee calculation is owned by pricing, invoice, or tax services.
+## Verified facts (pos-price / pos-order / pos-tax)
+- **Precedence is a fixed sequential pipeline, not a priority/weight model** (`PriceQuoteServiceImpl.calculatePrice`): (1) `BASE_PRICE` (MSRP, required) → (2) `LOCATION_OVERRIDE` (replaces the price absolutely, if an active override exists) → (3) `CUSTOMER_TIER_DISCOUNT` (multiplicative). Final rounding HALF_EVEN, scale 2. Within one rule type, the most-recently-effective active record wins (`ORDER BY effectiveFrom DESC LIMIT 1`). Promotions/restrictions are separate endpoints, NOT part of the quote pipeline (README drift: it claims otherwise).
+- **Effective dates:** `effectiveFrom` inclusive, `effectiveTo` exclusive (NULL = open-ended/active). Callers may pass an `effectiveTimestamp` for point-in-time/back-dated quotes.
+- **Price override permissions live in TWO domains:** the request/approve/reject workflow for overriding a *price* is `order:price_override:{apply,approve,reject,view}` (pos-order). `pricing:restriction:override` (pos-price) overrides a *restriction rule*, not a price value. Pricing's `LocationPriceOverride` is consumed by the quote calc but has no create endpoint/permission of its own.
+- **Tax is owned by `pos-tax`** (`TaxCalculationService`), not pricing or invoice; `pos-price` has zero tax code. A distinct "fee" concept is UNVERIFIABLE — no fee permission or calculation found.
+
+> TODO(verify): exact pricing OpenAPI operationIds for tool naming.

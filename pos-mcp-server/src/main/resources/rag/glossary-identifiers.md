@@ -13,9 +13,9 @@ This document defines common terms, abbreviations, and identifiers for natural-l
 `WO` means workorder. Workorder is one word in Durion Positivity documents. A workorder is the active record that tracks a vehicle being serviced after an approved estimate is promoted. A workorder may include labor entries, parts usage, technician assignment, change requests, and invoice generation context.
 
 ## Workorder number
-A workorder number identifies a workorder record. The exact canonical format is not verified in the bundle. Staff may say "WO," "workorder," "job," or "ticket." The assistant should accept the user's spelling, ask for the exact workorder number when ambiguous, and use lexical retrieval for exact-code recall.
+A workorder number is the human-facing identifier of a workorder, distinct from its UUID `id`. Format: `WO-YYYY-NNNN`, sequence starting at 1000 (e.g. `WO-2026-1001`). On promotion from an estimate it reuses the estimate's number with the prefix swapped (`EST-YYYY-NNNN` → `WO-YYYY-NNNN`) when free, else a fresh `WO-<year>-<seq>`. Estimate numbers are `EST-YYYY-NNNN`, unique per location. Staff may say "WO," "workorder," "job," or "ticket"; use lexical retrieval for exact-code recall.
 
-> TODO(verify): canonical workorder number format from pos-workorder source or API schema.
+_Verified: `pos-workorder` `Workorder.java` (human-readable `workorderNumber`, unique) + `WorkorderServiceImpl.generateWorkorderNumber`; `Estimate`/`EstimateServiceImpl.generateEstimateNumber`._
 
 ## Estimate
 An estimate is an itemized list of parts and labor created for a customer before work begins. The existing shop guide states that it must be approved with customer signature before promotion to a workorder. Estimate questions often involve approval, pricing, parts, labor, tax, and conversion to workorder.
@@ -24,34 +24,37 @@ An estimate is an itemized list of parts and labor created for a customer before
 A change request adds work to an in-progress workorder that was not on the original estimate. It requires customer approval before proceeding, according to the existing shop guide. Staff may ask "add-on," "extra work," or "new work found." The assistant should separate requested, approved, and performed work.
 
 ## SKU
-`SKU` means Stock Keeping Unit. It is the product identifier used for inventory, pricing, parts lines, purchasing, and pick lists. The exact SKU pattern is not verified in the bundle. Exact SKU queries should use lexical retrieval because dense embeddings can under-retrieve codes.
+`SKU` means Stock Keeping Unit — the product identifier used across inventory, pricing, parts lines, purchasing, and pick lists. In `pos-catalog` the SKU is a client-supplied string, unique (`uk_product_sku`), required at create, and immutable thereafter. There is no system-enforced length or regex pattern and no auto-generation; example values like `SKU-12345` are illustrative only. Treat the SKU as an opaque exact code — use lexical retrieval since dense embeddings under-retrieve codes.
 
-> TODO(verify): canonical SKU format from product/catalog or inventory source.
+_Verified: `pos-catalog` `ProductEntity` (`sku` unique), `ProductCreateRequestDto` (`@NotBlank`, no `@Pattern`/`@Size`), `ProductMasterDataServiceImpl` ("sku is immutable")._
 
 ## VIN
-`VIN` means Vehicle Identification Number. It identifies a vehicle and is relevant to customer/vehicle lookup, service history, warranty or claim context, and workorder context. The bundle names VIN as an identifier but does not verify validation rules. The assistant should avoid validating VIN structure unless the vehicle service source confirms it.
+`VIN` means Vehicle Identification Number. The system of record is `pos-vehicle-inventory`. A VIN is exactly 17 characters matching `^[A-HJ-NPR-Z0-9]{17}$` — uppercase letters and digits with I, O, Q excluded. It is normalized (trim, uppercase, strip non-alphanumerics) and stored both raw (`vin`) and normalized (`vin_normalized`, globally unique). Use lexical retrieval for VIN lookups.
 
-> TODO(verify): VIN validation and storage rules from pos-customer or vehicle API schema.
+_Verified: `pos-vehicle-inventory` `VinUtils` (pattern `^[A-HJ-NPR-Z0-9]{17}$`, `INVALID_CHARS="IOQ"`) + `VehicleRecord` (`vin`/`vin_normalized` length 17)._
 
 ## Invoice number
-An invoice number identifies an invoice or billing document. The bundle verifies invoice permissions only at coarse levels (`invoice:manage`, `invoice:finalize`) and explicitly notes no `invoice:read` sample. The assistant should not fabricate invoice-read permissions or invoice-number format rules.
+An invoice number is the human-facing invoice identifier (distinct from the UUID `id`). Format: `INV-<epochMillis>-<first 8 chars of the invoice UUID>`, assigned once at draft creation. Reading an invoice is gated by `invoice:manage` — there is no `invoice:read` permission. (DTO `@Schema` examples like `INV-2026-1001` are illustrative and do NOT match the runtime format.)
 
-> TODO(verify): invoice number format and read permission from pos-invoice source.
+_Verified: `pos-invoice` `InvoiceServiceImpl.generateInvoiceNumber()` (`"INV-"+epochMilli+"-"+idPart`); `InvoiceController` class-level `@PreAuthorize('invoice:manage')` covers GET._
 
 ## PO number
-`PO` means purchase order. A PO identifies ordered goods or services before receipt. PO-to-receipt-to-reconciliation flows connect order, inventory, goods receipt, AP, and accounting. The exact PO number pattern is not verified in the bundle.
+`PO` means purchase order. POs are owned by `pos-inventory` (NOT pos-order). The PO number is generated from a Postgres sequence rendered as an 8-character, zero-padded, uppercase base-36 code (e.g. `0000000A`) — there is no `PO-`/year prefix. (The OpenAPI example `PO-2026-00042` is aspirational and does NOT match runtime.) A goods-receipt number is `GR-<first 8 chars of a UUID>`. PO→receipt→reconciliation connects inventory, goods receipt, AP, and accounting.
 
-> TODO(verify): canonical PO number format from pos-order or inventory source.
+_Verified: `pos-inventory` `PurchaseOrderServiceImpl.generatePoNumber()` (base-36 sequence) + `inventory:purchase_order:*` perms; `AsnServiceImpl.generateReceiptNumber()` (`GR-`+UUID8)._
 
 ## Account code
-An account code may refer to a commercial account, billing account, accounting account, or claim/account reference depending on context. The assistant should clarify the domain when a user says only "account code." Accounting account codes should not be confused with customer account identifiers.
+"Account code" is domain-dependent — clarify which is meant:
+- **GL / chart-of-accounts code** (`pos-accounting`): matches `^\d{4}(-\d{3})?$` — four digits, optionally `-` plus three digits (e.g. `1000`, `4000-100`). Stored in `account_code` (length 20, unique).
+- **Customer account number** (`pos-customer`): the party `customerNumber` (unique per party), not a GL code.
+Journal entries have no human-facing number (UUID `journalEntryId` + integer `lineNumber` starting at 1).
 
-> TODO(verify): account-code formats by domain.
+_Verified: `pos-accounting` `GLAccountCreateRequest` (`@Pattern "^\\d{4}(-\\d{3})?$"`), `GLAccount`/`JournalEntry`; `pos-customer` `AbstractParty.customerNumber`._
 
 ## Claim code
-A claim code is referenced in the Gate 5 prompt as an exact identifier for lexical retrieval. The bundle does not provide claim-service rules or a verified claim-code format. The assistant should ask for the full code and avoid stating claim eligibility rules without source grounding.
+A claim code would identify a warranty/claim record. **No warranty, claim, or RMA concept was found** in `pos-invoice`, `pos-order`, or `pos-inventory` (inventory owns customer *returns* via `inventory:return:*`, which is not the same as warranty claims). The assistant should ask for the full code and must not state claim eligibility rules or a claim-code format — no owning service is established.
 
-> TODO(verify): claim-code format and claim workflow source.
+> TODO(verify): confirm whether any service owns warranty/claims (none found in invoice/order/inventory); if so, capture the claim-code format + workflow.
 
 ## Appointment
 An appointment is a scheduled service visit linking a customer, a vehicle, a time slot, and one or more shop resources such as a bay or mobile unit. It can move through statuses including scheduled, checked in, work in progress, waiting for parts, quality check, ready for pickup, completed, cancelled, invoiced, and reopened.

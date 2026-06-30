@@ -7,7 +7,11 @@ Required permissions: `security:role:view`, `security:permission:view`
 Audience: admin/security users.  
 This document is reference context only and grants no access; access is enforced by permission codes at request time.
 
-This matrix catalogs role-to-permission information visible in the supplied RAG bundle. It is not a complete security source. Gate 5 visibility must use caller permission codes, not role names alone.
+This matrix catalogs role-to-permission *associations*. It is not a complete security source. Gate 5 visibility must use caller permission codes, not role names alone.
+
+> **VERIFIED — critical:** Role→permission grants are **NOT seeded** in SQL. The `role_permissions` table is created but has zero `INSERT` rows; the seed file states the mapping is "intentionally minimal by default." Roles are seeded as identity only; **permission grants are provisioned at runtime via the role-management API**, so the per-role permission lists below are *representative associations from domain docs, not the authoritative granted set* and cannot be verified from source. (Source: `pos-security-service` `R__seed_reference_security.sql:789-790`; `V1__baseline_rbac_schema.sql`.)
+>
+> **Seeded canonical roles** (`R__seed_reference_security.sql:14-43`): ACCOUNTING_ASSOCIATE, ACCOUNT_MANAGER, ADMIN, CUSTOMER, DISPATCHER, LOCATION_MANAGER, SELF_SERVICE_CUSTOMER, SERVICE_ADVISOR, SYSTEM_ADMINISTRATOR, TECHNICIAN (plus V3: READ_ONLY_SCHEDULER, SHOP_MANAGER, SECURITY_ADMIN). The accounting personas below (GL_ANALYST, AP_CLERK, ACCOUNTANT, CONTROLLER) are **documentation personas from the accounting RAG, not seeded security roles**.
 
 ## AUTHENTICATED
 Authenticated users may receive general RAG reference context tagged `AUTHENTICATED`, such as the capability catalog, cross-domain playbooks, and glossary. Authentication does not imply access to domain records or admin/security documents.
@@ -25,7 +29,7 @@ Representative permissions visible in the bundle: `shop:location:view`, `shop:ba
 ## TECHNICIAN
 The shop guide states TECHNICIAN can retrieve appointment/schedule context and workorder operational context where permitted. Technician questions usually involve assigned work, WIP, parts, and labor. Representative visible permissions include `appointments:view`, `shop:schedule:view`, `workorder:workorder:view`, `workorder:labor:view`, `workorder:parts:view`, and `workorder:wip:view`.
 
-> TODO(verify): whether `workorder:labor:add` and `workorder:parts:add` are assigned to TECHNICIAN by default.
+_Verified: the codes `workorder:labor:add`, `workorder:labor:view`, `workorder:parts:add`, `workorder:parts:consume`, `workorder:parts:view` exist (`pos-workorder` permissions.yaml; seeded as permission definitions). Whether TECHNICIAN is granted them is NOT determinable from source — no role→permission grants are seeded (see the critical note above)._
 
 ## LOCATION_MANAGER
 The shop guide states LOCATION_MANAGER has broad location-level shop authority, including view/create/edit bays and mobile units, create/reschedule/cancel appointments, assign bays/mechanics, view schedules, and override conflicts. Representative permissions include `shop:location:view`, `shop:bay:view`, `shop:bay:create`, `shop:bay:edit`, `shop:bay:assign`, `appointments:create`, `appointments:view`, `appointments:reschedule`, `appointments:cancel`, `shop:schedule:view`, and `shop:schedule:edit`.
@@ -36,7 +40,7 @@ The accounting RAG lists ACCOUNTING_ASSOCIATE as day-to-day accounting operation
 ## GL_ANALYST
 The accounting RAG lists GL_ANALYST for GL setup, mappings, and draft entries. Visible permissions include view/create/edit variants for COA and mappings, `accounting:posting_rules:view`, `accounting:posting_rules:create`, `accounting:je:view`, `accounting:je:create`, `accounting:events:view`, `accounting:events:submit`, `accounting:export:view`, and `accounting:ap:view`.
 
-> TODO(verify): individual create/edit/submit codes because the PDF text compresses some as `view/create/edit`.
+_Note: GL_ANALYST is a documentation persona, not a seeded security role. Real accounting permission codes follow `accounting:resource:action` (e.g. `accounting:coa:view/create/edit/deactivate`, `accounting:je:view/create/post/reverse`, `accounting:posting_rules:view/create/publish/archive`, `accounting:ap:view/approve/reject/pay`, `accounting:report:export`) — verified in `pos-accounting/permissions.yaml`._
 
 ## AP_CLERK
 The accounting RAG states AP_CLERK includes all GL_ANALYST permissions plus `accounting:ap:approve`, `accounting:ap:reject`, and `accounting:ap:pay`.

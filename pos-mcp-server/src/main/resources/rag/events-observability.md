@@ -23,7 +23,15 @@ Common event categories:
 - Security/admin: user created, role assigned, permission changed, approval configuration changed.
 - MCP/NLTI: chat executed, request submitted, audit read.
 
-> TODO(verify): exact event names, payload fields, and owning services from module event contracts.
+## Verified facts (pos-events / pos-event-receiver / pos-mcp-server / pos-security-service)
+- **Emission mechanism:** methods annotated `@EmitEvent(id=..., apiVersion="1")`; an aspect publishes an `EventEmitted` domain event. Event types are declared as `EventTypeRegistration` constants in per-service `*EventTypes.java` registries (owning service = the module). Naming convention `{DOMAIN}_{RESOURCE}_{ACTION}` — e.g. `WORKORDER_CREATE`, `WORKORDER_APPROVE`, `WORKORDER_REOPEN` (pos-workorder); `ORDER_PRICE_OVERRIDE_APPLY/APPROVE/REJECT` (pos-order). Treat specific names as verified only against the owning `*EventTypes.java`.
+- **Two payload shapes (distinct):**
+  1. *Telemetry* (`EventEmitted`/`EmittedEvent`, pos-event-receiver): `eventId`, `id`, `apiVersion`, `timestamp`, `elapsedMs`, `publishedAt` — latency/volume only; NO entity id/actor/correlation. Rolled up hourly (count, avg/p95/p99 elapsed).
+  2. *Audit ledger* (the real "who did what to which entity"): NLTI `nlti_audit_event` (`correlationId`, `sessionId`, `requestId`, `eventType` ∈ {REQUEST,INTENT,PLAN,CONFIRMATION,EXECUTION_STEP,EXECUTION_COMPLETE,EXECUTION_FAILED}, `actorSubjectId`, `payloadRef/Hash`); security audit search supports `actorId`, `aggregateId`, `workorderId`, `productId`, `movementId`, `correlationId`, date range.
+- **Reconstruct "what happened to entity X":** pos-event-receiver only serves time-window aggregates (`/v1/events/summary/lastHour|lastDay|lastWeek`), NOT per-entity history. Use the audit ledgers: `GET /v1/audit/events` (pos-security-service, filter by aggregateId/workorderId/productId/actorId/correlationId) and `GET /v1/nlt/audit` (pos-mcp-server, by correlationId/eventType/date).
+- **Permissions:** `nlti:audit:read` (NLTI ledger), `security:audit:view` (security audit), `security:audit:export`, `crm:integration:audit` (CRM ingestion). 
+
+> TODO(verify): exact event-type constant names per owning `*EventTypes.java` before quoting a specific one to a user.
 
 ## Reconstructing "what happened to entity X"
 The assistant should reconstruct a timeline rather than jump to a conclusion.

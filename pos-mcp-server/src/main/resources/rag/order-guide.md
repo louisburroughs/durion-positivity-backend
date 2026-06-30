@@ -44,4 +44,9 @@ The assistant should flag these order-domain risks:
 - Location mismatch where items were ordered for one location but received elsewhere.
 - Missing permission for read or create actions.
 
-> TODO(verify): exact order statuses, PO number schema, order approval rules, and order OpenAPI operations from pos-order source.
+## Verified facts (pos-order / pos-inventory)
+- **Sales-order statuses** (`pos-order` `SalesOrderStatus`): `DRAFT, QUOTED, COMPLETED, VOIDED, CANCEL_REQUESTED, WORKORDER_CANCELLED, PAYMENT_REVERSED, CANCELLED, CANCEL_FAILED_WORKEXEC, CANCEL_FAILED_BILLING, CANCEL_REQUIRES_MANUAL_REVIEW`.
+- **Order permissions** (`pos-order` permissions.yaml): `order:order:{view,create,edit,cancel}`, `order:line:{view,create,edit,delete,enter_manual_price}`, `order:price_override:{view,apply,approve,reject}`. Order "approval" is price-override-scoped (apply → approve/reject); there is no generic order approve/reject.
+- **Purchase orders are NOT in pos-order** — they are owned by `pos-inventory` (`inventory:purchase_order:{create,view,approve,receive}`). `PurchaseOrderStatus`: `DRAFT, APPROVED, PARTIALLY_RECEIVED, FULLY_RECEIVED, CLOSED, CANCELLED`. PO number = 8-char base-36 sequence (see glossary); receipt number = `GR-<UUID8>`.
+
+> TODO(verify): exact pos-order OpenAPI operationIds/paths for tool naming (read pos-order/openapi.yaml).

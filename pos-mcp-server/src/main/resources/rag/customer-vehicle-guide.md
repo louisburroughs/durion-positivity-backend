@@ -35,4 +35,11 @@ The assistant should return only the data visible to the caller's permissions. I
 ## Error and exception patterns
 Common CRM issues include duplicate party records, stale contact data, vehicle assigned to wrong account, missing VIN/unit number, mismatched account and invoice, ambiguous fleet hierarchy, and customer/vehicle references that do not match the workorder.
 
-> TODO(verify): party type taxonomy, vehicle fields, merge/deduplication rules, fleet hierarchy, and service-history API ownership.
+## Verified facts (pos-customer / pos-vehicle-inventory)
+- **Party taxonomy** (`PartyType`): `PERSON`, `COMMERCIAL`, `UNKNOWN`. JPA: abstract `AbstractParty` (table-per-class) with `PersonParty` and `CommercialParty`. Every party has a unique `customerNumber`, plus `status` (default ACTIVE) and `tier` (default STANDARD).
+- **Fleet / commercial hierarchy:** modeled on `CommercialParty` via self-referencing `parentParty` / `childParties`. Person↔org links use `PartyRelationship` with roles `APPROVER, BILLING, PRIMARY_CONTACT, DRIVER, TECHNICAL`; exactly one primary billing contact per account. "Fleet" is not a party type — it is a CommercialParty with DRIVER-role relationships and fleet vehicles.
+- **Merge/dedup:** `crm:party:merge` → `POST /parties/{partyId}/merge` (CommercialParty only). Loser is soft-marked `AccountStatus.MERGED` (not deleted); relationships/external-ids/vehicle VINs reassigned to the survivor; `justification` required.
+- **Vehicle (system of record = `pos-vehicle-inventory` `VehicleRecord`):** `vehicleId` (UUID), `accountId`, `vin`/`vinNormalized` (unique), `unitNumber`, `description`, `licensePlate`(+jurisdiction), `year/make/model/trim`, `odometer` (JSONB), `lastServiceDate`, `isActive`. CRM keeps only a denormalized `vehicleVins` set.
+- **Service history:** there is NO consolidated service-history API/entity. Per-vehicle work history is retrieved from `pos-workorder` (estimates by `vehicleId`); `VehicleRecord.lastServiceDate` is the only last-service field. Do not claim a unified service-history endpoint.
+
+> TODO(verify): exact CRM/vehicle OpenAPI operationIds for tool naming.

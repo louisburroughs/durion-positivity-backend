@@ -28,7 +28,12 @@ Based on the existing RAG documents, these items commonly require approval or co
 - Administrative configuration changes with broad blast radius.
 - Security, role, or permission assignment changes.
 
-> TODO(verify): exact approval policy, thresholds, and approver roles from workorder/admin service sources.
+## Verified approval policy (pos-workorder)
+- Approval configuration (`ApprovalConfiguration`) has **NO monetary or percentage threshold and NO approver-role field**. It carries `approvalMethod` (`CLICK_CONFIRM` default, `SIGNATURE`, `ELECTRONIC_SIGNATURE`, `VERBAL_CONFIRMATION`), `declineExpiryDays` (default 30), `approvalWindowDays` (nullable), `requireSignature` (default false), `priority`.
+- Which config applies is resolved by **specificity, not amount**: priority 0 = default, 1 = location-specific, 2 = customer-specific. Threshold-based approval does not exist — do not state dollar thresholds.
+- What requires approval (approval-category events): `WORKORDER_APPROVE` (with customer signature), `WORKORDER_ESTIMATE_APPROVE`, `WORKORDER_CHANGE_REQUEST_APPROVE`/`DECLINE`, `WORKORDER_CHANGE_REQUEST_EMERGENCY_OVERRIDE` (**Manager-only**, `workorder:change_request:emergency_override`), time-entry approve/reject.
+
+_Verified: `pos-workorder` `ApprovalConfiguration.java`, `EventTypes.java`, `permissions.yaml`._
 
 ## Audit implications
 Admin and approval activity should be reconstructable: actor, timestamp, entity, previous value, new value, reason, source request, and correlation ID where available. The assistant should not state that an action is unaudited. If audit evidence is missing, it should say the audit source was not available and ask for the relevant entity identifier.

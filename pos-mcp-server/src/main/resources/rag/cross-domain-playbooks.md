@@ -63,7 +63,7 @@ Typical hand-offs:
 4. Inventory context may identify part SKU, lot, serial, or return disposition.
 5. Accounting context identifies receivable, adjustment, credit, or reimbursement treatment.
 
-> TODO(verify): warranty eligibility rules, claim-code schema, claim approval states, and reimbursement workflow against the owning service README/OpenAPI/permissions files.
+> **VERIFIED gap:** No warranty / claim / RMA owner was found in `pos-invoice`, `pos-order`, or `pos-inventory` (inventory owns customer *returns* via `inventory:return:*`, distinct from warranty claims; invoice owns payments/refunds, not claims). There is no verified claim-code schema, claim approval state machine, or reimbursement workflow in these services. The assistant must NOT describe a warranty/claim flow as if it exists. TODO(verify): confirm whether any other service owns warranty/claims before authoring this playbook further.
 
 ## Interpreting blocked cross-domain requests
 When a user asks why a workflow is blocked, the assistant should identify the current entity and then test dependencies in order. For a workorder-to-invoice issue, check approval, workorder status, parts/labor completeness, change-request approval, and invoice generation/finalization. For PO-to-reconciliation, check PO lines, receipt lines, quantity/cost match, vendor invoice, and AP state. For warranty/claim, check whether the claim source is verified before stating a business rule.
