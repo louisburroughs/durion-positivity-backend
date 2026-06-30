@@ -75,6 +75,13 @@ public class SessionAgentManagerTestConfiguration {
                     float[] embedding, int limit) {
                 return List.of();
             }
+
+            @Override
+            public java.util.List<com.positivity.mcp.internal.domain.DiscoveredOperation>
+                    findDiscoveredCandidatesForPermissions(
+                            float[] embedding, int limit, java.util.Set<String> permissionCodes, String workflowState) {
+                return List.of();
+            }
         };
     }
 }

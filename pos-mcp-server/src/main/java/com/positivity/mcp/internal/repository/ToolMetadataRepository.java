@@ -1,11 +1,25 @@
 package com.positivity.mcp.internal.repository;
 
+import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import java.util.List;
 import java.util.Set;
 import org.jspecify.annotations.NonNull;
 
 public interface ToolMetadataRepository {
+
+    /**
+     * Gate 3: permission-gated, embedding-ranked candidates restricted to OpenAPI-discovered
+     * operations ({@code source = 'openapi'}), with their execution coordinates. Same fail-closed
+     * permission ∩ workflow gating as {@link #findTopKByEmbeddingForPermissions}; empty
+     * {@code permissionCodes} short-circuits to an empty result.
+     */
+    @NonNull
+    List<DiscoveredOperation> findDiscoveredCandidatesForPermissions(
+            float @NonNull [] embedding,
+            int limit,
+            @NonNull Set<String> permissionCodes,
+            @NonNull String workflowState);
 
     /**
      * Returns enabled tools authorized for {@code workflowState} where the caller holds at
