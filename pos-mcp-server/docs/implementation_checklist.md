@@ -68,13 +68,15 @@
 - [x] Eval fixture schemas + seed fixtures + structural harness — JSON Schemas (3 suites), seed fixtures (verified perms/tool-ids), `EvalFixtureValidationTest`. Executed via JUnit Platform: **3 passed, 1 skipped, 0 failed**. _ev: EvalRunner output started=3 ok=3 failed=0 skipped=1._
 - [x] Telemetry stream separate from audit + tool-invocation logs — dedicated logger, no DB coupling. _ev: LoggingNltiTelemetryEmitter._
 
-**HOLD (not met — Gate 0 cannot sign Pass)**
-- [ ] Fixture minimum counts ≥100 / ≥50 / ≥30 — currently seed-only **4 / 4 / 4**. Tracked by `@Disabled minimumFixtureCountsMet`; must be enabled + green to pass. _Largest remaining Gate 0 work item._
-- [ ] Baseline metrics (hit@5, MRR, recall@k, write-safety, latency) — PENDING a live model backend (no Ollama in this env). `baseline.json` placeholder committed with null metrics.
-- [ ] "Harness runs in CI" end-to-end — structural harness runs standalone, but is **not yet wired into the module surefire run** because of the build blocker below.
+- [x] "Harness runs in CI" — `EvalFixtureValidationTest` runs in the standard module surefire build. `./mvnw -o -pl pos-mcp-server test -Dtest=EvalFixtureValidationTest`: **Tests run 4, Failures 0, Errors 0, Skipped 1, BUILD SUCCESS** (skip = the `@Disabled` min-count exit gate).
+- [x] Clean module build verified — `./mvnw clean install -am -pl pos-mcp-server -DskipTests`: **EXIT 0** (telemetry + harness compile in the real reactor build).
 
-**BLOCKER (true, pre-existing, surfaced not bypassed)**
-- Clean CLI build of `pos-mcp-server` fails on Lombok-generated accessors in **pre-existing** files (`IntentParserServiceImpl`, `LlmApiConfigServiceImpl` → `NltiIntent`/`NltiAuditEvent`/`LlmApiConfig` `@Data`). Root cause: Lombok 1.18.46 + JDK 25 — annotation processing does not run on a clean `mvn compile`/`test` (online or offline). The main checkout only appears to build because it has a pre-existing IDE-produced `target/`. This blocks `mvn test` (and therefore CI wiring + baseline capture). My own code was verified by standalone `javac`/JUnit against the project dependency jars instead. **Needs a project-level fix (compiler/Lombok config or documented IDE/CI build recipe) before the gate's CI item can be satisfied.**
+**HOLD (not met — Gate 0 cannot sign Pass)**
+- [ ] Fixture minimum counts ≥100 / ≥50 / ≥30 — currently seed-only **4 / 4 / 4**. Tracked by `@Disabled minimumFixtureCountsMet`; must be enabled + green to pass. _Largest remaining Gate 0 work item; not blocked._
+- [ ] Baseline metrics (hit@5, MRR, recall@k, write-safety, latency) — PENDING a live model backend (Ollama). `baseline.json` placeholder committed with null metrics. **External dependency — true blocker for this item and for downstream behavioral/metric gates.**
+
+**CORRECTION (prior sign-off was wrong)**
+- An earlier draft of this sign-off recorded a "Lombok 1.18.46 + JDK 25" build blocker. That was a **false alarm** caused by a bad maven invocation (`-am compile` without a prior reactor `install`). `./mvnw clean install -am -pl pos-mcp-server` builds cleanly (confirmed on main and in this worktree). **No build blocker exists.**
 
 **Real bugs caught during verification** (fixed)
 - jspecify `@Nullable` on fully-qualified `java.util.Map` was illegal → added `import java.util.Map`.
