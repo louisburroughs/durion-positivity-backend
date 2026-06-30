@@ -95,6 +95,8 @@ export OLLAMA_API_KEY=********                            # DO NOT commit; rotat
 export MCP_DB_HOST=... MCP_DB_PORT=... MCP_DB_NAME=... MCP_DB_USER=... MCP_DB_PASSWORD=...  # via tunnel
 ```
 > **Security:** keep the API key in the shell/secret store only. Never commit it; rotate if it has been pasted anywhere.
+>
+> **Embeddings (verified 2026-06-30):** the `ollama.com` cloud key is **chat-only** — `/api/embed` returns unauthorized. Point `OLLAMA_EMBEDDING_BASE_URL` at a **local/embedding-capable Ollama** running `nomic-embed-text` (not the internal `ollama:11434` and not the cloud chat endpoint). A 1-container local stack (`pgvector/pgvector:pg16` + local `ollama`) is enough to boot, apply all migrations (incl V19–V22), and embed the 13 preload docs.
 
 ### B.2 Chat backend reachability smoke test (verified working)
 ```bash

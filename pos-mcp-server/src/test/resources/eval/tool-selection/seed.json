@@ -9,9 +9,9 @@
         "permission_codes": ["workorder:workorder:view", "crm:party:view"],
         "workflow_state": "IDLE"
       },
-      "expected": { "tool_ids": ["workorders_getallworkorders"], "k": 5 },
-      "tags": ["single-lookup"],
-      "notes": "List/lookup over workorders; gated by workorder:workorder:view."
+      "expected": { "tool_ids": ["WorkorderFacadeTool"], "k": 5 },
+      "tags": ["single-lookup", "facade"],
+      "notes": "Live tool set is 16 coarse facade tools (mcp_tool.name = class name). WorkorderFacadeTool is gated by workorder:workorder:view (V18). When discovered-op persistence (G3.1) ships, also expect workorders_getallworkorders."
     },
     {
       "fixture_id": "advisor-multidomain-create-workorder",
@@ -34,10 +34,10 @@
       "expected": {
         "tool_ids": [],
         "none": true,
-        "forbidden_tool_ids": ["accounting_getjournalentry", "accounting_getglaccount"]
+        "forbidden_tool_ids": ["AccountingFacadeTool"]
       },
-      "tags": ["permission-negative"],
-      "notes": "Technician lacks accounting:je:view; accounting tools must be gated out (fail-closed)."
+      "tags": ["permission-negative", "facade"],
+      "notes": "AccountingFacadeTool requires accounting:coa:view / accounting:je:view (V18); technician lacks them → gated out (fail-closed). Verified live: forbidden_violations=0."
     },
     {
       "fixture_id": "return-workflow-gated-submit-to-stock",

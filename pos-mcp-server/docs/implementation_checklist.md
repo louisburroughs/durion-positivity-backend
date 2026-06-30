@@ -73,7 +73,7 @@
 
 **HOLD (not met — Gate 0 cannot sign Pass)**
 - [ ] Fixture minimum counts ≥100 / ≥50 / ≥30 — currently seed-only **4 / 4 / 4**. Tracked by `@Disabled minimumFixtureCountsMet`; must be enabled + green to pass. _Largest remaining Gate 0 work item; not blocked._
-- [ ] Baseline metrics (hit@5, MRR, recall@k, write-safety, latency) — driver **built** (`BaselineCaptureIT`, live-gated; runbook §B.4); awaiting a live backend run to populate `baseline.json`. RAG-recall + latency portions still follow-up. Live-boot dependency (LatencyUtils) fixed.
+- [~] Baseline metrics — **first live run 2026-06-30** (local 1-container stack): boot OK (V1–V22 applied, started 11.8s), 13 RAG docs embedded, fail-closed confirmed (deprecated tables only), `BaselineCaptureIT` ran → **forbidden_violations=0** (leakage guard ✓), **hit@5=0/mrr=0** over 3 seed fixtures (facade-vs-discovered naming mismatch — seed fixtures retargeted to facade class names; see `baseline.json`). Found+fixed a live-only boot blocker (`@ConstructorBinding` on `StaticDocEntry`, `176d2a647`). Still pending full stack: RAG recall@k, write-safety, latency, router. Discovered-op rows = 0 (G3.1 unimplemented, confirmed).
 
 **CORRECTION (prior sign-off was wrong)**
 - An earlier draft of this sign-off recorded a "Lombok 1.18.46 + JDK 25" build blocker. That was a **false alarm** caused by a bad maven invocation (`-am compile` without a prior reactor `install`). `./mvnw clean install -am -pl pos-mcp-server` builds cleanly (confirmed on main and in this worktree). **No build blocker exists.**

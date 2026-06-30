@@ -75,7 +75,13 @@ Notes: invoice perms are **coarse** — `invoice:manage` covers most mutations; 
 | GET `/v1/accounting/journal-entries/{id}` | getJournalEntry | `accounting_getjournalentry` |
 | GET `/v1/accounting/gl-accounts/{id}` | getGLAccount | `accounting_getglaccount` |
 
-Note: the domain segment is the **path** segment, so `pos-workorder` ops under `/v1/workorders/...` yield `workorders_*` while ops under `/v1/workexec/...` yield `workexec_*` — derive from the path, not the service name. The **17 legacy facade tools** predate discovery and carry their own `mcp_tool.name` (seeded by migration V18); when a fixture targets a facade rather than a discovered op, use the V18 name.
+Note: the domain segment is the **path** segment, so `pos-workorder` ops under `/v1/workorders/...` yield `workorders_*` while ops under `/v1/workexec/...` yield `workexec_*` — derive from the path, not the service name.
+
+### Live tool set today (verified 2026-06-30)
+**Discovered (`source='openapi'`) ops are NOT persisted to `mcp_tool` yet** (Gate 3 G3.1). So the only selectable tools live are the **16 facade tools**, whose `mcp_tool.name` is the **class name** (seeded V4, permission-gated V18):
+`AccountingFacadeTool`, `AdminFacadeTool`, `CatalogFacadeTool`, `CustomerFacadeTool`, `EventsFacadeTool`, `HrFacadeTool`, `InventoryFacadeTool`, `InvoiceFacadeTool`, `LocationFacadeTool`, `OrderFacadeTool`, `PricingFacadeTool`, `ReportingFacadeTool`, `ShopManagerFacadeTool`, `TaxFacadeTool`, `VehicleFacadeTool`, `WorkorderFacadeTool` (+ always-on Exa). V18 gating examples: `WorkorderFacadeTool` ← `workorder:workorder:view`; `InventoryFacadeTool` ← `inventory:on_hand:view`/`search`; `AccountingFacadeTool` ← `accounting:coa:view`/`accounting:je:view`.
+
+**Fixture implication:** until G3.1 persistence ships, `expected.tool_ids` must use **facade class names** (the live run showed `hit@5=0` because seed fixtures used the discovered convention). Add discovered-op fixtures once those rows exist.
 
 ---
 
