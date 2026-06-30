@@ -33,6 +33,10 @@ public final class SystemPromptDefaults {
     static final String ROLE_TECHNICIAN_PROMPT_NAME = "ROLE_TECHNICIAN";
     static final String ROLE_CUSTOMER_PROMPT_NAME = "ROLE_CUSTOMER";
     static final String ROLE_SELF_SERVICE_CUSTOMER_PROMPT_NAME = "ROLE_SELF_SERVICE_CUSTOMER";
+    // Fallback persona for authenticated callers with no higher-priority role (McpRoleResolver
+    // FALLBACK_ROLE). Internal-only interface: ROLE_CUSTOMER / ROLE_SELF_SERVICE_CUSTOMER are
+    // intentionally NOT seeded as personas (Gate 1).
+    static final String ROLE_USER_PROMPT_NAME = "ROLE_USER";
 
     static final List<String> MCP_ROLE_PRIORITY = List.of(
             ROLE_SYSTEM_ADMINISTRATOR_PROMPT_NAME,
@@ -61,6 +65,15 @@ public final class SystemPromptDefaults {
             - concise, operational, and decision-oriented
             - prefer short sections or bullets when they improve clarity
             - include next actions when they materially help the user move forward
+            """;
+
+    /** TOOL-USE layer: argument-grounding contract appended to every assembled prompt (Gate 1). */
+    static final String TOOL_USE_LAYER_TEXT = """
+            Tool-use contract:
+            - Prefer a tool call over recalling from memory for any live, record-specific, or status question.
+            - Never guess identifiers (workorder numbers, SKUs, VINs, invoice numbers, account codes); if one is missing, ask for it.
+            - Ground every tool argument in the user's words, a prior tool result, or confirmed context — never in an unstated assumption.
+            - If a required argument is missing, ask one focused clarifying question instead of inventing a value.
             """;
 
     /**

@@ -250,7 +250,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 .chatModel(chatModel)
                 .tools(tools)
                 .contentRetriever(resilientContentRetriever)
-                .systemMessageProvider(memoryId -> rolePromptResolver.resolvePrompt(promptName))
+                .systemMessageProvider(
+                        memoryId -> rolePromptResolver.assemble(role, ragScope).text())
                 .chatMemoryProvider(this::chatMemoryFor)
                 .build();
         LOGGER.debug(

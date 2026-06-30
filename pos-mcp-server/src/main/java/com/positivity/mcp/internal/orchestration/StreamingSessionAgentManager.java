@@ -202,7 +202,8 @@ public class StreamingSessionAgentManager
                 .streamingChatModel(streamingChatModel)
                 .tools(tools)
                 .contentRetriever(resilientContentRetriever)
-                .systemMessageProvider(memoryId -> rolePromptResolver.resolvePrompt(promptName))
+                .systemMessageProvider(
+                        memoryId -> rolePromptResolver.assemble(role, ragScope).text())
                 .chatMemoryProvider(this::chatMemoryFor)
                 .build();
         LOGGER.debug(
