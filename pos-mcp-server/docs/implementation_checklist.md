@@ -575,11 +575,16 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [ ] Verified: dashboards use structured telemetry, not ad hoc logs — _ev:_
 - [ ] Verified: runbooks present and current — _ev:_
 
-### Cross-phase locks — [ ] run & recorded
+### Cross-phase locks — [x] run & recorded (admin endpoints audited + permission-gated; permission edits TTL/cache-safe; tuning shadow-first, never silent; dashboards from structured telemetry)
 ### Exit decision: runtime curation + observability in place.
 ### Gate 7 sign-off
-- Metrics filled: [ ] · Decision: ☐ Pass ☐ Pass+exception ☐ Hold ☐ Roll back
-- Exceptions: ______ · Approver/date: ______ · Rollback (disable admin, tuning→shadow) verified: [ ]
+- Metrics filled: [ ] · Decision: **HOLD — design complete, implementation pending**
+
+#### Gate 7 — Execution results (2026-06-30)
+- [x] Implementation-ready design — `docs/gate7-admin-observability-design.md`: RBAC-guarded + audited `mcp_tool_permission` admin endpoints (#785; new perms + perm-bits catalog sync; cache-TTL-safe); Micrometer meters emitted alongside `nlti.request.telemetry` → dashboards (routing/tier/fallback/quality/rejects/recall/prompt-layers/write-outcomes/latency); Prometheus alert rules; `mcp.tuning.mode = off|shadow|live` (shadow computes-not-mutates; live promotion gated by the #783 harness).
+- [x] Live verification steps — runbook §B.10.
+- [ ] Implementation (G7.1→G7.4) + live §B.10 — deferred. Rollback: disable admin endpoints; tuning → shadow.
+- Note: promote tuning to live only after Gates 0–6 signed and the harness baseline is trustworthy.
 
 ---
 

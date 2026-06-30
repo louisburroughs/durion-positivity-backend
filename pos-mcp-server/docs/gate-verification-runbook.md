@@ -193,6 +193,14 @@ The exit criterion is **all write-safety fixtures pass**:
 - Audit chain present: PLAN → CONFIRMATION → EXECUTION_STEP → EXECUTION_COMPLETE/FAILED.
 - Rollback check: with write tools suppressed, the interface is read-only.
 
+### B.10 Admin tooling, dashboards, tuning controls (Gate 7 — after implementation per `gate7-admin-observability-design.md`)
+- **Admin RBAC:** unauthorized user → 403 on `/v1/mcp/admin/tool-permissions`; authorized admin can list/add/remove a `(tool, permission_code)` mapping.
+- **Cache-safe:** a mapping change takes effect after the agent-cache TTL / explicit invalidation (not mid-request).
+- **Audit:** the change is recorded (who / what / old→new / when) via `AuditLedgerService`.
+- **Dashboards:** panels (routing, tier usage, fallback, tool-selection quality, permission rejects, RAG recall, prompt-layer usage, write confirmations/cancellations/expirations/failures, p50/p95) reconcile with `nlti.request.telemetry` + Prometheus meters.
+- **Alerts** fire for: failed-tool-call spike, permission-reject spike, fallback overuse, write-failure rate, confirmation-mismatch attempt, retrieval regression, latency SLO breach.
+- **Tuning:** `mcp.tuning.mode=shadow` computes but does NOT mutate `mcp_tool.priority`; `=live` cannot promote shadow→live unless the #783 harness shows improvement (or approved neutral).
+
 ---
 
 ## C. Full module test suite (optional, broader)
