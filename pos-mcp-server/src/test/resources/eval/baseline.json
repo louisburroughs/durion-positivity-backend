@@ -1,0 +1,15 @@
+{
+  "_comment": "Gate 0 baseline metric snapshot. Captured before any Phase 1+ behavior change. Metric values are PENDING a live model backend (Ollama) + the metric-computation harness; structural-harness and config-hygiene Gate 0 items are complete. Fill the nulls when the runtime harness runs against the alpha backend.",
+  "schema_version": 1,
+  "captured_at": null,
+  "backend": { "chat_model": "qwen3.5:cloud", "embedding_model": "nomic-embed-text", "ollama_base_url": null },
+  "fixture_counts": { "tool_selection": 4, "rag_retrieval": 4, "write_safety": 4 },
+  "metrics": {
+    "tool_selection_hit_at_5": null,
+    "tool_selection_mrr": null,
+    "rag_recall_at_k": null,
+    "write_gate_safety_pass_rate": null,
+    "latency_p50_ms_by_tier": null,
+    "latency_p95_ms_by_tier": null
+  }
+}

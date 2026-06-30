@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "fixture_id": "create-workorder-happy-path",
+      "utterance": "Create a workorder for the Silverado on ACME Fleet for a tire rotation.",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["workorder:workorder:create", "crm:party:search", "crm:vehicle:view"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "workorders_createworkorder",
+        "required_args": ["customerId", "vehicleId", "serviceType"],
+        "disclosed_inferred_args": ["priority"]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "plan_args_equal_executed_args": true,
+        "provenance_present_on_all_args": true,
+        "inferred_defaults_disclosed": true,
+        "permission_recheck_at_execute": true
+      },
+      "tags": ["provenance"],
+      "notes": "priority defaulted -> must be disclosed; ids must be grounded from customer/vehicle lookups."
+    },
+    {
+      "fixture_id": "expired-plan-rejected",
+      "utterance": "Revert invoice INV-9921.",
+      "actor": { "role": "ROLE_ACCOUNT_MANAGER", "permission_codes": ["invoice:manage"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "invoices_revertinvoice",
+        "required_args": ["invoiceId"]
+      },
+      "assertions": {
+        "expires_after_ttl": true,
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true
+      },
+      "tags": ["expiry"],
+      "notes": "HIGH risk; confirm after plan-ttl must yield EXPIRED + require re-plan."
+    },
+    {
+      "fixture_id": "stale-slot-repreview",
+      "utterance": "Reschedule appointment APPT-5512 to tomorrow at 9am.",
+      "actor": { "role": "ROLE_DISPATCHER", "permission_codes": ["appointments:reschedule"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "appointments_rescheduleappointment",
+        "required_args": ["appointmentId", "newStartTime"]
+      },
+      "assertions": { "stale_data_forces_repreview": true, "plan_args_equal_executed_args": true },
+      "tags": ["stale-data"],
+      "notes": "If the 9am slot is taken between plan and confirm, force re-preview rather than executing into a conflict."
+    },
+    {
+      "fixture_id": "idempotent-double-confirm",
+      "utterance": "Cancel appointment APPT-5512.",
+      "actor": { "role": "ROLE_DISPATCHER", "permission_codes": ["appointments:cancel"] },
+      "expected": { "intent_type": "ACTION", "risk_level": "MEDIUM", "tool_id": "appointments_cancelappointment", "required_args": ["appointmentId"] },
+      "assertions": { "idempotency_single_execution": true },
+      "tags": ["idempotency"],
+      "notes": "Second confirmation with same idempotency key returns original result, no second cancel. Confirm exact operationId vs pos-shop-manager openapi.yaml."
+    }
+  ]
+}

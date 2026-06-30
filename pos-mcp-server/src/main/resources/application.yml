@@ -52,7 +52,9 @@ mcp:
     max-cached-agents: 500
     memory-max-messages: 50
   tuning:
-    enabled: true
+    # Gate 0 (NL-interface plan): adaptive tuning disabled until the retrieval-quality
+    # regression harness exists. Re-enable only via shadow→controlled-live promotion (Gate 7).
+    enabled: ${MCP_TUNING_ENABLED:false}
     cron: "0 0 2 * * ?"
   model:
     fallback:
@@ -64,6 +66,8 @@ langchain4j:
   ollama:
     chat-model:
       base-url: ${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
+      # Deliberate default executor model (Gate 0 config-hygiene). Documented in README.
+      # Tier routing (Gate 4) may select a smaller/larger model per request; this is the single default.
       model-name: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
       temperature: 0.2
       timeout: ${OLLAMA_CHAT_TIMEOUT:180s}

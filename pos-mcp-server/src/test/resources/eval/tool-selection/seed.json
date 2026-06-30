@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "fixture_id": "advisor-list-workorders",
+      "utterance": "Show me the open workorders.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": ["workorder:workorder:view", "crm:party:view"],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["workorders_getallworkorders"], "k": 5 },
+      "tags": ["single-lookup"],
+      "notes": "List/lookup over workorders; gated by workorder:workorder:view."
+    },
+    {
+      "fixture_id": "advisor-multidomain-create-workorder",
+      "utterance": "Create a workorder for the Silverado on ACME Fleet.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": ["crm:party:search", "crm:vehicle:view", "workorder:workorder:create"]
+      },
+      "expected": {
+        "tool_ids": ["crm_getallcustomers", "crm_listvehiclesforcustomer", "workorders_createworkorder"],
+        "k": 5
+      },
+      "tags": ["multi-domain"],
+      "notes": "Requires customer->vehicle->workorder chaining; all three should be in candidate set."
+    },
+    {
+      "fixture_id": "technician-denied-accounting",
+      "utterance": "Show me journal entry JE-4000.",
+      "actor": { "role": "ROLE_TECHNICIAN", "permission_codes": ["workorder:workorder:view"] },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": ["accounting_getjournalentry", "accounting_getglaccount"]
+      },
+      "tags": ["permission-negative"],
+      "notes": "Technician lacks accounting:je:view; accounting tools must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "return-workflow-gated-submit-to-stock",
+      "utterance": "Put these returned parts back into stock.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": ["inventory:goods_receipt:create"],
+        "workflow_state": "PROCESSING_RETURN"
+      },
+      "expected": { "tool_ids": ["inventory_submitreturntostock"], "k": 5 },
+      "tags": ["workflow-gated"],
+      "notes": "Tool only valid in non-IDLE PROCESSING_RETURN state (Phase 2C)."
+    }
+  ]
+}

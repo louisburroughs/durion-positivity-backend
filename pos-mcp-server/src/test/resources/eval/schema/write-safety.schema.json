@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://durion/pos-mcp-server/eval/write-safety.schema.json",
+  "title": "Write-action safety fixture suite",
+  "type": "object",
+  "required": ["schema_version", "fixtures"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "fixtures": { "type": "array", "items": { "$ref": "#/$defs/fixture" } }
+  },
+  "$defs": {
+    "fixture": {
+      "type": "object",
+      "required": ["fixture_id", "utterance", "actor", "expected", "assertions"],
+      "additionalProperties": false,
+      "properties": {
+        "fixture_id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "utterance": { "type": "string", "minLength": 1 },
+        "actor": {
+          "type": "object",
+          "required": ["role", "permission_codes"],
+          "additionalProperties": false,
+          "properties": {
+            "role": { "type": "string", "pattern": "^ROLE_[A-Z_]+$" },
+            "permission_codes": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "expected": {
+          "type": "object",
+          "required": ["intent_type", "tool_id", "required_args"],
+          "additionalProperties": false,
+          "properties": {
+            "intent_type": { "type": "string", "enum": ["QUERY", "ACTION", "UNKNOWN"] },
+            "risk_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+            "tool_id": { "type": "string" },
+            "required_args": { "type": "array", "items": { "type": "string" } },
+            "disclosed_inferred_args": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "assertions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "no_execute_before_confirm": { "type": "boolean" },
+            "plan_args_equal_executed_args": { "type": "boolean" },
+            "provenance_present_on_all_args": { "type": "boolean" },
+            "inferred_defaults_disclosed": { "type": "boolean" },
+            "permission_recheck_at_execute": { "type": "boolean" },
+            "expires_after_ttl": { "type": "boolean" },
+            "stale_data_forces_repreview": { "type": "boolean" },
+            "idempotency_single_execution": { "type": "boolean" }
+          }
+        },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

@@ -138,7 +138,7 @@ Retrieval is role-aware (`RoleAwareMetadataFilter`, `ScopedContentRetrieverFacto
 
 | Property                                        | Env / Default                 | Description                                    |
 | ----------------------------------------------- | ----------------------------- | ---------------------------------------------- |
-| `langchain4j.ollama.chat-model.model-name`      | `llama3.1:8b`                 | Ollama chat model                              |
+| `langchain4j.ollama.chat-model.model-name`      | `OLLAMA_CHAT_MODEL` `qwen3.5:cloud` | Deliberate default executor model (single default; tier routing may override per request) |
 | `langchain4j.ollama.embedding-model.model-name` | `nomic-embed-text`            | Embedding model for RAG                        |
 | `mcp.agent.cache-ttl-minutes`                   | `30`                          | Agent cache TTL (role agents + sessions)       |
 | `mcp.agent.candidate-tool-limit`                | `MCP_AGENT_CANDIDATE_TOOL_LIMIT` `8` | Max candidate tools per chat request    |
@@ -146,7 +146,7 @@ Retrieval is role-aware (`RoleAwareMetadataFilter`, `ScopedContentRetrieverFacto
 | `mcp.rag.chunking.max-segment-size`             | `MCP_RAG_MAX_SEGMENT_SIZE`    | Max chunk size                                 |
 | `mcp.rag.chunking.max-overlap-size`             | `MCP_RAG_MAX_OVERLAP_SIZE`    | Chunk overlap                                  |
 | `mcp.rag.preload.docs`                          | `[]`                          | Static classpath documents to preload          |
-| `mcp.tuning.enabled`                            | `true`                        | Enable adaptive tool priority tuning           |
+| `mcp.tuning.enabled`                            | `MCP_TUNING_ENABLED` `false`  | Adaptive tool priority tuning (disabled until regression harness exists — Gate 0) |
 | `mcp.tuning.cron`                               | `0 0 2 * * ?`                 | Tuning schedule (daily 02:00)                  |
 | `mcp.model.fallback.enabled`                    | `MCP_MODEL_FALLBACK_ENABLED`  | Primary → secondary model fallback             |
 | `mcp.discovery.aggregate-spec-url`              | `MCP_AGGREGATE_SPEC_URL`      | Gateway aggregate OpenAPI URL                  |
