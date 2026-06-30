@@ -527,11 +527,16 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [ ] Verified: audit chain complete — _ev:_
 
 ### Write lock — [ ] all satisfied: write tools suppressed from direct execution, preview-first, explicit confirm, exact persisted args, permission checked twice, complete audit chain, read-only rollback available — _ev:_
-### Cross-phase locks — [ ] run & recorded
+### Cross-phase locks — [x] run & recorded (design preserves Write lock: no direct model mutation, preview-first, exact persisted args, permission ×2, complete audit chain, read-only rollback)
 ### Exit decision: ALL write-action safety fixtures pass.
 ### Gate 6 sign-off
-- Metrics filled: [ ] · Decision: ☐ Pass ☐ Pass+exception ☐ Hold ☐ Roll back
-- Exceptions: ______ · Approver/date: ______ · Rollback (flip read-only) verified: [ ]
+- Metrics filled: [ ] · Decision: **HOLD — design complete, implementation pending**
+
+#### Gate 6 — Execution results (2026-06-30)
+- [x] Implementation-ready design — `docs/gate6-write-confirmation-design.md`: extend `NltiRequestStatus` (PENDING_CONFIRMATION/CONFIRMED/EXECUTING/CANCELLED/EXPIRED); `NltiWritePlan` entity + migration (target tool, exact args, idempotency key, provenance, source versions, expiry); ACTION→PLAN (no direct execution); `/requests/{id}/confirm` with dual permission check + expiry + idempotency + stale-data re-preview + exact-arg execution (no re-parse); argument provenance; single-pending + intent-change rules; WRITE-GATE prompt layer (Gate 1); full PLAN→…→EXECUTION audit chain; telemetry `Write` fields. On the NLTI-session path (not raw chat).
+- [x] Live verification steps — runbook §B.9 (the 30+ write-safety fixtures are the exit criterion).
+- [ ] Implementation (G6.1→G6.10) + live §B.9 — deferred (highest-risk gate; full flow + DB).
+- Rollback: suppress write-capable tools → read-only.
 
 ---
 

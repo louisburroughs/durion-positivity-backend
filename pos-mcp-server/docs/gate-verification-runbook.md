@@ -180,6 +180,19 @@ Requires pgvector + the embedding model; run the RAG-retrieval fixtures through 
 - **Chunking:** glossary/identifier docs use small chunks; prose/playbooks larger.
 - Doc hygiene: every preload/ingested doc has deterministic id, content hash, `rag_scope`, `required_permissions`.
 
+### B.9 Write-action confirmation gate (Gate 6 — after implementation per `gate6-write-confirmation-design.md`)
+Run the `write-safety` fixtures against the live NLTI-session path (`/v1/nlt/requests` + `/confirm`).
+The exit criterion is **all write-safety fixtures pass**:
+- No mutation without an explicit `/confirm`; plan args == executed args (no re-parse on confirm).
+- Expired plan (past `mcp.nlti.write.plan-ttl`) does not execute; idempotent re-confirm does not double-write.
+- Material argument change cancels + re-previews; missing required arg → clarification, not a guess.
+- Inferred-default args disclosed in the preview; HIGH-risk inferred defaults rejected / require explicit selection.
+- Lower-permission caller cannot execute a higher-permission plan (permission re-checked at confirm).
+- Changed source entity version since plan → forced re-preview (risk ≥ MEDIUM).
+- Downstream business-rule rejection surfaced accurately (not swallowed/faked).
+- Audit chain present: PLAN → CONFIRMATION → EXECUTION_STEP → EXECUTION_COMPLETE/FAILED.
+- Rollback check: with write tools suppressed, the interface is read-only.
+
 ---
 
 ## C. Full module test suite (optional, broader)
