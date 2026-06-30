@@ -34,4 +34,7 @@ Tax collected or accrued may need a liability account, but the bundle does not p
 ## Error and exception patterns
 Common issues include missing customer exemption, wrong location, wrong vehicle/service address, product/service taxable-category mismatch, estimate/invoice date difference, manual line adjustment, missing approval for tax override, and jurisdiction rule not loaded.
 
-> TODO(verify): tax jurisdiction source, exemption-document model, taxable category mapping, tax override approval rule, and tax-to-accounting posting rules.
+## Verified ownership (pos-tax)
+`pos-tax` is a thin service that **delegates tax calculation to an external tax provider** (`ExternalTaxServiceClient`, Resilience4j retry) with a deterministic `TestModeTaxCalculator` fallback (`TaxConfiguration`/`TaxProperties`/`TaxController`). It does **not** model jurisdictions, exemption documents, or taxable-category mappings internally — those live in the external provider. Permissions: `tax:calculate`, `tax:mode:view`. Tax→accounting posting is NOT owned by pos-tax: tax is presented on the invoice (`pos-invoice`) and posted to the GL by `pos-accounting`. So jurisdiction/exemption/category rules are UNVERIFIABLE from this repo (external), and there is no internal tax-override permission.
+
+_Verified: `pos-tax` `TaxCalculationServiceImpl`, `ExternalTaxServiceClient`, `TestModeTaxCalculator`, `permissions.yaml` (tax:calculate, tax:mode:view)._

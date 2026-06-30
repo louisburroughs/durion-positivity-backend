@@ -31,7 +31,7 @@ Common event categories:
 - **Reconstruct "what happened to entity X":** pos-event-receiver only serves time-window aggregates (`/v1/events/summary/lastHour|lastDay|lastWeek`), NOT per-entity history. Use the audit ledgers: `GET /v1/audit/events` (pos-security-service, filter by aggregateId/workorderId/productId/actorId/correlationId) and `GET /v1/nlt/audit` (pos-mcp-server, by correlationId/eventType/date).
 - **Permissions:** `nlti:audit:read` (NLTI ledger), `security:audit:view` (security audit), `security:audit:export`, `crm:integration:audit` (CRM ingestion). 
 
-> TODO(verify): exact event-type constant names per owning `*EventTypes.java` before quoting a specific one to a user.
+_Verified examples (owning `*EventTypes.java`): pos-workorder — `WORKORDER_CREATE`, `WORKORDER_START`, `WORKORDER_APPROVE`, `WORKORDER_COMPLETE`, `WORKORDER_REOPEN`, `WORKORDER_SEARCH`; pos-order — `ORDER_PRICE_OVERRIDE_APPLY`, `ORDER_PRICE_OVERRIDE_APPROVE`, `ORDER_PRICE_OVERRIDE_REJECT`, `ORDER_CART_CANCEL_REQUEST`. Each service has its own registry; confirm against the owning `*EventTypes.java` before quoting a name not listed here._
 
 ## Reconstructing "what happened to entity X"
 The assistant should reconstruct a timeline rather than jump to a conclusion.

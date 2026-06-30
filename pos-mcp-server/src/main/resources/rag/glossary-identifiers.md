@@ -52,9 +52,9 @@ Journal entries have no human-facing number (UUID `journalEntryId` + integer `li
 _Verified: `pos-accounting` `GLAccountCreateRequest` (`@Pattern "^\\d{4}(-\\d{3})?$"`), `GLAccount`/`JournalEntry`; `pos-customer` `AbstractParty.customerNumber`._
 
 ## Claim code
-A claim code would identify a warranty/claim record. **No warranty, claim, or RMA concept was found** in `pos-invoice`, `pos-order`, or `pos-inventory` (inventory owns customer *returns* via `inventory:return:*`, which is not the same as warranty claims). The assistant should ask for the full code and must not state claim eligibility rules or a claim-code format — no owning service is established.
+A claim code would identify a warranty/claim record. **A repo-wide search found no warranty-claim or RMA workflow in any service.** "Warranty" exists only as a descriptive product attribute in the catalog (`ProductEntity.warranty` / `manufacturerWarranty`, e.g. "1 year limited warranty") — not a claim process. The only `claim` permission is `inventory:putaway:claim` (claiming a putaway task, unrelated). There is therefore no claim-code format, claim state machine, or reimbursement workflow. The assistant must not describe one.
 
-> TODO(verify): confirm whether any service owns warranty/claims (none found in invoice/order/inventory); if so, capture the claim-code format + workflow.
+> OPEN (product decision, not a code gap): whether a warranty-claim capability is intended/roadmapped is a product question — no owning service exists in code today.
 
 ## Appointment
 An appointment is a scheduled service visit linking a customer, a vehicle, a time slot, and one or more shop resources such as a bay or mobile unit. It can move through statuses including scheduled, checked in, work in progress, waiting for parts, quality check, ready for pickup, completed, cancelled, invoiced, and reopened.
