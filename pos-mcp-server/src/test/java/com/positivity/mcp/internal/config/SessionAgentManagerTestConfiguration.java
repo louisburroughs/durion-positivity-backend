@@ -59,17 +59,6 @@ public class SessionAgentManagerTestConfiguration {
             }
 
             @Override
-            public java.util.List<String> findAllRoleNames() {
-                return List.of();
-            }
-
-            @Override
-            public java.util.List<com.positivity.mcp.internal.domain.ToolMetadata> findEnabledByRoleAndWorkflow(
-                    String role, String workflowState) {
-                return List.of();
-            }
-
-            @Override
             public java.util.List<com.positivity.mcp.internal.domain.ToolMetadata> findEnabledByWorkflow(
                     String workflowState) {
                 return List.of();
@@ -84,6 +73,13 @@ public class SessionAgentManagerTestConfiguration {
             @Override
             public java.util.List<com.positivity.mcp.internal.domain.ToolMetadata> findTopKByEmbedding(
                     float[] embedding, int limit) {
+                return List.of();
+            }
+
+            @Override
+            public java.util.List<com.positivity.mcp.internal.domain.DiscoveredOperation>
+                    findDiscoveredCandidatesForPermissions(
+                            float[] embedding, int limit, java.util.Set<String> permissionCodes, String workflowState) {
                 return List.of();
             }
         };

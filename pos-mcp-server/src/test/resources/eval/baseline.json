@@ -1,0 +1,38 @@
+{
+  "_comment": "Gate 0 baseline. First live run 2026-06-30 against a local 1-container stack (pgvector pg16 :5433 + local ollama nomic-embed-text). Chat smoke via ollama.com qwen3.5:cloud. NOTE: the ollama.com cloud key is CHAT-ONLY (/api/embed -> unauthorized); embeddings require a local/embedding-capable backend. tool_selection metrics are over the 3 seed fixtures only and reflect the facade-vs-discovered naming mismatch (see observations); re-run after fixture retargeting + with real fixtures.",
+  "schema_version": 1,
+  "captured_at": "2026-06-30",
+  "backend": {
+    "chat_base_url": "https://ollama.com",
+    "chat_model": "qwen3.5:cloud",
+    "chat_reachable": true,
+    "chat_key_is_chat_only": true,
+    "embedding_base_url": "local ollama (NOT ollama:11434)",
+    "embedding_model": "nomic-embed-text",
+    "embedding_reachable": true,
+    "postgres": "local pgvector/pgvector:pg16 on :5433"
+  },
+  "boot": {
+    "flyway_migrations_applied": "V1..V22 (incl V19/V20/V21/V22)",
+    "started_seconds": 11.8,
+    "rag_docs_embedded": 13,
+    "facade_tools": 16,
+    "discovered_openapi_tools": 0,
+    "fail_closed_verified": "only mcp_role_deprecated / mcp_tool_role_deprecated exist (originals gone)",
+    "readiness": "OUT_OF_SERVICE (environmental — no eureka/security-service/gateway in the 1-container stack)"
+  },
+  "observations": {
+    "tool_selection_hit_at_5_zero": "The 3 seed fixtures targeted discovered-convention tool names (e.g. workorders_getallworkorders), but the live tool set is 16 coarse facade tools whose mcp_tool.name = the class name (WorkorderFacadeTool, ...). So expected tools were never in top-5. Two seed fixtures retargeted to facade names (WorkorderFacadeTool; forbidden AccountingFacadeTool). Real fixtures (Gate 0 exit) must target the live tool set.",
+    "leakage_guard": "forbidden_violations = 0 (permission-negative held)."
+  },
+  "fixture_counts": { "tool_selection": 4, "rag_retrieval": 4, "write_safety": 4 },
+  "metrics": {
+    "tool_selection_hit_at_5": 0.0,
+    "tool_selection_mrr": 0.0,
+    "tool_selection_forbidden_violations": 0,
+    "rag_recall_at_k": null,
+    "write_gate_safety_pass_rate": null,
+    "latency_p50_ms_by_tier": null,
+    "latency_p95_ms_by_tier": null
+  }
+}

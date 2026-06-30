@@ -61,7 +61,7 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
             List<StaticRagPreloadProperties.StaticDocEntry> docs = preloadProperties.docs();
             for (StaticRagPreloadProperties.StaticDocEntry entry : docs) {
                 try {
-                    preloadDocument(entry.id(), entry.sourcePath(), entry.ragScope());
+                    preloadDocument(entry.id(), entry.sourcePath(), entry.ragScope(), entry.requiredPermissions());
                 } catch (Exception exception) {
                     String hash = resolveHashOrNull(entry.sourcePath());
                     persistFailedRecord(entry.id(), hash, entry.sourcePath(), entry.ragScope());
@@ -160,7 +160,11 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
         }
     }
 
-    private void preloadDocument(@NonNull String documentId, @NonNull String sourcePath, @Nullable String ragScope)
+    private void preloadDocument(
+            @NonNull String documentId,
+            @NonNull String sourcePath,
+            @Nullable String ragScope,
+            @NonNull List<String> requiredPermissions)
             throws IOException {
         Resource resource = new ClassPathResource(resourcePath(sourcePath));
         byte[] bytes = resource.getContentAsByteArray();
@@ -181,11 +185,16 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
             return;
         }
 
-        Map<String, Object> metadata = Map.of(
-                "document_id", documentId,
-                "source_path", sourcePath,
-                "rag_scope", normalizedRagScope);
-        var job = documentIngestionService.submitDocument(content, metadata);
+        Map<String, Object> metadata = new java.util.LinkedHashMap<>();
+        metadata.put("document_id", documentId);
+        metadata.put("source_path", sourcePath);
+        metadata.put("rag_scope", normalizedRagScope);
+        // Gate 5 G5.2: carry permission metadata as a comma-joined string (embedding-store metadata
+        // values are scalars). Consumed by PermissionAwareMetadataFilter (G5.1). Empty = public.
+        if (!requiredPermissions.isEmpty()) {
+            metadata.put("required_permissions", String.join(",", requiredPermissions));
+        }
+        var job = documentIngestionService.submitDocument(content, java.util.Map.copyOf(metadata));
         LOGGER.info("Submitted RAG preload document_id={} hash={} jobId={}", documentId, hash, job.jobId());
         persistRecord(documentId, hash, sourcePath, normalizedRagScope, RagPreloadStatus.QUEUED, job.jobId());
     }

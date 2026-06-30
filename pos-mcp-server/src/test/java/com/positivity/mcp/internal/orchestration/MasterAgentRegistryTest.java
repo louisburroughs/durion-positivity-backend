@@ -96,7 +96,7 @@ class MasterAgentRegistryTest {
     }
 
     @Test
-    void preloadableRoleIdentifiersPreferRoleAssignments() {
+    void preloadableRoleIdentifiersUnionCanonicalSetWithAssignments() {
         Object inventoryTool = new InventoryFacadeToolStub();
         MasterAgentRegistry registry = new MasterAgentRegistry(
                 List.of(),
@@ -105,7 +105,10 @@ class MasterAgentRegistryTest {
                         "ROLE_MANAGER", List.of(inventoryTool),
                         "ROLE_CASHIER", List.of(inventoryTool)));
 
-        assertThat(registry.preloadableRoleIdentifiers()).containsExactly("ROLE_CASHIER", "ROLE_MANAGER");
+        // Gate 2A (#639): preload covers the canonical role set (MCP_ROLE_PRIORITY + ROLE_USER)
+        // unioned with any configured assignments — so ROLE_TECHNICIAN/ROLE_USER are never omitted.
+        assertThat(registry.preloadableRoleIdentifiers())
+                .contains("ROLE_CASHIER", "ROLE_MANAGER", "ROLE_USER", "ROLE_TECHNICIAN", "ROLE_SERVICE_ADVISOR");
     }
 
     @Test
@@ -125,14 +128,17 @@ class MasterAgentRegistryTest {
     }
 
     @Test
-    void resolveDomainToolsNormalizesSecurityRolesToRegistryRoles() {
+    void resolveDomainToolsUsesRawRoleNameNoAliasing() {
         Object inventoryTool = new InventoryFacadeToolStub();
         MasterAgentRegistry registry = new MasterAgentRegistry(
                 List.of(),
                 List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))),
                 java.util.Map.of("ROLE_SERVICE_WRITER", List.of(inventoryTool)));
 
-        assertThat(registry.resolveDomainTools("ROLE_SERVICE_ADVISOR")).containsExactly(inventoryTool);
+        // Gate 2B (#780): ToolRegistryRoleMapper role aliasing retired — lookup is by the raw role
+        // name, no ROLE_SERVICE_ADVISOR -> ROLE_SERVICE_WRITER normalization.
+        assertThat(registry.resolveDomainTools("ROLE_SERVICE_WRITER")).containsExactly(inventoryTool);
+        assertThat(registry.resolveDomainTools("ROLE_SERVICE_ADVISOR")).isEmpty();
     }
 
     @Test

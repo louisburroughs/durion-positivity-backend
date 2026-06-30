@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.repository;
 
+import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -50,30 +51,9 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 this::mapRow);
     }
 
-    @Override
-    public @NonNull List<String> findAllRoleNames() {
-        return jdbcTemplate.queryForList("SELECT name FROM mcp_role ORDER BY name", String.class);
-    }
-
-    @Override
-    public @NonNull List<ToolMetadata> findEnabledByRoleAndWorkflow(
-            @NonNull String role, @NonNull String workflowState) {
-        String sql = """
-                SELECT t.id, t.name, t.display_name, t.description,
-                       t.domain, t.priority, t.cost_level,
-                       t.avg_latency_ms, t.enabled, t.handler_bean
-                FROM mcp_tool t
-                JOIN mcp_tool_role tr ON t.id = tr.tool_id
-                JOIN mcp_role r ON tr.role_id = r.id
-                JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
-                JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
-                WHERE t.enabled = true
-                  AND r.name = ?
-                  AND ws.name = ?
-                """;
-
-        return jdbcTemplate.query(sql, this::mapRow, role, workflowState);
-    }
+    // Gate 2B / #780: findAllRoleNames() and findEnabledByRoleAndWorkflow() removed — the legacy
+    // mcp_role / mcp_tool_role tables are no longer queried at runtime. Candidate gating runs
+    // solely through findTopKByEmbeddingForPermissions (permission codes + workflow state).
 
     @Override
     public @NonNull List<ToolMetadata> findEnabledByWorkflow(@NonNull String workflowState) {
@@ -128,6 +108,49 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                     ps.setInt(4, limit);
                 },
                 this::mapRow);
+    }
+
+    @Override
+    public @NonNull List<DiscoveredOperation> findDiscoveredCandidatesForPermissions(
+            float @NonNull [] embedding,
+            int limit,
+            @NonNull Set<String> permissionCodes,
+            @NonNull String workflowState) {
+        if (permissionCodes.isEmpty()) {
+            return List.of();
+        }
+        String sql = """
+                SELECT t.name, t.description, t.http_method, t.http_path, t.service_id, t.input_schema
+                FROM mcp_tool t
+                JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
+                JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
+                WHERE t.enabled = true
+                  AND t.embedding IS NOT NULL
+                  AND t.source = 'openapi'
+                  AND ws.name = ?
+                  AND t.id IN (SELECT tool_id FROM mcp_tool_permission WHERE permission_code = ANY(?))
+                ORDER BY t.embedding <=> ?::vector, t.id
+                LIMIT ?
+                """;
+        return jdbcTemplate.query(
+                sql,
+                ps -> {
+                    ps.setString(1, workflowState);
+                    ps.setArray(2, ps.getConnection().createArrayOf("varchar", permissionCodes.toArray()));
+                    ps.setObject(3, toVectorPGobject(embedding));
+                    ps.setInt(4, limit);
+                },
+                this::mapDiscovered);
+    }
+
+    private DiscoveredOperation mapDiscovered(ResultSet rs, int rowNum) throws SQLException {
+        return new DiscoveredOperation(
+                rs.getString("name"),
+                rs.getString("description"),
+                rs.getString("http_method"),
+                rs.getString("http_path"),
+                rs.getString("service_id"),
+                rs.getString("input_schema"));
     }
 
     @Override

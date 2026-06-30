@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "fixture_id": "exact-id-vin-fitment",
+      "query": "fitment rules for VIN 1GCEK14T34Z123456",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["crm:vehicle:view"] },
+      "expected": { "doc_ids": ["vehicle.fitment"], "k": 5 },
+      "tags": ["exact-id"],
+      "notes": "Exact VIN - exercises hybrid BM25 path (Phase 5)."
+    },
+    {
+      "fixture_id": "misspelling-recievables",
+      "query": "how do recievables get reconcilled",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:je:view"] },
+      "expected": { "doc_ids": ["accounting.de-bookkeeping"], "k": 5 },
+      "tags": ["misspelling"],
+      "notes": "Two misspellings; dense retrieval should still recall."
+    },
+    {
+      "fixture_id": "abbreviation-wo-to-invoice",
+      "query": "how does a WO become an invoice",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["workorder:workorder:view", "invoice:manage"] },
+      "expected": { "doc_ids": ["workflow.estimate-to-invoice", "shop.management"], "k": 5 },
+      "tags": ["abbreviation", "cross-domain"],
+      "notes": "WO = workorder; needs glossary + workflow playbook (added Phase 5)."
+    },
+    {
+      "fixture_id": "visibility-technician-denied-governance",
+      "query": "who can approve a permission change",
+      "actor": { "role": "ROLE_TECHNICIAN", "permission_codes": ["workorder:workorder:view"] },
+      "expected": {
+        "doc_ids": [],
+        "forbidden_doc_ids": ["admin.governance", "security.role-permission-matrix"]
+      },
+      "tags": ["visibility-negative"],
+      "notes": "Admin-only docs must not surface to a technician (permission-aware filter)."
+    }
+  ]
+}
