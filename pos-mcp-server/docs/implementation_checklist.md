@@ -538,7 +538,8 @@ the Permission lock. So it is specified implementation-ready and verified live t
 #### Gate 6 — Execution results (2026-06-30)
 - [x] Implementation-ready design — `docs/gate6-write-confirmation-design.md`: extend `NltiRequestStatus` (PENDING_CONFIRMATION/CONFIRMED/EXECUTING/CANCELLED/EXPIRED); `NltiWritePlan` entity + migration (target tool, exact args, idempotency key, provenance, source versions, expiry); ACTION→PLAN (no direct execution); `/requests/{id}/confirm` with dual permission check + expiry + idempotency + stale-data re-preview + exact-arg execution (no re-parse); argument provenance; single-pending + intent-change rules; WRITE-GATE prompt layer (Gate 1); full PLAN→…→EXECUTION audit chain; telemetry `Write` fields. On the NLTI-session path (not raw chat).
 - [x] Live verification steps — runbook §B.9 (the 30+ write-safety fixtures are the exit criterion).
-- [ ] Implementation (G6.1→G6.10) + live §B.9 — deferred (highest-risk gate; full flow + DB).
+- [x] **Foundations (2026-06-30, offline):** `NltiRequestStatus` extended (PENDING_CONFIRMATION/CONFIRMED/EXECUTING/CANCELLED/EXPIRED); `ArgProvenance` enum; `NltiWritePlan` entity + Flyway V22(pg)/V20(h2) incl. partial-unique one-pending-per-session index (pg); `WritePlanPolicy` pure invariants (expiry, provenance-complete, inferred-default disclosure, high-risk-inferred rejection) — 5 unit tests, 30 total green.
+- [ ] Deferred to live (G6.2/3/6/7/8/10): plan creation, `/requests/{id}/confirm` (exact-arg execution, dual permission check, expiry, idempotency, stale-data re-preview), WRITE-GATE prompt-layer wiring, telemetry + §B.9.
 - Rollback: suppress write-capable tools → read-only.
 
 ---
