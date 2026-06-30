@@ -35,7 +35,7 @@
         "permission_codes": { "type": "array", "items": { "type": "string" } },
         "workflow_state": {
           "type": "string",
-          "enum": ["IDLE", "CREATING_PO", "PROCESSING_RETURN"]
+          "enum": ["IDLE", "CREATING_PO", "RECEIVING_ASN", "INVENTORY_RECON", "PROCESSING_RETURN"]
         }
       }
     },

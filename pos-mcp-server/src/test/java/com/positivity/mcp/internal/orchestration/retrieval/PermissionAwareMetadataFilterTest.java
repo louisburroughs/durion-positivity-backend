@@ -40,10 +40,15 @@ class PermissionAwareMetadataFilterTest {
     }
 
     @Test
-    @DisplayName("AUTHENTICATED doc is visible to any authenticated caller")
+    @DisplayName("AUTHENTICATED doc is visible to an authenticated caller (carries the sentinel), hidden otherwise")
     void authenticatedSentinel() {
-        var filter = new PermissionAwareMetadataFilter(delegateOf(doc("authn", "AUTHENTICATED")), Set.of());
-        assertThat(texts(filter.retrieve(Query.from("q")))).containsExactly("authn");
+        ContentRetriever delegate = delegateOf(doc("authn", "AUTHENTICATED"));
+        // Authenticated callers carry the synthetic AUTHENTICATED code (CurrentUserContext).
+        var authed = new PermissionAwareMetadataFilter(delegate, Set.of("AUTHENTICATED"));
+        assertThat(texts(authed.retrieve(Query.from("q")))).containsExactly("authn");
+        // A context with no AUTHENTICATED sentinel does not see it (fail-closed).
+        var unauthed = new PermissionAwareMetadataFilter(delegate, Set.of("workorder:workorder:view"));
+        assertThat(unauthed.retrieve(Query.from("q"))).isEmpty();
     }
 
     @Test

@@ -35,11 +35,15 @@ class SystemPromptSeedRunnerTest {
         Map<String, String> seedPrompts = SystemPromptSeedRunner.seedPrompts();
 
         assertThat(seedPrompts).containsKeys("master", "inventory", "order", "customer", "workorder", "admin");
+        // Gate 1: internal role personas ARE seeded; customer-facing personas are not (internal-only interface).
         assertThat(seedPrompts)
-                .doesNotContainKeys(
+                .containsKeys(
                         SystemPromptDefaults.ROLE_ADMIN_PROMPT_NAME,
                         SystemPromptDefaults.ROLE_SYSTEM_ADMINISTRATOR_PROMPT_NAME,
-                        SystemPromptDefaults.ROLE_SERVICE_ADVISOR_PROMPT_NAME);
+                        SystemPromptDefaults.ROLE_SERVICE_ADVISOR_PROMPT_NAME)
+                .doesNotContainKeys(
+                        SystemPromptDefaults.ROLE_CUSTOMER_PROMPT_NAME,
+                        SystemPromptDefaults.ROLE_SELF_SERVICE_CUSTOMER_PROMPT_NAME);
         assertThat(seedPrompts.get("shop-manager")).contains("Stay inside shop-manager scope");
     }
 

@@ -43,7 +43,8 @@ class EvalFixtureValidationTest {
             "ROLE_DISPATCHER",
             "ROLE_TECHNICIAN",
             "ROLE_USER");
-    private static final Set<String> WORKFLOW_STATES = Set.of("IDLE", "CREATING_PO", "PROCESSING_RETURN");
+    private static final Set<String> WORKFLOW_STATES =
+            Set.of("IDLE", "CREATING_PO", "RECEIVING_ASN", "INVENTORY_RECON", "PROCESSING_RETURN");
     private static final Set<String> INTENT_TYPES = Set.of("QUERY", "ACTION", "UNKNOWN");
     private static final Set<String> RISK_LEVELS = Set.of("LOW", "MEDIUM", "HIGH");
 

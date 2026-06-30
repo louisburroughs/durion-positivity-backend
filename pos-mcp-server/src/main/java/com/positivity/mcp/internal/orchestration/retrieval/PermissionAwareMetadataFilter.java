@@ -67,7 +67,10 @@ public class PermissionAwareMetadataFilter implements ContentRetriever {
             return true; // public / unrestricted
         }
         if (required.contains(AUTHENTICATED)) {
-            return true; // any authenticated caller
+            // Visible to any authenticated caller. CurrentUserContext always carries the synthetic
+            // AUTHENTICATED code, so gate on its presence — safe even if this retriever is ever used
+            // outside an authenticated endpoint.
+            return callerPermissionCodes.contains(AUTHENTICATED);
         }
         return required.stream().anyMatch(callerPermissionCodes::contains);
     }

@@ -1,4 +1,4 @@
-package com.positivity.mcp.internal.discovery;
+package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -9,8 +9,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.discovery.OperationProxyFactory;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
-import com.positivity.mcp.internal.orchestration.RequestScopedUserContext;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import com.positivity.mcp.service.CurrentUserContext;
 import dev.langchain4j.data.embedding.Embedding;

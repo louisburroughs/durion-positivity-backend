@@ -21,7 +21,7 @@ import org.springframework.http.HttpMethod;
  * execution coordinates; invokes the reactive {@link OperationProxyFactory} handler and blocks for
  * the result. Failures render as a controlled error string — never a fabricated success.
  */
-class OpenApiOperationExecutor implements ToolExecutor {
+public class OpenApiOperationExecutor implements ToolExecutor {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenApiOperationExecutor.class);
 
@@ -30,7 +30,7 @@ class OpenApiOperationExecutor implements ToolExecutor {
     private final ObjectMapper objectMapper;
     private final Duration timeout;
 
-    OpenApiOperationExecutor(
+    public OpenApiOperationExecutor(
             @NonNull OperationProxyFactory proxyFactory,
             @NonNull DiscoveredOperation operation,
             @NonNull ObjectMapper objectMapper,
@@ -69,8 +69,10 @@ class OpenApiOperationExecutor implements ToolExecutor {
         try {
             return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
         } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException e) {
-            LOGGER.warn("MCP openapi tool args parse failed name={}; sending empty args", operation.name());
-            return Map.of();
+            // Do NOT execute with empty/implicit args on parse failure — that risks unintended
+            // (esp. write) calls. Fail the tool call; execute() renders this as a controlled error.
+            LOGGER.warn("MCP openapi tool args parse failed name={}; failing the call", operation.name());
+            throw new IllegalArgumentException("invalid tool arguments");
         }
     }
 

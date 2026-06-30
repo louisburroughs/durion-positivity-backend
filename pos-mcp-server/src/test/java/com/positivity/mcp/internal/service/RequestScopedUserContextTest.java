@@ -1,4 +1,4 @@
-package com.positivity.mcp.internal.orchestration;
+package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
