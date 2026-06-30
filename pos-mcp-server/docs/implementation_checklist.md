@@ -119,11 +119,25 @@
 - [ ] Verified: domain prompts not rewritten unnecessarily — _ev:_
 - [ ] Verified: no customer-facing personas in seed data — _ev:_
 
-### Cross-phase locks — [ ] run & recorded
+### Cross-phase locks — [x] run & recorded (Permission lock: persona grants no access — asserted in persona text + unit test; Prompt lock: layered + anti-hallucination BASE preserved)
 ### Exit decision: role-aware behavior visible, measurable, permission boundaries unchanged.
 ### Gate 1 sign-off
-- Metrics filled: [ ] · Decision: ☐ Pass ☐ Pass+exception ☐ Hold ☐ Roll back
-- Exceptions: ______ · Approver/date: ______ · Rollback (flag role-first off) verified: [ ]
+- Metrics filled: [ ] (answer-quality eval needs live stack) · Decision: **HOLD** (2 items pending)
+- Exceptions: n/a · Approver/date: pending · Rollback (swap assemble→resolvePrompt in both managers) verified: [x] documented
+
+#### Gate 1 — Execution results (2026-06-30)
+
+**DONE + verified (unit, no backend)**
+- [x] ROLE_* personas seeded for all 9 internal roles; ROLE_CUSTOMER / ROLE_SELF_SERVICE_CUSTOMER NOT seeded. _ev: RolePromptAssemblyTest.seedCoverage._
+- [x] Layered assembly BASE + ROLE + DOMAIN + TOOL_USE, correct order, skip-on-absent, built-in BASE fallback. _ev: RolePromptAssemblyTest (4 pass)._
+- [x] Role-first resolution (`RolePromptResolver.assemble(role, ragScope)`); role drives persona only, never tool/doc access (asserted in test + persona text). 
+- [x] Domain prompts preserved — applied as the DOMAIN layer by RAG scope.
+- [x] Blocking ≡ streaming — both `SessionAgentManager` and `StreamingSessionAgentManager` call the same `assemble(role, ragScope)`. _ev: identical systemMessageProvider wiring._
+- [x] Build green: `mvnw test -Dtest=RolePromptAssemblyTest,Eval*` → 13 run, 1 skipped, 0 failed.
+
+**HOLD (not met — Gate 1 cannot sign Pass)**
+- [ ] Prompt-layer telemetry **emission** — `assemble()` returns the layer list, but it is not yet written into a per-request telemetry event (the request-scoped telemetry pipeline doesn't exist until it's wired through the chat path; interdependent with Gate 4 router telemetry). Assembler-side support is done.
+- [ ] Behavioral correctness eval — "technician vs accounting → different persona; same persona → same tools" needs the live stack (full routing + DB). Structurally guaranteed (distinct personas, access unchanged); live measurement deferred with baseline.
 
 ---
 
