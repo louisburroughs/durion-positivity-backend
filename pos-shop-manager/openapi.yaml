@@ -1385,12 +1385,21 @@ components:
         referenceId:
           type: string
           description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
         nextAction:
           type: string
           description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
         supportAction:
           type: string
           description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
     FieldError:
       type: object
       description: Validation error for a specific request field
@@ -1403,6 +1412,9 @@ components:
           type: string
           description: Validation failure message
           example: must be greater than 0
+      required:
+      - field
+      - message
     ShopAuditEntryResponse:
       type: object
       description: Read-only shop audit trail entry recording a schedule or assignment change

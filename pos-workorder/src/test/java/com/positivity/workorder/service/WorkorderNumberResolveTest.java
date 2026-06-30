@@ -41,7 +41,11 @@ class WorkorderNumberResolveTest {
     private WorkorderSearchServiceImpl workorderSearchService;
 
     private Workorder workorder(UUID id, String number) {
-        return Workorder.builder().id(id).workorderNumber(number).status(WorkorderStatus.DRAFT).build();
+        return Workorder.builder()
+                .id(id)
+                .workorderNumber(number)
+                .status(WorkorderStatus.DRAFT)
+                .build();
     }
 
     @Test

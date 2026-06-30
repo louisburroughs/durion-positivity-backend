@@ -1,114 +1,159 @@
 # pos-mcp-server
 
-AI orchestration and MCP (Model Context Protocol) server for the Durion Positivity ETSMS platform. Discovers backend REST APIs from Eureka, registers them as MCP tools, routes natural language requests through LangChain4j agents backed by Ollama, and maintains a pgvector RAG document store for context-augmented queries.
+AI orchestration and MCP (Model Context Protocol) server for the Durion Positivity ETSMS platform. It discovers
+backend REST APIs from the gateway aggregate OpenAPI spec, registers them as MCP tools, routes natural-language
+requests through LangChain4j agents backed by Ollama, and maintains a pgvector RAG store for context-augmented
+queries. Tool visibility is gated by the caller's **permission codes** (perm_bits), and tool priorities are tuned
+adaptively from invocation outcomes.
+
+> This README is the authoritative document for the module. It consolidates the design specs and tuning guides that
+> previously lived under `docs/`. Operational runbooks, alert rules, and dashboards remain under
+> [`docs/runbooks/`](docs/runbooks/), [`docs/alerts/`](docs/alerts/), and [`docs/dashboards/`](docs/dashboards/).
 
 ## Responsibilities
 
-- Expose backend service REST endpoints as typed MCP tools with role-based access gating
-- Orchestrate multi-step agent conversations via LangChain4j session agents (standard and streaming)
-- Embed and retrieve RAG documents using pgvector for context-augmented tool selection
-- Persist system prompts, tool metadata, invocation audit logs, and NLTI sessions
-- Tune tool priorities adaptively based on invocation success rates (daily cron)
-- Manage document ingestion jobs asynchronously (`POST /v1/mcp/documents`)
-- Expose NLTI request and audit endpoints
+- Expose backend REST endpoints as MCP tools — 17 hand-curated domain **facade tools** plus operations discovered
+  from the gateway aggregate OpenAPI spec.
+- Gate tool visibility per request by the caller's permission codes intersected with workflow state (see
+  [Tool Selection](#tool-selection)).
+- Orchestrate multi-step agent conversations via LangChain4j session agents (synchronous and streaming SSE).
+- Embed and retrieve RAG documents using pgvector for context-augmented tool selection and answers.
+- Persist system prompts, tool metadata, invocation audit logs, and NLTI sessions/requests/intents.
+- Tune `mcp_tool.priority` adaptively from invocation success rate and latency (daily cron).
+- Run asynchronous, resumable RAG document-ingestion jobs.
+- Expose NLTI request submission and audit query endpoints.
 
-## Key Classes
+## Architecture
 
-- `AgentOrchestrationService` — coordinates per-user LangChain4j chat agents with tool narrowing
-- `StreamingAgentOrchestrationService` — streaming SSE variant of the agent orchestration path
-- `ToolRegistrationService` — loads tool metadata from DB and wires facade tool beans
-- `ToolRegistryService` — per-request semantic tool selection using pgvector ANN gated by role and workflow state
-- `McpRoleResolver` — extracts the primary Spring Security role from an `Authentication` using a priority-ordered list (ADMIN > MANAGER > SERVICE_WRITER > CASHIER > SUPPLIER > TECHNICIAN > ROLE_USER fallback)
-- `DocumentIngestionService` — asynchronous RAG document ingestion with chunking and embedding
-- `IntentParserService` — classifies inbound messages to route direct vs. agent paths
-- `SystemPromptService` — manages named system prompts stored in PostgreSQL
-- `RolePromptResolver` — resolves the active system prompt for a given role (role → "default" → built-in fallback; warns when falling back)
-- `StaticRagPreloadService` — preloads configured static classpath documents into the RAG store on startup (alpha profile)
+```
+Frontend / MCP clients
+   │  (JWT → gateway → X-Authorities perm_bits)
+   ▼
+pos-mcp-server (Spring Boot 4.0.x, Java 25)
+   ├─ SessionAgentManager / StreamingSessionAgentManager
+   │     per-user agent cache (Caffeine, TTL) keyed by role::toolCacheKey
+   │     ├─ permission-gated candidate tool set (ToolRegistryService)
+   │     ├─ Exa web-search tool (always included)
+   │     ├─ Tier-2 RAG ContentRetriever (shared pgvector store)
+   │     └─ per-session ChatMemory (MessageWindowChatMemory + semantic store)
+   ├─ LangChain4j runtime — OllamaChatModel / OllamaStreamingChatModel,
+   │     OllamaEmbeddingModel, AiServices tool-calling loop
+   ├─ Tool discovery (internal/discovery/) — fetch gateway aggregate OpenAPI,
+   │     map operations → mcp_tool rows, build HTTP proxies
+   ├─ Audit + adaptive tuning — every selection/execution logged; daily cron
+   │     recomputes priority
+   └─ Observability — Micrometer / OpenTelemetry, NLTI audit ledger
+        │
+        ├─ Ollama (chat + embedding model runtime)
+        ├─ PostgreSQL + pgvector (registry, RAG, audit, chat memory)
+        └─ Exa (external web-search SaaS)
+```
+
+The previous external orchestration platform was replaced by in-process LangChain4j: prompt construction
+(`AiServices`), tool-use planning (tool-calling protocol), memory (`MessageWindowChatMemory`), retrieval
+(`EmbeddingStoreContentRetriever` + pgvector), and model abstraction (`OllamaChatModel`) are all local.
 
 ## API Endpoints
 
-- `POST /v1/mcp/chat` — synchronous chat (auth: `mcp:chat:execute`)
-- `POST /v1/mcp/chat/stream` — streaming SSE chat (auth: `mcp:chat:stream`)
-- `POST /v1/mcp/documents` — ingest a document into the RAG store (auth: `mcp:document:ingest`)
-- `GET /v1/mcp/documents/jobs/{jobId}` — check ingestion job status
-- `POST /v1/nlt/requests` — submit an NLTI request (auth: `nlti:request:submit`)
-- `GET /v1/nlt/audit` — query NLTI audit log (auth: `nlti:audit:read`)
-- `GET /v1/prompts` / `PUT /v1/prompts/{id}` — system prompt management
-- `GET /v1/llm-apis` / `POST /v1/llm-apis` — LLM API config management
+| Method & path                          | Permission              | Purpose                                |
+| -------------------------------------- | ----------------------- | -------------------------------------- |
+| `POST /v1/mcp/chat`                    | `mcp:chat:execute`      | Synchronous chat                       |
+| `POST /v1/mcp/chat/stream`             | `mcp:chat:stream`       | Streaming SSE chat                     |
+| `POST /v1/mcp/documents`               | `mcp:document:ingest`   | Ingest a document into the RAG store   |
+| `GET  /v1/mcp/documents/jobs/{jobId}`  | `mcp:document:ingest`   | Check ingestion job status             |
+| `POST /v1/nlt/requests`                | `nlti:request:submit`   | Submit an NLTI request                 |
+| `GET  /v1/nlt/audit`                   | `nlti:audit:read`       | Query the NLTI audit log               |
+| `GET/PUT/DELETE /v1/prompts/{id}`      | `mcp:system_prompt:*`   | System prompt CRUD                     |
+| `GET/POST/PUT/DELETE /v1/llm-apis`     | `mcp:llm_api:*`         | LLM API config CRUD                    |
+
+Permission constants are defined in `McpPermissions`. Errors use the standard `ApiError` envelope.
+
+## Tool Selection
+
+Tool visibility is **permission-gated**, not role-gated. On each chat request `ToolRegistryService.resolveCandidateTools()`
+narrows the active tool set:
+
+1. `ToolMetadataRepository.findTopKByEmbeddingForPermissions()` runs a pgvector ANN query (`<=>` cosine distance)
+   that joins `mcp_tool`, `mcp_tool_permission`, and `mcp_workflow_state`. Only tools whose required permission codes
+   intersect the caller's `permissionCodes`, and that are valid for the current workflow state, enter the scoring
+   window. Gating happens **inside** the query, before the top-K cut.
+2. `ToolScorer` ranks candidates by a weighted blend of semantic similarity and normalized priority
+   (`Math.clamp(priority, 0.0, 1.0)`).
+3. If no embeddings are stored yet, a deterministic fallback returns gated tools sorted by `priority DESC, name ASC`.
+4. Selection is capped at `mcp.agent.candidate-tool-limit` (default 8). The Exa web-search tool is always included.
+5. The resolved agent is cached keyed by `role::toolCacheKey` (sorted tool names joined with `+`) and expires after
+   `mcp.agent.cache-ttl-minutes` (default 30) so DB priority/prompt edits take effect without restart.
+
+**Fail-closed:** a tool with zero `mcp_tool_permission` rows is never selected for any caller. The `AUTHENTICATED`
+sentinel marks operations available to any authenticated caller.
+
+**Permission-code extraction:** `CurrentUserContextResolver` derives bare `domain:resource:action` codes from the
+`Authentication` authorities (mixed `ROLE_*`, `PERM_*`, and bare forms) and always includes `AUTHENTICATED`.
+
+> **Known limitation — workflow state:** managers currently always evaluate with `WORKFLOW_IDLE`. Deriving workflow
+> state from session context to activate non-IDLE tool sets (`CREATING_PO`, `PROCESSING_RETURN`, …) is not yet
+> implemented — tracked as a backlog item.
+
+### Facade tools
+
+17 curated facade tools live in `internal/orchestration/tools/`: Accounting, Admin, Catalog, Customer, Events,
+Hr, Inventory, Invoice, Location, Order, Pricing, Reporting, ShopManager, Tax, Vehicle, Workorder, and the always-on
+Exa web search. Each maps to backend endpoints via a `@LoadBalanced` RestClient. Permission mappings for these tools
+are seeded by migration `V18`.
+
+### OpenAPI-discovered tools
+
+`ToolBootstrapRunner` calls `ToolRegistrationService.registerDiscoveredTools()` on startup. `OpenApiDocumentFetcher`
+pulls the gateway aggregate spec (`pos-api-gateway`, configurable via `MCP_AGGREGATE_SPEC_URL`), `OpenApiToolMapper`
+maps operations to `mcp_tool` rows, and `OperationProxyFactory` builds the HTTP proxy used to execute a call. These
+expand the candidate pool beyond the 17 facades. (Wiring discovered operations as directly agent-callable tools via a
+LangChain4j `ToolProvider` is a backlog item — see [Backlog](#backlog--missing-features).)
+
+## Audit & Adaptive Tuning
+
+Every tool decision is logged (selected tool, semantic rank, final score, `selected`, `success`, `fallback_invoked`,
+latency). A daily cron (`mcp.tuning.cron`, default `0 0 2 * * ?`) recomputes per-tool performance and adjusts
+`mcp_tool.priority`:
+
+```
+performance_score = (success_rate * 0.6) + ((1 - normalized_latency) * 0.3) + ...
+```
+
+Tuning is enabled by default with a runtime kill switch (`mcp.tuning.enabled`). Owning classes: `ToolAuditService`,
+`ToolPriorityTuningService`.
+
+## RAG Retrieval Pipeline (Tier 2)
+
+Both session managers use a Tier-2 retrieval chain:
+
+1. Baseline semantic retriever (`maxResults=10`, `minScore=0.6`).
+2. Query-expanded retriever (`maxResults=20`, `minScore=0.55`) using deterministic paraphrases.
+3. Hybrid merge + de-duplication across both retrievers.
+4. Final lexical-aware re-ranking to the top-5 contexts before prompt injection.
+
+Retrieval is role-aware (`RoleAwareMetadataFilter`, `ScopedContentRetrieverFactory`) and chat memory is persisted via
+`SemanticChatMemoryStore` with session summarization (`SessionSummary`).
 
 ## Configuration
 
-| Property                                        | Default            | Description                                       |
-| ----------------------------------------------- | ------------------ | ------------------------------------------------- |
-| `langchain4j.ollama.chat-model.model-name`      | `llama3.1:8b`      | Ollama chat model                                 |
-| `langchain4j.ollama.embedding-model.model-name` | `nomic-embed-text` | Embedding model for RAG                           |
-| `mcp.agent.cache-ttl-minutes`                   | `30`               | Agent cache TTL (role agents + sessions)          |
-| `mcp.agent.candidate-tool-limit`                | `8`                | Max tools from semantic selector per chat request |
-| `mcp.rag.chunking.enabled`                      | `true`             | Enable document chunking before embedding         |
-| `mcp.rag.preload.docs`                          | `[]`               | Static classpath documents to preload             |
-| `mcp.tuning.enabled`                            | `true`             | Enable adaptive tool priority tuning              |
-| `mcp.tuning.cron`                               | `0 0 2 * * ?`      | Tuning schedule (daily at 02:00)                  |
+| Property                                        | Env / Default                 | Description                                    |
+| ----------------------------------------------- | ----------------------------- | ---------------------------------------------- |
+| `langchain4j.ollama.chat-model.model-name`      | `llama3.1:8b`                 | Ollama chat model                              |
+| `langchain4j.ollama.embedding-model.model-name` | `nomic-embed-text`            | Embedding model for RAG                        |
+| `mcp.agent.cache-ttl-minutes`                   | `30`                          | Agent cache TTL (role agents + sessions)       |
+| `mcp.agent.candidate-tool-limit`                | `MCP_AGENT_CANDIDATE_TOOL_LIMIT` `8` | Max candidate tools per chat request    |
+| `mcp.rag.chunking.enabled`                      | `MCP_RAG_CHUNKING_ENABLED` `true`    | Chunk documents before embedding        |
+| `mcp.rag.chunking.max-segment-size`             | `MCP_RAG_MAX_SEGMENT_SIZE`    | Max chunk size                                 |
+| `mcp.rag.chunking.max-overlap-size`             | `MCP_RAG_MAX_OVERLAP_SIZE`    | Chunk overlap                                  |
+| `mcp.rag.preload.docs`                          | `[]`                          | Static classpath documents to preload          |
+| `mcp.tuning.enabled`                            | `true`                        | Enable adaptive tool priority tuning           |
+| `mcp.tuning.cron`                               | `0 0 2 * * ?`                 | Tuning schedule (daily 02:00)                  |
+| `mcp.model.fallback.enabled`                    | `MCP_MODEL_FALLBACK_ENABLED`  | Primary → secondary model fallback             |
+| `mcp.discovery.aggregate-spec-url`              | `MCP_AGGREGATE_SPEC_URL`      | Gateway aggregate OpenAPI URL                  |
+| Exa web search                                  | `EXA_API_KEY`                 | External web-search API key                    |
+| DB connection                                   | `MCP_DB_HOST/PORT/NAME/USER/PASSWORD` | PostgreSQL + pgvector                  |
 
-### Tier 2 RAG Retrieval Pipeline
-
-Both session managers use a Tier 2 retrieval chain to improve recall and precision:
-
-1. Baseline semantic retriever (`maxResults=10`, `minScore=0.6`)
-2. Query-expanded retriever (`maxResults=20`, `minScore=0.55`) using deterministic paraphrases
-3. Hybrid merge and de-duplication across both retrievers
-4. Final lexical-aware re-ranking to top-5 contexts before prompt injection
-
-## Dependencies
-
-- `pos-security-common` — JWT-based security filter
-- `pos-events` — `@EmitEvent` annotation and event registration
-- `pos-shared-dtos` — shared DTOs
-
-## Database
-
-Uses Flyway with PostgreSQL + pgvector extension. Migrations at `src/main/resources/db/migration`. H2 migrations at `src/main/resources/db/h2-migration` for local dev profile.
-
-Key tables added by this module:
-
-- `mcp_rag_preload_record` — immutable audit rows tracking each static document preload attempt (document_id, content_hash, status, loaded_at)
-
-## Startup Behaviour
-
-Three ApplicationRunner beans execute on startup (in addition to tool and event-type registration):
-
-| Runner                             | Profile | Behaviour                                                                                                                                                                                                                                              |
-| ---------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SystemPromptSeedRunner`           | `!test` | Upserts `default` and SQL-aligned `ROLE_*` prompts from code (create missing, overwrite changed content). Best-effort — per-entry failures are logged and skipped.                                                                                     |
-| `RagPreloadRunner`                 | `alpha` | Calls `StaticRagPreloadService.preloadAll()` to load configured static documents into the RAG store. Hashes each file and skips re-ingestion when hash matches the last successful load. Best-effort — failures are logged but do not prevent startup. |
-| `DocumentIngestionJobResumeRunner` | `!test` | Resumes any PENDING/RUNNING ingestion jobs left over from a previous run.                                                                                                                                                                              |
-
-### Role-Aware Prompt Resolution
-
-The system prompt used for each chat session is resolved per-role by `RolePromptResolver`:
-
-1. Look up a system prompt by name exactly matching the user's Spring Security role (e.g. `ROLE_SERVICE_ADVISOR`).
-2. If not found, log a WARN and look up the prompt named `default`.
-3. If not found, log a WARN and use the built-in hardcoded fallback prompt.
-
-Prompts are managed via the `/v1/prompts` CRUD API (requires `mcp:system_prompt:*` permission).
-
-### Semantic Per-Request Tool Selection
-
-On each chat request `ToolRegistryService.resolveCandidateTools()` narrows the active tool set using pgvector ANN (`<=>` cosine distance) gated by role, while workflow-state routing beyond `IDLE` is intentionally deferred (current managers evaluate with `WORKFLOW_IDLE` only):
-
-> **TODO (AC8):** Derive workflow state from session context and pass it into `ToolSelectionContext` so non-IDLE states (`CREATING_PO`, `PROCESSING_RETURN`, etc.) activate their respective tool sets. Requires persisting workflow state on `NltiSession` and threading it through both `SessionAgentManager` and `StreamingSessionAgentManager`. `ToolRegistryLoader` will also need to preload tools for active workflow states beyond `IDLE`.
-
-1. `ToolMetadataRepository.findTopKByEmbeddingForRole()` executes an ANN query that JOINs `mcp_tool`, `mcp_role`, `mcp_tool_role`, and `mcp_workflow_state` — only tools authorized for the user's role and the current workflow state enter the scoring window.
-2. `ToolScorer` ranks candidates using a weighted combination of semantic similarity and normalized priority (`Math.clamp(priority, 0.0, 1.0)`).
-3. If no embeddings are stored yet, a deterministic fallback returns gated tools sorted by `priority DESC, name ASC`.
-4. The streaming manager (`StreamingSessionAgentManager`) applies the same selection per message and caches the resulting agent keyed by `role::toolCacheKey` (sorted tool names joined with `+`).
-5. Role agents expire after `mcp.agent.cache-ttl-minutes` (default 30 min) so prompt edits and semantic tool-selection rankings in the database become effective without a service restart; changes to the role-tool fallback mapping (ToolRegistry) require a service restart.
-
-Roles are loaded dynamically from the `mcp_role` table (`ToolRegistryLoader`). `McpRoleResolver` resolves the primary role from `Authentication` in priority order: ADMIN > MANAGER > SERVICE_WRITER > CASHIER > SUPPLIER > TECHNICIAN > ROLE_USER fallback.
-
-### Static RAG Preload Configuration
-
-Configure static documents to preload in `application.yml`:
+### Static RAG preload (`alpha` profile)
 
 ```yaml
 mcp:
@@ -121,12 +166,64 @@ mcp:
           source-path: "classpath:rag/inv-cntrl-rag.md"
 ```
 
-Each entry specifies a stable `id` (document_id used for supersede semantics) and a `source-path` (classpath resource). Adding a new entry here is all that is required to include an additional static document in the preload registry.
+Each entry has a stable `id` (used for supersede semantics) and a classpath `source-path`. Adding an entry is all
+that is needed to include a new static document.
+
+## Startup Behaviour
+
+| Runner                             | Profile | Behaviour                                                                                        |
+| ---------------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `ToolBootstrapRunner`              | all     | Registers MCP tools from the gateway aggregate OpenAPI spec.                                      |
+| `SystemPromptSeedRunner`           | `!test` | Upserts `default` and `ROLE_*` prompts from code (best-effort; per-entry failures skipped).       |
+| `SimpleChatRuleSeedRunner`         | `!test` | Seeds the simple-chat rule catalog used for direct (non-agent) routing.                           |
+| `RagPreloadRunner`                 | `alpha` | Loads configured static documents; hashes each file and skips re-ingestion when the hash matches. |
+| `DocumentIngestionJobResumeRunner` | `!test` | Resumes PENDING/RUNNING ingestion jobs left over from a previous run.                             |
+
+### Role-aware prompt resolution
+
+The session system prompt is resolved by `RolePromptResolver`: (1) look up a prompt named exactly the caller's
+Spring Security role (e.g. `ROLE_SERVICE_ADVISOR`); (2) if missing, WARN and fall back to the `default` prompt;
+(3) if still missing, WARN and use the built-in hardcoded fallback. Prompts are managed via `/v1/prompts`.
+
+## Data Model
+
+Key tables (Flyway migrations under `src/main/resources/db/migration`, H2 variants under `db/h2-migration`):
+
+- `system_prompt`, `llm_api_config` — prompt and model-config CRUD.
+- `nlti_session`, `nlti_request`, `nlti_intent`, `nlti_audit_event` — NLTI session/request/intent tracking + audit.
+- `mcp_tool`, `mcp_tool_permission`, `mcp_workflow_state` — tool registry, permission gating (`V17`/`V18`), workflow
+  gating. `mcp_tool.source` distinguishes facade vs discovered operations.
+- `mcp_role`, `mcp_tool_role` — legacy role gating, retained pending cleanup (see [Backlog](#backlog--missing-features)).
+- `mcp_tool_invocation_log` — per-decision audit feeding adaptive tuning.
+- `mcp_rag_*` — RAG ingestion jobs, preload tracking, and immutable preload audit records.
+
+## Dependencies
+
+- `pos-security-common` — JWT-based security filter.
+- `pos-events` — `@EmitEvent` annotation and event registration.
+- `pos-shared-dtos` — shared DTOs (`ApiError`, etc.).
 
 ## Development
 
 ```bash
+# Run locally (dev profile, H2)
 ./mvnw -pl pos-mcp-server -am spring-boot:run -Dspring-boot.run.profiles=dev
+
+# Full local stack incl. Ollama + Postgres/pgvector
+docker compose up
 ```
 
-Use `docker compose up` from the backend root to start the full local stack including Ollama.
+## Backlog / Missing Features
+
+Tracked separately as GitHub issues. Open items not yet implemented in code:
+
+- **Workflow-state derivation beyond `IDLE`** — persist workflow state on `NltiSession` and thread it through both
+  session managers so non-IDLE tool sets activate.
+- **OpenAPI tool execution bridge** — wire `source = 'openapi'` discovered operations as agent-callable tools via a
+  LangChain4j `ToolProvider` so the assistant can execute them with no facade equivalent.
+- **Legacy role-gating cleanup** — drop `mcp_role` / `mcp_tool_role`, `ToolRegistryRoleMapper`, and the role-gated
+  repository queries now superseded by permission gating.
+- **`AUTHENTICATED` sentinel everywhere** — promote `requiredPermissionsOperationCustomizer` to `pos-security-common`
+  and emit the sentinel from all services so unguarded operations gate correctly.
+- **Retrieval-quality regression tests** — hit@5 / MRR harness for tool-selection and RAG recall.
+- **Hybrid embedding + BM25 retrieval** and an **admin UI for `mcp_tool_permission`** maintenance.

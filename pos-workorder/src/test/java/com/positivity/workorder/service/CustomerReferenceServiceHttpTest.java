@@ -14,16 +14,24 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
 
+/**
+ * HTTP-level tests for {@link CustomerReferenceService}. Both {@code resolve} and {@code resolveAll}
+ * now route through the batch endpoint {@code POST /v1/crm/accounts/parties:resolve}; name and phone
+ * derivation lives in pos-customer, so these tests assert the workorder-side mapping only.
+ */
 class CustomerReferenceServiceHttpTest {
 
+    private static final String RESOLVE_PATH = "/v1/crm/accounts/parties:resolve";
+
     @Test
-    void resolve_parsesNameAndPhone_fromDataEnvelope() throws Exception {
+    void resolve_mapsNameAndPhone_fromBatchResponse() throws Exception {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        String payload = """
-                {"data":{"customerName":"Jane Doe","phoneNumber":"+1-555-0100"}}
-                """;
         AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer("/v1/crm/" + customerId, 200, payload, callCount);
+        HttpServer server = startBatchServer(
+                RESOLVE_PATH,
+                200,
+                "[{\"partyId\":\"" + customerId + "\",\"displayName\":\"Jane Doe\",\"phoneNumber\":\"+1-555-0100\"}]",
+                callCount);
         try {
             String serviceId = "localhost:" + server.getAddress().getPort();
             CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
@@ -39,49 +47,10 @@ class CustomerReferenceServiceHttpTest {
     }
 
     @Test
-    void resolve_usesLegalName_forCommercialPartyRepresentation() throws Exception {
-        // The /v1/crm/{id} representation emits firstName/lastName (no customerName/displayName);
-        // for commercial parties lastName carries the full legal name.
-        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000002");
-        String payload =
-                "{\"firstName\":\"Blue Ridge Landscaping\",\"lastName\":\"Blue Ridge Landscaping Services LLC\"}";
-        AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer("/v1/crm/" + customerId, 200, payload, callCount);
-        try {
-            String serviceId = "localhost:" + server.getAddress().getPort();
-            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
-
-            CustomerReferenceService.CustomerContact contact = service.resolve(customerId);
-
-            assertThat(contact.name()).isEqualTo("Blue Ridge Landscaping Services LLC");
-        } finally {
-            server.stop(0);
-        }
-    }
-
-    @Test
-    void resolve_joinsFirstAndLastName_forIndividualParty() throws Exception {
-        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000003");
-        String payload = "{\"firstName\":\"Jane\",\"lastName\":\"Smith\"}";
-        AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer("/v1/crm/" + customerId, 200, payload, callCount);
-        try {
-            String serviceId = "localhost:" + server.getAddress().getPort();
-            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
-
-            CustomerReferenceService.CustomerContact contact = service.resolve(customerId);
-
-            assertThat(contact.name()).isEqualTo("Jane Smith");
-        } finally {
-            server.stop(0);
-        }
-    }
-
-    @Test
-    void resolve_returnsFallback_whenRemoteReturns404() throws Exception {
+    void resolve_returnsFallback_whenBatchOmitsId() throws Exception {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer("/v1/crm/" + customerId, 404, "{}", callCount);
+        HttpServer server = startBatchServer(RESOLVE_PATH, 200, "[]", callCount);
         try {
             String serviceId = "localhost:" + server.getAddress().getPort();
             CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
@@ -90,43 +59,23 @@ class CustomerReferenceServiceHttpTest {
 
             assertThat(contact.name()).isEqualTo("customer-" + customerId);
             assertThat(contact.phoneNumber()).isNull();
-            assertThat(callCount.get()).isEqualTo(1);
         } finally {
             server.stop(0);
         }
     }
 
     @Test
-    void resolveAll_deDuplicatesRequests_forRepeatedIds() throws Exception {
+    void resolve_callsBatchPath_withAuthorityHeader() throws Exception {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServer(
-                "/v1/crm/" + customerId,
+        HttpServer server = startBatchServerCapturingHeaders(
+                RESOLVE_PATH,
                 200,
-                "{\"customerName\":\"Repeated Customer\",\"phone\":\"+1-555-2222\"}",
-                callCount);
-        try {
-            String serviceId = "localhost:" + server.getAddress().getPort();
-            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
-
-            var resolved = service.resolveAll(List.of(customerId, customerId));
-
-            assertThat(resolved).hasSize(1);
-            assertThat(resolved.get(customerId).name()).isEqualTo("Repeated Customer");
-            assertThat(callCount.get()).isEqualTo(1);
-        } finally {
-            server.stop(0);
-        }
-    }
-
-    @Test
-    void resolve_callsNativeCustomerPath_withAuthorityHeader() throws Exception {
-        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        AtomicInteger callCount = new AtomicInteger();
-        HttpServer server = startServerCapturingHeaders(
-                "/v1/crm/" + customerId, 200, "{\"customerName\":\"Jane Doe\"}", callCount, receivedHeaders -> {
-                    assertThat(receivedHeaders.getFirst("X-User")).isEqualTo("pos-workorder");
-                    assertThat(receivedHeaders.getFirst("X-Authorities")).isEqualTo("crm:party:view");
+                "[{\"partyId\":\"" + customerId + "\",\"displayName\":\"Jane Doe\"}]",
+                callCount,
+                headers -> {
+                    assertThat(headers.getFirst("X-User")).isEqualTo("pos-workorder");
+                    assertThat(headers.getFirst("X-Authorities")).isEqualTo("crm:party:view");
                 });
         try {
             String serviceId = "localhost:" + server.getAddress().getPort();
@@ -141,7 +90,63 @@ class CustomerReferenceServiceHttpTest {
         }
     }
 
-    private HttpServer startServerCapturingHeaders(
+    @Test
+    void resolveAll_usesSingleBatchCall_andDeDuplicatesRepeatedIds() throws Exception {
+        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        AtomicInteger callCount = new AtomicInteger();
+        HttpServer server = startBatchServer(
+                RESOLVE_PATH,
+                200,
+                "[{\"partyId\":\"" + customerId + "\",\"displayName\":\"Repeated Customer\"}]",
+                callCount);
+        try {
+            String serviceId = "localhost:" + server.getAddress().getPort();
+            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
+
+            var resolved = service.resolveAll(List.of(customerId, customerId));
+
+            assertThat(resolved).hasSize(1);
+            assertThat(resolved.get(customerId).name()).isEqualTo("Repeated Customer");
+            // one batch POST regardless of repeated input ids
+            assertThat(callCount.get()).isEqualTo(1);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void resolveAll_partialFallback_forIdsOmittedByBatch() throws Exception {
+        UUID resolvedId = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+        UUID omittedId = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+        AtomicInteger callCount = new AtomicInteger();
+        HttpServer server = startBatchServer(
+                RESOLVE_PATH,
+                200,
+                "[{\"partyId\":\"" + resolvedId + "\",\"displayName\":\"Acme\",\"phoneNumber\":\"+1-555-7777\"}]",
+                callCount);
+        try {
+            String serviceId = "localhost:" + server.getAddress().getPort();
+            CustomerReferenceService service = new CustomerReferenceService(RestClient.builder(), serviceId);
+
+            var resolved = service.resolveAll(List.of(resolvedId, omittedId));
+
+            assertThat(resolved).hasSize(2);
+            assertThat(resolved.get(resolvedId).name()).isEqualTo("Acme");
+            assertThat(resolved.get(resolvedId).phoneNumber()).isEqualTo("+1-555-7777");
+            assertThat(resolved.get(omittedId).name()).isEqualTo("customer-" + omittedId);
+            assertThat(resolved.get(omittedId).phoneNumber()).isNull();
+            assertThat(callCount.get()).isEqualTo(1);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    private HttpServer startBatchServer(String expectedPath, int status, String body, AtomicInteger callCount)
+            throws IOException {
+        return startBatchServerCapturingHeaders(expectedPath, status, body, callCount, headers -> {});
+    }
+
+    private HttpServer startBatchServerCapturingHeaders(
             String expectedPath,
             int status,
             String body,
@@ -152,37 +157,12 @@ class CustomerReferenceServiceHttpTest {
         server.createContext("/", exchange -> {
             callCount.incrementAndGet();
             String requestPath = exchange.getRequestURI().getPath();
-            if (!"GET".equals(exchange.getRequestMethod()) || !expectedPath.equals(requestPath)) {
+            if (!"POST".equals(exchange.getRequestMethod()) || !expectedPath.equals(requestPath)) {
                 exchange.sendResponseHeaders(404, -1);
                 exchange.close();
                 return;
             }
-
             headerAssertions.accept(exchange.getRequestHeaders());
-
-            byte[] payload = body.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.sendResponseHeaders(status, payload.length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(payload);
-            }
-        });
-        server.start();
-        return server;
-    }
-
-    private HttpServer startServer(String expectedPath, int status, String body, AtomicInteger callCount)
-            throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/", exchange -> {
-            callCount.incrementAndGet();
-            String requestPath = exchange.getRequestURI().getPath();
-            if (!"GET".equals(exchange.getRequestMethod()) || !expectedPath.equals(requestPath)) {
-                exchange.sendResponseHeaders(404, -1);
-                exchange.close();
-                return;
-            }
-
             byte[] payload = body.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(status, payload.length);

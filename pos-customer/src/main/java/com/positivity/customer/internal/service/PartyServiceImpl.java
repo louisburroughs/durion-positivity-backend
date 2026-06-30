@@ -12,6 +12,7 @@ import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.GetPartyResponse;
 import com.positivity.customer.internal.dto.MergePartiesRequest;
 import com.positivity.customer.internal.dto.MergePartiesResponse;
+import com.positivity.customer.internal.dto.PartyNameRef;
 import com.positivity.customer.internal.dto.SearchPartiesRequest;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
 import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
@@ -354,6 +355,73 @@ public class PartyServiceImpl implements PartyService {
                 .pageNumber(0)
                 .pageSize(summaries.size())
                 .build();
+    }
+
+    /**
+     * Batch-resolve party ids to display names. Intentionally NOT {@code @Transactional}: each
+     * repository {@code findAllById} runs in its own short transaction and the entities are read as
+     * scalars afterwards, so the pos-people HTTP call below never holds a database connection.
+     */
+    @Override
+    @NonNull
+    public List<PartyNameRef> resolveNames(@NonNull List<UUID> partyIds) {
+        List<UUID> ids = partyIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+
+        Map<UUID, PartyNameRef> byPartyId = new java.util.LinkedHashMap<>();
+
+        // Commercial parties: prefer the display/trading name, fall back to the legal name. No phone
+        // is stored on the commercial party record.
+        for (CommercialParty party : partyRepository.findAllById(ids)) {
+            String name = StringUtils.hasText(party.getDisplayName()) ? party.getDisplayName() : party.getLegalName();
+            if (StringUtils.hasText(name)) {
+                byPartyId.put(party.getPartyId(), new PartyNameRef(party.getPartyId(), name.trim(), null));
+            }
+        }
+
+        // Person parties: name and phone live in pos-people; resolve them in a single batch call.
+        Map<UUID, UUID> personIdByPartyId = new java.util.LinkedHashMap<>();
+        for (PersonParty person : personPartyRepository.findAllById(ids)) {
+            if (person.getPersonId() != null) {
+                personIdByPartyId.put(person.getPartyId(), person.getPersonId());
+            }
+        }
+        if (!personIdByPartyId.isEmpty()) {
+            Map<UUID, PeopleClient.PersonIdentity> identities =
+                    peopleClient.fetchPersonIdentitiesQuietly(Set.copyOf(personIdByPartyId.values()));
+            personIdByPartyId.forEach((partyId, personId) -> {
+                PeopleClient.PersonIdentity identity = identities.get(personId);
+                if (identity != null && StringUtils.hasText(identity.displayName())) {
+                    byPartyId.put(
+                            partyId,
+                            new PartyNameRef(partyId, identity.displayName(), primaryPhone(identity.contactPoints())));
+                }
+            });
+        }
+
+        return List.copyOf(byPartyId.values());
+    }
+
+    /**
+     * Pick a best-effort phone from a person's contact points: the primary phone-type point if any,
+     * otherwise the first non-blank phone-type point. Phone contact types are prefixed {@code PHONE}.
+     */
+    private static @Nullable String primaryPhone(@NonNull List<PeopleClient.ContactPoint> contactPoints) {
+        PeopleClient.ContactPoint firstPhone = null;
+        for (PeopleClient.ContactPoint cp : contactPoints) {
+            if (cp.contactType() == null || !cp.contactType().startsWith("PHONE") || !StringUtils.hasText(cp.value())) {
+                continue;
+            }
+            if (cp.isPrimary()) {
+                return cp.value().trim();
+            }
+            if (firstPhone == null) {
+                firstPhone = cp;
+            }
+        }
+        return firstPhone != null ? firstPhone.value().trim() : null;
     }
 
     @Override
@@ -816,8 +884,8 @@ public class PartyServiceImpl implements PartyService {
             PartyRelationship rel, Map<UUID, PeopleClient.PersonIdentity> identities) {
         PersonParty person = rel.getToPerson();
         ContactSummary summary = new ContactSummary();
-        summary.setContactId(
-                Objects.requireNonNull(rel.getPartyRelationshipId(), "partyRelationshipId").toString());
+        summary.setContactId(Objects.requireNonNull(rel.getPartyRelationshipId(), "partyRelationshipId")
+                .toString());
         summary.setPrimary(rel.isPrimaryBillingContact());
         summary.setName(Objects.requireNonNullElse(resolveDisplayName(person, identities), "Unknown"));
         summary.setRoles(Collections.emptyList());

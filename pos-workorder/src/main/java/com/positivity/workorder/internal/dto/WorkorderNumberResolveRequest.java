@@ -15,9 +15,9 @@ import java.util.UUID;
 @Schema(description = "Batch request to resolve workorder ids to human workorder numbers")
 public record WorkorderNumberResolveRequest(
         @Schema(description = "Workorder identifiers to resolve", requiredMode = Schema.RequiredMode.REQUIRED)
-                @NotEmpty
-                @Size(max = 200)
-                List<UUID> workorderIds) {
+        @NotEmpty
+        @Size(max = 200)
+        List<UUID> workorderIds) {
 
     public WorkorderNumberResolveRequest {
         workorderIds = workorderIds == null ? List.of() : List.copyOf(workorderIds);

@@ -2,6 +2,7 @@ package com.positivity.invoice.internal.service;
 
 import com.positivity.invoice.internal.client.LocationServiceClient;
 import com.positivity.invoice.internal.client.TaxServiceClient;
+import com.positivity.invoice.internal.client.WorkorderReferenceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
@@ -29,10 +30,14 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -43,16 +48,32 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final TaxServiceClient taxServiceClient;
     private final LocationServiceClient locationServiceClient;
+    private final WorkorderReferenceClient workorderReferenceClient;
+
+    /**
+     * Self-reference (lazy to break the construction cycle) used so the public
+     * read/write entry points can invoke the {@code @Transactional} mapping
+     * methods through the Spring proxy and then perform remote enrichment
+     * outside the transaction boundary.
+     */
+    private InvoiceServiceImpl self;
+
+    @Autowired
+    public void setSelf(@Lazy InvoiceServiceImpl self) {
+        this.self = self;
+    }
 
     public InvoiceServiceImpl(
             @NonNull InvoiceRepository invoiceRepository,
             @NonNull TaxServiceClient taxServiceClient,
             @NonNull LocationServiceClient locationServiceClient,
+            @NonNull WorkorderReferenceClient workorderReferenceClient,
             Clock clock) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.taxServiceClient = taxServiceClient;
         this.locationServiceClient = locationServiceClient;
+        this.workorderReferenceClient = workorderReferenceClient;
     }
 
     @Override
@@ -84,9 +105,21 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @NonNull
     public InvoiceDetailsResponse getInvoice(@NonNull UUID invoiceId) {
+        // Load + map inside a read-only transaction (via the proxy so lazy
+        // collections initialize), then resolve the workorder number from the
+        // remote workexec service OUTSIDE the transaction so the DB connection is
+        // not held during the outbound call.
+        InvoiceDetailsResponse response = self.loadInvoiceDetail(invoiceId);
+        response.setWorkorderNumber(resolveWorkorderNumber(response.getWorkorderId()));
+        return response;
+    }
+
+    @Transactional(readOnly = true)
+    @NonNull
+    public InvoiceDetailsResponse loadInvoiceDetail(@NonNull UUID invoiceId) {
         Invoice invoice =
                 invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
         return toDetailsResponse(invoice);
@@ -111,7 +144,9 @@ public class InvoiceServiceImpl implements InvoiceService {
         recalculateTotals(invoice);
 
         Invoice saved = invoiceRepository.save(invoice);
-        return toDetailsResponse(saved);
+        InvoiceDetailsResponse response = toDetailsResponse(saved);
+        response.setWorkorderNumber(resolveWorkorderNumber(saved.getWorkorderId()));
+        return response;
     }
 
     @NonNull
@@ -133,6 +168,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             item.setQuantity(safeMoney(sourceItem.getQuantity(), BigDecimal.ONE));
             item.setUnitPrice(safeMoney(sourceItem.getUnitPrice(), BigDecimal.ZERO));
             item.setLineTotal(resolveLineTotal(sourceItem));
+            item.setType(sourceItem.getType());
             invoice.addItem(item);
         }
 
@@ -145,6 +181,14 @@ public class InvoiceServiceImpl implements InvoiceService {
         recalculateTotals(invoice);
 
         Invoice saved = invoiceRepository.save(invoice);
+        // Assign the invoice number at draft creation. The number is the invoice's stable
+        // identity for the whole of its lifecycle; deferring it left drafts showing a
+        // placeholder that never resolved. Assigned after the first save so the generated
+        // id is available for the number's id segment.
+        if (saved.getInvoiceNumber() == null || saved.getInvoiceNumber().isBlank()) {
+            saved.setInvoiceNumber(generateInvoiceNumber(saved));
+            saved = invoiceRepository.save(saved);
+        }
         return toGenerationResponse(saved);
     }
 
@@ -295,6 +339,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setInvoiceId(invoice.getId());
         response.setInvoiceNumber(invoice.getInvoiceNumber());
         response.setWorkorderId(invoice.getWorkorderId());
+        // workorderNumber is resolved by the caller outside the transaction.
         response.setEstimateId(invoice.getEstimateId());
         response.setApprovalId(invoice.getApprovalId());
         response.setPartyId(invoice.getPartyId());
@@ -309,6 +354,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setFinalizedBy(invoice.getFinalizedBy());
         response.setRevertedAt(invoice.getRevertedAt());
         response.setReversionReason(invoice.getReversionReason());
+        response.setRequiresManagerApproval(requiresManagerApproval(invoice));
 
         List<InvoiceItemResponse> itemResponses = invoice.getItems().stream()
                 .sorted(Comparator.comparing(
@@ -335,7 +381,42 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setUnitPrice(item.getUnitPrice());
         response.setAmount(item.getLineTotal());
         response.setWorkorderItemId(item.getWorkorderItemId());
+        response.setType(item.getType());
         return response;
+    }
+
+    /**
+     * Resolves the human-readable workorder number for the detail view via the
+     * workorder reference client (the same path the invoice search uses). Returns
+     * {@code null} when the workorder is unknown or unresolved so the UI can fall
+     * back to the identifier.
+     */
+    @Nullable
+    private String resolveWorkorderNumber(@Nullable UUID workorderId) {
+        if (workorderId == null) {
+            return null;
+        }
+        return workorderReferenceClient.resolveNumbers(Set.of(workorderId)).get(workorderId);
+    }
+
+    /**
+     * Whether a DRAFT invoice exceeds the SERVICE_ADVISOR finalization threshold.
+     *
+     * <p>This flag mirrors the threshold portion of
+     * {@link InvoiceFinalizationServiceImpl#checkEligibility} (role-agnostic): it
+     * reflects whether the invoice total is over the limit, NOT the viewing
+     * actor's authority. A SHOP_MANAGER is exempt from the approval code at
+     * finalize time, but the detail response is computed without a role, so the UI
+     * should treat this as "approval may be required" and rely on the finalize
+     * endpoint for the authoritative enforcement.
+     */
+    private boolean requiresManagerApproval(@NonNull Invoice invoice) {
+        if (invoice.getStatus() != InvoiceStatus.DRAFT) {
+            return false;
+        }
+        BigDecimal total = invoice.getTotal();
+        return total != null
+                && total.compareTo(InvoiceFinalizationServiceImpl.SERVICE_ADVISOR_LIMIT) > 0;
     }
 
     @NonNull

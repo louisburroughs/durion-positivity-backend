@@ -42,6 +42,8 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.search("CUSTOMER_PARTY_SEARCH", "Search for parties based on various criteria")
                         .build(),
+                EventTypeRegistration.search("CUSTOMER_PARTY_RESOLVE", "Batch-resolve party ids to display names")
+                        .build(),
                 EventTypeRegistration.approval(
                                 "CUSTOMER_PARTY_MERGE", "Merge multiple parties into a single party record")
                         .build(),

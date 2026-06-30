@@ -3,8 +3,10 @@ package com.positivity.invoice.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.service.InvoiceSearchService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -42,13 +44,18 @@ public class InvoiceSearchController {
 
     @Operation(
             summary = "Search invoices",
-            description =
-                    "Paginated free-text search for invoices matching the invoice number, "
-                            + "customer name, or workorder number.")
+            description = "Paginated free-text search for invoices matching the invoice number, "
+                    + "customer name, or workorder number.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Page of invoice search results returned."),
-        @ApiResponse(responseCode = "400", description = "Invalid pagination parameters."),
-        @ApiResponse(responseCode = "403", description = "Caller lacks the invoice:manage authority.")
+        @ApiResponse(
+                responseCode = "400",
+                description = "Invalid pagination parameters.",
+                content = @Content(schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Caller lacks the invoice:manage authority.",
+                content = @Content(schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/search")
     @PreAuthorize("hasAuthority('invoice:manage')")

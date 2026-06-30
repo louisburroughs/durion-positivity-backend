@@ -1213,7 +1213,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PageInvoiceSearchResult"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -1223,7 +1223,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PageInvoiceSearchResult"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -2335,6 +2335,67 @@
             "type": "boolean"
           }
         }
+      },
+      "ApiError": {
+        "type": "object",
+        "description": "Standard error response envelope returned by all Durion backend APIs",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Machine-readable error code",
+            "example": "ORDER_NOT_FOUND"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message",
+            "example": "Order '550e8400-e29b-41d4-a716-446655440000' was not found"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP status code",
+            "example": 404
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "ISO 8601 UTC timestamp of the error",
+            "example": "2026-03-17 14:30:00+00:00"
+          },
+          "correlationId": {
+            "type": "string",
+            "description": "Unique correlation ID for distributed request tracing",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "fieldErrors": {
+            "type": "array",
+            "description": "Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types",
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            }
+          },
+          "referenceId": {
+            "type": "string",
+            "description": "Workflow or review-case reference identifier, when applicable",
+            "example": "REVIEW-2026-000123"
+          },
+          "nextAction": {
+            "type": "string",
+            "description": "Recommended next step for the caller, when applicable",
+            "example": "Retry the request with a valid quantity"
+          },
+          "supportAction": {
+            "type": "string",
+            "description": "Support or admin investigation guidance, when applicable",
+            "example": "Contact support with the correlation ID for assistance"
+          }
+        },
+        "required": [
+          "code",
+          "correlationId",
+          "message",
+          "status",
+          "timestamp"
+        ]
       }
     },
     "securitySchemes": {

@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.util.List;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
  * authenticated; the actual byte download is a separate, token-authorized public endpoint
  * (see {@code InvoiceArtifactDownloadController}).
  */
+@Slf4j
 @RestController
 @RequestMapping("/v1/invoices")
 @PreAuthorize("isAuthenticated()")
@@ -42,7 +44,10 @@ public class InvoiceArtifactController {
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/{invoiceId}/artifacts")
     public ResponseEntity<List<InvoiceArtifactResponse>> listArtifacts(@PathVariable @NonNull UUID invoiceId) {
-        return ResponseEntity.ok(artifactService.listArtifacts(invoiceId));
+        log.info("listArtifacts request received for invoice {}", invoiceId);
+        List<InvoiceArtifactResponse> artifacts = artifactService.listArtifacts(invoiceId);
+        log.info("listArtifacts returning {} artifact(s) for invoice {}", artifacts.size(), invoiceId);
+        return ResponseEntity.ok(artifacts);
     }
 
     @Operation(

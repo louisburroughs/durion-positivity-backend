@@ -8,3 +8,5 @@ permissions:
     description: "Manage invoice billing rules and defaults"
   - name: "invoice:finalize"
     description: "Finalize a draft invoice; Service Advisor limited to ≤$500 without manager approval, Shop Manager unlimited (Story #13, AC3)"
+  - name: "invoice:finalize:override"
+    description: "Approve finalization of an invoice that requires manager elevation; held by manager/admin roles and verified for manager-approval-by-employee-number"

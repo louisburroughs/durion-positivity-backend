@@ -56,14 +56,30 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     static final BigDecimal SERVICE_ADVISOR_LIMIT = new BigDecimal("500.00");
     static final Duration REVERSION_WINDOW = Duration.ofHours(24);
 
+    private static final String OVERRIDE_AUTHORITY = "invoice:finalize:override";
+
+    /**
+     * Roles that grant finalize-override capability. Checked in addition to the
+     * {@link #OVERRIDE_AUTHORITY} so a logged-in manager/admin is auto-approved even
+     * before the (operational) authority grant is applied — the JWT always carries
+     * these roles. The authority remains the forward-compatible, fine-grained path.
+     */
+    private static final java.util.List<String> OVERRIDE_ROLES =
+            java.util.List.of("SHOP_MANAGER", "LOCATION_MANAGER", "ADMIN");
+
     private final InvoiceRepository invoiceRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ElevationTokenService elevationTokenService;
 
     public InvoiceFinalizationServiceImpl(
-            InvoiceRepository invoiceRepository, ApplicationEventPublisher eventPublisher, Clock clock) {
+            InvoiceRepository invoiceRepository,
+            ApplicationEventPublisher eventPublisher,
+            Clock clock,
+            ElevationTokenService elevationTokenService) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.eventPublisher = eventPublisher;
+        this.elevationTokenService = elevationTokenService;
     }
 
     /**
@@ -193,17 +209,26 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             }
         }
 
-        // Transition back to DRAFT
-        // ADR-0018: audit the actor performing the reversion
-        String revertedBy = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
-        String redactedCode = managerApprovalCode.length() > 4 ? managerApprovalCode.substring(0, 4) + "****" : "****";
+        // Actors without the override authority must supply a verified elevation token
+        // scoped to this invoice; a free-text code is no longer accepted. When a token is
+        // used, capture the approving manager's person id for audit (non-repudiation).
+        UUID revertApprover = null;
+        if (!callerCanOverride()) {
+            revertApprover = elevationTokenService
+                    .verify(managerApprovalCode, invoiceId)
+                    .orElseThrow(() ->
+                            new IllegalArgumentException("Invalid or expired manager approval code for this invoice"));
+        }
 
+        // Transition back to DRAFT
+        // ADR-0018: audit the actor performing the reversion and the approving manager.
+        String revertedBy = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         if (log.isInfoEnabled()) {
             log.info(
-                    "Invoice reversion: actor(mask)={}, invoiceId(mask)={}, approvalCode={}",
-                    maskForLog(revertedBy),
-                    maskForLog(invoiceId),
-                    redactedCode);
+                    "Invoice reversion: actor={}, approverPersonId={}, invoiceId={}",
+                    revertedBy,
+                    revertApprover,
+                    invoiceId);
         }
 
         invoice.setStatus(InvoiceStatus.DRAFT);
@@ -220,6 +245,24 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     // -------------------------------------------------------------------------
 
     /**
+     * True when the current actor may finalize/revert without a manager approval
+     * token: they hold the {@link #OVERRIDE_AUTHORITY} or one of the
+     * {@link #OVERRIDE_ROLES}. The role fallback keeps manager/admin auto-approval
+     * working independently of the operational authority grant.
+     */
+    private boolean callerCanOverride() {
+        if (SecurityContextHelper.hasAuthority(OVERRIDE_AUTHORITY)) {
+            return true;
+        }
+        for (String role : OVERRIDE_ROLES) {
+            if (SecurityContextHelper.hasRole(role)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * AC3 permission matrix enforcement.
      *
      * <p>
@@ -233,27 +276,40 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
      */
     private void enforcePermissions(
             @NonNull FinalizationRequest request, @NonNull UUID invoiceId, @NonNull BigDecimal invoiceTotal) {
-        boolean isShopManager = SecurityContextHelper.hasRole("SHOP_MANAGER");
+        // Managers/admins (override authority or role) finalize without an approval
+        // token regardless of amount — auto-approved.
+        if (callerCanOverride()) {
+            return;
+        }
+
+        // Below the SERVICE_ADVISOR cap, no manager approval is required.
+        if (invoiceTotal.compareTo(SERVICE_ADVISOR_LIMIT) <= 0) {
+            return;
+        }
+
+        // Above the cap, a verified manager-approval elevation token is mandatory.
         String approvalCode = request.getManagerApprovalCode();
+        if (approvalCode == null || approvalCode.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Manager approval code required: cannot finalize invoices exceeding $" + SERVICE_ADVISOR_LIMIT
+                            + " without a manager approval code");
+        }
+        UUID approvingManager = elevationTokenService
+                .verify(approvalCode, invoiceId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Invalid or expired manager approval code for this invoice"));
 
-        if (!isShopManager && invoiceTotal.compareTo(SERVICE_ADVISOR_LIMIT) > 0) {
-            if (approvalCode == null || approvalCode.isBlank()) {
-                throw new IllegalArgumentException(
-                        "Manager approval code required: SERVICE_ADVISOR cannot finalize invoices exceeding $"
-                                + SERVICE_ADVISOR_LIMIT + " without a manager approval code");
-            }
-            // M4: Audit the manager approval override
-            String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
-            String redactedCode = approvalCode.length() > 4 ? approvalCode.substring(0, 4) + "****" : "****";
-
-            if (log.isInfoEnabled()) {
-                log.info(
-                        "Manager approval override applied: actor(mask)={}, approvalCode={}, invoiceId(mask)={}, amount={}",
-                        maskForLog(actor),
-                        redactedCode,
-                        maskForLog(invoiceId),
-                        invoiceTotal);
-            }
+        // M4 + ADR-0018: Audit the manager approval override. The approving manager's
+        // person id is recorded UNMASKED — it is the non-repudiation value the audit
+        // exists to capture (a person UUID, not secret material).
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
+        if (log.isInfoEnabled()) {
+            log.info(
+                    "Manager approval override applied: actor={}, approverPersonId={}, invoiceId={}, amount={}",
+                    actor,
+                    approvingManager,
+                    invoiceId,
+                    invoiceTotal);
         }
     }
 

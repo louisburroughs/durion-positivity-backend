@@ -10,6 +10,8 @@ import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.GetPartyResponse;
 import com.positivity.customer.internal.dto.MergePartiesRequest;
 import com.positivity.customer.internal.dto.MergePartiesResponse;
+import com.positivity.customer.internal.dto.PartyNameRef;
+import com.positivity.customer.internal.dto.PartyNameResolveRequest;
 import com.positivity.customer.internal.dto.ResolveAccountTierRequest;
 import com.positivity.customer.internal.dto.ResolveAccountTierResponse;
 import com.positivity.customer.internal.dto.SearchPartiesRequest;
@@ -24,11 +26,14 @@ import com.positivity.customer.service.PartyService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -274,6 +279,35 @@ public class CrmAccountsController {
         log.info("searchParties");
         SearchPartiesResponse response = partyService.searchParties(body);
         return ResponseEntity.ok(response);
+    }
+
+    @Operation(
+            summary = "Resolve party display names",
+            description = "Batch-resolve party ids to display names. Consumed server-side by sibling services "
+                    + "(e.g. pos-invoice) that store only the party id and need the display name to enrich "
+                    + "finder/search rows. Unknown or unresolvable ids are omitted from the response.")
+    @ApiResponses(
+            value = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Resolved party id-to-name pairs",
+                        content =
+                                @Content(array = @ArraySchema(schema = @Schema(implementation = PartyNameRef.class)))),
+                @ApiResponse(responseCode = "400", description = "Invalid resolve request", content = @Content),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Forbidden - insufficient permissions",
+                        content = @Content)
+            })
+    @PostMapping("/parties:resolve")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {CrmPermissionRegistry.PARTY_VIEW})
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
+    @EmitEvent(id = "CUSTOMER_PARTY_RESOLVE", apiVersion = "1")
+    public ResponseEntity<List<PartyNameRef>> resolvePartyNames(@Valid @RequestBody PartyNameResolveRequest body) {
+        log.info("resolvePartyNames count={}", body.partyIds().size());
+        return ResponseEntity.ok(partyService.resolveNames(body.partyIds()));
     }
 
     @Operation(summary = "Merge parties", description = "Merge multiple parties into a single party record")

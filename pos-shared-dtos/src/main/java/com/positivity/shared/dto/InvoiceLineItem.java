@@ -8,6 +8,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Line item DTO used for invoice generation payloads and responses.
@@ -44,4 +45,11 @@ public class InvoiceLineItem {
             requiredMode = Schema.RequiredMode.REQUIRED,
             example = "90.00")
     private BigDecimal amount;
+
+    @Nullable
+    @Schema(
+            description = "Line item type (e.g. PART, LABOR, FEE, TAX).",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+            example = "LABOR")
+    private String type;
 }
