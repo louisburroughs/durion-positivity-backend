@@ -147,6 +147,8 @@ psql "$MCP_DB_URL" -c "\dt mcp_tool_role*"   # expect only *_deprecated
 (1) **Persist discovered ops to `mcp_tool`** — corrected finding: `ToolRegistrationServiceImpl` only registers ops with the in-memory `McpAsyncServer`; **no `source='openapi'` rows exist in the DB today**. Add row persistence (name/domain/description/`source='openapi'`/`http_method`/`http_path`/`service_id`/`input_schema` + an **embedding** via the model) AND seed `mcp_tool_permission` for them (else fail-closed → never selected). Surface method/path/serviceId from `OpenApiToolMapper`. Coord columns V21/V19 are ready.
 (2) wire `.toolProvider(openApiToolProvider)` into both managers + `RequestScopedUserContext` set/clear around the blocking `agent.chat(...)`; (3) streaming Reactor-context propagation (until then streaming stays fail-closed → no discovered tools). See `gate3-openapi-bridge-design.md` G3.1/G3.3.
 
+> **Facade-path status (2026-07-01):** the shared **facade** tool-binding path is fixed and live-verified — see the **Facade regression** bullet below (PR #788, image `sha-559d554`). The **openapi** discovered-ops items (1)/(2)/(3) above remain outstanding: `SELECT count(*) FROM mcp_tool WHERE source='openapi'` is still `0` on alpha, so the openapi **End-to-end / Negative / Streaming** bullets below stay deferred until step (1) lands.
+
 Requires the gateway aggregate spec reachable + discovered ops persisted with coords + permissions (step 1 above). With the service up (`alpha`):
 ```bash
 # PRECHECK — discovered ops must exist in the DB at all (empty today until step 1 is implemented):
@@ -158,7 +160,7 @@ psql "$MCP_DB_URL" -c "SELECT t.name FROM mcp_tool t JOIN mcp_tool_permission p 
 - **End-to-end (positive):** as a user holding the op's permission, send a `/v1/mcp/chat` message that should trigger a `source='openapi'` op **with no facade equivalent**; confirm a real gateway result (not a hallucinated success).
 - **Negative (leakage/permission):** as a user **lacking** that permission, confirm the op never appears in the agent's tools and cannot be executed — including reusing a cached agent that a higher-permission user just used (cached-agent leakage check).
 - **Streaming parity:** repeat both via `/v1/mcp/chat/stream` (separate Reactor-context propagation path — must enforce the negative case too).
-- **Facade regression:** confirm existing facade tools still work.
+- **Facade regression:** ✅ **VERIFIED 2026-07-01** (alpha, image `sha-559d554`, PR #788). As `admin.alpha` via gateway `POST /mcp-server/v1/mcp/chat`, "show open workorders" bound `selectedTools=8` (`MasterAgentRegistry.resolve-by-name` → 8 beans) and `WorkorderFacadeTool` executed against the live workorder service, returning real data (only `WO-2026-1000` Blue Ridge Landscaping, status COMPLETED — no hallucination). **Regression fixed:** pre-#788 this same path bound `selectedTools=0` (gated+scored names were resolved against a role-keyed bucket, but tool beans are bucketed by domain → every role resolved empty). Fix resolves selected names across the full registered set. Chat `HTTP=200`, model ~30s (qwen3.5:cloud).
 - **Workflow gating (Gate 2C live):** seed `mcp_tool_workflow` for a non-IDLE state, set `NltiSession.workflow_state`, confirm that state's tools activate and IDLE-only tools do not.
 
 ### B.7 Tiered model router (Gate 4)
