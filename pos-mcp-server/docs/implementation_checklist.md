@@ -14,6 +14,19 @@
 
 ---
 
+## Live verification pass — 2026-07-01 (alpha, image `sha-559d554`)
+
+First live run against the deployed stack (`durion-alpha`, containers up, `pos_mcp` DB, gateway `/mcp-server/**`). Evidence recorded into the relevant gates below. Summary:
+
+- **Model backend reachable (Gate 0 precondition):** chat `ollama.com/qwen3.5:cloud` → HTTP 200 (~28s); embeddings `nomic-embed-text` on the internal `ollama:11434` container → HTTP 200, real vector 0.36s (cloud key is chat-only — embeddings correctly use the local model). Baseline capture / fixture counts still outstanding.
+- **Gate 2B fail-closed cleanup — migration verified live:** Flyway `V19` applied on alpha (`flyway_schema_history`: "retire legacy role gating" success=true); `\dt` shows only `mcp_role_deprecated` / `mcp_tool_role_deprecated`. Permission gating works live: `admin.alpha` (676 authorities) → `gatedToolCount=16`. Negative low-permission case still pending.
+- **Gate 2C — migration verified live:** Flyway `V20` "nlti session workflow state" success=true on alpha (also `V21` exec-coords, `V22` write-plan applied). Non-IDLE tool activation still pending (needs `mcp_tool_workflow` seed + session propagation).
+- **Gate 3 — facade path FIXED + verified; openapi still empty:** a real **regression** was found and fixed — the shared selection path bound `selectedTools=0` for every role (gated+scored tool **names** were resolved against a role-keyed bucket, but tool beans are bucketed by **domain**, so resolution always returned empty). Fixed in **PR #788** (`MasterAgentRegistry.resolveToolsByName` resolves across the full registered set; `ToolSelectionEngine` repointed). Live retest: "show open workorders" → `selectedTools=8` (`resolve-by-name` → 8 beans), `WorkorderFacadeTool` executed against the live service returning real data (`WO-2026-1000`, COMPLETED). **openapi bridge unchanged:** `SELECT count(*) FROM mcp_tool WHERE source='openapi'` = **0** on alpha (confirms the deferred step-1 below).
+
+> **Planning note:** no gate flips to **Pass** from this pass. It confirms preconditions (live backend), closes two migration-on-real-Postgres HOLDs (2B/2C), records the #788 facade-binding fix, and re-confirms Gate 3 step-1 is the open blocker.
+
+---
+
 ## Gate 0 — Measurement, Telemetry, Config Hygiene
 
 **Entry:** none (first gate). **Goal:** measurement foundation before any behavior change.
@@ -73,7 +86,7 @@
 
 **HOLD (not met — Gate 0 cannot sign Pass)**
 - [ ] Fixture minimum counts ≥100 / ≥50 / ≥30 — currently seed-only **4 / 4 / 4**. Tracked by `@Disabled minimumFixtureCountsMet`; must be enabled + green to pass. _Largest remaining Gate 0 work item; not blocked._
-- [~] Baseline metrics — **first live run 2026-06-30** (local 1-container stack): boot OK (V1–V22 applied, started 11.8s), 13 RAG docs embedded, fail-closed confirmed (deprecated tables only), `BaselineCaptureIT` ran → **forbidden_violations=0** (leakage guard ✓), **hit@5=0/mrr=0** over 3 seed fixtures (facade-vs-discovered naming mismatch — seed fixtures retargeted to facade class names; see `baseline.json`). Found+fixed a live-only boot blocker (`@ConstructorBinding` on `StaticDocEntry`, `176d2a647`). Still pending full stack: RAG recall@k, write-safety, latency, router. Discovered-op rows = 0 (G3.1 unimplemented, confirmed).
+- [~] Baseline metrics — **first live run 2026-06-30** (local 1-container stack): boot OK (V1–V22 applied, started 11.8s), 13 RAG docs embedded, fail-closed confirmed (deprecated tables only), `BaselineCaptureIT` ran → **forbidden_violations=0** (leakage guard ✓), **hit@5=0/mrr=0** over 3 seed fixtures (facade-vs-discovered naming mismatch — seed fixtures retargeted to facade class names; see `baseline.json`). Found+fixed a live-only boot blocker (`@ConstructorBinding` on `StaticDocEntry`, `176d2a647`). Still pending full stack: RAG recall@k, write-safety, latency, router. Discovered-op rows = 0 (G3.1 unimplemented, confirmed). **2026-07-01 (alpha deployed stack):** model backend confirmed reachable end-to-end — chat `qwen3.5:cloud` HTTP 200, embeddings `nomic-embed-text` (local `ollama:11434`) HTTP 200 real vector; the live-backend precondition is met, but `BaselineCaptureIT` on alpha + fixture-count expansion remain the open Gate 0 items.
 
 **CORRECTION (prior sign-off was wrong)**
 - An earlier draft of this sign-off recorded a "Lombok 1.18.46 + JDK 25" build blocker. That was a **false alarm** caused by a bad maven invocation (`-am compile` without a prior reactor `install`). `./mvnw clean install -am -pl pos-mcp-server` builds cleanly (confirmed on main and in this worktree). **No build blocker exists.**
@@ -243,8 +256,8 @@
 - [x] AUTHENTICATED — mcp already injects `AUTHENTICATED` for every authenticated caller (`CurrentUserContext`); fail-closed unchanged.
 
 **HOLD / deferred**
-- [ ] Live fail-closed correctness (no-perm user cannot select tool; legacy tables not consulted at runtime; metrics within threshold) — needs the live DB (path 2 batch).
-- [ ] Rename migration not yet run against a real Postgres — reversible + IF EXISTS lower risk; verify on the tunnel host. **Take the DB snapshot before applying in any shared env.**
+- [~] Live fail-closed correctness — **partially verified 2026-07-01 (alpha):** permission gating is live and legacy tables are not consulted at runtime (`gatedToolCount=16` for `admin.alpha`, gating query joins only `mcp_tool_permission`+workflow). **Still pending:** the negative case with a genuinely low-permission user (no-perm user cannot select a gated tool) + metrics threshold.
+- [x] Rename migration run against a real Postgres — **verified 2026-07-01 (alpha):** Flyway `V19` "retire legacy role gating" success=true in `flyway_schema_history`; `\dt mcp_role* / mcp_tool_role*` shows only `*_deprecated`. (Snapshot-before-apply policy still applies to any *other* shared env.)
 - [ ] #781 (`AUTHENTICATED` sentinel emission across ~18 services + `requiredPermissionsOperationCustomizer` → `pos-security-common`) and #782 (`pos-security-service` role-default-permissions endpoint) are **cross-service**, outside this worktree pass — separate scoped change.
 
 ---
@@ -294,7 +307,8 @@
 - [x] `WORKFLOW_IDLE` no longer a hardcoded literal in the selection engine.
 
 **HOLD / deferred (architectural + live)**
-- [ ] Runtime session→selection propagation in the **chat managers**: `/v1/mcp/chat` is session-less (CurrentUserContext has no session id), so workflow state authoritatively belongs to the **NLTI-session path** (`NltiRequestService`), not the raw chat managers. Foundation (persisted field + explicit input) is in place; wiring the session-bearing path to pass `session.getWorkflowState()` is the remaining step.
+- [x] Migration on real Postgres — **verified 2026-07-01 (alpha):** Flyway `V20` "nlti session workflow state" success=true (`nlti_session.workflow_state` column live).
+- [ ] Runtime session→selection propagation in the **chat managers**: `/v1/mcp/chat` is session-less (CurrentUserContext has no session id), so workflow state authoritatively belongs to the **NLTI-session path** (`NltiRequestService`), not the raw chat managers. Foundation (persisted field + explicit input) is in place; wiring the session-bearing path to pass `session.getWorkflowState()` is the remaining step. _Live confirm 2026-07-01: chat requests derive `workflowState=IDLE` (session-less fallback), as designed._
 - [ ] Non-IDLE activation (CREATING_PO/PROCESSING_RETURN return their gated tools) — needs DB-seeded `mcp_tool_workflow` rows + live run.
 - [ ] Workflow transitions in telemetry — pending the telemetry-emission pipeline (cross-gate, with Gate 1/4).
 - Note: rollback = default `WorkflowState.DEFAULT` (IDLE) everywhere, degrading to current behavior.
@@ -365,6 +379,11 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [ ] Streaming Reactor-context propagation (until then streaming is fail-closed → no discovered tools).
 - [ ] Live tests §B.6 (the gate exit criterion).
 - Rollback: omit `.toolProvider(...)` → facade-only (current behavior).
+
+**LIVE VERIFICATION (2026-07-01, alpha `sha-559d554`)**
+- [x] **§B.6 Facade regression — PASS.** `admin.alpha` via gateway `/mcp-server/v1/mcp/chat` "show open workorders" → `selectedTools=8`, `WorkorderFacadeTool` executed against the live service, real data returned (`WO-2026-1000`, COMPLETED). See runbook §B.6.
+- [x] **Regression found + fixed (PR #788):** the shared selection path bound `selectedTools=0` for **every** role — gated+scored tool names were resolved via `resolveDomainTools(role, names)`, but callable beans are bucketed by **domain**, not role, so resolution always returned empty (facade tools were fully severed from the chat agent, not just openapi). Fix: `MasterAgentRegistry.resolveToolsByName(names)` resolves across the full registered set; `ToolSelectionEngine` repointed; both blocking + streaming managers covered. Unit-tested; merged; deployed; live-verified above.
+- [ ] **openapi bridge still empty (step-1 confirmed open):** `SELECT count(*) FROM mcp_tool WHERE source='openapi'` = **0** on alpha. The positive-E2E / negative-leakage / streaming-parity openapi bullets in §B.6 remain **deferred** until discovered-ops persistence (+coords +`mcp_tool_permission`) lands. This is the gating item for Gate 3 Pass.
 
 ---
 
