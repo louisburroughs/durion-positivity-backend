@@ -16,6 +16,8 @@ tags:
   description: NLTI Audit Ledger Query
 - name: NLTI
   description: Natural Language Task Interface
+- name: MCP Tool Permissions
+  description: Manage the permission codes that gate discovered OpenAPI tools
 paths:
   /v1/prompts/{id}:
     get:
@@ -454,8 +456,107 @@ paths:
       security:
       - bearerAuth:
         - mcp:document:ingest
+  /v1/tools/{toolName}/permissions:
+    get:
+      tags:
+      - MCP Tool Permissions
+      summary: List a tool's permission grants
+      description: Return the permission codes currently granted to a discovered OpenAPI tool.
+      operationId: listToolPermissions
+      parameters:
+      - name: toolName
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolPermissionsResponse'
+      security:
+      - bearerAuth:
+        - mcp:tool:view
+    post:
+      tags:
+      - MCP Tool Permissions
+      summary: Grant a permission to a tool
+      description: Grant a permission code to a discovered OpenAPI tool so callers holding it can select the tool. Idempotent. Returns the tool's full permission set.
+      operationId: grantToolPermission
+      parameters:
+      - name: toolName
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolPermissionRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolPermissionsResponse'
+      security:
+      - bearerAuth:
+        - mcp:tool:manage
+    delete:
+      tags:
+      - MCP Tool Permissions
+      summary: Revoke a permission from a tool
+      description: Revoke a permission code from a discovered OpenAPI tool. Idempotent.
+      operationId: revokeToolPermission
+      parameters:
+      - name: toolName
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: permissionCode
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+      security:
+      - bearerAuth:
+        - mcp:tool:manage
 components:
   schemas:
+    ToolPermissionRequest:
+      type: object
+      description: Request to grant a permission code to a discovered OpenAPI tool
+      properties:
+        permissionCode:
+          type: string
+          description: Permission code that must be held for the tool to be selectable. Either the literal AUTHENTICATED or a domain:resource:action code.
+          example: event-receiver:event_type:view
+          pattern: AUTHENTICATED|[a-z0-9-]+:[a-z0-9_-]+:[a-z0-9_-]+
+          minLength: 1
+      required:
+      - permissionCode
+    ToolPermissionsResponse:
+      type: object
+      description: The permission codes currently granted to a discovered OpenAPI tool
+      properties:
+        toolName:
+          type: string
+          description: Unique tool name
+          example: event-receiver_getactiveeventtypes
+        permissionCodes:
+          type: array
+          items:
+            type: string
+          description: Granted permission codes (a caller holding any one may select the tool)
     SystemPromptRequest:
       type: object
       description: Request to create or update a reusable system prompt

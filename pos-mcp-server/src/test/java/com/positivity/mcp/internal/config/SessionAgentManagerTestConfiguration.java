@@ -98,6 +98,21 @@ public class SessionAgentManagerTestConfiguration {
             public void addToolPermission(java.util.UUID toolId, String permissionCode) {
                 // no-op stub
             }
+
+            @Override
+            public java.util.Optional<java.util.UUID> findDiscoveredToolIdByName(String name) {
+                return java.util.Optional.empty();
+            }
+
+            @Override
+            public java.util.List<String> listToolPermissions(java.util.UUID toolId) {
+                return List.of();
+            }
+
+            @Override
+            public void removeToolPermission(java.util.UUID toolId, String permissionCode) {
+                // no-op stub
+            }
         };
     }
 }
