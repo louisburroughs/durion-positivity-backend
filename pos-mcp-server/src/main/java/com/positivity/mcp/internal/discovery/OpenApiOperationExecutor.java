@@ -6,8 +6,10 @@ import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.service.tool.ToolExecutor;
 import io.modelcontextprotocol.spec.McpSchema;
+import java.net.URI;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -47,8 +49,13 @@ public class OpenApiOperationExecutor implements ToolExecutor {
             Map<String, Object> arguments = parseArguments(request.arguments());
             McpSchema.CallToolRequest call = new McpSchema.CallToolRequest(operation.name(), arguments);
             HttpMethod method = HttpMethod.valueOf(operation.httpMethod());
+            // Route via the gateway base URI (service_id holds it), not the load-balancer: alpha's
+            // Eureka registry is empty, so loadBalancerClient.choose(serviceId) resolves nothing.
+            // Facade tools reach the gateway by base URL too. See gate3-openapi-bridge-design.md.
+            URI gatewayBaseUri =
+                    URI.create(Objects.requireNonNull(operation.serviceId(), "openapi op missing service_id"));
             McpSchema.CallToolResult result = proxyFactory
-                    .handler(operation.serviceId(), method, operation.httpPath())
+                    .handlerForBaseUri(gatewayBaseUri, method, operation.httpPath())
                     .apply(null, call)
                     .block(timeout);
             return render(result);
