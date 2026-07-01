@@ -85,6 +85,36 @@ class MasterAgentRegistryTest {
     }
 
     @Test
+    void resolveToolsByNameSearchesAllDomainsIgnoringRoleScope() {
+        Object sharedTool = new SharedToolStub();
+        Object inventoryTool = new InventoryFacadeToolStub();
+        Object orderTool = new OrderFacadeToolStub();
+        MasterAgentRegistry registry = new MasterAgentRegistry(
+                List.of(sharedTool),
+                List.of(
+                        new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool)),
+                        new DomainAgentDefinition("orders", "orders", List.of(orderTool))));
+
+        // Regression (facade tool binding): permission gating + scoring run upstream, so the
+        // name->bean step must search the full registered set. A role caller (ROLE_ADMIN) resolves
+        // nothing via the role-scoped overload because tools are bucketed by domain, never by role.
+        assertThat(registry.resolveDomainTools("ROLE_ADMIN", List.of("orderFacadeToolStub")))
+                .isEmpty();
+        assertThat(registry.resolveToolsByName(
+                        List.of("orderFacadeToolStub", "inventoryFacadeToolStub", "sharedToolStub")))
+                .containsExactlyInAnyOrder(orderTool, inventoryTool, sharedTool);
+    }
+
+    @Test
+    void resolveToolsByNameReturnsEmptyForEmptySelection() {
+        MasterAgentRegistry registry = new MasterAgentRegistry(
+                List.of(new SharedToolStub()),
+                List.of(new DomainAgentDefinition("inventory", "inventory", List.of(new InventoryFacadeToolStub()))));
+
+        assertThat(registry.resolveToolsByName(List.of())).isEmpty();
+    }
+
+    @Test
     void preloadableDomainAgentsReturnsAgentNames() {
         MasterAgentRegistry registry = new MasterAgentRegistry(
                 List.of(),

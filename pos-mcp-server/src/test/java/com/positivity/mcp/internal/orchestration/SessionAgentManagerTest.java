@@ -120,9 +120,7 @@ class SessionAgentManagerTest {
         // Return a FRESH list on every invocation so buildAgent mutations don't bleed
         // across calls
         lenient().when(toolRegistry.resolveDomainTools(anyString())).thenAnswer(inv -> new ArrayList<>());
-        lenient()
-                .when(toolRegistry.resolveDomainTools(anyString(), anyCollection()))
-                .thenAnswer(inv -> new ArrayList<>());
+        lenient().when(toolRegistry.resolveToolsByName(anyCollection())).thenAnswer(inv -> new ArrayList<>());
         when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         lenient()
                 .when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
@@ -260,8 +258,7 @@ class SessionAgentManagerTest {
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
         when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
                 .thenReturn(List.of(inventoryToolMetadata()));
-        when(toolRegistry.resolveDomainTools("ROLE_ADMIN", List.of("inventoryFacadeTool")))
-                .thenReturn(List.of(inventoryFacadeTool));
+        when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
         when(chatModel.chat(any(ChatRequest.class)))
                 .thenReturn(ChatResponse.builder()
                         .aiMessage(AiMessage.from("Stock found"))

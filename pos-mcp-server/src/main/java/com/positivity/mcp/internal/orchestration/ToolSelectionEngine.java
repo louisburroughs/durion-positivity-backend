@@ -109,7 +109,10 @@ public class ToolSelectionEngine {
             if (selectedNames.isEmpty()) {
                 return logNoCandidates(role, permissionCodes, message, fullRoleTools);
             }
-            List<Object> resolvedTools = toolRegistry.resolveDomainTools(role, selectedNames);
+            // Resolve names across the full registered tool set (not role-scoped): permission gating
+            // + scoring already ran in ToolRegistryService, and tools are bucketed by domain, so a
+            // role-scoped lookup (resolveDomainTools(role, names)) can never match. See Gate 2B / #780.
+            List<Object> resolvedTools = toolRegistry.resolveToolsByName(selectedNames);
             if (resolvedTools.isEmpty() && !fullRoleTools.isEmpty()) {
                 return logResolvedToZeroTools(role, permissionCodes, message, selectedNames, fullRoleTools);
             }

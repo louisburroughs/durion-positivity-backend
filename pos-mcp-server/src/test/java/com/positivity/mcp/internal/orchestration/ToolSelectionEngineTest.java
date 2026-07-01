@@ -87,8 +87,7 @@ class ToolSelectionEngineTest {
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
         when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
                 .thenReturn(List.of(inventoryTool));
-        when(toolRegistry.resolveDomainTools("ROLE_ADMIN", List.of("inventoryFacadeTool")))
-                .thenReturn(List.of(inventoryFacadeTool));
+        when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
 
         ToolSelectionEngine.ToolSelectionResult result =
                 toolSelectionEngine.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, "show stock for sku ABC");
