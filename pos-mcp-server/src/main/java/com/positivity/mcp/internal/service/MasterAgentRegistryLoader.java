@@ -75,6 +75,12 @@ public class MasterAgentRegistryLoader {
     }
 
     private Object loadToolBean(@NonNull ToolMetadata tool) {
+        // Openapi-discovered rows have no handler_bean (they execute via OpenApiToolProvider, not a
+        // bean); they are excluded by the repository query, but guard defensively so a null never
+        // reaches getBean (which throws "'name' must not be null" and fails context init).
+        if (tool.handlerBean() == null || tool.handlerBean().isBlank()) {
+            return null;
+        }
         try {
             return applicationContext.getBean(tool.handlerBean());
         } catch (NoSuchBeanDefinitionException e) {

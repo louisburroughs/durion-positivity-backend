@@ -39,6 +39,7 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
                 JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
                 WHERE t.enabled = true
+                  AND t.source <> 'openapi'
                   AND tp.permission_code = ANY(?)
                   AND ws.name = ?
                 """;
@@ -66,6 +67,7 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
                 JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
                 WHERE t.enabled = true
+                  AND t.source <> 'openapi'
                   AND ws.name = ?
                 ORDER BY lower(t.domain), t.name
                 """;
@@ -93,6 +95,7 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
                 JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
                 WHERE t.enabled = true
+                  AND t.source <> 'openapi'
                   AND t.embedding IS NOT NULL
                   AND ws.name = ?
                   AND t.id IN (SELECT tool_id FROM mcp_tool_permission WHERE permission_code = ANY(?))
@@ -215,6 +218,7 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                        avg_latency_ms, enabled, handler_bean
                 FROM mcp_tool
                 WHERE enabled = true
+                  AND source <> 'openapi'
                   AND embedding IS NOT NULL
                 ORDER BY embedding <=> ?::vector, id
                 LIMIT ?

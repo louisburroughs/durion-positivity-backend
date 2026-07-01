@@ -56,6 +56,21 @@ class MasterAgentRegistryLoaderTest {
     }
 
     @Test
+    void toolWithNullHandlerBeanIsSkippedNotCrashing() {
+        // Regression: openapi-discovered rows have no handler_bean. If one reaches the loader it must
+        // be skipped, not passed to getBean(null) (which throws "'name' must not be null" and crashes
+        // context init — the mcp-server crash-loop on 2026-07-01).
+        ToolMetadata openapiTool = tool("event-receiver_getactiveeventtypes", "event-receiver", null);
+        when(repository.findEnabledByWorkflow("IDLE")).thenReturn(List.of(openapiTool));
+
+        MasterAgentRegistryLoader loader = new MasterAgentRegistryLoader(repository, applicationContext, "idle");
+        MasterAgentRegistryLoader.LoadedMasterAgentRegistry loaded = loader.loadRegistryDefinition();
+
+        assertThat(loaded.sharedTools()).isEmpty();
+        assertThat(loaded.domainToolAssignments()).isEmpty();
+    }
+
+    @Test
     void sharedOnlyWorkflowYieldsNoDomainOrRoleAssignments() {
         ToolMetadata masterTool = tool("ExaWebSearchTool", "master", "exaWebSearchTool");
         Object sharedBean = new Object();
