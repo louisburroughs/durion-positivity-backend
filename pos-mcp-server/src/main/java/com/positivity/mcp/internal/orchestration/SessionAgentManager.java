@@ -42,6 +42,8 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Component
 @Profile("alpha")
@@ -131,8 +133,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     /**
-     * Returns a cached role agent, creating one if absent. User-specific
-     * conversation state is resolved later by the chat memory provider.
+     * Returns a cached role agent, creating one if absent. User-specific conversation state is
+     * resolved later by the chat memory provider.
      */
     @NonNull
     PosAssistant getOrCreateAgent(@NonNull String userId, @NonNull String role) {
@@ -195,10 +197,12 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                         messagePreview);
             }
             PosAssistant agent = getOrCreateAgent(role, cacheKey, selection.roleTools(), selection.fallbackTools());
-            // Gate 3 (G3.3): publish the caller so the dynamic OpenApiToolProvider (running inside the
-            // cached agent) resolves this request's permission-eligible tools; cleared in finally.
+            // Gate 3 (G3.3): publish the caller so the dynamic OpenApiToolProvider
+            // (running inside the
+            // cached agent) resolves this request's permission-eligible tools; cleared
+            // in finally.
             if (requestScopedUserContext != null) {
-                requestScopedUserContext.set(currentUserContext);
+                requestScopedUserContext.set(currentUserContext, currentAuthorizationHeader());
             }
             long agentStartNanos = System.nanoTime();
             String response = agent.chat(memoryKey(username, role), message, formatUserContext(currentUserContext));
@@ -264,6 +268,15 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         return roleAgentCache.estimatedSize();
     }
 
+    /** The caller's raw {@code Authorization} header from the current servlet request, if present. */
+    private @Nullable String currentAuthorizationHeader() {
+        var attributes = RequestContextHolder.getRequestAttributes();
+        if (attributes instanceof ServletRequestAttributes servletAttributes) {
+            return servletAttributes.getRequest().getHeader("Authorization");
+        }
+        return null;
+    }
+
     private PosAssistant buildAgent(@NonNull String role) {
         return buildAgent(role, toolRegistry.resolveDomainTools(role), toolSelectionEngine.fullFallbackTools());
     }
@@ -304,9 +317,12 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                         memoryId -> rolePromptResolver.assemble(role, ragScope).text())
                 .chatMemoryProvider(this::chatMemoryFor);
         if (openApiToolProvider != null) {
-            // Gate 3 (G3.3): dynamic, permission-gated OpenAPI-discovered tools resolved per request
-            // from RequestScopedUserContext (set around agent.chat below). A cached agent never
-            // captures a caller's permissions, so it cannot leak a prior caller's tools.
+            // Gate 3 (G3.3): dynamic, permission-gated OpenAPI-discovered tools
+            // resolved per request
+            // from RequestScopedUserContext (set around agent.chat below). A cached
+            // agent never
+            // captures a caller's permissions, so it cannot leak a prior caller's
+            // tools.
             agentBuilder.toolProvider(openApiToolProvider);
         }
         PosAssistant agent = agentBuilder.build();
@@ -336,8 +352,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     /**
-     * Evicts a user's conversation state and rate counter. Role agents remain
-     * cached.
+     * Evicts a user's conversation state and rate counter. Role agents remain cached.
      */
     @Override
     public void evict(@NonNull String userId) {
@@ -350,7 +365,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         int prebuilt = 0;
         for (String role : toolRegistry.preloadableRoleIdentifiers()) {
             try {
-                // No CurrentUserContext is available during startup warm-up, so prebuild
+                // No CurrentUserContext is available during startup warm-up, so
+                // prebuild
                 // with the AUTHENTICATED-only permission set; callers whose actual
                 // permissionCodes differ get a cache miss and build on demand via
                 // getOrCreateAgent (its key already varies with toolCacheKey).
@@ -407,9 +423,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     /**
-     * Emits one {@code nlti.request.telemetry} event for a completed chat request (Gate 1). Never
-     * throws into the request path — a telemetry failure is logged and swallowed. No-op when no
-     * emitter is configured. {@code correlationId} is taken from the request MDC when present.
+     * Emits one {@code nlti.request.telemetry} event for a completed chat request (Gate 1).
+     * Never throws into the request path — a telemetry failure is logged and swallowed. No-op
+     * when no emitter is configured. {@code correlationId} is taken from the request MDC when
+     * present.
      */
     private void emitChatTelemetry(
             @NonNull CurrentUserContext currentUserContext,
@@ -453,10 +470,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     private static @NonNull String formatUserContext(@NonNull CurrentUserContext currentUserContext) {
         return "Authenticated user context: username=" + currentUserContext.username()
-                + ", userId=" + currentUserContext.userId()
-                + ", primaryRole=" + currentUserContext.primaryRole()
-                + ", roles=" + currentUserContext.roles()
-                + ", authorityCount=" + currentUserContext.authorities().size()
+                + ", userId=" + currentUserContext.userId() + ", primaryRole="
+                + currentUserContext.primaryRole() + ", roles="
+                + currentUserContext.roles() + ", authorityCount="
+                + currentUserContext.authorities().size()
                 + ". Interpret references to 'me', 'my', or 'current user' as this authenticated user."
                 + " If a question depends on the user's exact permissions, prefer a self-service permissions tool before asking for identifiers.";
     }

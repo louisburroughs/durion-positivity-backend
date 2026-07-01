@@ -15,6 +15,8 @@ import io.modelcontextprotocol.spec.McpSchema;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -43,7 +45,7 @@ class OpenApiOperationExecutorTest {
                 "http://api-gateway:8080",
                 null);
         OpenApiOperationExecutor executor =
-                new OpenApiOperationExecutor(proxyFactory, operation, new ObjectMapper(), TIMEOUT);
+                new OpenApiOperationExecutor(proxyFactory, operation, new ObjectMapper(), TIMEOUT, null);
 
         String result = executor.execute(
                 ToolExecutionRequest.builder()
@@ -59,13 +61,51 @@ class OpenApiOperationExecutorTest {
     }
 
     @Test
+    @DisplayName("execute relays the caller's Authorization header into the outbound call")
+    void execute_relaysAuthorizationHeader() {
+        OperationProxyFactory proxyFactory = mock(OperationProxyFactory.class);
+        McpSchema.CallToolResult ok = McpSchema.CallToolResult.builder()
+                .content(List.of(new McpSchema.TextContent("[]")))
+                .build();
+        AtomicReference<McpSchema.CallToolRequest> captured = new AtomicReference<>();
+        when(proxyFactory.handlerForBaseUri(any(URI.class), eq(HttpMethod.GET), eq("/v1/accounting/invoices")))
+                .thenReturn((exchange, request) -> {
+                    captured.set(request);
+                    return Mono.just(ok);
+                });
+        DiscoveredOperation operation = new DiscoveredOperation(
+                "accounting_listinvoices",
+                "List invoices",
+                "GET",
+                "/v1/accounting/invoices",
+                "http://api-gateway:8080",
+                null);
+        OpenApiOperationExecutor executor =
+                new OpenApiOperationExecutor(proxyFactory, operation, new ObjectMapper(), TIMEOUT, "Bearer test-token");
+
+        executor.execute(
+                ToolExecutionRequest.builder()
+                        .name("accounting_listinvoices")
+                        .arguments("{}")
+                        .build(),
+                null);
+
+        assertThat(captured.get()).isNotNull();
+        Object headers = captured.get().arguments().get("headers");
+        assertThat(headers).isInstanceOf(Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> headerMap = (Map<String, Object>) headers;
+        assertThat(headerMap).containsEntry("Authorization", "Bearer test-token");
+    }
+
+    @Test
     @DisplayName("execute returns a controlled error (no proxy call) when service_id is missing")
     void execute_missingServiceId_returnsControlledError() {
         OperationProxyFactory proxyFactory = mock(OperationProxyFactory.class);
         DiscoveredOperation operation = new DiscoveredOperation(
                 "accounting_listinvoices", "List invoices", "GET", "/v1/accounting/invoices", null, null);
         OpenApiOperationExecutor executor =
-                new OpenApiOperationExecutor(proxyFactory, operation, new ObjectMapper(), TIMEOUT);
+                new OpenApiOperationExecutor(proxyFactory, operation, new ObjectMapper(), TIMEOUT, null);
 
         String result = executor.execute(
                 ToolExecutionRequest.builder()

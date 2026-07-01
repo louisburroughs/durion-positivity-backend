@@ -77,6 +77,7 @@ public class OpenApiToolProvider implements ToolProvider {
             return new ToolProviderResult(Map.of());
         }
         CurrentUserContext caller = maybe.get();
+        String authHeader = userContext.currentAuthHeader().orElse(null);
         String userMessage =
                 request.userMessage() == null ? "" : request.userMessage().singleText();
         if (userMessage == null || userMessage.isBlank()) {
@@ -99,7 +100,7 @@ public class OpenApiToolProvider implements ToolProvider {
                     .name(op.name())
                     .description(op.description())
                     .build();
-            tools.put(spec, new OpenApiOperationExecutor(proxyFactory, op, objectMapper, executionTimeout));
+            tools.put(spec, new OpenApiOperationExecutor(proxyFactory, op, objectMapper, executionTimeout, authHeader));
         }
         LOGGER.debug(
                 "MCP openapi tool provider role={} permissionCount={} discoveredTools={}",
