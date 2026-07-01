@@ -4,6 +4,7 @@ import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
 public interface ToolMetadataRepository {
@@ -20,6 +21,21 @@ public interface ToolMetadataRepository {
             int limit,
             @NonNull Set<String> permissionCodes,
             @NonNull String workflowState);
+
+    /**
+     * Gate 3 (G3.1): upserts a discovered OpenAPI operation as a {@code source='openapi'}
+     * {@code mcp_tool} row (execution coordinates + embedding), keyed by tool name. Returns the row id
+     * so the caller can link workflow states and permissions. Facade rows are untouched.
+     */
+    @NonNull
+    UUID upsertDiscoveredOperation(
+            @NonNull DiscoveredOperation operation, @NonNull String domain, float @NonNull [] embedding);
+
+    /** Gate 3 (G3.1): maps a tool to a workflow state (by name) so it is selectable there. Idempotent. */
+    void linkToolToWorkflow(@NonNull UUID toolId, @NonNull String workflowState);
+
+    /** Gate 3 (G3.1): grants a tool a required permission code (fail-closed gating input). Idempotent. */
+    void addToolPermission(@NonNull UUID toolId, @NonNull String permissionCode);
 
     /**
      * Returns enabled tools authorized for {@code workflowState} where the caller holds at

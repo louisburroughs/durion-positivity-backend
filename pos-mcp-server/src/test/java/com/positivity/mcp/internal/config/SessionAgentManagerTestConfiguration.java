@@ -82,6 +82,24 @@ public class SessionAgentManagerTestConfiguration {
                             float[] embedding, int limit, java.util.Set<String> permissionCodes, String workflowState) {
                 return List.of();
             }
+
+            @Override
+            public java.util.UUID upsertDiscoveredOperation(
+                    com.positivity.mcp.internal.domain.DiscoveredOperation operation,
+                    String domain,
+                    float[] embedding) {
+                return java.util.UUID.fromString("00000000-0000-0000-0000-000000000000");
+            }
+
+            @Override
+            public void linkToolToWorkflow(java.util.UUID toolId, String workflowState) {
+                // no-op stub
+            }
+
+            @Override
+            public void addToolPermission(java.util.UUID toolId, String permissionCode) {
+                // no-op stub
+            }
         };
     }
 }
