@@ -10,9 +10,12 @@ import com.positivity.mcp.internal.orchestration.memory.SessionSummary;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.service.PermissionCodes;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
+import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.service.AgentOrchestrationService;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
+import com.positivity.mcp.service.RolePromptResolver.AssembledPrompt;
 import com.positivity.mcp.service.SessionAgentCacheMetrics;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -23,14 +26,17 @@ import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -65,6 +71,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     private final RolePromptResolver rolePromptResolver;
     private final SimpleChatClassifier simpleChatClassifier;
+    private final @Nullable NltiTelemetryEmitter telemetryEmitter;
 
     private final int memoryMaxMessages;
     private final int rateLimitPerSession;
@@ -81,6 +88,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @Nullable SessionSummary sessionSummary,
             @NonNull RolePromptResolver rolePromptResolver,
             @NonNull SimpleChatClassifier simpleChatClassifier,
+            @Nullable NltiTelemetryEmitter telemetryEmitter,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
             @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
@@ -96,6 +104,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         this.sessionSummary = sessionSummary;
         this.rolePromptResolver = rolePromptResolver;
         this.simpleChatClassifier = simpleChatClassifier;
+        this.telemetryEmitter = telemetryEmitter;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
         this.requestCountCache = Caffeine.newBuilder()
@@ -190,6 +199,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             if (toolExecutionAuditLogger != null) {
                 toolExecutionAuditLogger.logToolExecution(null, username, true, false, elapsedMs, null);
             }
+            List<String> toolNames = sharedOrchestrationSupport.toolNames(selectedTools);
+            String ragScope = toolRegistry.resolveRagScopeForTools(selectedTools);
+            AssembledPrompt assembled = rolePromptResolver.assemble(role, ragScope);
+            List<String> promptLayers = assembled != null ? assembled.layers() : List.of();
+            emitChatTelemetry(currentUserContext, toolNames, promptLayers, false, null, elapsedMs, "SUCCESS", null);
             return response;
         } catch (RuntimeException exception) {
             int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -202,6 +216,15 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                         elapsedMs,
                         exception.getClass().getSimpleName());
             }
+            emitChatTelemetry(
+                    currentUserContext,
+                    List.of(),
+                    List.of(),
+                    false,
+                    null,
+                    elapsedMs,
+                    "ERROR",
+                    exception.getClass().getSimpleName());
             throw new IllegalStateException(
                     "MCP chat failed role=%s elapsedMs=%d errorName=%s"
                             .formatted(role, elapsedMs, exception.getClass().getSimpleName()),
@@ -346,7 +369,51 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             toolExecutionAuditLogger.logToolExecution(
                     null, currentUserContext.username(), true, false, elapsedMs, null);
         }
+        emitChatTelemetry(currentUserContext, List.of(), List.of(), true, null, elapsedMs, "SUCCESS", null);
         return response;
+    }
+
+    /**
+     * Emits one {@code nlti.request.telemetry} event for a completed chat request (Gate 1). Never
+     * throws into the request path — a telemetry failure is logged and swallowed. No-op when no
+     * emitter is configured. {@code correlationId} is taken from the request MDC when present.
+     */
+    private void emitChatTelemetry(
+            @NonNull CurrentUserContext currentUserContext,
+            @NonNull List<String> selectedToolNames,
+            @NonNull List<String> promptLayers,
+            boolean simpleChat,
+            @Nullable String simpleChatRule,
+            long totalMs,
+            @NonNull String status,
+            @Nullable String errorCode) {
+        if (telemetryEmitter == null) {
+            return;
+        }
+        try {
+            String correlationId = MDC.get("correlationId");
+            if (correlationId == null || correlationId.isBlank()) {
+                correlationId = UUID.randomUUID().toString();
+            }
+            telemetryEmitter.emit(NltiRequestTelemetryFactory.forChatRequest(
+                    correlationId,
+                    Instant.now().toString(),
+                    currentUserContext.primaryRole(),
+                    currentUserContext.permissionCodes().size(),
+                    selectedToolNames,
+                    promptLayers,
+                    simpleChat,
+                    simpleChatRule,
+                    totalMs,
+                    status,
+                    errorCode));
+        } catch (RuntimeException telemetryFailure) {
+            LOGGER.warn(
+                    "MCP telemetry emission failed role={} status={}",
+                    currentUserContext.primaryRole(),
+                    status,
+                    telemetryFailure);
+        }
     }
 
     private static @NonNull String formatUserContext(@NonNull CurrentUserContext currentUserContext) {
