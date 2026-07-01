@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,6 +13,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.positivity.mcp.internal.config.McpServerProperties;
 import com.positivity.mcp.internal.discovery.OpenApiDocumentFetcher;
 import com.positivity.mcp.internal.discovery.OpenApiToolMapper;
+import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import io.modelcontextprotocol.server.McpAsyncServer;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
@@ -142,7 +144,13 @@ class ToolRegistrationServiceImplTest {
                 List.of(),
                 "http://gateway.test/v3/api-docs",
                 List.of());
-        return new ToolRegistrationServiceImpl(properties, openApiDocumentFetcher, openApiToolMapper, mcpAsyncServer);
+        return new ToolRegistrationServiceImpl(
+                properties,
+                openApiDocumentFetcher,
+                openApiToolMapper,
+                mcpAsyncServer,
+                mock(ToolMetadataRepository.class),
+                "http://api-gateway:8080");
     }
 
     private ToolRegistrationServiceImpl serviceWithIncludedServices(List<String> includedServices) {
@@ -156,7 +164,13 @@ class ToolRegistrationServiceImplTest {
                 List.of(),
                 "http://gateway.test/v3/api-docs",
                 List.of());
-        return new ToolRegistrationServiceImpl(properties, openApiDocumentFetcher, openApiToolMapper, mcpAsyncServer);
+        return new ToolRegistrationServiceImpl(
+                properties,
+                openApiDocumentFetcher,
+                openApiToolMapper,
+                mcpAsyncServer,
+                mock(ToolMetadataRepository.class),
+                "http://api-gateway:8080");
     }
 
     private static ListAppender<ILoggingEvent> attachLogAppender() {

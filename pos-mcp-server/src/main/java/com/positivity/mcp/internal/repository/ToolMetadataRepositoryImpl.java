@@ -145,12 +145,14 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
     }
 
     @Override
-    public @NonNull UUID upsertDiscoveredOperation(
-            @NonNull DiscoveredOperation operation, @NonNull String domain, float @NonNull [] embedding) {
+    public @NonNull UUID upsertDiscoveredOperation(@NonNull DiscoveredOperation operation, @NonNull String domain) {
+        // Embedding is intentionally NOT written here: it is owned by ToolEmbeddingInitializer, which
+        // backfills rows WHERE embedding IS NULL. ON CONFLICT preserves any existing embedding so
+        // re-discovery on restart does not clear it (and does not re-embed ~hundreds of ops each boot).
         String sql = """
                 INSERT INTO mcp_tool (name, display_name, description, domain, source,
-                                      http_method, http_path, service_id, input_schema, embedding, enabled)
-                VALUES (?, ?, ?, ?, 'openapi', ?, ?, ?, ?, ?::vector, true)
+                                      http_method, http_path, service_id, input_schema, enabled)
+                VALUES (?, ?, ?, ?, 'openapi', ?, ?, ?, ?, true)
                 ON CONFLICT (name) DO UPDATE SET
                     display_name = EXCLUDED.display_name,
                     description  = EXCLUDED.description,
@@ -160,7 +162,6 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                     http_path    = EXCLUDED.http_path,
                     service_id   = EXCLUDED.service_id,
                     input_schema = EXCLUDED.input_schema,
-                    embedding    = EXCLUDED.embedding,
                     enabled      = true
                 RETURNING id
                 """;
@@ -174,8 +175,7 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 operation.httpMethod(),
                 operation.httpPath(),
                 operation.serviceId(),
-                operation.inputSchema(),
-                toVectorPGobject(embedding));
+                operation.inputSchema());
         return Objects.requireNonNull(id, "upsertDiscoveredOperation returned no id");
     }
 
