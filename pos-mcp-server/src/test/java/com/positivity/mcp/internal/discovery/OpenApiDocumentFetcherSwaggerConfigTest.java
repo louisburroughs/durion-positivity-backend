@@ -7,8 +7,11 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.Paths;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 class OpenApiDocumentFetcherSwaggerConfigTest {
 
@@ -63,5 +66,19 @@ class OpenApiDocumentFetcherSwaggerConfigTest {
         assertThat(OpenApiDocumentFetcher.prefixPaths(null, "/accounting")).isEmpty();
         assertThat(OpenApiDocumentFetcher.prefixPaths(new OpenAPI(), "/accounting"))
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName("isTransient retries timeouts and 5xx (cold service), not 4xx or non-network errors")
+    void isTransient_classifiesRetryableFailures() {
+        assertThat(OpenApiDocumentFetcher.isTransient(new TimeoutException())).isTrue();
+        assertThat(OpenApiDocumentFetcher.isTransient(
+                        new WebClientResponseException(503, "Service Unavailable", HttpHeaders.EMPTY, null, null)))
+                .isTrue();
+        assertThat(OpenApiDocumentFetcher.isTransient(
+                        new WebClientResponseException(404, "Not Found", HttpHeaders.EMPTY, null, null)))
+                .isFalse();
+        assertThat(OpenApiDocumentFetcher.isTransient(new IllegalStateException("boom")))
+                .isFalse();
     }
 }

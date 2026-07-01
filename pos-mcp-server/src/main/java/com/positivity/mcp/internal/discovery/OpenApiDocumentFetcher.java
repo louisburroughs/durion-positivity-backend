@@ -9,9 +9,11 @@ import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeoutException;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -20,8 +22,11 @@ import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 @Component
 public class OpenApiDocumentFetcher {
@@ -31,6 +36,11 @@ public class OpenApiDocumentFetcher {
     private static final URI LOCAL_GATEWAY_FALLBACK = URI.create("http://localhost:8080");
     private static final String SWAGGER_CONFIG_SUFFIX = "/swagger-config";
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    // Discovery runs at startup; a cold service mesh returns 503 / times out on the first hit. Retry
+    // transient failures with backoff so a warming service is picked up without a full app restart.
+    private static final int DISCOVERY_RETRY_ATTEMPTS = 3;
+    private static final Duration DISCOVERY_RETRY_MIN_BACKOFF = Duration.ofSeconds(2);
+    private static final Duration DISCOVERY_RETRY_MAX_BACKOFF = Duration.ofSeconds(10);
 
     private final DiscoveryClient discoveryClient;
     private final WebClient webClient;
@@ -230,6 +240,9 @@ public class OpenApiDocumentFetcher {
                 .retrieve()
                 .bodyToMono(String.class)
                 .timeout(properties.discoveryTimeout())
+                .retryWhen(Retry.backoff(DISCOVERY_RETRY_ATTEMPTS, DISCOVERY_RETRY_MIN_BACKOFF)
+                        .maxBackoff(DISCOVERY_RETRY_MAX_BACKOFF)
+                        .filter(OpenApiDocumentFetcher::isTransient))
                 .map(raw -> deserialize(doc.routingPrefix(), raw))
                 .map(result -> prefixPaths(result.getOpenAPI(), doc.routingPrefix()))
                 .doOnNext(paths -> log.info(
@@ -238,6 +251,18 @@ public class OpenApiDocumentFetcher {
                     log.warn("Could not fetch/merge service spec at {}: {}", docUri, ex.getMessage());
                     return Mono.just(new Paths());
                 });
+    }
+
+    /**
+     * Transient failures worth retrying during startup discovery: request timeouts, connection
+     * errors, and 5xx (a service still warming up returns 503). A 4xx (e.g. 404) is not retried.
+     */
+    static boolean isTransient(@NonNull Throwable ex) {
+        if (ex instanceof TimeoutException || ex instanceof WebClientRequestException) {
+            return true;
+        }
+        return ex instanceof WebClientResponseException response
+                && response.getStatusCode().is5xxServerError();
     }
 
     /**
