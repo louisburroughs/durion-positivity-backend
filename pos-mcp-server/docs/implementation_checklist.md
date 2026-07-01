@@ -320,39 +320,39 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 **Entry:** Gate 2C Pass. **Goal:** execute discovered OpenAPI ops without per-op facades.
 
 ### Scope
-- [ ] LangChain4j `ToolProvider` for `source='openapi'` implemented — _ev:_
-- [ ] Ops invoked via `OperationProxyFactory` — _ev:_
-- [ ] User context + permission codes propagated — _ev:_
-- [ ] Cached-agent permission leakage prevented — _ev:_
-- [ ] Facade tools still work — _ev:_
+- [x] LangChain4j `ToolProvider` for `source='openapi'` implemented — _ev: `OpenApiToolProvider`, wired #797._
+- [x] Ops invoked via `OperationProxyFactory` — _ev: live `Tool proxy GET .../event-receiver/v1/eventTypes/active -> 200` (#796/#801)._
+- [x] User context + permission codes propagated — _ev: auth relay #799 (caller bearer token forwarded); permission codes gate selection._
+- [~] Cached-agent permission leakage prevented — _ev: dynamic `provideTools` reads `RequestScopedUserContext` per request (design-safe); negative/leakage NOT yet live-tested._
+- [x] Facade tools still work — _ev: #788 §B.6 facade regression PASS._
 
 ### Completeness gate
-- [ ] Discovered ops can become agent-callable — _ev:_
-- [ ] Only selected + permission-eligible ops exposed — _ev:_
-- [ ] Proxied calls include current user context — _ev:_
-- [ ] Cached agents cannot expose prior higher-permission user's tools — _ev:_
-- [ ] Facade + OpenAPI tools coexist — _ev:_
-- [ ] Telemetry distinguishes facade vs OpenAPI source — _ev:_
+- [x] Discovered ops can become agent-callable — _ev: 348 ops discovered/persisted; agent invoked `event-receiver_getactiveeventtypes` live._
+- [x] Only selected + permission-eligible ops exposed — _ev: `findDiscoveredCandidatesForPermissions` (source='openapi' ∩ permission ∩ workflow); fail-closed with no permission._
+- [x] Proxied calls include current user context — _ev: auth relay #799; op executed as caller → 200._
+- [~] Cached agents cannot expose prior higher-permission user's tools — _ev: per-request dynamic provider (design-safe); leakage not yet live-tested._
+- [x] Facade + OpenAPI tools coexist — _ev: facade selection + openapi provider both active in the same request (live logs)._
+- [ ] Telemetry distinguishes facade vs OpenAPI source — _ev: NOT wired — `nlti.request.telemetry` has no per-tool source tag._
 
 ### Correctness tests
-- [ ] E2E: execute a discovered op with no facade — _ev:_
-- [ ] Lower-permission user cannot call higher-permission op — _ev:_
-- [ ] Permission re-checked at call time, not only cache-build — _ev:_
-- [ ] Arguments schema-validated before proxy call — _ev:_
-- [ ] Failed proxy → controlled error, not hallucinated success — _ev:_
-- [ ] Blocking & streaming support bridge identically — _ev:_
+- [x] E2E: execute a discovered op with no facade — _ev: 2026-07-01 live, `event-receiver_getactiveeventtypes` → gateway 200, agent returned 276 active event types._
+- [ ] Lower-permission user cannot call higher-permission op — _ev: NOT live-tested (only positive path proven; needs a low-perm user run)._
+- [x] Permission re-checked at call time, not only cache-build — _ev: `provideTools` (isDynamic) queries `caller.permissionCodes()` per request, not at agent build._
+- [ ] Arguments schema-validated before proxy call — _ev: NOT wired — `input_schema` persisted null; `ToolSpecification` built with name+description only, no JsonObjectSchema._
+- [x] Failed proxy → controlled error, not hallucinated success — _ev: `OpenApiOperationExecutor` renders controlled error string; unit-tested (missing service_id → controlled error)._
+- [~] Blocking & streaming support bridge identically — _ev: blocking wired + live-proven; streaming stays fail-closed (Reactor-context propagation deferred)._
 
 ### Drift checks (assert true)
-- [ ] Verified: not all 500+ ops exposed without candidate selection — _ev:_
-- [ ] Verified: OpenAPI ops do not bypass permission checks — _ev:_
-- [ ] Verified: LLM cannot choose arbitrary URLs/ops outside registry — _ev:_
-- [ ] Verified: tool schemas include argument validation — _ev:_
-- [ ] Verified: facade behavior not regressed — _ev:_
+- [x] Verified: not all 500+ ops exposed without candidate selection — _ev: embedding topK (candidateLimit) + permission gate; 348 ops exist, only permission-eligible topK surface._
+- [x] Verified: OpenAPI ops do not bypass permission checks — _ev: fail-closed — 0 permission rows → discoveredTools=0; op selected only after a permission seed._
+- [x] Verified: LLM cannot choose arbitrary URLs/ops outside registry — _ev: executor calls only the persisted method/path of a selected, gated op; no LLM-supplied URL._
+- [ ] Verified: tool schemas include argument validation — _ev: NOT met — input_schema not persisted/applied (see Correctness above)._
+- [x] Verified: facade behavior not regressed — _ev: #788 facade regression PASS; facade + openapi coexist live._
 
 ### Cross-phase locks — [x] run & recorded (design preserves Permission lock: per-call permission re-check, no LLM-chosen URLs, gated candidate selection)
 ### Exit decision: one discovered non-facade op safely callable end-to-end.
 ### Gate 3 sign-off
-- Metrics filled: [ ] · Decision: **HOLD — design complete, implementation deferred to live**
+- Metrics filled: [ ] · Decision: **HOLD** — core execution bridge live-proven (positive E2E), but Pass held on: (1) negative/leakage E2E, (2) argument-schema validation, (3) telemetry facade-vs-openapi source tag, (4) streaming Reactor-context parity, (5) permission-seeding source (#785).
 
 #### Gate 3 — Execution results (2026-06-30)
 **Why design-first (not code-first):** Gate 3 is the security-path gate — per-call permission
@@ -373,17 +373,27 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [x] `OpenApiToolProvider` (`isDynamic`; reads `RequestScopedUserContext`; **fail-closed** when no context).
 - [x] `RequestScopedUserContext` leakage primitive + tests (`OpenApiToolProviderTest`, `RequestScopedUserContextTest`).
 
-**DEFERRED to live (final wiring + verification)**
-- [ ] Persist discovered ops to `mcp_tool` + populate coords (LIVE, not offline — corrected 2026-06-30): `ToolRegistrationServiceImpl` only registers ops with the in-memory `McpAsyncServer`; nothing writes `source='openapi'` rows. Must add row persistence (+ embedding via the model + `mcp_tool_permission` seeding) before coords/`OpenApiToolProvider` have data. Coord columns (V21/V19) ready.
-- [ ] Wire `.toolProvider(openApiToolProvider)` into both managers + holder set/clear around blocking `agent.chat(...)` (constructor change touches `SessionAgentManager` + its test constructors).
-- [ ] Streaming Reactor-context propagation (until then streaming is fail-closed → no discovered tools).
-- [ ] Live tests §B.6 (the gate exit criterion).
+**DELIVERED (2026-07-01) — was "deferred to live"**
+- [x] Persist discovered ops to `mcp_tool` + coords — `OpenApiToolMapper.toDiscoveredOperations` (#793) + `upsertDiscoveredOperation`/`linkToolToWorkflow` (#794) + discovery wiring (#795). Embedding backfilled by `ToolEmbeddingInitializer`. **348 rows live on alpha.**
+- [x] Swagger-config aggregation (#798) — the gateway serves per-service specs via `/v3/api-docs/swagger-config`, not a merged doc; fetch each + prefix paths with the service routing segment. Transient-retry (#802) for a cold mesh.
+- [x] Executor routes via gateway base URI (#796) — `handlerForBaseUri` (Eureka registry is empty; LB path would resolve nothing).
+- [x] Wire `.toolProvider(openApiToolProvider)` into the blocking manager + set/clear `RequestScopedUserContext` around `agent.chat` (#797).
+- [x] Relay caller auth to the op call (#799) — else the gateway 401s.
+- [x] Boot-crash hotfix (#800) — openapi rows (null handler_bean) excluded from the facade/bean-loading queries so the registry loader doesn't `getBean(null)`.
+- [ ] Streaming Reactor-context propagation — still fail-closed (blocking only).
 - Rollback: omit `.toolProvider(...)` → facade-only (current behavior).
 
 **LIVE VERIFICATION (2026-07-01, alpha `sha-559d554`)**
 - [x] **§B.6 Facade regression — PASS.** `admin.alpha` via gateway `/mcp-server/v1/mcp/chat` "show open workorders" → `selectedTools=8`, `WorkorderFacadeTool` executed against the live service, real data returned (`WO-2026-1000`, COMPLETED). See runbook §B.6.
 - [x] **Regression found + fixed (PR #788):** the shared selection path bound `selectedTools=0` for **every** role — gated+scored tool names were resolved via `resolveDomainTools(role, names)`, but callable beans are bucketed by **domain**, not role, so resolution always returned empty (facade tools were fully severed from the chat agent, not just openapi). Fix: `MasterAgentRegistry.resolveToolsByName(names)` resolves across the full registered set; `ToolSelectionEngine` repointed; both blocking + streaming managers covered. Unit-tested; merged; deployed; live-verified above.
-- [ ] **openapi bridge still empty (step-1 confirmed open):** `SELECT count(*) FROM mcp_tool WHERE source='openapi'` = **0** on alpha. The positive-E2E / negative-leakage / streaming-parity openapi bullets in §B.6 remain **deferred** until discovered-ops persistence (+coords +`mcp_tool_permission`) lands. This is the gating item for Gate 3 Pass.
+- [x] **openapi bridge E2E — PASS (positive path) 2026-07-01, image `sha-5c7e41b`:** `SELECT count(*) FROM mcp_tool WHERE source='openapi'` = **348** (was 0). Seeded `AUTHENTICATED` on `event-receiver_getactiveeventtypes`; chat as `admin.alpha` → op selected (semantic score 1.000) → `OpenApiToolProvider` surfaced it → agent invoked → **auth relayed → gateway `GET /event-receiver/v1/eventTypes/active -> 200`** → agent returned **276 active event types** (real data). Proxy target+status now logged (#801). Fail-closed confirmed: with 0 permission rows, `discoveredTools=0`.
+
+**STILL OPEN for Gate 3 Pass:**
+- [ ] Negative/leakage E2E — a lower-permission user cannot call/see a higher-permission op (incl. cached-agent reuse). Positive path only, so far.
+- [ ] Argument-schema validation — persist `input_schema` and build the `ToolSpecification`'s `JsonObjectSchema` from it (currently name+description only).
+- [ ] Telemetry facade-vs-openapi source tag on the per-tool record.
+- [ ] Streaming Reactor-context propagation (blocking is done).
+- [ ] Permission-seeding source (admin tooling / #785) — ops fail-closed until a permission is granted.
 
 ---
 
