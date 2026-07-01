@@ -8,6 +8,7 @@ import dev.langchain4j.service.tool.ToolExecutor;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.net.URI;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -27,26 +28,32 @@ public class OpenApiOperationExecutor implements ToolExecutor {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenApiOperationExecutor.class);
 
+    private static final String AUTHORIZATION = "Authorization";
+    private static final String HEADERS_ARG = "headers";
+
     private final OperationProxyFactory proxyFactory;
     private final DiscoveredOperation operation;
     private final ObjectMapper objectMapper;
     private final Duration timeout;
+    private final @Nullable String authHeader;
 
     public OpenApiOperationExecutor(
             @NonNull OperationProxyFactory proxyFactory,
             @NonNull DiscoveredOperation operation,
             @NonNull ObjectMapper objectMapper,
-            @NonNull Duration timeout) {
+            @NonNull Duration timeout,
+            @Nullable String authHeader) {
         this.proxyFactory = proxyFactory;
         this.operation = operation;
         this.objectMapper = objectMapper;
         this.timeout = timeout;
+        this.authHeader = authHeader;
     }
 
     @Override
     public String execute(@NonNull ToolExecutionRequest request, @Nullable Object memoryId) {
         try {
-            Map<String, Object> arguments = parseArguments(request.arguments());
+            Map<String, Object> arguments = withRelayedAuth(parseArguments(request.arguments()));
             McpSchema.CallToolRequest call = new McpSchema.CallToolRequest(operation.name(), arguments);
             HttpMethod method = HttpMethod.valueOf(operation.httpMethod());
             // Route via the gateway base URI (service_id holds it), not the load-balancer: alpha's
@@ -67,6 +74,25 @@ public class OpenApiOperationExecutor implements ToolExecutor {
                     exception);
             return "Error: tool execution failed (" + exception.getClass().getSimpleName() + ")";
         }
+    }
+
+    /**
+     * Relays the caller's {@code Authorization} header into the outbound call so the gateway executes
+     * the discovered op as the caller (facade tools relay the bearer token the same way). An explicit
+     * {@code headers.Authorization} in the tool arguments is left untouched.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> withRelayedAuth(@NonNull Map<String, Object> arguments) {
+        if (authHeader == null || authHeader.isBlank()) {
+            return arguments;
+        }
+        Map<String, Object> merged = new HashMap<>(arguments);
+        Object existing = merged.get(HEADERS_ARG);
+        Map<String, Object> headers =
+                existing instanceof Map<?, ?> map ? new HashMap<>((Map<String, Object>) map) : new HashMap<>();
+        headers.putIfAbsent(AUTHORIZATION, authHeader);
+        merged.put(HEADERS_ARG, headers);
+        return merged;
     }
 
     private Map<String, Object> parseArguments(@Nullable String json) {
