@@ -446,12 +446,16 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             if (correlationId == null || correlationId.isBlank()) {
                 correlationId = UUID.randomUUID().toString();
             }
+            List<String> discoveredOpenapiTools = requestScopedUserContext != null
+                    ? requestScopedUserContext.currentDiscoveredOpenapiToolNames()
+                    : List.of();
             telemetryEmitter.emit(NltiRequestTelemetryFactory.forChatRequest(
                     correlationId,
                     Instant.now().toString(),
                     currentUserContext.primaryRole(),
                     currentUserContext.permissionCodes().size(),
                     selectedToolNames,
+                    discoveredOpenapiTools,
                     promptLayers,
                     simpleChat,
                     simpleChatRule,

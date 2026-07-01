@@ -82,5 +82,7 @@ class OpenApiToolProviderTest {
         assertThat(spec.description()).contains("GET", "/v1/workorders");
         assertThat(spec.parameters()).isNotNull();
         assertThat(spec.parameters().properties()).containsKeys("pathParams", "queryParams", "headers", "body");
+        // Provider publishes the surfaced openapi tool names for telemetry (facade vs openapi source).
+        assertThat(userContext.currentDiscoveredOpenapiToolNames()).containsExactly("workorders_getallworkorders");
     }
 }
