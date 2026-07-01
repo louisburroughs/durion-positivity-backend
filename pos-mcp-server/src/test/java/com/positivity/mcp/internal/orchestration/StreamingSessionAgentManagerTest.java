@@ -237,8 +237,7 @@ class StreamingSessionAgentManagerTest {
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
         when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
                 .thenReturn(List.of(inventoryToolMetadata()));
-        when(toolRegistry.resolveDomainTools("ROLE_CASHIER", List.of("inventoryFacadeTool")))
-                .thenReturn(List.of(inventoryFacadeTool));
+        when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
 
         StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
         clearInvocations(toolRegistryService);
