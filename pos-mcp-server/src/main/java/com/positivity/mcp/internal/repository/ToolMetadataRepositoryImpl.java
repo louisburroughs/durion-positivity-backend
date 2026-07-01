@@ -5,6 +5,7 @@ import com.positivity.mcp.internal.domain.ToolMetadata;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -141,6 +142,59 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                     ps.setInt(4, limit);
                 },
                 this::mapDiscovered);
+    }
+
+    @Override
+    public @NonNull UUID upsertDiscoveredOperation(
+            @NonNull DiscoveredOperation operation, @NonNull String domain, float @NonNull [] embedding) {
+        String sql = """
+                INSERT INTO mcp_tool (name, display_name, description, domain, source,
+                                      http_method, http_path, service_id, input_schema, embedding, enabled)
+                VALUES (?, ?, ?, ?, 'openapi', ?, ?, ?, ?, ?::vector, true)
+                ON CONFLICT (name) DO UPDATE SET
+                    display_name = EXCLUDED.display_name,
+                    description  = EXCLUDED.description,
+                    domain       = EXCLUDED.domain,
+                    source       = 'openapi',
+                    http_method  = EXCLUDED.http_method,
+                    http_path    = EXCLUDED.http_path,
+                    service_id   = EXCLUDED.service_id,
+                    input_schema = EXCLUDED.input_schema,
+                    embedding    = EXCLUDED.embedding,
+                    enabled      = true
+                RETURNING id
+                """;
+        UUID id = jdbcTemplate.queryForObject(
+                sql,
+                UUID.class,
+                operation.name(),
+                operation.name(),
+                operation.description(),
+                domain,
+                operation.httpMethod(),
+                operation.httpPath(),
+                operation.serviceId(),
+                operation.inputSchema(),
+                toVectorPGobject(embedding));
+        return Objects.requireNonNull(id, "upsertDiscoveredOperation returned no id");
+    }
+
+    @Override
+    public void linkToolToWorkflow(@NonNull UUID toolId, @NonNull String workflowState) {
+        jdbcTemplate.update("""
+                INSERT INTO mcp_tool_workflow (tool_id, workflow_state_id)
+                SELECT ?, id FROM mcp_workflow_state WHERE name = ?
+                ON CONFLICT DO NOTHING
+                """, toolId, workflowState);
+    }
+
+    @Override
+    public void addToolPermission(@NonNull UUID toolId, @NonNull String permissionCode) {
+        jdbcTemplate.update("""
+                INSERT INTO mcp_tool_permission (tool_id, permission_code)
+                VALUES (?, ?)
+                ON CONFLICT DO NOTHING
+                """, toolId, permissionCode);
     }
 
     private DiscoveredOperation mapDiscovered(ResultSet rs, int rowNum) throws SQLException {
