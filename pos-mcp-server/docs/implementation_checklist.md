@@ -336,7 +336,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Correctness tests
 - [x] E2E: execute a discovered op with no facade — _ev: 2026-07-01 live, `event-receiver_getactiveeventtypes` → gateway 200, agent returned 276 active event types._
-- [ ] Lower-permission user cannot call higher-permission op — _ev: NOT live-tested (only positive path proven; needs a low-perm user run)._
+- [x] Lower-permission user cannot call higher-permission op — _ev: 2026-07-01 live (alpha) — an op seeded with a permission the caller LACKS (`gate3:negative:notheld`) is excluded by the gating filter, while an op with a held permission (`AUTHENTICATED`) is eligible; caller-perms ∩ `mcp_tool_permission` fail-closed confirmed with real data. (Two-distinct-user + cached-agent leakage still covered only by design — see `[~]` above.)_
 - [x] Permission re-checked at call time, not only cache-build — _ev: `provideTools` (isDynamic) queries `caller.permissionCodes()` per request, not at agent build._
 - [ ] Arguments schema-validated before proxy call — _ev: NOT wired — `input_schema` persisted null; `ToolSpecification` built with name+description only, no JsonObjectSchema._
 - [x] Failed proxy → controlled error, not hallucinated success — _ev: `OpenApiOperationExecutor` renders controlled error string; unit-tested (missing service_id → controlled error)._
