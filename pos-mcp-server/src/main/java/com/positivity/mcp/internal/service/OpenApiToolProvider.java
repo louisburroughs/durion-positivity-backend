@@ -8,6 +8,7 @@ import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import com.positivity.mcp.service.CurrentUserContext;
 import dev.langchain4j.agent.tool.ToolSpecification;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.service.tool.ToolExecutor;
 import dev.langchain4j.service.tool.ToolProvider;
@@ -38,6 +39,39 @@ import org.springframework.stereotype.Component;
 public class OpenApiToolProvider implements ToolProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenApiToolProvider.class);
+
+    /**
+     * The generic call envelope the {@link OperationProxyFactory} reads. Method/path are fixed from
+     * the persisted coordinates (surfaced in the tool description), so the model only supplies the
+     * request parameters. Per-parameter typing from the OpenAPI operation is a follow-up refinement.
+     */
+    private static final JsonObjectSchema REQUEST_ENVELOPE_SCHEMA = JsonObjectSchema.builder()
+            .description("Parameters for the gateway operation named in the tool description.")
+            .addProperty(
+                    "pathParams",
+                    JsonObjectSchema.builder()
+                            .description("Path template parameters keyed by name, e.g. {\"productId\": \"...\"}.")
+                            .build())
+            .addProperty(
+                    "queryParams",
+                    JsonObjectSchema.builder()
+                            .description("Query-string parameters.")
+                            .build())
+            .addProperty(
+                    "headers",
+                    JsonObjectSchema.builder()
+                            .description("Extra HTTP headers (auth is relayed automatically).")
+                            .build())
+            .addProperty(
+                    "body",
+                    JsonObjectSchema.builder()
+                            .description("Request body payload, for write operations.")
+                            .build())
+            .build();
+
+    private static String describeOperation(@NonNull DiscoveredOperation op) {
+        return op.description() + " [" + op.httpMethod() + " " + op.httpPath() + "]";
+    }
 
     private final ToolMetadataRepository repository;
     private final EmbeddingModel embeddingModel;
@@ -98,7 +132,8 @@ public class OpenApiToolProvider implements ToolProvider {
             }
             ToolSpecification spec = ToolSpecification.builder()
                     .name(op.name())
-                    .description(op.description())
+                    .description(describeOperation(op))
+                    .parameters(REQUEST_ENVELOPE_SCHEMA)
                     .build();
             tools.put(spec, new OpenApiOperationExecutor(proxyFactory, op, objectMapper, executionTimeout, authHeader));
         }

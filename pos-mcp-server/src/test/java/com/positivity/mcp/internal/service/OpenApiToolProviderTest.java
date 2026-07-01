@@ -76,6 +76,11 @@ class OpenApiToolProviderTest {
 
         // Only the executable op (with coordinates) is exposed.
         assertThat(result.tools()).hasSize(1);
-        assertThat(result.tools().keySet().iterator().next().name()).isEqualTo("workorders_getallworkorders");
+        var spec = result.tools().keySet().iterator().next();
+        assertThat(spec.name()).isEqualTo("workorders_getallworkorders");
+        // Description surfaces method+path so the model knows the template; envelope gives the params.
+        assertThat(spec.description()).contains("GET", "/v1/workorders");
+        assertThat(spec.parameters()).isNotNull();
+        assertThat(spec.parameters().properties()).containsKeys("pathParams", "queryParams", "headers", "body");
     }
 }
