@@ -149,6 +149,7 @@ public class StreamingSessionAgentManager
         AssembledPrompt assembled = rolePromptResolver.assemble(role, ragScope);
         List<String> promptLayers = assembled != null ? assembled.layers() : List.of();
         String correlationId = resolveCorrelationId();
+        String workflowState = selection.workflowState().name();
 
         String userContext = formatUserContext(currentUserContext);
         return Flux.<String>create(emitter -> streamTokens(agent, memoryId, message, userContext, emitter))
@@ -164,7 +165,14 @@ public class StreamingSessionAgentManager
                         toolExecutionAuditLogger.logToolExecution(null, username, true, false, elapsedMs, null);
                     }
                     emitStreamTelemetry(
-                            correlationId, currentUserContext, toolNames, promptLayers, elapsedMs, "SUCCESS", null);
+                            correlationId,
+                            currentUserContext,
+                            toolNames,
+                            promptLayers,
+                            workflowState,
+                            elapsedMs,
+                            "SUCCESS",
+                            null);
                 })
                 .doOnError(exception -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -188,6 +196,7 @@ public class StreamingSessionAgentManager
                             currentUserContext,
                             List.of(),
                             List.of(),
+                            workflowState,
                             elapsedMs,
                             "ERROR",
                             exception.getClass().getSimpleName());
@@ -329,6 +338,7 @@ public class StreamingSessionAgentManager
             @NonNull CurrentUserContext currentUserContext,
             @NonNull List<String> selectedToolNames,
             @NonNull List<String> promptLayers,
+            @Nullable String workflowState,
             long totalMs,
             @NonNull String status,
             @Nullable String errorCode) {
@@ -345,6 +355,7 @@ public class StreamingSessionAgentManager
                     promptLayers,
                     false,
                     null,
+                    workflowState,
                     totalMs,
                     status,
                     errorCode));

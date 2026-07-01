@@ -203,7 +203,16 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             String ragScope = toolRegistry.resolveRagScopeForTools(selectedTools);
             AssembledPrompt assembled = rolePromptResolver.assemble(role, ragScope);
             List<String> promptLayers = assembled != null ? assembled.layers() : List.of();
-            emitChatTelemetry(currentUserContext, toolNames, promptLayers, false, null, elapsedMs, "SUCCESS", null);
+            emitChatTelemetry(
+                    currentUserContext,
+                    toolNames,
+                    promptLayers,
+                    false,
+                    null,
+                    selection.workflowState().name(),
+                    elapsedMs,
+                    "SUCCESS",
+                    null);
             return response;
         } catch (RuntimeException exception) {
             int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -221,6 +230,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     List.of(),
                     List.of(),
                     false,
+                    null,
                     null,
                     elapsedMs,
                     "ERROR",
@@ -369,7 +379,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             toolExecutionAuditLogger.logToolExecution(
                     null, currentUserContext.username(), true, false, elapsedMs, null);
         }
-        emitChatTelemetry(currentUserContext, List.of(), List.of(), true, null, elapsedMs, "SUCCESS", null);
+        emitChatTelemetry(currentUserContext, List.of(), List.of(), true, null, null, elapsedMs, "SUCCESS", null);
         return response;
     }
 
@@ -384,6 +394,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @NonNull List<String> promptLayers,
             boolean simpleChat,
             @Nullable String simpleChatRule,
+            @Nullable String workflowState,
             long totalMs,
             @NonNull String status,
             @Nullable String errorCode) {
@@ -404,6 +415,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     promptLayers,
                     simpleChat,
                     simpleChatRule,
+                    workflowState,
                     totalMs,
                     status,
                     errorCode));

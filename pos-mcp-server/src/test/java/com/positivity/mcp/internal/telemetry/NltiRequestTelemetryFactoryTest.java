@@ -20,6 +20,7 @@ class NltiRequestTelemetryFactoryTest {
                 List.of("BASE", "ROLE", "DOMAIN", "TOOL_USE"),
                 false,
                 null,
+                "CREATING_PO",
                 1234L,
                 "SUCCESS",
                 null);
@@ -38,8 +39,10 @@ class NltiRequestTelemetryFactoryTest {
         assertThat(event.latency().totalMs()).isEqualTo(1234L);
         assertThat(event.outcome().status()).isEqualTo("SUCCESS");
         assertThat(event.outcome().errorCode()).isNull();
-        // Tier-0 routing is only set on the simple-chat path.
-        assertThat(event.routing()).isNull();
+        // Tool path carries the workflow state (Gate 2C) but no tier yet.
+        assertThat(event.routing()).isNotNull();
+        assertThat(event.routing().workflowState()).isEqualTo("CREATING_PO");
+        assertThat(event.routing().tier()).isNull();
     }
 
     @Test
@@ -53,6 +56,7 @@ class NltiRequestTelemetryFactoryTest {
                 List.of(),
                 true,
                 "greeting",
+                null,
                 42L,
                 "SUCCESS",
                 null);
@@ -76,6 +80,7 @@ class NltiRequestTelemetryFactoryTest {
                 List.of(),
                 false,
                 null,
+                null,
                 10L,
                 "ERROR",
                 "RuntimeException");
@@ -95,6 +100,7 @@ class NltiRequestTelemetryFactoryTest {
                 List.of("WorkorderFacadeTool"),
                 List.of("BASE", "NOT_A_LAYER", "role"),
                 false,
+                null,
                 null,
                 5L,
                 "SUCCESS",

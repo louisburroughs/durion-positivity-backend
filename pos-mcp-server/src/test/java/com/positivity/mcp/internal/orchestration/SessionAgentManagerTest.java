@@ -318,6 +318,9 @@ class SessionAgentManagerTest {
         assertThat(event.rag()).isNotNull();
         assertThat(event.rag().promptLayers())
                 .containsExactly(NltiRequestTelemetry.PromptLayer.BASE, NltiRequestTelemetry.PromptLayer.ROLE);
+        // Gate 2C: the resolved workflow state is surfaced (IDLE for this session-less lookup query).
+        assertThat(event.routing()).isNotNull();
+        assertThat(event.routing().workflowState()).isEqualTo("IDLE");
     }
 
     @Test

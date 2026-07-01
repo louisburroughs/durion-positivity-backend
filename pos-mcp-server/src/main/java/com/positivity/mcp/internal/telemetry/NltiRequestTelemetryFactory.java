@@ -40,14 +40,23 @@ public final class NltiRequestTelemetryFactory {
             @NonNull List<String> promptLayers,
             boolean simpleChat,
             @Nullable String simpleChatRule,
+            @Nullable String workflowState,
             long totalMs,
             @NonNull String status,
             @Nullable String errorCode) {
 
         Actor actor = new Actor(primaryRole, permissionCodeCount);
 
-        // Tier-0 rule path is the only tier known without the Gate 4 router; leave null otherwise.
-        Routing routing = simpleChat ? new Routing(null, null, null, null, Tier.T0_RULE, simpleChatRule) : null;
+        // Tier-0 rule path is the only tier known without the Gate 4 router; the tool path carries the
+        // resolved workflow state (Gate 2C) but no tier yet. Routing is omitted only when neither applies.
+        Routing routing;
+        if (simpleChat) {
+            routing = new Routing(null, null, null, null, Tier.T0_RULE, simpleChatRule, workflowState);
+        } else if (workflowState != null) {
+            routing = new Routing(null, null, null, null, null, null, workflowState);
+        } else {
+            routing = null;
+        }
 
         Tools tools = selectedToolNames.isEmpty()
                 ? null

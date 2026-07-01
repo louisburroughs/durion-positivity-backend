@@ -81,7 +81,7 @@ public class ToolSelectionEngine {
                     sharedOrchestrationSupport.toolNames(fallbackTools),
                     sharedOrchestrationSupport.preview(message));
         }
-        return new ToolSelectionResult(roleTools, fallbackTools);
+        return new ToolSelectionResult(roleTools, fallbackTools, workflowState);
     }
 
     public @NonNull List<Object> fullFallbackTools() {
@@ -297,5 +297,13 @@ public class ToolSelectionEngine {
     }
 
     public record ToolSelectionResult(
-            @NonNull List<Object> roleTools, @NonNull List<Object> fallbackTools) {}
+            @NonNull List<Object> roleTools,
+            @NonNull List<Object> fallbackTools,
+            @NonNull WorkflowState workflowState) {
+
+        /** Backward-compatible constructor defaulting to {@link WorkflowState#IDLE}. */
+        public ToolSelectionResult(@NonNull List<Object> roleTools, @NonNull List<Object> fallbackTools) {
+            this(roleTools, fallbackTools, WorkflowState.IDLE);
+        }
+    }
 }

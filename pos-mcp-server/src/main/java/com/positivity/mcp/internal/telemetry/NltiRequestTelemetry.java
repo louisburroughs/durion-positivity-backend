@@ -63,7 +63,8 @@ public record NltiRequestTelemetry(
             @Nullable String domain,
             @Nullable String complexity,
             @Nullable Tier tier,
-            @Nullable String simpleChatRule) {}
+            @Nullable String simpleChatRule,
+            @Nullable String workflowState) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Model(
