@@ -393,7 +393,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [ ] Argument-schema validation — persist `input_schema` and build the `ToolSpecification`'s `JsonObjectSchema` from it (currently name+description only).
 - [ ] Telemetry facade-vs-openapi source tag on the per-tool record.
 - [ ] Streaming Reactor-context propagation (blocking is done).
-- [ ] Permission-seeding source (admin tooling / #785) — ops fail-closed until a permission is granted.
+- [x] Permission-seeding source (admin tooling / #785) — `ToolPermissionController` (`/v1/tools/{toolName}/permissions` GET/POST/DELETE, gated by `mcp:tool:view` / `mcp:tool:manage`) grants/lists/revokes an openapi tool's `mcp_tool_permission` rows, replacing manual SQL. Controller + `openapi.yaml` regenerated; unit + slice tested (11) + live contract test. _Deploy notes:_ (a) the new `mcp:tool:view`/`mcp:tool:manage` codes need a perm-bits catalog sync ([[perm-bits-catalog-gotcha]]) before an admin can be granted them; (b) SDK regen is the downstream step ([[controller-change-openapi-sdk-chain]])._
 
 ---
 

@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -198,6 +199,29 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 VALUES (?, ?)
                 ON CONFLICT DO NOTHING
                 """, toolId, permissionCode);
+    }
+
+    @Override
+    public @NonNull Optional<UUID> findDiscoveredToolIdByName(@NonNull String name) {
+        List<UUID> ids = jdbcTemplate.query(
+                "SELECT id FROM mcp_tool WHERE name = ? AND source = 'openapi'",
+                (rs, rowNum) -> rs.getObject("id", UUID.class),
+                name);
+        return ids.isEmpty() ? Optional.empty() : Optional.of(ids.get(0));
+    }
+
+    @Override
+    public @NonNull List<String> listToolPermissions(@NonNull UUID toolId) {
+        return jdbcTemplate.queryForList(
+                "SELECT permission_code FROM mcp_tool_permission WHERE tool_id = ? ORDER BY permission_code",
+                String.class,
+                toolId);
+    }
+
+    @Override
+    public void removeToolPermission(@NonNull UUID toolId, @NonNull String permissionCode) {
+        jdbcTemplate.update(
+                "DELETE FROM mcp_tool_permission WHERE tool_id = ? AND permission_code = ?", toolId, permissionCode);
     }
 
     private DiscoveredOperation mapDiscovered(ResultSet rs, int rowNum) throws SQLException {
