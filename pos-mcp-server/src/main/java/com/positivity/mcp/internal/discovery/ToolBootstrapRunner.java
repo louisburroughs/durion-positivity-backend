@@ -6,9 +6,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+// Gate 3 (G3.1): must run before ToolEmbeddingInitializer so newly persisted openapi rows
+// (embedding NULL) are picked up by the embedding backfill in the same startup.
 @Component
+@Order(10)
 public class ToolBootstrapRunner implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ToolBootstrapRunner.class);

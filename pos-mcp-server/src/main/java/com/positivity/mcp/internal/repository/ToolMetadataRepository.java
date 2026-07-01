@@ -24,12 +24,13 @@ public interface ToolMetadataRepository {
 
     /**
      * Gate 3 (G3.1): upserts a discovered OpenAPI operation as a {@code source='openapi'}
-     * {@code mcp_tool} row (execution coordinates + embedding), keyed by tool name. Returns the row id
-     * so the caller can link workflow states and permissions. Facade rows are untouched.
+     * {@code mcp_tool} row (execution coordinates), keyed by tool name. Returns the row id so the
+     * caller can link workflow states and permissions. The embedding is left null for
+     * {@code ToolEmbeddingInitializer} to backfill; {@code ON CONFLICT} preserves an existing one.
+     * Facade rows are untouched.
      */
     @NonNull
-    UUID upsertDiscoveredOperation(
-            @NonNull DiscoveredOperation operation, @NonNull String domain, float @NonNull [] embedding);
+    UUID upsertDiscoveredOperation(@NonNull DiscoveredOperation operation, @NonNull String domain);
 
     /** Gate 3 (G3.1): maps a tool to a workflow state (by name) so it is selectable there. Idempotent. */
     void linkToolToWorkflow(@NonNull UUID toolId, @NonNull String workflowState);

@@ -85,9 +85,7 @@ public class SessionAgentManagerTestConfiguration {
 
             @Override
             public java.util.UUID upsertDiscoveredOperation(
-                    com.positivity.mcp.internal.domain.DiscoveredOperation operation,
-                    String domain,
-                    float[] embedding) {
+                    com.positivity.mcp.internal.domain.DiscoveredOperation operation, String domain) {
                 return java.util.UUID.fromString("00000000-0000-0000-0000-000000000000");
             }
 

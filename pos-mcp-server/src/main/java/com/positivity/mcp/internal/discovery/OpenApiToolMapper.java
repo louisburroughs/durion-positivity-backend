@@ -154,7 +154,7 @@ public class OpenApiToolMapper {
                 .build());
     }
 
-    static String extractDomain(@NonNull String path) {
+    public static String extractDomain(@NonNull String path) {
         for (String segment : path.split("/")) {
             if (segment.isBlank() || segment.matches("v\\d+")) {
                 continue;

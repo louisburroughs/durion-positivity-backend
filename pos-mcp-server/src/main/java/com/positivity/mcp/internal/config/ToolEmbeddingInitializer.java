@@ -11,11 +11,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+// Gate 3 (G3.1): runs after ToolBootstrapRunner (@Order 10) so it also backfills embeddings for
+// openapi rows persisted during discovery in the same startup.
 @Component
 @Profile("!test")
+@Order(20)
 public class ToolEmbeddingInitializer implements ApplicationRunner {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolEmbeddingInitializer.class);
