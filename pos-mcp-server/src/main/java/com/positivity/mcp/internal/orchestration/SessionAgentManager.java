@@ -8,7 +8,9 @@ import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
 import com.positivity.mcp.internal.orchestration.memory.SessionSummary;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.PermissionCodes;
+import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
@@ -72,6 +74,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private final RolePromptResolver rolePromptResolver;
     private final SimpleChatClassifier simpleChatClassifier;
     private final @Nullable NltiTelemetryEmitter telemetryEmitter;
+    private final @Nullable OpenApiToolProvider openApiToolProvider;
+    private final @Nullable RequestScopedUserContext requestScopedUserContext;
 
     private final int memoryMaxMessages;
     private final int rateLimitPerSession;
@@ -89,6 +93,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @NonNull RolePromptResolver rolePromptResolver,
             @NonNull SimpleChatClassifier simpleChatClassifier,
             @Nullable NltiTelemetryEmitter telemetryEmitter,
+            @Nullable OpenApiToolProvider openApiToolProvider,
+            @Nullable RequestScopedUserContext requestScopedUserContext,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
             @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
@@ -105,6 +111,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         this.rolePromptResolver = rolePromptResolver;
         this.simpleChatClassifier = simpleChatClassifier;
         this.telemetryEmitter = telemetryEmitter;
+        this.openApiToolProvider = openApiToolProvider;
+        this.requestScopedUserContext = requestScopedUserContext;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
         this.requestCountCache = Caffeine.newBuilder()
@@ -187,6 +195,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                         messagePreview);
             }
             PosAssistant agent = getOrCreateAgent(role, cacheKey, selection.roleTools(), selection.fallbackTools());
+            // Gate 3 (G3.3): publish the caller so the dynamic OpenApiToolProvider (running inside the
+            // cached agent) resolves this request's permission-eligible tools; cleared in finally.
+            if (requestScopedUserContext != null) {
+                requestScopedUserContext.set(currentUserContext);
+            }
             long agentStartNanos = System.nanoTime();
             String response = agent.chat(memoryKey(username, role), message, formatUserContext(currentUserContext));
             int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -239,6 +252,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     "MCP chat failed role=%s elapsedMs=%d errorName=%s"
                             .formatted(role, elapsedMs, exception.getClass().getSimpleName()),
                     exception);
+        } finally {
+            if (requestScopedUserContext != null) {
+                requestScopedUserContext.clear();
+            }
         }
     }
 
@@ -279,14 +296,20 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         // the provider, so role-level agent prebuilds do not share conversations.
         // Prompt resolution is deferred per-message via systemMessageProvider so that
         // database updates to prompts are visible immediately without agent rebuild.
-        PosAssistant agent = AiServices.builder(PosAssistant.class)
+        var agentBuilder = AiServices.builder(PosAssistant.class)
                 .chatModel(chatModel)
                 .tools(tools)
                 .contentRetriever(resilientContentRetriever)
                 .systemMessageProvider(
                         memoryId -> rolePromptResolver.assemble(role, ragScope).text())
-                .chatMemoryProvider(this::chatMemoryFor)
-                .build();
+                .chatMemoryProvider(this::chatMemoryFor);
+        if (openApiToolProvider != null) {
+            // Gate 3 (G3.3): dynamic, permission-gated OpenAPI-discovered tools resolved per request
+            // from RequestScopedUserContext (set around agent.chat below). A cached agent never
+            // captures a caller's permissions, so it cannot leak a prior caller's tools.
+            agentBuilder.toolProvider(openApiToolProvider);
+        }
+        PosAssistant agent = agentBuilder.build();
         LOGGER.debug(
                 "Built MCP role agent role={} promptName={} ragScope={} toolNames={}",
                 role,
