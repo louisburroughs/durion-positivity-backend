@@ -27,6 +27,7 @@ import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
+import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
 import dev.langchain4j.model.chat.StreamingChatModel;
@@ -101,6 +102,9 @@ class StreamingSessionAgentManagerTest {
     @Mock
     private ScopedContentRetrieverFactory scopedContentRetrieverFactory;
 
+    @Mock
+    private NltiTelemetryEmitter telemetryEmitter;
+
     // Real instance required to prevent @Tool duplicate registration
     private ExaWebSearchTool exaWebSearchTool;
     private InventoryFacadeTool inventoryFacadeTool;
@@ -121,6 +125,9 @@ class StreamingSessionAgentManagerTest {
         when(toolRegistry.resolveDomainTools(any())).thenAnswer(inv -> new ArrayList<>());
         when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         lenient().when(rolePromptResolver.resolvePrompt(any())).thenReturn("Default role prompt");
+        lenient()
+                .when(rolePromptResolver.assemble(any(), any()))
+                .thenReturn(new RolePromptResolver.AssembledPrompt("prompt", List.of("BASE", "ROLE")));
         lenient()
                 .when(toolSelectionEngine.selectRoleTools(any(), any(), any()))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
@@ -156,6 +163,7 @@ class StreamingSessionAgentManagerTest {
                 scopedContentRetrieverFactory,
                 rolePromptResolver,
                 null, // toolAuditService
+                telemetryEmitter,
                 30,
                 500,
                 50,
@@ -324,6 +332,7 @@ class StreamingSessionAgentManagerTest {
                 scopedContentRetrieverFactory,
                 rolePromptResolver,
                 null,
+                telemetryEmitter,
                 30,
                 500,
                 50,
@@ -383,6 +392,7 @@ class StreamingSessionAgentManagerTest {
                 scopedContentRetrieverFactory,
                 rolePromptResolver,
                 null,
+                telemetryEmitter,
                 0,
                 500,
                 50,
@@ -412,6 +422,7 @@ class StreamingSessionAgentManagerTest {
                 scopedContentRetrieverFactory,
                 rolePromptResolver,
                 null,
+                telemetryEmitter,
                 30,
                 500,
                 50,
