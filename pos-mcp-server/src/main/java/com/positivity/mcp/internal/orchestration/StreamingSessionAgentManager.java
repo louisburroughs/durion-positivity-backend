@@ -8,8 +8,11 @@ import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.service.PermissionCodes;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
+import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
+import com.positivity.mcp.service.RolePromptResolver.AssembledPrompt;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
 import dev.langchain4j.memory.ChatMemory;
@@ -18,13 +21,16 @@ import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.service.AiServices;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -56,6 +62,9 @@ public class StreamingSessionAgentManager
     @Nullable
     private final ToolExecutionAuditLogger toolExecutionAuditLogger;
 
+    @Nullable
+    private final NltiTelemetryEmitter telemetryEmitter;
+
     private final int memoryMaxMessages;
     private final int rateLimitPerSession;
 
@@ -67,6 +76,7 @@ public class StreamingSessionAgentManager
             @NonNull ScopedContentRetrieverFactory scopedContentRetrieverFactory,
             @NonNull RolePromptResolver rolePromptResolver,
             @Nullable ToolExecutionAuditLogger toolExecutionAuditLogger,
+            @Nullable NltiTelemetryEmitter telemetryEmitter,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
             @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
@@ -78,6 +88,7 @@ public class StreamingSessionAgentManager
         this.scopedContentRetrieverFactory = scopedContentRetrieverFactory;
         this.rolePromptResolver = rolePromptResolver;
         this.toolExecutionAuditLogger = toolExecutionAuditLogger;
+        this.telemetryEmitter = telemetryEmitter;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
         int sanitizedMaxCachedAgents = Math.max(1, maxCachedAgents);
@@ -131,6 +142,15 @@ public class StreamingSessionAgentManager
         StreamingPosAssistant agent =
                 roleAgentCache.get(role + MEMORY_KEY_SEPARATOR + cacheKey, ignored -> buildAgent(role, allTools));
 
+        // Capture on the calling thread: the Reactor completion signals run on a scheduler thread
+        // where the request MDC (correlationId) and prompt layers are no longer available.
+        List<String> toolNames = sharedOrchestrationSupport.toolNames(allTools);
+        String ragScope = toolRegistry.resolveRagScopeForTools(allTools);
+        AssembledPrompt assembled = rolePromptResolver.assemble(role, ragScope);
+        List<String> promptLayers = assembled != null ? assembled.layers() : List.of();
+        String correlationId = resolveCorrelationId();
+        String workflowState = selection.workflowState().name();
+
         String userContext = formatUserContext(currentUserContext);
         return Flux.<String>create(emitter -> streamTokens(agent, memoryId, message, userContext, emitter))
                 .doOnComplete(() -> {
@@ -144,8 +164,18 @@ public class StreamingSessionAgentManager
                     if (toolExecutionAuditLogger != null) {
                         toolExecutionAuditLogger.logToolExecution(null, username, true, false, elapsedMs, null);
                     }
+                    emitStreamTelemetry(
+                            correlationId,
+                            currentUserContext,
+                            toolNames,
+                            promptLayers,
+                            workflowState,
+                            elapsedMs,
+                            "SUCCESS",
+                            null);
                 })
                 .doOnError(exception -> {
+                    int elapsedMs = (int) (System.currentTimeMillis() - startMs);
                     LOGGER.warn(
                             "MCP streaming chat failed username={} role={} preview=\"{}\" error={}",
                             username,
@@ -158,9 +188,18 @@ public class StreamingSessionAgentManager
                                 username,
                                 false,
                                 false,
-                                0,
+                                elapsedMs,
                                 exception.getClass().getSimpleName());
                     }
+                    emitStreamTelemetry(
+                            correlationId,
+                            currentUserContext,
+                            List.of(),
+                            List.of(),
+                            workflowState,
+                            elapsedMs,
+                            "ERROR",
+                            exception.getClass().getSimpleName());
                 });
     }
 
@@ -287,6 +326,54 @@ public class StreamingSessionAgentManager
     private static int tokenCount(@NonNull String text) {
         return SimpleChatRuleCatalog.tokenize(SimpleChatRuleCatalog.normalize(text))
                 .size();
+    }
+
+    /**
+     * Emits one {@code nlti.request.telemetry} event for a completed streaming request (Gate 1).
+     * Called from Reactor completion signals; {@code correlationId} is captured on the calling
+     * thread and passed in. Never throws into the stream; no-op when no emitter is configured.
+     */
+    private void emitStreamTelemetry(
+            @NonNull String correlationId,
+            @NonNull CurrentUserContext currentUserContext,
+            @NonNull List<String> selectedToolNames,
+            @NonNull List<String> promptLayers,
+            @Nullable String workflowState,
+            long totalMs,
+            @NonNull String status,
+            @Nullable String errorCode) {
+        if (telemetryEmitter == null) {
+            return;
+        }
+        try {
+            telemetryEmitter.emit(NltiRequestTelemetryFactory.forChatRequest(
+                    correlationId,
+                    Instant.now().toString(),
+                    currentUserContext.primaryRole(),
+                    currentUserContext.permissionCodes().size(),
+                    selectedToolNames,
+                    promptLayers,
+                    false,
+                    null,
+                    workflowState,
+                    totalMs,
+                    status,
+                    errorCode));
+        } catch (RuntimeException telemetryFailure) {
+            LOGGER.warn(
+                    "MCP streaming telemetry emission failed role={} status={}",
+                    currentUserContext.primaryRole(),
+                    status,
+                    telemetryFailure);
+        }
+    }
+
+    private static @NonNull String resolveCorrelationId() {
+        String correlationId = MDC.get("correlationId");
+        if (correlationId == null || correlationId.isBlank()) {
+            return UUID.randomUUID().toString();
+        }
+        return correlationId;
     }
 
     private static long elapsedMs(long startNanos) {
