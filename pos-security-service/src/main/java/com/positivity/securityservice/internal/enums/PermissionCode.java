@@ -449,13 +449,16 @@ public enum PermissionCode {
     WORKORDER__TIMEENTRY__APPROVE(343, "workorder:timeEntry:approve"),
     WORKORDER__TIMEENTRY__REJECT(344, "workorder:timeEntry:reject"),
     // ── Workorder (new) ────────────────────────────────────────────────────────
-    WORKORDER__LABOR__ADD_ON_BEHALF(345, "workorder:labor:add_on_behalf");
+    WORKORDER__LABOR__ADD_ON_BEHALF(345, "workorder:labor:add_on_behalf"),
+    // ── Mcp (new) ──────────────────────────────────────────────────────────────
+    MCP__TOOL__MANAGE(347, "mcp:tool:manage"),
+    MCP__TOOL__VIEW(348, "mcp:tool:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 15;
+    public static final int CATALOG_VERSION = 16;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
