@@ -17,6 +17,7 @@ class NltiRequestTelemetryFactoryTest {
                 "ROLE_ADMIN",
                 676,
                 List.of("WorkorderFacadeTool", "InventoryFacadeTool"),
+                List.of("event-receiver_getactiveeventtypes"),
                 List.of("BASE", "ROLE", "DOMAIN", "TOOL_USE"),
                 false,
                 null,
@@ -32,6 +33,7 @@ class NltiRequestTelemetryFactoryTest {
         assertThat(event.actor().permissionCodeCount()).isEqualTo(676);
         assertThat(event.tools()).isNotNull();
         assertThat(event.tools().selected()).containsExactly("WorkorderFacadeTool", "InventoryFacadeTool");
+        assertThat(event.tools().discoveredOpenapi()).containsExactly("event-receiver_getactiveeventtypes");
         assertThat(event.tools().candidateCount()).isEqualTo(2);
         assertThat(event.rag()).isNotNull();
         assertThat(event.rag().promptLayers())
@@ -52,6 +54,7 @@ class NltiRequestTelemetryFactoryTest {
                 "2026-07-01T00:00:00Z",
                 "ROLE_USER",
                 3,
+                List.of(),
                 List.of(),
                 List.of(),
                 true,
@@ -78,6 +81,7 @@ class NltiRequestTelemetryFactoryTest {
                 676,
                 List.of(),
                 List.of(),
+                List.of(),
                 false,
                 null,
                 null,
@@ -98,6 +102,7 @@ class NltiRequestTelemetryFactoryTest {
                 "ROLE_ADMIN",
                 676,
                 List.of("WorkorderFacadeTool"),
+                List.of(),
                 List.of("BASE", "NOT_A_LAYER", "role"),
                 false,
                 null,

@@ -137,6 +137,8 @@ public class OpenApiToolProvider implements ToolProvider {
                     .build();
             tools.put(spec, new OpenApiOperationExecutor(proxyFactory, op, objectMapper, executionTimeout, authHeader));
         }
+        userContext.recordDiscoveredOpenapiTools(
+                tools.keySet().stream().map(ToolSpecification::name).toList());
         LOGGER.debug(
                 "MCP openapi tool provider role={} permissionCount={} discoveredTools={}",
                 caller.primaryRole(),

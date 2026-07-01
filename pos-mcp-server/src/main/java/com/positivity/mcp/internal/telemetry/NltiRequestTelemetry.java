@@ -78,7 +78,8 @@ public record NltiRequestTelemetry(
             List<String> selected,
             int rejectedPermissionCount,
             int candidateCount,
-            @Nullable List<ToolInvocation> invoked) {}
+            @Nullable List<ToolInvocation> invoked,
+            @Nullable List<String> discoveredOpenapi) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record RagDoc(String docId, double score) {}

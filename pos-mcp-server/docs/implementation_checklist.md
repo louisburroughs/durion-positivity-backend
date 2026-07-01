@@ -332,7 +332,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 - [x] Proxied calls include current user context — _ev: auth relay #799; op executed as caller → 200._
 - [~] Cached agents cannot expose prior higher-permission user's tools — _ev: per-request dynamic provider (design-safe); leakage not yet live-tested._
 - [x] Facade + OpenAPI tools coexist — _ev: facade selection + openapi provider both active in the same request (live logs)._
-- [ ] Telemetry distinguishes facade vs OpenAPI source — _ev: NOT wired — `nlti.request.telemetry` has no per-tool source tag._
+- [x] Telemetry distinguishes facade vs OpenAPI source — _ev: `NltiRequestTelemetry.Tools.discoveredOpenapi` lists openapi-source tools separately from facade `selected`; `OpenApiToolProvider` publishes the surfaced names request-scoped, `SessionAgentManager` includes them in the event. Unit-tested._
 
 ### Correctness tests
 - [x] E2E: execute a discovered op with no facade — _ev: 2026-07-01 live, `event-receiver_getactiveeventtypes` → gateway 200, agent returned 276 active event types._

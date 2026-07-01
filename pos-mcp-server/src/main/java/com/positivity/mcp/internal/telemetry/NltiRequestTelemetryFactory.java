@@ -37,6 +37,7 @@ public final class NltiRequestTelemetryFactory {
             @NonNull String primaryRole,
             int permissionCodeCount,
             @NonNull List<String> selectedToolNames,
+            @NonNull List<String> discoveredOpenapiTools,
             @NonNull List<String> promptLayers,
             boolean simpleChat,
             @Nullable String simpleChatRule,
@@ -58,9 +59,14 @@ public final class NltiRequestTelemetryFactory {
             routing = null;
         }
 
-        Tools tools = selectedToolNames.isEmpty()
+        Tools tools = (selectedToolNames.isEmpty() && discoveredOpenapiTools.isEmpty())
                 ? null
-                : new Tools(List.copyOf(selectedToolNames), 0, selectedToolNames.size(), null);
+                : new Tools(
+                        List.copyOf(selectedToolNames),
+                        0,
+                        selectedToolNames.size(),
+                        null,
+                        discoveredOpenapiTools.isEmpty() ? null : List.copyOf(discoveredOpenapiTools));
 
         List<PromptLayer> layers = promptLayers.stream()
                 .map(NltiRequestTelemetryFactory::toPromptLayer)

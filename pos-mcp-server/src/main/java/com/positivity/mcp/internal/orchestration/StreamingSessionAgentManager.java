@@ -352,6 +352,8 @@ public class StreamingSessionAgentManager
                     currentUserContext.primaryRole(),
                     currentUserContext.permissionCodes().size(),
                     selectedToolNames,
+                    // Streaming is fail-closed for openapi tools (Reactor-context propagation deferred).
+                    List.of(),
                     promptLayers,
                     false,
                     null,

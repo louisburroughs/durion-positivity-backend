@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.service.CurrentUserContext;
+import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -29,6 +30,10 @@ public class RequestScopedUserContext {
             CurrentUserContext context, @Nullable String authHeader) {}
 
     private static final ThreadLocal<Holder> HOLDER = new ThreadLocal<>();
+    // Names of the OpenAPI-discovered tools the provider surfaced this request, for telemetry
+    // (facade vs openapi source). Written by OpenApiToolProvider inside agent.chat, read by the
+    // manager when it emits the per-request telemetry event.
+    private static final ThreadLocal<List<String>> DISCOVERED_OPENAPI_TOOLS = new ThreadLocal<>();
 
     public void set(@NonNull CurrentUserContext context) {
         set(context, null);
@@ -38,8 +43,18 @@ public class RequestScopedUserContext {
         HOLDER.set(new Holder(context, authHeader));
     }
 
+    public void recordDiscoveredOpenapiTools(@NonNull List<String> toolNames) {
+        DISCOVERED_OPENAPI_TOOLS.set(List.copyOf(toolNames));
+    }
+
+    public @NonNull List<String> currentDiscoveredOpenapiToolNames() {
+        List<String> names = DISCOVERED_OPENAPI_TOOLS.get();
+        return names == null ? List.of() : names;
+    }
+
     public void clear() {
         HOLDER.remove();
+        DISCOVERED_OPENAPI_TOOLS.remove();
     }
 
     public @NonNull Optional<CurrentUserContext> current() {
