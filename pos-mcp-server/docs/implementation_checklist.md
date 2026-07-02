@@ -340,7 +340,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 - [x] Permission re-checked at call time, not only cache-build — _ev: `provideTools` (isDynamic) queries `caller.permissionCodes()` per request, not at agent build._
 - [~] Arguments schema-validated before proxy call — _ev: `OpenApiToolProvider.buildParameterSchema` builds a `JsonObjectSchema` envelope; **path params are typed + required** from the path template (`/v1/workorders/{workorderId}` → required string `workorderId`), so langchain4j validates them. Query/header/body stay free-form objects (per-field query typing from `operation.getParameters()` is the remaining refinement)._
 - [x] Failed proxy → controlled error, not hallucinated success — _ev: `OpenApiOperationExecutor` renders controlled error string; unit-tested (missing service_id → controlled error)._
-- [~] Blocking & streaming support bridge identically — _ev: blocking wired + live-proven; streaming stays fail-closed (Reactor-context propagation deferred)._
+- [~] Blocking & streaming support bridge identically — _ev: blocking wired + live-proven; streaming now wires `OpenApiToolProvider` too — the caller is published to `RequestScopedUserContext` synchronously inside `streamTokens` and cleared in `finally` on the same thread (no cross-request leak; fail-closed if provideTools ran past the clear). Functional streaming-openapi selection is pending live SSE verification._
 
 ### Drift checks (assert true)
 - [x] Verified: not all 500+ ops exposed without candidate selection — _ev: embedding topK (candidateLimit) + permission gate; 348 ops exist, only permission-eligible topK surface._
@@ -380,7 +380,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [x] Wire `.toolProvider(openApiToolProvider)` into the blocking manager + set/clear `RequestScopedUserContext` around `agent.chat` (#797).
 - [x] Relay caller auth to the op call (#799) — else the gateway 401s.
 - [x] Boot-crash hotfix (#800) — openapi rows (null handler_bean) excluded from the facade/bean-loading queries so the registry loader doesn't `getBean(null)`.
-- [ ] Streaming Reactor-context propagation — still fail-closed (blocking only).
+- [~] Streaming context wiring — `OpenApiToolProvider` wired into the streaming agent; caller published/cleared synchronously in `streamTokens` (no Reactor-context accessor needed; leak-safe). Live SSE proof pending.
 - Rollback: omit `.toolProvider(...)` → facade-only (current behavior).
 
 **LIVE VERIFICATION (2026-07-01, alpha `sha-559d554`)**
@@ -392,7 +392,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [x] Negative permission-gating — an op behind a not-held permission is excluded (live, #805). _Remaining:_ cached-agent reuse across two distinct users is still design-covered only (`[~]`), not live-tested.
 - [~] Argument-schema validation — path params typed + required from the template; query/header/body free-form (per-field query typing from `operation.getParameters()` is the remaining refinement).
 - [x] Telemetry facade-vs-openapi source tag (#806).
-- [ ] Streaming Reactor-context propagation (blocking is done) — the last substantive open item.
+- [~] Streaming context wiring — provider wired + caller published/cleared synchronously in `streamTokens` (leak-safe). Live SSE verification of streaming-openapi selection is the remaining proof.
 - [x] Permission-seeding source (admin tooling / #785) — `ToolPermissionController` (`/v1/tools/{toolName}/permissions` GET/POST/DELETE, gated by `mcp:tool:view` / `mcp:tool:manage`) grants/lists/revokes an openapi tool's `mcp_tool_permission` rows, replacing manual SQL (#807). Perm-bits registered (bits 347/348, catalog v16, #809). _Deploy:_ fleet redeploy for catalog v16, then grant `mcp:tool:manage` to an admin role; SDK regen is downstream ([[controller-change-openapi-sdk-chain]])._
 
 ---

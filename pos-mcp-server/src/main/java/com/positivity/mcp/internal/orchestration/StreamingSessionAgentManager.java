@@ -6,7 +6,9 @@ import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.PermissionCodes;
+import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
@@ -34,6 +36,8 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 
@@ -65,6 +69,12 @@ public class StreamingSessionAgentManager
     @Nullable
     private final NltiTelemetryEmitter telemetryEmitter;
 
+    @Nullable
+    private final OpenApiToolProvider openApiToolProvider;
+
+    @Nullable
+    private final RequestScopedUserContext requestScopedUserContext;
+
     private final int memoryMaxMessages;
     private final int rateLimitPerSession;
 
@@ -77,6 +87,8 @@ public class StreamingSessionAgentManager
             @NonNull RolePromptResolver rolePromptResolver,
             @Nullable ToolExecutionAuditLogger toolExecutionAuditLogger,
             @Nullable NltiTelemetryEmitter telemetryEmitter,
+            @Nullable OpenApiToolProvider openApiToolProvider,
+            @Nullable RequestScopedUserContext requestScopedUserContext,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
             @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
@@ -89,6 +101,8 @@ public class StreamingSessionAgentManager
         this.rolePromptResolver = rolePromptResolver;
         this.toolExecutionAuditLogger = toolExecutionAuditLogger;
         this.telemetryEmitter = telemetryEmitter;
+        this.openApiToolProvider = openApiToolProvider;
+        this.requestScopedUserContext = requestScopedUserContext;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
         int sanitizedMaxCachedAgents = Math.max(1, maxCachedAgents);
@@ -152,7 +166,11 @@ public class StreamingSessionAgentManager
         String workflowState = selection.workflowState().name();
 
         String userContext = formatUserContext(currentUserContext);
-        return Flux.<String>create(emitter -> streamTokens(agent, memoryId, message, userContext, emitter))
+        // Capture the caller's Authorization on the request thread; the Flux is subscribed later on a
+        // Reactor thread where RequestContextHolder is no longer populated.
+        String authorizationHeader = currentAuthorizationHeader();
+        return Flux.<String>create(emitter -> streamTokens(
+                        agent, memoryId, message, userContext, currentUserContext, authorizationHeader, emitter))
                 .doOnComplete(() -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
                     LOGGER.debug(
@@ -237,14 +255,19 @@ public class StreamingSessionAgentManager
 
         // Prompt resolution is deferred per-message via systemMessageProvider so that
         // database updates to prompts are visible immediately without agent rebuild.
-        StreamingPosAssistant agent = AiServices.builder(StreamingPosAssistant.class)
+        var agentBuilder = AiServices.builder(StreamingPosAssistant.class)
                 .streamingChatModel(streamingChatModel)
                 .tools(tools)
                 .contentRetriever(resilientContentRetriever)
                 .systemMessageProvider(
                         memoryId -> rolePromptResolver.assemble(role, ragScope).text())
-                .chatMemoryProvider(this::chatMemoryFor)
-                .build();
+                .chatMemoryProvider(this::chatMemoryFor);
+        if (openApiToolProvider != null) {
+            // Discovered OpenAPI tools are surfaced per request; the caller context is published on
+            // the streaming thread in streamTokens (fail-closed when absent).
+            agentBuilder.toolProvider(openApiToolProvider);
+        }
+        StreamingPosAssistant agent = agentBuilder.build();
         LOGGER.debug(
                 "Built MCP streaming role agent role={} promptName={} ragScope={} toolNames={}",
                 role,
@@ -266,16 +289,31 @@ public class StreamingSessionAgentManager
             @NonNull String memoryId,
             @NonNull String message,
             @NonNull String userContext,
+            @NonNull CurrentUserContext currentUserContext,
+            @Nullable String authorizationHeader,
             @NonNull FluxSink<String> emitter) {
-        agent.chat(memoryId, message, userContext)
-                .onPartialResponse(token -> {
-                    if (!emitter.isCancelled()) {
-                        emitter.next(token);
-                    }
-                })
-                .onCompleteResponse(response -> emitter.complete())
-                .onError(emitter::error)
-                .start();
+        // Publish the caller for OpenApiToolProvider.provideTools, which langchain4j invokes
+        // synchronously while building the request context inside start(). Cleared in finally on this
+        // same thread — before any async token callback — so a pooled Reactor thread cannot leak the
+        // caller to a later request; if provideTools ran after the clear it would just fail-closed.
+        if (requestScopedUserContext != null) {
+            requestScopedUserContext.set(currentUserContext, authorizationHeader);
+        }
+        try {
+            agent.chat(memoryId, message, userContext)
+                    .onPartialResponse(token -> {
+                        if (!emitter.isCancelled()) {
+                            emitter.next(token);
+                        }
+                    })
+                    .onCompleteResponse(response -> emitter.complete())
+                    .onError(emitter::error)
+                    .start();
+        } finally {
+            if (requestScopedUserContext != null) {
+                requestScopedUserContext.clear();
+            }
+        }
     }
 
     private void prebuildRoleAgents() {
@@ -311,6 +349,14 @@ public class StreamingSessionAgentManager
 
     private static @NonNull String memoryKey(@NonNull String userId, @NonNull String role) {
         return userId + MEMORY_KEY_SEPARATOR + role;
+    }
+
+    private @Nullable String currentAuthorizationHeader() {
+        var attributes = RequestContextHolder.getRequestAttributes();
+        if (attributes instanceof ServletRequestAttributes servletAttributes) {
+            return servletAttributes.getRequest().getHeader("Authorization");
+        }
+        return null;
     }
 
     private static @NonNull String formatUserContext(@NonNull CurrentUserContext currentUserContext) {
