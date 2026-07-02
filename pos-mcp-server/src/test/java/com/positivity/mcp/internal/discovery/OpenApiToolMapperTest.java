@@ -185,6 +185,32 @@ class OpenApiToolMapperTest {
         return openApi;
     }
 
+    @Test
+    @DisplayName("toDiscoveredOperations persists query parameters as input_schema JSON")
+    void toDiscoveredOperations_persistsQueryParamsAsInputSchema() {
+        OpenApiToolMapper mapper =
+                new OpenApiToolMapper(propertiesWithExclusions(List.of()), mock(OperationProxyFactory.class));
+
+        Operation op = new Operation();
+        op.setOperationId("searchOrders");
+        var status = new io.swagger.v3.oas.models.parameters.QueryParameter();
+        status.setName("status");
+        status.setRequired(true);
+        status.setSchema(new io.swagger.v3.oas.models.media.StringSchema());
+        op.setParameters(List.of(status));
+        PathItem item = new PathItem();
+        item.setGet(op);
+        OpenAPI openApi = openApiWith(Map.of("/v1/order/orders", item));
+
+        List<DiscoveredOperation> ops = mapper.toDiscoveredOperations("http://api-gateway:8080", openApi);
+
+        assertThat(ops).hasSize(1);
+        assertThat(ops.getFirst().inputSchema())
+                .contains("\"name\":\"status\"")
+                .contains("\"type\":\"string\"")
+                .contains("\"required\":true");
+    }
+
     private static PathItem getItem(String operationId, String summary) {
         Operation op = new Operation();
         op.setOperationId(operationId);
