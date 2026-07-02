@@ -15,6 +15,7 @@ import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import com.positivity.mcp.service.CurrentUserContext;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.service.tool.ToolProviderRequest;
@@ -65,7 +66,12 @@ class OpenApiToolProviderTest {
                 Set.of("workorder:workorder:view")));
         when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(new float[] {0.1f, 0.2f})));
         DiscoveredOperation executable = new DiscoveredOperation(
-                "workorders_getallworkorders", "List workorders", "GET", "/v1/workorders", "pos-workorder", null);
+                "workorders_getallworkorders",
+                "List workorders",
+                "GET",
+                "/v1/workorders/{workorderId}",
+                "pos-workorder",
+                null);
         DiscoveredOperation notExecutable =
                 new DiscoveredOperation("broken_op", "missing coords", null, null, null, null);
         lenient()
@@ -82,6 +88,10 @@ class OpenApiToolProviderTest {
         assertThat(spec.description()).contains("GET", "/v1/workorders");
         assertThat(spec.parameters()).isNotNull();
         assertThat(spec.parameters().properties()).containsKeys("pathParams", "queryParams", "headers", "body");
+        // Path params are typed from the template: {workorderId} → a required string property.
+        var pathParams = (JsonObjectSchema) spec.parameters().properties().get("pathParams");
+        assertThat(pathParams.properties()).containsKey("workorderId");
+        assertThat(pathParams.required()).contains("workorderId");
         // Provider publishes the surfaced openapi tool names for telemetry (facade vs openapi source).
         assertThat(userContext.currentDiscoveredOpenapiToolNames()).containsExactly("workorders_getallworkorders");
     }

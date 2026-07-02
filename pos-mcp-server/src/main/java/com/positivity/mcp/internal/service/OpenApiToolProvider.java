@@ -15,11 +15,15 @@ import dev.langchain4j.service.tool.ToolProvider;
 import dev.langchain4j.service.tool.ToolProviderRequest;
 import dev.langchain4j.service.tool.ToolProviderResult;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,34 +44,55 @@ public class OpenApiToolProvider implements ToolProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenApiToolProvider.class);
 
-    /**
-     * The generic call envelope the {@link OperationProxyFactory} reads. Method/path are fixed from
-     * the persisted coordinates (surfaced in the tool description), so the model only supplies the
-     * request parameters. Per-parameter typing from the OpenAPI operation is a follow-up refinement.
-     */
-    private static final JsonObjectSchema REQUEST_ENVELOPE_SCHEMA = JsonObjectSchema.builder()
-            .description("Parameters for the gateway operation named in the tool description.")
-            .addProperty(
-                    "pathParams",
-                    JsonObjectSchema.builder()
-                            .description("Path template parameters keyed by name, e.g. {\"productId\": \"...\"}.")
-                            .build())
-            .addProperty(
-                    "queryParams",
-                    JsonObjectSchema.builder()
-                            .description("Query-string parameters.")
-                            .build())
-            .addProperty(
-                    "headers",
-                    JsonObjectSchema.builder()
-                            .description("Extra HTTP headers (auth is relayed automatically).")
-                            .build())
-            .addProperty(
-                    "body",
-                    JsonObjectSchema.builder()
-                            .description("Request body payload, for write operations.")
-                            .build())
+    private static final Pattern PATH_PARAM_PATTERN = Pattern.compile("\\{([^}/]+)}");
+
+    private static final JsonObjectSchema QUERY_PARAMS_SCHEMA =
+            JsonObjectSchema.builder().description("Query-string parameters.").build();
+    private static final JsonObjectSchema HEADERS_SCHEMA = JsonObjectSchema.builder()
+            .description("Extra HTTP headers (auth is relayed automatically).")
             .build();
+    private static final JsonObjectSchema BODY_SCHEMA = JsonObjectSchema.builder()
+            .description("Request body payload, for write operations.")
+            .build();
+
+    /**
+     * The request envelope {@link OperationProxyFactory} reads. Path parameters are typed from the
+     * operation's path template ({@code /v1/products/{productId}} → a required string
+     * {@code productId}), so the model knows exactly which path values to supply; query/header/body
+     * stay free-form objects. Method/path themselves are fixed from the persisted coordinates.
+     */
+    private static JsonObjectSchema buildParameterSchema(@NonNull DiscoveredOperation op) {
+        List<String> pathParams = extractPathParams(op.httpPath());
+        JsonObjectSchema.Builder pathParamsSchema = JsonObjectSchema.builder().description("Path template parameters.");
+        for (String name : pathParams) {
+            pathParamsSchema.addStringProperty(name, "Path parameter " + name);
+        }
+        if (!pathParams.isEmpty()) {
+            pathParamsSchema.required(pathParams);
+        }
+        return JsonObjectSchema.builder()
+                .description("Parameters for the gateway operation named in the tool description.")
+                .addProperty("pathParams", pathParamsSchema.build())
+                .addProperty("queryParams", QUERY_PARAMS_SCHEMA)
+                .addProperty("headers", HEADERS_SCHEMA)
+                .addProperty("body", BODY_SCHEMA)
+                .build();
+    }
+
+    private static List<String> extractPathParams(@Nullable String path) {
+        if (path == null) {
+            return List.of();
+        }
+        List<String> params = new ArrayList<>();
+        Matcher matcher = PATH_PARAM_PATTERN.matcher(path);
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            if (!params.contains(name)) {
+                params.add(name);
+            }
+        }
+        return params;
+    }
 
     private static String describeOperation(@NonNull DiscoveredOperation op) {
         return op.description() + " [" + op.httpMethod() + " " + op.httpPath() + "]";
@@ -133,7 +158,7 @@ public class OpenApiToolProvider implements ToolProvider {
             ToolSpecification spec = ToolSpecification.builder()
                     .name(op.name())
                     .description(describeOperation(op))
-                    .parameters(REQUEST_ENVELOPE_SCHEMA)
+                    .parameters(buildParameterSchema(op))
                     .build();
             tools.put(spec, new OpenApiOperationExecutor(proxyFactory, op, objectMapper, executionTimeout, authHeader));
         }
