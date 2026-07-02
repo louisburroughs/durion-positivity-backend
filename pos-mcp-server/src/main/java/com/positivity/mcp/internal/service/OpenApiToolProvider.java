@@ -1,5 +1,7 @@
 package com.positivity.mcp.internal.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.discovery.OpenApiOperationExecutor;
 import com.positivity.mcp.internal.discovery.OperationProxyFactory;
@@ -58,10 +60,11 @@ public class OpenApiToolProvider implements ToolProvider {
     /**
      * The request envelope {@link OperationProxyFactory} reads. Path parameters are typed from the
      * operation's path template ({@code /v1/products/{productId}} → a required string
-     * {@code productId}), so the model knows exactly which path values to supply; query/header/body
-     * stay free-form objects. Method/path themselves are fixed from the persisted coordinates.
+     * {@code productId}), so the model knows exactly which path values to supply. Query parameters are
+     * typed from the persisted {@code input_schema}; headers/body stay free-form objects. Method/path
+     * themselves are fixed from the persisted coordinates.
      */
-    private static JsonObjectSchema buildParameterSchema(@NonNull DiscoveredOperation op) {
+    private JsonObjectSchema buildParameterSchema(@NonNull DiscoveredOperation op) {
         List<String> pathParams = extractPathParams(op.httpPath());
         JsonObjectSchema.Builder pathParamsSchema = JsonObjectSchema.builder().description("Path template parameters.");
         for (String name : pathParams) {
@@ -73,10 +76,52 @@ public class OpenApiToolProvider implements ToolProvider {
         return JsonObjectSchema.builder()
                 .description("Parameters for the gateway operation named in the tool description.")
                 .addProperty("pathParams", pathParamsSchema.build())
-                .addProperty("queryParams", QUERY_PARAMS_SCHEMA)
+                .addProperty("queryParams", buildQueryParamsSchema(op.inputSchema()))
                 .addProperty("headers", HEADERS_SCHEMA)
                 .addProperty("body", BODY_SCHEMA)
                 .build();
+    }
+
+    /**
+     * Builds a typed {@code queryParams} schema from the operation's persisted query-parameter JSON
+     * ({@code {"query":[{"name","type","required"}]}}). Falls back to a free-form object when the
+     * operation has no persisted query params or the JSON cannot be parsed.
+     */
+    private JsonObjectSchema buildQueryParamsSchema(@Nullable String inputSchemaJson) {
+        if (inputSchemaJson == null || inputSchemaJson.isBlank()) {
+            return QUERY_PARAMS_SCHEMA;
+        }
+        try {
+            JsonNode query = objectMapper.readTree(inputSchemaJson).get("query");
+            if (query == null || !query.isArray() || query.isEmpty()) {
+                return QUERY_PARAMS_SCHEMA;
+            }
+            JsonObjectSchema.Builder builder = JsonObjectSchema.builder().description("Query-string parameters.");
+            List<String> required = new ArrayList<>();
+            for (JsonNode param : query) {
+                String name = param.path("name").asText(null);
+                if (name == null || name.isBlank()) {
+                    continue;
+                }
+                String description = "Query parameter " + name;
+                switch (param.path("type").asText("string")) {
+                    case "integer" -> builder.addIntegerProperty(name, description);
+                    case "number" -> builder.addNumberProperty(name, description);
+                    case "boolean" -> builder.addBooleanProperty(name, description);
+                    default -> builder.addStringProperty(name, description);
+                }
+                if (param.path("required").asBoolean(false)) {
+                    required.add(name);
+                }
+            }
+            if (!required.isEmpty()) {
+                builder.required(required);
+            }
+            return builder.build();
+        } catch (JsonProcessingException | RuntimeException e) {
+            LOGGER.debug("MCP openapi query-param schema parse failed; using free-form object", e);
+            return QUERY_PARAMS_SCHEMA;
+        }
     }
 
     private static List<String> extractPathParams(@Nullable String path) {

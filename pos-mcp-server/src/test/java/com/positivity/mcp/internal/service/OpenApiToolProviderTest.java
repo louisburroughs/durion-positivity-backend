@@ -71,7 +71,7 @@ class OpenApiToolProviderTest {
                 "GET",
                 "/v1/workorders/{workorderId}",
                 "pos-workorder",
-                null);
+                "{\"query\":[{\"name\":\"status\",\"type\":\"string\",\"required\":true}]}");
         DiscoveredOperation notExecutable =
                 new DiscoveredOperation("broken_op", "missing coords", null, null, null, null);
         lenient()
@@ -92,6 +92,10 @@ class OpenApiToolProviderTest {
         var pathParams = (JsonObjectSchema) spec.parameters().properties().get("pathParams");
         assertThat(pathParams.properties()).containsKey("workorderId");
         assertThat(pathParams.required()).contains("workorderId");
+        // Query params are typed + required from the persisted input_schema JSON.
+        var queryParams = (JsonObjectSchema) spec.parameters().properties().get("queryParams");
+        assertThat(queryParams.properties()).containsKey("status");
+        assertThat(queryParams.required()).contains("status");
         // Provider publishes the surfaced openapi tool names for telemetry (facade vs openapi source).
         assertThat(userContext.currentDiscoveredOpenapiToolNames()).containsExactly("workorders_getallworkorders");
     }

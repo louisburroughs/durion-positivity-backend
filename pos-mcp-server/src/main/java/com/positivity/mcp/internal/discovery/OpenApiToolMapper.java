@@ -1,5 +1,7 @@
 package com.positivity.mcp.internal.discovery;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.config.McpServerProperties;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -7,6 +9,7 @@ import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.parameters.Parameter;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -15,6 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -24,6 +28,8 @@ public class OpenApiToolMapper {
 
     private static final String OBJECT = "object";
     private static final String DESCRIPTION = "description";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final String QUERY_IN = "query";
     private final McpServerProperties properties;
     private final OperationProxyFactory proxyFactory;
 
@@ -121,7 +127,44 @@ public class OpenApiToolMapper {
         String toolName = sanitizeName(domain + "_" + operationId);
         String title = Optional.ofNullable(operation.getSummary()).orElse(operationId);
         String description = Optional.ofNullable(operation.getDescription()).orElse(title);
-        operations.add(new DiscoveredOperation(toolName, description, method.name(), path, serviceId, null));
+        operations.add(new DiscoveredOperation(
+                toolName, description, method.name(), path, serviceId, buildQueryParamSchemaJson(operation)));
+    }
+
+    /**
+     * Compact JSON of the operation's query parameters ({@code {"query":[{"name","type","required"}]}}),
+     * persisted as {@code input_schema} so {@link com.positivity.mcp.internal.service.OpenApiToolProvider}
+     * can type them for the model. Returns null when the operation has no query parameters.
+     */
+    private @Nullable String buildQueryParamSchemaJson(@NonNull Operation operation) {
+        if (operation.getParameters() == null) {
+            return null;
+        }
+        List<Map<String, Object>> query = new ArrayList<>();
+        for (Parameter parameter : operation.getParameters()) {
+            if (parameter == null
+                    || !QUERY_IN.equalsIgnoreCase(parameter.getIn())
+                    || !StringUtils.hasText(parameter.getName())) {
+                continue;
+            }
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("name", parameter.getName());
+            entry.put(
+                    "type",
+                    parameter.getSchema() != null && parameter.getSchema().getType() != null
+                            ? parameter.getSchema().getType()
+                            : "string");
+            entry.put("required", Boolean.TRUE.equals(parameter.getRequired()));
+            query.add(entry);
+        }
+        if (query.isEmpty()) {
+            return null;
+        }
+        try {
+            return MAPPER.writeValueAsString(Map.of(QUERY_IN, query));
+        } catch (JsonProcessingException e) {
+            return null;
+        }
     }
 
     private void addAggregateOperation(
