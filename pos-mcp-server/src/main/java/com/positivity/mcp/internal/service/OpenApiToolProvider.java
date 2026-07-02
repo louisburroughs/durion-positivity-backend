@@ -60,8 +60,9 @@ public class OpenApiToolProvider implements ToolProvider {
     /**
      * The request envelope {@link OperationProxyFactory} reads. Path parameters are typed from the
      * operation's path template ({@code /v1/products/{productId}} → a required string
-     * {@code productId}), so the model knows exactly which path values to supply; query/header/body
-     * stay free-form objects. Method/path themselves are fixed from the persisted coordinates.
+     * {@code productId}), so the model knows exactly which path values to supply. Query parameters are
+     * typed from the persisted {@code input_schema}; headers/body stay free-form objects. Method/path
+     * themselves are fixed from the persisted coordinates.
      */
     private JsonObjectSchema buildParameterSchema(@NonNull DiscoveredOperation op) {
         List<String> pathParams = extractPathParams(op.httpPath());
@@ -118,7 +119,7 @@ public class OpenApiToolProvider implements ToolProvider {
             }
             return builder.build();
         } catch (JsonProcessingException | RuntimeException e) {
-            LOGGER.debug("MCP openapi query-param schema parse failed; using free-form object: {}", e.getMessage());
+            LOGGER.debug("MCP openapi query-param schema parse failed; using free-form object", e);
             return QUERY_PARAMS_SCHEMA;
         }
     }

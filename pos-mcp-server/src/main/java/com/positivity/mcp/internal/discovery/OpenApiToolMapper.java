@@ -142,7 +142,9 @@ public class OpenApiToolMapper {
         }
         List<Map<String, Object>> query = new ArrayList<>();
         for (Parameter parameter : operation.getParameters()) {
-            if (parameter == null || !QUERY_IN.equalsIgnoreCase(parameter.getIn()) || parameter.getName() == null) {
+            if (parameter == null
+                    || !QUERY_IN.equalsIgnoreCase(parameter.getIn())
+                    || !StringUtils.hasText(parameter.getName())) {
                 continue;
             }
             Map<String, Object> entry = new LinkedHashMap<>();
