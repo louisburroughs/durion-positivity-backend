@@ -26,6 +26,8 @@ import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFacto
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.service.OpenApiToolProvider;
+import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.service.CurrentUserContext;
@@ -164,6 +166,8 @@ class StreamingSessionAgentManagerTest {
                 rolePromptResolver,
                 null, // toolAuditService
                 telemetryEmitter,
+                null, // openApiToolProvider
+                null, // requestScopedUserContext
                 30,
                 500,
                 50,
@@ -333,6 +337,8 @@ class StreamingSessionAgentManagerTest {
                 rolePromptResolver,
                 null,
                 telemetryEmitter,
+                null, // openApiToolProvider
+                null, // requestScopedUserContext
                 30,
                 500,
                 50,
@@ -393,6 +399,8 @@ class StreamingSessionAgentManagerTest {
                 rolePromptResolver,
                 null,
                 telemetryEmitter,
+                null, // openApiToolProvider
+                null, // requestScopedUserContext
                 0,
                 500,
                 50,
@@ -423,6 +431,8 @@ class StreamingSessionAgentManagerTest {
                 rolePromptResolver,
                 null,
                 telemetryEmitter,
+                null, // openApiToolProvider
+                null, // requestScopedUserContext
                 30,
                 500,
                 50,
@@ -464,6 +474,35 @@ class StreamingSessionAgentManagerTest {
             return "orders";
         }
         return "master";
+    }
+
+    @Test
+    @DisplayName("streamChat with an openapi provider wired builds and leaves the request context clean")
+    void streamChat_withOpenApiProvider_doesNotLeakContext() {
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        OpenApiToolProvider openApiToolProvider = mock(OpenApiToolProvider.class);
+        StreamingSessionAgentManager providerManager = new StreamingSessionAgentManager(
+                streamingChatModel,
+                toolRegistry,
+                sharedOrchestrationSupport,
+                toolSelectionEngine,
+                scopedContentRetrieverFactory,
+                rolePromptResolver,
+                null,
+                telemetryEmitter,
+                openApiToolProvider,
+                requestContext,
+                30,
+                500,
+                50,
+                100);
+
+        Flux<String> result = providerManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "hello");
+
+        assertThat(result).isNotNull();
+        // The caller is published/cleared only inside streamTokens (on subscribe), so building the
+        // stream must not leave any caller in the request-scoped holder on this thread.
+        assertThat(requestContext.current()).isEmpty();
     }
 
     private static CurrentUserContext userContext(String username, UUID userId, String primaryRole) {
