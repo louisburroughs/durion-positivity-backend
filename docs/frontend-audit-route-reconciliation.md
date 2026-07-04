@@ -23,13 +23,25 @@ compounded:
 
 Both raised `PropertyReferenceException` → unhandled → 500.
 
-Fix (`pos-accounting`): the service now parses `property[,direction]`, maps API
-field names to entity properties (`modifiedAt` → `updatedAt`), and rejects unknown
-properties/directions with `UnsupportedSortPropertyException`, which the module's
-advice maps to a **400** `ApiError` (`UNSUPPORTED_SORT_PROPERTY`) instead of a 500.
+Fix (`pos-accounting`): a shared `SortParamParser` now parses
+`property[,direction]`, maps API field names to entity properties
+(`modifiedAt` → `updatedAt`), and rejects unknown properties/directions with
+`UnsupportedSortPropertyException`, which the module's advice maps to a **400**
+`ApiError` (`UNSUPPORTED_SORT_PROPERTY`) instead of a 500.
 
-Supported sort fields: `createdAt`, `modifiedAt`, `updatedAt`, `name`, `eventType`.
+Posting-rules sort fields: `createdAt`, `modifiedAt`, `updatedAt`, `name`,
+`eventType`, `description`, `createdBy`, `modifiedBy`, `postingRuleSetId`.
 Direction defaults to `desc` when omitted.
+
+The identical bug existed on two sibling endpoints and is fixed the same way:
+
+- `GET /v1/accounting/journal-entries` — sort fields `createdAt`, `modifiedAt`,
+  `updatedAt`, `transactionDate`, `postedAt`, `status`, `entryType`,
+  `description`, `createdBy`, `journalEntryId`; direction defaults to `desc`.
+- `GET /v1/accounting/gl-accounts` — sort fields `accountCode`, `accountName`,
+  `accountType`, `description`, `activationDate`, `deactivationDate`,
+  `createdAt`, `modifiedAt`, `updatedAt`, `glAccountId`; direction defaults to
+  `asc` (matching its previous behavior).
 
 ## 2. pos-people endpoints — both implemented; 404s are semantic
 
@@ -47,6 +59,16 @@ location" answer**, not a routing gap. The service resolves the caller's active
 (Previously the endpoint fell back to any active assignment even when none was
 flagged primary; it now strictly returns 404 when the primary location is null.
 The availability fallback below still accepts any active assignment.)
+
+So that existing flows keep resolving a location under the stricter rule
+(pos-workorder derives estimate/workorder locations from this endpoint):
+
+- Creating a staffing assignment now **defaults to primary** when the person has
+  no active primary assignment — a person's first location is their primary.
+- Migration `V3__backfill_primary_location_assignments.sql` promotes the single
+  active assignment of any employee who has exactly one and none flagged
+  primary. Employees with several active assignments and no primary still 404
+  (genuinely ambiguous; fix via the staffing assignment API).
 
 The frontend's graceful degradation to a location picker is the right behavior;
 treat this 404 as a normal domain outcome and exclude it from audit error counts.
@@ -90,10 +112,15 @@ missing route.
 - **Aggregated, live**: the gateway serves Swagger UI at `/swagger-ui.html` with a
   drop-down per service (Accounting, Inventory, People, …); raw specs at
   `/{domain}/v3/api-docs` through the gateway (e.g. `/inventory/v3/api-docs`).
-- **Checked-in snapshots**: each module keeps `openapi.yaml`/`openapi.json` at its
-  root — `pos-accounting/openapi.yaml`, `pos-inventory/openapi.yaml`,
-  `pos-people/openapi.yaml`. Regenerate with `./mvnw -Popenapi clean verify -DskipTests`
-  (see `docs/DEVELOPMENT_GUIDE.md` → "OpenAPI Documentation").
+- **Checked-in snapshots**: each module keeps `openapi.yaml` at its root —
+  `pos-accounting/openapi.yaml`, `pos-inventory/openapi.yaml`,
+  `pos-people/openapi.yaml` — updated to reflect the changes in this issue
+  (cycleCountPlans LIST, sort/400 contracts, primary-location 404 wording).
+  Regenerate with `./mvnw -Popenapi clean verify -DskipTests` (see
+  `docs/DEVELOPMENT_GUIDE.md` → "OpenAPI Documentation"). The `openapi.json`
+  snapshots are older-generation artifacts and materially stale (pos-people's
+  predates the primary-location endpoint entirely); prefer the YAML or the live
+  gateway docs.
 
 These give the frontend a way to verify paths without authenticated production
 probing.

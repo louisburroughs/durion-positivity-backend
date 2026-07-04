@@ -18,6 +18,7 @@ import com.positivity.accounting.internal.exception.AccountNotInactiveException;
 import com.positivity.accounting.internal.exception.AccountNotZeroBalanceException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
+import com.positivity.accounting.internal.exception.UnsupportedSortPropertyException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.accounting.internal.service.GLAccountServiceImpl;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -41,6 +43,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 /**
  * Unit tests for GLAccountServiceImpl.
@@ -395,6 +398,42 @@ class GLAccountServiceTest {
         GLAccountListResponse result = service.listGLAccounts(0, 10, "accountCode", "INACTIVE");
 
         assertThat(result.getResults()).isEmpty(); // ACTIVE account filtered out
+    }
+
+    @Test
+    @DisplayName("listGLAccounts - maps 'modifiedAt,desc' to entity property updatedAt descending")
+    void listGLAccounts_mapsModifiedAtWithDirection() {
+        Page<GLAccount> page = new PageImpl<>(List.of(testAccount));
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        when(glAccountRepository.findAll(pageableCaptor.capture())).thenReturn(page);
+
+        service.listGLAccounts(0, 10, "modifiedAt,desc", null);
+
+        Sort.Order order = pageableCaptor.getValue().getSort().iterator().next();
+        assertThat(order.getProperty()).isEqualTo("updatedAt");
+        assertThat(order.getDirection()).isEqualTo(Sort.Direction.DESC);
+    }
+
+    @Test
+    @DisplayName("listGLAccounts - defaults to ascending when direction omitted")
+    void listGLAccounts_defaultsToAscending() {
+        Page<GLAccount> page = new PageImpl<>(List.of(testAccount));
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        when(glAccountRepository.findAll(pageableCaptor.capture())).thenReturn(page);
+
+        service.listGLAccounts(0, 10, "accountCode", null);
+
+        Sort.Order order = pageableCaptor.getValue().getSort().iterator().next();
+        assertThat(order.getProperty()).isEqualTo("accountCode");
+        assertThat(order.getDirection()).isEqualTo(Sort.Direction.ASC);
+    }
+
+    @Test
+    @DisplayName("listGLAccounts - rejects unknown sort property with 400-mapped exception")
+    void listGLAccounts_rejectsUnknownSortProperty() {
+        assertThatThrownBy(() -> service.listGLAccounts(0, 10, "nonexistentField", null))
+                .isInstanceOf(UnsupportedSortPropertyException.class)
+                .hasMessageContaining("nonexistentField");
     }
 
     // ===== VALIDATE =====

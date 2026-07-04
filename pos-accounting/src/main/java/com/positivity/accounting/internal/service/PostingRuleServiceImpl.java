@@ -8,7 +8,6 @@ import com.positivity.accounting.internal.dto.PostingRuleVersionResponse;
 import com.positivity.accounting.internal.entity.PostingRuleSet;
 import com.positivity.accounting.internal.entity.PostingRuleVersion;
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
-import com.positivity.accounting.internal.exception.UnsupportedSortPropertyException;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
 import com.positivity.accounting.service.PostingRuleService;
@@ -53,7 +52,11 @@ public class PostingRuleServiceImpl implements PostingRuleService {
             "modifiedAt", "updatedAt",
             "updatedAt", "updatedAt",
             "name", "name",
-            "eventType", "eventType");
+            "eventType", "eventType",
+            "description", "description",
+            "createdBy", "createdBy",
+            "modifiedBy", "modifiedBy",
+            "postingRuleSetId", "postingRuleSetId");
 
     private final Clock clock;
 
@@ -109,35 +112,10 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     @Transactional(readOnly = true)
     public PostingRuleSetListResponse listRuleSetsAsResponse(int page, int size, String sort) {
-        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        Pageable pageable =
+                PageRequest.of(page, size, SortParamParser.parse(sort, SORTABLE_PROPERTIES, Sort.Direction.DESC));
         Page<PostingRuleSet> ruleSetsPage = ruleSetRepository.findAll(pageable);
         return PostingRuleMapper.toListResponse(ruleSetsPage);
-    }
-
-    /**
-     * Parses a Spring-style {@code property[,direction]} sort parameter (e.g.
-     * {@code modifiedAt,desc}) against the whitelist of sortable API fields.
-     * Direction defaults to DESC when omitted.
-     *
-     * @throws UnsupportedSortPropertyException for unknown properties or
-     *                                          directions (mapped to 400)
-     */
-    private static Sort parseSort(String sort) {
-        String[] parts = sort.split(",", 2);
-        String requested = parts[0].trim();
-        String property = SORTABLE_PROPERTIES.get(requested);
-        if (property == null) {
-            throw new UnsupportedSortPropertyException("Unsupported sort property: '" + requested + "'. Supported: "
-                    + SORTABLE_PROPERTIES.keySet().stream().sorted().toList());
-        }
-        Sort.Direction direction = Sort.Direction.DESC;
-        if (parts.length == 2 && !parts[1].isBlank()) {
-            String requestedDirection = parts[1].trim();
-            direction = Sort.Direction.fromOptionalString(requestedDirection)
-                    .orElseThrow(() -> new UnsupportedSortPropertyException(
-                            "Unsupported sort direction: '" + requestedDirection + "'. Use 'asc' or 'desc'."));
-        }
-        return Sort.by(direction, property);
     }
 
     @Override

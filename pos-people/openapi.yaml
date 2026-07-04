@@ -1943,7 +1943,7 @@ paths:
       tags:
       - People Availability API
       summary: Get current user's primary location
-      description: Resolve the authenticated user's primary active location from their staffing assignments.
+      description: Resolve the authenticated user's primary active location from their staffing assignments. Returns 404 when the user has no active assignment flagged as primary.
       operationId: getCurrentUserPrimaryLocation
       responses:
         '200':
@@ -1953,7 +1953,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PrimaryLocationResponse'
         '404':
-          description: No active location assignment found for current user.
+          description: No primary location assignment found for current user.
           content:
             application/json:
               schema:
