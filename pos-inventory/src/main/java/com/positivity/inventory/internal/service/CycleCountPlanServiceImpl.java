@@ -9,8 +9,10 @@ import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.service.CycleCountPlanService;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +47,22 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
                 .findById(planId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new CycleCountPlanNotFoundException(planId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CycleCountPlanResponse> listPlans(UUID locationId, CycleCountPlanStatus status) {
+        List<CycleCountPlan> plans;
+        if (locationId != null && status != null) {
+            plans = cycleCountPlanRepository.findByLocationIdAndStatusOrderByCreatedAtDesc(locationId, status);
+        } else if (locationId != null) {
+            plans = cycleCountPlanRepository.findByLocationIdOrderByCreatedAtDesc(locationId);
+        } else if (status != null) {
+            plans = cycleCountPlanRepository.findByStatusOrderByCreatedAtDesc(status);
+        } else {
+            plans = cycleCountPlanRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
+        }
+        return plans.stream().map(this::toResponse).toList();
     }
 
     private void validate(CreateCycleCountPlanRequest request) {

@@ -54,9 +54,10 @@ public class PeopleAvailabilityController {
 
     @Operation(
             summary = "Get current user's primary location",
-            description = "Resolve the authenticated user's primary active location from their staffing assignments.")
+            description = "Resolve the authenticated user's primary active location from their staffing assignments. "
+                    + "Returns 404 when the user has no active assignment flagged as primary.")
     @ApiResponse(responseCode = "200", description = "Primary location resolved successfully.")
-    @ApiResponse(responseCode = "404", description = "No active location assignment found for current user.")
+    @ApiResponse(responseCode = "404", description = "No primary location assignment found for current user.")
     @GetMapping("/me/primary-location")
     @EmitEvent(id = "PEOPLE_PRIMARY_LOCATION_GET", apiVersion = "1")
     @PreAuthorize("hasAuthority('people:availability:view')")

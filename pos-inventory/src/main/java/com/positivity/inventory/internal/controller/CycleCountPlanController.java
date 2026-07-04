@@ -3,14 +3,17 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
+import com.positivity.inventory.internal.enums.CycleCountPlanStatus;
 import com.positivity.inventory.service.CycleCountPlanService;
 import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -55,6 +59,31 @@ public class CycleCountPlanController {
                 .orElseThrow(() -> new IllegalStateException("No current user"));
         CycleCountPlanResponse response = cycleCountPlanService.createPlan(request, createdBy);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping
+    @EmitEvent(id = "INVENTORY_CYCLE_COUNT_PLAN_LIST", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:cycle_count:view"})
+    @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
+    @Operation(
+            summary = "List cycle count plans",
+            description = "Lists cycle count plans, newest first, optionally filtered by location and/or status.",
+            tags = {"Cycle Count Plans"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Cycle count plans returned",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = CycleCountPlanResponse.class))))
+    @ApiResponse(responseCode = "403", description = "User lacks required permission")
+    public ResponseEntity<List<CycleCountPlanResponse>> listPlans(
+            @Parameter(description = "Filter by location identifier") @RequestParam(required = false) UUID locationId,
+            @Parameter(description = "Filter by plan status") @RequestParam(required = false)
+                    CycleCountPlanStatus status) {
+        return ResponseEntity.ok(cycleCountPlanService.listPlans(locationId, status));
     }
 
     @GetMapping("/{planId}")

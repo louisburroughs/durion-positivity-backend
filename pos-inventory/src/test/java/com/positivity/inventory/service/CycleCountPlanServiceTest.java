@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Sort;
 
 /**
  * Unit tests for CycleCountPlanServiceImpl.
@@ -251,5 +252,94 @@ class CycleCountPlanServiceTest {
         when(cycleCountPlanRepository.findById(unknownId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getPlan(unknownId)).isInstanceOf(CycleCountPlanNotFoundException.class);
+    }
+
+    // ─── listPlans ─────────────────────────────────────────────────────────────
+
+    private CycleCountPlan planEntity(UUID planId) {
+        return CycleCountPlan.builder()
+                .planId(planId)
+                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000010"))
+                .zoneIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000011")))
+                .planName("Plan " + planId)
+                .scheduledDate(LocalDate.now(FIXED_CLOCK).plusDays(5))
+                .status(CycleCountPlanStatus.PLANNED)
+                .createdBy(ACTOR_USER_ID)
+                .build();
+    }
+
+    /**
+     * Verifies that listing without filters returns all plans newest first.
+     */
+    @Test
+    void listPlans_noFilters_returnsAllPlans() {
+        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(cycleCountPlanRepository.findAll(any(Sort.class))).thenReturn(List.of(planEntity(planId)));
+
+        List<CycleCountPlanResponse> response = service.listPlans(null, null);
+
+        assertThat(response).hasSize(1);
+        assertThat(response.getFirst().getPlanId()).isEqualTo(planId);
+        verify(cycleCountPlanRepository).findAll(any(Sort.class));
+    }
+
+    /**
+     * Verifies that a locationId filter dispatches to the location-scoped query.
+     */
+    @Test
+    void listPlans_locationFilter_usesLocationQuery() {
+        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000010");
+        when(cycleCountPlanRepository.findByLocationIdOrderByCreatedAtDesc(locationId))
+                .thenReturn(List.of(planEntity(planId)));
+
+        List<CycleCountPlanResponse> response = service.listPlans(locationId, null);
+
+        assertThat(response).hasSize(1);
+        verify(cycleCountPlanRepository).findByLocationIdOrderByCreatedAtDesc(locationId);
+    }
+
+    /**
+     * Verifies that a status filter dispatches to the status-scoped query.
+     */
+    @Test
+    void listPlans_statusFilter_usesStatusQuery() {
+        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(cycleCountPlanRepository.findByStatusOrderByCreatedAtDesc(CycleCountPlanStatus.PLANNED))
+                .thenReturn(List.of(planEntity(planId)));
+
+        List<CycleCountPlanResponse> response = service.listPlans(null, CycleCountPlanStatus.PLANNED);
+
+        assertThat(response).hasSize(1);
+        verify(cycleCountPlanRepository).findByStatusOrderByCreatedAtDesc(CycleCountPlanStatus.PLANNED);
+    }
+
+    /**
+     * Verifies that both filters together dispatch to the combined query.
+     */
+    @Test
+    void listPlans_bothFilters_usesCombinedQuery() {
+        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000010");
+        when(cycleCountPlanRepository.findByLocationIdAndStatusOrderByCreatedAtDesc(
+                        locationId, CycleCountPlanStatus.PLANNED))
+                .thenReturn(List.of(planEntity(planId)));
+
+        List<CycleCountPlanResponse> response = service.listPlans(locationId, CycleCountPlanStatus.PLANNED);
+
+        assertThat(response).hasSize(1);
+        verify(cycleCountPlanRepository)
+                .findByLocationIdAndStatusOrderByCreatedAtDesc(locationId, CycleCountPlanStatus.PLANNED);
+    }
+
+    /**
+     * Verifies that an empty repository result maps to an empty list, not an
+     * error.
+     */
+    @Test
+    void listPlans_noPlans_returnsEmptyList() {
+        when(cycleCountPlanRepository.findAll(any(Sort.class))).thenReturn(List.of());
+
+        assertThat(service.listPlans(null, null)).isEmpty();
     }
 }

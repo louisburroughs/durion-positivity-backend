@@ -37,16 +37,19 @@ Direction defaults to `desc` when omitted.
 
 Implemented (`PeopleAvailabilityController`). **404 is the expected "no primary
 location" answer**, not a routing gap. The service resolves the caller's active
-`EmployeeLocationAssignment` for today and returns 404 (`ProblemDetail`) when:
+`EmployeeLocationAssignment` for today **flagged as primary** and returns 404
+(`ProblemDetail`) when:
 
-- the user has no active location assignment for the date
-  (`"…no active location assignment exists for requester on <date>"`), or
+- the user has no active assignment flagged primary for the date
+  (`"No primary location assignment exists for requester on <date>"`), or
 - no user→person link exists (`"No person link found for username: …"`).
+
+(Previously the endpoint fell back to any active assignment even when none was
+flagged primary; it now strictly returns 404 when the primary location is null.
+The availability fallback below still accepts any active assignment.)
 
 The frontend's graceful degradation to a location picker is the right behavior;
 treat this 404 as a normal domain outcome and exclude it from audit error counts.
-(There is no empty-200 variant today; if the frontend would rather have
-`200` + `null`, that is an API-shape change to request separately.)
 
 Note: both endpoints require the `people:availability:view` authority, which no
 standard role grants by default — a missing grant surfaces as 403, not 404.
@@ -64,7 +67,7 @@ missing route.
 
 | Frontend path (internal form) | Status | Canonical route |
 |---|---|---|
-| `GET /v1/inventory/cycleCountPlans` (LIST) | **Does not exist** | Only `POST /v1/inventory/cycleCountPlans` and `GET /v1/inventory/cycleCountPlans/{planId}`. No collection LIST is implemented (matches the SDK). A list endpoint is a new-feature request. (`GET /v1/inventory/cycleCountAdjustments` *is* a list, if adjustments are what the page needs.) |
+| `GET /v1/inventory/cycleCountPlans` (LIST) | ✅ **Added** | Collection LIST now implemented: `GET /v1/inventory/cycleCountPlans` with optional `locationId` and `status` (`PLANNED`, …) filters, newest first. Requires `inventory:cycle_count:view`. The SDK should add a matching `listPlans` operation. |
 | `GET /v1/inventory/putaway/tasks` | ✅ Exists | Optional params `locationId`, `storageLocationId`. |
 | `GET /v1/inventory/replenishment/tasks` | ✅ Exists | No params. |
 | `GET /v1/inventory/locations` | ✅ Exists | `InventoryReferenceDataController`. Also `GET /v1/inventory/storage-locations`, `GET /v1/inventory/location-zones`. |
