@@ -2786,6 +2786,10 @@ components:
           type: string
           description: Identifier of the location in the HR system of record
           example: HR-1001
+        timezone:
+          type: string
+          description: IANA timezone identifier of the location
+          example: America/New_York
         updatedAt:
           type: string
           format: date-time

@@ -9,6 +9,7 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -98,7 +99,7 @@ public class LocationSyncController {
             content =
                     @Content(
                             mediaType = "application/json",
-                            schema = @Schema(description = "Array of sync log entries")))
+                            array = @ArraySchema(schema = @Schema(implementation = SyncLogResponse.class))))
     @ApiResponse(
             responseCode = "403",
             description = "User lacks required location view authority",
