@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 15")
-    void catalogVersionIsFifteen() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(15);
+    @DisplayName("CATALOG_VERSION is 16")
+    void catalogVersionIsSixteen() {
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(16);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 346")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 348")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1180,8 +1180,11 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(345)).isEqualTo("PERM_workorder:labor:add_on_behalf");
         // catalog v15 (#762/CAP-007): invoice finalize-override authority appended (bit 346)
         assertThat(GatewayPermissionCatalog.authorityForBit(346)).isEqualTo("PERM_invoice:finalize:override");
+        // catalog v16 (#809): mcp tool authorities appended (bits 347-348)
+        assertThat(GatewayPermissionCatalog.authorityForBit(347)).isEqualTo("PERM_mcp:tool:manage");
+        assertThat(GatewayPermissionCatalog.authorityForBit(348)).isEqualTo("PERM_mcp:tool:view");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(347)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(349)).isNull();
     }
 
     @Test
