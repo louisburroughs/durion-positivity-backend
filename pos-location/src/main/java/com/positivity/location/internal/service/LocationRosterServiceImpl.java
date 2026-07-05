@@ -52,6 +52,7 @@ public class LocationRosterServiceImpl implements LocationRosterService {
                 .code(location.getCode())
                 .status(location.getStatus())
                 .hrLocationId(location.getHrLocationId())
+                .timezone(location.getTimezone())
                 .updatedAt(location.getUpdatedAt())
                 .build();
     }

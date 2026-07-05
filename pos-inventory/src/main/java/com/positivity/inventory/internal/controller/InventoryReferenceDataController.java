@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -106,5 +107,34 @@ public class InventoryReferenceDataController {
     public ResponseEntity<Page<LocationZoneDto>> listLocationZones(
             @RequestParam(required = false) UUID locationId, @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(inventoryReferenceDataService.listLocationZones(locationId, pageable));
+    }
+
+    // pos-location owns this vocabulary (StorageLocationType, CAP-214 #39);
+    // this mirror is pinned by the CAP-214 #40 frontend contract.
+    private static final List<String> STORAGE_TYPES = List.of("FLOOR", "SHELF", "BIN", "CAGE", "TRUCK");
+
+    @GetMapping("/meta/storage-types")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:location:view"})
+    @PreAuthorize("hasAuthority('inventory:location:view')")
+    @Operation(
+            operationId = "listStorageTypes",
+            summary = "List storage location types",
+            description = "Returns the supported storage location type codes.",
+            tags = {"Inventory Reference Data"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Storage types returned",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(description = "Array of storage type codes")))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required location view authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<List<String>> listStorageTypes() {
+        return ResponseEntity.ok(STORAGE_TYPES);
     }
 }

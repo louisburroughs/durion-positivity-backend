@@ -17,6 +17,8 @@ permissions:
     description: "View storage location configuration and site default location assignments"
   - name: "inventory:location:admin"
     description: "Manage storage location lifecycle and site default location assignments"
+  - name: "inventory:location:sync"
+    description: "Trigger a location roster sync from pos-location into the local reference table"
   - name: "inventory:pick_list:create"
     description: "Create pick lists for workorders"
   - name: "inventory:pick_list:view"
