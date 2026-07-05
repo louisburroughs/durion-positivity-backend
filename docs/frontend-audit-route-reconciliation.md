@@ -89,7 +89,7 @@ missing route.
 
 | Frontend path (internal form) | Status | Canonical route |
 |---|---|---|
-| `GET /v1/inventory/cycleCountPlans` (LIST) | ✅ **Added** | Collection LIST now implemented: `GET /v1/inventory/cycleCountPlans` with optional `locationId` and `status` (`PLANNED`, …) filters, newest first. Requires `inventory:cycle_count:view`. The SDK should add a matching `listPlans` operation. |
+| `GET /v1/inventory/cycleCountPlans` (LIST) | ✅ **Added** | Collection LIST now implemented: `GET /v1/inventory/cycleCountPlans` with optional `locationId` and `status` (`PLANNED`, …) filters, newest first, paged via `page`/`size` (default size 50; response stays a plain array). Requires `inventory:cycle_count:view`. The SDK should add a matching `listPlans` operation. |
 | `GET /v1/inventory/putaway/tasks` | ✅ Exists | Optional params `locationId`, `storageLocationId`. |
 | `GET /v1/inventory/replenishment/tasks` | ✅ Exists | No params. |
 | `GET /v1/inventory/locations` | ✅ Exists | `InventoryReferenceDataController`. Also `GET /v1/inventory/storage-locations`, `GET /v1/inventory/location-zones`. |

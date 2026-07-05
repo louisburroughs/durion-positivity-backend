@@ -1295,8 +1295,8 @@ paths:
       tags:
       - Cycle Count Plans
       summary: List cycle count plans
-      description: Lists cycle count plans, newest first, optionally filtered by location
-        and/or status.
+      description: Lists one page of cycle count plans, newest first, optionally filtered
+        by location and/or status. Bounded by page/size (default size 50).
       operationId: listPlans
       parameters:
       - name: locationId
@@ -1319,6 +1319,24 @@ paths:
           - APPROVED
           - REJECTED
           - CANCELLED
+      - name: page
+        in: query
+        description: Page index (0-based)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+          exclusiveMinimum: 0
       responses:
         '200':
           description: Cycle count plans returned

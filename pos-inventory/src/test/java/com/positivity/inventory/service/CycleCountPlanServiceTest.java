@@ -3,6 +3,8 @@ package com.positivity.inventory.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,8 +24,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 /**
@@ -269,77 +275,39 @@ class CycleCountPlanServiceTest {
     }
 
     /**
-     * Verifies that listing without filters returns all plans newest first.
+     * Verifies that the filters and paging reach the repository query and the
+     * matching page maps to responses (empty filters pass through as nulls).
      */
     @Test
-    void listPlans_noFilters_returnsAllPlans() {
+    void listPlans_passesFiltersAndPagingToQuery() {
         UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        when(cycleCountPlanRepository.findAll(any(Sort.class))).thenReturn(List.of(planEntity(planId)));
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000010");
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        when(cycleCountPlanRepository.findByOptionalFilters(
+                        eq(locationId), eq(CycleCountPlanStatus.PLANNED), pageableCaptor.capture()))
+                .thenReturn(new PageImpl<>(List.of(planEntity(planId))));
 
-        List<CycleCountPlanResponse> response = service.listPlans(null, null);
+        List<CycleCountPlanResponse> response = service.listPlans(locationId, CycleCountPlanStatus.PLANNED, 2, 25);
 
         assertThat(response).hasSize(1);
         assertThat(response.getFirst().getPlanId()).isEqualTo(planId);
-        verify(cycleCountPlanRepository).findAll(any(Sort.class));
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getPageNumber()).isEqualTo(2);
+        assertThat(pageable.getPageSize()).isEqualTo(25);
+        Sort.Order order = pageable.getSort().iterator().next();
+        assertThat(order.getProperty()).isEqualTo("createdAt");
+        assertThat(order.getDirection()).isEqualTo(Sort.Direction.DESC);
     }
 
     /**
-     * Verifies that a locationId filter dispatches to the location-scoped query.
-     */
-    @Test
-    void listPlans_locationFilter_usesLocationQuery() {
-        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000010");
-        when(cycleCountPlanRepository.findByLocationIdOrderByCreatedAtDesc(locationId))
-                .thenReturn(List.of(planEntity(planId)));
-
-        List<CycleCountPlanResponse> response = service.listPlans(locationId, null);
-
-        assertThat(response).hasSize(1);
-        verify(cycleCountPlanRepository).findByLocationIdOrderByCreatedAtDesc(locationId);
-    }
-
-    /**
-     * Verifies that a status filter dispatches to the status-scoped query.
-     */
-    @Test
-    void listPlans_statusFilter_usesStatusQuery() {
-        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        when(cycleCountPlanRepository.findByStatusOrderByCreatedAtDesc(CycleCountPlanStatus.PLANNED))
-                .thenReturn(List.of(planEntity(planId)));
-
-        List<CycleCountPlanResponse> response = service.listPlans(null, CycleCountPlanStatus.PLANNED);
-
-        assertThat(response).hasSize(1);
-        verify(cycleCountPlanRepository).findByStatusOrderByCreatedAtDesc(CycleCountPlanStatus.PLANNED);
-    }
-
-    /**
-     * Verifies that both filters together dispatch to the combined query.
-     */
-    @Test
-    void listPlans_bothFilters_usesCombinedQuery() {
-        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000010");
-        when(cycleCountPlanRepository.findByLocationIdAndStatusOrderByCreatedAtDesc(
-                        locationId, CycleCountPlanStatus.PLANNED))
-                .thenReturn(List.of(planEntity(planId)));
-
-        List<CycleCountPlanResponse> response = service.listPlans(locationId, CycleCountPlanStatus.PLANNED);
-
-        assertThat(response).hasSize(1);
-        verify(cycleCountPlanRepository)
-                .findByLocationIdAndStatusOrderByCreatedAtDesc(locationId, CycleCountPlanStatus.PLANNED);
-    }
-
-    /**
-     * Verifies that an empty repository result maps to an empty list, not an
+     * Verifies that null filters and an empty page map to an empty list, not an
      * error.
      */
     @Test
-    void listPlans_noPlans_returnsEmptyList() {
-        when(cycleCountPlanRepository.findAll(any(Sort.class))).thenReturn(List.of());
+    void listPlans_noFiltersNoPlans_returnsEmptyList() {
+        when(cycleCountPlanRepository.findByOptionalFilters(isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(Page.empty());
 
-        assertThat(service.listPlans(null, null)).isEmpty();
+        assertThat(service.listPlans(null, null, 0, 50)).isEmpty();
     }
 }
