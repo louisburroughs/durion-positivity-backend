@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.JournalEntryReversalRequest;
 import com.positivity.accounting.internal.dto.JournalEntryTraceabilityResponse;
 import com.positivity.accounting.internal.dto.PagedResponse;
+import com.positivity.accounting.internal.service.SortParamParser;
 import com.positivity.accounting.service.JournalEntryService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,6 +18,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -48,6 +50,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class JournalEntryController {
 
     private static final Logger log = LoggerFactory.getLogger(JournalEntryController.class);
+
+    /**
+     * API sort field → entity property. The API exposes {@code modifiedAt}
+     * (see JournalEntryResponse) while the entity property is {@code updatedAt}.
+     */
+    private static final Map<String, String> SORTABLE_PROPERTIES = Map.of(
+            "createdAt", "createdAt",
+            "modifiedAt", "updatedAt",
+            "updatedAt", "updatedAt",
+            "transactionDate", "transactionDate",
+            "postedAt", "postedAt",
+            "status", "status",
+            "entryType", "entryType",
+            "description", "description",
+            "createdBy", "createdBy",
+            "journalEntryId", "journalEntryId");
+
     private final JournalEntryService journalEntryService;
 
     public JournalEntryController(@NonNull JournalEntryService journalEntryService) {
@@ -64,15 +83,24 @@ public class JournalEntryController {
             description = "Retrieve paginated journal entries.",
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "200", description = "Journal entries listed")
+    @ApiResponse(responseCode = "400", description = "Unsupported sort property or direction")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_LIST", apiVersion = "1")
     public ResponseEntity<PagedResponse<JournalEntryResponse>> listJournalEntries(
             @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @Positive @RequestParam(defaultValue = "20") int size,
-            @Parameter(description = "Sort field") @NotBlank @RequestParam(defaultValue = "createdAt") String sort) {
+            @Parameter(
+                            description = "Sort field with optional direction, e.g. 'modifiedAt,desc'. "
+                                    + "Supported fields: createdAt, modifiedAt, updatedAt, transactionDate, "
+                                    + "postedAt, status, entryType, description, createdBy, journalEntryId. "
+                                    + "Direction defaults to desc.")
+                    @NotBlank
+                    @RequestParam(defaultValue = "createdAt")
+                    String sort) {
         log.debug("Listing journal entries: page={}, size={}", page, size);
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, sort));
+        Pageable pageable =
+                PageRequest.of(page, size, SortParamParser.parse(sort, SORTABLE_PROPERTIES, Sort.Direction.DESC));
         var entryPage = journalEntryService.listJournalEntries(pageable);
 
         PagedResponse<JournalEntryResponse> response = new PagedResponse<>(

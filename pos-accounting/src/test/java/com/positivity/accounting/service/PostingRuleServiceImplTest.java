@@ -13,6 +13,7 @@ import com.positivity.accounting.internal.dto.PostingRuleVersionResponse;
 import com.positivity.accounting.internal.entity.PostingRuleSet;
 import com.positivity.accounting.internal.entity.PostingRuleVersion;
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
+import com.positivity.accounting.internal.exception.UnsupportedSortPropertyException;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
 import com.positivity.accounting.internal.service.PostingRuleServiceImpl;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -35,6 +37,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 /**
  * Unit tests for PostingRuleServiceImpl.
@@ -195,6 +198,64 @@ class PostingRuleServiceImplTest {
         var result = service.listRuleSetsAsResponse(0, 10, "name");
 
         assertThat(result).isNotNull();
+    }
+
+    @Test
+    @DisplayName("listRuleSetsAsResponse - maps 'modifiedAt,desc' to entity property updatedAt descending")
+    void listRuleSetsAsResponse_mapsModifiedAtWithDirection() {
+        Page<PostingRuleSet> page = new PageImpl<>(List.of(testRuleSet));
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        when(ruleSetRepository.findAll(pageableCaptor.capture())).thenReturn(page);
+
+        service.listRuleSetsAsResponse(0, 20, "modifiedAt,desc");
+
+        Sort.Order order = pageableCaptor.getValue().getSort().iterator().next();
+        assertThat(order.getProperty()).isEqualTo("updatedAt");
+        assertThat(order.getDirection()).isEqualTo(Sort.Direction.DESC);
+    }
+
+    @Test
+    @DisplayName("listRuleSetsAsResponse - honors ascending direction")
+    void listRuleSetsAsResponse_honorsAscendingDirection() {
+        Page<PostingRuleSet> page = new PageImpl<>(List.of(testRuleSet));
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        when(ruleSetRepository.findAll(pageableCaptor.capture())).thenReturn(page);
+
+        service.listRuleSetsAsResponse(0, 20, "createdAt,asc");
+
+        Sort.Order order = pageableCaptor.getValue().getSort().iterator().next();
+        assertThat(order.getProperty()).isEqualTo("createdAt");
+        assertThat(order.getDirection()).isEqualTo(Sort.Direction.ASC);
+    }
+
+    @Test
+    @DisplayName("listRuleSetsAsResponse - defaults to descending when direction omitted")
+    void listRuleSetsAsResponse_defaultsToDescending() {
+        Page<PostingRuleSet> page = new PageImpl<>(List.of(testRuleSet));
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        when(ruleSetRepository.findAll(pageableCaptor.capture())).thenReturn(page);
+
+        service.listRuleSetsAsResponse(0, 20, "createdAt");
+
+        Sort.Order order = pageableCaptor.getValue().getSort().iterator().next();
+        assertThat(order.getProperty()).isEqualTo("createdAt");
+        assertThat(order.getDirection()).isEqualTo(Sort.Direction.DESC);
+    }
+
+    @Test
+    @DisplayName("listRuleSetsAsResponse - rejects unknown sort property")
+    void listRuleSetsAsResponse_rejectsUnknownSortProperty() {
+        assertThatThrownBy(() -> service.listRuleSetsAsResponse(0, 20, "nonexistentField,desc"))
+                .isInstanceOf(UnsupportedSortPropertyException.class)
+                .hasMessageContaining("nonexistentField");
+    }
+
+    @Test
+    @DisplayName("listRuleSetsAsResponse - rejects unknown sort direction")
+    void listRuleSetsAsResponse_rejectsUnknownSortDirection() {
+        assertThatThrownBy(() -> service.listRuleSetsAsResponse(0, 20, "createdAt,sideways"))
+                .isInstanceOf(UnsupportedSortPropertyException.class)
+                .hasMessageContaining("sideways");
     }
 
     @Test

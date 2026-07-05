@@ -15,6 +15,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +42,21 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class PostingRuleServiceImpl implements PostingRuleService {
     private static final String VERSION_NOT_FOUND = "Version not found: ";
+
+    /**
+     * API sort field → entity property. The API exposes {@code modifiedAt}
+     * (see PostingRuleSetResponse) while the entity property is {@code updatedAt}.
+     */
+    private static final Map<String, String> SORTABLE_PROPERTIES = Map.of(
+            "createdAt", "createdAt",
+            "modifiedAt", "updatedAt",
+            "updatedAt", "updatedAt",
+            "name", "name",
+            "eventType", "eventType",
+            "description", "description",
+            "createdBy", "createdBy",
+            "modifiedBy", "modifiedBy",
+            "postingRuleSetId", "postingRuleSetId");
 
     private final Clock clock;
 
@@ -96,7 +112,8 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     @Transactional(readOnly = true)
     public PostingRuleSetListResponse listRuleSetsAsResponse(int page, int size, String sort) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, sort));
+        Pageable pageable =
+                PageRequest.of(page, size, SortParamParser.parse(sort, SORTABLE_PROPERTIES, Sort.Direction.DESC));
         Page<PostingRuleSet> ruleSetsPage = ruleSetRepository.findAll(pageable);
         return PostingRuleMapper.toListResponse(ruleSetsPage);
     }

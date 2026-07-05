@@ -9,8 +9,13 @@ import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.service.CycleCountPlanService;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +28,8 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
 
     @Override
     @Transactional
-    public CycleCountPlanResponse createPlan(CreateCycleCountPlanRequest request, String createdBy) {
+    public @NonNull CycleCountPlanResponse createPlan(
+            @NonNull CreateCycleCountPlanRequest request, @NonNull String createdBy) {
         validate(request);
 
         CycleCountPlan saved = cycleCountPlanRepository.save(CycleCountPlan.builder()
@@ -40,11 +46,21 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
 
     @Override
     @Transactional(readOnly = true)
-    public CycleCountPlanResponse getPlan(UUID planId) {
+    public @NonNull CycleCountPlanResponse getPlan(@NonNull UUID planId) {
         return cycleCountPlanRepository
                 .findById(planId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new CycleCountPlanNotFoundException(planId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull List<CycleCountPlanResponse> listPlans(
+            UUID locationId, CycleCountPlanStatus status, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return cycleCountPlanRepository.findByOptionalFilters(locationId, status, pageable).getContent().stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     private void validate(CreateCycleCountPlanRequest request) {
