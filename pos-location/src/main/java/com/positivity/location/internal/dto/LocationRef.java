@@ -50,6 +50,12 @@ public class LocationRef {
     private String hrLocationId;
 
     @Schema(
+            description = "IANA timezone identifier of the location",
+            example = "America/New_York",
+            requiredMode = NOT_REQUIRED)
+    private String timezone;
+
+    @Schema(
             description = "Timestamp when the location was last updated (ISO 8601)",
             example = "2026-06-18T08:00:00Z",
             requiredMode = NOT_REQUIRED)
