@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.dto.StorageLocationDto;
 import com.positivity.inventory.service.InventoryReferenceDataService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -129,7 +130,7 @@ public class InventoryReferenceDataController {
             content =
                     @Content(
                             mediaType = "application/json",
-                            schema = @Schema(description = "Array of storage type codes")))
+                            array = @ArraySchema(schema = @Schema(type = "string", example = "SHELF"))))
     @ApiResponse(
             responseCode = "403",
             description = "User lacks required location view authority",

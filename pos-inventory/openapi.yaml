@@ -22,6 +22,8 @@ tags:
   description: Pick list and pick task management endpoints
 - name: Putaway Execution
   description: Execute putaway tasks with validation and audit events
+- name: Location Sync
+  description: Location roster sync trigger and audit log endpoints
 - name: Inventory Reservations
   description: Reserve, promote, and cancel inventory allocations for workorder lines
 - name: Shortage Resolution
@@ -1240,6 +1242,49 @@ paths:
         - inventory:location:admin
       x-required-permissions:
       - inventory:location:admin
+  /v1/inventory/locations/sync:
+    post:
+      tags:
+      - Location Sync
+      summary: Trigger a location roster sync
+      description: Runs one bulk sync of the location roster from pos-location into the local reference table. Re-sending the same Idempotency-Key returns the original run instead of syncing again.
+      operationId: triggerLocationSync
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        description: Client-generated key that makes retries idempotent
+        required: false
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '202':
+          description: Sync run completed and its summary returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationSyncRunResponse'
+        '403':
+          description: User lacks required sync authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '503':
+          description: pos-location unavailable; the failure is recorded in the sync log
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:sync
+      x-required-permissions:
+      - inventory:location:sync
   /v1/inventory/goods-receipts:
     post:
       tags:
@@ -1295,8 +1340,7 @@ paths:
       tags:
       - Cycle Count Plans
       summary: List cycle count plans
-      description: Lists one page of cycle count plans, newest first, optionally filtered
-        by location and/or status. Bounded by page/size (default size 50).
+      description: Lists one page of cycle count plans, newest first, optionally filtered by location and/or status. Bounded by page/size (default size 50).
       operationId: listPlans
       parameters:
       - name: locationId
@@ -2016,6 +2060,110 @@ paths:
         - inventory:pick_list:execute
       x-required-permissions:
       - inventory:pick_list:execute
+  /v1/inventory/sync-logs:
+    get:
+      tags:
+      - Location Sync
+      summary: List location sync logs
+      description: Lists one page of location sync audit entries, newest first, optionally filtered by outcome. Accepts page/size or the pageIndex/pageSize aliases; response is a plain array.
+      operationId: listSyncLogs
+      parameters:
+      - name: outcome
+        in: query
+        description: Filter by outcome
+        required: false
+        schema:
+          type: string
+          enum:
+          - OK
+          - PARTIAL
+          - FAILED
+          - INVALID_PAYLOAD
+      - name: page
+        in: query
+        description: Page index (0-based)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          exclusiveMinimum: 0
+      - name: pageIndex
+        in: query
+        description: Alias of page used by SDK clients
+        required: false
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+      - name: pageSize
+        in: query
+        description: Alias of size used by SDK clients
+        required: false
+        schema:
+          type: integer
+          format: int32
+          exclusiveMinimum: 0
+      responses:
+        '200':
+          description: Sync log entries returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SyncLogResponse'
+        '403':
+          description: User lacks required location view authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:view
+      x-required-permissions:
+      - inventory:location:view
+  /v1/inventory/sync-logs/{syncLogId}:
+    get:
+      tags:
+      - Location Sync
+      summary: Get a location sync log entry
+      description: Returns one location sync audit entry by identifier.
+      operationId: getSyncLog
+      parameters:
+      - name: syncLogId
+        in: path
+        description: Sync log identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Sync log entry returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncLogResponse'
+        '404':
+          description: Sync log entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:view
+      x-required-permissions:
+      - inventory:location:view
   /v1/inventory/storage-locations:
     get:
       tags:
@@ -2482,6 +2630,34 @@ paths:
         - inventory:pick_list:view
       x-required-permissions:
       - inventory:pick_list:view
+  /v1/inventory/meta/storage-types:
+    get:
+      tags:
+      - Inventory Reference Data
+      summary: List storage location types
+      description: Returns the supported storage location type codes.
+      operationId: listStorageTypes
+      responses:
+        '200':
+          description: Storage types returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  example: SHELF
+        '403':
+          description: User lacks required location view authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:view
+      x-required-permissions:
+      - inventory:location:view
   /v1/inventory/locations:
     get:
       tags:
@@ -4950,6 +5126,63 @@ components:
           format: date-time
           description: Timestamp when the inventory was moved
           example: 2026-01-15 09:30:00+00:00
+    LocationSyncRunResponse:
+      type: object
+      description: Summary of one location sync run
+      properties:
+        syncRunId:
+          type: string
+          format: uuid
+          description: Identifier of the sync run
+          example: 01960003-0000-7000-8000-000000000001
+        outcome:
+          type: string
+          description: Overall outcome of the run
+          example: OK
+        locationsProcessed:
+          type: integer
+          format: int32
+          description: Number of roster records processed
+          example: 42
+        locationsCreated:
+          type: integer
+          format: int32
+          description: Number of location refs created
+          example: 3
+        locationsUpdated:
+          type: integer
+          format: int32
+          description: Number of location refs updated
+          example: 5
+        locationsUnchanged:
+          type: integer
+          format: int32
+          description: Number of roster records already up to date
+          example: 34
+        locationsFailed:
+          type: integer
+          format: int32
+          description: Number of roster records that failed to apply
+          example: 0
+        startedAt:
+          type: string
+          format: date-time
+          description: When the run started
+        completedAt:
+          type: string
+          format: date-time
+          description: When the run completed
+        correlationId:
+          type: string
+          description: Correlation id of the triggering request
+      required:
+      - locationsCreated
+      - locationsFailed
+      - locationsProcessed
+      - locationsUnchanged
+      - locationsUpdated
+      - outcome
+      - syncRunId
     CreateGoodsReceiptLineRequest:
       type: object
       description: Request payload describing a single received line item when recording a goods receipt against a purchase order
@@ -6068,6 +6301,85 @@ components:
           example: IN_PROGRESS
       required:
       - status
+    SyncLogResponse:
+      type: object
+      description: Location sync audit log entry
+      properties:
+        syncLogId:
+          type: string
+          format: uuid
+          description: Identifier of this log entry
+          example: 01960003-0000-7000-8000-000000000001
+        syncRunId:
+          type: string
+          format: uuid
+          description: Identifier of the sync run this entry belongs to
+          example: 01960003-0000-7000-8000-000000000002
+        scope:
+          type: string
+          description: RUN summary entry or RECORD failure entry
+          example: RUN
+        outcome:
+          type: string
+          description: Outcome of the run or record
+          example: OK
+        correlationId:
+          type: string
+          description: Correlation id of the triggering request
+        triggeredBy:
+          type: string
+          description: User or system that triggered the run
+        locationId:
+          type: string
+          format: uuid
+          description: pos-location id of the record (RECORD scope only)
+        hrLocationId:
+          type: string
+          description: HR location id of the record (RECORD scope only)
+        payload:
+          type: string
+          description: Raw roster payload of a failed record
+        errorMessage:
+          type: string
+          description: Error detail when the entry is a failure
+        locationsProcessed:
+          type: integer
+          format: int32
+          description: Number of roster records processed (RUN scope only)
+        locationsCreated:
+          type: integer
+          format: int32
+          description: Number of location refs created (RUN scope only)
+        locationsUpdated:
+          type: integer
+          format: int32
+          description: Number of location refs updated (RUN scope only)
+        locationsUnchanged:
+          type: integer
+          format: int32
+          description: Number of records already up to date (RUN scope only)
+        locationsFailed:
+          type: integer
+          format: int32
+          description: Number of records that failed to apply (RUN scope only)
+        startedAt:
+          type: string
+          format: date-time
+          description: When the run started
+        completedAt:
+          type: string
+          format: date-time
+          description: When the run completed
+        createdAt:
+          type: string
+          format: date-time
+          description: When this entry was recorded
+      required:
+      - createdAt
+      - outcome
+      - scope
+      - syncLogId
+      - syncRunId
     Pageable:
       type: object
       properties:
