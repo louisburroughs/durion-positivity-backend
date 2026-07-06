@@ -524,11 +524,23 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar -DskipTests -DskipITs \
+          SONAR_BASE_ARGS="-DskipTests -DskipITs \
             -Dsonar.projectKey=louisburroughs_durion-positivity-backend \
             -Dsonar.organization=louisburroughs \
             -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.coverage.jacoco.xmlReportPaths=sonar-coverage/**/jacoco.xml,**/target/site/jacoco/jacoco.xml
+            -Dsonar.coverage.jacoco.xmlReportPaths=sonar-coverage/**/jacoco.xml,**/target/site/jacoco/jacoco.xml"
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # Work around intermittent SonarCloud PR auto-lookup failures by analyzing
+            # the PR head branch directly instead of relying on server-side PR fetch.
+            ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
+              ${SONAR_BASE_ARGS} \
+              -Dsonar.branch.name=${{ github.event.pull_request.head.ref }} \
+              -Dsonar.scm.revision=${{ github.event.pull_request.head.sha }}
+          else
+            ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
+              ${SONAR_BASE_ARGS}
+          fi
 
   code-quality-full:
     name: Full Coverage SonarCloud Analysis
