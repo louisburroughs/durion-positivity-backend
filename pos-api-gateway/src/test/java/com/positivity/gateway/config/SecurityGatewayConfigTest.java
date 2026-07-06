@@ -1180,13 +1180,13 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(345)).isEqualTo("PERM_workorder:labor:add_on_behalf");
         // catalog v15 (#762/CAP-007): invoice finalize-override authority appended (bit 346)
         assertThat(GatewayPermissionCatalog.authorityForBit(346)).isEqualTo("PERM_invoice:finalize:override");
-                // catalog v16 (#809): mcp tool authorities appended (bits 347-348)
+        // catalog v16 (#809): mcp tool authorities appended (bits 347-348)
         assertThat(GatewayPermissionCatalog.authorityForBit(347)).isEqualTo("PERM_mcp:tool:manage");
         assertThat(GatewayPermissionCatalog.authorityForBit(348)).isEqualTo("PERM_mcp:tool:view");
-                // catalog v17 (#818 checks): inventory location sync authority appended (bit 349)
-                assertThat(GatewayPermissionCatalog.authorityForBit(349)).isEqualTo("PERM_inventory:location:sync");
-                // beyond array must return null
-                assertThat(GatewayPermissionCatalog.authorityForBit(350)).isNull();
+        // catalog v17 (#818 checks): inventory location sync authority appended (bit 349)
+        assertThat(GatewayPermissionCatalog.authorityForBit(349)).isEqualTo("PERM_inventory:location:sync");
+        // beyond array must return null
+        assertThat(GatewayPermissionCatalog.authorityForBit(350)).isNull();
     }
 
     @Test

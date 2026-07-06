@@ -162,9 +162,7 @@ public class PartyServiceImpl implements PartyService {
                 .legalName(personName)
                 .displayName(personName)
                 .status(personParty.getStatus().toString())
-                .createdAt(personParty.getCreatedAt() != null
-                        ? ISO_FORMATTER.format(personParty.getCreatedAt())
-                        : ISO_FORMATTER.format(Instant.EPOCH))
+            .createdAt(ISO_FORMATTER.format(requireNonNullField(personParty.getCreatedAt(), "createdAt")))
                 .modifiedAt(personParty.getModifiedAt() != null
                         ? ISO_FORMATTER.format(personParty.getModifiedAt())
                         : null)
@@ -709,8 +707,7 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private @Nullable PersonParty findPersonPartyByIdInternal(UUID partyId) {
-        var personResult = personPartyRepository.findById(partyId);
-        return personResult != null ? personResult.orElse(null) : null;
+        return personPartyRepository.findById(partyId).orElse(null);
     }
 
     @Override
