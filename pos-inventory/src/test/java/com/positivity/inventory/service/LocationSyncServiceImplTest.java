@@ -231,6 +231,7 @@ class LocationSyncServiceImplTest {
         UUID locationId = UUID.randomUUID();
         LocationRosterEntry sparse =
                 new LocationRosterEntry(locationId, "Shop A Renamed", null, null, null, null, null);
+        Instant priorSourceUpdatedAt = Instant.parse("2026-06-01T00:00:00Z");
         LocationRefEntity existing = LocationRefEntity.builder()
                 .locationId(locationId)
                 .name("Shop A")
@@ -238,6 +239,7 @@ class LocationSyncServiceImplTest {
                 .status("ACTIVE")
                 .hrLocationId("HR-1")
                 .timezone("America/New_York")
+                .sourceUpdatedAt(priorSourceUpdatedAt)
                 .active(true)
                 .build();
         when(locationRosterClient.fetchRoster()).thenReturn(List.of(sparse));
@@ -256,6 +258,7 @@ class LocationSyncServiceImplTest {
         assertThat(saved.getTimezone()).isEqualTo("America/New_York");
         assertThat(saved.getStatus()).isEqualTo("ACTIVE");
         assertThat(saved.isActive()).isTrue();
+        assertThat(saved.getSourceUpdatedAt()).isEqualTo(priorSourceUpdatedAt);
     }
 
     // ─── listSyncLogs / getSyncLog ─────────────────────────────────────────────

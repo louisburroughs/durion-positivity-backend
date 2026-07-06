@@ -121,6 +121,7 @@ public class LocationSyncController {
     }
 
     @GetMapping("/sync-logs/{syncLogId}")
+    @EmitEvent(id = "INVENTORY_LOCATION_SYNC_LOG_GET", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:view"})

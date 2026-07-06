@@ -194,7 +194,7 @@ public class LocationSyncServiceImpl implements LocationSyncService {
             ref.setActive(entryActive);
             changed = true;
         }
-        if (!Objects.equals(ref.getSourceUpdatedAt(), entry.updatedAt())) {
+        if (entry.updatedAt() != null && !Objects.equals(ref.getSourceUpdatedAt(), entry.updatedAt())) {
             ref.setSourceUpdatedAt(entry.updatedAt());
             changed = true;
         }
