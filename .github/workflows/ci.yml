@@ -531,11 +531,13 @@ jobs:
             -Dsonar.coverage.jacoco.xmlReportPaths=sonar-coverage/**/jacoco.xml,**/target/site/jacoco/jacoco.xml"
 
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # Work around intermittent SonarCloud PR auto-lookup failures by analyzing
-            # the PR head branch directly instead of relying on server-side PR fetch.
+            # Force PR-scoped analysis explicitly to avoid branch-level quality-gate
+            # evaluation and bypass flaky PR auto-detection.
             ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
               ${SONAR_BASE_ARGS} \
-              -Dsonar.branch.name=${{ github.event.pull_request.head.ref }} \
+              -Dsonar.pullrequest.key=${{ github.event.pull_request.number }} \
+              -Dsonar.pullrequest.branch=${{ github.event.pull_request.head.ref }} \
+              -Dsonar.pullrequest.base=${{ github.event.pull_request.base.ref }} \
               -Dsonar.scm.revision=${{ github.event.pull_request.head.sha }}
           else
             ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
