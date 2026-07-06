@@ -6,6 +6,7 @@ import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRespon
 import com.positivity.customer.internal.entity.CommunicationPreference;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
+import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.CommunicationPreferenceService;
 import java.time.Clock;
 import java.time.Instant;
@@ -49,14 +50,17 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
 
     private final CommunicationPreferenceRepository preferenceRepository;
     private final CommercialPartyRepository partyRepository;
+        private final PersonPartyRepository personPartyRepository;
 
     public CommunicationPreferenceServiceImpl(
             CommunicationPreferenceRepository preferenceRepository,
             CommercialPartyRepository partyRepository,
+                        PersonPartyRepository personPartyRepository,
             Clock clock) {
         this.clock = clock;
         this.preferenceRepository = preferenceRepository;
         this.partyRepository = partyRepository;
+                this.personPartyRepository = personPartyRepository;
     }
 
     /**
@@ -74,10 +78,7 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
     @NonNull
     @Transactional(readOnly = true)
     public GetCommunicationPreferencesResponse getCommunicationPreferences(@NonNull UUID partyId) {
-        // Verify party exists
-        partyRepository
-                .findById(partyId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found: " + partyId));
+                assertPartyExists(partyId);
 
         // Get preferences or return defaults
         return preferenceRepository
@@ -103,11 +104,7 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
     @Transactional
     public UpsertCommunicationPreferencesResponse upsertCommunicationPreferences(
             @NonNull UUID partyId, @NonNull UpsertCommunicationPreferencesRequest request) {
-
-        // Verify party exists
-        partyRepository
-                .findById(partyId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found: " + partyId));
+        assertPartyExists(partyId);
 
         // Find existing preferences or create new
         CommunicationPreference preference = preferenceRepository
@@ -214,4 +211,10 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
         String value = partyId.toString();
         return value.substring(0, 8) + "...";
     }
+
+        private void assertPartyExists(@NonNull UUID partyId) {
+                if (!partyRepository.existsById(partyId) && !personPartyRepository.existsById(partyId)) {
+                        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found: " + partyId);
+                }
+        }
 }
