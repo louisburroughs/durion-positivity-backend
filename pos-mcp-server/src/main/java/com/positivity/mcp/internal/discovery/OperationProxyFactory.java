@@ -100,11 +100,23 @@ public class OperationProxyFactory {
         if (body != null) {
             requestSpec.contentType(MediaType.APPLICATION_JSON);
         }
+        if (log.isDebugEnabled()) {
+            log.debug("Tool proxy calling {} {} ({})", method, targetUri, logContext);
+        }
         return requestSpec
                 .body(body != null ? BodyInserters.fromValue(body) : BodyInserters.empty())
                 .retrieve()
                 .toEntity(String.class)
-                .map(responseEntity -> successResult(responseEntity.getBody()))
+                .map(responseEntity -> {
+                    if (log.isDebugEnabled()) {
+                        log.debug(
+                                "Tool proxy {} {} -> {}",
+                                method,
+                                targetUri,
+                                responseEntity.getStatusCode().value());
+                    }
+                    return successResult(responseEntity.getBody());
+                })
                 .onErrorResume(ex -> {
                     log.warn("Tool proxy failed for {} {}: {}", logContext, targetUri, ex.getMessage());
                     return Mono.just(errorResult(ex.getMessage()));

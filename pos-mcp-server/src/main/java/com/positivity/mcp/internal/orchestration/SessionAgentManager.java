@@ -8,11 +8,16 @@ import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
 import com.positivity.mcp.internal.orchestration.memory.SessionSummary;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.PermissionCodes;
+import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
+import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.service.AgentOrchestrationService;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
+import com.positivity.mcp.service.RolePromptResolver.AssembledPrompt;
 import com.positivity.mcp.service.SessionAgentCacheMetrics;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -23,17 +28,22 @@ import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Component
 @Profile("alpha")
@@ -65,6 +75,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     private final RolePromptResolver rolePromptResolver;
     private final SimpleChatClassifier simpleChatClassifier;
+    private final @Nullable NltiTelemetryEmitter telemetryEmitter;
+    private final @Nullable OpenApiToolProvider openApiToolProvider;
+    private final @Nullable RequestScopedUserContext requestScopedUserContext;
 
     private final int memoryMaxMessages;
     private final int rateLimitPerSession;
@@ -81,6 +94,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @Nullable SessionSummary sessionSummary,
             @NonNull RolePromptResolver rolePromptResolver,
             @NonNull SimpleChatClassifier simpleChatClassifier,
+            @Nullable NltiTelemetryEmitter telemetryEmitter,
+            @Nullable OpenApiToolProvider openApiToolProvider,
+            @Nullable RequestScopedUserContext requestScopedUserContext,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
             @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
@@ -96,6 +112,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         this.sessionSummary = sessionSummary;
         this.rolePromptResolver = rolePromptResolver;
         this.simpleChatClassifier = simpleChatClassifier;
+        this.telemetryEmitter = telemetryEmitter;
+        this.openApiToolProvider = openApiToolProvider;
+        this.requestScopedUserContext = requestScopedUserContext;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
         this.requestCountCache = Caffeine.newBuilder()
@@ -114,8 +133,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     /**
-     * Returns a cached role agent, creating one if absent. User-specific
-     * conversation state is resolved later by the chat memory provider.
+     * Returns a cached role agent, creating one if absent. User-specific conversation state is
+     * resolved later by the chat memory provider.
      */
     @NonNull
     PosAssistant getOrCreateAgent(@NonNull String userId, @NonNull String role) {
@@ -178,6 +197,13 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                         messagePreview);
             }
             PosAssistant agent = getOrCreateAgent(role, cacheKey, selection.roleTools(), selection.fallbackTools());
+            // Gate 3 (G3.3): publish the caller so the dynamic OpenApiToolProvider
+            // (running inside the
+            // cached agent) resolves this request's permission-eligible tools; cleared
+            // in finally.
+            if (requestScopedUserContext != null) {
+                requestScopedUserContext.set(currentUserContext, currentAuthorizationHeader());
+            }
             long agentStartNanos = System.nanoTime();
             String response = agent.chat(memoryKey(username, role), message, formatUserContext(currentUserContext));
             int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -190,6 +216,20 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             if (toolExecutionAuditLogger != null) {
                 toolExecutionAuditLogger.logToolExecution(null, username, true, false, elapsedMs, null);
             }
+            List<String> toolNames = sharedOrchestrationSupport.toolNames(selectedTools);
+            String ragScope = toolRegistry.resolveRagScopeForTools(selectedTools);
+            AssembledPrompt assembled = rolePromptResolver.assemble(role, ragScope);
+            List<String> promptLayers = assembled != null ? assembled.layers() : List.of();
+            emitChatTelemetry(
+                    currentUserContext,
+                    toolNames,
+                    promptLayers,
+                    false,
+                    null,
+                    selection.workflowState().name(),
+                    elapsedMs,
+                    "SUCCESS",
+                    null);
             return response;
         } catch (RuntimeException exception) {
             int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -202,16 +242,39 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                         elapsedMs,
                         exception.getClass().getSimpleName());
             }
+            emitChatTelemetry(
+                    currentUserContext,
+                    List.of(),
+                    List.of(),
+                    false,
+                    null,
+                    null,
+                    elapsedMs,
+                    "ERROR",
+                    exception.getClass().getSimpleName());
             throw new IllegalStateException(
                     "MCP chat failed role=%s elapsedMs=%d errorName=%s"
                             .formatted(role, elapsedMs, exception.getClass().getSimpleName()),
                     exception);
+        } finally {
+            if (requestScopedUserContext != null) {
+                requestScopedUserContext.clear();
+            }
         }
     }
 
     @Override
     public long getCacheSize() {
         return roleAgentCache.estimatedSize();
+    }
+
+    /** The caller's raw {@code Authorization} header from the current servlet request, if present. */
+    private @Nullable String currentAuthorizationHeader() {
+        var attributes = RequestContextHolder.getRequestAttributes();
+        if (attributes instanceof ServletRequestAttributes servletAttributes) {
+            return servletAttributes.getRequest().getHeader("Authorization");
+        }
+        return null;
     }
 
     private PosAssistant buildAgent(@NonNull String role) {
@@ -246,13 +309,23 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         // the provider, so role-level agent prebuilds do not share conversations.
         // Prompt resolution is deferred per-message via systemMessageProvider so that
         // database updates to prompts are visible immediately without agent rebuild.
-        PosAssistant agent = AiServices.builder(PosAssistant.class)
+        var agentBuilder = AiServices.builder(PosAssistant.class)
                 .chatModel(chatModel)
                 .tools(tools)
                 .contentRetriever(resilientContentRetriever)
-                .systemMessageProvider(memoryId -> rolePromptResolver.resolvePrompt(promptName))
-                .chatMemoryProvider(this::chatMemoryFor)
-                .build();
+                .systemMessageProvider(
+                        memoryId -> rolePromptResolver.assemble(role, ragScope).text())
+                .chatMemoryProvider(this::chatMemoryFor);
+        if (openApiToolProvider != null) {
+            // Gate 3 (G3.3): dynamic, permission-gated OpenAPI-discovered tools
+            // resolved per request
+            // from RequestScopedUserContext (set around agent.chat below). A cached
+            // agent never
+            // captures a caller's permissions, so it cannot leak a prior caller's
+            // tools.
+            agentBuilder.toolProvider(openApiToolProvider);
+        }
+        PosAssistant agent = agentBuilder.build();
         LOGGER.debug(
                 "Built MCP role agent role={} promptName={} ragScope={} toolNames={}",
                 role,
@@ -279,8 +352,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     /**
-     * Evicts a user's conversation state and rate counter. Role agents remain
-     * cached.
+     * Evicts a user's conversation state and rate counter. Role agents remain cached.
      */
     @Override
     public void evict(@NonNull String userId) {
@@ -293,7 +365,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         int prebuilt = 0;
         for (String role : toolRegistry.preloadableRoleIdentifiers()) {
             try {
-                // No CurrentUserContext is available during startup warm-up, so prebuild
+                // No CurrentUserContext is available during startup warm-up, so
+                // prebuild
                 // with the AUTHENTICATED-only permission set; callers whose actual
                 // permissionCodes differ get a cache miss and build on demand via
                 // getOrCreateAgent (its key already varies with toolCacheKey).
@@ -345,15 +418,66 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             toolExecutionAuditLogger.logToolExecution(
                     null, currentUserContext.username(), true, false, elapsedMs, null);
         }
+        emitChatTelemetry(currentUserContext, List.of(), List.of(), true, null, null, elapsedMs, "SUCCESS", null);
         return response;
+    }
+
+    /**
+     * Emits one {@code nlti.request.telemetry} event for a completed chat request (Gate 1).
+     * Never throws into the request path — a telemetry failure is logged and swallowed. No-op
+     * when no emitter is configured. {@code correlationId} is taken from the request MDC when
+     * present.
+     */
+    private void emitChatTelemetry(
+            @NonNull CurrentUserContext currentUserContext,
+            @NonNull List<String> selectedToolNames,
+            @NonNull List<String> promptLayers,
+            boolean simpleChat,
+            @Nullable String simpleChatRule,
+            @Nullable String workflowState,
+            long totalMs,
+            @NonNull String status,
+            @Nullable String errorCode) {
+        if (telemetryEmitter == null) {
+            return;
+        }
+        try {
+            String correlationId = MDC.get("correlationId");
+            if (correlationId == null || correlationId.isBlank()) {
+                correlationId = UUID.randomUUID().toString();
+            }
+            List<String> discoveredOpenapiTools = requestScopedUserContext != null
+                    ? requestScopedUserContext.currentDiscoveredOpenapiToolNames()
+                    : List.of();
+            telemetryEmitter.emit(NltiRequestTelemetryFactory.forChatRequest(
+                    correlationId,
+                    Instant.now().toString(),
+                    currentUserContext.primaryRole(),
+                    currentUserContext.permissionCodes().size(),
+                    selectedToolNames,
+                    discoveredOpenapiTools,
+                    promptLayers,
+                    simpleChat,
+                    simpleChatRule,
+                    workflowState,
+                    totalMs,
+                    status,
+                    errorCode));
+        } catch (RuntimeException telemetryFailure) {
+            LOGGER.warn(
+                    "MCP telemetry emission failed role={} status={}",
+                    currentUserContext.primaryRole(),
+                    status,
+                    telemetryFailure);
+        }
     }
 
     private static @NonNull String formatUserContext(@NonNull CurrentUserContext currentUserContext) {
         return "Authenticated user context: username=" + currentUserContext.username()
-                + ", userId=" + currentUserContext.userId()
-                + ", primaryRole=" + currentUserContext.primaryRole()
-                + ", roles=" + currentUserContext.roles()
-                + ", authorityCount=" + currentUserContext.authorities().size()
+                + ", userId=" + currentUserContext.userId() + ", primaryRole="
+                + currentUserContext.primaryRole() + ", roles="
+                + currentUserContext.roles() + ", authorityCount="
+                + currentUserContext.authorities().size()
                 + ". Interpret references to 'me', 'my', or 'current user' as this authenticated user."
                 + " If a question depends on the user's exact permissions, prefer a self-service permissions tool before asking for identifiers.";
     }

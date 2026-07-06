@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.orchestration;
 
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
+import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
@@ -53,19 +54,34 @@ public class ToolSelectionEngine {
 
     public @NonNull ToolSelectionResult selectRoleTools(
             @NonNull String role, @NonNull Set<String> permissionCodes, @NonNull String message) {
-        List<Object> roleTools = roleToolsForMessage(role, permissionCodes, message);
+        // Session-less callers (e.g. /v1/mcp/chat) fall back to message-heuristic derivation.
+        return selectRoleTools(role, permissionCodes, message, deriveWorkflowState(message));
+    }
+
+    /**
+     * Gate 2C: workflow-state-aware selection. {@code workflowState} is an explicit input so a
+     * session-bearing caller can supply the persisted {@code NltiSession} state rather than relying
+     * on message-text heuristics.
+     */
+    public @NonNull ToolSelectionResult selectRoleTools(
+            @NonNull String role,
+            @NonNull Set<String> permissionCodes,
+            @NonNull String message,
+            @NonNull WorkflowState workflowState) {
+        List<Object> roleTools = roleToolsForMessage(role, permissionCodes, message, workflowState);
         List<Object> fallbackTools = sharedOrchestrationSupport.mergeTools(
                 toolRegistry.resolveMasterTools(), fallbackToolsForMessage(message));
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
-                    "MCP shared tool selection role={} permissionCodes={} roleTools={} fallbackTools={} queryPreview=\"{}\"",
+                    "MCP shared tool selection role={} permissionCodes={} workflowState={} roleTools={} fallbackTools={} queryPreview=\"{}\"",
                     role,
                     permissionCodes,
+                    workflowState,
                     sharedOrchestrationSupport.toolNames(roleTools),
                     sharedOrchestrationSupport.toolNames(fallbackTools),
                     sharedOrchestrationSupport.preview(message));
         }
-        return new ToolSelectionResult(roleTools, fallbackTools);
+        return new ToolSelectionResult(roleTools, fallbackTools, workflowState);
     }
 
     public @NonNull List<Object> fullFallbackTools() {
@@ -74,24 +90,29 @@ public class ToolSelectionEngine {
     }
 
     private @NonNull List<Object> roleToolsForMessage(
-            @NonNull String role, @NonNull Set<String> permissionCodes, @NonNull String message) {
+            @NonNull String role,
+            @NonNull Set<String> permissionCodes,
+            @NonNull String message,
+            @NonNull WorkflowState workflowState) {
         List<Object> fullRoleTools = toolRegistry.resolveDomainTools(role);
         if (toolRegistryService == null) {
             logToolSelectorUnavailable(role, permissionCodes, message, fullRoleTools);
             return fullRoleTools;
         }
         try {
-            String workflowState = deriveWorkflowState(message);
-            logWorkflowState(message, workflowState);
+            logWorkflowState(message, workflowState.name());
             List<ToolMetadata> candidates = toolRegistryService.resolveCandidateTools(
-                    new ToolSelectionContext(message, role, workflowState, permissionCodes), candidateToolLimit);
-            logCandidates(role, permissionCodes, workflowState, candidates);
+                    new ToolSelectionContext(message, role, workflowState.name(), permissionCodes), candidateToolLimit);
+            logCandidates(role, permissionCodes, workflowState.name(), candidates);
             List<String> selectedNames =
                     candidates.stream().map(ToolMetadata::name).toList();
             if (selectedNames.isEmpty()) {
                 return logNoCandidates(role, permissionCodes, message, fullRoleTools);
             }
-            List<Object> resolvedTools = toolRegistry.resolveDomainTools(role, selectedNames);
+            // Resolve names across the full registered tool set (not role-scoped): permission gating
+            // + scoring already ran in ToolRegistryService, and tools are bucketed by domain, so a
+            // role-scoped lookup (resolveDomainTools(role, names)) can never match. See Gate 2B / #780.
+            List<Object> resolvedTools = toolRegistry.resolveToolsByName(selectedNames);
             if (resolvedTools.isEmpty() && !fullRoleTools.isEmpty()) {
                 return logResolvedToZeroTools(role, permissionCodes, message, selectedNames, fullRoleTools);
             }
@@ -205,10 +226,15 @@ public class ToolSelectionEngine {
         }
     }
 
-    private @NonNull String deriveWorkflowState(@NonNull String message) {
+    /**
+     * Heuristic workflow-state derivation from message text. Used only as a fallback for
+     * session-less callers; the authoritative state is the persisted {@code NltiSession} value
+     * supplied to the {@code WorkflowState} overload of {@link #selectRoleTools}.
+     */
+    private @NonNull WorkflowState deriveWorkflowState(@NonNull String message) {
         String lower = message.toLowerCase(Locale.ROOT);
         if (containsAny(lower, Set.of("purchase order", "create po", "new po", "po for vendor"))) {
-            return "CREATING_PO";
+            return WorkflowState.CREATING_PO;
         } else if (containsAny(
                 lower,
                 Set.of(
@@ -219,7 +245,7 @@ public class ToolSelectionEngine {
                         "receiving shipment",
                         "advanced shipment notice",
                         "asn"))) {
-            return "RECEIVING_ASN";
+            return WorkflowState.RECEIVING_ASN;
         } else if (containsAny(
                 lower,
                 Set.of(
@@ -228,9 +254,9 @@ public class ToolSelectionEngine {
                         "reconcile inventory",
                         "stock reconciliation",
                         "cycle count"))) {
-            return "INVENTORY_RECON";
+            return WorkflowState.INVENTORY_RECON;
         }
-        return "IDLE";
+        return WorkflowState.IDLE;
     }
 
     private @NonNull List<Object> fallbackToolsForMessage(@NonNull String message) {
@@ -271,5 +297,13 @@ public class ToolSelectionEngine {
     }
 
     public record ToolSelectionResult(
-            @NonNull List<Object> roleTools, @NonNull List<Object> fallbackTools) {}
+            @NonNull List<Object> roleTools,
+            @NonNull List<Object> fallbackTools,
+            @NonNull WorkflowState workflowState) {
+
+        /** Backward-compatible constructor defaulting to {@link WorkflowState#IDLE}. */
+        public ToolSelectionResult(@NonNull List<Object> roleTools, @NonNull List<Object> fallbackTools) {
+            this(roleTools, fallbackTools, WorkflowState.IDLE);
+        }
+    }
 }

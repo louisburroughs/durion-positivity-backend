@@ -57,7 +57,8 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                     "An overlapping assignment already exists for this person, location, and role");
         }
 
-        if (request.isPrimary()) {
+        boolean primary = request.isPrimary();
+        if (primary) {
             repository
                     .findFirstByEmployee_PersonIdAndIsPrimaryTrueAndStatus(
                             request.getPersonId(), AssignmentStatus.ACTIVE)
@@ -79,13 +80,23 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                         existing.setStatus(AssignmentStatus.ENDED);
                         repository.save(existing);
                     });
+        } else if (repository
+                .findFirstByEmployee_PersonIdAndIsPrimaryTrueAndStatus(request.getPersonId(), AssignmentStatus.ACTIVE)
+                .isEmpty()) {
+            // A person's only location must be their primary: /me/primary-location
+            // (and its service-to-service consumers, e.g. pos-workorder location
+            // resolution) returns 404 when no assignment carries the flag.
+            primary = true;
+            log.info(
+                    "Defaulting assignment to primary: person {} has no active primary location",
+                    request.getPersonId());
         }
 
         EmployeeLocationAssignment assignment = EmployeeLocationAssignment.builder()
                 .employee(resolveEmployee(request.getPersonId()))
                 .locationId(request.getLocationId())
                 .role(request.getRole())
-                .isPrimary(request.isPrimary())
+                .isPrimary(primary)
                 .effectiveFrom(request.getEffectiveFrom())
                 .effectiveTo(request.getEffectiveTo())
                 .status(AssignmentStatus.ACTIVE)

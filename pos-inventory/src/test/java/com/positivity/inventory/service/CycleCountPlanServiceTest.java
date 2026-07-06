@@ -3,6 +3,8 @@ package com.positivity.inventory.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,8 +24,13 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 /**
  * Unit tests for CycleCountPlanServiceImpl.
@@ -251,5 +258,56 @@ class CycleCountPlanServiceTest {
         when(cycleCountPlanRepository.findById(unknownId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getPlan(unknownId)).isInstanceOf(CycleCountPlanNotFoundException.class);
+    }
+
+    // ─── listPlans ─────────────────────────────────────────────────────────────
+
+    private CycleCountPlan planEntity(UUID planId) {
+        return CycleCountPlan.builder()
+                .planId(planId)
+                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000010"))
+                .zoneIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000011")))
+                .planName("Plan " + planId)
+                .scheduledDate(LocalDate.now(FIXED_CLOCK).plusDays(5))
+                .status(CycleCountPlanStatus.PLANNED)
+                .createdBy(ACTOR_USER_ID)
+                .build();
+    }
+
+    /**
+     * Verifies that the filters and paging reach the repository query and the
+     * matching page maps to responses (empty filters pass through as nulls).
+     */
+    @Test
+    void listPlans_passesFiltersAndPagingToQuery() {
+        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000010");
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        when(cycleCountPlanRepository.findByOptionalFilters(
+                        eq(locationId), eq(CycleCountPlanStatus.PLANNED), pageableCaptor.capture()))
+                .thenReturn(new PageImpl<>(List.of(planEntity(planId))));
+
+        List<CycleCountPlanResponse> response = service.listPlans(locationId, CycleCountPlanStatus.PLANNED, 2, 25);
+
+        assertThat(response).hasSize(1);
+        assertThat(response.getFirst().getPlanId()).isEqualTo(planId);
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getPageNumber()).isEqualTo(2);
+        assertThat(pageable.getPageSize()).isEqualTo(25);
+        Sort.Order order = pageable.getSort().iterator().next();
+        assertThat(order.getProperty()).isEqualTo("createdAt");
+        assertThat(order.getDirection()).isEqualTo(Sort.Direction.DESC);
+    }
+
+    /**
+     * Verifies that null filters and an empty page map to an empty list, not an
+     * error.
+     */
+    @Test
+    void listPlans_noFiltersNoPlans_returnsEmptyList() {
+        when(cycleCountPlanRepository.findByOptionalFilters(isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        assertThat(service.listPlans(null, null, 0, 50)).isEmpty();
     }
 }

@@ -76,11 +76,15 @@ public class OllamaEmbeddingModelConfiguration {
 
         @Override
         public @NonNull Response<List<Embedding>> embedAll(@NonNull List<TextSegment> textSegments) {
-            List<String> inputs = textSegments.stream().map(TextSegment::text).toList();
+            List<String> inputs = textSegments.stream()
+                    .map(TextSegment::text)
+                    .map(OllamaEmbeddingModelConfiguration::capToContext)
+                    .toList();
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("model", modelName);
             body.put("input", inputs);
             body.put("dimensions", knownDimension());
+            body.put("truncate", true);
 
             EmbedResponse response = restClient
                     .post()
@@ -119,6 +123,19 @@ public class OllamaEmbeddingModelConfiguration {
         public @NonNull String modelName() {
             return modelName;
         }
+    }
+
+    // nomic-embed-text has a ~2048-token context; a long chat message (tool-selection embeds the raw
+    // user text) otherwise makes the embed endpoint reject the request with 400 "the input length
+    // exceeds the context length", surfacing as a 500 on /v1/mcp/chat. Cap conservatively (~4 chars per
+    // token) and also ask Ollama to truncate server-side.
+    static final int MAX_INPUT_CHARS = 8000;
+
+    static String capToContext(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.length() <= MAX_INPUT_CHARS ? text : text.substring(0, MAX_INPUT_CHARS);
     }
 
     private record EmbedResponse(

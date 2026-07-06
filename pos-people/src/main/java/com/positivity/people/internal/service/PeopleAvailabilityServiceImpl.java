@@ -71,22 +71,29 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
     @Override
     @NonNull
     public UUID resolveCurrentUserPrimaryLocationId() {
-        return resolveRequesterLocationId(LocalDate.now(clock));
+        LocalDate targetDate = LocalDate.now(clock);
+        return assignmentRepository.findActiveByPersonIdAndDate(resolveRequesterPersonId(), targetDate).stream()
+                .filter(EmployeeLocationAssignment::isPrimary)
+                .findFirst()
+                .map(EmployeeLocationAssignment::getLocationId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "No primary location assignment exists for requester on " + targetDate));
     }
 
     @NonNull
     private UUID resolveRequesterLocationId(@NonNull LocalDate targetDate) {
-        String username = SecurityContextHelper.getCurrentUsername()
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "locationId was not provided and authenticated user context is missing"));
-
-        UUID personId = userPersonTranslationService.getPersonUuidForUser(username);
-
-        return assignmentRepository.findActiveByPersonIdAndDate(personId, targetDate).stream()
+        return assignmentRepository.findActiveByPersonIdAndDate(resolveRequesterPersonId(), targetDate).stream()
                 .findFirst()
                 .map(EmployeeLocationAssignment::getLocationId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "locationId was not provided and no active location assignment exists for requester on "
                                 + targetDate));
+    }
+
+    @NonNull
+    private UUID resolveRequesterPersonId() {
+        String username = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new EntityNotFoundException("Authenticated user context is missing"));
+        return userPersonTranslationService.getPersonUuidForUser(username);
     }
 }

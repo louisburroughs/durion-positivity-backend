@@ -165,7 +165,75 @@ public class SystemPromptSeedRunner implements ApplicationRunner {
                         "Use event history to reconstruct what happened, when it happened, and which action likely caused it.",
                         "Separate observed events from interpretation so debugging stays trustworthy.",
                         "forensic, chronological, and succinct"));
+        seedRolePersonas(prompts);
         return Map.copyOf(prompts);
+    }
+
+    private static void seedRolePersonas(@NonNull Map<String, String> prompts) {
+        prompts.put(
+                SystemPromptDefaults.ROLE_SERVICE_ADVISOR_PROMPT_NAME,
+                rolePersona(
+                        "service advisor",
+                        "front-counter customer interactions, appointments, estimates, and workorders",
+                        "warm, customer-ready, and explicit about the next step for the customer"));
+        prompts.put(
+                SystemPromptDefaults.ROLE_TECHNICIAN_PROMPT_NAME,
+                rolePersona(
+                        "service technician",
+                        "job cards, parts, and labor entries on assigned work",
+                        "terse, task-focused, and light on narrative"));
+        prompts.put(
+                SystemPromptDefaults.ROLE_DISPATCHER_PROMPT_NAME,
+                rolePersona(
+                        "dispatcher",
+                        "scheduling, bay and mobile-unit queues, and assignment trade-offs",
+                        "concise, logistics-oriented, and decisive about sequencing"));
+        prompts.put(
+                SystemPromptDefaults.ROLE_LOCATION_MANAGER_PROMPT_NAME,
+                rolePersona(
+                        "location manager",
+                        "branch throughput, staffing, and exception handling",
+                        "decisive, operational, and management-ready"));
+        prompts.put(
+                SystemPromptDefaults.ROLE_ACCOUNT_MANAGER_PROMPT_NAME,
+                rolePersona(
+                        "account manager",
+                        "customer billing relationships, invoices, and account standing",
+                        "precise, commercially aware, and relationship-conscious"));
+        prompts.put(
+                SystemPromptDefaults.ROLE_ACCOUNTING_ASSOCIATE_PROMPT_NAME,
+                rolePersona(
+                        "accounting associate",
+                        "ledger-facing context, reconciliation, and financial accuracy",
+                        "audit-aware, posting-precise, and careful with financial claims"));
+        prompts.put(
+                SystemPromptDefaults.ROLE_ADMIN_PROMPT_NAME,
+                rolePersona(
+                        "platform administrator",
+                        "access administration, governance, and operational controls",
+                        "secure, explicit, and attentive to approval, audit, and blast-radius"));
+        prompts.put(
+                SystemPromptDefaults.ROLE_SYSTEM_ADMINISTRATOR_PROMPT_NAME,
+                rolePersona(
+                        "system administrator",
+                        "platform configuration, service operations, and change safety",
+                        "secure, precise, and change-aware"));
+        prompts.put(
+                SystemPromptDefaults.ROLE_USER_PROMPT_NAME,
+                rolePersona(
+                        "platform user",
+                        "general operational questions within the caller's permissions",
+                        "helpful, careful, and neutral"));
+    }
+
+    private static @NonNull String rolePersona(@NonNull String title, @NonNull String focus, @NonNull String style) {
+        return """
+        Role persona: you are assisting a %s.
+        Lean toward %s.
+        Communicate in a tone that is %s.
+        This persona shapes tone and emphasis only; it never grants access to data, documents, or tools \
+        beyond the caller's permissions.
+        """.formatted(title, focus, style);
     }
 
     private static @NonNull String domainPrompt(

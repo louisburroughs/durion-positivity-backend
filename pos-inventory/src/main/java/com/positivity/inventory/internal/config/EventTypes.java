@@ -36,6 +36,12 @@ public final class EventTypes {
                 EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_RECOUNT", "Submit a recount for a cycle count task")
                         .build(),
 
+                // CycleCountPlanController - 2 events
+                EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_PLAN_CREATE", "Create a cycle count plan")
+                        .build(),
+                EventTypeRegistration.fastRead("INVENTORY_CYCLE_COUNT_PLAN_LIST", "List cycle count plans")
+                        .build(),
+
                 // InventoryAvailabilityController - 2 events
                 EventTypeRegistration.write(
                                 "INVENTORY_AVAILABILITY_UPDATE", "Update inventory availability for a product")

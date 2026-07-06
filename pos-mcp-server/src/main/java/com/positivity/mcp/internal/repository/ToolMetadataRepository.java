@@ -1,11 +1,57 @@
 package com.positivity.mcp.internal.repository;
 
+import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
 public interface ToolMetadataRepository {
+
+    /**
+     * Gate 3: permission-gated, embedding-ranked candidates restricted to OpenAPI-discovered
+     * operations ({@code source = 'openapi'}), with their execution coordinates. Same fail-closed
+     * permission ∩ workflow gating as {@link #findTopKByEmbeddingForPermissions}; empty
+     * {@code permissionCodes} short-circuits to an empty result.
+     */
+    @NonNull
+    List<DiscoveredOperation> findDiscoveredCandidatesForPermissions(
+            float @NonNull [] embedding,
+            int limit,
+            @NonNull Set<String> permissionCodes,
+            @NonNull String workflowState);
+
+    /**
+     * Gate 3 (G3.1): upserts a discovered OpenAPI operation as a {@code source='openapi'}
+     * {@code mcp_tool} row (execution coordinates), keyed by tool name. Returns the row id so the
+     * caller can link workflow states and permissions. The embedding is left null for
+     * {@code ToolEmbeddingInitializer} to backfill; {@code ON CONFLICT} preserves an existing one.
+     * Facade rows are untouched.
+     */
+    @NonNull
+    UUID upsertDiscoveredOperation(@NonNull DiscoveredOperation operation, @NonNull String domain);
+
+    /** Gate 3 (G3.1): maps a tool to a workflow state (by name) so it is selectable there. Idempotent. */
+    void linkToolToWorkflow(@NonNull UUID toolId, @NonNull String workflowState);
+
+    /** Gate 3 (G3.1): grants a tool a required permission code (fail-closed gating input). Idempotent. */
+    void addToolPermission(@NonNull UUID toolId, @NonNull String permissionCode);
+
+    /**
+     * Gate 3 (#785): resolves a discovered ({@code source='openapi'}) tool id by its unique name.
+     * Empty when no such openapi tool exists. Facade rows are never returned.
+     */
+    @NonNull
+    Optional<UUID> findDiscoveredToolIdByName(@NonNull String name);
+
+    /** Gate 3 (#785): the permission codes currently granted to a tool, ascending. */
+    @NonNull
+    List<String> listToolPermissions(@NonNull UUID toolId);
+
+    /** Gate 3 (#785): revokes a permission code from a tool. Idempotent (no-op if absent). */
+    void removeToolPermission(@NonNull UUID toolId, @NonNull String permissionCode);
 
     /**
      * Returns enabled tools authorized for {@code workflowState} where the caller holds at
@@ -18,23 +64,8 @@ public interface ToolMetadataRepository {
     List<ToolMetadata> findEnabledByPermissionsAndWorkflow(
             @NonNull Set<String> permissionCodes, @NonNull String workflowState);
 
-    /**
-     * Returns all role names currently defined in the mcp_role table. Used for role-scoped
-     * domain-tool/RAG-scope resolution ({@link
-     * com.positivity.mcp.internal.service.MasterAgentRegistryLoader}), not for {@code
-     * mcp_tool} candidate gating.
-     */
-    @NonNull
-    List<String> findAllRoleNames();
-
-    /**
-     * Returns enabled tools assigned to {@code role} for {@code workflowState} via {@code
-     * mcp_tool_role}/{@code mcp_role}. Used for role-scoped domain-tool/RAG-scope resolution
-     * ({@link com.positivity.mcp.internal.service.MasterAgentRegistryLoader}), not for {@code
-     * mcp_tool} candidate gating.
-     */
-    @NonNull
-    List<ToolMetadata> findEnabledByRoleAndWorkflow(@NonNull String role, @NonNull String workflowState);
+    // Gate 2B / #780: findAllRoleNames() and findEnabledByRoleAndWorkflow() removed — the legacy
+    // mcp_role / mcp_tool_role role-gating path is retired in favour of permission gating.
 
     @NonNull
     List<ToolMetadata> findEnabledByWorkflow(@NonNull String workflowState);

@@ -26,6 +26,8 @@ import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
+import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
 import dev.langchain4j.data.embedding.Embedding;
@@ -105,6 +107,9 @@ class SessionAgentManagerTest {
     @Mock
     private ScopedContentRetrieverFactory scopedContentRetrieverFactory;
 
+    @Mock
+    private NltiTelemetryEmitter telemetryEmitter;
+
     // Real instance required: Mockito subclasses cause @Tool duplicate registration
     // in LangChain4j
     private ExaWebSearchTool exaWebSearchTool;
@@ -120,9 +125,7 @@ class SessionAgentManagerTest {
         // Return a FRESH list on every invocation so buildAgent mutations don't bleed
         // across calls
         lenient().when(toolRegistry.resolveDomainTools(anyString())).thenAnswer(inv -> new ArrayList<>());
-        lenient()
-                .when(toolRegistry.resolveDomainTools(anyString(), anyCollection()))
-                .thenAnswer(inv -> new ArrayList<>());
+        lenient().when(toolRegistry.resolveToolsByName(anyCollection())).thenAnswer(inv -> new ArrayList<>());
         when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         lenient()
                 .when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
@@ -131,6 +134,9 @@ class SessionAgentManagerTest {
                 .when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
         lenient().when(rolePromptResolver.resolvePrompt(anyString())).thenReturn("Default role prompt");
+        lenient()
+                .when(rolePromptResolver.assemble(anyString(), anyString()))
+                .thenReturn(new RolePromptResolver.AssembledPrompt("prompt", List.of("BASE", "ROLE")));
         lenient().when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(new float[] {0.1f})));
         lenient().when(embeddingStore.search(any())).thenReturn(new EmbeddingSearchResult<>(List.of()));
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
@@ -170,6 +176,9 @@ class SessionAgentManagerTest {
                 null, // sessionSummary
                 rolePromptResolver,
                 simpleChatClassifier,
+                telemetryEmitter,
+                null,
+                null,
                 30,
                 500,
                 50,
@@ -260,8 +269,7 @@ class SessionAgentManagerTest {
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
         when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
                 .thenReturn(List.of(inventoryToolMetadata()));
-        when(toolRegistry.resolveDomainTools("ROLE_ADMIN", List.of("inventoryFacadeTool")))
-                .thenReturn(List.of(inventoryFacadeTool));
+        when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
         when(chatModel.chat(any(ChatRequest.class)))
                 .thenReturn(ChatResponse.builder()
                         .aiMessage(AiMessage.from("Stock found"))
@@ -280,6 +288,41 @@ class SessionAgentManagerTest {
         verify(scopedContentRetrieverFactory).create("inventory", 20, 0.55);
         assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
         assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_ADMIN::InventoryFacadeTool");
+    }
+
+    @Test
+    @DisplayName("chat emits one nlti.request.telemetry event with actor, tools, prompt layers, SUCCESS")
+    void chat_emitsRequestTelemetry() {
+        String message = "show stock for sku ABC";
+        ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
+        when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
+                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(List.of(inventoryToolMetadata()));
+        when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
+        when(chatModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("Stock found"))
+                        .build());
+        SessionAgentManager selectorManager = managerWithToolSelectionEngine(realToolSelectionEngine);
+
+        selectorManager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), message);
+
+        ArgumentCaptor<NltiRequestTelemetry> eventCaptor = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter).emit(eventCaptor.capture());
+        NltiRequestTelemetry event = eventCaptor.getValue();
+        assertThat(event.eventType()).isEqualTo(NltiRequestTelemetry.EVENT_TYPE);
+        assertThat(event.schemaVersion()).isEqualTo(NltiRequestTelemetry.SCHEMA_VERSION);
+        assertThat(event.actor().primaryRole()).isEqualTo("ROLE_ADMIN");
+        assertThat(event.outcome().status()).isEqualTo("SUCCESS");
+        assertThat(event.tools()).isNotNull();
+        assertThat(event.tools().selected()).contains("InventoryFacadeTool");
+        assertThat(event.rag()).isNotNull();
+        assertThat(event.rag().promptLayers())
+                .containsExactly(NltiRequestTelemetry.PromptLayer.BASE, NltiRequestTelemetry.PromptLayer.ROLE);
+        // Gate 2C: the resolved workflow state is surfaced (IDLE for this session-less lookup query).
+        assertThat(event.routing()).isNotNull();
+        assertThat(event.routing().workflowState()).isEqualTo("IDLE");
     }
 
     @Test
@@ -324,6 +367,9 @@ class SessionAgentManagerTest {
                 null, // sessionSummary
                 rolePromptResolver,
                 simpleChatClassifier,
+                telemetryEmitter,
+                null,
+                null,
                 0,
                 500,
                 50,
@@ -359,6 +405,9 @@ class SessionAgentManagerTest {
                 null,
                 rolePromptResolver,
                 simpleChatClassifier,
+                telemetryEmitter,
+                null,
+                null,
                 30,
                 500,
                 50,

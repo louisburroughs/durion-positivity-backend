@@ -776,7 +776,9 @@ paths:
           exclusiveMinimum: 0
       - name: sort
         in: query
-        description: Sort field
+        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported
+          fields: createdAt, modifiedAt, updatedAt, name, eventType, description, createdBy,
+          modifiedBy, postingRuleSetId. Direction defaults to desc.'
         required: true
         schema:
           type: string
@@ -785,6 +787,12 @@ paths:
       responses:
         '200':
           description: Posting rule sets listed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostingRuleSetListResponse'
+        '400':
+          description: Unsupported sort property or direction
           content:
             application/json:
               schema:
@@ -1326,7 +1334,9 @@ paths:
           exclusiveMinimum: 0
       - name: sort
         in: query
-        description: Sort field
+        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported
+          fields: createdAt, modifiedAt, updatedAt, transactionDate, postedAt, status,
+          entryType, description, createdBy, journalEntryId. Direction defaults to desc.'
         required: true
         schema:
           type: string
@@ -1335,6 +1345,12 @@ paths:
       responses:
         '200':
           description: Journal entries listed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponseJournalEntryResponse'
+        '400':
+          description: Unsupported sort property or direction
           content:
             application/json:
               schema:
@@ -1528,7 +1544,10 @@ paths:
           exclusiveMinimum: 0
       - name: sort
         in: query
-        description: Sort field
+        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported
+          fields: accountCode, accountName, accountType, description, activationDate,
+          deactivationDate, createdAt, modifiedAt, updatedAt, glAccountId. Direction
+          defaults to asc.'
         required: true
         schema:
           type: string
@@ -1543,6 +1562,12 @@ paths:
       responses:
         '200':
           description: GL accounts listed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GLAccountListResponse'
+        '400':
+          description: Unsupported sort property or direction
           content:
             application/json:
               schema:

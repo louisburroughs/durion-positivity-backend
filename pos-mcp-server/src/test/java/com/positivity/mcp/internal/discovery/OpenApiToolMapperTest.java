@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.config.McpServerProperties;
+import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
@@ -114,6 +115,41 @@ class OpenApiToolMapperTest {
 
     // --- helpers ---
 
+    @Test
+    @DisplayName("toDiscoveredOperations surfaces method/path/serviceId execution coordinates (Gate 3 G3.1)")
+    void toDiscoveredOperations_surfacesExecutionCoordinates() {
+        OperationProxyFactory mockFactory = mock(OperationProxyFactory.class);
+        OpenApiToolMapper mapper = new OpenApiToolMapper(propertiesWithExclusions(List.of()), mockFactory);
+        OpenAPI openApi = openApiWith(Map.of("/v1/accounting/invoices", getItem("listInvoices", "List invoices")));
+
+        List<DiscoveredOperation> ops = mapper.toDiscoveredOperations("pos-api-gateway", openApi);
+
+        assertThat(ops).hasSize(1);
+        DiscoveredOperation op = ops.getFirst();
+        assertThat(op.name()).isEqualTo("accounting_listinvoices");
+        assertThat(op.description()).isEqualTo("List invoices");
+        assertThat(op.httpMethod()).isEqualTo("GET");
+        assertThat(op.httpPath()).isEqualTo("/v1/accounting/invoices");
+        assertThat(op.serviceId()).isEqualTo("pos-api-gateway");
+        assertThat(op.inputSchema()).isNull();
+        assertThat(op.isExecutable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("toDiscoveredOperations applies the same exclusion filtering as spec generation")
+    void toDiscoveredOperations_excludesConfiguredFragments() {
+        OperationProxyFactory mockFactory = mock(OperationProxyFactory.class);
+        McpServerProperties props = propertiesWithExclusions(List.of("/admin/"));
+        OpenApiToolMapper mapper = new OpenApiToolMapper(props, mockFactory);
+        OpenAPI openApi = openApiWith(Map.of(
+                "/v1/accounting/invoices", getItem("listInvoices", "List invoices"),
+                "/v1/admin/settings", getItem("getSettings", "Get settings")));
+
+        List<DiscoveredOperation> ops = mapper.toDiscoveredOperations("pos-api-gateway", openApi);
+
+        assertThat(ops).extracting(DiscoveredOperation::name).containsExactly("accounting_listinvoices");
+    }
+
     private static McpServerProperties propertiesWithExclusions(List<String> excludedFragments) {
         return new McpServerProperties(
                 "http://localhost:8086",
@@ -147,6 +183,32 @@ class OpenApiToolMapperTest {
         OpenAPI openApi = new OpenAPI();
         openApi.setPaths(paths);
         return openApi;
+    }
+
+    @Test
+    @DisplayName("toDiscoveredOperations persists query parameters as input_schema JSON")
+    void toDiscoveredOperations_persistsQueryParamsAsInputSchema() {
+        OpenApiToolMapper mapper =
+                new OpenApiToolMapper(propertiesWithExclusions(List.of()), mock(OperationProxyFactory.class));
+
+        Operation op = new Operation();
+        op.setOperationId("searchOrders");
+        var status = new io.swagger.v3.oas.models.parameters.QueryParameter();
+        status.setName("status");
+        status.setRequired(true);
+        status.setSchema(new io.swagger.v3.oas.models.media.StringSchema());
+        op.setParameters(List.of(status));
+        PathItem item = new PathItem();
+        item.setGet(op);
+        OpenAPI openApi = openApiWith(Map.of("/v1/order/orders", item));
+
+        List<DiscoveredOperation> ops = mapper.toDiscoveredOperations("http://api-gateway:8080", openApi);
+
+        assertThat(ops).hasSize(1);
+        assertThat(ops.getFirst().inputSchema())
+                .contains("\"name\":\"status\"")
+                .contains("\"type\":\"string\"")
+                .contains("\"required\":true");
     }
 
     private static PathItem getItem(String operationId, String summary) {

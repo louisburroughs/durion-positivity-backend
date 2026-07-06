@@ -59,12 +59,20 @@ public class GLAccountController {
             description = "Retrieve paginated GL accounts filtered by status and sorted by a field.",
             tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL accounts listed")
+    @ApiResponse(responseCode = "400", description = "Unsupported sort property or direction")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_LIST", apiVersion = "1")
     public ResponseEntity<GLAccountListResponse> listGLAccounts(
             @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @Positive @RequestParam(defaultValue = "20") int size,
-            @Parameter(description = "Sort field") @NotBlank @RequestParam(defaultValue = "accountCode") String sort,
+            @Parameter(
+                            description = "Sort field with optional direction, e.g. 'modifiedAt,desc'. "
+                                    + "Supported fields: accountCode, accountName, accountType, description, "
+                                    + "activationDate, deactivationDate, createdAt, modifiedAt, updatedAt, "
+                                    + "glAccountId. Direction defaults to asc.")
+                    @NotBlank
+                    @RequestParam(defaultValue = "accountCode")
+                    String sort,
             @Parameter(description = "Filter by account status") @RequestParam(required = false) String status) {
         log.info("List GL accounts");
         GLAccountListResponse response = glAccountService.listGLAccounts(page, size, sort, status);

@@ -66,25 +66,21 @@ public class MasterAgentRegistryLoader {
                 }
             }
         }
-        Map<String, List<Object>> roleScopedTools = new TreeMap<>();
-        for (String roleName : repository.findAllRoleNames()) {
-            List<Object> resolvedRoleTools = new ArrayList<>();
-            for (ToolMetadata tool : repository.findEnabledByRoleAndWorkflow(roleName, workflowState)) {
-                if (MASTER_DOMAINS.contains(normalizeDomain(tool.domain()))) {
-                    continue;
-                }
-                Object bean = loadToolBean(tool);
-                if (bean != null) {
-                    resolvedRoleTools.add(bean);
-                }
-            }
-            roleScopedTools.put(normalizeRoleName(roleName), List.copyOf(resolvedRoleTools));
-        }
-        return new LoadedMasterAgentRegistry(
-                List.copyOf(sharedTools), immutableCopy(domainScopedTools), Map.copyOf(roleScopedTools));
+        // Gate 2B / #780: the legacy role->tool preassignment (mcp_role / mcp_tool_role) is retired.
+        // Tool visibility is now fully determined by permission gating at request time
+        // (permissionCodes ∩ mcp_tool_permission ∩ workflow state — ToolMetadataRepository
+        // .findTopKByEmbeddingForPermissions), so role-scoped preassignment is no longer built.
+        // roleToolAssignments is intentionally empty.
+        return new LoadedMasterAgentRegistry(List.copyOf(sharedTools), immutableCopy(domainScopedTools));
     }
 
     private Object loadToolBean(@NonNull ToolMetadata tool) {
+        // Openapi-discovered rows have no handler_bean (they execute via OpenApiToolProvider, not a
+        // bean); they are excluded by the repository query, but guard defensively so a null never
+        // reaches getBean (which throws "'name' must not be null" and fails context init).
+        if (tool.handlerBean() == null || tool.handlerBean().isBlank()) {
+            return null;
+        }
         try {
             return applicationContext.getBean(tool.handlerBean());
         } catch (NoSuchBeanDefinitionException e) {
@@ -109,10 +105,6 @@ public class MasterAgentRegistryLoader {
 
     private static @NonNull String normalizeDomain(@NonNull String domain) {
         return domain.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private static @NonNull String normalizeRoleName(@NonNull String roleName) {
-        return ToolRegistryRoleMapper.normalize(roleName);
     }
 
     private static @NonNull Map<String, List<Object>> immutableCopy(@NonNull Map<String, List<Object>> source) {

@@ -20,6 +20,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -46,6 +47,22 @@ public class GLAccountServiceImpl implements GLAccountService {
     private static final String GL_ACCOUNT_NOT_FOUND = "GL account not found: ";
 
     private static final String SYSTEM = "SYSTEM";
+
+    /**
+     * API sort field → entity property. The API exposes {@code modifiedAt}
+     * (see GLAccountResponse) while the entity property is {@code updatedAt}.
+     */
+    private static final Map<String, String> SORTABLE_PROPERTIES = Map.of(
+            "accountCode", "accountCode",
+            "accountName", "accountName",
+            "accountType", "accountType",
+            "description", "description",
+            "activationDate", "activationDate",
+            "deactivationDate", "deactivationDate",
+            "createdAt", "createdAt",
+            "modifiedAt", "updatedAt",
+            "updatedAt", "updatedAt",
+            "glAccountId", "glAccountId");
 
     private static final Logger log = LoggerFactory.getLogger(GLAccountServiceImpl.class);
 
@@ -315,8 +332,10 @@ public class GLAccountServiceImpl implements GLAccountService {
     public GLAccountListResponse listGLAccounts(int page, int size, String sort, String status) {
         log.debug("Listing GL accounts");
 
-        // Build pageable with sorting
-        Sort sortOrder = Sort.by(sort != null ? sort : "accountCode");
+        // Build pageable with sorting; ascending default preserves the previous
+        // Sort.by(property) behavior.
+        Sort sortOrder =
+                SortParamParser.parse(sort != null ? sort : "accountCode", SORTABLE_PROPERTIES, Sort.Direction.ASC);
         Pageable pageable = PageRequest.of(page, size, sortOrder);
 
         // Fetch all accounts (filtering by status requires derived field)

@@ -1,20 +1,32 @@
 package com.positivity.mcp.internal.discovery;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.config.McpServerProperties;
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Paths;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import java.net.URI;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeoutException;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 @Component
 public class OpenApiDocumentFetcher {
@@ -22,6 +34,13 @@ public class OpenApiDocumentFetcher {
     private static final Logger log = LoggerFactory.getLogger(OpenApiDocumentFetcher.class);
     private static final String GATEWAY_SERVICE_ID = "pos-api-gateway";
     private static final URI LOCAL_GATEWAY_FALLBACK = URI.create("http://localhost:8080");
+    private static final String SWAGGER_CONFIG_SUFFIX = "/swagger-config";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    // Discovery runs at startup; a cold service mesh returns 503 / times out on the first hit. Retry
+    // transient failures with backoff so a warming service is picked up without a full app restart.
+    private static final int DISCOVERY_RETRY_ATTEMPTS = 3;
+    private static final Duration DISCOVERY_RETRY_MIN_BACKOFF = Duration.ofSeconds(2);
+    private static final Duration DISCOVERY_RETRY_MAX_BACKOFF = Duration.ofSeconds(10);
 
     private final DiscoveryClient discoveryClient;
     private final WebClient webClient;
@@ -150,7 +169,14 @@ public class OpenApiDocumentFetcher {
                     OpenAPI openAPI = result.getOpenAPI();
                     if (openAPI == null) {
                         log.warn("Failed to parse aggregate OpenAPI from {}: {}", specUri, result.getMessages());
-                        return Mono.<DiscoveredOpenApi>empty();
+                        return aggregateViaSwaggerConfig(specUri, baseUri);
+                    }
+                    if (openAPI.getPaths() == null || openAPI.getPaths().isEmpty()) {
+                        log.info(
+                                "Aggregate spec at {} exposes no paths (springdoc gateway); "
+                                        + "aggregating per-service specs via swagger-config",
+                                specUri);
+                        return aggregateViaSwaggerConfig(specUri, baseUri);
                     }
                     return Mono.just(new DiscoveredOpenApi("aggregate", baseUri, openAPI));
                 })
@@ -159,6 +185,143 @@ public class OpenApiDocumentFetcher {
                     return Mono.empty();
                 });
     }
+
+    /**
+     * Fallback discovery for a springdoc gateway that does not serve a single merged OpenAPI at
+     * {@code /v3/api-docs} but instead exposes {@code /v3/api-docs/swagger-config} — an index of
+     * per-service doc URLs. Fetches each per-service spec and merges their paths, prefixing every
+     * path with the service's gateway routing segment (the first segment of its doc URL, e.g.
+     * {@code /accounting/v3/api-docs} → prefix {@code /accounting}) so the merged paths are the
+     * full gateway paths (matching how facade tools address the gateway).
+     */
+    private Mono<DiscoveredOpenApi> aggregateViaSwaggerConfig(URI specUri, URI baseUri) {
+        URI swaggerConfigUri = URI.create(specUri.toString() + SWAGGER_CONFIG_SUFFIX);
+        String gatewayOwnDocPath = specUri.getPath();
+        return webClient
+                .get()
+                .uri(swaggerConfigUri)
+                .retrieve()
+                .bodyToMono(String.class)
+                .timeout(properties.discoveryTimeout())
+                .flatMap(json -> {
+                    List<ServiceDoc> docs = parseServiceDocs(json, gatewayOwnDocPath);
+                    if (docs.isEmpty()) {
+                        log.warn("swagger-config at {} listed no per-service specs", swaggerConfigUri);
+                        return Mono.<DiscoveredOpenApi>empty();
+                    }
+                    return Flux.fromIterable(docs)
+                            .flatMap(doc -> fetchAndPrefixService(baseUri, doc))
+                            .reduce(new Paths(), (merged, servicePaths) -> {
+                                merged.putAll(servicePaths);
+                                return merged;
+                            })
+                            .map(mergedPaths -> {
+                                OpenAPI merged = new OpenAPI();
+                                merged.setPaths(mergedPaths);
+                                log.info(
+                                        "Aggregated {} service specs via swagger-config from {} → {} paths",
+                                        docs.size(),
+                                        swaggerConfigUri,
+                                        mergedPaths.size());
+                                return new DiscoveredOpenApi("aggregate", baseUri, merged);
+                            });
+                })
+                .onErrorResume(ex -> {
+                    log.warn("swagger-config aggregation failed at {}: {}", swaggerConfigUri, ex.getMessage());
+                    return Mono.empty();
+                });
+    }
+
+    private Mono<Paths> fetchAndPrefixService(URI baseUri, ServiceDoc doc) {
+        URI docUri = baseUri.resolve(doc.url());
+        return webClient
+                .get()
+                .uri(docUri)
+                .retrieve()
+                .bodyToMono(String.class)
+                .timeout(properties.discoveryTimeout())
+                .retryWhen(Retry.backoff(DISCOVERY_RETRY_ATTEMPTS, DISCOVERY_RETRY_MIN_BACKOFF)
+                        .maxBackoff(DISCOVERY_RETRY_MAX_BACKOFF)
+                        .filter(OpenApiDocumentFetcher::isTransient))
+                .map(raw -> deserialize(doc.routingPrefix(), raw))
+                .map(result -> prefixPaths(result.getOpenAPI(), doc.routingPrefix()))
+                .doOnNext(paths -> log.info(
+                        "Fetched service spec {} → {} paths (prefix {})", docUri, paths.size(), doc.routingPrefix()))
+                .onErrorResume(ex -> {
+                    log.warn("Could not fetch/merge service spec at {}: {}", docUri, ex.getMessage());
+                    return Mono.just(new Paths());
+                });
+    }
+
+    /**
+     * Transient failures worth retrying during startup discovery: request timeouts, connection
+     * errors, and 5xx (a service still warming up returns 503). A 4xx (e.g. 404) is not retried.
+     */
+    static boolean isTransient(@NonNull Throwable ex) {
+        if (ex instanceof TimeoutException || ex instanceof WebClientRequestException) {
+            return true;
+        }
+        return ex instanceof WebClientResponseException response
+                && response.getStatusCode().is5xxServerError();
+    }
+
+    /**
+     * Parses a springdoc {@code swagger-config} JSON body into the per-service docs to aggregate,
+     * skipping the gateway's own (empty) spec. Each doc's routing prefix is the first path segment
+     * of its doc URL. Pure/testable.
+     */
+    static List<ServiceDoc> parseServiceDocs(@NonNull String swaggerConfigJson, @NonNull String gatewayOwnDocPath) {
+        List<ServiceDoc> docs = new ArrayList<>();
+        JsonNode urls;
+        try {
+            urls = MAPPER.readTree(swaggerConfigJson).get("urls");
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            log.warn("Malformed swagger-config JSON: {}", ex.getMessage());
+            return docs;
+        }
+        if (urls == null || !urls.isArray()) {
+            return docs;
+        }
+        for (JsonNode entry : urls) {
+            JsonNode urlNode = entry.get("url");
+            if (urlNode == null || urlNode.asText().isBlank()) {
+                continue;
+            }
+            String url = urlNode.asText();
+            if (url.equals(gatewayOwnDocPath)) {
+                continue; // the gateway's own (empty) spec
+            }
+            String prefix = firstPathSegment(url);
+            if (prefix.isEmpty()) {
+                continue;
+            }
+            docs.add(new ServiceDoc(url, prefix));
+        }
+        return docs;
+    }
+
+    /** Returns a copy of {@code serviceSpec}'s paths with {@code routingPrefix} prepended to each. */
+    static @NonNull Paths prefixPaths(@Nullable OpenAPI serviceSpec, @NonNull String routingPrefix) {
+        Paths prefixed = new Paths();
+        if (serviceSpec == null || serviceSpec.getPaths() == null) {
+            return prefixed;
+        }
+        for (var entry : serviceSpec.getPaths().entrySet()) {
+            prefixed.addPathItem(routingPrefix + entry.getKey(), entry.getValue());
+        }
+        return prefixed;
+    }
+
+    private static String firstPathSegment(@NonNull String url) {
+        String path = url.startsWith("http") ? URI.create(url).getPath() : url;
+        String trimmed = path.startsWith("/") ? path.substring(1) : path;
+        int slash = trimmed.indexOf('/');
+        String segment = slash > 0 ? trimmed.substring(0, slash) : trimmed;
+        return segment.isBlank() ? "" : "/" + segment;
+    }
+
+    /** A per-service OpenAPI doc discovered via swagger-config: its (gateway-relative) URL and routing prefix. */
+    record ServiceDoc(@NonNull String url, @NonNull String routingPrefix) {}
 
     public @NonNull Mono<DiscoveredOpenApi> fetchForService(@NonNull String serviceId) {
         var instance = pickInstance(serviceId);

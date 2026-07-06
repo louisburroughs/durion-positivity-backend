@@ -15,6 +15,9 @@ public final class McpPermissions {
     public static final String SYSTEM_PROMPT_UPDATE = "mcp:system_prompt:update";
     public static final String SYSTEM_PROMPT_DELETE = "mcp:system_prompt:delete";
 
+    public static final String TOOL_VIEW = "mcp:tool:view";
+    public static final String TOOL_MANAGE = "mcp:tool:manage";
+
     public static final String NLTI_REQUEST_SUBMIT = "nlti:request:submit";
     public static final String NLTI_REQUEST_READ = "nlti:request:read";
     public static final String NLTI_AUDIT_READ = "nlti:audit:read";

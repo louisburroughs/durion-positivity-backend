@@ -1291,6 +1291,74 @@ paths:
       x-required-permissions:
       - inventory:goods_receipt:create
   /v1/inventory/cycleCountPlans:
+    get:
+      tags:
+      - Cycle Count Plans
+      summary: List cycle count plans
+      description: Lists one page of cycle count plans, newest first, optionally filtered
+        by location and/or status. Bounded by page/size (default size 50).
+      operationId: listPlans
+      parameters:
+      - name: locationId
+        in: query
+        description: Filter by location identifier
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        description: Filter by plan status
+        required: false
+        schema:
+          type: string
+          enum:
+          - PLANNED
+          - STARTED
+          - COMPLETED_PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - CANCELLED
+      - name: page
+        in: query
+        description: Page index (0-based)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+          exclusiveMinimum: 0
+      responses:
+        '200':
+          description: Cycle count plans returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CycleCountPlanResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CycleCountPlanResponse'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:view
+      x-required-permissions:
+      - inventory:cycle_count:view
     post:
       tags:
       - Cycle Count Plans

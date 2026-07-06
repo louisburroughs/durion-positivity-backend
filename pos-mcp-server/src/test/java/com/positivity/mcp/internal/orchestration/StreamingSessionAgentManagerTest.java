@@ -26,7 +26,10 @@ import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFacto
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.service.OpenApiToolProvider;
+import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.ToolRegistryService;
+import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
 import dev.langchain4j.model.chat.StreamingChatModel;
@@ -101,6 +104,9 @@ class StreamingSessionAgentManagerTest {
     @Mock
     private ScopedContentRetrieverFactory scopedContentRetrieverFactory;
 
+    @Mock
+    private NltiTelemetryEmitter telemetryEmitter;
+
     // Real instance required to prevent @Tool duplicate registration
     private ExaWebSearchTool exaWebSearchTool;
     private InventoryFacadeTool inventoryFacadeTool;
@@ -121,6 +127,9 @@ class StreamingSessionAgentManagerTest {
         when(toolRegistry.resolveDomainTools(any())).thenAnswer(inv -> new ArrayList<>());
         when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         lenient().when(rolePromptResolver.resolvePrompt(any())).thenReturn("Default role prompt");
+        lenient()
+                .when(rolePromptResolver.assemble(any(), any()))
+                .thenReturn(new RolePromptResolver.AssembledPrompt("prompt", List.of("BASE", "ROLE")));
         lenient()
                 .when(toolSelectionEngine.selectRoleTools(any(), any(), any()))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
@@ -156,6 +165,9 @@ class StreamingSessionAgentManagerTest {
                 scopedContentRetrieverFactory,
                 rolePromptResolver,
                 null, // toolAuditService
+                telemetryEmitter,
+                null, // openApiToolProvider
+                null, // requestScopedUserContext
                 30,
                 500,
                 50,
@@ -237,8 +249,7 @@ class StreamingSessionAgentManagerTest {
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
         when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
                 .thenReturn(List.of(inventoryToolMetadata()));
-        when(toolRegistry.resolveDomainTools("ROLE_CASHIER", List.of("inventoryFacadeTool")))
-                .thenReturn(List.of(inventoryFacadeTool));
+        when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
 
         StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
         clearInvocations(toolRegistryService);
@@ -325,6 +336,9 @@ class StreamingSessionAgentManagerTest {
                 scopedContentRetrieverFactory,
                 rolePromptResolver,
                 null,
+                telemetryEmitter,
+                null, // openApiToolProvider
+                null, // requestScopedUserContext
                 30,
                 500,
                 50,
@@ -384,6 +398,9 @@ class StreamingSessionAgentManagerTest {
                 scopedContentRetrieverFactory,
                 rolePromptResolver,
                 null,
+                telemetryEmitter,
+                null, // openApiToolProvider
+                null, // requestScopedUserContext
                 0,
                 500,
                 50,
@@ -413,6 +430,9 @@ class StreamingSessionAgentManagerTest {
                 scopedContentRetrieverFactory,
                 rolePromptResolver,
                 null,
+                telemetryEmitter,
+                null, // openApiToolProvider
+                null, // requestScopedUserContext
                 30,
                 500,
                 50,
@@ -454,6 +474,35 @@ class StreamingSessionAgentManagerTest {
             return "orders";
         }
         return "master";
+    }
+
+    @Test
+    @DisplayName("streamChat with an openapi provider wired builds and leaves the request context clean")
+    void streamChat_withOpenApiProvider_doesNotLeakContext() {
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        OpenApiToolProvider openApiToolProvider = mock(OpenApiToolProvider.class);
+        StreamingSessionAgentManager providerManager = new StreamingSessionAgentManager(
+                streamingChatModel,
+                toolRegistry,
+                sharedOrchestrationSupport,
+                toolSelectionEngine,
+                scopedContentRetrieverFactory,
+                rolePromptResolver,
+                null,
+                telemetryEmitter,
+                openApiToolProvider,
+                requestContext,
+                30,
+                500,
+                50,
+                100);
+
+        Flux<String> result = providerManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "hello");
+
+        assertThat(result).isNotNull();
+        // The caller is published/cleared only inside streamTokens (on subscribe), so building the
+        // stream must not leave any caller in the request-scoped holder on this thread.
+        assertThat(requestContext.current()).isEmpty();
     }
 
     private static CurrentUserContext userContext(String username, UUID userId, String primaryRole) {

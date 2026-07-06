@@ -59,17 +59,6 @@ public class SessionAgentManagerTestConfiguration {
             }
 
             @Override
-            public java.util.List<String> findAllRoleNames() {
-                return List.of();
-            }
-
-            @Override
-            public java.util.List<com.positivity.mcp.internal.domain.ToolMetadata> findEnabledByRoleAndWorkflow(
-                    String role, String workflowState) {
-                return List.of();
-            }
-
-            @Override
             public java.util.List<com.positivity.mcp.internal.domain.ToolMetadata> findEnabledByWorkflow(
                     String workflowState) {
                 return List.of();
@@ -85,6 +74,44 @@ public class SessionAgentManagerTestConfiguration {
             public java.util.List<com.positivity.mcp.internal.domain.ToolMetadata> findTopKByEmbedding(
                     float[] embedding, int limit) {
                 return List.of();
+            }
+
+            @Override
+            public java.util.List<com.positivity.mcp.internal.domain.DiscoveredOperation>
+                    findDiscoveredCandidatesForPermissions(
+                            float[] embedding, int limit, java.util.Set<String> permissionCodes, String workflowState) {
+                return List.of();
+            }
+
+            @Override
+            public java.util.UUID upsertDiscoveredOperation(
+                    com.positivity.mcp.internal.domain.DiscoveredOperation operation, String domain) {
+                return java.util.UUID.fromString("00000000-0000-0000-0000-000000000000");
+            }
+
+            @Override
+            public void linkToolToWorkflow(java.util.UUID toolId, String workflowState) {
+                // no-op stub
+            }
+
+            @Override
+            public void addToolPermission(java.util.UUID toolId, String permissionCode) {
+                // no-op stub
+            }
+
+            @Override
+            public java.util.Optional<java.util.UUID> findDiscoveredToolIdByName(String name) {
+                return java.util.Optional.empty();
+            }
+
+            @Override
+            public java.util.List<String> listToolPermissions(java.util.UUID toolId) {
+                return List.of();
+            }
+
+            @Override
+            public void removeToolPermission(java.util.UUID toolId, String permissionCode) {
+                // no-op stub
             }
         };
     }

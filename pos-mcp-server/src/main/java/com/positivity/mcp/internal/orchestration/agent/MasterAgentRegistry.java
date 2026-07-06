@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.orchestration.agent;
 
 import com.positivity.mcp.internal.domain.RagScope;
-import com.positivity.mcp.internal.service.ToolRegistryRoleMapper;
+import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import java.beans.Introspector;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -70,7 +70,9 @@ public final class MasterAgentRegistry {
 
     public @NonNull List<Object> resolveDomainTools(@NonNull String agentName) {
         List<Object> resolvedTools = new ArrayList<>();
-        String normalizedAgentName = ToolRegistryRoleMapper.normalize(agentName);
+        // Gate 2B / #780: ToolRegistryRoleMapper (legacy role aliasing) retired. roleToolAssignments
+        // is empty under permission gating; lookup retained defensively and resolves via domain agent.
+        String normalizedAgentName = agentName;
         List<Object> assignedTools = roleToolAssignments.get(normalizedAgentName);
         if (assignedTools != null) {
             resolvedTools.addAll(assignedTools);
@@ -120,6 +122,56 @@ public final class MasterAgentRegistry {
         return resolvedTools;
     }
 
+    /**
+     * Resolves selected tool names against every registered tool (shared + all domain agents),
+     * independent of agent/role scoping.
+     *
+     * <p>Permission gating and semantic scoring already happened upstream in {@code
+     * ToolRegistryService} (permissionCodes ∩ {@code mcp_tool_permission} ∩ workflow state), so the
+     * name→bean step must search the full registered set. Tools are bucketed by <em>domain</em>
+     * (never by role), so the role-scoped {@link #resolveDomainTools(String, Collection)} overload
+     * can never match a role caller such as {@code ROLE_ADMIN} and always resolves empty. See Gate 2B
+     * / #780: the legacy role→tool preassignment was retired without repointing name resolution.
+     */
+    public @NonNull List<Object> resolveToolsByName(@NonNull Collection<String> toolNames) {
+        Set<String> selectedNames = new HashSet<>();
+        for (String toolName : toolNames) {
+            selectedNames.add(toolName.toLowerCase(Locale.ROOT));
+        }
+        if (selectedNames.isEmpty()) {
+            LOGGER.debug("MCP master registry resolve-by-name selectedNames=[] resolvedTools=[]");
+            return new ArrayList<>();
+        }
+        List<Object> availableTools = allRegisteredTools();
+        List<Object> resolvedTools = new ArrayList<>();
+        for (Object tool : availableTools) {
+            if (matchesSelectedTool(tool, selectedNames)
+                    && resolvedTools.stream().noneMatch(existing -> sameTool(existing, tool))) {
+                resolvedTools.add(tool);
+            }
+        }
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(
+                    "MCP master registry resolve-by-name selectedNames={} availableTools={} resolvedTools={}",
+                    new TreeSet<>(selectedNames),
+                    availableTools.stream()
+                            .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
+                            .toList(),
+                    resolvedTools.stream()
+                            .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
+                            .toList());
+        }
+        return resolvedTools;
+    }
+
+    private @NonNull List<Object> allRegisteredTools() {
+        List<Object> allTools = new ArrayList<>(sharedTools);
+        for (DomainAgentDefinition domainAgent : domainAgents) {
+            allTools.addAll(domainAgent.tools());
+        }
+        return allTools;
+    }
+
     public @NonNull String resolveRagScopeForTools(@NonNull Collection<Object> tools) {
         if (tools.stream().anyMatch(this::isSharedTool)) {
             return RagScope.MASTER;
@@ -147,7 +199,9 @@ public final class MasterAgentRegistry {
     }
 
     public @NonNull Set<String> preloadableRoleIdentifiers() {
-        Set<String> roleIdentifiers = new TreeSet<>();
+        // Gate 2A / #639: always cover the canonical role set (MCP_ROLE_PRIORITY + ROLE_USER) so
+        // ROLE_TECHNICIAN and ROLE_USER are never omitted, unioned with any configured assignments.
+        Set<String> roleIdentifiers = new TreeSet<>(SystemPromptDefaults.PRELOADABLE_ROLE_IDENTIFIERS);
         roleIdentifiers.addAll(roleToolAssignments.keySet());
         if (!roleIdentifiers.isEmpty()) {
             return roleIdentifiers;

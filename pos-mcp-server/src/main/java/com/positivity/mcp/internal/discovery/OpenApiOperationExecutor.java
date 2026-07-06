@@ -1,0 +1,124 @@
+package com.positivity.mcp.internal.discovery;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.domain.DiscoveredOperation;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.service.tool.ToolExecutor;
+import io.modelcontextprotocol.spec.McpSchema;
+import java.net.URI;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpMethod;
+
+/**
+ * Bridges an OpenAPI-discovered operation to a synchronous LangChain4j {@link ToolExecutor} (Gate 3).
+ * Built per request by {@link OpenApiToolProvider} from a {@link DiscoveredOperation}'s persisted
+ * execution coordinates; invokes the reactive {@link OperationProxyFactory} handler and blocks for
+ * the result. Failures render as a controlled error string — never a fabricated success.
+ */
+public class OpenApiOperationExecutor implements ToolExecutor {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(OpenApiOperationExecutor.class);
+
+    private static final String AUTHORIZATION = "Authorization";
+    private static final String HEADERS_ARG = "headers";
+
+    private final OperationProxyFactory proxyFactory;
+    private final DiscoveredOperation operation;
+    private final ObjectMapper objectMapper;
+    private final Duration timeout;
+    private final @Nullable String authHeader;
+
+    public OpenApiOperationExecutor(
+            @NonNull OperationProxyFactory proxyFactory,
+            @NonNull DiscoveredOperation operation,
+            @NonNull ObjectMapper objectMapper,
+            @NonNull Duration timeout,
+            @Nullable String authHeader) {
+        this.proxyFactory = proxyFactory;
+        this.operation = operation;
+        this.objectMapper = objectMapper;
+        this.timeout = timeout;
+        this.authHeader = authHeader;
+    }
+
+    @Override
+    public String execute(@NonNull ToolExecutionRequest request, @Nullable Object memoryId) {
+        try {
+            Map<String, Object> arguments = withRelayedAuth(parseArguments(request.arguments()));
+            McpSchema.CallToolRequest call = new McpSchema.CallToolRequest(operation.name(), arguments);
+            HttpMethod method = HttpMethod.valueOf(operation.httpMethod());
+            // Route via the gateway base URI (service_id holds it), not the load-balancer: alpha's
+            // Eureka registry is empty, so loadBalancerClient.choose(serviceId) resolves nothing.
+            // Facade tools reach the gateway by base URL too. See gate3-openapi-bridge-design.md.
+            URI gatewayBaseUri =
+                    URI.create(Objects.requireNonNull(operation.serviceId(), "openapi op missing service_id"));
+            McpSchema.CallToolResult result = proxyFactory
+                    .handlerForBaseUri(gatewayBaseUri, method, operation.httpPath())
+                    .apply(null, call)
+                    .block(timeout);
+            return render(result);
+        } catch (RuntimeException exception) {
+            LOGGER.warn(
+                    "MCP openapi tool execution failed name={} error={}",
+                    operation.name(),
+                    exception.getClass().getSimpleName(),
+                    exception);
+            return "Error: tool execution failed (" + exception.getClass().getSimpleName() + ")";
+        }
+    }
+
+    /**
+     * Relays the caller's {@code Authorization} header into the outbound call so the gateway executes
+     * the discovered op as the caller (facade tools relay the bearer token the same way). An explicit
+     * {@code headers.Authorization} in the tool arguments is left untouched.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> withRelayedAuth(@NonNull Map<String, Object> arguments) {
+        if (authHeader == null || authHeader.isBlank()) {
+            return arguments;
+        }
+        Map<String, Object> merged = new HashMap<>(arguments);
+        Object existing = merged.get(HEADERS_ARG);
+        Map<String, Object> headers =
+                existing instanceof Map<?, ?> map ? new HashMap<>((Map<String, Object>) map) : new HashMap<>();
+        headers.putIfAbsent(AUTHORIZATION, authHeader);
+        merged.put(HEADERS_ARG, headers);
+        return merged;
+    }
+
+    private Map<String, Object> parseArguments(@Nullable String json) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException e) {
+            // Do NOT execute with empty/implicit args on parse failure — that risks unintended
+            // (esp. write) calls. Fail the tool call; execute() renders this as a controlled error.
+            LOGGER.warn("MCP openapi tool args parse failed name={}; failing the call", operation.name());
+            throw new IllegalArgumentException("invalid tool arguments");
+        }
+    }
+
+    private String render(McpSchema.@Nullable CallToolResult result) {
+        if (result == null) {
+            return "Error: no response from operation";
+        }
+        String text = result.content() == null
+                ? ""
+                : result.content().stream()
+                        .filter(c -> c instanceof McpSchema.TextContent)
+                        .map(c -> ((McpSchema.TextContent) c).text())
+                        .collect(Collectors.joining("\n"));
+        return Boolean.TRUE.equals(result.isError()) ? "Error: " + text : text;
+    }
+}

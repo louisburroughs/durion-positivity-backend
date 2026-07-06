@@ -59,12 +59,19 @@ public class PostingRuleController {
             description = "Retrieve paginated posting rule sets.",
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "200", description = "Posting rule sets listed")
+    @ApiResponse(responseCode = "400", description = "Unsupported sort property or direction")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @EmitEvent(id = "ACCOUNTING_POSTING_RULE_LIST", apiVersion = "1")
     public ResponseEntity<PostingRuleSetListResponse> listPostingRuleSets(
             @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @Positive @RequestParam(defaultValue = "20") int size,
-            @Parameter(description = "Sort field") @NotBlank @RequestParam(defaultValue = "createdAt") String sort) {
+            @Parameter(
+                            description = "Sort field with optional direction, e.g. 'modifiedAt,desc'. "
+                                    + "Supported fields: createdAt, modifiedAt, updatedAt, name, eventType. "
+                                    + "Direction defaults to desc.")
+                    @NotBlank
+                    @RequestParam(defaultValue = "createdAt")
+                    String sort) {
         log.info("List posting rule sets");
         PostingRuleSetListResponse response = postingRuleService.listRuleSetsAsResponse(page, size, sort);
         return ResponseEntity.ok(response);

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://durion/pos-mcp-server/eval/rag-retrieval.schema.json",
+  "title": "RAG retrieval fixture suite",
+  "type": "object",
+  "required": ["schema_version", "fixtures"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "fixtures": { "type": "array", "items": { "$ref": "#/$defs/fixture" } }
+  },
+  "$defs": {
+    "fixture": {
+      "type": "object",
+      "required": ["fixture_id", "query", "actor", "expected"],
+      "additionalProperties": false,
+      "properties": {
+        "fixture_id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "query": { "type": "string", "minLength": 1 },
+        "actor": {
+          "type": "object",
+          "required": ["role", "permission_codes"],
+          "additionalProperties": false,
+          "properties": {
+            "role": { "type": "string", "pattern": "^ROLE_[A-Z_]+$" },
+            "permission_codes": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "expected": {
+          "type": "object",
+          "required": ["doc_ids"],
+          "additionalProperties": false,
+          "properties": {
+            "doc_ids": { "type": "array", "items": { "type": "string" } },
+            "forbidden_doc_ids": { "type": "array", "items": { "type": "string" } },
+            "k": { "type": "integer", "minimum": 1, "default": 5 }
+          }
+        },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}
