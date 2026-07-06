@@ -134,18 +134,48 @@ public class PartyServiceImpl implements PartyService {
     @Transactional(readOnly = true)
     public GetPartyResponse getParty(UUID partyId) {
         log.debug("Fetching party with id: {}", partyId);
-        CommercialParty party = findPartyOrThrow(partyId);
+        CommercialParty party = findPartyByIdInternal(partyId);
+        if (party != null) {
+            return GetPartyResponse.builder()
+                    .partyId(String.valueOf(party.getPartyId()))
+                    .partyType(party.getPartyType().toString())
+                    .legalName(party.getLegalName())
+                    .displayName(party.getDisplayName())
+                    .taxId(party.getTaxId())
+                    .status(party.getStatus().toString())
+                    .billingTermsId(party.getBillingTermsId())
+                    .createdAt(party.getCreatedAt() != null ? ISO_FORMATTER.format(party.getCreatedAt()) : null)
+                    .modifiedAt(party.getModifiedAt() != null ? ISO_FORMATTER.format(party.getModifiedAt()) : null)
+                    .build();
+        }
+
+        PersonParty personParty = findPersonPartyByIdInternal(partyId);
+        if (personParty == null) {
+            log.warn("Party not found with id: {}", partyId);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "party not found");
+        }
+
+        String personName = resolvePersonDisplayName(personParty);
         return GetPartyResponse.builder()
-                .partyId(String.valueOf(party.getPartyId()))
-                .partyType(party.getPartyType().toString())
-                .legalName(party.getLegalName())
-                .displayName(party.getDisplayName())
-                .taxId(party.getTaxId())
-                .status(party.getStatus().toString())
-                .billingTermsId(party.getBillingTermsId())
-                .createdAt(party.getCreatedAt() != null ? ISO_FORMATTER.format(party.getCreatedAt()) : null)
-                .modifiedAt(party.getModifiedAt() != null ? ISO_FORMATTER.format(party.getModifiedAt()) : null)
+                .partyId(String.valueOf(personParty.getPartyId()))
+                .partyType(personParty.getPartyType().toString())
+                .legalName(personName)
+                .displayName(personName)
+                .status(personParty.getStatus().toString())
+            .createdAt(ISO_FORMATTER.format(requireNonNullField(personParty.getCreatedAt(), "createdAt")))
+                .modifiedAt(personParty.getModifiedAt() != null
+                        ? ISO_FORMATTER.format(personParty.getModifiedAt())
+                        : null)
                 .build();
+    }
+
+    private String resolvePersonDisplayName(@NonNull PersonParty personParty) {
+        Map<UUID, PeopleClient.PersonIdentity> identities = fetchIdentitiesFor(List.of(personParty));
+        String displayName = resolveDisplayName(personParty, identities);
+        if (StringUtils.hasText(displayName)) {
+            return displayName;
+        }
+        return personParty.getPartyId().toString();
     }
 
     private CommercialParty findPartyOrThrow(UUID partyId) {
@@ -676,6 +706,10 @@ public class PartyServiceImpl implements PartyService {
         return partyRepository.findByPartyId(partyId);
     }
 
+    private @Nullable PersonParty findPersonPartyByIdInternal(UUID partyId) {
+        return personPartyRepository.findById(partyId).orElse(null);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public CrmSnapshotDTO buildSnapshotForParty(UUID partyId) {
@@ -695,12 +729,17 @@ public class PartyServiceImpl implements PartyService {
         }
 
         CommercialParty party = findPartyByIdInternal(partyId);
-
-        if (party == null) {
-            return null;
+        CrmSnapshotDTO fresh;
+        if (party != null) {
+            fresh = assembleSnapshot(party);
+        } else {
+            PersonParty personParty = findPersonPartyByIdInternal(partyId);
+            if (personParty == null) {
+                return null;
+            }
+            fresh = assembleSnapshotForPersonParty(personParty);
         }
 
-        CrmSnapshotDTO fresh = assembleSnapshot(party);
         if (fresh.getSnapshotMetadata() != null) {
             fresh.getSnapshotMetadata().setSource("CRM_API");
         }
@@ -716,6 +755,10 @@ public class PartyServiceImpl implements PartyService {
         log.debug("Fetching billing rules for party: {}", partyId);
         CommercialParty party = findPartyByIdInternal(partyId);
         if (party == null) {
+            boolean personExists = personPartyRepository.existsById(partyId);
+            if (personExists) {
+                return BillingRuleRef.defaults();
+            }
             log.warn("Party not found when fetching billing rules: {}", partyId);
             return null;
         }
@@ -838,6 +881,14 @@ public class PartyServiceImpl implements PartyService {
         return new CrmSnapshotDTO(meta, acct, contacts, vehicles, prefs, BillingRuleRef.defaults());
     }
 
+    private CrmSnapshotDTO assembleSnapshotForPersonParty(@NonNull PersonParty personParty) {
+        SnapshotMetadata meta = createMetadata();
+        AccountSummary acct = buildAccountSummary(personParty);
+        List<CrmSnapshotDTO.VehicleSummary> vehicles = buildVehicleSummaries(personParty);
+        return new CrmSnapshotDTO(meta, acct, Collections.emptyList(), vehicles, buildBillingPreferences(),
+                BillingRuleRef.defaults());
+    }
+
     private SnapshotMetadata createMetadata() {
         SnapshotMetadata meta = new SnapshotMetadata(UUIDv7Generator.generate(), Instant.now(clock), "1.0.0");
         meta.setSource("CRM_API");
@@ -853,6 +904,18 @@ public class PartyServiceImpl implements PartyService {
         String type = partyType.name();
 
         return new AccountSummary(id, customerNumber, name, type);
+    }
+
+    private AccountSummary buildAccountSummary(@NonNull PersonParty personParty) {
+        String customerNumber = StringUtils.hasText(personParty.getCustomerNumber())
+                ? personParty.getCustomerNumber()
+                : "P-" + personParty.getPartyId();
+        String accountName = resolvePersonDisplayName(personParty);
+        return new AccountSummary(
+                personParty.getPartyId().toString(),
+                customerNumber,
+                accountName,
+                personParty.getPartyType().name());
     }
 
     private String requireText(String value, String fieldName) {
@@ -902,7 +965,7 @@ public class PartyServiceImpl implements PartyService {
         return summary;
     }
 
-    private List<CrmSnapshotDTO.VehicleSummary> buildVehicleSummaries(CommercialParty party) {
+    private List<CrmSnapshotDTO.VehicleSummary> buildVehicleSummaries(Party party) {
         if (party == null
                 || party.getVehicleVins() == null
                 || party.getVehicleVins().isEmpty()) {

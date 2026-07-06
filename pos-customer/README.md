@@ -38,6 +38,12 @@ CRM service for the Durion Positivity ETSMS platform. Manages the customer party
 - `DELETE /v1/customers/{customerId}/vehicles/{vehicleId}` — unlink a vehicle
 - `POST /v1/customer/bulk-ingest` — bulk import customers (auth: `crm:party:create`)
 
+### Unified Party Detail Behavior
+
+- The browse endpoint `GET /v1/crm/accounts/parties` may include both `COMMERCIAL` and `PERSON` party types.
+- Party-scoped detail reads now accept either party type for the same `partyId` domain.
+- Endpoints that are commercial-account oriented (for example `GET /v1/crm/commercial-accounts/{partyId}/contacts`) return an empty contact list for person parties instead of `404`.
+
 ## Configuration
 
 | Property                | Default  | Description                  |

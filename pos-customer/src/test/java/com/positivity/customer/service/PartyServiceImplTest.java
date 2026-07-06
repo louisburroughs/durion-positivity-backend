@@ -113,6 +113,16 @@ class PartyServiceImplTest {
         return p;
     }
 
+    private PersonParty personParty(UUID partyId, UUID personId) {
+        PersonParty personParty = new PersonParty();
+        personParty.setPartyId(partyId);
+        personParty.setPersonId(personId);
+        personParty.setCustomerNumber("CUST-P-001");
+        personParty.setStatus(AccountStatus.ACTIVE);
+        personParty.setCreatedAt(Instant.now(TEST_CLOCK));
+        return personParty;
+    }
+
     /** Build a canonical pos-people identity (sole source of name/contacts, ADR-0015 I2). */
     private static PeopleClient.PersonIdentity identity(
             UUID id, String first, String last, String email, String phone) {
@@ -392,9 +402,30 @@ class PartyServiceImplTest {
     }
 
     @Test
+    void getParty_returnsMappedResponse_forPersonParty() {
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000021");
+        UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000022");
+        PersonParty personParty = personParty(partyId, personId);
+
+        when(partyRepository.findByPartyId(partyId)).thenReturn(null);
+        when(personPartyRepository.findById(partyId)).thenReturn(Optional.of(personParty));
+        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(personId)))
+                .thenReturn(java.util.Map.of(personId, identity(personId, "Pat", "Person", null, null)));
+
+        GetPartyResponse response = service.getParty(partyId);
+
+        assertThat(response.getPartyId()).isEqualTo(partyId.toString());
+        assertThat(response.getPartyType()).isEqualTo("PERSON");
+        assertThat(response.getLegalName()).isEqualTo("Pat Person");
+        assertThat(response.getDisplayName()).isEqualTo("Pat Person");
+        assertThat(response.getStatus()).isEqualTo("ACTIVE");
+    }
+
+    @Test
     void getParty_throwsNotFound_whenMissing() {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(partyRepository.findByPartyId(partyId)).thenReturn(null);
+        when(personPartyRepository.findById(partyId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getParty(partyId))
                 .isInstanceOf(ResponseStatusException.class)
@@ -919,10 +950,56 @@ class PartyServiceImplTest {
     void getBillingRulesForParty_returnsNull_whenPartyNotFound() {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(partyRepository.findByPartyId(partyId)).thenReturn(null);
+        when(personPartyRepository.existsById(partyId)).thenReturn(false);
 
         var result = service.getBillingRulesForParty(partyId);
 
         assertThat(result).isNull();
+    }
+
+    @Test
+    void getBillingRulesForParty_returnsDefaults_whenPersonPartyExists() {
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000031");
+        when(partyRepository.findByPartyId(partyId)).thenReturn(null);
+        when(personPartyRepository.existsById(partyId)).thenReturn(true);
+
+        var result = service.getBillingRulesForParty(partyId);
+
+        assertThat(result).isNotNull();
+        assertThat(result.isPoRequired()).isFalse();
+        assertThat(result.getPaymentTerms()).isEqualTo("Due on Receipt");
+    }
+
+    @Test
+    void buildSnapshotForParty_returnsFreshSnapshot_forPersonParty() {
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000041");
+        UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000042");
+        PersonParty personParty = personParty(partyId, personId);
+        personParty.setVehicleVins(new HashSet<>(List.of("VIN-P-1")));
+
+        VehicleResponse vehicleResponse = VehicleResponse.builder()
+                .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000043"))
+                .vin("VIN-P-1")
+                .make("Toyota")
+                .model("Camry")
+                .year(2025)
+                .build();
+
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cache.get(partyId)).thenReturn(null);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(null);
+        when(personPartyRepository.findById(partyId)).thenReturn(Optional.of(personParty));
+        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(personId)))
+                .thenReturn(java.util.Map.of(personId, identity(personId, "Sam", "Solo", null, null)));
+        when(vehicleInventoryClient.getVehicleByVin("VIN-P-1")).thenReturn(Optional.of(vehicleResponse));
+
+        CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getAccount().getPartyId()).isEqualTo(partyId.toString());
+        assertThat(result.getAccount().getAccountType()).isEqualTo("PERSON");
+        assertThat(result.getAccount().getAccountName()).isEqualTo("Sam Solo");
+        assertThat(result.getVehicles()).hasSize(1);
     }
 
     @Test

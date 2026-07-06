@@ -21,6 +21,10 @@ on:
     - cron: "0 6 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -520,11 +524,25 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar -DskipTests -DskipITs \
+          SONAR_BASE_ARGS="-DskipTests -DskipITs \
             -Dsonar.projectKey=louisburroughs_durion-positivity-backend \
             -Dsonar.organization=louisburroughs \
             -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.coverage.jacoco.xmlReportPaths=sonar-coverage/**/jacoco.xml,**/target/site/jacoco/jacoco.xml
+            -Dsonar.coverage.jacoco.xmlReportPaths=sonar-coverage/**/jacoco.xml,**/target/site/jacoco/jacoco.xml"
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # Force PR-scoped analysis explicitly to avoid branch-level quality-gate
+            # evaluation and bypass flaky PR auto-detection.
+            ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
+              ${SONAR_BASE_ARGS} \
+              -Dsonar.pullrequest.key=${{ github.event.pull_request.number }} \
+              -Dsonar.pullrequest.branch=${{ github.event.pull_request.head.ref }} \
+              -Dsonar.pullrequest.base=${{ github.event.pull_request.base.ref }} \
+              -Dsonar.scm.revision=${{ github.event.pull_request.head.sha }}
+          else
+            ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
+              ${SONAR_BASE_ARGS}
+          fi
 
   code-quality-full:
     name: Full Coverage SonarCloud Analysis
