@@ -11,8 +11,6 @@ import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
 
 /**
  * Stripe payment gateway implementation.
@@ -25,9 +23,6 @@ import org.springframework.stereotype.Component;
  * - STRIPE_IDEMPOTENCY_WINDOW_HOURS: Idempotency key window in hours (default:
  * 24)
  */
-@Component
-@ConditionalOnProperty(name = "payment.gateway.provider", havingValue = "stripe", matchIfMissing = true)
-@ConditionalOnProperty(name = "stripe.api-key", matchIfMissing = false)
 public class StripePaymentGateway implements PaymentGatewayProvider {
 
     private static final Logger log = LoggerFactory.getLogger(StripePaymentGateway.class);

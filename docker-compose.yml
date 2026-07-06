@@ -84,7 +84,7 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.93.0
     container_name: otel-collector
-    command: [ "--config=/etc/otel-collector-config.yml" ]
+    command: [ "--config=/etc/otel-observability/otel-collector-config.yml" ]
     ports:
       - "4317:4317" # OTLP gRPC receiver
       - "4318:4318" # OTLP HTTP receiver
@@ -92,7 +92,7 @@ services:
       - "8889:8889" # Prometheus exporter metrics
       - "13133:13133" # Health check extension
     volumes:
-      - ./observability/otel-collector-config.yml:/etc/otel-collector-config.yml:ro
+      - ./observability:/etc/otel-observability:ro
     depends_on:
       - jaeger
       - prometheus
@@ -962,41 +962,41 @@ services:
         aliases:
           - api-gateway
 
-  # pos-frontend:
-  #   build:
-  #     context: ../durion-positivity-frontend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "4200:4000"
-  #   environment:
-  #     PORT: 4000
-  #     NODE_ENV: production
-  #     API_GATEWAY_URL: http://pos-api-gateway:8080
-  #     NG_ALLOWED_HOSTS: ${NG_ALLOWED_HOSTS}
-  #     OTEL_SERVICE_NAME: pos-frontend
-  #     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
-  #     OTEL_RESOURCE_ATTRIBUTES: "service.name=pos-frontend,service.namespace=durion-g\
-  #       roup,deployment.environment=pre-production"
-  #   depends_on:
-  #     pos-api-gateway:
-  #       condition: service_healthy
-  #   healthcheck:
-  #     test:
-  #       [
-  #         "CMD",
-  #         "node",
-  #         "-e",
-  #         "const net=require('net');const
-  #           s=net.connect(4000,'127.0.0.1',()=>{s.end();process.exit(0)});s.set\
-  #           Timeout(2000,()=>{s.destroy();process.exit(1)});s.on('error',()=>pr\
-  #           ocess.exit(1));",
-  #       ]
-  #     interval: 5s
-  #     timeout: 3s
-  #     retries: 20
-  #   logging: *logging
-  #   networks:
-  #     - pos-network
+  pos-frontend:
+    build:
+      context: ../durion-positivity-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "4200:4000"
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      API_GATEWAY_URL: http://pos-api-gateway:8080
+      NG_ALLOWED_HOSTS: ${NG_ALLOWED_HOSTS}
+      OTEL_SERVICE_NAME: pos-frontend
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_RESOURCE_ATTRIBUTES: "service.name=pos-frontend,service.namespace=durion-g\
+        roup,deployment.environment=pre-production"
+    depends_on:
+      pos-api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const net=require('net');const
+            s=net.connect(4000,'127.0.0.1',()=>{s.end();process.exit(0)});s.set\
+            Timeout(2000,()=>{s.destroy();process.exit(1)});s.on('error',()=>pr\
+            ocess.exit(1));",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+    networks:
+      - pos-network
 
 # Docker Networks
 networks:
