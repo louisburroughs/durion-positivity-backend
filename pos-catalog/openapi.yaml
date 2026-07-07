@@ -4010,7 +4010,7 @@ components:
           type: string
           format: date-time
           description: UTC instant the current lifecycle state took effect; only populated for detailed search
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           nullable: true
         msrpAmount:
           type: string

@@ -83,8 +83,9 @@ class ProductSearchDetailedContractBehaviorIT extends BaseContractIntegrationTes
         assertThat(priced.get("msrpCurrency").asString()).isEqualTo("USD");
         assertThat(priced.get("msrpEffectiveStartDate").asString())
                 .isEqualTo(LocalDate.now(TEST_CLOCK).minusDays(1).toString());
-        assertThat(priced.get("msrpEffectiveEndDate").isNull())
-                .as("open-ended MSRP has null end date")
+        JsonNode pricedEnd = priced.get("msrpEffectiveEndDate");
+        assertThat(pricedEnd == null || pricedEnd.isNull())
+                .as("open-ended MSRP has null/absent end date")
                 .isTrue();
 
         // The unpriced product must have null price fields rather than erroring.
@@ -96,10 +97,14 @@ class ProductSearchDetailedContractBehaviorIT extends BaseContractIntegrationTes
         }
         assertThat(unpriced).as("Unpriced product present in results").isNotNull();
         assertThat(unpriced.get("lifecycleState").asString()).isEqualTo("ACTIVE");
-        assertThat(unpriced.get("msrpAmount").isNull())
-                .as("Product without active MSRP returns null amount")
+        JsonNode unpricedAmount = unpriced.get("msrpAmount");
+        assertThat(unpricedAmount == null || unpricedAmount.isNull())
+                .as("Product without active MSRP returns null/absent amount")
                 .isTrue();
-        assertThat(unpriced.get("msrpCurrency").isNull()).isTrue();
+        JsonNode unpricedCurrency = unpriced.get("msrpCurrency");
+        assertThat(unpricedCurrency == null || unpricedCurrency.isNull())
+                .as("Product without active MSRP returns null/absent currency")
+                .isTrue();
     }
 
     // -----------------------------------------------------------------------

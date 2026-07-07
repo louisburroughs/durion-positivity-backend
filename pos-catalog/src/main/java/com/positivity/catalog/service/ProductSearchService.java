@@ -28,9 +28,10 @@ public interface ProductSearchService {
      * @param limit    maximum number of results to return (1–100)
      * @param detailed when {@code true}, each result row is enriched inline with
      *                 lifecycle state + effective instant and the product's active
-     *                 MSRP (amount, currency, effective window), resolved
-     *                 server-side in a single query. When {@code false}, the lean
-     *                 summary is returned and the enriched fields are null (#828)
+     *                 MSRP (amount, currency, effective window). Enrichment is
+     *                 batched (one additional MSRP query for the whole page, no
+     *                 N+1 fan-out). When {@code false}, the lean summary is
+     *                 returned and the enriched fields are null (#828)
      * @return cursor-based search result
      */
     @NonNull
