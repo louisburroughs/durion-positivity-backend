@@ -537,6 +537,12 @@ jobs:
           path: sonar-coverage
 
       - name: SonarCloud Scan
+        # Stopgap: PR-mode analysis currently fails at PR decoration because SonarCloud cannot
+        # resolve the pull request via its GitHub App / DevOps-platform binding ("Something went
+        # wrong while trying to get the pullrequest with key 'N'"). Until that binding is fixed in
+        # SonarCloud, do not let a PR-decoration failure fail this check. The push/main-branch scan
+        # (else branch below) stays strict and remains the authoritative quality gate.
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
