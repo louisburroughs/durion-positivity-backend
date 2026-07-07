@@ -75,7 +75,9 @@ public class TusUploadController {
     @Operation(
             summary = "Create a resumable upload",
             description = "Creates a new TUS upload scoped to a bulk load job. "
-                    + "Returns a Location header with the upload URL for subsequent HEAD and PATCH requests.")
+                    + "Returns a Location header with the upload URL for subsequent HEAD and PATCH requests. "
+                    + "The Location is a relative reference (RFC 3986) that clients must resolve against the "
+                    + "creation request URL, so it stays correct behind the API gateway and any proxy prefix.")
     @ApiResponse(responseCode = "201", description = "Upload created")
     @ApiResponse(responseCode = "412", description = "Unsupported TUS version")
     @ApiResponse(responseCode = "413", description = "Upload-Length exceeds server maximum")
@@ -83,8 +85,7 @@ public class TusUploadController {
             @PathVariable @NonNull UUID jobId,
             @RequestHeader(value = TUS_RESUMABLE, required = false) @Nullable String tusResumable,
             @RequestHeader("Upload-Length") long uploadLength,
-            @RequestHeader(value = "Upload-Metadata", required = false) @Nullable String uploadMetadata,
-            HttpServletRequest request) {
+            @RequestHeader(value = "Upload-Metadata", required = false) @Nullable String uploadMetadata) {
 
         ResponseEntity<Void> versionError = rejectIfUnsupportedVersion(tusResumable);
         if (versionError != null) return versionError;
@@ -99,8 +100,12 @@ public class TusUploadController {
         TusUploadService.Created created =
                 tusUploadService.createUpload(jobId, fileName, uploadLength, resolveOperatorId());
 
-        String location = resolveBaseUrl(request) + "/v1/tus/" + created.id();
-        return ResponseEntity.created(URI.create(location))
+        // Relative to this creation URL (…/v1/bulk-jobs/{jobId}/tus): resolves to …/v1/tus/{id}
+        // under whatever public prefix the gateway/proxy exposes, without trusting
+        // X-Forwarded-* headers. The service's own request URL must NOT be used here — it is
+        // the internal address with the gateway prefix already stripped.
+        URI location = URI.create("../../tus/" + created.id());
+        return ResponseEntity.created(location)
                 .header(TUS_RESUMABLE, TUS_VERSION)
                 .header(UPLOAD_OFFSET, "0")
                 .header("Upload-Expires", formatRfc1123(created.expiresAt()))
@@ -209,12 +214,6 @@ public class TusUploadController {
             }
         }
         return "upload.bin";
-    }
-
-    private String resolveBaseUrl(HttpServletRequest request) {
-        String url = request.getRequestURL().toString();
-        int idx = url.indexOf("/v1/");
-        return idx >= 0 ? url.substring(0, idx) : "";
     }
 
     private String formatRfc1123(Instant instant) {
