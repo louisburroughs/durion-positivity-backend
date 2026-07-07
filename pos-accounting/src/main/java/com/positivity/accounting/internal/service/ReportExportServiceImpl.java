@@ -64,7 +64,7 @@ public class ReportExportServiceImpl implements ReportExportService {
         log.info(
                 "Report export requested: exportId={} reportType={} operator={}",
                 exportId,
-                request.getReportType(),
+                LogSanitizer.forLog(request.getReportType()),
                 LogSanitizer.forLog(operatorId));
         return response;
     }

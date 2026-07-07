@@ -1,5 +1,6 @@
 package com.positivity.security.common;
 
+import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -23,7 +24,7 @@ import org.jspecify.annotations.Nullable;
 public final class LogSanitizer {
 
     /** Matches CR, LF, tab and every other ASCII control character. */
-    private static final String CONTROL_CHARS = "[\\p{Cntrl}]";
+    private static final Pattern CONTROL_CHARS = Pattern.compile("[\\p{Cntrl}]");
 
     private LogSanitizer() {}
 
@@ -38,6 +39,6 @@ public final class LogSanitizer {
         if (value == null) {
             return "null";
         }
-        return value.toString().replaceAll(CONTROL_CHARS, "_");
+        return CONTROL_CHARS.matcher(value.toString()).replaceAll("_");
     }
 }

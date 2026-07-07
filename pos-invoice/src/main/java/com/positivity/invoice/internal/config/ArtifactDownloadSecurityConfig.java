@@ -3,7 +3,6 @@ package com.positivity.invoice.internal.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
@@ -24,17 +23,15 @@ public class ArtifactDownloadSecurityConfig {
     @Bean
     @Order(0)
     public SecurityFilterChain artifactDownloadFilterChain(HttpSecurity http) throws Exception {
-        // Only the GET byte-download is exposed here; every other method on this path is
-        // denied and (for legitimate mutating routes) handled by the authenticated
-        // gateway chain. CSRF protection is intentionally left at its secure default:
-        // it never challenges safe methods (GET/HEAD/OPTIONS), so the download needs no
-        // token, and the chain is stateless (no session-borne ambient authority to forge).
-        // Authorization is enforced inside the controller via the signed download token.
+        // CSRF is left at its secure default rather than disabled: it never challenges
+        // safe methods (GET/HEAD/OPTIONS), so the byte-download — and clients that probe
+        // it with HEAD or a CORS OPTIONS preflight — work without a token, while an unsafe
+        // method would be rejected (this path has only the GET download handler, no
+        // mutating routes). The chain is stateless, so there is no session-borne ambient
+        // authority for a cross-site request to forge; authorization is enforced inside
+        // the controller via the signed download token.
         http.securityMatcher(DOWNLOAD_PATTERN)
-                .authorizeHttpRequests(auth -> auth.requestMatchers(HttpMethod.GET, DOWNLOAD_PATTERN)
-                        .permitAll()
-                        .anyRequest()
-                        .denyAll())
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
         return http.build();
     }
