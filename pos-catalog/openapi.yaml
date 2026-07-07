@@ -1738,7 +1738,7 @@ paths:
       tags:
       - Products API
       summary: Search catalog products
-      description: Cursor-based product search with optional free-text query and exact filters for brand, category, and SKU.
+      description: Cursor-based product search with optional free-text query and exact filters for brand, category, and SKU. Pass detailed=true to enrich each row inline with lifecycle state + effective instant and the product's active MSRP (amount, currency, effective window), resolved server-side in a single request. Products without an active MSRP return null price fields.
       operationId: searchProducts
       parameters:
       - name: q
@@ -1777,6 +1777,13 @@ paths:
         required: false
         schema:
           type: string
+      - name: detailed
+        in: query
+        description: When true, enrich each row with lifecycle state, effective instant, and active MSRP
+        required: false
+        schema:
+          type: boolean
+          default: false
       responses:
         '200':
           description: Search results
@@ -3990,6 +3997,43 @@ components:
           type: string
           description: Manufacturer brand name
           example: AcmePro
+        lifecycleState:
+          type: string
+          description: Lifecycle state; only populated for detailed search
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - DISCONTINUED
+          example: ACTIVE
+          nullable: true
+        lifecycleStateEffectiveAt:
+          type: string
+          format: date-time
+          description: UTC instant the current lifecycle state took effect; only populated for detailed search
+          example: 2026-01-15 09:30:00+00:00
+          nullable: true
+        msrpAmount:
+          type: string
+          description: Active MSRP amount; null when the product has no active MSRP or for lean search
+          example: '99.99'
+          nullable: true
+        msrpCurrency:
+          type: string
+          description: Active MSRP ISO 4217 currency code; null when no active MSRP or for lean search
+          example: USD
+          nullable: true
+        msrpEffectiveStartDate:
+          type: string
+          format: date
+          description: Start of the active MSRP effective window; null when no active MSRP or for lean search
+          example: 2026-01-15
+          nullable: true
+        msrpEffectiveEndDate:
+          type: string
+          format: date
+          description: End of the active MSRP effective window; null for open-ended, no active MSRP, or lean search
+          example: 2026-12-31
+          nullable: true
     EffectiveLocationPriceResponseDto:
       type: object
       description: Effective location-specific price for a product

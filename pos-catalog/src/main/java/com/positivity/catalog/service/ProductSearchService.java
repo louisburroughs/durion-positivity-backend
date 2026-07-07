@@ -26,9 +26,14 @@ public interface ProductSearchService {
      * @param cursor   opaque pagination cursor from previous response; null for
      *                 first page
      * @param limit    maximum number of results to return (1–100)
+     * @param detailed when {@code true}, each result row is enriched inline with
+     *                 lifecycle state + effective instant and the product's active
+     *                 MSRP (amount, currency, effective window), resolved
+     *                 server-side in a single query. When {@code false}, the lean
+     *                 summary is returned and the enriched fields are null (#828)
      * @return cursor-based search result
      */
     @NonNull
     CatalogSearchResultDto searchProducts(
-            String q, String brand, String category, String sku, String cursor, int limit);
+            String q, String brand, String category, String sku, String cursor, int limit, boolean detailed);
 }
