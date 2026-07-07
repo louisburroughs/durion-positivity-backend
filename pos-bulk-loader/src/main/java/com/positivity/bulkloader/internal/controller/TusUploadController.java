@@ -1,6 +1,7 @@
 package com.positivity.bulkloader.internal.controller;
 
 import com.positivity.bulkloader.service.TusUploadService;
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -72,6 +73,7 @@ public class TusUploadController {
 
     @PostMapping("/bulk-jobs/{jobId}/tus")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @EmitEvent(id = "BULK_LOADER_TUS_UPLOAD_CREATE", apiVersion = "1")
     @Operation(
             summary = "Create a resumable upload",
             description = "Creates a new TUS upload scoped to a bulk load job. "
@@ -139,6 +141,7 @@ public class TusUploadController {
 
     @PatchMapping("/tus/{uploadId}")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @EmitEvent(id = "BULK_LOADER_TUS_UPLOAD_CHUNK_APPEND", apiVersion = "1")
     @Operation(
             summary = "Upload a chunk",
             description = "Appends a byte range to an in-progress TUS upload. "
@@ -176,6 +179,7 @@ public class TusUploadController {
 
     @DeleteMapping("/tus/{uploadId}")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @EmitEvent(id = "BULK_LOADER_TUS_UPLOAD_CANCEL", apiVersion = "1")
     @Operation(summary = "Cancel an upload", description = "Permanently deletes a TUS upload and its temporary file.")
     @ApiResponse(responseCode = "204", description = "Upload deleted")
     @ApiResponse(responseCode = "404", description = "Upload not found")
