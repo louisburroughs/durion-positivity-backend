@@ -4,7 +4,6 @@ import com.positivity.accounting.internal.dto.DefaultGLMappingListResponse;
 import com.positivity.accounting.internal.dto.DefaultGLMappingRequest;
 import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
 import com.positivity.accounting.internal.entity.DefaultGLMapping;
-import com.positivity.accounting.internal.entity.DefaultGLMapping_;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
@@ -38,6 +37,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional
 public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
+    private static final String MAPPING_NOT_FOUND_MESSAGE = "Default GL mapping not found: ";
+
     private final Clock clock;
 
     private final DefaultGLMappingRepository repository;
@@ -71,7 +72,7 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
 
         DefaultGLMapping existing = repository
                 .findById(mappingId)
-                .orElseThrow(() -> new IllegalArgumentException("Default GL mapping not found: " + mappingId));
+            .orElseThrow(() -> new IllegalArgumentException(MAPPING_NOT_FOUND_MESSAGE + mappingId));
 
         // Validate GL accounts
         validateGLAccounts(request.getDebitAccountId(), request.getCreditAccountId());
@@ -93,7 +94,7 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
 
         DefaultGLMapping mapping = repository
                 .findById(mappingId)
-                .orElseThrow(() -> new IllegalArgumentException("Default GL mapping not found: " + mappingId));
+            .orElseThrow(() -> new IllegalArgumentException(MAPPING_NOT_FOUND_MESSAGE + mappingId));
 
         mapping.setActive(false);
         repository.save(mapping);
@@ -107,7 +108,7 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
     public DefaultGLMappingResponse getDefaultMapping(@NonNull UUID mappingId) {
         DefaultGLMapping mapping = repository
                 .findById(mappingId)
-                .orElseThrow(() -> new IllegalArgumentException("Default GL mapping not found: " + mappingId));
+            .orElseThrow(() -> new IllegalArgumentException(MAPPING_NOT_FOUND_MESSAGE + mappingId));
         return toResponse(mapping);
     }
 
@@ -115,7 +116,7 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
     @NonNull
     @Transactional(readOnly = true)
     public DefaultGLMappingListResponse listDefaultMappings(int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(DefaultGLMapping_.EVENT_TYPE));
+        Pageable pageable = PageRequest.of(page, size, Sort.by("eventType"));
         Page<DefaultGLMapping> mappingsPage = repository.findAll(pageable);
 
         // Batch-load GL accounts to avoid N+1 query pattern
