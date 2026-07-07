@@ -373,11 +373,11 @@ public final class GatewayPermissionCatalog {
         "PERM_invoice:finalize:override", // 346
 
         // ── New batch (bits 347–348) ──────────────────────────────────────────
-        "PERM_mcp:tool:manage",                              // 347
-        "PERM_mcp:tool:view",                                // 348
+        "PERM_mcp:tool:manage", // 347
+        "PERM_mcp:tool:view", // 348
 
         // ── New batch (bits 349–349) ──────────────────────────────────────────
-        "PERM_inventory:location:sync"                      // 349
+        "PERM_inventory:location:sync" // 349
     };
 
     public static String authorityForBit(int bitIndex) {

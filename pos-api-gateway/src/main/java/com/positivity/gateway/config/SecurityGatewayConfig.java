@@ -118,8 +118,21 @@ public class SecurityGatewayConfig {
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/**")
                         .allowedOriginPatterns("*")
-                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
+                        // HEAD is required by the TUS resumable-upload protocol (offset probe on resume).
+                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD")
                         .allowedHeaders("*")
+                        // Response headers browser JS must be able to read. A wildcard is not
+                        // usable here because allowCredentials(true) disables '*' expansion.
+                        // Location + Upload-* / Tus-* are required by TUS upload clients.
+                        .exposedHeaders(
+                                "Location",
+                                "Upload-Offset",
+                                "Upload-Length",
+                                "Upload-Expires",
+                                "Tus-Resumable",
+                                "Tus-Version",
+                                "Tus-Max-Size",
+                                "Tus-Extension")
                         .allowCredentials(true)
                         .maxAge(3600);
             }
