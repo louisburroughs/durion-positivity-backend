@@ -16,6 +16,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -104,8 +105,8 @@ public class TimeEntryAdjustment {
 
     @jakarta.persistence.Transient
     public void setTimeEntryId(UUID timeEntryId) {
-        // timeEntry is a required (@NonNull) association, so build a reference entity rather than
-        // assigning null (mirrors TimeEntry.setWorkOrderId's non-null association setter).
-        this.timeEntry = new TimeEntry(timeEntryId);
+        // timeEntry is a required (optional=false) association; reject a null id rather than build a
+        // reference entity with a null primary key (which would fail obscurely later at persist time).
+        this.timeEntry = new TimeEntry(Objects.requireNonNull(timeEntryId, "timeEntryId must not be null"));
     }
 }

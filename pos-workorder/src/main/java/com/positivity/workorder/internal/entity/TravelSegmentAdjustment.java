@@ -12,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -90,8 +91,9 @@ public class TravelSegmentAdjustment {
 
     @jakarta.persistence.Transient
     public void setTravelSegmentId(UUID travelSegmentId) {
-        // travelSegment is a required (@NonNull) association, so build a reference entity rather than
-        // assigning null (mirrors TimeEntry.setWorkOrderId's non-null association setter).
-        this.travelSegment = new TravelSegment(travelSegmentId);
+        // travelSegment is a required (optional=false) association; reject a null id rather than build a
+        // reference entity with a null primary key (which would fail obscurely later at persist time).
+        this.travelSegment =
+                new TravelSegment(Objects.requireNonNull(travelSegmentId, "travelSegmentId must not be null"));
     }
 }

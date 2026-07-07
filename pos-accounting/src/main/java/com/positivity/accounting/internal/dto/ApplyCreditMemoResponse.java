@@ -68,10 +68,7 @@ public class ApplyCreditMemoResponse implements Serializable {
     @NonNull
     private InvoiceStatus status;
 
-    public void setStatus(InvoiceStatus status) {
-        if (status == null) {
-            throw new IllegalStateException("Invoice status cannot be null");
-        }
+    public void setStatus(@NonNull InvoiceStatus status) {
         if (status == InvoiceStatus.UNKNOWN) {
             throw new IllegalStateException("Invoice status cannot be UNKNOWN");
         }
