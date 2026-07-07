@@ -13,6 +13,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -72,12 +73,26 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
     @NonNull
     public UUID resolveCurrentUserPrimaryLocationId() {
         LocalDate targetDate = LocalDate.now(clock);
-        return assignmentRepository.findActiveByPersonIdAndDate(resolveRequesterPersonId(), targetDate).stream()
-                .filter(EmployeeLocationAssignment::isPrimary)
-                .findFirst()
-                .map(EmployeeLocationAssignment::getLocationId)
+        return findPrimaryLocationId(resolveRequesterPersonId(), targetDate)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "No primary location assignment exists for requester on " + targetDate));
+    }
+
+    @Override
+    @NonNull
+    public UUID resolvePrimaryLocationId(@NonNull UUID personId) {
+        LocalDate targetDate = LocalDate.now(clock);
+        return findPrimaryLocationId(personId, targetDate)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "No primary location assignment exists for person " + personId + " on " + targetDate));
+    }
+
+    @NonNull
+    private Optional<UUID> findPrimaryLocationId(@NonNull UUID personId, @NonNull LocalDate targetDate) {
+        return assignmentRepository.findActiveByPersonIdAndDate(personId, targetDate).stream()
+                .filter(EmployeeLocationAssignment::isPrimary)
+                .findFirst()
+                .map(EmployeeLocationAssignment::getLocationId);
     }
 
     @NonNull
