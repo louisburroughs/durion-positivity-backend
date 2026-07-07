@@ -111,11 +111,13 @@ public class PeopleExceptionHandler {
 
     // Without these handlers, Spring MVC's routing/binding exceptions fall through to the
     // Exception catch-all below and every unknown path or malformed parameter surfaces as a
-    // 500 (issue #820).
+    // 500 (issue #820). The details deliberately do not echo request data (path, parameter
+    // values): reflecting user-controlled input is flagged as XSS-prone (SonarCloud S5131),
+    // and the request path is already available in the ProblemDetail `instance` field.
     @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
-    public ProblemDetail handleNoEndpoint(Exception ex, HttpServletRequest request) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.NOT_FOUND, "No endpoint " + request.getMethod() + " " + request.getRequestURI());
+    public ProblemDetail handleNoEndpoint() {
+        ProblemDetail problem =
+                ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "No endpoint for the requested path");
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
@@ -123,7 +125,7 @@ public class PeopleExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ProblemDetail handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST, "Invalid value '" + ex.getValue() + "' for parameter '" + ex.getName() + "'");
+                HttpStatus.BAD_REQUEST, "Invalid value for parameter '" + ex.getName() + "'");
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
