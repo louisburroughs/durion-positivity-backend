@@ -37,8 +37,6 @@ public class AccountSummary {
     @NonNull
     private String accountType;
 
-    public AccountSummary() {}
-
     public AccountSummary(
             @NonNull String partyId,
             @NonNull String accountNumber,

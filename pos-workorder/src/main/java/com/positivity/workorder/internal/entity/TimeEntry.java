@@ -110,6 +110,9 @@ public class TimeEntry {
     @Column(nullable = false)
     private Instant updatedAt;
 
+    // PK-only reference constructor used by association setters (e.g. TimeEntryAdjustment);
+    // intentionally leaves the other @NonNull persistent columns unset on the reference proxy.
+    @SuppressWarnings("java:S2637")
     public TimeEntry(UUID timeEntryId) {
         this.timeEntryId = timeEntryId;
     }

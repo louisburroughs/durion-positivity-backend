@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 @Schema(description = "Request to update a staffing assignment")
 public class UpdateStaffingAssignmentRequest {
@@ -28,7 +29,7 @@ public class UpdateStaffingAssignmentRequest {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID locationId;
 
-    @NonNull
+    @Nullable
     @NotBlank
     @Schema(description = "Assignment role", example = "TECHNICIAN", requiredMode = Schema.RequiredMode.REQUIRED)
     private String role;

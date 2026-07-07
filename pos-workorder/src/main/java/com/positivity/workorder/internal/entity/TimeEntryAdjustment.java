@@ -104,6 +104,8 @@ public class TimeEntryAdjustment {
 
     @jakarta.persistence.Transient
     public void setTimeEntryId(UUID timeEntryId) {
-        this.timeEntry = timeEntryId != null ? new TimeEntry(timeEntryId) : null;
+        // timeEntry is a required (@NonNull) association, so build a reference entity rather than
+        // assigning null (mirrors TimeEntry.setWorkOrderId's non-null association setter).
+        this.timeEntry = new TimeEntry(timeEntryId);
     }
 }

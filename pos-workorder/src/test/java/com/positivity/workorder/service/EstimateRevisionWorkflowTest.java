@@ -62,7 +62,16 @@ class EstimateRevisionWorkflowTest {
     private static final UUID TEST_USER_ID = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
 
     @BeforeEach
-    void mockAuthentication() {
+    void setUp() {
+        // Clean up any existing test data
+        auditEventRepository.deleteAll();
+        workorderRepository.deleteAll();
+        estimateRepository.deleteAll();
+
+        mockAuthentication();
+    }
+
+    private void mockAuthentication() {
         TestingAuthenticationToken authentication =
                 new TestingAuthenticationToken("test-user", "password", "ROLE_USER");
 
@@ -79,14 +88,6 @@ class EstimateRevisionWorkflowTest {
     @AfterEach
     void clearAuthentication() {
         SecurityContextHolder.clearContext();
-    }
-
-    @BeforeEach
-    void setUp() {
-        // Clean up any existing test data
-        auditEventRepository.deleteAll();
-        workorderRepository.deleteAll();
-        estimateRepository.deleteAll();
     }
 
     /**

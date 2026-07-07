@@ -24,6 +24,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -94,13 +95,6 @@ public class IntentParserServiceImpl implements IntentParserService {
         intent.setClarificationQuestionsJson(toJson(questions));
 
         NltiIntent persistedIntent = repository.save(intent);
-        if (persistedIntent == null) {
-            log.warn(
-                    "Intent repository returned null for sessionId={}, correlationId={}; using in-memory fallback",
-                    sessionId,
-                    correlationId);
-            persistedIntent = intent;
-        }
 
         appendAuditEvent(NltiAuditEventType.INTENT, correlationId, sessionId);
         incrementParseCounter();
@@ -279,7 +273,7 @@ public class IntentParserServiceImpl implements IntentParserService {
         return new IntentV1(
                 intent.getId(),
                 intent.getIntentType() != null ? intent.getIntentType().name() : null,
-                intent.getStatus() != null ? intent.getStatus().name() : null,
+                Objects.requireNonNull(intent.getStatus(), "intent status").name(),
                 intent.getRiskLevel() != null ? intent.getRiskLevel().name() : null,
                 slots,
                 questions);

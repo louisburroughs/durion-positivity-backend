@@ -155,8 +155,10 @@ public class AccountingEventResponse {
         if (status != null) {
             try {
                 this.status = AccountingEventStatus.valueOf(status);
-            } catch (IllegalArgumentException _) {
-                this.status = null;
+            } catch (IllegalArgumentException e) {
+                // Mirror the sibling response DTOs: reject an unparseable status rather than
+                // nulling the @NotNull field (which would silently wipe a required value).
+                throw new IllegalStateException("Unknown accounting event status: " + status, e);
             }
         }
     }

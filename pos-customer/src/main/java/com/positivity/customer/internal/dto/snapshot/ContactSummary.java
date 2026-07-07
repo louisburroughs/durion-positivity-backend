@@ -15,7 +15,7 @@ public class ContactSummary {
             description = "Identifier of the contact",
             example = "01960003-0000-7000-8000-000000000020",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    @NonNull
+    @Nullable
     private String contactId;
 
     @Schema(
@@ -49,7 +49,7 @@ public class ContactSummary {
 
     public ContactSummary() {}
 
-    @NonNull
+    @Nullable
     public String getContactId() {
         return contactId;
     }
@@ -124,8 +124,6 @@ public class ContactSummary {
         @NonNull
         private String number;
 
-        public PhoneNumberDTO() {}
-
         public PhoneNumberDTO(@NonNull String type, @NonNull String number) {
             this.type = type;
             this.number = number;
@@ -162,8 +160,6 @@ public class ContactSummary {
                 requiredMode = Schema.RequiredMode.REQUIRED)
         @NonNull
         private String address;
-
-        public EmailAddressDTO() {}
 
         public EmailAddressDTO(@NonNull String type, @NonNull String address) {
             this.type = type;

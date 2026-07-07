@@ -16,7 +16,7 @@ public class SnapshotMetadata {
             description = "Unique identifier of the snapshot",
             example = "01960003-0000-7000-8000-000000000001",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    @NonNull
+    @Nullable
     private UUID snapshotId;
 
     @Schema(
@@ -61,7 +61,7 @@ public class SnapshotMetadata {
         this.version = version;
     }
 
-    @NonNull
+    @Nullable
     public UUID getSnapshotId() {
         return snapshotId;
     }

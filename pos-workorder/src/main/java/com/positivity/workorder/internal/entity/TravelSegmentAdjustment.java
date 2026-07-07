@@ -90,6 +90,8 @@ public class TravelSegmentAdjustment {
 
     @jakarta.persistence.Transient
     public void setTravelSegmentId(UUID travelSegmentId) {
-        this.travelSegment = travelSegmentId != null ? new TravelSegment(travelSegmentId) : null;
+        // travelSegment is a required (@NonNull) association, so build a reference entity rather than
+        // assigning null (mirrors TimeEntry.setWorkOrderId's non-null association setter).
+        this.travelSegment = new TravelSegment(travelSegmentId);
     }
 }

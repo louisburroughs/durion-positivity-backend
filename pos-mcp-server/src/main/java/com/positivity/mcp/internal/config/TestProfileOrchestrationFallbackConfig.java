@@ -7,6 +7,7 @@ import com.positivity.mcp.service.DocumentIngestionJobStatus;
 import com.positivity.mcp.service.DocumentIngestionService;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -62,7 +63,7 @@ public class TestProfileOrchestrationFallbackConfig {
             @Override
             public @NonNull DocumentIngestionJob submitDocument(
                     @NonNull String content, @NonNull Map<String, Object> metadata) {
-                OffsetDateTime now = OffsetDateTime.now();
+                OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
                 return new DocumentIngestionJob(
                         UUID.randomUUID(),
                         "openapi-test-document",
