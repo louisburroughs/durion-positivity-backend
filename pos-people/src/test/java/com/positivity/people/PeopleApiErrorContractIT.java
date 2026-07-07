@@ -30,7 +30,7 @@ class PeopleApiErrorContractIT extends BaseContractIntegrationTest {
     void unknownPathReturnsNotFound() throws Exception {
         mockMvc.perform(withAuth(get("/v1/people/" + PERSON_ID + "/no-such-resource")))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.detail").value("No endpoint GET /v1/people/" + PERSON_ID + "/no-such-resource"));
+                .andExpect(jsonPath("$.detail").value("No endpoint for the requested path"));
     }
 
     @Test
@@ -38,7 +38,7 @@ class PeopleApiErrorContractIT extends BaseContractIntegrationTest {
     void malformedPathVariableReturnsBadRequest() throws Exception {
         mockMvc.perform(withAuth(get("/v1/people/not-a-uuid")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").value("Invalid value 'not-a-uuid' for parameter 'personId'"));
+                .andExpect(jsonPath("$.detail").value("Invalid value for parameter 'personId'"));
     }
 
     @Test
