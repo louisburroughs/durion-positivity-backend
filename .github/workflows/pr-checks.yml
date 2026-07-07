@@ -60,7 +60,10 @@ jobs:
       
       - name: Install hadolint
         run: |
-          wget -O /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
+          # --https-only refuses to follow any redirect to a non-HTTPS URL, so the
+          # binary can only ever be fetched over TLS. (Sonar secrets/redirect hotspot)
+          wget --https-only -O /usr/local/bin/hadolint \
+            https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
           chmod +x /usr/local/bin/hadolint
       
       - name: Lint Dockerfiles
@@ -83,10 +86,14 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.12'
 
       - name: Install Python dependencies
-        run: pip install pyyaml
+        # Pin the exact version (locks the resolved dependency graph; PyYAML has no
+        # runtime deps) and force pre-built wheels only, so no arbitrary setup.py /
+        # build script runs during install. (Sonar githubactions:S8541, S8544)
+        run: |
+          pip install --only-binary=:all: 'pyyaml==6.0.2'
 
       - name: Check @PreAuthorize permissions are registered in the catalog
         run: |

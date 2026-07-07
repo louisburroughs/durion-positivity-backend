@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.dto.ReportExportRequest;
 import com.positivity.accounting.internal.dto.ReportExportResponse;
 import com.positivity.accounting.internal.enums.ExportStatus;
 import com.positivity.accounting.service.ReportExportService;
+import com.positivity.security.common.LogSanitizer;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
@@ -63,8 +64,8 @@ public class ReportExportServiceImpl implements ReportExportService {
         log.info(
                 "Report export requested: exportId={} reportType={} operator={}",
                 exportId,
-                request.getReportType(),
-                operatorId);
+                LogSanitizer.forLog(request.getReportType()),
+                LogSanitizer.forLog(operatorId));
         return response;
     }
 

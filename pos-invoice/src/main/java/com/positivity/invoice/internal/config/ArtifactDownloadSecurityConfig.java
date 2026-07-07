@@ -23,9 +23,15 @@ public class ArtifactDownloadSecurityConfig {
     @Bean
     @Order(0)
     public SecurityFilterChain artifactDownloadFilterChain(HttpSecurity http) throws Exception {
+        // CSRF is left at its secure default rather than disabled: it never challenges
+        // safe methods (GET/HEAD/OPTIONS), so the byte-download — and clients that probe
+        // it with HEAD or a CORS OPTIONS preflight — work without a token, while an unsafe
+        // method would be rejected (this path has only the GET download handler, no
+        // mutating routes). The chain is stateless, so there is no session-borne ambient
+        // authority for a cross-site request to forge; authorization is enforced inside
+        // the controller via the signed download token.
         http.securityMatcher(DOWNLOAD_PATTERN)
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-                .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
         return http.build();
     }
