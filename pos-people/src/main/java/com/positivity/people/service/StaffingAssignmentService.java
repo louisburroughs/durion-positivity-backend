@@ -16,6 +16,14 @@ public interface StaffingAssignmentService {
     @NonNull
     List<StaffingAssignmentResponse> findByPersonId(@NonNull UUID personId);
 
+    /**
+     * Active assignments for a person as of today: status ACTIVE with today inside the
+     * effective date range, primary assignment first. Empty when the person currently has
+     * no location.
+     */
+    @NonNull
+    List<StaffingAssignmentResponse> findActiveByPersonId(@NonNull UUID personId);
+
     @NonNull
     Optional<StaffingAssignmentResponse> findById(@NonNull UUID assignmentId);
 

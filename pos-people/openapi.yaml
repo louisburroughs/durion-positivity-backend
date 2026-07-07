@@ -1502,6 +1502,96 @@ paths:
         - people:userLink:view
       x-required-permissions:
       - people:userLink:view
+  /v1/people/{personId}/staffing/assignments:
+    get:
+      tags:
+      - People - Staffing Assignments
+      summary: List assignments for person (path variant)
+      description: Returns all staffing assignments for the person given in the path. Same contract as GET /v1/people/staffing/assignments?personId={personId}.
+      operationId: getAssignmentsByPath
+      parameters:
+      - name: personId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: List of assignments.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StaffingAssignmentResponse'
+      security:
+      - bearerAuth:
+        - people:employee:view
+      x-required-permissions:
+      - people:employee:view
+  /v1/people/{personId}/primary-location:
+    get:
+      tags:
+      - People Availability API
+      summary: Get a person's primary location
+      description: Resolve a person's primary active location from their staffing assignments. Returns 404 when the person has no active assignment flagged as primary.
+      operationId: getPersonPrimaryLocation
+      parameters:
+      - name: personId
+        in: path
+        description: Person id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Primary location resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrimaryLocationResponse'
+        '404':
+          description: No primary location assignment found for the person.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrimaryLocationResponse'
+      security:
+      - bearerAuth:
+        - people:availability:view
+      x-required-permissions:
+      - people:employee:view
+  /v1/people/{personId}/locations:
+    get:
+      tags:
+      - People Availability API
+      summary: Get a person's active location assignments
+      description: List a person's staffing assignments that are active today, primary first. Returns an empty list when the person has no current location.
+      operationId: getPersonLocations
+      parameters:
+      - name: personId
+        in: path
+        description: Person id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Active location assignments returned successfully.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StaffingAssignmentResponse'
+      security:
+      - bearerAuth:
+        - people:availability:view
+      x-required-permissions:
+      - people:employee:view
   /v1/people/users/{username}/person:
     get:
       tags:
@@ -1938,6 +2028,31 @@ paths:
       x-required-permissions:
       - people:time:export:read
       - accounting:time:export
+  /v1/people/me:
+    get:
+      tags:
+      - People API
+      summary: Get current user's person record
+      description: Resolve the authenticated user to their linked person record. Returns 404 when the user has no person link or the linked person no longer exists.
+      operationId: getCurrentPerson
+      responses:
+        '200':
+          description: Person found and returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+        '404':
+          description: No person linked to the current user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+      security:
+      - bearerAuth:
+        - people:person:view
+      x-required-permissions:
+      - people:person:view
   /v1/people/me/primary-location:
     get:
       tags:
@@ -1958,6 +2073,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PrimaryLocationResponse'
+      security:
+      - bearerAuth:
+        - people:availability:view
+      x-required-permissions:
+      - people:availability:view
+  /v1/people/me/locations:
+    get:
+      tags:
+      - People Availability API
+      summary: Get current user's active location assignments
+      description: List the authenticated user's staffing assignments that are active today, primary first. Returns an empty list when the user has no current location.
+      operationId: getCurrentUserLocations
+      responses:
+        '200':
+          description: Active location assignments returned successfully.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StaffingAssignmentResponse'
+        '404':
+          description: No person linked to the current user.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StaffingAssignmentResponse'
       security:
       - bearerAuth:
         - people:availability:view
@@ -3302,6 +3446,17 @@ components:
           type: boolean
           description: Whether the role is active
           example: true
+    PrimaryLocationResponse:
+      type: object
+      description: Primary location resolved from the authenticated user's active staffing assignments
+      properties:
+        locationId:
+          type: string
+          format: uuid
+          description: Location identifier of the user's primary active assignment
+          example: 22222222-2222-2222-2222-222222222222
+      required:
+      - locationId
     PersonResponse:
       type: object
       description: Person summary returned by person read operations
@@ -3705,17 +3860,6 @@ components:
       - locationId
       - locationName
       - timeEntryId
-    PrimaryLocationResponse:
-      type: object
-      description: Primary location resolved from the authenticated user's active staffing assignments
-      properties:
-        locationId:
-          type: string
-          format: uuid
-          description: Location identifier of the user's primary active assignment
-          example: 22222222-2222-2222-2222-222222222222
-      required:
-      - locationId
     TimeEntryException:
       type: object
       description: Time entry exception representing a discrepancy or issue with time tracking
