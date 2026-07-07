@@ -177,7 +177,11 @@ public class WorkorderLaborEntry {
     }
 
     private BigDecimal calculateHours(LocalDateTime start, LocalDateTime end) {
-        long minutes = java.time.Duration.between(start, end).toMinutes();
+        // Labor timestamps are recorded in UTC; compute the duration on zone-aware values so the
+        // result is DST-safe rather than on bare LocalDateTime.
+        long minutes = java.time.Duration.between(
+                        start.atOffset(java.time.ZoneOffset.UTC), end.atOffset(java.time.ZoneOffset.UTC))
+                .toMinutes();
         return BigDecimal.valueOf(minutes).divide(BigDecimal.valueOf(60), 2, java.math.RoundingMode.HALF_UP);
     }
 }

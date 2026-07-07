@@ -452,13 +452,15 @@ public enum PermissionCode {
     WORKORDER__LABOR__ADD_ON_BEHALF(345, "workorder:labor:add_on_behalf"),
     // ── Mcp (new) ──────────────────────────────────────────────────────────────
     MCP__TOOL__MANAGE(347, "mcp:tool:manage"),
-    MCP__TOOL__VIEW(348, "mcp:tool:view");
+    MCP__TOOL__VIEW(348, "mcp:tool:view"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__LOCATION__SYNC(349, "inventory:location:sync");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 16;
+    public static final int CATALOG_VERSION = 17;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

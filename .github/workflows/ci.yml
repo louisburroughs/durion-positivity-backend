@@ -2,7 +2,7 @@ name: Backend CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
       - "pos-*/**"
       - "pom.xml"
@@ -10,7 +10,7 @@ on:
       - "Dockerfile"
       - "docker-compose.yml"
   pull_request:
-    branches: [main]
+    branches: [ main ]
     paths:
       - "pos-*/**"
       - "pom.xml"
@@ -20,6 +20,10 @@ on:
   schedule:
     - cron: "0 6 * * *"
   workflow_dispatch:
+
+# Job-level permissions only (Sonar githubactions:S8264); jobs without a
+# permissions block get no token scopes.
+permissions: {}
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -38,6 +42,8 @@ jobs:
   detect-test-modules:
     name: Detect Test Modules
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: github.event_name != 'schedule'
     outputs:
       modules: ${{ steps.detect.outputs.modules }}
@@ -105,6 +111,8 @@ jobs:
   build-reactor:
     name: Build Reactor (install all)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: detect-test-modules
     if: needs.detect-test-modules.outputs.has-changes == 'true'
 
@@ -149,7 +157,9 @@ jobs:
   unit-tests:
     name: Unit Tests (${{ matrix.module }})
     runs-on: ubuntu-latest
-    needs: [detect-test-modules, build-reactor]
+    permissions:
+      contents: read
+    needs: [ detect-test-modules, build-reactor ]
     if: needs.detect-test-modules.outputs.has-changes == 'true'
 
     strategy:
@@ -224,7 +234,9 @@ jobs:
   integration-tests-modules:
     name: Integration Tests (${{ matrix.module }})
     runs-on: ubuntu-latest
-    needs: [detect-test-modules, build-reactor]
+    permissions:
+      contents: read
+    needs: [ detect-test-modules, build-reactor ]
     if: needs.detect-test-modules.outputs.has-changes == 'true' &&
       (github.event_name == 'workflow_dispatch' || (github.event_name == 'push'
       && github.ref == 'refs/heads/main'))
@@ -284,7 +296,9 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: [unit-tests]
+    permissions:
+      contents: read
+    needs: [ unit-tests ]
     # Only run on main branch pushes or when pom.xml files change (dependency updates)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' ||
       contains(github.event.pull_request.changed_files, 'pom.xml')
@@ -350,7 +364,9 @@ jobs:
   docker-build:
     name: Detect Changed Services
     runs-on: ubuntu-latest
-    needs: [unit-tests]
+    permissions:
+      contents: read
+    needs: [ unit-tests ]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
       services: ${{ steps.detect-services.outputs.services }}
@@ -390,6 +406,8 @@ jobs:
   docker-build-matrix:
     name: Build Docker Image (${{ matrix.service }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: docker-build
     if: needs.docker-build.outputs.has-changes == 'true'
 
@@ -417,15 +435,14 @@ jobs:
             hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Build service JAR
-        run:
-          ./mvnw clean package -pl ${{ matrix.service }} -am -DskipTests -DskipITs -T
+        run: ./mvnw clean package -pl ${{ matrix.service }} -am -DskipTests -DskipITs -T
           1C -B
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: ./${{ matrix.service }}
           file: ./${{ matrix.service }}/Dockerfile
@@ -436,14 +453,14 @@ jobs:
 
       - name: Log in to Docker Hub
         if: vars.ENABLE_DOCKERHUB_PUSH == 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Push Docker image
         if: vars.ENABLE_DOCKERHUB_PUSH == 'true'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: ./${{ matrix.service }}
           file: ./${{ matrix.service }}/Dockerfile
@@ -454,16 +471,17 @@ jobs:
 
       - name: Skip Docker Hub push
         if: vars.ENABLE_DOCKERHUB_PUSH != 'true'
-        run:
-          echo "Docker Hub push is disabled. Set ENABLE_DOCKERHUB_PUSH=true to
+        run: echo "Docker Hub push is disabled. Set ENABLE_DOCKERHUB_PUSH=true to
           publish from this workflow."
 
   code-quality:
     name: Incremental Code Quality Analysis
     runs-on: ubuntu-latest
-    needs: [unit-tests]
-    # Disabled until SonarCloud ALM binding is intentionally configured for this repository.
-    if: false
+    permissions:
+      contents: read
+      pull-requests: read
+    needs: [ unit-tests ]
+    if: github.event_name != 'schedule'
 
     steps:
       - name: Checkout code
@@ -522,16 +540,39 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          # Event data is passed via env vars, never interpolated into the script:
+          # head.ref is attacker-controlled on fork PRs (script injection).
+          EVENT_NAME: ${{ github.event_name }}
+          PR_KEY: ${{ github.event.pull_request.number }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar -DskipTests -DskipITs \
+          SONAR_BASE_ARGS="-DskipTests -DskipITs \
             -Dsonar.projectKey=louisburroughs_durion-positivity-backend \
             -Dsonar.organization=louisburroughs \
             -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.coverage.jacoco.xmlReportPaths=sonar-coverage/**/jacoco.xml,**/target/site/jacoco/jacoco.xml
+            -Dsonar.coverage.jacoco.xmlReportPaths=sonar-coverage/**/jacoco.xml,**/target/site/jacoco/jacoco.xml"
+
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            # Force PR-scoped analysis explicitly to avoid branch-level quality-gate
+            # evaluation and bypass flaky PR auto-detection.
+            ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
+              ${SONAR_BASE_ARGS} \
+              -Dsonar.pullrequest.key="${PR_KEY}" \
+              -Dsonar.pullrequest.branch="${PR_BRANCH}" \
+              -Dsonar.pullrequest.base="${PR_BASE}" \
+              -Dsonar.scm.revision="${PR_HEAD_SHA}"
+          else
+            ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
+              ${SONAR_BASE_ARGS}
+          fi
 
   code-quality-full:
     name: Full Coverage SonarCloud Analysis
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: github.event_name == 'schedule'
 
     steps:
@@ -588,7 +629,9 @@ jobs:
   integration-test:
     name: Integration Tests with Docker Compose
     runs-on: ubuntu-latest
-    needs: [unit-tests]
+    permissions:
+      contents: read
+    needs: [ unit-tests ]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     env:

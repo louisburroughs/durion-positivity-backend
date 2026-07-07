@@ -5,16 +5,20 @@ import com.positivity.people.internal.dto.Person;
 import com.positivity.people.internal.dto.ResolvePersonRequest;
 import com.positivity.people.internal.dto.ResolvePersonResponse;
 import com.positivity.people.service.PersonService;
+import com.positivity.people.service.UserPersonTranslationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -35,6 +39,32 @@ import org.springframework.web.bind.annotation.RestController;
 public class PersonController {
 
     private final PersonService personService;
+
+    private final UserPersonTranslationService userPersonTranslationService;
+
+    @Operation(
+            summary = "Get current user's person record",
+            description = "Resolve the authenticated user to their linked person record. Returns 404 when the user"
+                    + " has no person link or the linked person no longer exists.")
+    @ApiResponse(responseCode = "200", description = "Person found and returned.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No person linked to the current user.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @GetMapping("/me")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:person:view"})
+    @PreAuthorize("hasAuthority('people:person:view')")
+    public Person getCurrentPerson() {
+        UUID personId = userPersonTranslationService.getPersonUuidForCurrentUser();
+        return personService
+                .getPersonById(personId)
+                .orElseThrow(() -> new EntityNotFoundException("No person found for id: " + personId));
+    }
 
     @Operation(summary = "Get all people", description = "Retrieve people with optional type and text filters.")
     @Parameter(

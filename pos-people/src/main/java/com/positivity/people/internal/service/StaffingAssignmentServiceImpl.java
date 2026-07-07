@@ -121,6 +121,13 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
     }
 
     @Override
+    public @NonNull List<StaffingAssignmentResponse> findActiveByPersonId(@NonNull UUID personId) {
+        return repository.findActiveByPersonIdAndDate(personId, LocalDate.now(clock)).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
     public @NonNull Optional<StaffingAssignmentResponse> findById(@NonNull UUID assignmentId) {
         return repository.findById(assignmentId).map(this::toResponse);
     }

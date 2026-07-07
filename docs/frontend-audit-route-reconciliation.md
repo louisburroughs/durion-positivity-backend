@@ -92,10 +92,10 @@ missing route.
 | `GET /v1/inventory/cycleCountPlans` (LIST) | ✅ **Added** | Collection LIST now implemented: `GET /v1/inventory/cycleCountPlans` with optional `locationId` and `status` (`PLANNED`, …) filters, newest first, paged via `page`/`size` (default size 50; response stays a plain array). Requires `inventory:cycle_count:view`. The SDK should add a matching `listPlans` operation. |
 | `GET /v1/inventory/putaway/tasks` | ✅ Exists | Optional params `locationId`, `storageLocationId`. |
 | `GET /v1/inventory/replenishment/tasks` | ✅ Exists | No params. |
-| `GET /v1/inventory/locations` | ✅ Exists | `InventoryReferenceDataController`. Also `GET /v1/inventory/storage-locations`, `GET /v1/inventory/location-zones`. |
-| `GET …/locations/sync-logs` | **Does not exist** (whole repo) | No backend equivalent; frontend should remove or file a feature request. |
-| `GET …/meta/storage-types` | **Does not exist** (whole repo) | Closest is `GET /v1/inventory/storage-locations`. |
-| `POST …/locations/sync` | **Does not exist** (whole repo) | No backend equivalent. |
+| `GET /v1/inventory/locations` | ✅ Exists | `InventoryReferenceDataController`. Now served from the local `location_ref` roster synced from pos-location (CAP-214 #40); response is a Spring `Page` (items under `content`). Also `GET /v1/inventory/storage-locations`, `GET /v1/inventory/location-zones`. |
+| `GET …/sync-logs` | ✅ **Added** (CAP-214 #40) | `GET /v1/inventory/sync-logs` with optional `outcome` (`OK`, `PARTIAL`, `FAILED`, `INVALID_PAYLOAD`) filter, newest first, paged via `page`/`size` (aliases `pageIndex`/`pageSize` accepted; default size 50; response is a plain array). Also `GET /v1/inventory/sync-logs/{syncLogId}`. Requires `inventory:location:view`. |
+| `GET …/meta/storage-types` | ✅ **Added** (CAP-214 #40) | `GET /v1/inventory/meta/storage-types` returns the storage type codes (`FLOOR`, `SHELF`, `BIN`, `CAGE`, `TRUCK`) as a plain array. Requires `inventory:location:view`. |
+| `POST …/locations/sync` | ✅ **Added** (CAP-214 #40) | `POST /v1/inventory/locations/sync` runs one bulk roster sync from pos-location; optional `Idempotency-Key` header makes retries return the original run. Responds 202 with `{syncRunId, outcome, locations*}`. Requires `inventory:location:sync`. |
 
 ## 4. Divergent-route reconciliation (canonical paths)
 

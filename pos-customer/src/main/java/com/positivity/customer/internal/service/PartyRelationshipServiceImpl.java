@@ -179,8 +179,8 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
 
         log.debug("Getting contacts for commercial account: partyId={}, roles={}, status={}", partyId, roles, status);
 
-        // Validate party exists
-        if (!partyRepository.existsById(partyId)) {
+                // Validate party exists in the unified party model (commercial + person).
+                if (!partyRepository.existsById(partyId) && !personRepository.existsById(partyId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found");
         }
 

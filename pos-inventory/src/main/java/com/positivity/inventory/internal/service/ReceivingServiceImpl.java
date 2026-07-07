@@ -578,7 +578,8 @@ public class ReceivingServiceImpl implements ReceivingService {
                     + ": productId is required");
         }
 
-        BigDecimal expectedQuantity = stubLine != null ? stubLine.getExpectedQuantity() : null;
+        // stubLine is guaranteed non-null here: the productId guard above throws when it is null (java:S2583).
+        BigDecimal expectedQuantity = stubLine.getExpectedQuantity();
         if (expectedQuantity == null || expectedQuantity.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalStateException("Invalid source document line " + lineNumber + " for " + sourceDocumentId
                     + ": expectedQuantity must be greater than 0");

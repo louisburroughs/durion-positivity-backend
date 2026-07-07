@@ -248,42 +248,43 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
 
     private void enforceLinkedUserRules(UUID personId, String normalizedEmail, String chosenUsername) {
         List<UUID> linkedUserIds = peopleRegistrationClient.getLinkedUserIds(personId);
-        for (UUID linkedUserId : linkedUserIds) {
-            User linkedUser = userRepository
-                    .findById(linkedUserId)
-                    .orElseThrow(() -> new SelfRegistrationConflictException(
-                            USER_PERSON_LINK_CONFLICT,
-                            "Resolved person has an inconsistent existing user link",
-                            selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
-                                    .caseType(SelfRegistrationCaseType.IDENTITY_REVIEW)
-                                    .reasonCode(USER_PERSON_LINK_CONFLICT)
-                                    .reasonMessage("Resolved person has an inconsistent existing user link")
-                                    .email(normalizedEmail)
-                                    .requestedUsername(chosenUsername)
-                                    .personId(personId)
-                                    .linkedUserId(linkedUserId)
-                                    .notes("People link exists but security user record could not be found")
-                                    .build())));
-            if (isActive(linkedUser)) {
-                throw new SelfRegistrationConflictException(
-                        "PERSON_ALREADY_HAS_ACTIVE_USER",
-                        "Resolved person is already linked to a different active user");
-            }
-            UUID referenceId = selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
-                    .caseType(SelfRegistrationCaseType.ACCOUNT_RECOVERY)
-                    .reasonCode("ACCOUNT_RECOVERY_REQUIRED")
-                    .reasonMessage("Resolved person already has an inactive linked user and must go through recovery")
-                    .email(normalizedEmail)
-                    .requestedUsername(chosenUsername)
-                    .personId(personId)
-                    .linkedUserId(linkedUserId)
-                    .notes("Inactive linked user blocks self-registration")
-                    .build());
-            throw new SelfRegistrationConflictException(
-                    "ACCOUNT_RECOVERY_REQUIRED",
-                    "Resolved person already has an inactive linked user and must go through recovery",
-                    referenceId);
+        if (linkedUserIds.isEmpty()) {
+            return;
         }
+        UUID linkedUserId = linkedUserIds.get(0);
+        User linkedUser = userRepository
+                .findById(linkedUserId)
+                .orElseThrow(() -> new SelfRegistrationConflictException(
+                        USER_PERSON_LINK_CONFLICT,
+                        "Resolved person has an inconsistent existing user link",
+                        selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
+                                .caseType(SelfRegistrationCaseType.IDENTITY_REVIEW)
+                                .reasonCode(USER_PERSON_LINK_CONFLICT)
+                                .reasonMessage("Resolved person has an inconsistent existing user link")
+                                .email(normalizedEmail)
+                                .requestedUsername(chosenUsername)
+                                .personId(personId)
+                                .linkedUserId(linkedUserId)
+                                .notes("People link exists but security user record could not be found")
+                                .build())));
+        if (isActive(linkedUser)) {
+            throw new SelfRegistrationConflictException(
+                    "PERSON_ALREADY_HAS_ACTIVE_USER", "Resolved person is already linked to a different active user");
+        }
+        UUID referenceId = selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
+                .caseType(SelfRegistrationCaseType.ACCOUNT_RECOVERY)
+                .reasonCode("ACCOUNT_RECOVERY_REQUIRED")
+                .reasonMessage("Resolved person already has an inactive linked user and must go through recovery")
+                .email(normalizedEmail)
+                .requestedUsername(chosenUsername)
+                .personId(personId)
+                .linkedUserId(linkedUserId)
+                .notes("Inactive linked user blocks self-registration")
+                .build());
+        throw new SelfRegistrationConflictException(
+                "ACCOUNT_RECOVERY_REQUIRED",
+                "Resolved person already has an inactive linked user and must go through recovery",
+                referenceId);
     }
 
     private void enforceCrmConflictRules(

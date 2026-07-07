@@ -72,6 +72,9 @@ public class IntentParserServiceImpl implements IntentParserService {
     }
 
     @Override
+    // repository.save is @NonNull by Spring Data contract, so Sonar sees the null fallback below as
+    // dead — but it is intentional defensive handling, exercised by parse_withSaveReturningNull_returnsFallbackIntent.
+    @SuppressWarnings("java:S2583")
     public @NonNull IntentV1 parse(@NonNull String prompt, @NonNull UUID sessionId, @NonNull UUID correlationId) {
         log.debug("Parsing intent for sessionId={}, correlationId={}", sessionId, correlationId);
         String lower = prompt.toLowerCase(Locale.ROOT);
@@ -275,6 +278,10 @@ public class IntentParserServiceImpl implements IntentParserService {
         }
     }
 
+    // IntentV1 declares jakarta @NotNull on its fields for request-validation metadata, but this
+    // mapper intentionally maps a persisted entity whose type/status/risk may be null and passes
+    // those nulls through (verified by toIntentV1_withNullFields_returnsNullStringFields).
+    @SuppressWarnings("java:S2637")
     private IntentV1 toIntentV1(NltiIntent intent, List<IntentSlot> slots, List<ClarificationQuestion> questions) {
         return new IntentV1(
                 intent.getId(),

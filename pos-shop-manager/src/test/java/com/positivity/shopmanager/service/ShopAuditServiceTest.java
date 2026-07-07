@@ -273,6 +273,7 @@ class ShopAuditServiceTest {
 
         List<ShopAuditEntryResponse> results = service.search(filter);
 
+        assertThat(results).isNotEmpty();
         assertThat(results)
                 .as("search by workorderId must return a non-null list")
                 .isNotNull()
@@ -300,6 +301,7 @@ class ShopAuditServiceTest {
 
         List<ShopAuditEntryResponse> results = service.search(filter);
 
+        assertThat(results).isNotEmpty();
         assertThat(results)
                 .as("search by mechanicId must return a non-null list")
                 .isNotNull()
@@ -327,6 +329,7 @@ class ShopAuditServiceTest {
 
         List<ShopAuditEntryResponse> results = service.search(filter);
 
+        assertThat(results).isNotEmpty();
         assertThat(results)
                 .as("search by eventType must return a non-null list")
                 .isNotNull()

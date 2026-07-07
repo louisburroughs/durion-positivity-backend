@@ -37,7 +37,7 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull LeadTimeView queryLeadTime(
-            @NonNull UUID productId, @Nullable UUID locationId, @Nullable UUID storageLocationId) {
+            UUID productId, @Nullable UUID locationId, @Nullable UUID storageLocationId) {
         if (productId == null) {
             throw new InvalidInventoryAvailabilityRequestException("productId is required");
         }

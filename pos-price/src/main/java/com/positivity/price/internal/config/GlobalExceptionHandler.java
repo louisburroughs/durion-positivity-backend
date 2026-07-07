@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
@@ -151,8 +152,7 @@ public class GlobalExceptionHandler {
 
     private ApiError.FieldError toFieldError(FieldError fieldError) {
         return new ApiError.FieldError(
-                fieldError.getField(),
-                fieldError.getDefaultMessage() == null ? "Invalid value" : fieldError.getDefaultMessage());
+                fieldError.getField(), Objects.requireNonNullElse(fieldError.getDefaultMessage(), "Invalid value"));
     }
 
     private ResponseEntity<ApiError> buildErrorResponse(

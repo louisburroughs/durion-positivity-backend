@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.service;
 import com.positivity.invoice.internal.client.ManagerApprovalClient;
 import com.positivity.invoice.internal.dto.ElevateResponse;
 import com.positivity.invoice.internal.exception.ElevationDeniedException;
+import com.positivity.security.common.LogSanitizer;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -46,7 +47,10 @@ public class ElevationService {
 
         ElevationTokenService.MintedToken minted = tokenService.mint(invoiceId, managerPersonId);
         // ADR-0018: audit the approving manager and the invoice the grant authorises.
-        log.info("Elevation token minted: approverPersonId={}, invoiceId={}", managerPersonId, invoiceId);
+        log.info(
+                "Elevation token minted: approverPersonId={}, invoiceId={}",
+                LogSanitizer.forLog(managerPersonId),
+                LogSanitizer.forLog(invoiceId));
         return new ElevateResponse(minted.token(), minted.expiresAt());
     }
 }

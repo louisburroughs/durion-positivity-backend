@@ -12,7 +12,7 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "Read-only CRM snapshot of an account, its contacts, vehicles, and billing configuration")
 public class CrmSnapshotDTO {
     @Schema(description = "Metadata describing the snapshot", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NonNull
+    @Nullable
     private SnapshotMetadata snapshotMetadata;
 
     @Schema(description = "Account summary", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -44,7 +44,7 @@ public class CrmSnapshotDTO {
                 description = "Identifier of the vehicle",
                 example = "01960003-0000-7000-8000-000000000030",
                 requiredMode = Schema.RequiredMode.REQUIRED)
-        @NonNull
+        @Nullable
         private String vehicleId;
 
         @Schema(
@@ -72,7 +72,7 @@ public class CrmSnapshotDTO {
 
         public VehicleSummary() {}
 
-        @NonNull
+        @Nullable
         public String getVehicleId() {
             return vehicleId;
         }
@@ -200,7 +200,7 @@ public class CrmSnapshotDTO {
 
     // Getters and Setters
 
-    @NonNull
+    @Nullable
     public SnapshotMetadata getSnapshotMetadata() {
         return snapshotMetadata;
     }

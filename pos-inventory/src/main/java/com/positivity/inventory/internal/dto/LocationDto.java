@@ -38,6 +38,15 @@ public class LocationDto {
     @Schema(description = "Type classification of the location", example = "WAREHOUSE", requiredMode = NOT_REQUIRED)
     private String type;
 
+    @Schema(description = "Operational status of the location", example = "ACTIVE", requiredMode = NOT_REQUIRED)
+    private String status;
+
+    @Schema(
+            description = "IANA timezone identifier of the location",
+            example = "America/New_York",
+            requiredMode = NOT_REQUIRED)
+    private String timezone;
+
     @Schema(description = "Whether the location is currently active", example = "true", requiredMode = REQUIRED)
     private boolean active;
 }

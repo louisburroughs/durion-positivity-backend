@@ -36,6 +36,7 @@ public class ProductEntity implements CatalogItem {
     private UUID id;
 
     @PrePersist
+    @PostLoad
     public void generateId() {
         if (status == null) {
             status = ProductStatus.ACTIVE;
@@ -180,14 +181,4 @@ public class ProductEntity implements CatalogItem {
     @LastModifiedDate
     @Schema(description = "Timestamp when product was last updated")
     private Instant updatedAt;
-
-    @PostLoad
-    public void ensureDefaults() {
-        if (status == null) {
-            status = ProductStatus.ACTIVE;
-        }
-        if (lifecycleState == null) {
-            lifecycleState = ProductLifecycleState.ACTIVE;
-        }
-    }
 }

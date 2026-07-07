@@ -64,6 +64,15 @@ public final class EventTypes {
                                 "Deactivate a storage location with optional stock transfer")
                         .build(),
 
+                // LocationSyncController - 3 events
+                EventTypeRegistration.write(
+                                "INVENTORY_LOCATION_SYNC_TRIGGER", "Trigger a location roster sync from pos-location")
+                        .build(),
+                EventTypeRegistration.fastRead("INVENTORY_LOCATION_SYNC_LOG_LIST", "List location sync audit logs")
+                        .build(),
+                EventTypeRegistration.fastRead("INVENTORY_LOCATION_SYNC_LOG_GET", "Get a location sync audit log entry")
+                        .build(),
+
                 // PutawayController - 2 events
                 EventTypeRegistration.write(
                                 "INVENTORY_PUTAWAY_TASK_GENERATE",

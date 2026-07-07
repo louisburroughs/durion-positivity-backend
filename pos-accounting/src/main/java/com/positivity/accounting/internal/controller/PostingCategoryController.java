@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.dto.PostingCategoryResponse;
 import com.positivity.accounting.internal.dto.PostingCategoryUpdateRequest;
 import com.positivity.accounting.service.PostingCategoryService;
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.LogSanitizer;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -126,7 +127,7 @@ public class PostingCategoryController {
         // Sanitize sort parameter - use default if not in allowed list
         String sanitizedSort = ALLOWED_SORT_FIELDS.contains(sort) ? sort : "categoryName";
         if (!sort.equals(sanitizedSort)) {
-            log.warn("Invalid sort field '{}' requested, defaulting to '{}'", sort, sanitizedSort);
+            log.warn("Invalid sort field '{}' requested, defaulting to '{}'", LogSanitizer.forLog(sort), sanitizedSort);
         }
 
         PostingCategoryListResponse response =

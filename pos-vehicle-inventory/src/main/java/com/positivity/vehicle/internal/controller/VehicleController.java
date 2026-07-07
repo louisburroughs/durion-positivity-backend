@@ -75,10 +75,8 @@ public class VehicleController {
             @Parameter(description = "ID of the vehicle to update", example = "1") @PathVariable UUID id,
             @Parameter(description = "Updated vehicle object") @RequestBody VehicleLegacyRequest updated) {
         try {
-            return vehicleLegacyService
-                    .updateVehicle(id, updated)
-                    .map(ResponseEntity::ok)
-                    .orElseGet(() -> ResponseEntity.notFound().build());
+            // ResponseEntity.of: 200 + body when present, 404 when empty (Sonar S6863).
+            return ResponseEntity.of(vehicleLegacyService.updateVehicle(id, updated));
         } catch (IllegalArgumentException e) {
             log.warn("Invalid update request for vehicle id {}: {}", id, e.getMessage());
             return ResponseEntity.badRequest().build();
@@ -125,10 +123,8 @@ public class VehicleController {
             @Parameter(description = "VIN of the vehicle to retrieve", example = "1HGCM82633A004352") @PathVariable
                     String vin) {
         try {
-            return vehicleLegacyService
-                    .getVehicleByVin(vin)
-                    .map(ResponseEntity::ok)
-                    .orElseGet(() -> ResponseEntity.notFound().build());
+            // ResponseEntity.of: 200 + body when present, 404 when empty (Sonar S6863).
+            return ResponseEntity.of(vehicleLegacyService.getVehicleByVin(vin));
         } catch (IllegalArgumentException e) {
             log.warn("Invalid VIN lookup request: {}", e.getMessage());
             return ResponseEntity.badRequest().build();
@@ -145,10 +141,8 @@ public class VehicleController {
                     String vin,
             @Parameter(description = "Updated vehicle object") @RequestBody VehicleLegacyRequest updated) {
         try {
-            return vehicleLegacyService
-                    .updateVehicleByVin(vin, updated)
-                    .map(ResponseEntity::ok)
-                    .orElseGet(() -> ResponseEntity.notFound().build());
+            // ResponseEntity.of: 200 + body when present, 404 when empty (Sonar S6863).
+            return ResponseEntity.of(vehicleLegacyService.updateVehicleByVin(vin, updated));
         } catch (IllegalArgumentException e) {
             log.warn("Invalid update-by-vin request for VIN {}: {}", vin, e.getMessage());
             return ResponseEntity.badRequest().build();
