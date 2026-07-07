@@ -62,7 +62,7 @@ jobs:
         run: |
           # --https-only refuses to follow any redirect to a non-HTTPS URL, so the
           # binary can only ever be fetched over TLS. (Sonar secrets/redirect hotspot)
-          wget --https-only -O /usr/local/bin/hadolint \
+          wget --https-only --max-redirect=0 -O /usr/local/bin/hadolint \
             https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
           chmod +x /usr/local/bin/hadolint
       
