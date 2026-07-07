@@ -36,4 +36,10 @@ public class FileUploadResponse {
 
     @Schema(description = "Size of the uploaded file in bytes", example = "204800", requiredMode = REQUIRED)
     private long sizeBytes;
+
+    @Schema(
+            description = "Content detection result for the uploaded file (detected domain, confidence, and"
+                    + " suggested column mappings). Absent when the file structure could not be parsed.",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private ContentDetectionResult detection;
 }

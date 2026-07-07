@@ -99,8 +99,9 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
         request.setUpc(ingestRecord.getUpc());
         request.setName(ingestRecord.getName());
         request.setDescription(firstNonBlank(ingestRecord.getDescription(), ingestRecord.getName()));
-        request.setUnitOfMeasure(DEFAULT_UNIT_OF_MEASURE);
-        request.setMpn(firstNonBlank(ingestRecord.getSku(), ingestRecord.getName()));
+        request.setUnitOfMeasure(firstNonBlank(ingestRecord.getUnitOfMeasure(), DEFAULT_UNIT_OF_MEASURE));
+        request.setMpn(
+                firstNonBlank(ingestRecord.getMpn(), firstNonBlank(ingestRecord.getSku(), ingestRecord.getName())));
         return request;
     }
 

@@ -15,6 +15,7 @@ import com.positivity.bulkingest.BulkIngestRequest;
 import com.positivity.bulkloader.PosBlkLoaderApplication;
 import com.positivity.bulkloader.internal.config.BulkLoaderEventTypeInitializer;
 import com.positivity.bulkloader.internal.config.PermissionRegistration;
+import com.positivity.bulkloader.internal.domain.CatalogProductRecord;
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
@@ -22,9 +23,13 @@ import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
 import com.positivity.bulkloader.internal.service.BulkLoadAuthorizationContext;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -160,5 +165,124 @@ class FileUploadProcessEndToEndTest {
         assertThat(request.getOperatorId()).isEqualTo("test-operator");
         assertThat(request.getRecords()).hasSize(1);
         assertThat(bulkLoadAuthorizationContext.getAuthorizationHeader()).isNull();
+    }
+
+    @Test
+    @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+    void startProcessing_vendorFormatCsv_discoversColumnsByHeader() throws Exception {
+        // Vendor price-file layout: different header names, different column order, extra columns.
+        String relativeStoragePath = JOB_ID + "/vendor-parts-catalog.csv";
+        Files.createDirectories(STORAGE_ROOT.resolve(JOB_ID.toString()));
+        Files.writeString(STORAGE_ROOT.resolve(relativeStoragePath), """
+                vendor_id,vendor_name,supplier_sku,manufacturer_part_no,upc,category,subcategory,brand,product_name,description,uom,list_price,dealer_cost,currency
+                VEND-MIC-001,Michelin North America,MIC-000001,3A3ZMF8MD,822676000001,Wheels,Steel Wheel,Maxion,Maxion Steel Wheel 15x6,Steel Wheel test item,EA,242.81,174.89,USD
+                VEND-NAT-005,National Tire Supply,NAT-000004,IIUC039TE,896474000004,TPMS,Valve Stem,Dill,Dill Valve Stem Programmable,Programmable valve stem,KIT,96.26,62.07,USD
+                """);
+
+        saveJob("vendor-parts-catalog.csv", relativeStoragePath);
+
+        mockMvc.perform(post("/v1/bulk-jobs/{jobId}/process", JOB_ID)
+                        .header(GatewaySecurityConstants.HEADER_TOKEN, "token-e2e"))
+                .andExpect(status().isOk());
+
+        BulkIngestRequest<CatalogProductRecord> request = capturedCatalogRequest();
+        assertThat(request.getRecords()).hasSize(2);
+        CatalogProductRecord first = request.getRecords().get(0);
+        assertThat(first.getSku()).isEqualTo("MIC-000001");
+        assertThat(first.getMpn()).isEqualTo("3A3ZMF8MD");
+        assertThat(first.getUpc()).isEqualTo("822676000001");
+        assertThat(first.getName()).isEqualTo("Maxion Steel Wheel 15x6");
+        assertThat(first.getDescription()).isEqualTo("Steel Wheel test item");
+        assertThat(first.getCategoryName()).isEqualTo("Wheels");
+        assertThat(first.getSubcategoryName()).isEqualTo("Steel Wheel");
+        assertThat(first.getUnitOfMeasure()).isEqualTo("EA");
+        assertThat(first.getPrice()).isEqualByComparingTo(new BigDecimal("242.81"));
+    }
+
+    @Test
+    @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+    void startProcessing_xlsxWorkbook_selectsDataSheetAndDiscoversColumns() throws Exception {
+        String relativeStoragePath = JOB_ID + "/vendor-parts-catalog.xlsx";
+        Files.createDirectories(STORAGE_ROOT.resolve(JOB_ID.toString()));
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+                var out = Files.newOutputStream(STORAGE_ROOT.resolve(relativeStoragePath))) {
+            Sheet importMap = workbook.createSheet("Import_Map");
+            writeRow(importMap, 0, "Target POS Field", "Source Column");
+            writeRow(importMap, 1, "SKU", "supplier_sku");
+
+            Sheet catalog = workbook.createSheet("Catalog");
+            writeRow(catalog, 0, "supplier_sku", "product_name", "category", "uom", "list_price");
+            writeRow(catalog, 1, "MIC-000001", "Maxion Steel Wheel 15x6", "Wheels", "EA", "242.81");
+            writeRow(catalog, 2, "NAT-000004", "Dill Valve Stem", "TPMS", "KIT", "96.26");
+            workbook.write(out);
+        }
+
+        saveJob("vendor-parts-catalog.xlsx", relativeStoragePath);
+
+        mockMvc.perform(post("/v1/bulk-jobs/{jobId}/process", JOB_ID)
+                        .header(GatewaySecurityConstants.HEADER_TOKEN, "token-e2e"))
+                .andExpect(status().isOk());
+
+        BulkIngestRequest<CatalogProductRecord> request = capturedCatalogRequest();
+        assertThat(request.getRecords()).hasSize(2);
+        assertThat(request.getRecords().get(0).getSku()).isEqualTo("MIC-000001");
+        assertThat(request.getRecords().get(1).getName()).isEqualTo("Dill Valve Stem");
+    }
+
+    @Test
+    @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+    void startProcessing_jsonFile_discoversRecordsByStructure() throws Exception {
+        String relativeStoragePath = JOB_ID + "/vendor-parts-catalog.json";
+        Files.createDirectories(STORAGE_ROOT.resolve(JOB_ID.toString()));
+        Files.writeString(STORAGE_ROOT.resolve(relativeStoragePath), """
+                {
+                  "vendor": "Michelin North America",
+                  "items": [
+                    {"supplier_sku": "MIC-000001", "product_name": "Maxion Steel Wheel 15x6", "uom": "EA", "list_price": 242.81},
+                    {"supplier_sku": "NAT-000004", "product_name": "Dill Valve Stem", "uom": "KIT", "list_price": 96.26}
+                  ]
+                }
+                """);
+
+        saveJob("vendor-parts-catalog.json", relativeStoragePath);
+
+        mockMvc.perform(post("/v1/bulk-jobs/{jobId}/process", JOB_ID)
+                        .header(GatewaySecurityConstants.HEADER_TOKEN, "token-e2e"))
+                .andExpect(status().isOk());
+
+        BulkIngestRequest<CatalogProductRecord> request = capturedCatalogRequest();
+        assertThat(request.getRecords()).hasSize(2);
+        CatalogProductRecord first = request.getRecords().get(0);
+        assertThat(first.getSku()).isEqualTo("MIC-000001");
+        assertThat(first.getUnitOfMeasure()).isEqualTo("EA");
+        assertThat(first.getPrice()).isEqualByComparingTo(new BigDecimal("242.81"));
+    }
+
+    private void saveJob(String fileName, String relativeStoragePath) {
+        BulkLoadJob job = new BulkLoadJob();
+        job.setId(JOB_ID);
+        job.setOperatorId("test-operator");
+        job.setLocationId(LOCATION_ID);
+        job.setFileName(fileName);
+        job.setOriginalFilePath(relativeStoragePath);
+        job.setDomainType(DomainType.CATALOG_PRODUCT);
+        job.setStatus(JobStatus.UPLOADING);
+        bulkLoadJobRepository.saveAndFlush(job);
+    }
+
+    @SuppressWarnings("unchecked")
+    private BulkIngestRequest<CatalogProductRecord> capturedCatalogRequest() {
+        verify(requestBodyUriSpec, timeout(2000)).uri("/v1/catalog/bulk-ingest");
+        ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(requestBodySpec, timeout(2000)).body(bodyCaptor.capture());
+        assertThat(bodyCaptor.getValue()).isInstanceOf(BulkIngestRequest.class);
+        return (BulkIngestRequest<CatalogProductRecord>) bodyCaptor.getValue();
+    }
+
+    private void writeRow(Sheet sheet, int rowIndex, String... values) {
+        Row row = sheet.createRow(rowIndex);
+        for (int i = 0; i < values.length; i++) {
+            row.createCell(i).setCellValue(values[i]);
+        }
     }
 }
