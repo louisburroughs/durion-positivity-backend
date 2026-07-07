@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -174,8 +175,7 @@ public class GlobalExceptionHandler {
 
     private ApiError.FieldError toFieldError(FieldError fieldError) {
         return new ApiError.FieldError(
-                fieldError.getField(),
-                fieldError.getDefaultMessage() == null ? "invalid value" : fieldError.getDefaultMessage());
+                fieldError.getField(), Objects.requireNonNullElse(fieldError.getDefaultMessage(), "invalid value"));
     }
 
     private UUID resolveCorrelationId(HttpServletRequest request) {

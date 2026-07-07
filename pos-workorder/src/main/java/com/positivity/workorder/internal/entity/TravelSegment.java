@@ -50,6 +50,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Builder
 @EntityListeners(AuditingEntityListener.class)
 public class TravelSegment {
+    // PK-only reference constructor used by association setters (e.g. TravelSegmentAdjustment);
+    // intentionally leaves the other @NonNull persistent columns unset on the reference proxy.
+    @SuppressWarnings("java:S2637")
     public TravelSegment(UUID travelSegmentId) {
         this.travelSegmentId = travelSegmentId;
     }

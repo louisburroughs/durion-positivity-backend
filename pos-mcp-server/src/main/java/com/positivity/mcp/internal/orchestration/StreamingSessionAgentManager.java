@@ -161,7 +161,7 @@ public class StreamingSessionAgentManager
         List<String> toolNames = sharedOrchestrationSupport.toolNames(allTools);
         String ragScope = toolRegistry.resolveRagScopeForTools(allTools);
         AssembledPrompt assembled = rolePromptResolver.assemble(role, ragScope);
-        List<String> promptLayers = assembled != null ? assembled.layers() : List.of();
+        List<String> promptLayers = assembled.layers();
         String correlationId = resolveCorrelationId();
         String workflowState = selection.workflowState().name();
 

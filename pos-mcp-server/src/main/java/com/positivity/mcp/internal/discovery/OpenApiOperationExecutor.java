@@ -62,7 +62,10 @@ public class OpenApiOperationExecutor implements ToolExecutor {
             URI gatewayBaseUri =
                     URI.create(Objects.requireNonNull(operation.serviceId(), "openapi op missing service_id"));
             McpSchema.CallToolResult result = proxyFactory
-                    .handlerForBaseUri(gatewayBaseUri, method, operation.httpPath())
+                    .handlerForBaseUri(
+                            gatewayBaseUri,
+                            method,
+                            Objects.requireNonNull(operation.httpPath(), "openapi op missing http_path"))
                     .apply(null, call)
                     .block(timeout);
             return render(result);

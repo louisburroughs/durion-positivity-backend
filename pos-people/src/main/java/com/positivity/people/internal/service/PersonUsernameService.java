@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -25,11 +26,11 @@ public class PersonUsernameService {
 
     /** Username for a single person, or null if unlinked. */
     public @Nullable String usernameForPerson(@NonNull UUID personId) {
-        return linkRepository.findByPerson_Id(personId).stream()
+        Optional<String> username = linkRepository.findByPerson_Id(personId).stream()
                 .map(UserPersonLink::getUsername)
                 .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(null);
+                .findFirst();
+        return username.isPresent() ? username.get() : null;
     }
 
     /** Batch personId → username for directory/list paths. */

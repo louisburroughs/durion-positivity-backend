@@ -232,10 +232,10 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
         UUID actorPersonId = mechanicId;
 
         // Current assignment is the default attribution target (shopmgmt system of record), not the actor.
-        UUID assignedTechnicianId = technicianAssignmentRepository
+        Optional<UUID> assignedTechnicianOpt = technicianAssignmentRepository
                 .findByWorkorder_IdAndCurrentTrue(request.workorderId())
-                .map(TechnicianAssignment::getTechnicianId)
-                .orElse(null);
+                .map(TechnicianAssignment::getTechnicianId);
+        UUID assignedTechnicianId = assignedTechnicianOpt.isPresent() ? assignedTechnicianOpt.get() : null;
 
         UUID trackedTechnicianId = resolveTrackedTechnician(request, actorPersonId, assignedTechnicianId);
         boolean onBehalf = authorizeAttribution(request, actorPersonId, assignedTechnicianId, trackedTechnicianId);
@@ -359,7 +359,11 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
     private WorkexecTimeTrackingService.TimerEntry toTimerResponse(@NonNull WorkorderLaborEntry entry) {
         Long durationInSeconds = null;
         if (entry.getEndTime() != null) {
-            durationInSeconds = java.time.Duration.between(entry.getStartTime(), entry.getEndTime())
+            // Labor timestamps are stored in UTC (see startTimer/stopTimers). Compute the duration on
+            // zone-aware values so the result is DST-safe rather than on bare LocalDateTime.
+            durationInSeconds = java.time.Duration.between(
+                            entry.getStartTime().atOffset(ZoneOffset.UTC),
+                            entry.getEndTime().atOffset(ZoneOffset.UTC))
                     .getSeconds();
         }
 

@@ -540,8 +540,11 @@ public class VendorBillServiceImpl implements VendorBillService {
         }
 
         // 3. Date proximity (20 points)
-        long daysDiff =
-                Math.abs(java.time.temporal.ChronoUnit.DAYS.between(bill.getBillDate(), event.getInvoiceDate()));
+        // Convert the timezone-unaware LocalDateTime values to zone-aware ZonedDateTime (using the
+        // service Clock's zone) before computing the duration between them (java:S8700).
+        long daysDiff = Math.abs(java.time.temporal.ChronoUnit.DAYS.between(
+                bill.getBillDate().atZone(clock.getZone()),
+                event.getInvoiceDate().atZone(clock.getZone())));
         if (daysDiff <= 7) {
             score += 20;
             details.append("date_match(20);");

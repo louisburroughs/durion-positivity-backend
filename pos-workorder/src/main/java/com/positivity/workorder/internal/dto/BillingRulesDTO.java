@@ -74,20 +74,11 @@ public class BillingRulesDTO {
 
     // Constructors
 
+    // Mandatory no-arg constructor for Jackson deserialization; the @NonNull fields are
+    // populated from the request body and their required-ness is enforced by the jakarta
+    // @NotBlank/@NotNull validation on each field, not by this constructor.
+    @SuppressWarnings("java:S2637")
     public BillingRulesDTO() {}
-
-    public BillingRulesDTO(
-            @NonNull String partyId,
-            boolean purchaseOrderRequired,
-            @NonNull String paymentTermsCode,
-            @NonNull InvoiceDeliveryMethod invoiceDeliveryMethod,
-            @NonNull InvoiceGroupingStrategy invoiceGroupingStrategy) {
-        this.partyId = partyId;
-        this.purchaseOrderRequired = purchaseOrderRequired;
-        this.paymentTermsCode = paymentTermsCode;
-        this.invoiceDeliveryMethod = invoiceDeliveryMethod;
-        this.invoiceGroupingStrategy = invoiceGroupingStrategy;
-    }
 
     // Getters and Setters
 

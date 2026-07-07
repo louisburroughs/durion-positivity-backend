@@ -109,10 +109,8 @@ public class EventTypeController {
                     String typeCode) {
         log.info("Fetching event type with code(mask): {}", maskForLog(typeCode));
         try {
-            return eventTypeService
-                    .getEventTypeByCode(typeCode)
-                    .map(ResponseEntity::ok)
-                    .orElseGet(() -> ResponseEntity.notFound().build());
+            // ResponseEntity.of: 200 + body when present, 404 when empty (Sonar S6863).
+            return ResponseEntity.of(eventTypeService.getEventTypeByCode(typeCode));
         } catch (IllegalArgumentException e) {
             log.warn("Invalid event type code lookup(mask) '{}': {}", maskForLog(typeCode), e.getMessage());
             return ResponseEntity.badRequest().build();
@@ -228,19 +226,19 @@ public class EventTypeController {
                     EventTypeRequest request) {
         log.info("Updating event type: id(mask)={}", maskForLog(id));
         try {
-            return eventTypeService
-                    .updateEventType(id, request)
-                    .map(response -> {
-                        log.info(
-                                "Event type updated successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
-                                id,
-                                response.apiVersion(),
-                                response.p50Micros(),
-                                response.p95Micros(),
-                                response.p99Micros());
-                        return ResponseEntity.ok(response);
-                    })
-                    .orElseGet(() -> ResponseEntity.notFound().build());
+            var updated = eventTypeService.updateEventType(id, request);
+            if (updated.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+            EventTypeResponse response = updated.get();
+            log.info(
+                    "Event type updated successfully: id={}, apiVersion={}, p50={}µs, p95={}µs, p99={}µs",
+                    id,
+                    response.apiVersion(),
+                    response.p50Micros(),
+                    response.p95Micros(),
+                    response.p99Micros());
+            return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             log.warn("Invalid update event type request for id(mask) {}: {}", maskForLog(id), e.getMessage());
             return ResponseEntity.badRequest().build();
