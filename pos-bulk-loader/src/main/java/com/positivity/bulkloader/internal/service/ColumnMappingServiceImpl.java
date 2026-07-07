@@ -29,6 +29,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +43,7 @@ public class ColumnMappingServiceImpl implements ColumnMappingService {
     private final ContentDetectionService contentDetectionService;
     private final FileStorageService fileStorageService;
     private final RecordFileParserRegistry recordFileParserRegistry;
+    private final TransactionTemplate transactionTemplate;
 
     @Override
     @Transactional(readOnly = true)
@@ -107,8 +109,9 @@ public class ColumnMappingServiceImpl implements ColumnMappingService {
         return effective;
     }
 
+    // Deliberately not @Transactional: file parsing can be slow and must not hold a DB
+    // connection. Only the suggestion persistence below runs in a transaction.
     @Override
-    @Transactional
     @Nullable
     public ContentDetectionResult detectUploadedFile(
             @NonNull UUID jobId, @NonNull String operatorId, @NonNull String storagePath, @NonNull String fileName) {
@@ -126,7 +129,7 @@ public class ColumnMappingServiceImpl implements ColumnMappingService {
                         .toList());
             }
         } catch (RuntimeException e) {
-            log.warn("Content detection skipped for job {} file {}: {}", jobId, fileName, e.getMessage());
+            log.warn("Content detection skipped for job {} file {}", jobId, fileName, e);
             return null;
         }
 
@@ -142,11 +145,17 @@ public class ColumnMappingServiceImpl implements ColumnMappingService {
         Map<String, String> suggestions = contentDetectionService.suggestMappings(headers, mappingDomain);
         result.setSuggestedColumnMappings(suggestions);
 
+        transactionTemplate.executeWithoutResult(_ -> persistSuggestions(jobId, result, suggestions));
+        return result;
+    }
+
+    private void persistSuggestions(
+            @NonNull UUID jobId, @NonNull ContentDetectionResult result, @NonNull Map<String, String> suggestions) {
         boolean hasUserApprovedMappings = mappingRepository.findByJobId(jobId).stream()
                 .anyMatch(mapping -> Boolean.TRUE.equals(mapping.getOverriddenByUser()));
         if (hasUserApprovedMappings) {
             log.info("Keeping user-approved column mappings for job {}; suggestions not persisted", jobId);
-            return result;
+            return;
         }
 
         mappingRepository.deleteByJobId(jobId);
@@ -165,7 +174,6 @@ public class ColumnMappingServiceImpl implements ColumnMappingService {
                 result.getConfidence(),
                 jobId,
                 suggestions.size());
-        return result;
     }
 
     private ColumnMappingResponse toResponse(@NonNull BulkLoadColumnMapping mapping) {

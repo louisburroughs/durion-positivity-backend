@@ -22,12 +22,15 @@ import org.springframework.batch.infrastructure.item.ItemStreamReader;
 @Slf4j
 public class FlexibleRecordItemReader<T> implements ItemStreamReader<T> {
 
+    private static final String READ_COUNT_KEY = "flexibleRecordItemReader.readCount";
+
     private final Supplier<RecordSource> sourceSupplier;
     private final Function<List<String>, Map<String, String>> mappingResolver;
     private final Function<Map<String, String>, T> rowMapper;
 
     private RecordSource source;
     private Map<String, String> columnMappings;
+    private long readCount;
 
     public FlexibleRecordItemReader(
             @NonNull Supplier<RecordSource> sourceSupplier,
@@ -52,7 +55,20 @@ public class FlexibleRecordItemReader<T> implements ItemStreamReader<T> {
             closeQuietly();
             throw new ItemStreamException("No source columns could be mapped to target fields; headers=" + headers);
         }
+        skipAlreadyProcessedRecords(executionContext);
         log.info("Opened flexible record reader with column mappings {}", columnMappings);
+    }
+
+    /** On a restarted execution, fast-forwards past the records already read by the failed run. */
+    private void skipAlreadyProcessedRecords(ExecutionContext executionContext) {
+        readCount = 0;
+        long alreadyRead = executionContext.getLong(READ_COUNT_KEY, 0L);
+        while (readCount < alreadyRead && source.nextRecord() != null) {
+            readCount++;
+        }
+        if (alreadyRead > 0) {
+            log.info("Restarted flexible record reader: skipped {} already-processed records", readCount);
+        }
     }
 
     @Override
@@ -62,6 +78,7 @@ public class FlexibleRecordItemReader<T> implements ItemStreamReader<T> {
         if (row == null) {
             return null;
         }
+        readCount++;
         Map<String, String> canonical = LinkedHashMap.newLinkedHashMap(columnMappings.size());
         for (Map.Entry<String, String> mapping : columnMappings.entrySet()) {
             String value = row.get(mapping.getKey());
@@ -74,7 +91,7 @@ public class FlexibleRecordItemReader<T> implements ItemStreamReader<T> {
 
     @Override
     public void update(@NonNull ExecutionContext executionContext) {
-        // No restart state: the reader always re-reads from the start of the file.
+        executionContext.putLong(READ_COUNT_KEY, readCount);
     }
 
     @Override

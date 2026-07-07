@@ -63,8 +63,16 @@ public class FileUploadController {
         String originalFileName = file.getOriginalFilename() == null ? "upload.csv" : file.getOriginalFilename();
         String storagePath = fileStorageService.store(jobId, originalFileName, file.getInputStream(), file.getSize());
         bulkLoadJobService.markUploadStored(jobId, operatorId, storagePath);
-        ContentDetectionResult detection =
-                columnMappingService.detectUploadedFile(jobId, operatorId, storagePath, originalFileName);
+        ContentDetectionResult detection = null;
+        try {
+            detection = columnMappingService.detectUploadedFile(jobId, operatorId, storagePath, originalFileName);
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "Content detection failed for job {} file {}; upload succeeded anyway",
+                    jobId,
+                    originalFileName,
+                    ex);
+        }
         FileUploadResponse response = FileUploadResponse.builder()
                 .jobId(jobId)
                 .storagePath(storagePath)

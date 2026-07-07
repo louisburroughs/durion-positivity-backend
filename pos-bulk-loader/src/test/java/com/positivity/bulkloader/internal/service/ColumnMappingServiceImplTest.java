@@ -50,6 +50,9 @@ class ColumnMappingServiceImplTest {
     @Mock
     RecordFileParserRegistry recordFileParserRegistry;
 
+    @Mock
+    org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+
     @InjectMocks
     ColumnMappingServiceImpl service;
 
