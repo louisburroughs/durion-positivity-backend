@@ -24,6 +24,7 @@ import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.service.AccountTierService;
 import com.positivity.customer.service.PartyService;
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.LogSanitizer;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -243,13 +244,13 @@ public class CrmAccountsController {
                     String sortOrder) {
         log.info(
                 "browseParties pageable={} name={} status={} partyType={} customerNumber={} sortField={} sortOrder={}",
-                pageable,
-                name,
-                status,
-                partyType,
-                customerNumber,
-                sortField,
-                sortOrder);
+                LogSanitizer.forLog(pageable),
+                LogSanitizer.forLog(name),
+                LogSanitizer.forLog(status),
+                LogSanitizer.forLog(partyType),
+                LogSanitizer.forLog(customerNumber),
+                LogSanitizer.forLog(sortField),
+                LogSanitizer.forLog(sortOrder));
         return ResponseEntity.ok(
                 partyService.browseParties(pageable, name, status, partyType, customerNumber, sortField, sortOrder));
     }

@@ -54,6 +54,10 @@ public class SecurityConfig {
     public SecurityFilterChain authSecurityFilterChain(
             HttpSecurity http, GatewayHeaderAuthenticationFilter gatewayHeaderAuthenticationFilter) {
         try {
+            // CSRF safe to skip: this chain is STATELESS (below) and authenticates via
+            // bearer JWT / gateway headers, never a session cookie. With no cookie-borne
+            // ambient authority, there is nothing for a cross-site request to forge; the
+            // login/refresh endpoints are the credential exchange itself. (Sonar S4502)
             http.securityMatcher("/v1/auth/**")
                     .csrf(csrf -> csrf.ignoringRequestMatchers("/v1/auth/**"))
                     .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -82,6 +86,9 @@ public class SecurityConfig {
             @Value("${pos.security.metrics-scrape.username:prometheus}") String metricsUsername,
             @Value("${pos.security.metrics-scrape.password:prometheus-scrape}") String metricsPassword) {
         try {
+            // CSRF safe to disable: single Prometheus scrape endpoint, STATELESS (below)
+            // and guarded by HTTP Basic. No session cookie is issued, so there is no
+            // ambient authority a cross-site request could exploit. (Sonar S4502)
             http.securityMatcher("/actuator/prometheus")
                     .csrf(csrf -> csrf.disable())
                     .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -101,6 +108,10 @@ public class SecurityConfig {
     public SecurityFilterChain gatewaySecurityFilterChain(
             HttpSecurity http, GatewayHeaderAuthenticationFilter gatewayHeaderAuthenticationFilter) {
         try {
+            // CSRF safe to skip: this chain is STATELESS (below) and authenticates via
+            // bearer JWT / validated gateway headers, never a session cookie. Docs and
+            // actuator/health are public reads. With no cookie-borne ambient authority
+            // there is nothing for a cross-site request to forge. (Sonar S4502)
             http.csrf(csrf -> csrf.ignoringRequestMatchers(
                             "/v1/**",
                             "/actuator/**",

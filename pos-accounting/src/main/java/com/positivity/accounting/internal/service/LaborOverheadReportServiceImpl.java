@@ -9,6 +9,7 @@ import com.positivity.accounting.internal.report.LaborOverheadTaxonomy.LineDef;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import com.positivity.accounting.service.LaborOverheadReportService;
+import com.positivity.security.common.LogSanitizer;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -65,7 +66,7 @@ public class LaborOverheadReportServiceImpl implements LaborOverheadReportServic
         int resolvedAsOfMonth = asOfMonth == null ? MONTHS : asOfMonth;
         log.info(
                 "Generating Labor & Overhead report for location={}, fiscalYear={}, asOfMonth={}",
-                locationId,
+                LogSanitizer.forLog(locationId),
                 fiscalYear,
                 resolvedAsOfMonth);
 
