@@ -1555,12 +1555,12 @@ paths:
         '404':
           description: No primary location assignment found for the person.
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/PrimaryLocationResponse'
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
-        - people:availability:view
+        - people:employee:view
       x-required-permissions:
       - people:employee:view
   /v1/people/{personId}/locations:
@@ -1589,7 +1589,7 @@ paths:
                   $ref: '#/components/schemas/StaffingAssignmentResponse'
       security:
       - bearerAuth:
-        - people:availability:view
+        - people:employee:view
       x-required-permissions:
       - people:employee:view
   /v1/people/users/{username}/person:
@@ -2045,9 +2045,9 @@ paths:
         '404':
           description: No person linked to the current user.
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/Person'
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - people:person:view
@@ -2070,9 +2070,9 @@ paths:
         '404':
           description: No primary location assignment found for current user.
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/PrimaryLocationResponse'
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - people:availability:view
@@ -2097,11 +2097,9 @@ paths:
         '404':
           description: No person linked to the current user.
           content:
-            application/json:
+            application/problem+json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/StaffingAssignmentResponse'
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - people:availability:view

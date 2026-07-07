@@ -7,18 +7,19 @@ import com.positivity.people.internal.dto.StaffingAssignmentResponse;
 import com.positivity.people.service.PeopleAvailabilityService;
 import com.positivity.people.service.StaffingAssignmentService;
 import com.positivity.people.service.UserPersonTranslationService;
-import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.persistence.EntityNotFoundException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,9 +31,6 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @Tag(name = "People Availability API", description = "Operations for querying people availability")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(
-        name = "bearerAuth",
-        scopes = {"people:availability:view"})
 @RequestMapping("/v1/people")
 @RequiredArgsConstructor
 public class PeopleAvailabilityController {
@@ -49,6 +47,9 @@ public class PeopleAvailabilityController {
     @ApiResponse(responseCode = "200", description = "Availability data returned successfully.")
     @GetMapping("/availability")
     @EmitEvent(id = "PEOPLE_AVAILABILITY_LIST", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:availability:view"})
     @PreAuthorize("hasAuthority('people:availability:view')")
     public ResponseEntity<List<PeopleAvailabilityResponse>> getPeopleAvailability(
             @Parameter(description = "Filter by location ID. Defaults to requester location when omitted.")
@@ -67,9 +68,18 @@ public class PeopleAvailabilityController {
             description = "Resolve the authenticated user's primary active location from their staffing assignments. "
                     + "Returns 404 when the user has no active assignment flagged as primary.")
     @ApiResponse(responseCode = "200", description = "Primary location resolved successfully.")
-    @ApiResponse(responseCode = "404", description = "No primary location assignment found for current user.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No primary location assignment found for current user.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @GetMapping("/me/primary-location")
     @EmitEvent(id = "PEOPLE_PRIMARY_LOCATION_GET", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:availability:view"})
     @PreAuthorize("hasAuthority('people:availability:view')")
     public ResponseEntity<PrimaryLocationResponse> getCurrentUserPrimaryLocation() {
         UUID locationId = peopleAvailabilityService.resolveCurrentUserPrimaryLocationId();
@@ -83,12 +93,22 @@ public class PeopleAvailabilityController {
             description = "List the authenticated user's staffing assignments that are active today, primary first."
                     + " Returns an empty list when the user has no current location.")
     @ApiResponse(responseCode = "200", description = "Active location assignments returned successfully.")
-    @ApiResponse(responseCode = "404", description = "No person linked to the current user.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No person linked to the current user.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @GetMapping("/me/locations")
     @EmitEvent(id = "PEOPLE_ME_LOCATIONS_LIST", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:availability:view"})
     @PreAuthorize("hasAuthority('people:availability:view')")
     public List<StaffingAssignmentResponse> getCurrentUserLocations() {
-        return staffingAssignmentService.findActiveByPersonId(resolveCurrentPersonId());
+        return staffingAssignmentService.findActiveByPersonId(
+                userPersonTranslationService.getPersonUuidForCurrentUser());
     }
 
     @Operation(
@@ -112,7 +132,13 @@ public class PeopleAvailabilityController {
             description = "Resolve a person's primary active location from their staffing assignments. Returns 404"
                     + " when the person has no active assignment flagged as primary.")
     @ApiResponse(responseCode = "200", description = "Primary location resolved successfully.")
-    @ApiResponse(responseCode = "404", description = "No primary location assignment found for the person.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No primary location assignment found for the person.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @GetMapping("/{personId}/primary-location")
     @EmitEvent(id = "PEOPLE_PERSON_PRIMARY_LOCATION_GET", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -124,12 +150,6 @@ public class PeopleAvailabilityController {
         UUID locationId = peopleAvailabilityService.resolvePrimaryLocationId(personId);
         return ResponseEntity.ok(
                 PrimaryLocationResponse.builder().locationId(locationId).build());
-    }
-
-    private UUID resolveCurrentPersonId() {
-        String username = SecurityContextHelper.getCurrentUsername()
-                .orElseThrow(() -> new EntityNotFoundException("Authenticated user context is missing"));
-        return userPersonTranslationService.getPersonUuidForUser(username);
     }
 
     private String maskForLog(Object value) {
