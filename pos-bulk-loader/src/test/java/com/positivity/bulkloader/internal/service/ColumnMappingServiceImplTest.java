@@ -12,9 +12,13 @@ import com.positivity.bulkloader.internal.entity.BulkLoadColumnMapping;
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.bulkloader.internal.parser.RecordFileParserRegistry;
 import com.positivity.bulkloader.internal.repository.BulkLoadColumnMappingRepository;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
+import com.positivity.bulkloader.service.ContentDetectionService;
+import com.positivity.bulkloader.service.FileStorageService;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -36,6 +40,15 @@ class ColumnMappingServiceImplTest {
 
     @Mock
     BulkLoadJobRepository jobRepository;
+
+    @Mock
+    ContentDetectionService contentDetectionService;
+
+    @Mock
+    FileStorageService fileStorageService;
+
+    @Mock
+    RecordFileParserRegistry recordFileParserRegistry;
 
     @InjectMocks
     ColumnMappingServiceImpl service;
@@ -91,6 +104,49 @@ class ColumnMappingServiceImplTest {
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).getSourceColumn()).isEqualTo("name");
         assertThat(responses.get(0).getOverriddenByUser()).isTrue();
+    }
+
+    // ─── resolveEffectiveMappings ────────────────────────────────────────────
+
+    @Test
+    void resolveEffectiveMappings_storedMappingsTakePriorityOverSuggestions() {
+        List<String> headers = List.of("supplier_sku", "product_name", "custom_col");
+        BulkLoadColumnMapping stored = columnMapping(MAPPING_ID, JOB_ID, "custom_col", "sku");
+
+        when(mappingRepository.findByJobId(JOB_ID)).thenReturn(List.of(stored));
+        when(contentDetectionService.suggestMappings(headers, DomainType.CATALOG_PRODUCT))
+                .thenReturn(Map.of("supplier_sku", "sku", "product_name", "name"));
+
+        Map<String, String> effective = service.resolveEffectiveMappings(JOB_ID, headers, DomainType.CATALOG_PRODUCT);
+
+        // "sku" is claimed by the stored mapping; the suggested supplier_sku->sku must be dropped.
+        assertThat(effective).containsEntry("custom_col", "sku").containsEntry("product_name", "name");
+        assertThat(effective).doesNotContainKey("supplier_sku");
+    }
+
+    @Test
+    void resolveEffectiveMappings_withoutJobId_usesSuggestionsOnly() {
+        List<String> headers = List.of("supplier_sku", "product_name");
+        when(contentDetectionService.suggestMappings(headers, DomainType.CATALOG_PRODUCT))
+                .thenReturn(Map.of("supplier_sku", "sku", "product_name", "name"));
+
+        Map<String, String> effective = service.resolveEffectiveMappings(null, headers, DomainType.CATALOG_PRODUCT);
+
+        assertThat(effective).containsEntry("supplier_sku", "sku").containsEntry("product_name", "name");
+    }
+
+    @Test
+    void resolveEffectiveMappings_storedMappingForAbsentHeader_isIgnored() {
+        List<String> headers = List.of("supplier_sku");
+        BulkLoadColumnMapping stored = columnMapping(MAPPING_ID, JOB_ID, "old_column", "name");
+
+        when(mappingRepository.findByJobId(JOB_ID)).thenReturn(List.of(stored));
+        when(contentDetectionService.suggestMappings(headers, DomainType.CATALOG_PRODUCT))
+                .thenReturn(Map.of("supplier_sku", "sku"));
+
+        Map<String, String> effective = service.resolveEffectiveMappings(JOB_ID, headers, DomainType.CATALOG_PRODUCT);
+
+        assertThat(effective).containsOnly(Map.entry("supplier_sku", "sku"));
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────

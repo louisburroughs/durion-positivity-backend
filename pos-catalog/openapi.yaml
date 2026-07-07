@@ -3667,6 +3667,14 @@ components:
           type: number
           description: List price for the item
           example: 29.99
+        mpn:
+          type: string
+          description: Manufacturer part number; falls back to the SKU when absent
+          example: MPN-98765
+        unitOfMeasure:
+          type: string
+          description: Unit of measure for the item; defaults to EA when absent
+          example: EA
       required:
       - name
       - sku

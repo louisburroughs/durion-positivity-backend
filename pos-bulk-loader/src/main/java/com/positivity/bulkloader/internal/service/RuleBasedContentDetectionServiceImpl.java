@@ -4,7 +4,7 @@ import com.positivity.bulkloader.internal.dto.ContentDetectionResult;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.service.ContentDetectionService;
 import java.util.EnumMap;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -31,7 +31,10 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
                     PRICE_FIELD,
                     "name",
                     "manufacturer",
+                    "brand",
+                    "part_no",
                     "part_number",
+                    "uom",
                     "weight"),
             DomainType.INVENTORY_STOCK_COUNT,
             Set.of("sku", QUANTITY_FIELD, "qty", "stock", "on_hand", "location_code", "bin", "unit_cost", "warehouse"),
@@ -58,7 +61,7 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
             }
             int score = 0;
             for (String header : columnHeaders) {
-                String normalized = header.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "_");
+                String normalized = normalize(header);
                 if (normalized.isEmpty()) {
                     continue;
                 }
@@ -75,7 +78,7 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
                 .orElse(DomainType.CATALOG_PRODUCT);
         int maxScore = scores.getOrDefault(best, 0);
         double confidence = columnHeaders.isEmpty() ? 0.0 : (double) maxScore / columnHeaders.size();
-        Map<String, String> suggestedMappings = buildSuggestedMappings(columnHeaders, best);
+        Map<String, String> suggestedMappings = suggestMappings(columnHeaders, best);
 
         log.debug("Content detection: domain={} confidence={} headers={}", best, confidence, columnHeaders);
         return ContentDetectionResult.builder()
@@ -86,28 +89,57 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
                 .build();
     }
 
-    private Map<String, String> buildSuggestedMappings(List<String> headers, DomainType domain) {
-        Map<String, String> mappings = new HashMap<>();
-        for (String header : headers) {
-            String normalized = header.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "_");
-            String target = inferTargetField(normalized, domain);
-            if (target != null) {
+    @Override
+    @NonNull
+    public Map<String, String> suggestMappings(@NonNull List<String> columnHeaders, @NonNull DomainType domainType) {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        for (String header : columnHeaders) {
+            String target = inferTargetField(normalize(header), domainType);
+            if (target != null && !mappings.containsValue(target)) {
                 mappings.put(header, target);
             }
         }
         return mappings;
     }
 
+    private String normalize(String header) {
+        return header.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "_")
+                .replaceAll("^_+", "")
+                .replaceAll("_+$", "");
+    }
+
     private String inferTargetField(String normalized, DomainType domain) {
         return switch (domain) {
             case CATALOG_PRODUCT ->
                 switch (normalized) {
-                    case "sku", "item_number", "item_no", "part_no" -> "sku";
-                    case "upc", "barcode", "ean" -> "upc";
-                    case "name", "item_name", "product_name", "description" -> "name";
-                    case PRICE_FIELD, "list_price", "retail_price" -> PRICE_FIELD;
-                    case "category", "category_name" -> "categoryName";
-                    case "subcategory", "subcategory_name" -> "subcategoryName";
+                    case "sku",
+                            "item_number",
+                            "item_no",
+                            "item_sku",
+                            "item_code",
+                            "part_no",
+                            "part_number",
+                            "product_code",
+                            "sku_number",
+                            "supplier_sku",
+                            "vendor_sku" -> "sku";
+                    case "upc", "upc_code", "barcode", "ean", "gtin" -> "upc";
+                    case "name", "item_name", "product_name", "product", "product_title", "title" -> "name";
+                    case "description", "desc", "product_description", "long_description", "item_description" ->
+                        "description";
+                    case PRICE_FIELD, "list_price", "retail_price", "unit_price", "msrp", "selling_price" ->
+                        PRICE_FIELD;
+                    case "category", "category_name", "categoryname", "product_category" -> "categoryName";
+                    case "subcategory", "sub_category", "subcategory_name", "subcategoryname" -> "subcategoryName";
+                    case "mpn",
+                            "manufacturer_part_no",
+                            "manufacturer_part_number",
+                            "mfr_part_no",
+                            "mfr_part_number",
+                            "mfg_part_no",
+                            "mfg_part_number" -> "mpn";
+                    case "uom", "unit_of_measure", "unitofmeasure", "sell_uom" -> "unitOfMeasure";
                     default -> null;
                 };
             case INVENTORY_STOCK_COUNT ->

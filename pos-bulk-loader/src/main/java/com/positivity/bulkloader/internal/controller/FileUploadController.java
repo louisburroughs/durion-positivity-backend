@@ -1,8 +1,10 @@
 package com.positivity.bulkloader.internal.controller;
 
 import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
+import com.positivity.bulkloader.internal.dto.ContentDetectionResult;
 import com.positivity.bulkloader.internal.dto.FileUploadResponse;
 import com.positivity.bulkloader.service.BulkLoadJobService;
+import com.positivity.bulkloader.service.ColumnMappingService;
 import com.positivity.bulkloader.service.FileStorageService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.GatewaySecurityConstants;
@@ -42,6 +44,7 @@ public class FileUploadController {
 
     private final BulkLoadJobService bulkLoadJobService;
     private final FileStorageService fileStorageService;
+    private final ColumnMappingService columnMappingService;
 
     @PostMapping("/{jobId}/upload")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
@@ -60,11 +63,14 @@ public class FileUploadController {
         String originalFileName = file.getOriginalFilename() == null ? "upload.csv" : file.getOriginalFilename();
         String storagePath = fileStorageService.store(jobId, originalFileName, file.getInputStream(), file.getSize());
         bulkLoadJobService.markUploadStored(jobId, operatorId, storagePath);
+        ContentDetectionResult detection =
+                columnMappingService.detectUploadedFile(jobId, operatorId, storagePath, originalFileName);
         FileUploadResponse response = FileUploadResponse.builder()
                 .jobId(jobId)
                 .storagePath(storagePath)
                 .fileName(originalFileName)
                 .sizeBytes(file.getSize())
+                .detection(detection)
                 .build();
         log.info(
                 "File uploaded for job {} by operator {}: {} ({} bytes)",

@@ -13,8 +13,12 @@ import com.positivity.bulkloader.internal.domain.VehicleBulkRecord;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentRecord;
 import com.positivity.bulkloader.internal.domain.VehicleLoaderStrategy;
+import com.positivity.bulkloader.internal.enums.DomainType;
+import com.positivity.bulkloader.internal.parser.FlexibleRecordItemReader;
+import com.positivity.bulkloader.internal.parser.RecordFileParserRegistry;
 import com.positivity.bulkloader.internal.service.BulkLoadAuthorizationContext;
 import com.positivity.bulkloader.internal.service.BulkLoadJobExecutionListener;
+import com.positivity.bulkloader.service.ColumnMappingService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
@@ -29,6 +33,7 @@ import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.infrastructure.item.ItemProcessor;
+import org.springframework.batch.infrastructure.item.ItemStreamReader;
 import org.springframework.batch.infrastructure.item.ItemWriter;
 import org.springframework.batch.infrastructure.item.file.FlatFileItemReader;
 import org.springframework.batch.infrastructure.item.file.builder.FlatFileItemReaderBuilder;
@@ -66,6 +71,8 @@ public class BatchConfiguration {
     private final VehicleFitmentLoaderStrategy vehicleFitmentLoaderStrategy;
     private final BulkLoadAuthorizationContext bulkLoadAuthorizationContext;
     private final BulkLoadJobExecutionListener bulkLoadJobExecutionListener;
+    private final RecordFileParserRegistry recordFileParserRegistry;
+    private final ColumnMappingService columnMappingService;
 
     @Value("${pos.catalog.base-url:http://localhost:8082}")
     private String catalogBaseUrl;
@@ -98,13 +105,13 @@ public class BatchConfiguration {
 
     @Bean
     public Step catalogBulkLoadStep(
-            FlatFileItemReader<CatalogProductRecord> catalogCsvReader,
+            ItemStreamReader<CatalogProductRecord> catalogFlexibleReader,
             ItemProcessor<CatalogProductRecord, CatalogProductRecord> catalogItemProcessor,
             ItemWriter<CatalogProductRecord> catalogBulkIngestWriter) {
         return new StepBuilder("catalogBulkLoadStep", jobRepository)
                 .<CatalogProductRecord, CatalogProductRecord>chunk(500)
                 .transactionManager(transactionManager)
-                .reader(catalogCsvReader)
+                .reader(catalogFlexibleReader)
                 .processor(catalogItemProcessor)
                 .writer(catalogBulkIngestWriter)
                 .faultTolerant()
@@ -113,10 +120,32 @@ public class BatchConfiguration {
                 .build();
     }
 
+    /**
+     * Header/structure-driven reader for catalog uploads: supports delimited text (CSV/TSV/pipe),
+     * spreadsheets (xlsx/xls), JSON, YAML, and XML. Columns are discovered from the file itself
+     * and mapped to catalog fields via job-approved mappings or rule-based inference.
+     */
     @Bean
     @StepScope
-    public FlatFileItemReader<CatalogProductRecord> catalogCsvReader(
-            @Value("#{jobParameters['storagePath']}") String storagePath) {
+    public ItemStreamReader<CatalogProductRecord> catalogFlexibleReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        java.nio.file.Path resolved = resolveStoragePath(storagePath);
+        String fileName = resolved.getFileName().toString();
+        UUID jobId = parseUuidOrNull(jobIdParam);
+        return new FlexibleRecordItemReader<>(
+                () -> {
+                    try {
+                        return recordFileParserRegistry.open(java.nio.file.Files.newInputStream(resolved), fileName);
+                    } catch (java.io.IOException e) {
+                        throw new java.io.UncheckedIOException("Failed to open uploaded file: " + fileName, e);
+                    }
+                },
+                headers -> columnMappingService.resolveEffectiveMappings(jobId, headers, DomainType.CATALOG_PRODUCT),
+                catalogLoaderStrategy::mapRow);
+    }
+
+    private java.nio.file.Path resolveStoragePath(String storagePath) {
         if (storagePath == null || storagePath.isBlank()) {
             throw new IllegalArgumentException("storagePath job parameter must not be null or blank");
         }
@@ -125,17 +154,18 @@ public class BatchConfiguration {
         if (!resolved.startsWith(base)) {
             throw new IllegalArgumentException("Invalid storage path: attempted path traversal");
         }
+        return resolved;
+    }
 
-        BeanWrapperFieldSetMapper<CatalogProductRecord> mapper = new BeanWrapperFieldSetMapper<>();
-        mapper.setTargetType(CatalogProductRecord.class);
-        return new FlatFileItemReaderBuilder<CatalogProductRecord>()
-                .name("catalogCsvReader")
-                .resource(new FileSystemResource(resolved))
-                .delimited()
-                .names("sku", "upc", "name", "description", "categoryName", "subcategoryName", "price")
-                .fieldSetMapper(mapper)
-                .linesToSkip(1)
-                .build();
+    private UUID parseUuidOrNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException _) {
+            return null;
+        }
     }
 
     @Bean
@@ -220,14 +250,7 @@ public class BatchConfiguration {
     @StepScope
     public FlatFileItemReader<CustomerPersonRecord> customerCsvReader(
             @Value("#{jobParameters['storagePath']}") String storagePath) {
-        if (storagePath == null || storagePath.isBlank()) {
-            throw new IllegalArgumentException("storagePath job parameter must not be null or blank");
-        }
-        java.nio.file.Path base = java.nio.file.Path.of(storageRoot).normalize().toAbsolutePath();
-        java.nio.file.Path resolved = base.resolve(storagePath).normalize();
-        if (!resolved.startsWith(base)) {
-            throw new IllegalArgumentException("Invalid storage path: attempted path traversal");
-        }
+        java.nio.file.Path resolved = resolveStoragePath(storagePath);
 
         BeanWrapperFieldSetMapper<CustomerPersonRecord> mapper = new BeanWrapperFieldSetMapper<>();
         mapper.setTargetType(CustomerPersonRecord.class);
@@ -323,14 +346,7 @@ public class BatchConfiguration {
     @StepScope
     public FlatFileItemReader<PersonRecord> peopleCsvReader(
             @Value("#{jobParameters['storagePath']}") String storagePath) {
-        if (storagePath == null || storagePath.isBlank()) {
-            throw new IllegalArgumentException("storagePath job parameter must not be null or blank");
-        }
-        java.nio.file.Path base = java.nio.file.Path.of(storageRoot).normalize().toAbsolutePath();
-        java.nio.file.Path resolved = base.resolve(storagePath).normalize();
-        if (!resolved.startsWith(base)) {
-            throw new IllegalArgumentException("Invalid storage path: attempted path traversal");
-        }
+        java.nio.file.Path resolved = resolveStoragePath(storagePath);
 
         BeanWrapperFieldSetMapper<PersonRecord> mapper = new BeanWrapperFieldSetMapper<>();
         mapper.setTargetType(PersonRecord.class);
@@ -425,14 +441,7 @@ public class BatchConfiguration {
     @StepScope
     public FlatFileItemReader<BasePriceRecord> priceCsvReader(
             @Value("#{jobParameters['storagePath']}") String storagePath) {
-        if (storagePath == null || storagePath.isBlank()) {
-            throw new IllegalArgumentException("storagePath job parameter must not be null or blank");
-        }
-        java.nio.file.Path base = java.nio.file.Path.of(storageRoot).normalize().toAbsolutePath();
-        java.nio.file.Path resolved = base.resolve(storagePath).normalize();
-        if (!resolved.startsWith(base)) {
-            throw new IllegalArgumentException("Invalid storage path: attempted path traversal");
-        }
+        java.nio.file.Path resolved = resolveStoragePath(storagePath);
 
         BeanWrapperFieldSetMapper<BasePriceRecord> mapper = new BeanWrapperFieldSetMapper<>();
         mapper.setTargetType(BasePriceRecord.class);
@@ -527,14 +536,7 @@ public class BatchConfiguration {
     @StepScope
     public FlatFileItemReader<VehicleBulkRecord> vehicleCsvReader(
             @Value("#{jobParameters['storagePath']}") String storagePath) {
-        if (storagePath == null || storagePath.isBlank()) {
-            throw new IllegalArgumentException("storagePath job parameter must not be null or blank");
-        }
-        java.nio.file.Path base = java.nio.file.Path.of(storageRoot).normalize().toAbsolutePath();
-        java.nio.file.Path resolved = base.resolve(storagePath).normalize();
-        if (!resolved.startsWith(base)) {
-            throw new IllegalArgumentException("Invalid storage path: attempted path traversal");
-        }
+        java.nio.file.Path resolved = resolveStoragePath(storagePath);
 
         BeanWrapperFieldSetMapper<VehicleBulkRecord> mapper = new BeanWrapperFieldSetMapper<>();
         mapper.setTargetType(VehicleBulkRecord.class);
@@ -641,14 +643,7 @@ public class BatchConfiguration {
     @StepScope
     public FlatFileItemReader<VehicleFitmentRecord> vehicleFitmentCsvReader(
             @Value("#{jobParameters['storagePath']}") String storagePath) {
-        if (storagePath == null || storagePath.isBlank()) {
-            throw new IllegalArgumentException("storagePath job parameter must not be null or blank");
-        }
-        java.nio.file.Path base = java.nio.file.Path.of(storageRoot).normalize().toAbsolutePath();
-        java.nio.file.Path resolved = base.resolve(storagePath).normalize();
-        if (!resolved.startsWith(base)) {
-            throw new IllegalArgumentException("Invalid storage path: attempted path traversal");
-        }
+        java.nio.file.Path resolved = resolveStoragePath(storagePath);
 
         BeanWrapperFieldSetMapper<VehicleFitmentRecord> mapper = new BeanWrapperFieldSetMapper<>();
         mapper.setTargetType(VehicleFitmentRecord.class);

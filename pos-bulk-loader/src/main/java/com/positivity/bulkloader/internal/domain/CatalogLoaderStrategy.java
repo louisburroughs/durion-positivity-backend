@@ -21,10 +21,12 @@ public class CatalogLoaderStrategy implements DomainLoaderStrategy<CatalogProduc
         CatalogProductRecord catalogProduct = new CatalogProductRecord();
         catalogProduct.setSku(row.get("sku"));
         catalogProduct.setUpc(row.get("upc"));
-        catalogProduct.setName(row.getOrDefault("name", row.get("description")));
+        catalogProduct.setName(firstNonBlank(row.get("name"), row.get("description")));
         catalogProduct.setDescription(row.get("description"));
         catalogProduct.setCategoryName(row.get("categoryName"));
         catalogProduct.setSubcategoryName(row.get("subcategoryName"));
+        catalogProduct.setMpn(row.get("mpn"));
+        catalogProduct.setUnitOfMeasure(row.get("unitOfMeasure"));
         String priceStr = row.get("price");
         if (priceStr != null && !priceStr.isBlank()) {
             try {
@@ -34,6 +36,10 @@ public class CatalogLoaderStrategy implements DomainLoaderStrategy<CatalogProduc
             }
         }
         return catalogProduct;
+    }
+
+    private String firstNonBlank(String primary, String fallback) {
+        return primary != null && !primary.isBlank() ? primary : fallback;
     }
 
     @Override
