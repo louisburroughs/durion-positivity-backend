@@ -36,7 +36,6 @@ public class ProductEntity implements CatalogItem {
     private UUID id;
 
     @PrePersist
-    @PostLoad
     public void generateId() {
         if (status == null) {
             status = ProductStatus.ACTIVE;
