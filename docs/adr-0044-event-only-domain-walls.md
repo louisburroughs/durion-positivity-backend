@@ -1,17 +1,17 @@
-# ADR-0043 Event-Only Domain Walls and Module Communication Policy
+# ADR-0044 Event-Only Domain Walls and Module Communication Policy
 
 - Status: **Proposed** (candidate — issue [#823](https://github.com/louisburroughs/durion-positivity-backend/issues/823))
 - Date: 2026-07-08
 - Supersedes: the domain-to-domain portions of the service-discovery client policy
-  (`docs/service-discovery-migration/client-policy-matrix.md`) and the undocumented
+  (`docs/service-discovery-migration/client-policy-matrix.md`) and the javadoc-only
   "do not replicate address data" platform rule (see §Changes to other ADRs)
-- Related: ADR-0011, ADR-0014, ADR-0016, ADR-0017, ADR-0021, ADR-0025, ADR-0026, ADR-0027,
-  ADR-0040, ADR-0042
+- Related: ADR-0006, ADR-0009, ADR-0011, ADR-0012, ADR-0014, ADR-0015, ADR-0017, ADR-0020,
+  ADR-0021, ADR-0022, ADR-0025, ADR-0026, ADR-0027, ADR-0040, ADR-0042, ADR-0043
 - Supporting analysis: `docs/module-coupling/issue-823-event-only-domain-walls-assessment.md`
 
 Once accepted, promote this document to the canonical ADR repository as
-`durion/docs/adr/0043-event-only-domain-walls.adr.md` and keep this copy as the backend-local
-reference.
+`durion/docs/adr/0044-event-only-domain-walls.adr.md` (0043 is taken by the user–person linkage
+authority ADR) and keep this copy as the backend-local reference.
 
 ## Context
 
@@ -42,14 +42,15 @@ pending states.
 
 | Class | Modules | May be called synchronously? |
 |---|---|---|
-| **Utility** | `pos-api-gateway`, `pos-security-service`, `pos-documents`, `pos-image`, `pos-tax` (per ADR-0021), `pos-event-receiver`, `pos-price` | Yes — by any module |
+| **Utility** | `pos-api-gateway`, `pos-security-service`, `pos-documents` (per ADR-0020), `pos-image`, `pos-tax` (per ADR-0021), `pos-event-receiver`, `pos-price` | Yes — by any module |
 | **Domain** | `pos-accounting`, `pos-catalog`, `pos-customer`, `pos-inquiry`, `pos-inventory`, `pos-invoice`, `pos-location`, `pos-order`, `pos-people` (HR), `pos-people-contact` (new), `pos-shop-manager`, `pos-vehicle-inventory`, `pos-vehicle-fitment`, `pos-vehicle-reference-*`, `pos-workorder`, `pos-bulk-loader` | No — events only |
 | **Libraries / non-deployed** | `pos-events`, `pos-shared-dtos`, `pos-domain-events` (new), `pos-security-common`, `pos-tax-common`, `pos-bulk-ingest-lib`, `pos-document-helper`, `pos-dependencies`, `pos-archunit` | n/a |
 
 `pos-tax` and `pos-price` are utilities because they are stateless *computation* (tax and price
 determination), not data lookups — replicating their rule engines into callers would be worse than
-the call. `pos-mcp-server` is a gateway client (bearer-token relay) and follows client rules, not
-module rules.
+the call. `pos-documents` is a utility because ADR-0020 mandates centralized document creation via
+its render API. `pos-mcp-server` is a gateway client (bearer-token relay) and follows client rules,
+not module rules.
 
 ### 2. Rules of separation
 
@@ -144,18 +145,24 @@ not apply on this channel. The trust model is:
   retired; billing-rule and invoice read models are event-fed; payment application, payment
   reversal, credit-memo application, and invoice regeneration become command events consumed by
   pos-invoice / pos-workorder with result events back.
-- **Vehicle owns its writes.** Vehicle create/update/delete moves out of pos-customer CRM; the
-  frontend calls pos-vehicle-inventory through the gateway. pos-customer keeps a read-only vehicle
-  mirror fed by `vehicle.events.v1`. pos-vehicle-fitment and the vehicle-reference modules are
-  unchanged (external API lookups).
+- **Vehicle owns its writes.** Vehicle registry create/update/delete moves out of pos-customer CRM;
+  the frontend calls pos-vehicle-inventory through the gateway. pos-customer keeps a read-only
+  vehicle mirror fed by `vehicle.events.v1` to serve its cross-cutting queries. Per ADR-0012,
+  **vehicle-party associations remain owned by pos-customer** and party-association events continue
+  to originate there; only registry ownership of the vehicle record itself is affected.
+  pos-vehicle-fitment and the vehicle-reference modules are unchanged (external API lookups).
 - **People splits into contact and HR.** New module `pos-people-contact` owns `Person`,
-  `PersonContactPoint`, `UserPersonLink` and publishes contact events. `pos-people` retains HR
-  (Employee, timekeeping, availability, staffing, work sessions) and publishes availability and
-  assignment events. pos-security-service's user↔person linking becomes command + confirmation
-  events.
+  `PersonContactPoint`, and the authoritative `user_person_links` store (ADR-0015, ADR-0043) and
+  publishes contact/link events. `pos-people` retains HR (Employee, timekeeping per ADR-0006,
+  availability, staffing, work sessions) and publishes availability and assignment events.
+  pos-security-service's user↔person linking becomes command + confirmation events, and its
+  `users.person_id` becomes the event-fed projection that ADR-0043 §2 already sanctions as an
+  alternative (see §Changes to other ADRs).
 - **Customer and location become publishers.** `customer.events.v1` and `location.events.v1`
-  (including address data — see ADR-0016 note below) replace all remaining customer/location REST
-  clients in inventory, invoice, people, shop-manager, and workorder.
+  (including address data — see the note on the javadoc platform rule below) replace all remaining
+  customer/location REST clients in inventory, invoice, people, shop-manager, and workorder.
+  Callers of pos-tax source the `destinationAddress` required by ADR-0021 from their local
+  location replicas.
 
 ### 7. Enforcement
 
@@ -164,7 +171,7 @@ not apply on this channel. The trust model is:
   whitelist. Rule ships report-only during migration and flips to build-failing when Phase 5
   completes (phases in the supporting analysis).
 - Per-module `ArchitectureTest` classes gain the mirrored rule plus the `pos-domain-events` import
-  allowance.
+  allowance. This extends, and does not alter, the intra-module package boundary rules of ADR-0026.
 - The utility whitelist lives in one place (a constant list in `pos-archunit`) and changing it
   requires amending this ADR.
 
@@ -187,20 +194,39 @@ coupling — accounting↔invoice/workorder — in place indefinitely).
 
 ## Changes required in other ADRs
 
-| ADR | Subject (as referenced in this repo) | Required change |
-|---|---|---|
-| **ADR-0011** — API gateway security architecture | Gateway is the security boundary; JWT → `X-Authorities` | **Amend.** Add a section stating the gateway boundary governs synchronous/client traffic only; the asynchronous Kafka channel uses the trust model in ADR-0043 §5 (internal-only broker, producer identity, `actor` as audit metadata). No change to token or header semantics. |
-| **ADR-0014** — Gateway whitelist routing; pos-tax non-registration | Route whitelist; pos-tax internal-only, no Eureka | **Amend.** Add gateway routes for the new `pos-people-contact` module and confirm the `VEHICLE-INVENTORY` route covers the vehicle write endpoints that move frontend-facing. pos-tax stance unchanged (reaffirmed by ADR-0043 utility classification). |
-| **ADR-0016** — Location contract | Location domain contract (parent types, validation) | **Amend/supersede in part.** The platform rule "other services must not replicate address data: store the locationId and query pos-location" (currently embedded in `pos-invoice` `LocationServiceClient` and `pos-workorder` `LocationClient` javadoc, attributed to the location contract) is **reversed**: consumers MAY hold read-only address replicas fed by `location.events.v1` under ADR-0043 R3. If ADR-0016 codifies the rule, update its text; either way, update the two javadocs when those clients are retired. |
-| **ADR-0017** — Controller HTTP response-code standard | Semantics for 400/401/403/404/409/422/500 | **Amend.** Add `202 Accepted` semantics for endpoints whose effect is enqueuing a command event (response carries a tracking/idempotency reference and a pending-state resource), and a convention for exposing async failure states (result event rejected → surfaced via status resource, not a late HTTP error). |
-| **ADR-0021** — Tax API consumption policy | pos-tax internal-only direct calls | **No change.** Reaffirmed: pos-tax is classified as a utility; existing direct-call exception stands. |
-| **ADR-0025** — Permissions manifest registration policy | Startup permission registration | **No change.** Startup-infra registration is explicitly outside ADR-0043's event mandate (R2). New modules (`pos-people-contact`) follow the existing registration pattern. |
-| **ADR-0026** — Service contract boundary policy | Module boundaries: only `service.*` public; cross-module via REST or events | **Amend.** Narrow the cross-module interaction clause: domain↔domain is events-only; synchronous REST is limited to the ADR-0043 utility whitelist. Add `pos-domain-events` to the shared libraries modules may import (alongside `pos-shared-dtos`), and record the `ext_{owner}_{entity}` replica-table convention as part of the boundary contract. |
-| **ADR-0027** — UUID-typed identifier contract policy | UUID-typed IDs in contracts | **No change** (extend applicability note): event envelope and payload identifiers are UUID-typed; `eventId` is UUIDv7 (ADR-0013). |
-| **ADR-0040** — Authorization via trusted `X-Authorities` | Downstream services trust gateway-produced headers | **Amend.** Current text covers "standard internal API authorization flows." Add: event consumption is not authorized via `X-Authorities`; command events are authorized by topic/producer per ADR-0043 §5, with the initiating user's permission check performed at the original synchronous edge and the `actor` recorded for audit. |
-| **ADR-0042** — OpenAPI rollout baseline | OpenAPI coverage and validation for REST endpoints | **Amend.** (a) Vehicle write endpoints on `pos-vehicle-inventory` become frontend-facing and must join the OpenAPI enforcement waves; add `pos-people-contact` to the module inventory when created. (b) Note that async event contracts are out of OpenAPI scope — contract documentation for topics lives in `pos-domain-events` (AsyncAPI adoption may be proposed separately). |
-| **ADR-0013** — UUID v7 identifier strategy | UUIDv7 primary keys | **No change.** Envelope `eventId` complies. |
+Verified against the canonical texts in `durion/docs/adr/` (2026-07-08).
 
-Also superseded (non-ADR): `docs/service-discovery-migration/client-policy-matrix.md` — its
-`direct-discovery` classification no longer authorizes domain→domain calls; `startup-infra`,
-`gateway-exception`, `tax-exemption`, and `external` categories remain valid.
+### Amendments required
+
+| ADR | Subject | Required change |
+|---|---|---|
+| **ADR-0009** — Backend domain responsibilities guide | Domain responsibility matrix with "Integrates With" columns and integration patterns | Add a `pos-people-contact` row; split the current pos-people row into contact vs HR responsibilities; update "Integrates With" entries so domain↔domain integration is described as event topics rather than REST calls (e.g. pos-accounting integrates via `invoice.events.v1` / `accounting.commands.v1`, not REST to pos-order/pos-inventory); reflect accounting as event-only. |
+| **ADR-0011** — API gateway security architecture | Gateway-enforced security; pos-security-service ownership; trust model | Add a section stating the gateway trust model governs synchronous/client traffic only; the asynchronous Kafka channel uses the trust model in ADR-0044 §5 (internal-only broker, producer identity, `actor` as audit metadata). No change to token or header semantics. |
+| **ADR-0012** — Vehicle-party relationships belong in pos-customer | Associations owned by pos-customer; pos-customer references vehicle IDs | Association ownership is **unchanged**, but add a clarifying note: vehicle *registry* CRUD is no longer proxied through pos-customer — the frontend calls pos-vehicle-inventory via the gateway, and pos-customer serves its cross-cutting queries ("vehicles owned by a party") from a read-only `ext_vehicle_*` replica fed by `vehicle.events.v1`. Party-association events still originate from pos-customer. |
+| **ADR-0014** — Internal service security via gateway route control | Secure-by-default: no gateway route unless whitelisted | Add explicit routes for `pos-people-contact` and confirm the vehicle-inventory route covers the registry write endpoints that become frontend-facing. pos-tax non-registration stance unchanged. |
+| **ADR-0015** — Identity entity relationships | Person definition; Person↔User invariants (I5–I7) | Invariants unchanged; update the owning-module references: `Person`, `PersonContactPoint`, and `user_person_links` move from pos-people to `pos-people-contact`. |
+| **ADR-0017** — API controller HTTP response codes | Canonical response matrix (no 202 today) | Add `202 Accepted` semantics for endpoints whose effect is enqueuing a command event (response carries a tracking/idempotency reference and a pending-state resource), plus a convention for surfacing async rejection (result event rejected → status resource, not a late HTTP error). |
+| **ADR-0040** — Roles/JWT permission governance | Permission-based backend authorization; token claim contract | Add: event consumption is not authorized via permissions/`X-Authorities`; command events are authorized by topic/producer per ADR-0044 §5, with the initiating user's permission check performed at the original synchronous edge and `actor` recorded for audit. |
+| **ADR-0042** — OpenAPI annotation standards | Mandatory OpenAPI annotations, MCP discovery | Add `pos-people-contact` and the newly frontend-facing pos-vehicle-inventory write endpoints to the enforcement inventory (backend rollout baseline `docs/adr-0042-openapi-rollout-baseline.md` likewise). Note that async event contracts are out of OpenAPI scope — topic contracts live in `pos-domain-events`; AsyncAPI adoption may be proposed separately. |
+| **ADR-0043** — User–person linkage authority and translation | `pos-people.user_person_links` is sole source of truth; §2 prefers removing `users.person_id` and resolving via sync `GET /v1/people/users/{userId}/person` at token-issue time | Two amendments: (a) module references move from pos-people to `pos-people-contact` (link store ownership follows the split); (b) **flip the §2 preference** — under event-only walls, the *preferred* option becomes the one ADR-0043 already sanctions as the alternative: `pos-security-service.users.person_id` retained strictly as a projection written only from the link event (`people-contact.events.v1` link-changed), never by user-CRUD code. Link creation/removal initiated by security flows becomes command + confirmation events. Token-issue-time derivation then reads the local projection (no sync call), preserving the ADR-0022 claim contract and its fallback/metric rules. |
+
+### Reviewed — no change required (reaffirmed)
+
+| ADR | Why no change |
+|---|---|
+| **ADR-0006** — Workexec domain ownership boundaries | Timekeeping stays in the people/HR domain; the split does not move any ADR-0006 assignment. Cross-domain integration contracts it references now flow over events per this ADR. |
+| **ADR-0013** — UUID v7 identifier strategy | Envelope `eventId` complies. |
+| **ADR-0016** — Location entity semantics | Verified: it does **not** codify the "do not replicate address data" rule. That rule exists only as javadoc in `pos-invoice` `LocationServiceClient` and `pos-workorder` `LocationClient` ("Per the platform rule, other services must not replicate address data") and is superseded directly by R3; remove the javadoc when those clients are retired. |
+| **ADR-0020** — Documents centralized creation | Reaffirmed: pos-documents is a utility; synchronous render calls remain the mandated pattern. |
+| **ADR-0021** — Tax API consumption and internal access policy | Reaffirmed: pos-tax is a utility with direct internal calls; its `destinationAddress` contract is satisfied from callers' location replicas. |
+| **ADR-0022** — Stable person identifier claim policy | Claim contract unchanged; derivation flows through the amended ADR-0043 mechanism. Update the link-store module reference alongside ADR-0043's. |
+| **ADR-0025** — Permissions manifest registration policy | Startup-infra registration is explicitly exempt (R2); `pos-people-contact` follows the existing pattern. |
+| **ADR-0026** — Service contract boundary policy | Scope is intra-module package boundaries (`service` vs `internal`), which this ADR does not alter. Optionally add a pointer to ADR-0044 for cross-module transport rules. |
+| **ADR-0027** — UUID-typed identifier contract policy | Event payload identifiers are UUID-typed; compliant. |
+
+### Superseded non-ADR documents
+
+- `docs/service-discovery-migration/client-policy-matrix.md` — its `direct-discovery`
+  classification no longer authorizes domain→domain calls; `startup-infra`, `gateway-exception`,
+  `tax-exemption`, and `external` categories remain valid.
+- The javadoc "platform rule" against replicating address data (see ADR-0016 row above).
