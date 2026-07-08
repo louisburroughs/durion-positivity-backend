@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -581,5 +583,24 @@ class WorkorderEventHandlerTest {
                         "sourceWorkorderId",
                         UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))
                 .build();
+    }
+
+    /**
+     * ADR-0044 §4: transient infrastructure errors must escape to the container
+     * error handler (retry with backoff, then DLQ) instead of being committed as
+     * permanent failure log entries.
+     */
+    @Test
+    void transientDataAccessErrorsPropagateForRetry() {
+        when(processingLogRepository.findByEventId(any())).thenReturn(Optional.empty());
+        when(vehicleProjectionRepository.findById(any())).thenThrow(new QueryTimeoutException("db timeout"));
+
+        String json = """
+                {"eventId":"11111111-1111-7111-8111-111111111111","eventType":"VehicleUpdated",
+                 "payload":{"vehicleId":"22222222-2222-7222-8222-222222222222","vin":"VIN1"}}
+                """;
+
+        assertThatExceptionOfType(QueryTimeoutException.class).isThrownBy(() -> handler.handleWorkorderEvent(json));
+        verify(vehicleProjectionRepository, never()).save(any());
     }
 }

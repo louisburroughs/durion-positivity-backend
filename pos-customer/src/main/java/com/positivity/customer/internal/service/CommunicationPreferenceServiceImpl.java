@@ -50,17 +50,17 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
 
     private final CommunicationPreferenceRepository preferenceRepository;
     private final CommercialPartyRepository partyRepository;
-        private final PersonPartyRepository personPartyRepository;
+    private final PersonPartyRepository personPartyRepository;
 
     public CommunicationPreferenceServiceImpl(
             CommunicationPreferenceRepository preferenceRepository,
             CommercialPartyRepository partyRepository,
-                        PersonPartyRepository personPartyRepository,
+            PersonPartyRepository personPartyRepository,
             Clock clock) {
         this.clock = clock;
         this.preferenceRepository = preferenceRepository;
         this.partyRepository = partyRepository;
-                this.personPartyRepository = personPartyRepository;
+        this.personPartyRepository = personPartyRepository;
     }
 
     /**
@@ -78,7 +78,7 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
     @NonNull
     @Transactional(readOnly = true)
     public GetCommunicationPreferencesResponse getCommunicationPreferences(@NonNull UUID partyId) {
-                assertPartyExists(partyId);
+        assertPartyExists(partyId);
 
         // Get preferences or return defaults
         return preferenceRepository
@@ -212,9 +212,9 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
         return value.substring(0, 8) + "...";
     }
 
-        private void assertPartyExists(@NonNull UUID partyId) {
-                if (!partyRepository.existsById(partyId) && !personPartyRepository.existsById(partyId)) {
-                        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found: " + partyId);
-                }
+    private void assertPartyExists(@NonNull UUID partyId) {
+        if (!partyRepository.existsById(partyId) && !personPartyRepository.existsById(partyId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found: " + partyId);
         }
+    }
 }
