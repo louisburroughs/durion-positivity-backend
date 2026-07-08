@@ -154,6 +154,21 @@ on startup against `pos-security-service` (`POST /security-service/v1/permission
 `@PreAuthorize("hasAuthority('" + SomePermissions.SOME_ACTION + "')")`. See `docs/OPERATIONS_RUNBOOK.md`
 ("Permission Registration").
 
+## Output Style — Caveman (token compression, default ON)
+
+Chat responses in this repo default to compressed "caveman" style (adopted from the durion
+`token-stack` skill; see `.claude/skills/caveman/SKILL.md`):
+
+- Answer first. No preamble, no restating the question, no closing summary or sign-off.
+- Telegraphic prose: short sentences, fragments fine, filler words dropped.
+- Lists/tables over paragraphs; aim for one line per point.
+- Don't echo file contents, diffs, or logs — cite `path:line` instead.
+- Routine status updates: one line max. No emoji, no headers on short answers.
+- **Scope: chat output only.** Commit messages, PR/issue bodies, code, comments, docs, and ADRs
+  keep normal repo conventions and full quality.
+- **Override:** drop to normal prose when the user asks ("verbose", "explain"), or when
+  compression would make a nuanced finding ambiguous — correctness beats brevity.
+
 ## Further Reading
 
 - `AGENTS.md` — full code templates for the patterns above (event registries, initializers, ArchUnit rules)
