@@ -205,7 +205,7 @@ paths:
       tags:
       - TUS Resumable Upload API
       summary: Create a resumable upload
-      description: Creates a new TUS upload scoped to a bulk load job. Returns a Location header with the upload URL for subsequent HEAD and PATCH requests.
+      description: Creates a new TUS upload scoped to a bulk load job. Returns a Location header with the absolute upload URL for subsequent HEAD and PATCH requests. The URL is reconstructed from the X-Forwarded-Proto/Host/Port/Prefix headers supplied by the API gateway / reverse-proxy chain, so it reflects the public address (including any proxy path prefix) rather than this service's internal one.
       operationId: createUpload
       parameters:
       - name: jobId

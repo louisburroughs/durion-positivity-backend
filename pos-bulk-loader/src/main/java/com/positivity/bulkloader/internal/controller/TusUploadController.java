@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
 @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -77,9 +78,10 @@ public class TusUploadController {
     @Operation(
             summary = "Create a resumable upload",
             description = "Creates a new TUS upload scoped to a bulk load job. "
-                    + "Returns a Location header with the upload URL for subsequent HEAD and PATCH requests. "
-                    + "The Location is a relative reference (RFC 3986) that clients must resolve against the "
-                    + "creation request URL, so it stays correct behind the API gateway and any proxy prefix.")
+                    + "Returns a Location header with the absolute upload URL for subsequent HEAD and PATCH "
+                    + "requests. The URL is reconstructed from the X-Forwarded-Proto/Host/Port/Prefix headers "
+                    + "supplied by the API gateway / reverse-proxy chain, so it reflects the public address "
+                    + "(including any proxy path prefix) rather than this service's internal one.")
     @ApiResponse(responseCode = "201", description = "Upload created")
     @ApiResponse(responseCode = "412", description = "Unsupported TUS version")
     @ApiResponse(responseCode = "413", description = "Upload-Length exceeds server maximum")
@@ -102,11 +104,16 @@ public class TusUploadController {
         TusUploadService.Created created =
                 tusUploadService.createUpload(jobId, fileName, uploadLength, resolveOperatorId());
 
-        // Relative to this creation URL (…/v1/bulk-jobs/{jobId}/tus): resolves to …/v1/tus/{id}
-        // under whatever public prefix the gateway/proxy exposes, without trusting
-        // X-Forwarded-* headers. The service's own request URL must NOT be used here — it is
-        // the internal address with the gateway prefix already stripped.
-        URI location = URI.create("../../tus/" + created.id());
+        // Absolute URL, as in the tus spec's own examples: relative Location references break
+        // tus clients whose endpoint is a bare path, and stale copies of them resolve against
+        // the page URL instead of the API (see issue #833). ForwardedHeaderFilter
+        // (server.forward-headers-strategy: framework) has already rebuilt this request from the
+        // X-Forwarded-Proto/Host/Port/Prefix headers set by the gateway/proxy chain, so the
+        // base below is the public address (e.g. https://host/bulk-loader), not the internal
+        // one with the gateway prefix stripped.
+        URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
+                .path("/v1/tus/{uploadId}")
+                .build(created.id());
         return ResponseEntity.created(location)
                 .header(TUS_RESUMABLE, TUS_VERSION)
                 .header(UPLOAD_OFFSET, "0")
