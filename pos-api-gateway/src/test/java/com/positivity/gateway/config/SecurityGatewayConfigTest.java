@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 17")
+    @DisplayName("CATALOG_VERSION is 18")
     void catalogVersionIsSeventeen() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(17);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(18);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 349")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 350")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1185,8 +1185,10 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(348)).isEqualTo("PERM_mcp:tool:view");
         // catalog v17 (#818 checks): inventory location sync authority appended (bit 349)
         assertThat(GatewayPermissionCatalog.authorityForBit(349)).isEqualTo("PERM_inventory:location:sync");
+        // catalog v18 (#823/#839): outbox replay authority appended (bit 350)
+        assertThat(GatewayPermissionCatalog.authorityForBit(350)).isEqualTo("PERM_workorder:events:replay");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(350)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(351)).isNull();
     }
 
     @Test

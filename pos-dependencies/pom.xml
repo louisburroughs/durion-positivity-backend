@@ -50,6 +50,13 @@
                 <version>${project.version}</version>
             </dependency>
 
+            <!-- Shared Domain Event Contracts (ADR-0044) -->
+            <dependency>
+                <groupId>com.positivity</groupId>
+                <artifactId>pos-domain-events</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
             <!-- Shared Tax DTO and Validation Library -->
             <dependency>
                 <groupId>com.positivity</groupId>

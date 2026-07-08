@@ -54,6 +54,8 @@ permissions:
     description: "Create estimate snapshots"
   - name: "workorder:estimate_snapshot:view"
     description: "View estimate snapshot history"
+  - name: "workorder:events:replay"
+    description: "Re-emit published domain events from the outbox (replica seeding and drift repair)"
   - name: "workorder:invoice:create"
     description: "Create workorder invoices"
   - name: "workorder:invoice:view"

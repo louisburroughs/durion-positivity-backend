@@ -1,9 +1,9 @@
-generatedAt: "2026-07-06T13:58:35.652199+00:00"
-root: "/home/n541342/IdeaProjects/durion-positivity-backend"
+generatedAt: "2026-07-08T15:18:37.438139+00:00"
+root: "/home/user/durion-positivity-backend"
 summary:
   manifestCount: 18
-  permissionCount: 327
-  uniquePermissionCount: 327
+  permissionCount: 328
+  uniquePermissionCount: 328
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -685,7 +685,7 @@ manifests:
     domain: "workorder"
     serviceName: "pos-workorder"
     version: "1.0"
-    permissionCount: 50
+    permissionCount: 51
     permissions:
       - name: "workorder:approval_config:create"
         description: "Create approval configurations"
@@ -739,6 +739,8 @@ manifests:
         description: "Create estimate snapshots"
       - name: "workorder:estimate_snapshot:view"
         description: "View estimate snapshot history"
+      - name: "workorder:events:replay"
+        description: "Re-emit published domain events from the outbox (replica seeding and drift repair)"
       - name: "workorder:invoice:create"
         description: "Create workorder invoices"
       - name: "workorder:invoice:view"
@@ -2602,6 +2604,12 @@ permissions:
     source: "pos-workorder/src/main/resources/permissions.yaml"
   - name: "workorder:estimate_snapshot:view"
     description: "View estimate snapshot history"
+    domain: "workorder"
+    serviceName: "pos-workorder"
+    module: "pos-workorder"
+    source: "pos-workorder/src/main/resources/permissions.yaml"
+  - name: "workorder:events:replay"
+    description: "Re-emit published domain events from the outbox (replica seeding and drift repair)"
     domain: "workorder"
     serviceName: "pos-workorder"
     module: "pos-workorder"

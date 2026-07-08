@@ -162,10 +162,9 @@ public class PartyServiceImpl implements PartyService {
                 .legalName(personName)
                 .displayName(personName)
                 .status(personParty.getStatus().toString())
-            .createdAt(ISO_FORMATTER.format(requireNonNullField(personParty.getCreatedAt(), "createdAt")))
-                .modifiedAt(personParty.getModifiedAt() != null
-                        ? ISO_FORMATTER.format(personParty.getModifiedAt())
-                        : null)
+                .createdAt(ISO_FORMATTER.format(requireNonNullField(personParty.getCreatedAt(), "createdAt")))
+                .modifiedAt(
+                        personParty.getModifiedAt() != null ? ISO_FORMATTER.format(personParty.getModifiedAt()) : null)
                 .build();
     }
 
@@ -885,8 +884,8 @@ public class PartyServiceImpl implements PartyService {
         SnapshotMetadata meta = createMetadata();
         AccountSummary acct = buildAccountSummary(personParty);
         List<CrmSnapshotDTO.VehicleSummary> vehicles = buildVehicleSummaries(personParty);
-        return new CrmSnapshotDTO(meta, acct, Collections.emptyList(), vehicles, buildBillingPreferences(),
-                BillingRuleRef.defaults());
+        return new CrmSnapshotDTO(
+                meta, acct, Collections.emptyList(), vehicles, buildBillingPreferences(), BillingRuleRef.defaults());
     }
 
     private SnapshotMetadata createMetadata() {

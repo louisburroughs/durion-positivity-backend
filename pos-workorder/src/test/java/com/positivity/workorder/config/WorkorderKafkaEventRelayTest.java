@@ -4,7 +4,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.positivity.workorder.internal.config.KafkaEventRelay;
-import com.positivity.workorder.internal.config.KafkaProducer;
+import com.positivity.workorder.internal.config.OutboxEventWriter;
 import com.positivity.workorder.internal.domain.WorkSessionStartedEvent;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 import java.time.Clock;
@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 class WorkorderKafkaEventRelayTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-    private final KafkaProducer producer = org.mockito.Mockito.mock(KafkaProducer.class);
+    private final OutboxEventWriter producer = org.mockito.Mockito.mock(OutboxEventWriter.class);
     private final KafkaEventRelay relay = new KafkaEventRelay(producer);
 
     @Test

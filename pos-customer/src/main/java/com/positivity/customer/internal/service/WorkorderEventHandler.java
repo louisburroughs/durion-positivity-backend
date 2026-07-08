@@ -23,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -108,6 +109,10 @@ public class WorkorderEventHandler {
                     .failureReason(truncateFailureReason("SCHEMA validation failed: " + ex.getMessage()))
                     .processedAt(Instant.now(clock))
                     .build());
+        } catch (TransientDataAccessException ex) {
+            // Let the container error handler retry with backoff / route to the DLQ (ADR-0044 §4)
+            // instead of committing a permanent failure log for a transient infrastructure error.
+            throw ex;
         } catch (Exception ex) {
             log.error("Unhandled exception while processing workorder event", ex);
             processingLogRepository.save(ProcessingLog.builder()
@@ -160,6 +165,8 @@ public class WorkorderEventHandler {
                     .status(ProcessingStatus.SUCCESS)
                     .processedAt(Instant.now(clock))
                     .build());
+        } catch (TransientDataAccessException ex) {
+            throw ex;
         } catch (Exception ex) {
             log.error(
                     "VehicleUpdated payload processing failed eventId={} eventType={}",
@@ -266,6 +273,8 @@ public class WorkorderEventHandler {
                     .status(ProcessingStatus.SUCCESS)
                     .processedAt(Instant.now(clock))
                     .build());
+        } catch (TransientDataAccessException ex) {
+            throw ex;
         } catch (Exception ex) {
             log.error(
                     "ContactPreferenceUpdated processing failed eventId={} eventType={}",
@@ -349,6 +358,8 @@ public class WorkorderEventHandler {
                     .status(ProcessingStatus.SUCCESS)
                     .processedAt(Instant.now(clock))
                     .build());
+        } catch (TransientDataAccessException ex) {
+            throw ex;
         } catch (Exception ex) {
             log.error(
                     "PartyNoteAdded processing failed eventId={} eventType={}",

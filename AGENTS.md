@@ -240,6 +240,51 @@ Modules using `@EmitEvent` MUST include pos-events dependency in pom.xml:
 
 - Failing to register events results in silent audit failures and compliance violations.
 
+### Domain Events over Kafka (ADR-0044)
+
+Module-to-module communication is **events-only** — synchronous REST between domain modules is
+prohibited; only the utility modules (gateway, security-service, documents, image, tax,
+event-receiver, price) may be called synchronously. The `@EmitEvent`/pos-event-receiver pipeline
+above is **audit-only** and is not a module-to-module channel. See
+`docs/adr-0044-event-only-domain-walls.md` for the full rules.
+
+- **Contracts live in `pos-domain-events`** (importable by every module): the
+  `DomainEventEnvelope<T>` record and `DomainTopics` naming helpers. Payload DTOs are versioned
+  per domain (additive-only within a version; breaking changes require a `.v2` topic).
+- **Topics**: facts on `{domain}.events.v1` (published only by the owning module), commands on
+  `{domain}.commands.v1` (consumed only by the owning module), poison messages to `{topic}.dlq`.
+  Records are keyed by `aggregateId` (`envelope.recordKey()`), preserving per-aggregate order.
+- **Producing**: build envelopes with `DomainEventEnvelope.of(...)` using the module's injected
+  `Clock`; publish through the module's transactional outbox — never call `KafkaTemplate` directly
+  from a business transaction.
+- **Consuming**: record each `eventId` in the module's `processed_events` table in the same
+  transaction as the replica update (redelivery must be harmless), and use `aggregateVersion` to
+  ignore stale updates and detect gaps.
+- **Replicas**: read-only copies of another domain's data live in `ext_{owner}_{entity}` tables,
+  written only by the event consumer, with minimum fields required.
+
+```java
+DomainEventEnvelope<PartyUpdatedV1> event = DomainEventEnvelope.of(
+        "customer.party.updated",   // eventType: dotted lowercase
+        1,                          // schemaVersion
+        partyId,                    // aggregateId (also the Kafka key)
+        aggregateVersion,           // monotonic per-aggregate sequence
+        "pos-customer",             // sourceService
+        correlationId,              // nullable
+        actorUserId,                // nullable; audit only, never authorization
+        new PartyUpdatedV1(...),    // versioned payload DTO from pos-domain-events
+        clock);
+outbox.append(DomainTopics.events("customer"), event); // same transaction as the state change
+```
+
+```xml
+<dependency>
+    <groupId>com.positivity</groupId>
+    <artifactId>pos-domain-events</artifactId>
+    <version>${project.version}</version>
+</dependency>
+```
+
 ## Null Safety Standards
 
 ### ⚠️ MANDATORY: @NonNull Annotation for Null Safety

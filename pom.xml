@@ -253,6 +253,7 @@
 	<modules>
 		<module>pos-dependencies</module>
 		<module>pos-shared-dtos</module>
+		<module>pos-domain-events</module>
 		<module>pos-security-common</module>
 		<module>pos-tax-common</module>
 		<module>pos-archunit</module>
