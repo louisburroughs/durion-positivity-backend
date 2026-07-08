@@ -52,6 +52,8 @@ class OutboxPublisherTest {
                 .recordKey(key)
                 .payload("{\"eventId\":\"" + key + "\"}")
                 .createdAt(Instant.parse("2026-07-08T11:59:00Z"))
+                .attempts(2)
+                .lastError("previous failure")
                 .build();
     }
 
@@ -68,6 +70,7 @@ class OutboxPublisherTest {
         verify(kafkaTemplate).send("workorder.events.v1", "k1", row.getPayload());
         assertThat(row.getPublishedAt()).isEqualTo(Instant.parse("2026-07-08T12:00:00Z"));
         assertThat(row.getAttempts()).isZero();
+        assertThat(row.getLastError()).isNull();
         verify(repository).save(row);
     }
 
@@ -83,11 +86,11 @@ class OutboxPublisherTest {
         publisher.publishPending();
 
         assertThat(first.getPublishedAt()).isNull();
-        assertThat(first.getAttempts()).isEqualTo(1);
+        assertThat(first.getAttempts()).isEqualTo(3);
         assertThat(first.getLastError()).contains("broker down");
         // Batch stops at the first failure to preserve publish order: only k1 was attempted.
         verify(kafkaTemplate, times(1)).send(anyString(), anyString(), anyString());
         verify(kafkaTemplate).send("workorder.events.v1", "k1", first.getPayload());
-        assertThat(second.getAttempts()).isZero();
+        assertThat(second.getAttempts()).isEqualTo(2);
     }
 }

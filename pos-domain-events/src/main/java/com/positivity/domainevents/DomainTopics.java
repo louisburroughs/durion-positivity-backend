@@ -35,7 +35,7 @@ public final class DomainTopics {
 
     /** Dead-letter topic for a fact or command topic: {@code {topic}.dlq} (ADR-0044 §4). */
     public static @NonNull String dlq(@NonNull String topic) {
-        if (topic.isBlank()) {
+        if (topic == null || topic.isBlank()) {
             throw new IllegalArgumentException("topic must not be blank");
         }
         return topic + ".dlq";

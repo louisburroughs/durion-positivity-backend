@@ -21,5 +21,6 @@ class DomainTopicsTest {
         assertThatIllegalArgumentException().isThrownBy(() -> DomainTopics.events("Customer"));
         assertThatIllegalArgumentException().isThrownBy(() -> DomainTopics.commands("pos_customer"));
         assertThatIllegalArgumentException().isThrownBy(() -> DomainTopics.dlq(" "));
+        assertThatIllegalArgumentException().isThrownBy(() -> DomainTopics.dlq(null));
     }
 }

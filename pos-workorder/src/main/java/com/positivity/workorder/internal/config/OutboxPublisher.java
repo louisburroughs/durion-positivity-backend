@@ -15,16 +15,16 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Drains {@code event_outbox} to Kafka (ADR-0044 §4).
  *
- * <p>At-least-once: a row is marked published only after the broker acknowledges the send, so a
- * crash between send and mark re-sends on the next poll — consumers must be idempotent by
- * {@code eventId}. Rows are processed in id order (UUIDv7 = insertion time); the batch stops at
- * the first failure so a struggling broker cannot reorder events, and failed rows retry on every
- * poll with {@code attempts}/{@code last_error} recorded for alerting.
+ * <p>At-least-once: a row is marked published (in its own short transaction, so no DB connection
+ * is held across the blocking broker send) only after the broker acknowledges, and a crash between
+ * send and mark re-sends on the next poll — consumers must be idempotent by {@code eventId}. Rows
+ * are processed in id order (UUIDv7 = insertion time); the batch stops at the first failure so a
+ * struggling broker cannot reorder events, and failed rows retry on every poll with
+ * {@code attempts}/{@code last_error} recorded for alerting.
  */
 @Slf4j
 @Component
@@ -62,7 +62,6 @@ public class OutboxPublisher {
     }
 
     @Scheduled(fixedDelayString = "${workorder.outbox.poll-interval-ms:1000}")
-    @Transactional
     public void publishPending() {
         List<OutboxEvent> pending = outboxEventRepository.findTop100ByPublishedAtIsNullOrderByIdAsc();
         for (OutboxEvent event : pending) {
@@ -79,6 +78,7 @@ public class OutboxPublisher {
                     .send(event.getTopic(), event.getRecordKey(), event.getPayload())
                     .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
             event.setPublishedAt(Instant.now(clock));
+            event.setAttempts(0);
             event.setLastError(null);
             outboxEventRepository.save(event);
             increment(publishedCounter);
