@@ -366,6 +366,59 @@ public class PartyController {
 
 ---
 
+## Domain Events (Kafka, ADR-0044)
+
+Module-to-module communication flows over Kafka domain topics (`{domain}.events.v1` facts,
+`{domain}.commands.v1` commands). Contracts live in `pos-domain-events`; the full policy is
+`docs/adr-0044-event-only-domain-walls.md`.
+
+### Local broker
+
+`docker-compose up -d kafka` starts a single-node KRaft broker (`apache/kafka`). Services reach it
+at `kafka:29092` inside the compose network (host tools at `localhost:9092`). Kafka features remain
+opt-in per module (e.g. `WORKORDER_KAFKA_ENABLED=true`, `pos.customer.kafka.enabled=true`) until
+the Phase 0.4 tier-1 flip.
+
+### Transactional outbox (producers)
+
+Producers write events to their `event_outbox` table in the business transaction; a scheduled
+publisher drains to Kafka (at-least-once). Operational signals:
+
+- Metrics: `workorder.outbox.published`, `workorder.outbox.publish.failures` (counter deltas);
+  a growing gap means the drain is failing.
+- `SELECT count(*) FROM event_outbox WHERE published_at IS NULL` — sustained growth means the
+  broker is unreachable or the publisher is stopped; check `attempts`/`last_error` on stuck rows.
+- The publisher halts its batch at the first failure to preserve order — one poisoned/oversized
+  record blocks the drain; inspect the oldest unpublished row first.
+
+### Consumers: retry and DLQ
+
+Consumers retry failed records with exponential backoff, then dead-letter to `{topic}.dlq`
+(e.g. `workorder.events.v1.dlq`). Redelivery is safe: consumers deduplicate by `eventId`
+(unique-keyed processing log). To inspect a DLQ:
+
+```bash
+docker exec kafka-positivity /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 --topic workorder.events.v1.dlq --from-beginning --max-messages 10
+```
+
+To reprocess a DLQ'd record after fixing the cause, re-emit it from the owner's outbox (below) —
+do not hand-copy messages between topics.
+
+### Replica seeding and drift repair (replay)
+
+Owners expose an administrative re-emit endpoint (permission `{domain}:events:replay`), e.g.:
+
+```bash
+# Re-emit all workorder events created since July 1 (idempotent for consumers)
+curl -X POST "https://<gateway>/workorder/v1/outbox/replay?since=2026-07-01T00:00:00Z" \
+  -H "Authorization: Bearer $TOKEN" -H "X-API-Version: 1"
+```
+
+Seeding a brand-new replica: create the consumer's `ext_*` tables (Flyway), start the consumer,
+then call replay with `since` at the epoch (omit the parameter). Consumers skip anything already
+processed.
+
 ## Related Documentation
 
 - **Platform-level runbook**: `durion/docs/OPERATIONS_RUNBOOK.md`

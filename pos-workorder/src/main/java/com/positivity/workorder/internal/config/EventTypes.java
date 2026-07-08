@@ -40,6 +40,12 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    /** Re-emit published outbox events for replica seeding / drift repair (ADR-0044) */
+    public static final EventTypeRegistration WORKORDER_OUTBOX_REPLAY = EventTypeRegistration.write(
+                    "WORKORDER_OUTBOX_REPLAY", "Re-emit published domain events from the outbox")
+            .apiVersion("1")
+            .build();
+
     /** Delete a workorder */
     public static final EventTypeRegistration WORKORDER_DELETE = EventTypeRegistration.write(
                     "WORKORDER_DELETE", "Delete a workorder by ID")
@@ -510,6 +516,7 @@ public final class EventTypes {
             WORKORDER_SEARCH,
             WORKORDER_NUMBER_RESOLVE,
             WORKORDER_CREATE,
+            WORKORDER_OUTBOX_REPLAY,
             WORKORDER_DELETE,
             WORKORDER_START,
             WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE,
