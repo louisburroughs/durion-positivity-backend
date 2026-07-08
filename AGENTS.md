@@ -262,6 +262,20 @@ above is **audit-only** and is not a module-to-module channel. See
   ignore stale updates and detect gaps.
 - **Replicas**: read-only copies of another domain's data live in `ext_{owner}_{entity}` tables,
   written only by the event consumer, with minimum fields required.
+- **Reconciliation** (mandatory wherever a replica exists — "duplication without reconciliation is
+  not permitted"): the owner publishes a `ReconciliationManifestV1` per closed time window on
+  `{domain}.manifest.v1` (`DomainTopics.manifest(domain)`), summarizing the window's published
+  events (count + SHA-256 checksum over sorted eventIds, `ReconciliationManifestV1.checksumOf`).
+  Window membership is the UUIDv7 timestamp embedded in each `eventId`
+  (`UuidV7Timestamps.instantOf`) — identical on both sides, no shared clock needed. The consumer
+  recomputes the summary from its processing log (range-scan the eventId column with
+  `UuidV7Timestamps.minStringAt(windowStart/End)`), and on mismatch increments a `replica.drift`
+  counter (tags `owner`, `entity`) and publishes a `{domain}.outbox.replay-requested` command with
+  `payload.since = windowStartUtc`; the owner re-emits through its outbox and the consumer's
+  eventId dedupe makes the repair idempotent. Manifests are sent directly (not via outbox): a lost
+  manifest self-heals on the owner's next run, and zero-event windows still get manifests so
+  consumers can alert on absence. Reference pair: `pos-workorder` `ManifestPublisher` (owner) and
+  `pos-customer` `WorkorderManifestListener` (consumer).
 
 ```java
 DomainEventEnvelope<PartyUpdatedV1> event = DomainEventEnvelope.of(

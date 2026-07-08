@@ -184,6 +184,12 @@
             <artifactId>pos-shared-dtos</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Cross-module domain event contracts (ADR-0044) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-domain-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-bulk-ingest-lib</artifactId>

@@ -7,7 +7,9 @@ import static org.mockito.Mockito.verify;
 import com.positivity.workorder.internal.config.KafkaCommandListener;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
+import com.positivity.workorder.service.OutboxReplayService;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,12 +24,13 @@ class WorkorderKafkaCommandListenerTest {
             Clock.fixed(java.time.Instant.parse("2024-01-01T00:00:00Z"), java.time.ZoneOffset.UTC);
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ApplicationEventPublisher eventPublisher = org.mockito.Mockito.mock(ApplicationEventPublisher.class);
+    private final OutboxReplayService outboxReplayService = org.mockito.Mockito.mock(OutboxReplayService.class);
 
     private KafkaCommandListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new KafkaCommandListener(FIXED_CLOCK, objectMapper, eventPublisher);
+        listener = new KafkaCommandListener(FIXED_CLOCK, objectMapper, eventPublisher, outboxReplayService);
     }
 
     @Test
@@ -89,5 +92,30 @@ class WorkorderKafkaCommandListenerTest {
                 """);
 
         verify(eventPublisher, never()).publishEvent(any());
+        verify(outboxReplayService, never()).replaySince(any());
+    }
+
+    @Test
+    @DisplayName("workorder.outbox.replay-requested triggers an outbox replay from payload.since")
+    void replayCommandTriggersOutboxReplay() {
+        listener.onCommand("""
+                {"commandType":"workorder.outbox.replay-requested","payload":{"since":"2026-07-08T10:00:00Z"}}
+                """);
+
+        verify(outboxReplayService).replaySince(Instant.parse("2026-07-08T10:00:00Z"));
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("Replay command without a parseable payload.since is ignored")
+    void replayCommandWithoutSinceIsIgnored() {
+        listener.onCommand("""
+                {"commandType":"WORKORDER_OUTBOX_REPLAY_REQUESTED","payload":{}}
+                """);
+        listener.onCommand("""
+                {"commandType":"workorder.outbox.replay-requested","payload":{"since":"not-a-timestamp"}}
+                """);
+
+        verify(outboxReplayService, never()).replaySince(any());
     }
 }

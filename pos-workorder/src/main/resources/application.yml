@@ -98,3 +98,10 @@ workorder:
     events-topic: ${WORKORDER_KAFKA_EVENTS_TOPIC:workorder.events.v1}
     commands-topic: ${WORKORDER_KAFKA_COMMANDS_TOPIC:workorder.commands.v1}
     consumer-group: ${WORKORDER_KAFKA_CONSUMER_GROUP:${spring.application.name}-commands}
+  # Reconciliation manifests (ADR-0044, one summary per closed window of the fact topic)
+  manifest:
+    topic: ${WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
+    window: ${WORKORDER_MANIFEST_WINDOW:PT1H}
+    grace: ${WORKORDER_MANIFEST_GRACE:PT5M}
+    poll-interval-ms: ${WORKORDER_MANIFEST_POLL_INTERVAL_MS:300000}
+    send-timeout-ms: ${WORKORDER_MANIFEST_SEND_TIMEOUT_MS:10000}

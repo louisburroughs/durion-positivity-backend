@@ -419,6 +419,45 @@ Seeding a brand-new replica: create the consumer's `ext_*` tables (Flyway), star
 then call replay with `since` at the epoch (omit the parameter). Consumers skip anything already
 processed.
 
+### Reconciliation manifests and drift detection
+
+Owners publish a per-window summary (count + checksum of the window's eventIds) on
+`{domain}.manifest.v1`; consumers recompute it from their processing log and, on mismatch,
+publish a `{domain}.outbox.replay-requested` command themselves — repair is automatic and needs
+no operator action. Everything flows over the event channel; there are no synchronous
+domain-to-domain reconciliation calls (ADR-0044 §4). Reference pair: `pos-workorder`
+`ManifestPublisher` → `pos-customer` `WorkorderManifestListener`.
+
+Operational signals:
+
+- `replica_drift_total{owner,entity}` (consumer side) — one increment per mismatched window.
+  Occasional single increments self-heal via replay; a **steadily increasing** counter means the
+  repair loop is not converging (owner's command listener down, replay permission/topic issue, or
+  a poison message that can never be recorded) — check the consumer's warn log for the window
+  details (expected vs observed count/checksum) and the owner's `workorder.commands.v1` consumer.
+- `workorder.manifest.published` / `workorder.manifest.publish.failures` (owner side) — manifests
+  stopping entirely means the owner's scheduler or broker connection is down; consumers see no
+  drift while blind, so alert on manifest absence too.
+- Tuning: `workorder.manifest.window` (default `PT1H`), `workorder.manifest.grace` (default
+  `PT5M` — how long after a window closes before its manifest publishes; raise it if consumer lag
+  causes false-positive drift), `workorder.manifest.poll-interval-ms`.
+
+Manual drift drill (compose stack, both `WORKORDER_KAFKA_ENABLED=true` and
+`pos.customer.kafka.enabled=true`):
+
+1. Create/update a workorder so an event lands in `event_outbox` and the customer replica.
+2. Corrupt the consumer: `DELETE FROM processing_log WHERE event_id = '<eventId>'` (and the
+   projected row) in the customer schema.
+3. Wait one manifest cycle (or temporarily set `workorder.manifest.window=PT2M`,
+   `workorder.manifest.grace=PT30S`). The customer logs `Replica drift detected`, increments
+   `replica_drift_total`, and the owner re-emits; the event is reprocessed and the projection
+   restored within the following poll.
+4. Verify `replica_drift_total` stops increasing on subsequent windows.
+
+Until producers emit the full `DomainEventEnvelope` (with `aggregateVersion`), manifests detect
+**lost/undelivered events**, not corrupted-in-place replica rows; per-aggregate state comparison
+arrives with the envelope migration (Phase 1/2).
+
 ## Related Documentation
 
 - **Platform-level runbook**: `durion/docs/OPERATIONS_RUNBOOK.md`

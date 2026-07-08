@@ -17,6 +17,16 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
     List<OutboxEvent> findTop100ByPublishedAtIsNullOrderByIdAsc();
 
     /**
+     * Published rows of one topic whose {@code createdAt} falls in the given range, for
+     * reconciliation-manifest computation (ADR-0044 §4). Callers pass the window padded by a small
+     * slack and re-filter precisely by the eventId's UUIDv7 timestamp, since {@code createdAt} and
+     * the payload's eventId are stamped microseconds apart.
+     */
+    @NonNull
+    List<OutboxEvent> findByTopicAndPublishedAtIsNotNullAndCreatedAtBetween(
+            @NonNull String topic, @NonNull Instant from, @NonNull Instant to);
+
+    /**
      * Mark already-published events created at or after {@code since} for re-publication
      * (ADR-0044 backfill/drift repair). The publisher re-sends them; consumers dedupe by eventId.
      */
