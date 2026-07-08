@@ -120,7 +120,10 @@ Envelope (extends the existing pos-workorder `KafkaProducer` envelope):
   administrative re-emit-all) to seed new replicas and repair drift.
 - **Reconciliation.** A scheduled job per consumer compares replica `aggregateVersion`s (or
   count/checksum) against the owner and triggers targeted re-sync on drift. Duplication without
-  reconciliation is not permitted.
+  reconciliation is not permitted. Reconciliation itself flows over the event channel: owners
+  publish periodic reconciliation manifests on `{domain}.manifest.v1` and consumers request
+  targeted re-emit via the owner's command topic — reconciliation MUST NOT use synchronous
+  domain-to-domain calls (decided 2026-07-08, durion-positivity-backend#823/#840).
 - **Kafka as tier-1 infrastructure.** Kafka becomes a required runtime dependency for all domain
   modules in docker/alpha/prod profiles (no more `@ConditionalOnProperty` opt-in for domain flows),
   with consumer-lag and DLQ monitoring in the observability stack.
