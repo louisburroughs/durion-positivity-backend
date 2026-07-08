@@ -27,6 +27,9 @@ spring:
 
 server:
   port: 0
+  # Honor X-Forwarded-Proto/Host/Port/Prefix from the gateway/reverse-proxy chain so absolute
+  # URLs built from the current request (e.g. the TUS Location header) use the public address.
+  forward-headers-strategy: framework
   tomcat:
     max-http-header-size: 65536
 

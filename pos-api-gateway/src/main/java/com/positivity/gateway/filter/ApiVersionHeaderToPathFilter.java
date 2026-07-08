@@ -53,7 +53,10 @@ import reactor.core.publisher.Mono;
  * <h2>/api Prefix Stripping</h2>
  * Paths that start with {@code /api/} are normalised (prefix stripped) before
  * all other processing. This covers direct gateway access from clients that
- * mirror the front-end Node.js proxy mount point.
+ * mirror the front-end Node.js proxy mount point. The stripped {@code /api}
+ * prefix is appended to the {@code X-Forwarded-Prefix} header so downstream
+ * services can rebuild public absolute URLs (e.g. the bulk-loader TUS
+ * {@code Location} header).
  *
  * <h2>Already-Versioned Paths</h2>
  * If the inbound path already matches
@@ -97,7 +100,13 @@ public class ApiVersionHeaderToPathFilter implements GlobalFilter, Ordered {
         if (rawPath != null && rawPath.startsWith("/api/")) {
             rawPath = rawPath.substring("/api".length());
             final var normalizedPath = rawPath;
-            exchange = exchange.mutate().request(r -> r.path(normalizedPath)).build();
+            // Record the stripped prefix in X-Forwarded-Prefix (appended after any value set by
+            // an outer proxy) so downstream services can rebuild public absolute URLs — e.g. the
+            // bulk-loader TUS Location header. XForwardedHeadersFilter later appends the route
+            // prefix removed by StripPrefix to the same header.
+            exchange = exchange.mutate()
+                    .request(r -> r.path(normalizedPath).headers(h -> h.add("X-Forwarded-Prefix", "/api")))
+                    .build();
             log.debug("Stripped /api prefix; effective path={}", rawPath);
         }
 
