@@ -1,6 +1,6 @@
 # ADR-0044 Event-Only Domain Walls and Module Communication Policy
 
-- Status: **Proposed** (candidate — issue [#823](https://github.com/louisburroughs/durion-positivity-backend/issues/823))
+- Status: **Accepted** (2026-07-08 — issue [#823](https://github.com/louisburroughs/durion-positivity-backend/issues/823))
 - Date: 2026-07-08
 - Supersedes: the domain-to-domain portions of the service-discovery client policy
   (`docs/service-discovery-migration/client-policy-matrix.md`) and the javadoc-only
@@ -9,9 +9,9 @@
   ADR-0021, ADR-0022, ADR-0025, ADR-0026, ADR-0027, ADR-0040, ADR-0042, ADR-0043
 - Supporting analysis: `docs/module-coupling/issue-823-event-only-domain-walls-assessment.md`
 
-Once accepted, promote this document to the canonical ADR repository as
-`durion/docs/adr/0044-event-only-domain-walls.adr.md` (0043 is taken by the user–person linkage
-authority ADR) and keep this copy as the backend-local reference.
+The canonical version of this ADR is
+[`durion/docs/adr/0044-platform-event-only-domain-walls.adr.md`](https://github.com/louisburroughs/durion/blob/master/docs/adr/0044-platform-event-only-domain-walls.adr.md);
+this file is the backend-local reference copy.
 
 ## Context
 
