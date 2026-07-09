@@ -116,7 +116,9 @@ public class WorkorderManifestListener {
         try {
             String command = objectMapper.writeValueAsString(new ReplayCommand(
                     REPLAY_COMMAND_TYPE,
-                    new ReplayCommand.Payload(manifest.windowStartUtc().toString())));
+                    new ReplayCommand.Payload(
+                            manifest.windowStartUtc().toString(),
+                            manifest.windowEndUtc().toString())));
             kafkaTemplate.send(workorderCommandsTopic, manifest.windowStartUtc().toString(), command);
         } catch (Exception e) {
             // Best effort: the drift metric already fired, and the next manifest re-detects.
@@ -127,6 +129,6 @@ public class WorkorderManifestListener {
     /** Command envelope for the owner's {@code workorder.commands.v1} listener. */
     record ReplayCommand(
             @NonNull String commandType, @NonNull Payload payload) {
-        record Payload(@Nullable String since) {}
+        record Payload(@Nullable String since, @Nullable String until) {}
     }
 }

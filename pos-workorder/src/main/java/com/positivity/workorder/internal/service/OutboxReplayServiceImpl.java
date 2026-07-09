@@ -23,4 +23,12 @@ public class OutboxReplayServiceImpl implements OutboxReplayService {
         log.info("Outbox replay requested since={} eventsQueued={}", since, count);
         return count;
     }
+
+    @Override
+    @Transactional
+    public int replayBetween(@NonNull Instant since, @NonNull Instant until) {
+        int count = outboxEventRepository.markForReplayBetween(since, until);
+        log.info("Outbox replay requested window=[{}, {}) eventsQueued={}", since, until, count);
+        return count;
+    }
 }

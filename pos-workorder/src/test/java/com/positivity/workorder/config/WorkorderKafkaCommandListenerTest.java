@@ -31,6 +31,8 @@ class WorkorderKafkaCommandListenerTest {
     @BeforeEach
     void setUp() {
         listener = new KafkaCommandListener(FIXED_CLOCK, objectMapper, eventPublisher, outboxReplayService);
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                listener, "replayMaxLookback", java.time.Duration.ofDays(30));
     }
 
     @Test
@@ -96,14 +98,39 @@ class WorkorderKafkaCommandListenerTest {
     }
 
     @Test
-    @DisplayName("workorder.outbox.replay-requested triggers an outbox replay from payload.since")
+    @DisplayName("workorder.outbox.replay-requested without until replays from since (slack-padded)")
     void replayCommandTriggersOutboxReplay() {
         listener.onCommand("""
                 {"commandType":"workorder.outbox.replay-requested","payload":{"since":"2026-07-08T10:00:00Z"}}
                 """);
 
-        verify(outboxReplayService).replaySince(Instant.parse("2026-07-08T10:00:00Z"));
+        verify(outboxReplayService).replaySince(Instant.parse("2026-07-08T09:59:59Z"));
         verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("Replay command with until repairs only the window (slack-padded on both ends)")
+    void replayCommandWithUntilIsBounded() {
+        listener.onCommand("""
+                {"commandType":"workorder.outbox.replay-requested",
+                 "payload":{"since":"2026-07-08T10:00:00Z","until":"2026-07-08T11:00:00Z"}}
+                """);
+
+        verify(outboxReplayService)
+                .replayBetween(Instant.parse("2026-07-08T09:59:59Z"), Instant.parse("2026-07-08T11:00:01Z"));
+        verify(outboxReplayService, never()).replaySince(any());
+    }
+
+    @Test
+    @DisplayName("Replay command older than the max lookback is rejected")
+    void replayCommandBeyondLookbackIsIgnored() {
+        // Clock is 2024-01-01; since is >30 days earlier.
+        listener.onCommand("""
+                {"commandType":"workorder.outbox.replay-requested","payload":{"since":"2023-10-01T00:00:00Z"}}
+                """);
+
+        verify(outboxReplayService, never()).replaySince(any());
+        verify(outboxReplayService, never()).replayBetween(any(), any());
     }
 
     @Test

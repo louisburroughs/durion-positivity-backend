@@ -101,22 +101,40 @@ public class ManifestPublisher {
                         .register(registry);
     }
 
+    /** Catch-up bound per run — 24 windows covers a day-long outage at the default 1h window. */
+    private static final int MAX_WINDOWS_PER_RUN = 24;
+
     @Scheduled(fixedDelayString = "${workorder.manifest.poll-interval-ms:300000}")
     public void publishDueManifest() {
-        Instant windowEnd = latestClosedWindowEnd();
-        if (windowEnd == null || (lastPublishedWindowEnd != null && !windowEnd.isAfter(lastPublishedWindowEnd))) {
+        Instant latestClosed = latestClosedWindowEnd();
+        if (latestClosed == null || (lastPublishedWindowEnd != null && !latestClosed.isAfter(lastPublishedWindowEnd))) {
             return;
         }
-        Instant windowStart = windowEnd.minus(window);
-        try {
-            publishManifest(windowStart, windowEnd);
-            lastPublishedWindowEnd = windowEnd;
-            increment(publishedCounter);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            recordFailure(windowStart, windowEnd, e);
-        } catch (Exception e) {
-            recordFailure(windowStart, windowEnd, e);
+        // First run publishes only the latest closed window (no historic backfill on boot);
+        // afterwards every window is published in order so scheduler gaps cannot skip one
+        // permanently (PR #849 review).
+        Instant windowEnd = lastPublishedWindowEnd == null ? latestClosed : lastPublishedWindowEnd.plus(window);
+        int published = 0;
+        while (!windowEnd.isAfter(latestClosed) && published < MAX_WINDOWS_PER_RUN) {
+            Instant windowStart = windowEnd.minus(window);
+            try {
+                publishManifest(windowStart, windowEnd);
+                lastPublishedWindowEnd = windowEnd;
+                increment(publishedCounter);
+                published++;
+                windowEnd = windowEnd.plus(window);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                recordFailure(windowStart, windowEnd, e);
+                return;
+            } catch (Exception e) {
+                // Retry this window on the next poll; later windows stay queued behind it.
+                recordFailure(windowStart, windowEnd, e);
+                return;
+            }
+        }
+        if (!windowEnd.isAfter(latestClosed)) {
+            log.info("Manifest catch-up capped at {} windows this run; continuing next poll", MAX_WINDOWS_PER_RUN);
         }
     }
 
@@ -135,18 +153,24 @@ public class ManifestPublisher {
         List<String> eventIds = new ArrayList<>();
         TreeMap<String, Long> eventTypeCounts = new TreeMap<>();
         for (OutboxEvent row : candidates) {
-            JsonNode envelope = objectMapper.readTree(row.getPayload());
-            String eventId = envelope.path("eventId").stringValue(null);
-            if (eventId == null || eventId.isBlank()) {
-                log.warn("Outbox row {} has no eventId in its payload; excluded from manifest", row.getId());
-                continue;
+            // One malformed row must not block the window's manifest forever (PR #849 review):
+            // skip it with a warning; the consumer-side mismatch it may cause is visible drift.
+            try {
+                JsonNode envelope = objectMapper.readTree(row.getPayload());
+                String eventId = envelope.path("eventId").stringValue(null);
+                if (eventId == null || eventId.isBlank()) {
+                    log.warn("Outbox row {} has no eventId in its payload; excluded from manifest", row.getId());
+                    continue;
+                }
+                if (!UuidV7Timestamps.isInWindow(UUID.fromString(eventId), windowStart, windowEnd)) {
+                    continue;
+                }
+                eventIds.add(eventId);
+                String eventType = envelope.path("eventType").stringValue(null);
+                eventTypeCounts.merge(eventType == null || eventType.isBlank() ? "unknown" : eventType, 1L, Long::sum);
+            } catch (Exception e) {
+                log.warn("Outbox row {} has an unparsable payload/eventId; excluded from manifest", row.getId(), e);
             }
-            if (!UuidV7Timestamps.isInWindow(UUID.fromString(eventId), windowStart, windowEnd)) {
-                continue;
-            }
-            eventIds.add(eventId);
-            String eventType = envelope.path("eventType").stringValue(null);
-            eventTypeCounts.merge(eventType == null || eventType.isBlank() ? "unknown" : eventType, 1L, Long::sum);
         }
 
         ReconciliationManifestV1 manifest = new ReconciliationManifestV1(

@@ -199,4 +199,59 @@ class ManifestPublisherTest {
                         .longValue())
                 .isZero();
     }
+
+    @Test
+    @DisplayName("Catches up every missed window in order after a scheduler gap (PR #849 review)")
+    void catchesUpMissedWindows() {
+        when(repository.findByTopicAndPublishedAtIsNotNullAndCreatedAtBetween(anyString(), any(), any()))
+                .thenReturn(List.of());
+        ReflectionTestUtils.setField(publisher, "lastPublishedWindowEnd", Instant.parse("2026-07-08T09:00:00Z"));
+
+        publisher.publishDueManifest();
+
+        ArgumentCaptor<String> messages = ArgumentCaptor.forClass(String.class);
+        verify(kafkaTemplate, times(3)).send(anyString(), anyString(), messages.capture());
+        List<String> ends = messages.getAllValues().stream()
+                .map(m -> objectMapper
+                        .readTree(m)
+                        .path("payload")
+                        .path("windowEndUtc")
+                        .stringValue())
+                .toList();
+        assertThat(ends).containsExactly("2026-07-08T10:00:00Z", "2026-07-08T11:00:00Z", "2026-07-08T12:00:00Z");
+    }
+
+    @Test
+    @DisplayName("A malformed outbox row is skipped, not fatal to the window's manifest (PR #849 review)")
+    void skipsMalformedRows() {
+        OutboxEvent good = row(
+                eventIdAt(WINDOW_START.plusSeconds(60), 1),
+                "workorder.work_session.started.v1",
+                WINDOW_START.plusSeconds(60));
+        OutboxEvent badJson = OutboxEvent.builder()
+                .id(UUID.randomUUID())
+                .topic("workorder.events.v1")
+                .recordKey("bad")
+                .payload("{not json")
+                .createdAt(WINDOW_START.plusSeconds(120))
+                .publishedAt(WINDOW_START.plusSeconds(121))
+                .build();
+        OutboxEvent badUuid = OutboxEvent.builder()
+                .id(UUID.randomUUID())
+                .topic("workorder.events.v1")
+                .recordKey("bad-uuid")
+                .payload("{\"eventId\":\"not-a-uuid\",\"eventType\":\"x.y\"}")
+                .createdAt(WINDOW_START.plusSeconds(180))
+                .publishedAt(WINDOW_START.plusSeconds(181))
+                .build();
+        when(repository.findByTopicAndPublishedAtIsNotNullAndCreatedAtBetween(anyString(), any(), any()))
+                .thenReturn(List.of(good, badJson, badUuid));
+
+        publisher.publishDueManifest();
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(kafkaTemplate).send(anyString(), anyString(), message.capture());
+        JsonNode manifest = objectMapper.readTree(message.getValue()).path("payload");
+        assertThat(manifest.path("eventCount").intValue()).isEqualTo(1);
+    }
 }

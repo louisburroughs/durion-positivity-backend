@@ -51,4 +51,13 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
     @Query("update OutboxEvent e set e.publishedAt = null, e.attempts = 0, e.lastError = null"
             + " where e.publishedAt is not null and e.createdAt >= :since")
     int markForReplaySince(@Param("since") @NonNull Instant since);
+
+    /**
+     * Bounded variant for manifest-driven drift repair: re-queue only the drifted window instead
+     * of everything since {@code since} (PR #849 review).
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update OutboxEvent e set e.publishedAt = null, e.attempts = 0, e.lastError = null"
+            + " where e.publishedAt is not null and e.createdAt >= :since and e.createdAt < :until")
+    int markForReplayBetween(@Param("since") @NonNull Instant since, @Param("until") @NonNull Instant until);
 }

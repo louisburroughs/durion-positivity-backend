@@ -19,4 +19,13 @@ public interface OutboxReplayService {
      * @return the number of events queued for re-publication
      */
     int replaySince(@NonNull Instant since);
+
+    /**
+     * Mark published outbox events created in {@code [since, until)} for re-publication — the
+     * bounded form used by manifest-driven drift repair, so one drifted window never triggers a
+     * full-history replay.
+     *
+     * @return the number of events queued for re-publication
+     */
+    int replayBetween(@NonNull Instant since, @NonNull Instant until);
 }

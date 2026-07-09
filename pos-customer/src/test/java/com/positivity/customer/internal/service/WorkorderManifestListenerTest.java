@@ -123,6 +123,7 @@ class WorkorderManifestListenerTest {
         JsonNode json = objectMapper.readTree(command.getValue());
         assertThat(json.path("commandType").stringValue()).isEqualTo("workorder.outbox.replay-requested");
         assertThat(json.path("payload").path("since").stringValue()).isEqualTo(WINDOW_START.toString());
+        assertThat(json.path("payload").path("until").stringValue()).isEqualTo(WINDOW_END.toString());
     }
 
     @Test

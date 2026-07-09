@@ -4,11 +4,14 @@ import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import com.positivity.workorder.service.OutboxReplayService;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -39,6 +42,13 @@ public class KafkaCommandListener {
     private static final String COMMAND_ASSIGNMENT_UPDATED = "ASSIGNMENT_UPDATED";
     /** Canonical dotted name normalized to command-type form: WORKORDER_OUTBOX_REPLAY_REQUESTED. */
     private static final String COMMAND_OUTBOX_REPLAY_REQUESTED = "WORKORDER_OUTBOX_REPLAY_REQUESTED";
+
+    /** Covers the sub-millisecond skew between outbox createdAt and the eventId timestamp. */
+    private static final Duration REPLAY_WINDOW_SLACK = Duration.ofSeconds(1);
+
+    /** Replay commands older than this are rejected (PR #849 review — bound repair cost). */
+    @Value("${workorder.outbox.replay.max-lookback:P30D}")
+    private Duration replayMaxLookback;
 
     private final Clock clock;
     private final ObjectMapper objectMapper;
@@ -100,19 +110,43 @@ public class KafkaCommandListener {
 
     private void handleOutboxReplayRequested(@NonNull JsonNode root) {
         JsonNode payloadNode = root.get(PAYLOAD);
-        String since = payloadNode == null ? null : payloadNode.path("since").stringValue(null);
-        if (since == null || since.isBlank()) {
-            log.warn("Ignoring outbox replay command with missing payload.since: {}", root);
+        Instant since = parseInstant(payloadNode, "since");
+        if (since == null) {
+            log.warn("Ignoring outbox replay command with missing/malformed payload.since: {}", root);
             return;
         }
-        Instant sinceInstant;
+        Instant lookbackLimit = Instant.now(clock).minus(replayMaxLookback);
+        if (since.isBefore(lookbackLimit)) {
+            // PR #849 review: a malformed or ancient `since` must not trigger a huge re-emit.
+            log.warn(
+                    "Ignoring outbox replay command: since={} exceeds max lookback {} (limit {})",
+                    since,
+                    replayMaxLookback,
+                    lookbackLimit);
+            return;
+        }
+        Instant until = parseInstant(payloadNode, "until");
+        int queued;
+        if (until != null && until.isAfter(since)) {
+            // Bounded window repair; +/- slack covers createdAt vs eventId-timestamp skew.
+            queued = outboxReplayService.replayBetween(
+                    since.minus(REPLAY_WINDOW_SLACK), until.plus(REPLAY_WINDOW_SLACK));
+        } else {
+            queued = outboxReplayService.replaySince(since.minus(REPLAY_WINDOW_SLACK));
+        }
+        log.info("Outbox replay command processed since={} until={} eventsQueued={}", since, until, queued);
+    }
+
+    private @Nullable Instant parseInstant(@Nullable JsonNode payloadNode, @NonNull String field) {
+        String value = payloadNode == null ? null : payloadNode.path(field).stringValue(null);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
         try {
-            sinceInstant = Instant.parse(since);
+            return Instant.parse(value);
         } catch (Exception e) {
-            log.warn("Ignoring outbox replay command with malformed payload.since={}", since);
-            return;
+            log.warn("Malformed payload.{}={} on outbox replay command", field, value);
+            return null;
         }
-        int queued = outboxReplayService.replaySince(sinceInstant);
-        log.info("Outbox replay command processed since={} eventsQueued={}", sinceInstant, queued);
     }
 }
