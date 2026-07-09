@@ -10,7 +10,6 @@ import com.positivity.accounting.internal.dto.ApplyCreditMemoRequest;
 import com.positivity.accounting.internal.dto.ApplyCreditMemoResponse;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceRequest;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
-import com.positivity.accounting.internal.dto.BillingRuleRefResponse;
 import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.dto.ReversePaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.ReversePaymentApplicationResponse;
@@ -38,31 +37,6 @@ class AccountingClientUriTest {
     private static final UUID WORKORDER_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
 
     // -----------------------------------------------------------------------
-    // CustomerBillingRulesClient
-    // -----------------------------------------------------------------------
-
-    @Test
-    void customerBillingRulesClient_usesEurekaUrl_withAuthHeaders() {
-        RestClient.Builder builder = RestClient.builder();
-        MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
-        RestClient restClient = builder.build();
-
-        CustomerBillingRulesClient client = new CustomerBillingRulesClient(restClient, "customer");
-
-        mockServer
-                .expect(requestTo("http://customer/v1/crm/snapshot/party/" + PARTY_ID + "/billing-rules"))
-                .andExpect(method(HttpMethod.GET))
-                .andExpect(header("X-User", "pos-accounting"))
-                .andExpect(header("X-Authorities", "crm:party:view"))
-                .andRespond(withSuccess(
-                        "{\"poRequired\":false,\"taxExempt\":false,\"currency\":\"USD\"}", MediaType.APPLICATION_JSON));
-
-        BillingRuleRefResponse response = client.getBillingRules(PARTY_ID);
-
-        assertThat(response).isNotNull();
-        mockServer.verify();
-    }
-
     // -----------------------------------------------------------------------
     // InvoiceServiceClient
     // -----------------------------------------------------------------------
