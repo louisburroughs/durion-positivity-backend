@@ -43,5 +43,7 @@ class EventListenerConfigTest {
                 .start();
 
         assertThatCode(() -> config.startKafkaListeners(event)).doesNotThrowAnyException();
+        // The registry start must still have been attempted — fail-open, not skipped.
+        verify(registry).start();
     }
 }
