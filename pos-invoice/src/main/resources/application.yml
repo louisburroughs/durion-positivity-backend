@@ -1,6 +1,12 @@
 spring:
   application:
     name: invoice
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
   jpa:
     hibernate:
       ddl-auto: validate
@@ -74,6 +80,11 @@ billing:
 
 # Event service configuration
 pos:
+  invoice:
+    kafka:
+      # Domain-event publishing (ADR-0044, #842). Off until the broker is provisioned;
+      # flip POS_INVOICE_KAFKA_ENABLED per environment.
+      enabled: ${POS_INVOICE_KAFKA_ENABLED:false}
   events:
     api-secret: ${POS_EVENTS_API_SECRET:}
 

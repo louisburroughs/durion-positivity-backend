@@ -9,21 +9,17 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.accounting.internal.client.InvoiceServiceClient;
-import com.positivity.accounting.internal.client.InvoiceServiceException;
 import com.positivity.accounting.internal.config.CreditMemoGLConfig;
-import com.positivity.accounting.internal.dto.ApplyCreditMemoRequest;
-import com.positivity.accounting.internal.dto.ApplyCreditMemoResponse;
 import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.CreditMemoResponse;
-import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.entity.CreditMemo;
+import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
-import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.service.AccountingPeriodServiceImpl;
 import com.positivity.accounting.internal.service.CreditMemoServiceImpl;
 import com.positivity.accounting.internal.service.GLPostingServiceImpl;
+import com.positivity.accounting.internal.service.InvoiceBalanceCalculator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -53,8 +49,9 @@ import org.springframework.web.server.ResponseStatusException;
  * Tests business logic, validation rules, and error handling
  * for Credit Memo operations (CAP-052).
  *
- * Phase 2.1: Tests updated with mocks for InvoiceServiceClient,
- * GLPostingService, AccountingPeriodService, and CreditMemoGLConfig.
+ * ADR-0044 (#842): invoice state comes from the ext_invoice replica via
+ * InvoiceBalanceCalculator; the balance due is derived from accounting's own
+ * records rather than fetched from pos-invoice.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CreditMemoService Unit Tests")
@@ -68,7 +65,7 @@ class CreditMemoServiceTest {
     private CreditMemoRepository creditMemoRepository;
 
     @Mock
-    private InvoiceServiceClient invoiceServiceClient;
+    private InvoiceBalanceCalculator invoiceBalanceCalculator;
 
     @Mock
     private GLPostingServiceImpl glPostingService;
@@ -90,8 +87,7 @@ class CreditMemoServiceTest {
     private UUID testArAccountId;
     private CreateCreditMemoRequest testRequest;
     private CreditMemo testCreditMemo;
-    private InvoiceDetails testInvoice;
-    private ApplyCreditMemoResponse testInvoiceResponse;
+    private ExtInvoice testInvoice;
 
     @BeforeEach
     void setUp() {
@@ -122,25 +118,9 @@ class CreditMemoServiceTest {
         testCreditMemo.setPriorPeriodAdjustment(false);
         testCreditMemo.setCurrency("USD");
 
-        // Mock invoice details
-        testInvoice = InvoiceDetails.builder()
-                .invoiceId(testInvoiceId)
-                .customerId(testCustomerId)
-                .status(InvoiceStatus.OPEN)
-                .totalAmount(new BigDecimal("110.00"))
-                .balanceDue(new BigDecimal("110.00"))
-                .currency("USD")
-                .invoiceDate(Instant.now(TEST_CLOCK).minusSeconds(86400)) // Yesterday
-                .build();
-
-        // Mock invoice response after CM applied
-        testInvoiceResponse = ApplyCreditMemoResponse.builder()
-                .invoiceId(testInvoiceId)
-                .balanceBefore(new BigDecimal("110.00"))
-                .balanceAfter(new BigDecimal("55.00"))
-                .status(InvoiceStatus.OPEN)
-                .creditMemoApplied(new BigDecimal("55.00"))
-                .build();
+        // Replica row for the invoice (owned by pos-invoice, fed via invoice.events.v1)
+        testInvoice =
+                replicaInvoice("FINALIZED", "110.00", Instant.now(TEST_CLOCK).minusSeconds(86400));
 
         // Mock GL config (lenient - not all tests reach GL posting)
         lenient().when(glConfig.getRevenueAccountId()).thenReturn(testRevenueAccountId);
@@ -156,10 +136,8 @@ class CreditMemoServiceTest {
     @DisplayName("Should create credit memo successfully")
     void testCreateCreditMemo_Success() {
         // Given
-        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
+        stubReplica(testInvoice, "110.00");
         when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(testCreditMemo);
-        when(invoiceServiceClient.applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class)))
-                .thenReturn(testInvoiceResponse);
 
         // When
         CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
@@ -173,6 +151,7 @@ class CreditMemoServiceTest {
         assertThat(response.getTotalAmount()).isEqualByComparingTo("55.00");
         assertThat(response.getReasonCode()).isEqualTo("RETURNED_GOODS");
         assertThat(response.getStatus()).isEqualTo(CreditMemoStatus.POSTED);
+        // balanceAfter = 110.00 - (50.00 + 5.00), derived locally
         assertThat(response.getInvoiceBalanceAfter()).isEqualByComparingTo("55.00");
 
         // Verify entity was saved
@@ -183,6 +162,8 @@ class CreditMemoServiceTest {
         assertThat(saved.getCreditAmount()).isEqualByComparingTo("50.00");
         assertThat(saved.getReasonCode()).isEqualTo("RETURNED_GOODS");
         assertThat(saved.getStatus()).isEqualTo(CreditMemoStatus.POSTED);
+        assertThat(saved.getCustomerId()).isEqualTo(testCustomerId);
+        assertThat(saved.getCurrency()).isEqualTo("USD");
 
         // Verify GL posting was called
         verify(glPostingService)
@@ -196,9 +177,6 @@ class CreditMemoServiceTest {
                         anyString(),
                         eq(false),
                         eq(null));
-
-        // Verify invoice was updated
-        verify(invoiceServiceClient).applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class));
     }
 
     @Test
@@ -220,18 +198,8 @@ class CreditMemoServiceTest {
         savedMemo.setCurrency("USD");
         savedMemo.setPriorPeriodAdjustment(false);
 
-        ApplyCreditMemoResponse partialResponse = ApplyCreditMemoResponse.builder()
-                .invoiceId(testInvoiceId)
-                .balanceBefore(new BigDecimal("110.00"))
-                .balanceAfter(new BigDecimal("82.50"))
-                .status(InvoiceStatus.OPEN)
-                .creditMemoApplied(new BigDecimal("27.50"))
-                .build();
-
-        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
+        stubReplica(testInvoice, "110.00");
         when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(savedMemo);
-        when(invoiceServiceClient.applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class)))
-                .thenReturn(partialResponse);
 
         // When
         CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
@@ -239,6 +207,7 @@ class CreditMemoServiceTest {
         // Then
         assertThat(response.getTaxAmountReversed()).isEqualByComparingTo("2.50");
         assertThat(response.getTotalAmount()).isEqualByComparingTo("27.50");
+        // balanceAfter = 110.00 - 27.50, derived locally
         assertThat(response.getInvoiceBalanceAfter()).isEqualByComparingTo("82.50");
     }
 
@@ -247,7 +216,7 @@ class CreditMemoServiceTest {
     void testCreateCreditMemo_AmountExceedsBalance() {
         // Given - invoice balance is $110.00
         testRequest.setCreditAmount(new BigDecimal("200.00"));
-        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
+        stubReplica(testInvoice, "110.00");
 
         // When / Then
         assertThatThrownBy(() -> service.createCreditMemo(testRequest, "test-user"))
@@ -261,8 +230,6 @@ class CreditMemoServiceTest {
     @DisplayName("Should throw exception when total credit (including tax) exceeds invoice balance")
     void testCreateCreditMemo_TotalAmountWithTaxExceedsBalance() {
         // Given - invoice balance is $110.00
-        // Under old validation, only the creditAmount (without tax) was compared to
-        // balanceDue.
         // With a 10% tax reversal, we need a creditAmount such that:
         // creditAmount + (creditAmount * 0.10) > balanceDue
         // Setting creditAmount to $105.00 gives us:
@@ -270,7 +237,7 @@ class CreditMemoServiceTest {
         // - taxReversed: $10.50 (10% of 105)
         // - total: $115.50, which exceeds the $110.00 balance
         testRequest.setCreditAmount(new BigDecimal("105.00"));
-        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
+        stubReplica(testInvoice, "110.00");
 
         // When / Then
         assertThatThrownBy(() -> service.createCreditMemo(testRequest, "test-user"))
@@ -284,17 +251,8 @@ class CreditMemoServiceTest {
     @Test
     @DisplayName("Should throw exception when invoice has zero remaining balance")
     void testCreateCreditMemo_ZeroRemainingBalance() {
-        // Given - invoice is fully paid (totalAmount = totalPaid, subtotal = 0)
-        testInvoice = InvoiceDetails.builder()
-                .invoiceId(testInvoiceId)
-                .customerId(testCustomerId)
-                .status(InvoiceStatus.PAID_IN_FULL)
-                .totalAmount(new BigDecimal("110.00"))
-                .totalPaid(new BigDecimal("110.00"))
-                .balanceDue(BigDecimal.ZERO)
-                .currency("USD")
-                .build();
-        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
+        // Given - invoice is fully paid (derived balance is zero)
+        stubReplica(testInvoice, "0.00");
 
         // When / Then - should fail fast with 409 before attempting division
         assertThatThrownBy(() -> service.createCreditMemo(testRequest, "test-user"))
@@ -305,66 +263,49 @@ class CreditMemoServiceTest {
     }
 
     @Test
-    @DisplayName("Should throw exception when invoice is voided")
-    void testCreateCreditMemo_VoidedInvoice() {
-        // Given
-        testInvoice = InvoiceDetails.builder()
-                .invoiceId(testInvoiceId)
-                .customerId(testCustomerId)
-                .status(InvoiceStatus.VOIDED)
-                .totalAmount(new BigDecimal("110.00"))
-                .balanceDue(new BigDecimal("110.00"))
-                .currency("USD")
-                .build();
-        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
+    @DisplayName("Should throw exception when invoice is not AR-eligible (DRAFT)")
+    void testCreateCreditMemo_DraftInvoice() {
+        // Given - a DRAFT invoice never entered AR
+        testInvoice = replicaInvoice("DRAFT", "110.00", null);
+        when(invoiceBalanceCalculator.findInvoice(testInvoiceId)).thenReturn(Optional.of(testInvoice));
+        when(invoiceBalanceCalculator.isArEligible(testInvoice)).thenReturn(false);
 
         // When / Then
         assertThatThrownBy(() -> service.createCreditMemo(testRequest, "test-user"))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("VOIDED invoices")
+                .hasMessageContaining("DRAFT invoices")
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
     }
 
     @Test
-    @DisplayName("Should throw exception when invoice service unavailable")
-    void testCreateCreditMemo_InvoiceServiceUnavailable() {
+    @DisplayName("Should throw 404 when invoice is missing from the replica")
+    void testCreateCreditMemo_InvoiceMissingFromReplica() {
         // Given
-        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId))
-                .thenThrow(new InvoiceServiceException("Service unavailable", 503));
+        when(invoiceBalanceCalculator.findInvoice(testInvoiceId)).thenReturn(Optional.empty());
 
         // When / Then
         assertThatThrownBy(() -> service.createCreditMemo(testRequest, "test-user"))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("unavailable")
+                .hasMessageContaining("not found in the invoice replica")
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
-                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+                .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test
     @DisplayName("Should detect and flag prior period adjustment")
     void testCreateCreditMemo_PriorPeriodAdjustment() {
-        // Given - invoice from prior period
+        // Given - invoice finalized in a prior period
         Instant priorPeriodDate = Instant.now(TEST_CLOCK).minusSeconds(2592000); // 30 days ago
-        testInvoice = InvoiceDetails.builder()
-                .invoiceId(testInvoiceId)
-                .customerId(testCustomerId)
-                .status(InvoiceStatus.OPEN)
-                .totalAmount(new BigDecimal("110.00"))
-                .balanceDue(new BigDecimal("110.00"))
-                .currency("USD")
-                .invoiceDate(priorPeriodDate)
-                .build();
+        testInvoice = replicaInvoice("FINALIZED", "110.00", priorPeriodDate);
 
         testCreditMemo.setPriorPeriodAdjustment(true);
         testCreditMemo.setOriginalPeriodId("2026-01");
 
-        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
+        stubReplica(testInvoice, "110.00");
         when(periodService.isPriorPeriod(priorPeriodDate)).thenReturn(true);
         when(periodService.getPeriodIdForDate(priorPeriodDate)).thenReturn("2026-01");
         when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(testCreditMemo);
-        when(invoiceServiceClient.applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class)))
-                .thenReturn(testInvoiceResponse);
 
         // When
         CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
@@ -460,7 +401,7 @@ class CreditMemoServiceTest {
     void testGetCreditMemo_Success() {
         // Given
         when(creditMemoRepository.findById(testCreditMemoId)).thenReturn(Optional.of(testCreditMemo));
-        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
+        stubReplica(testInvoice, "110.00");
 
         // When
         CreditMemoResponse response = service.getCreditMemo(testCreditMemoId);
@@ -472,7 +413,22 @@ class CreditMemoServiceTest {
         assertThat(response.getInvoiceBalanceAfter()).isEqualByComparingTo("110.00");
 
         verify(creditMemoRepository).findById(testCreditMemoId);
-        verify(invoiceServiceClient).getInvoiceDetails(testInvoiceId);
+        verify(invoiceBalanceCalculator).findInvoice(testInvoiceId);
+    }
+
+    @Test
+    @DisplayName("Should return zero balance when the invoice is missing from the replica")
+    void testGetCreditMemo_InvoiceMissingFromReplica() {
+        // Given
+        when(creditMemoRepository.findById(testCreditMemoId)).thenReturn(Optional.of(testCreditMemo));
+        when(invoiceBalanceCalculator.findInvoice(testInvoiceId)).thenReturn(Optional.empty());
+
+        // When
+        CreditMemoResponse response = service.getCreditMemo(testCreditMemoId);
+
+        // Then - balance unavailable but the request does not fail
+        assertThat(response).isNotNull();
+        assertThat(response.getInvoiceBalanceAfter()).isEqualByComparingTo("0");
     }
 
     @Test
@@ -496,9 +452,7 @@ class CreditMemoServiceTest {
         // Given
         String[] reasonCodes = {"RETURNED_GOODS", "PRICING_ERROR", "SERVICE_CREDIT", "BILLING_ERROR", "DAMAGED_GOODS"};
 
-        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
-        when(invoiceServiceClient.applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class)))
-                .thenReturn(testInvoiceResponse);
+        stubReplica(testInvoice, "110.00");
 
         for (String reasonCode : reasonCodes) {
             testRequest.setReasonCode(reasonCode);
@@ -519,15 +473,38 @@ class CreditMemoServiceTest {
         // Given
         testRequest.setJustificationNote(null);
         testCreditMemo.setJustificationNote(null);
-        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
+        stubReplica(testInvoice, "110.00");
         when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(testCreditMemo);
-        when(invoiceServiceClient.applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class)))
-                .thenReturn(testInvoiceResponse);
 
         // When
         CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
 
         // Then
         assertThat(response.getJustificationNote()).isNull();
+    }
+
+    // ========================================
+    // Helper Methods
+    // ========================================
+
+    private ExtInvoice replicaInvoice(String status, String total, Instant finalizedAt) {
+        return ExtInvoice.builder()
+                .invoiceId(testInvoiceId)
+                .workorderId(UUID.fromString("00000000-0000-0000-0000-0000000000ff"))
+                .partyId(testCustomerId.toString())
+                .status(status)
+                .total(new BigDecimal(total))
+                .finalizedAt(finalizedAt)
+                .aggregateVersion(1L)
+                .updatedAt(Instant.now(TEST_CLOCK))
+                .build();
+    }
+
+    private void stubReplica(ExtInvoice invoice, String balanceDue) {
+        lenient()
+                .when(invoiceBalanceCalculator.findInvoice(invoice.getInvoiceId()))
+                .thenReturn(Optional.of(invoice));
+        lenient().when(invoiceBalanceCalculator.isArEligible(invoice)).thenReturn(true);
+        lenient().when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(new BigDecimal(balanceDue));
     }
 }

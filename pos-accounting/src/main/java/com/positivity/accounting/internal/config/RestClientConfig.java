@@ -16,7 +16,7 @@ import org.springframework.web.client.RestClient;
  *
  * **Usage:**
  * - Injected into service classes for making REST calls
- * - Used by InvoiceServiceClient for Invoice service integration
+ * - Used by WorkorderInvoiceClient for invoice regeneration through pos-workorder
  * - Other services can create their own RestClient beans using the same generic
  * timeout properties
  *

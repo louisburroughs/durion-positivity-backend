@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.config.InvoiceEventPublisher;
 import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
@@ -25,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Story #13 — Controlled invoice finalization.
@@ -70,16 +72,19 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     private final InvoiceRepository invoiceRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final ElevationTokenService elevationTokenService;
+    private final InvoiceEventPublisher invoiceEventPublisher;
 
     public InvoiceFinalizationServiceImpl(
             InvoiceRepository invoiceRepository,
             ApplicationEventPublisher eventPublisher,
             Clock clock,
-            ElevationTokenService elevationTokenService) {
+            ElevationTokenService elevationTokenService,
+            InvoiceEventPublisher invoiceEventPublisher) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.eventPublisher = eventPublisher;
         this.elevationTokenService = elevationTokenService;
+        this.invoiceEventPublisher = invoiceEventPublisher;
     }
 
     /**
@@ -129,6 +134,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
      */
     @Override
     @NonNull
+    @Transactional
     public InvoiceDetailsResponse completeInvoice(@NonNull UUID invoiceId, @NonNull FinalizationRequest request) {
         // AC4: only DRAFT invoices are eligible for finalization.
         // Reject any non-DRAFT state (e.g., FINALIZED, POSTED, ERROR) with conflict.
@@ -160,6 +166,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             invoice.setFinalizedAt(now);
             invoice.setFinalizedBy(finalizedBy);
             Invoice saved = invoiceRepository.save(invoice);
+            invoiceEventPublisher.publishInvoiceUpdated(saved);
 
             // AC5: Emit async accounting event
             publishFinalizedEvent(saved.getId(), saved.getWorkorderId(), finalizedBy, now, saved.getTotal());
@@ -176,6 +183,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
      */
     @Override
     @NonNull
+    @Transactional
     public InvoiceDetailsResponse revert(
             @NonNull UUID invoiceId, @NonNull String managerApprovalCode, @NonNull String reason) {
         // M6: Approval code must be supplied
@@ -236,6 +244,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         invoice.setReversionReason(reason);
         invoice.setRevertedBy(revertedBy);
         Invoice saved = invoiceRepository.save(invoice);
+        invoiceEventPublisher.publishInvoiceUpdated(saved);
 
         return toDetailsResponse(saved);
     }
@@ -290,14 +299,13 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         // Above the cap, a verified manager-approval elevation token is mandatory.
         String approvalCode = request.getManagerApprovalCode();
         if (approvalCode == null || approvalCode.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Manager approval code required: cannot finalize invoices exceeding $" + SERVICE_ADVISOR_LIMIT
-                            + " without a manager approval code");
+            throw new IllegalArgumentException("Manager approval code required: cannot finalize invoices exceeding $"
+                    + SERVICE_ADVISOR_LIMIT + " without a manager approval code");
         }
         UUID approvingManager = elevationTokenService
                 .verify(approvalCode, invoiceId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Invalid or expired manager approval code for this invoice"));
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Invalid or expired manager approval code for this invoice"));
 
         // M4 + ADR-0018: Audit the manager approval override. The approving manager's
         // person id is recorded UNMASKED — it is the non-repudiation value the audit

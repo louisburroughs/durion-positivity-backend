@@ -376,7 +376,8 @@ Module-to-module communication flows over Kafka domain topics (`{domain}.events.
 
 `docker-compose up -d kafka` starts a single-node KRaft broker (`apache/kafka`). Services reach it
 at `kafka:29092` inside the compose network (host tools at `localhost:9092`). Kafka features remain
-opt-in per module (e.g. `WORKORDER_KAFKA_ENABLED=true`, `pos.customer.kafka.enabled=true`) until
+opt-in per module (e.g. `WORKORDER_KAFKA_ENABLED=true`, `pos.customer.kafka.enabled=true`,
+`POS_INVOICE_KAFKA_ENABLED=true`, `pos.accounting.kafka.enabled=true`) until
 the Phase 0.4 tier-1 flip.
 
 ### Transactional outbox (producers)

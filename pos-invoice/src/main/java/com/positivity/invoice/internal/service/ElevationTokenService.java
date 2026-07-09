@@ -133,5 +133,6 @@ public class ElevationTokenService {
     }
 
     /** A freshly minted token and its expiry. */
-    public record MintedToken(@NonNull String token, @NonNull Instant expiresAt) {}
+    public record MintedToken(
+            @NonNull String token, @NonNull Instant expiresAt) {}
 }

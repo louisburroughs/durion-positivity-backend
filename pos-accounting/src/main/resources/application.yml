@@ -47,8 +47,6 @@ eureka:
 
 # Cross-service configuration
 pos:
-  invoice:
-    service-id: invoice
   workorder:
     service-id: workorder
   # RestClient timeouts configured via pos.restclient.connect.timeout and pos.restclient.read.timeout
@@ -65,6 +63,7 @@ pos:
       enabled: ${POS_ACCOUNTING_KAFKA_ENABLED:false}
       payments-topic: ${POS_ACCOUNTING_KAFKA_PAYMENTS_TOPIC:payment.cleared.v1}
       customer-events-topic: ${POS_ACCOUNTING_KAFKA_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
+      invoice-events-topic: ${POS_ACCOUNTING_KAFKA_INVOICE_EVENTS_TOPIC:invoice.events.v1}
       consumer-group: ${POS_ACCOUNTING_KAFKA_CONSUMER_GROUP:${spring.application.name}-payments}
 
 # Payment Gateway Configuration

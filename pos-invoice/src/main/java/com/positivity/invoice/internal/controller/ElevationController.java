@@ -49,14 +49,14 @@ public class ElevationController {
     @PostMapping("/elevate")
     @Operation(
             summary = "Mint a manager-approval elevation token",
-            description = "Verifies the named manager (by employee number) holds invoice:finalize:override and mints"
-                    + " a short-lived token scoped to the given invoice, returned as the managerApprovalCode for finalize.")
+            description =
+                    "Verifies the named manager (by employee number) holds invoice:finalize:override and mints"
+                            + " a short-lived token scoped to the given invoice, returned as the managerApprovalCode for finalize.")
     @ApiResponse(responseCode = "200", description = "Elevation token minted")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "401", description = "Manager approval denied")
     public ResponseEntity<ElevateResponse> elevate(@Valid @RequestBody @NonNull ElevateRequest request) {
-        ElevateResponse response =
-                elevationService.elevate(request.getManagerEmployeeNumber(), request.getInvoiceId());
+        ElevateResponse response = elevationService.elevate(request.getManagerEmployeeNumber(), request.getInvoiceId());
         return ResponseEntity.ok(response);
     }
 

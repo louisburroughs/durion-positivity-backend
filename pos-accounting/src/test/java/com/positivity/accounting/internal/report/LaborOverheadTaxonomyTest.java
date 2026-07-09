@@ -27,7 +27,7 @@ class LaborOverheadTaxonomyTest {
         List<String> leafCodes = LaborOverheadTaxonomy.leafCodes();
 
         assertThat(leafCodes)
-            .contains("1.1.1", "1.1.2", "2.11.4")
+                .contains("1.1.1", "1.1.2", "2.11.4")
                 .doesNotContain(
                         "1.1",
                         "1.3",
@@ -72,14 +72,16 @@ class LaborOverheadTaxonomyTest {
         assertThat(taxesAndBenefits.costType()).isNull();
         assertThat(taxesAndBenefits.childCodes()).containsExactly("1.3.1", "1.3.2", "1.3.3", "1.3.4", "1.3.5", "1.3.6");
 
-        LaborOverheadTaxonomy.LineDef totalOverhead = LaborOverheadTaxonomy.byCode(LaborOverheadTaxonomy.TOTAL_OVERHEAD);
+        LaborOverheadTaxonomy.LineDef totalOverhead =
+                LaborOverheadTaxonomy.byCode(LaborOverheadTaxonomy.TOTAL_OVERHEAD);
         assertThat(totalOverhead).isNotNull();
         assertThat(totalOverhead.level()).isEqualTo(1);
         assertThat(totalOverhead.parentCode()).isNull();
         assertThat(totalOverhead.isSubtotal()).isTrue();
         assertThat(totalOverhead.childCodes())
                 .containsExactly(
-                        "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", "2.11", "2.12", "2.13", "2.14", "2.15");
+                        "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", "2.11", "2.12", "2.13",
+                        "2.14", "2.15");
     }
 
     @Test
