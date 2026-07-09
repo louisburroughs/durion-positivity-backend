@@ -3,10 +3,12 @@ package com.positivity.workorder.internal.config;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import com.positivity.workorder.service.OutboxReplayService;
+import com.positivity.workorder.service.WorkorderInvoiceService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -29,6 +31,9 @@ import tools.jackson.databind.ObjectMapper;
  * <li>{@code workorder.outbox.replay-requested} — consumer-initiated drift repair (ADR-0044 §4):
  * re-queues published outbox events created at or after {@code payload.since} for
  * re-publication; consumers dedupe by eventId so replay is idempotent.</li>
+ * <li>{@code workorder.invoice.regenerate-requested} — async invoice regeneration (ADR-0044 R4,
+ * #842): generates the invoice draft for {@code payload.workorderId}; idempotent per workorder,
+ * and the result flows back to callers via {@code invoice.events.v1}.</li>
  * </ul>
  * </p>
  */
@@ -43,6 +48,9 @@ public class KafkaCommandListener {
     /** Canonical dotted name normalized to command-type form: WORKORDER_OUTBOX_REPLAY_REQUESTED. */
     private static final String COMMAND_OUTBOX_REPLAY_REQUESTED = "WORKORDER_OUTBOX_REPLAY_REQUESTED";
 
+    /** Canonical dotted name normalized: workorder.invoice.regenerate-requested (#842). */
+    private static final String COMMAND_INVOICE_REGENERATE_REQUESTED = "WORKORDER_INVOICE_REGENERATE_REQUESTED";
+
     /** Covers the sub-millisecond skew between outbox createdAt and the eventId timestamp. */
     private static final Duration REPLAY_WINDOW_SLACK = Duration.ofSeconds(1);
 
@@ -54,6 +62,7 @@ public class KafkaCommandListener {
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final OutboxReplayService outboxReplayService;
+    private final WorkorderInvoiceService workorderInvoiceService;
 
     @KafkaListener(
             topics = "${workorder.kafka.commands-topic:workorder.commands.v1}",
@@ -77,6 +86,11 @@ public class KafkaCommandListener {
 
             if (COMMAND_OUTBOX_REPLAY_REQUESTED.equals(commandType)) {
                 handleOutboxReplayRequested(root);
+                return;
+            }
+
+            if (COMMAND_INVOICE_REGENERATE_REQUESTED.equals(commandType)) {
+                handleInvoiceRegenerateRequested(root);
                 return;
             }
 
@@ -105,6 +119,33 @@ public class KafkaCommandListener {
             log.info("Published AssignmentUpdatedEvent from Kafka for workorderId={}", event.getWorkorderId());
         } catch (Exception e) {
             log.error("Failed to process Kafka command message: {}", message, e);
+        }
+    }
+
+    private void handleInvoiceRegenerateRequested(@NonNull JsonNode root) {
+        JsonNode payloadNode = root.get(PAYLOAD);
+        String rawWorkorderId =
+                payloadNode == null ? null : payloadNode.path("workorderId").stringValue(null);
+        UUID workorderId;
+        try {
+            workorderId = UUID.fromString(rawWorkorderId);
+        } catch (Exception e) {
+            log.warn("Ignoring invoice regeneration command with missing/malformed workorderId: {}", root);
+            return;
+        }
+        String idempotencyKey = payloadNode.path("idempotencyKey").stringValue(null);
+        try {
+            // Idempotent per workorder: generateInvoice returns the existing invoice on replay,
+            // so command redelivery is harmless. Business failures (workorder missing or not
+            // COMPLETED) are permanent — log and drop rather than poison the partition.
+            var response = workorderInvoiceService.generateInvoice(workorderId, idempotencyKey);
+            log.info(
+                    "Invoice regeneration command processed workorderId={} invoiceId={} status={}",
+                    workorderId,
+                    response.getInvoiceId(),
+                    response.getStatus());
+        } catch (Exception e) {
+            log.error("Invoice regeneration command failed for workorderId={}", workorderId, e);
         }
     }
 
