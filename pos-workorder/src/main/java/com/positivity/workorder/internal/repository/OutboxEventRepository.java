@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.repository;
 import com.positivity.workorder.internal.entity.OutboxEvent;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,6 +16,22 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
     /** Oldest unpublished rows first — UUIDv7 ids are time-ordered, preserving publish order. */
     @NonNull
     List<OutboxEvent> findTop100ByPublishedAtIsNullOrderByIdAsc();
+
+    /** Unpublished backlog size — exposed as the {@code workorder.outbox.pending} gauge. */
+    long countByPublishedAtIsNull();
+
+    /** Oldest unpublished row (drain head) — drives the {@code workorder.outbox.oldest.age} gauge. */
+    @NonNull
+    Optional<OutboxEvent> findFirstByPublishedAtIsNullOrderByIdAsc();
+
+    /**
+     * Purge published rows older than the retention cutoff (issue #838: 90 days). Unpublished rows
+     * are never deleted ({@code publishedAt < cutoff} excludes NULL). Replay of a purged window is
+     * no longer possible — see the retention note in OPERATIONS_RUNBOOK.md.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from OutboxEvent e where e.publishedAt is not null and e.publishedAt < :cutoff")
+    int purgePublishedBefore(@Param("cutoff") @NonNull Instant cutoff);
 
     /**
      * Published rows of one topic whose {@code createdAt} falls in the given range, for

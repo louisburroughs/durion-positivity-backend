@@ -391,6 +391,32 @@ publisher drains to Kafka (at-least-once). Operational signals:
 - The publisher halts its batch at the first failure to preserve order — one poisoned/oversized
   record blocks the drain; inspect the oldest unpublished row first.
 
+### Dashboards and alerts (#838)
+
+Grafana dashboard **"Domain Events (ADR-0044)"** (provisioned from
+`observability/grafana/provisioning/dashboards/json/domain-events.json`) charts outbox
+backlog/age, publish/failure rates, consumer lag, DLQ depth, replica drift, and manifest activity.
+`kafka-exporter` (compose service, :9308) supplies topic depth and consumer-group lag.
+
+Provisioned alert thresholds (dashboard-only delivery in alpha):
+
+| Signal | Warn | Critical |
+|---|---|---|
+| Oldest unpublished outbox row | > 5 min | > 15 min |
+| Consumer group lag | > 100 records for 5 min | — |
+| DLQ message | any | — |
+| `replica_drift_total` | any increase | — |
+| Manifest silence (`workorder.manifest.v1`) | > 2 h (2× window) | — |
+
+### Retention (#838)
+
+- Kafka topics (delete policy, provisioned by the `kafka-topic-init` compose job): `*.events.v1`
+  and `*.commands.v1` 7 d; `*.manifest.v1` 3 d; `*.dlq` 30 d. 1 partition per topic on the
+  single-node broker.
+- `event_outbox` table: published rows are purged after **90 days** (`OutboxPurgeJob`, nightly,
+  `workorder.outbox.retention-days`). Replay history equals this retention — a window older than
+  90 days can no longer be re-emitted. Unpublished rows are never purged.
+
 ### Consumers: retry and DLQ
 
 Consumers retry failed records with exponential backoff, then dead-letter to `{topic}.dlq`

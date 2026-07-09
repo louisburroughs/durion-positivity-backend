@@ -150,6 +150,52 @@ services:
     networks:
       - pos-network
 
+  kafka-exporter:
+    # #838: topic depth (DLQ), consumer lag, and manifest-topic activity for Prometheus.
+    image: danielqsj/kafka-exporter:v1.8.0
+    container_name: kafka-exporter-positivity
+    command: [ "--kafka.server=kafka:29092" ]
+    ports:
+      - "127.0.0.1:9308:9308"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    logging: *logging
+    networks:
+      - pos-network
+
+  kafka-topic-init:
+    # #838 Q6/Q7/Q9: provision domain-event topics with delete retention, 1 partition.
+    image: apache/kafka:3.9.0
+    container_name: kafka-topic-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: [ "/bin/bash", "-c" ]
+    command:
+      - |
+        set -e
+        declare -A topics=(
+          ["workorder.events.v1"]=604800000
+          ["workorder.commands.v1"]=604800000
+          ["workorder.manifest.v1"]=259200000
+          ["workorder.events.v1.dlq"]=2592000000
+          ["workorder.manifest.v1.dlq"]=2592000000
+          ["payment.cleared.v1"]=604800000
+        )
+        for t in "$${!topics[@]}"; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists \
+            --topic "$$t" --partitions 1 --replication-factor 1 || true
+          /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:29092 --alter \
+            --entity-type topics --entity-name "$$t" \
+            --add-config "retention.ms=$${topics[$$t]},cleanup.policy=delete"
+        done
+        echo "topic init complete"
+    restart: "no"
+    logging: *logging
+    networks:
+      - pos-network
+
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
