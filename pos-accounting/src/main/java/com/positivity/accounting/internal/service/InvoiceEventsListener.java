@@ -85,7 +85,10 @@ public class InvoiceEventsListener {
         UUID invoiceId = payload.invoiceId();
 
         ExtInvoice existing = extInvoiceRepository.findById(invoiceId).orElse(null);
-        if (existing != null && existing.getAggregateVersion() >= aggregateVersion && aggregateVersion > 0) {
+        // Versions are strictly increasing per invoice (committed JPA @Version, flushed before
+        // emit), so version 0 (the create) participates in the comparison too — a late or
+        // replayed version-0 event must never overwrite a newer replica row (PR #850 review).
+        if (existing != null && existing.getAggregateVersion() >= aggregateVersion) {
             log.debug(
                     "Skipping stale invoice event invoiceId={} eventVersion={} replicaVersion={}",
                     invoiceId,

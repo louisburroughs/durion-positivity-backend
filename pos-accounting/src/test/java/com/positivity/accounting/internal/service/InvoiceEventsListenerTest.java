@@ -98,6 +98,25 @@ class InvoiceEventsListenerTest {
     }
 
     @Test
+    @DisplayName("Skips a replayed version-0 event when the replica is already newer (PR #850 review)")
+    void skipsReplayedVersionZeroEvent() {
+        when(processedEvents.existsById("e-zero")).thenReturn(false);
+        when(replica.findById(INVOICE_ID))
+                .thenReturn(Optional.of(ExtInvoice.builder()
+                        .invoiceId(INVOICE_ID)
+                        .workorderId(WORKORDER_ID)
+                        .status("POSTED")
+                        .aggregateVersion(5L)
+                        .updatedAt(Instant.now(TEST_CLOCK))
+                        .build()));
+
+        listener.onInvoiceEvent(event("e-zero", 0));
+
+        verify(replica, never()).save(any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
     @DisplayName("Ignores other event types")
     void ignoresOtherEventTypes() {
         listener.onInvoiceEvent("""

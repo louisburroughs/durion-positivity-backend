@@ -4,6 +4,7 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
 import com.positivity.invoice.internal.entity.Invoice;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Component;
 public class InvoiceEventPublisher {
 
     private final Clock clock;
+    private final EntityManager entityManager;
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
 
     public void publishInvoiceUpdated(@NonNull Invoice invoice) {
@@ -32,6 +34,10 @@ public class InvoiceEventPublisher {
         if (writer == null) {
             return;
         }
+        // Flush so the JPA @Version already carries the committed value: versions are then
+        // strictly increasing per invoice (create=0, updates=1,2,...), which the consumer's
+        // stale-event guard relies on (PR #850 review).
+        entityManager.flush();
         InvoiceUpdatedV1 payload = new InvoiceUpdatedV1(
                 invoice.getId(),
                 invoice.getInvoiceNumber(),
@@ -50,8 +56,6 @@ public class InvoiceEventPublisher {
                 InvoiceUpdatedV1.EVENT_TYPE,
                 InvoiceUpdatedV1.SCHEMA_VERSION,
                 invoice.getId(),
-                // Pre-flush JPA @Version: lags the committed value by one but stays monotonic,
-                // which is all the consumer's stale-event check needs.
                 invoice.getVersion() == null ? 0L : invoice.getVersion().longValue(),
                 "pos-invoice",
                 null,
