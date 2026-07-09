@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.repository;
 import com.positivity.workorder.internal.entity.OutboxEvent;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,6 +17,32 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
     @NonNull
     List<OutboxEvent> findTop100ByPublishedAtIsNullOrderByIdAsc();
 
+    /** Unpublished backlog size — exposed as the {@code workorder.outbox.pending} gauge. */
+    long countByPublishedAtIsNull();
+
+    /** Oldest unpublished row (drain head) — drives the {@code workorder.outbox.oldest.age} gauge. */
+    @NonNull
+    Optional<OutboxEvent> findFirstByPublishedAtIsNullOrderByIdAsc();
+
+    /**
+     * Purge published rows older than the retention cutoff (issue #838: 90 days). Unpublished rows
+     * are never deleted ({@code publishedAt < cutoff} excludes NULL). Replay of a purged window is
+     * no longer possible — see the retention note in OPERATIONS_RUNBOOK.md.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from OutboxEvent e where e.publishedAt is not null and e.publishedAt < :cutoff")
+    int purgePublishedBefore(@Param("cutoff") @NonNull Instant cutoff);
+
+    /**
+     * Published rows of one topic whose {@code createdAt} falls in the given range, for
+     * reconciliation-manifest computation (ADR-0044 §4). Callers pass the window padded by a small
+     * slack and re-filter precisely by the eventId's UUIDv7 timestamp, since {@code createdAt} and
+     * the payload's eventId are stamped microseconds apart.
+     */
+    @NonNull
+    List<OutboxEvent> findByTopicAndPublishedAtIsNotNullAndCreatedAtBetween(
+            @NonNull String topic, @NonNull Instant from, @NonNull Instant to);
+
     /**
      * Mark already-published events created at or after {@code since} for re-publication
      * (ADR-0044 backfill/drift repair). The publisher re-sends them; consumers dedupe by eventId.
@@ -24,4 +51,13 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
     @Query("update OutboxEvent e set e.publishedAt = null, e.attempts = 0, e.lastError = null"
             + " where e.publishedAt is not null and e.createdAt >= :since")
     int markForReplaySince(@Param("since") @NonNull Instant since);
+
+    /**
+     * Bounded variant for manifest-driven drift repair: re-queue only the drifted window instead
+     * of everything since {@code since} (PR #849 review).
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update OutboxEvent e set e.publishedAt = null, e.attempts = 0, e.lastError = null"
+            + " where e.publishedAt is not null and e.createdAt >= :since and e.createdAt < :until")
+    int markForReplayBetween(@Param("since") @NonNull Instant since, @Param("until") @NonNull Instant until);
 }

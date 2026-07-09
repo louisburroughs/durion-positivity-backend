@@ -20,6 +20,7 @@ public final class DomainTopics {
 
     public static final String WORKORDER_EVENTS_V1 = "workorder.events.v1";
     public static final String WORKORDER_COMMANDS_V1 = "workorder.commands.v1";
+    public static final String WORKORDER_MANIFEST_V1 = "workorder.manifest.v1";
 
     private DomainTopics() {}
 
@@ -31,6 +32,15 @@ public final class DomainTopics {
     /** Command topic for the given domain, version 1: {@code {domain}.commands.v1}. */
     public static @NonNull String commands(@NonNull String domain) {
         return validated(domain) + ".commands.v1";
+    }
+
+    /**
+     * Reconciliation-manifest topic for the given domain, version 1: {@code {domain}.manifest.v1}
+     * (ADR-0044 §4). Kept separate from the fact topic so consumers' business handlers never see
+     * manifests.
+     */
+    public static @NonNull String manifest(@NonNull String domain) {
+        return validated(domain) + ".manifest.v1";
     }
 
     /** Dead-letter topic for a fact or command topic: {@code {topic}.dlq} (ADR-0044 §4). */

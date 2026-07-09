@@ -1,0 +1,154 @@
+# Grafana-provisioned alert rules for the ADR-0044 domain-event channel (issue #838 Q5).
+# Dashboard-only delivery for alpha (no contact points configured beyond the default).
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: domain-events
+    folder: Durion POS
+    interval: 1m
+    rules:
+      - uid: outbox-oldest-warn
+        title: Outbox drain lagging (oldest unpublished > 5m)
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: Oldest unpublished event_outbox row is older than 5 minutes — drain is slow or stuck.
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: max(workorder_outbox_oldest_age_seconds)
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [300] }
+      - uid: outbox-oldest-critical
+        title: Outbox drain stuck (oldest unpublished > 15m)
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: Oldest unpublished event_outbox row is older than 15 minutes — inspect attempts/last_error on the head row.
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: max(workorder_outbox_oldest_age_seconds)
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [900] }
+      - uid: consumer-lag-warn
+        title: Kafka consumer lag > 100 for 5m
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: A consumer group is more than 100 records behind for over 5 minutes.
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: max(sum by (consumergroup) (kafka_consumergroup_lag))
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [100] }
+      - uid: dlq-message-warn
+        title: DLQ received a message
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: A record was dead-lettered in the last 15 minutes — every DLQ message warrants a look (see OPERATIONS_RUNBOOK.md).
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: sum(increase(kafka_topic_partition_current_offset{topic=~".*\\.dlq"}[15m]))
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+      - uid: replica-drift-warn
+        title: Replica drift detected
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: A reconciliation manifest mismatched a replica in the last hour; a replay was auto-requested — verify it healed.
+        data:
+          - refId: A
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: sum(increase(replica_drift_total[1h]))
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+      - uid: manifest-silent-warn
+        title: Manifest publisher silent > 2h
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: No manifest published to workorder.manifest.v1 in 2 hours (2x window) — the owner's manifest job is down.
+        data:
+          - refId: A
+            relativeTimeRange: { from: 7200, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: sum(increase(kafka_topic_partition_current_offset{topic="workorder.manifest.v1"}[2h]))
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
