@@ -37,8 +37,19 @@ public class EventListenerConfig {
     public void startKafkaListeners(ApplicationReadyEvent event) {
         KafkaListenerEndpointRegistry registry =
                 event.getApplicationContext().getBean(KafkaListenerEndpointRegistry.class);
-        registry.start();
-        log.info("Kafka listeners started after application ready");
+        try {
+            registry.start();
+            log.info("Kafka listeners started after application ready");
+        } catch (Exception e) {
+            // An unresolvable/unavailable broker (e.g. bootstrap servers pointing at a Kafka
+            // container that is not deployed yet) must not kill the service — the REST API works
+            // without event ingestion. Consumer construction fails fast on unresolvable DNS, so
+            // this is reachable, not just theoretical.
+            log.error(
+                    "Kafka listeners could not be started; continuing without event ingestion. "
+                            + "Check spring.kafka.bootstrap-servers / broker availability.",
+                    e);
+        }
     }
 
     /**
