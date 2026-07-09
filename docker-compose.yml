@@ -141,6 +141,11 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # Persist log segments so a container recreate (alpha deploys use
+      # --force-recreate) does not wipe topics, offsets, and consumer state.
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka-data:/var/lib/kafka/data
     healthcheck:
       test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1" ]
       interval: 10s
@@ -180,7 +185,12 @@ services:
           ["workorder.commands.v1"]=604800000
           ["workorder.manifest.v1"]=259200000
           ["workorder.events.v1.dlq"]=2592000000
+          ["workorder.commands.v1.dlq"]=2592000000
           ["workorder.manifest.v1.dlq"]=2592000000
+          ["customer.events.v1"]=604800000
+          ["customer.events.v1.dlq"]=2592000000
+          ["invoice.events.v1"]=604800000
+          ["invoice.events.v1.dlq"]=2592000000
           ["payment.cleared.v1"]=604800000
         )
         for t in "$${!topics[@]}"; do
@@ -283,9 +293,6 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
-      # Domain events (ADR-0044, #842) — opt-in until the tier-1 flip
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
-      POS_INVOICE_KAFKA_ENABLED: ${POS_INVOICE_KAFKA_ENABLED:-false}
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -536,6 +543,11 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
+      # Domain events (ADR-0044, #842) — opt-in until the tier-1 flip.
+      # application.yml binds spring.kafka.bootstrap-servers from KAFKA_BOOTSTRAP_SERVERS,
+      # so that single variable is the source of truth here.
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      POS_INVOICE_KAFKA_ENABLED: ${POS_INVOICE_KAFKA_ENABLED:-false}
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -1070,6 +1082,8 @@ networks:
 
 # Docker Volumes for Observability Data Persistence
 volumes:
+  kafka-data:
+    driver: local
   prometheus-data:
     driver: local
   grafana-data:

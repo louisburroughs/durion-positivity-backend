@@ -64,6 +64,11 @@ OBSERVABILITY_SERVICES=(
   grafana
 )
 
+KAFKA_SERVICES=(
+  kafka
+  kafka-exporter
+)
+
 BACKEND_SERVICES=(
   eureka-server
   pos-accounting
@@ -148,6 +153,21 @@ docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${OBSERVABILITY_SERVICES[@]}"
 
 echo "Starting observability services: ${OBSERVABILITY_SERVICES[*]}"
 docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate "${OBSERVABILITY_SERVICES[@]}"
+
+# Kafka domain-event backbone (ADR-0044, #838). Broker data lives on the
+# kafka-data volume, so --force-recreate is safe. --wait blocks on the
+# compose healthcheck before topics are provisioned.
+echo "Pulling Kafka services: ${KAFKA_SERVICES[*]}"
+docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${KAFKA_SERVICES[@]}" kafka-topic-init
+
+echo "Starting Kafka broker"
+docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate --wait kafka
+
+echo "Provisioning Kafka topics"
+docker compose "${COMPOSE_ARGS[@]}" run --rm --no-deps kafka-topic-init
+
+echo "Starting Kafka exporter"
+docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate kafka-exporter
 
 echo "Pulling backend services: ${BACKEND_SERVICES[*]}"
 docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${BACKEND_SERVICES[@]}"
