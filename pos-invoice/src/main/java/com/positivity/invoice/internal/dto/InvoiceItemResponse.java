@@ -34,10 +34,7 @@ public class InvoiceItemResponse {
             requiredMode = NOT_REQUIRED)
     private UUID workorderItemId;
 
-    @Schema(
-            description = "Line item type (e.g. PART, LABOR, FEE, TAX)",
-            example = "LABOR",
-            requiredMode = NOT_REQUIRED)
+    @Schema(description = "Line item type (e.g. PART, LABOR, FEE, TAX)", example = "LABOR", requiredMode = NOT_REQUIRED)
     private String type;
 
     @Nullable

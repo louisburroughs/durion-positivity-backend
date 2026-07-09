@@ -32,6 +32,9 @@ class InvoiceFinalizedEventHandlerTest {
     @Mock
     private InvoiceRepository invoiceRepository;
 
+    @Mock
+    private com.positivity.invoice.internal.config.InvoiceEventPublisher invoiceEventPublisher;
+
     @InjectMocks
     private InvoiceFinalizedEventHandler eventHandler;
 

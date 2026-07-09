@@ -3,6 +3,7 @@ package com.positivity.customer.internal.service;
 import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.client.VehicleInventoryClient;
 import com.positivity.customer.internal.config.CacheConfig;
+import com.positivity.customer.internal.config.OutboxEventWriter;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateCommercialAccountResponse;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
@@ -35,6 +36,9 @@ import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PartyService;
+import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.domainevents.DomainTopics;
+import com.positivity.domainevents.customer.BillingRulesUpdatedV1;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
@@ -82,6 +86,9 @@ public class PartyServiceImpl implements PartyService {
     private final CacheManager cacheManager;
     private final PeopleClient peopleClient;
     private final VehicleInventoryClient vehicleInventoryClient;
+
+    /** Present only when pos.customer.kafka.enabled=true (ADR-0044 producer, issue #842). */
+    private final org.springframework.beans.factory.ObjectProvider<OutboxEventWriter> outboxEventWriter;
 
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_INSTANT.withLocale(Locale.US);
 
@@ -832,7 +839,47 @@ public class PartyServiceImpl implements PartyService {
         embedded.setDiscountPolicyRef(request.getDiscountPolicyRef());
         party.setBillingRules(embedded);
         partyRepository.save(party);
+        publishBillingRulesUpdated(partyId, embedded);
         return mapToBillingRuleRef(embedded);
+    }
+
+    /**
+     * ADR-0044 (issue #842): billing-rule changes are facts owned by this module; consumers
+     * (pos-accounting) maintain read-only replicas from customer.events.v1. Written through the
+     * outbox inside this transaction — no event on rollback. The envelope's aggregateVersion uses
+     * the update timestamp (epoch millis): CommercialParty has no optimistic-lock version, and
+     * millisecond ordering is sufficient for replica staleness checks on this low-frequency data.
+     */
+    private void publishBillingRulesUpdated(UUID partyId, BillingRulesEmbeddable embedded) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        BillingRulesUpdatedV1 payload = new BillingRulesUpdatedV1(
+                partyId,
+                embedded.getPoRequired(),
+                embedded.getTaxExempt(),
+                embedded.getCreditHold(),
+                embedded.getAutoPayEnabled(),
+                embedded.getPaymentTerms(),
+                embedded.getCreditLimit(),
+                embedded.getCurrency(),
+                embedded.getInvoiceDeliveryMethod() == null
+                        ? null
+                        : embedded.getInvoiceDeliveryMethod().name(),
+                embedded.getBillingAddressId(),
+                embedded.getDiscountPolicyRef());
+        DomainEventEnvelope<BillingRulesUpdatedV1> envelope = DomainEventEnvelope.of(
+                BillingRulesUpdatedV1.EVENT_TYPE,
+                1,
+                partyId,
+                java.time.Instant.now(clock).toEpochMilli(),
+                "pos-customer",
+                null,
+                null,
+                payload,
+                clock);
+        writer.publish(DomainTopics.events("customer"), envelope);
     }
 
     private BillingRuleRef mapToBillingRuleRef(BillingRulesEmbeddable embedded) {

@@ -58,6 +58,9 @@ class InvoiceServiceImplTest {
     @Mock
     private WorkorderReferenceClient workorderReferenceClient;
 
+    @Mock
+    private com.positivity.invoice.internal.config.InvoiceEventPublisher invoiceEventPublisher;
+
     @InjectMocks
     private InvoiceServiceImpl invoiceService;
 
@@ -127,12 +130,15 @@ class InvoiceServiceImplTest {
         draftInvoice.addItem(labor);
 
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
-        when(workorderReferenceClient.resolveNumbers(any())).thenReturn(java.util.Map.of(workorderId, "WO-2026-000045"));
+        when(workorderReferenceClient.resolveNumbers(any()))
+                .thenReturn(java.util.Map.of(workorderId, "WO-2026-000045"));
 
         InvoiceDetailsResponse result = invoiceService.getInvoice(invoiceId);
 
         assertThat(result.getWorkorderNumber()).isEqualTo("WO-2026-000045");
-        assertThat(result.getItems()).singleElement().satisfies(item -> assertThat(item.getType()).isEqualTo("LABOR"));
+        assertThat(result.getItems())
+                .singleElement()
+                .satisfies(item -> assertThat(item.getType()).isEqualTo("LABOR"));
     }
 
     @Test

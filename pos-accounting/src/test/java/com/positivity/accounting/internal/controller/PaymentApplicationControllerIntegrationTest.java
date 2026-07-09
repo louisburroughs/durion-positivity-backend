@@ -1,25 +1,19 @@
 package com.positivity.accounting.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.accounting.BaseIntegrationTest;
-import com.positivity.accounting.internal.client.InvoiceServiceClient;
-import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceRequest;
-import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
-import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalRequest;
-import com.positivity.accounting.internal.dto.ReversePaymentApplicationResponse;
+import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.PaymentApplication;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
-import com.positivity.accounting.internal.enums.InvoiceStatus;
+import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
@@ -35,7 +29,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * Integration tests for Payment Application REST API endpoints
@@ -62,8 +55,8 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private PaymentApplicationReversalRepository paymentApplicationReversalRepository;
 
-    @MockitoBean
-    private InvoiceServiceClient invoiceServiceClient;
+    @Autowired
+    private ExtInvoiceRepository extInvoiceRepository;
 
     private static final String API_V1 = "/v1/accounting";
 
@@ -81,6 +74,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
         paymentApplicationReversalRepository.deleteAll();
         paymentApplicationRepository.deleteAll();
         receivablePaymentRepository.deleteAll();
+        extInvoiceRepository.deleteAll();
 
         // Initialize test IDs
         testPaymentId = nextUuid();
@@ -88,45 +82,23 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
         testInvoice1Id = nextUuid();
         testInvoice2Id = nextUuid();
 
-        // Mock InvoiceServiceClient to prevent real HTTP calls
-        when(invoiceServiceClient.getInvoiceDetails(any())).thenAnswer(invocation -> {
-            UUID invoiceId = invocation.getArgument(0);
-            return InvoiceDetails.builder()
-                    .invoiceId(invoiceId)
-                    .customerId(testCustomerId)
-                    .status(InvoiceStatus.OPEN)
-                    .currency("USD")
-                    .totalAmount(new BigDecimal("10000.00"))
-                    .balanceDue(new BigDecimal("10000.00"))
-                    .build();
-        });
-        when(invoiceServiceClient.applyPaymentToInvoice(any(), any())).thenAnswer(invocation -> {
-            UUID invoiceId = invocation.getArgument(0);
-            ApplyPaymentToInvoiceRequest req = invocation.getArgument(1);
-            BigDecimal balanceBefore = new BigDecimal("10000.00");
-            BigDecimal balanceAfter = balanceBefore.subtract(req.getAmountApplied());
-            return ApplyPaymentToInvoiceResponse.builder()
-                    .invoiceId(invoiceId)
-                    .status(
-                            balanceAfter.compareTo(BigDecimal.ZERO) == 0
-                                    ? InvoiceStatus.PAID_IN_FULL
-                                    : InvoiceStatus.PARTIALLY_PAID)
-                    .balanceBefore(balanceBefore)
-                    .balanceAfter(balanceAfter)
-                    .totalPaid(req.getAmountApplied())
-                    .totalAmount(balanceBefore)
-                    .build();
-        });
-        when(invoiceServiceClient.reversePaymentApplication(any(), any())).thenAnswer(invocation -> {
-            UUID invoiceId = invocation.getArgument(0);
-            com.positivity.accounting.internal.dto.ReversePaymentApplicationRequest req = invocation.getArgument(1);
-            return ReversePaymentApplicationResponse.builder()
-                    .invoiceId(invoiceId)
-                    .status(InvoiceStatus.OPEN)
-                    .balanceBefore(BigDecimal.ZERO)
-                    .balanceDue(req.getAmountToRestore())
-                    .build();
-        });
+        // Seed the ext_invoice replica (ADR-0044 #842): balances are derived from these
+        // rows plus accounting's own application records — no invoice-service calls.
+        seedReplicaInvoice(testInvoice1Id, "10000.00");
+        seedReplicaInvoice(testInvoice2Id, "10000.00");
+    }
+
+    private void seedReplicaInvoice(UUID invoiceId, String total) {
+        extInvoiceRepository.save(ExtInvoice.builder()
+                .invoiceId(invoiceId)
+                .workorderId(nextUuid())
+                .partyId(testCustomerId.toString())
+                .status("FINALIZED")
+                .total(new BigDecimal(total))
+                .finalizedAt(Instant.now(TEST_CLOCK))
+                .aggregateVersion(1L)
+                .updatedAt(Instant.now(TEST_CLOCK))
+                .build());
     }
 
     // ========================================

@@ -86,6 +86,15 @@ class PartyServiceImplTest {
 
     private PartyServiceImpl service;
 
+    private static org.springframework.beans.factory.ObjectProvider<
+                    com.positivity.customer.internal.config.OutboxEventWriter>
+            emptyOutboxWriterProvider() {
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<com.positivity.customer.internal.config.OutboxEventWriter>
+                provider = org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+        return provider;
+    }
+
     @BeforeEach
     void setUp() {
         service = new PartyServiceImpl(
@@ -95,7 +104,8 @@ class PartyServiceImplTest {
                 partyRelationshipRepository,
                 cacheManager,
                 peopleClient,
-                vehicleInventoryClient);
+                vehicleInventoryClient,
+                emptyOutboxWriterProvider());
     }
 
     private CommercialParty party(UUID id) {

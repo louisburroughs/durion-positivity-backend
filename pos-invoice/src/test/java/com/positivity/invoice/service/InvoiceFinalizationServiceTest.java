@@ -74,6 +74,9 @@ class InvoiceFinalizationServiceTest {
     @Mock
     private ElevationTokenService elevationTokenService;
 
+    @Mock
+    private com.positivity.invoice.internal.config.InvoiceEventPublisher invoiceEventPublisher;
+
     @InjectMocks
     private InvoiceFinalizationServiceImpl service;
 

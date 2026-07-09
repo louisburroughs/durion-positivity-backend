@@ -2,7 +2,6 @@ package com.positivity.accounting.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -11,26 +10,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.accounting.BaseContractIntegrationTest;
-import com.positivity.accounting.internal.client.InvoiceServiceClient;
-import com.positivity.accounting.internal.dto.ApplyCreditMemoRequest;
-import com.positivity.accounting.internal.dto.ApplyCreditMemoResponse;
 import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
-import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.entity.CreditMemo;
+import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
-import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.service.InvoiceBalanceCalculator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,7 +68,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
     private JournalEntryLineRepository journalEntryLineRepository;
 
     @MockitoBean
-    private InvoiceServiceClient invoiceServiceClient;
+    private InvoiceBalanceCalculator invoiceBalanceCalculator;
 
     private static final String API_V1_CREDIT_MEMOS = "/v1/accounting/credit-memos";
     private static final UUID REVENUE_ACCOUNT_ID = UUID.fromString("01234567-89ab-cdef-0123-456789abcdef");
@@ -88,31 +83,23 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         creditMemoRepository.deleteAll();
         glAccountRepository.deleteAll();
 
-        // Setup default invoice service mocks
-        // Default invoice details for $110 balance
+        // Default replica state (ADR-0044 #842): a FINALIZED $110 invoice with a $110
+        // derived balance, matching the previous invoice-service stubs.
         UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        InvoiceDetails defaultInvoice = InvoiceDetails.builder()
+        ExtInvoice defaultInvoice = ExtInvoice.builder()
                 .invoiceId(invoiceId)
-                .customerId(customerId)
-                .status(InvoiceStatus.OPEN)
-                .totalAmount(new BigDecimal("110.00"))
-                .totalPaid(BigDecimal.ZERO)
-                .balanceDue(new BigDecimal("110.00"))
-                .currency("USD")
-                .invoiceDate(Instant.now(Clock.systemUTC()))
+                .workorderId(UUID.fromString("00000000-0000-0000-0000-0000000000ff"))
+                .partyId(customerId.toString())
+                .status("FINALIZED")
+                .total(new BigDecimal("110.00"))
+                .finalizedAt(Instant.now(Clock.systemUTC()))
+                .aggregateVersion(1L)
+                .updatedAt(Instant.now(Clock.systemUTC()))
                 .build();
-        when(invoiceServiceClient.getInvoiceDetails(any(UUID.class))).thenReturn(defaultInvoice);
-
-        // Default invoice update response
-        ApplyCreditMemoResponse defaultResponse = new ApplyCreditMemoResponse();
-        defaultResponse.setInvoiceId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        defaultResponse.setBalanceBefore(new BigDecimal("110.00"));
-        defaultResponse.setBalanceAfter(new BigDecimal("0.00"));
-        defaultResponse.setStatus(InvoiceStatus.PAID_IN_FULL);
-        defaultResponse.setCreditMemoApplied(new BigDecimal("110.00"));
-        when(invoiceServiceClient.applyCreditMemo(any(UUID.class), any(ApplyCreditMemoRequest.class)))
-                .thenReturn(defaultResponse);
+        when(invoiceBalanceCalculator.findInvoice(any(UUID.class))).thenReturn(java.util.Optional.of(defaultInvoice));
+        when(invoiceBalanceCalculator.isArEligible(any(ExtInvoice.class))).thenReturn(true);
+        when(invoiceBalanceCalculator.balanceDue(any(ExtInvoice.class))).thenReturn(new BigDecimal("110.00"));
 
         seedConfiguredGLAccounts();
     }
@@ -201,17 +188,6 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         request.setReasonCode("PRICING_ERROR");
         request.setJustificationNote("Incorrect pricing applied to line item #3");
 
-        // Mock partial credit response: balance goes from 110 to 82.50 (110 - 27.50
-        // total with tax)
-        ApplyCreditMemoResponse partialResponse = new ApplyCreditMemoResponse();
-        partialResponse.setInvoiceId(testInvoiceId);
-        partialResponse.setBalanceBefore(new BigDecimal("110.00"));
-        partialResponse.setBalanceAfter(new BigDecimal("82.50"));
-        partialResponse.setStatus("OPEN");
-        partialResponse.setCreditMemoApplied(new BigDecimal("27.50"));
-        when(invoiceServiceClient.applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class)))
-                .thenReturn(partialResponse);
-
         // Act: POST to Credit Memo endpoint
         mockMvc.perform(withAuth(post(API_V1_CREDIT_MEMOS))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -272,16 +248,8 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         cm.setPriorPeriodAdjustment(false);
         CreditMemo saved = creditMemoRepository.save(cm);
 
-        // Mock invoice details for balance lookup
-        InvoiceDetails invoice = InvoiceDetails.builder()
-                .invoiceId(invoiceId)
-                .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .status(InvoiceStatus.OPEN)
-                .totalAmount(new BigDecimal("110.00"))
-                .balanceDue(new BigDecimal("55.00")) // Balance after credit applied
-                .currency("USD")
-                .build();
-        when(invoiceServiceClient.getInvoiceDetails(invoiceId)).thenReturn(invoice);
+        // Derived balance after credit applied
+        when(invoiceBalanceCalculator.balanceDue(any(ExtInvoice.class))).thenReturn(new BigDecimal("55.00"));
 
         // Act: GET by ID
         mockMvc.perform(withAuth(get(API_V1_CREDIT_MEMOS + "/" + saved.getCreditMemoId())))
@@ -403,20 +371,9 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
     void testCreateCreditMemo_FullyPaidInvoice() throws Exception {
         // Arrange: Invoice is fully paid (zero balance remaining)
         UUID testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        // Mock a fully-paid invoice with zero balance
-        InvoiceDetails fullyPaidInvoice = InvoiceDetails.builder()
-                .invoiceId(testInvoiceId)
-                .customerId(customerId)
-                .status(InvoiceStatus.PAID_IN_FULL)
-                .totalAmount(new BigDecimal("110.00"))
-                .totalPaid(new BigDecimal("110.00"))
-                .balanceDue(BigDecimal.ZERO)
-                .currency("USD")
-                .invoiceDate(Instant.now(TEST_CLOCK).minus(5, ChronoUnit.DAYS))
-                .build();
-        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(fullyPaidInvoice);
+        // Derived balance is zero: the invoice is fully paid
+        when(invoiceBalanceCalculator.balanceDue(any(ExtInvoice.class))).thenReturn(BigDecimal.ZERO);
 
         CreateCreditMemoRequest request = new CreateCreditMemoRequest();
         request.setOriginalInvoiceId(testInvoiceId);

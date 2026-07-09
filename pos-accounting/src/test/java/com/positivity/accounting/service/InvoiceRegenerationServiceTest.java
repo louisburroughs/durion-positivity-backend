@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.client.WorkorderInvoiceClient;
 import com.positivity.accounting.internal.client.WorkorderServiceException;
+import com.positivity.accounting.internal.config.WorkorderCommandPublisher;
 import com.positivity.accounting.internal.service.InvoiceRegenerationServiceImpl;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import java.time.Clock;
@@ -34,6 +35,9 @@ class InvoiceRegenerationServiceTest {
 
     @Mock
     private WorkorderInvoiceClient workorderInvoiceClient;
+
+    @Mock
+    private org.springframework.beans.factory.ObjectProvider<WorkorderCommandPublisher> commandPublisherProvider;
 
     @InjectMocks
     private InvoiceRegenerationServiceImpl service;
@@ -92,5 +96,44 @@ class InvoiceRegenerationServiceTest {
                     assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
                     assertThat(ex.getReason()).isEqualTo(message);
                 });
+    }
+
+    @Test
+    @DisplayName("Should publish command and return PENDING when Kafka publisher is available (ADR-0044)")
+    void testRegenerateInvoiceFromWorkorder_AsyncCommandPath() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        WorkorderCommandPublisher publisher = org.mockito.Mockito.mock(WorkorderCommandPublisher.class);
+        when(commandPublisherProvider.getIfAvailable()).thenReturn(publisher);
+
+        InvoiceGenerationResponse response = service.regenerateInvoiceFromWorkorder(workorderId, "idem-1");
+
+        assertThat(response.getStatus()).isEqualTo(InvoiceRegenerationServiceImpl.STATUS_PENDING);
+        assertThat(response.getWorkorderId()).isEqualTo(workorderId);
+        assertThat(response.getInvoiceId()).isNull();
+        verify(publisher)
+                .requestInvoiceRegeneration(
+                        org.mockito.ArgumentMatchers.eq(workorderId),
+                        org.mockito.ArgumentMatchers.eq("idem-1"),
+                        org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verifyNoInteractions(workorderInvoiceClient);
+    }
+
+    @Test
+    @DisplayName("Should map publish failure to 503 on the async command path")
+    void testRegenerateInvoiceFromWorkorder_AsyncPublishFailure() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        WorkorderCommandPublisher publisher = org.mockito.Mockito.mock(WorkorderCommandPublisher.class);
+        when(commandPublisherProvider.getIfAvailable()).thenReturn(publisher);
+        org.mockito.Mockito.doThrow(new IllegalStateException("broker down"))
+                .when(publisher)
+                .requestInvoiceRegeneration(
+                        org.mockito.ArgumentMatchers.eq(workorderId),
+                        org.mockito.ArgumentMatchers.isNull(),
+                        org.mockito.ArgumentMatchers.anyString());
+
+        assertThatThrownBy(() -> service.regenerateInvoiceFromWorkorder(workorderId, null))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+                        .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
     }
 }

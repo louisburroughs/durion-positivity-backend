@@ -48,4 +48,14 @@ public interface PaymentApplicationReversalRepository extends JpaRepository<Paym
      * @return true if already reversed
      */
     boolean existsByOriginalPaymentApplication_PaymentApplicationId(UUID originalPaymentApplicationId);
+
+    /**
+     * Sum of all reversed amounts for an invoice (via the reversed applications).
+     *
+     * @param invoiceId invoice identifier
+     * @return total reversed amount
+     */
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(r.amount), 0) FROM PaymentApplicationReversal r"
+            + " WHERE r.originalPaymentApplication.invoiceId = :invoiceId")
+    java.math.BigDecimal sumReversedAmountByInvoiceId(UUID invoiceId);
 }

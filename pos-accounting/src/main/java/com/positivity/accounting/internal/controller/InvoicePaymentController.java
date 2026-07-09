@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.BillingRuleRefResponse;
 import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
 import com.positivity.accounting.internal.dto.RegenerateInvoiceFromWorkorderRequest;
+import com.positivity.accounting.internal.service.InvoiceRegenerationServiceImpl;
 import com.positivity.accounting.service.BillingRulesService;
 import com.positivity.accounting.service.InvoicePaymentStatusService;
 import com.positivity.accounting.service.InvoiceRegenerationService;
@@ -103,6 +104,9 @@ public class InvoicePaymentController {
             description = "Regenerate an invoice from a workorder.",
             tags = {"Invoice Payments"})
     @ApiResponse(responseCode = "200", description = "Invoice regenerated")
+    @ApiResponse(
+            responseCode = "202",
+            description = "Regeneration command accepted (ADR-0044 async path); invoice arrives via invoice.events.v1")
     @ApiResponse(responseCode = "404", description = "Workorder not found")
     @ApiResponse(responseCode = "409", description = "Workorder is not in COMPLETED state")
     @ApiResponse(responseCode = "503", description = "Workorder service unavailable")
@@ -112,6 +116,9 @@ public class InvoicePaymentController {
 
         InvoiceGenerationResponse response = invoiceRegenerationService.regenerateInvoiceFromWorkorder(
                 request.getWorkorderId(), request.getIdempotencyKey());
+        if (InvoiceRegenerationServiceImpl.STATUS_PENDING.equals(response.getStatus())) {
+            return ResponseEntity.accepted().body(response);
+        }
         return ResponseEntity.ok(response);
     }
 

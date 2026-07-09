@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.service;
 import com.positivity.invoice.internal.client.LocationServiceClient;
 import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.client.WorkorderReferenceClient;
+import com.positivity.invoice.internal.config.InvoiceEventPublisher;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
@@ -49,6 +50,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final TaxServiceClient taxServiceClient;
     private final LocationServiceClient locationServiceClient;
     private final WorkorderReferenceClient workorderReferenceClient;
+    private final InvoiceEventPublisher invoiceEventPublisher;
 
     /**
      * Self-reference (lazy to break the construction cycle) used so the public
@@ -68,12 +70,14 @@ public class InvoiceServiceImpl implements InvoiceService {
             @NonNull TaxServiceClient taxServiceClient,
             @NonNull LocationServiceClient locationServiceClient,
             @NonNull WorkorderReferenceClient workorderReferenceClient,
+            @NonNull InvoiceEventPublisher invoiceEventPublisher,
             Clock clock) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.taxServiceClient = taxServiceClient;
         this.locationServiceClient = locationServiceClient;
         this.workorderReferenceClient = workorderReferenceClient;
+        this.invoiceEventPublisher = invoiceEventPublisher;
     }
 
     @Override
@@ -144,6 +148,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         recalculateTotals(invoice);
 
         Invoice saved = invoiceRepository.save(invoice);
+        invoiceEventPublisher.publishInvoiceUpdated(saved);
         InvoiceDetailsResponse response = toDetailsResponse(saved);
         response.setWorkorderNumber(resolveWorkorderNumber(saved.getWorkorderId()));
         return response;
@@ -189,6 +194,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             saved.setInvoiceNumber(generateInvoiceNumber(saved));
             saved = invoiceRepository.save(saved);
         }
+        invoiceEventPublisher.publishInvoiceUpdated(saved);
         return toGenerationResponse(saved);
     }
 
@@ -415,8 +421,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             return false;
         }
         BigDecimal total = invoice.getTotal();
-        return total != null
-                && total.compareTo(InvoiceFinalizationServiceImpl.SERVICE_ADVISOR_LIMIT) > 0;
+        return total != null && total.compareTo(InvoiceFinalizationServiceImpl.SERVICE_ADVISOR_LIMIT) > 0;
     }
 
     @NonNull
