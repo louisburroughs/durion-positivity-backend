@@ -41,6 +41,9 @@ import dev.langchain4j.model.output.Response;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -82,6 +85,7 @@ import org.springframework.web.client.RestClient;
 class SessionAgentManagerTest {
 
     private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000000301");
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-04-13T02:00:00Z"), ZoneOffset.UTC);
 
     @Mock
     private ChatModel chatModel;
@@ -179,6 +183,7 @@ class SessionAgentManagerTest {
                 telemetryEmitter,
                 null,
                 null,
+                FIXED_CLOCK,
                 30,
                 500,
                 50,
@@ -370,6 +375,7 @@ class SessionAgentManagerTest {
                 telemetryEmitter,
                 null,
                 null,
+                FIXED_CLOCK,
                 0,
                 500,
                 50,
@@ -408,6 +414,7 @@ class SessionAgentManagerTest {
                 telemetryEmitter,
                 null,
                 null,
+                FIXED_CLOCK,
                 30,
                 500,
                 50,

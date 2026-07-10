@@ -22,6 +22,7 @@ import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.service.AiServices;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -75,6 +76,8 @@ public class StreamingSessionAgentManager
     @Nullable
     private final RequestScopedUserContext requestScopedUserContext;
 
+    private final Clock clock;
+
     private final int memoryMaxMessages;
     private final int rateLimitPerSession;
 
@@ -89,6 +92,7 @@ public class StreamingSessionAgentManager
             @Nullable NltiTelemetryEmitter telemetryEmitter,
             @Nullable OpenApiToolProvider openApiToolProvider,
             @Nullable RequestScopedUserContext requestScopedUserContext,
+            @NonNull Clock clock,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
             @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
@@ -103,6 +107,7 @@ public class StreamingSessionAgentManager
         this.telemetryEmitter = telemetryEmitter;
         this.openApiToolProvider = openApiToolProvider;
         this.requestScopedUserContext = requestScopedUserContext;
+        this.clock = clock;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
         int sanitizedMaxCachedAgents = Math.max(1, maxCachedAgents);
@@ -394,7 +399,7 @@ public class StreamingSessionAgentManager
         try {
             telemetryEmitter.emit(NltiRequestTelemetryFactory.forChatRequest(
                     correlationId,
-                    Instant.now().toString(),
+                    Instant.now(clock).toString(),
                     currentUserContext.primaryRole(),
                     currentUserContext.permissionCodes().size(),
                     selectedToolNames,
