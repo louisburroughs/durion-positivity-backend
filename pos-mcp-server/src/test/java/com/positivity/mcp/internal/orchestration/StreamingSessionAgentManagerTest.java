@@ -37,6 +37,9 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.lang.reflect.Member;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -79,6 +82,7 @@ class StreamingSessionAgentManagerTest {
 
     private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000000302");
     private static final Set<String> PERMISSION_CODES = Set.of("AUTHENTICATED", "mcp:chat:stream");
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-04-13T02:00:00Z"), ZoneOffset.UTC);
 
     @Mock
     private StreamingChatModel streamingChatModel;
@@ -168,6 +172,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                FIXED_CLOCK,
                 30,
                 500,
                 50,
@@ -339,6 +344,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                FIXED_CLOCK,
                 30,
                 500,
                 50,
@@ -401,6 +407,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                FIXED_CLOCK,
                 0,
                 500,
                 50,
@@ -433,6 +440,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                FIXED_CLOCK,
                 30,
                 500,
                 50,
@@ -492,6 +500,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 openApiToolProvider,
                 requestContext,
+                FIXED_CLOCK,
                 30,
                 500,
                 50,

@@ -27,6 +27,7 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -78,6 +79,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private final @Nullable NltiTelemetryEmitter telemetryEmitter;
     private final @Nullable OpenApiToolProvider openApiToolProvider;
     private final @Nullable RequestScopedUserContext requestScopedUserContext;
+    private final Clock clock;
 
     private final int memoryMaxMessages;
     private final int rateLimitPerSession;
@@ -97,6 +99,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @Nullable NltiTelemetryEmitter telemetryEmitter,
             @Nullable OpenApiToolProvider openApiToolProvider,
             @Nullable RequestScopedUserContext requestScopedUserContext,
+            @NonNull Clock clock,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
             @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
@@ -115,6 +118,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         this.telemetryEmitter = telemetryEmitter;
         this.openApiToolProvider = openApiToolProvider;
         this.requestScopedUserContext = requestScopedUserContext;
+        this.clock = clock;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
         this.requestCountCache = Caffeine.newBuilder()
@@ -451,7 +455,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     : List.of();
             telemetryEmitter.emit(NltiRequestTelemetryFactory.forChatRequest(
                     correlationId,
-                    Instant.now().toString(),
+                    Instant.now(clock).toString(),
                     currentUserContext.primaryRole(),
                     currentUserContext.permissionCodes().size(),
                     selectedToolNames,
