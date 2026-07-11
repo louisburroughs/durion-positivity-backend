@@ -128,6 +128,8 @@ services:
       # Container log files + Docker socket for service-discovery labels.
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Persist read positions across container recreation.
+      - promtail-positions:/promtail
     command: [ "-config.file=/etc/promtail/promtail-config.yml" ]
     depends_on:
       - loki
@@ -1127,6 +1129,8 @@ volumes:
   grafana-data:
     driver: local
   loki-data:
+    driver: local
+  promtail-positions:
     driver: local
   postgres-data:
     driver: local

@@ -7,7 +7,9 @@ server:
   log_level: warn
 
 positions:
-  filename: /tmp/positions.yaml
+  # Persisted on a named volume so alpha's --force-recreate deploys don't
+  # re-tail every container's log from the start (which re-ingests old lines).
+  filename: /promtail/positions.yaml
 
 clients:
   - url: http://loki:3100/loki/api/v1/push
