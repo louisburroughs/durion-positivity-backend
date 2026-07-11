@@ -51,6 +51,10 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  docker-socket-proxy:
+    restart: unless-stopped
+    logging: *logging
+
   promtail:
     restart: unless-stopped
     logging: *logging

@@ -105,7 +105,9 @@ services:
     image: grafana/loki:3.1.1
     container_name: loki
     ports:
-      - "3100:3100"
+      # Localhost only — Grafana/Promtail reach Loki over the pos-network;
+      # no need to expose all container logs on shared/remote host interfaces.
+      - "127.0.0.1:3100:3100"
     volumes:
       - ./observability/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki-data:/loki
@@ -119,20 +121,37 @@ services:
     networks:
       - pos-network
 
+  # docker-socket-proxy - Read-only, whitelisted Docker API for Promtail SD (#858)
+  # Promtail needs container metadata for labels but not root-equivalent socket
+  # access; the proxy exposes only GET /containers and /version over TCP.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: docker-socket-proxy
+    environment:
+      CONTAINERS: 1   # allow GET /containers/* (SD target list)
+      NETWORKS: 1     # allow GET /networks/* (promtail computes network labels)
+      VERSION: 1      # allow GET /version (API negotiation)
+      # All other API groups (POST, exec, images, ...) denied by default.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    logging: *logging
+    networks:
+      - pos-network
+
   # Promtail - Ships Docker json-file logs to Loki (#858)
   promtail:
     image: grafana/promtail:3.1.1
     container_name: promtail
     volumes:
       - ./observability/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
-      # Container log files + Docker socket for service-discovery labels.
+      # Container log files (read directly; container metadata comes from the proxy).
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       # Persist read positions across container recreation.
       - promtail-positions:/promtail
     command: [ "-config.file=/etc/promtail/promtail-config.yml" ]
     depends_on:
       - loki
+      - docker-socket-proxy
     logging: *logging
     networks:
       - pos-network

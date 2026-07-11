@@ -53,11 +53,12 @@ datasources:
     editable: true
     jsonData:
       maxLines: 1000
-      # Correlate a log line back to a trace when it carries a traceId (Spring
-      # Boot MDC / Micrometer tracing writes traceId into the log message).
+      # Correlate a log line back to a trace. Spring Boot + Micrometer tracing
+      # emits the default pattern "[<app>,<traceId>,<spanId>]" (comma-delimited,
+      # app name may be empty or contain '.'/'-'); capture the middle traceId.
       derivedFields:
         - name: TraceID
-          matcherRegex: 'traceId=(\w+)'
+          matcherRegex: '\[[\w.\-]*,(\w+),\w*\]'
           url: '$${__value.raw}'
           datasourceUid: 'jaeger'
     version: 1
