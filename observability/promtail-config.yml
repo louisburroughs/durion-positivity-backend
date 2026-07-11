@@ -1,0 +1,53 @@
+# Promtail configuration for the Durion observability stack (#858).
+# Tails the Docker json-file logs of every container on the host and ships them
+# to Loki, enriched with container/service/compose labels from the Docker API.
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  # Persisted on a named volume so alpha's --force-recreate deploys don't
+  # re-tail every container's log from the start (which re-ingests old lines).
+  filename: /promtail/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Discover every running container via the Docker daemon and tail its logs.
+  - job_name: docker
+    docker_sd_configs:
+      # Via docker-socket-proxy (read-only, whitelisted API) — not the raw socket.
+      - host: tcp://docker-socket-proxy:2375
+        refresh_interval: 15s
+    relabel_configs:
+      # container_name without the leading "/"
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+      # compose service name (e.g. pos-order, grafana, postgres)
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'service'
+      # compose project (durion stack)
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: 'project'
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: 'stream'
+      - target_label: 'job'
+        replacement: 'docker'
+    pipeline_stages:
+      # Docker writes each line as {"log":"...","stream":"...","time":"..."}.
+      - docker: {}
+      # Extract a log-level token so LogQL can filter by level. Case-insensitive
+      # so it matches both Spring Boot/logback ("INFO", "ERROR") and lowercase
+      # infra logs (Loki/Promtail/Postgres emit "level=warn"). Normalised to
+      # uppercase so dashboard filters (level=~"ERROR|FATAL") are consistent.
+      # "WARN" also captures the "WARN" prefix of Postgres's "WARNING".
+      - regex:
+          expression: '(?i)(?P<level>TRACE|DEBUG|INFO|WARN|ERROR|FATAL)'
+      - template:
+          source: level
+          template: '{{ ToUpper .Value }}'
+      - labels:
+          level:

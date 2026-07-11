@@ -8,6 +8,8 @@ This directory contains the observability infrastructure for the Durion Positivi
 - **Prometheus**: Time-series database for metrics collection
 - **Grafana**: Visualization and analytics platform
 - **OpenTelemetry Collector**: Unified telemetry data collection and processing
+- **Loki**: Log aggregation store, queryable in Grafana Explore and the Logs dashboard
+- **Promtail**: Ships every container's Docker `json-file` logs to Loki with `service`/`container` labels
 
 ## Architecture
 
@@ -28,7 +30,13 @@ This directory contains the observability infrastructure for the Durion Positivi
          │                      │
          │               ┌──────▼─────┐
          └──────────────→│  Grafana   │ (Visualization)
-                         └────────────┘
+                         └──────▲─────┘
+                                │ (Logs)
+┌─────────────────┐     ┌──────┴─────┐
+│ All containers  │────→│  Promtail  │────→ Loki
+│ (docker json-   │     └────────────┘
+│  file logs)     │
+└─────────────────┘
 ```
 
 ## Quick Start
@@ -42,7 +50,7 @@ From the repository root:
 docker-compose up -d
 
 # Or start only observability services
-docker-compose up -d jaeger prometheus grafana otel-collector
+docker-compose up -d jaeger prometheus grafana otel-collector loki promtail
 ```
 
 ### 2. Access the Dashboards
@@ -56,6 +64,10 @@ docker-compose up -d jaeger prometheus grafana otel-collector
 
 - **Prometheus**: <http://localhost:9090>
   - Query metrics and explore targets
+
+- **Loki**: <http://localhost:3100> (API only; query via Grafana)
+  - In Grafana: **Explore → Loki**, or open the **Durion Logs (Loki)** dashboard
+  - Example LogQL: `{job="docker", service="pos-order"} |= "ERROR"`
 
 - **OTEL Collector Health**: <http://localhost:13133>
   - Check collector status
@@ -111,6 +123,27 @@ Configures the OpenTelemetry Collector pipeline:
 - Jaeger: Traces via OTLP
 - Prometheus: Metrics on port 8889
 - Logging: Debug output
+
+### `loki-config.yml`
+
+Single-binary, filesystem-backed Loki (`grafana/loki:3.1.1`). Suitable for local dev and the
+alpha single-host EC2 box; not multi-tenant/clustered.
+
+- HTTP API: Port 3100 (`/ready`, `/loki/api/v1/push`, `/loki/api/v1/query_range`)
+- Retention: 168h (7 days), enforced by the compactor — matches Kafka event retention
+- Storage: `tsdb` index + filesystem chunks under the `loki-data` volume
+
+### `promtail-config.yml`
+
+Promtail (`grafana/promtail:3.1.1`) uses Docker service-discovery to tail the `json-file` logs of
+every container on the host and push them to Loki.
+
+**Labels applied** (from the Docker API): `container`, `service` (compose service name),
+`project`, `stream`, `job="docker"`, and a `level` extracted from the log line
+(`TRACE|DEBUG|INFO|WARN|ERROR|FATAL`).
+
+**Requires** host mounts (already wired in `docker-compose.yml`):
+`/var/lib/docker/containers:ro` and `/var/run/docker.sock:ro`.
 
 ### `application-observability.yml`
 

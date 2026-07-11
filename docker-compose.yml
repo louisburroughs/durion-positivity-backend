@@ -75,6 +75,7 @@ services:
     depends_on:
       - prometheus
       - jaeger
+      - loki
     logging: *logging
     networks:
       - pos-network
@@ -95,6 +96,62 @@ services:
     depends_on:
       - jaeger
       - prometheus
+    logging: *logging
+    networks:
+      - pos-network
+
+  # Loki - Log aggregation (#858)
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: loki
+    ports:
+      # Localhost only — Grafana/Promtail reach Loki over the pos-network;
+      # no need to expose all container logs on shared/remote host interfaces.
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./observability/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    command: [ "-config.file=/etc/loki/loki-config.yml" ]
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:3100/ready || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *logging
+    networks:
+      - pos-network
+
+  # docker-socket-proxy - Read-only, whitelisted Docker API for Promtail SD (#858)
+  # Promtail needs container metadata for labels but not root-equivalent socket
+  # access; the proxy exposes only GET /containers and /version over TCP.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: docker-socket-proxy
+    environment:
+      CONTAINERS: 1   # allow GET /containers/* (SD target list)
+      NETWORKS: 1     # allow GET /networks/* (promtail computes network labels)
+      VERSION: 1      # allow GET /version (API negotiation)
+      # All other API groups (POST, exec, images, ...) denied by default.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    logging: *logging
+    networks:
+      - pos-network
+
+  # Promtail - Ships Docker json-file logs to Loki (#858)
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: promtail
+    volumes:
+      - ./observability/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      # Container log files (read directly; container metadata comes from the proxy).
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      # Persist read positions across container recreation.
+      - promtail-positions:/promtail
+    command: [ "-config.file=/etc/promtail/promtail-config.yml" ]
+    depends_on:
+      - loki
+      - docker-socket-proxy
     logging: *logging
     networks:
       - pos-network
@@ -1089,6 +1146,10 @@ volumes:
   prometheus-data:
     driver: local
   grafana-data:
+    driver: local
+  loki-data:
+    driver: local
+  promtail-positions:
     driver: local
   postgres-data:
     driver: local
