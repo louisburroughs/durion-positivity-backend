@@ -43,6 +43,25 @@ datasources:
         datasourceUid: 'loki'
     version: 1
 
+  # Loki Datasource for logs (#858)
+  # uid 'loki' satisfies the Jaeger/Tempo tracesToLogs.datasourceUid references above.
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: true
+    jsonData:
+      maxLines: 1000
+      # Correlate a log line back to a trace when it carries a traceId (Spring
+      # Boot MDC / Micrometer tracing writes traceId into the log message).
+      derivedFields:
+        - name: TraceID
+          matcherRegex: 'traceId=(\w+)'
+          url: '$${__value.raw}'
+          datasourceUid: 'jaeger'
+    version: 1
+
   # TestData Datasource for testing and demos
   - name: TestData
     type: testdata

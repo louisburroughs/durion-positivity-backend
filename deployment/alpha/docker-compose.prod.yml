@@ -47,6 +47,14 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  loki:
+    restart: unless-stopped
+    logging: *logging
+
+  promtail:
+    restart: unless-stopped
+    logging: *logging
+
   # ── Ollama (Docker Hub image — no ECR) ─────────────────────────────────────
 
   ollama:
