@@ -47,8 +47,10 @@ class RoleAuthorityServiceTest {
                         "crm:vehicle:view",
                         "crm:vehicle:search",
                         "crm:vehicle:create",
-                        "crm:vehicle:edit",
-                        "crm:vehicle:deactivate",
+                        "vehicle-inventory:registry:view",
+                        "vehicle-inventory:registry:create",
+                        "vehicle-inventory:registry:update",
+                        "vehicle-inventory:registry:delete",
                         "crm:vehicle_party_association:view",
                         "crm:vehicle_party_association:create",
                         "crm:vehicle_party_association:edit",
@@ -91,6 +93,9 @@ class RoleAuthorityServiceTest {
         assertThat(authorities)
                 .contains("ROLE_FLEET_MANAGER")
                 .contains("crm:vehicle:create")
+                .contains("vehicle-inventory:registry:create")
+                .contains("vehicle-inventory:registry:update")
+                .doesNotContain("crm:vehicle:edit", "vehicle-inventory:registry:delete")
                 .contains("crm:party:view")
                 .contains(MCP_CHAT_EXECUTE);
     }
