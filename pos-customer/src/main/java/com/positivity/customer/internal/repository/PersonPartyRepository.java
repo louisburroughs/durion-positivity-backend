@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for PersonParty entities (CAP:091 Story #104).
@@ -33,4 +34,12 @@ public interface PersonPartyRepository extends JpaRepository<PersonParty, UUID> 
      */
     @Query("SELECT DISTINCT p.personId FROM PersonParty p WHERE p.personId IS NOT NULL")
     List<UUID> findDistinctPersonIds();
+
+    /**
+     * Person parties currently associated with the given vehicle VIN. Used by the
+     * {@code vehicle.events.v1} consumer to keep the customer-owned vehicle-party association
+     * aligned with the owner's accountId fact (ADR-0044 §6, ADR-0012).
+     */
+    @Query("SELECT p FROM PersonParty p WHERE :vin MEMBER OF p.vehicleVins")
+    List<PersonParty> findByVehicleVin(@Param("vin") @NonNull String vin);
 }

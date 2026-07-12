@@ -856,6 +856,11 @@ components:
       type: object
       description: Vehicle update request
       properties:
+        accountId:
+          type: string
+          format: uuid
+          description: Owning party (account) id. Providing a different accountId transfers the vehicle to that party; the vehicle-party association follows via vehicle.events.v1 (ADR-0044 §6).
+          example: 018f6a2b-7c4d-7e3a-9b1c-2d3e4f5a6b7c
         unitNumber:
           type: string
           description: Fleet/unit number.
@@ -1249,14 +1254,12 @@ components:
           minLength: 1
         unitNumber:
           type: string
-          description: Fleet/unit number.
+          description: Fleet/unit number. Optional; stored as empty when omitted.
           example: UNIT-1024
-          minLength: 1
         description:
           type: string
-          description: Human-readable vehicle description.
+          description: Human-readable vehicle description. Optional; stored as empty when omitted.
           example: 2024 Ford F-150 XL
-          minLength: 1
         licensePlate:
           type: string
           description: License plate value.
@@ -1284,8 +1287,6 @@ components:
           example: XL
       required:
       - accountId
-      - description
-      - unitNumber
       - vin
     PreferencesMergeDto:
       type: object

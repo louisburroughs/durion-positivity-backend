@@ -2,7 +2,6 @@ package com.positivity.customer.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,7 +13,6 @@ import com.positivity.customer.internal.repository.CommunicationPreferenceReposi
 import com.positivity.customer.internal.repository.PartyNoteRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessingLogRepository;
-import com.positivity.customer.internal.repository.VehicleProjectionRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -59,9 +57,6 @@ class WorkorderEventHandlerCoverageTest {
     private PartyNoteRepository partyNoteRepository;
 
     @Mock
-    private VehicleProjectionRepository vehicleProjectionRepository;
-
-    @Mock
     private PersonParty personParty;
 
     private WorkorderEventHandler handler;
@@ -74,7 +69,6 @@ class WorkorderEventHandlerCoverageTest {
                 communicationPreferenceRepository,
                 personPartyRepository,
                 partyNoteRepository,
-                vehicleProjectionRepository,
                 new ObjectMapper());
     }
 
@@ -275,76 +269,6 @@ class WorkorderEventHandlerCoverageTest {
         verify(processingLogRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
         assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
-    }
-
-    // -----------------------------------------------------------------------
-    // handleVehicleUpdated — catch Exception branch via save failure
-    // -----------------------------------------------------------------------
-
-    /**
-     * A {@link RuntimeException} thrown by the first
-     * {@link ProcessingLogRepository#save} call in
-     * {@link WorkorderEventHandler#handleVehicleUpdated}
-     * exercises the {@code catch(Exception)} path and triggers a second save with
-     * {@link ProcessingStatus#SCHEMA_VALIDATION_FAILED}.
-     */
-    @Test
-    void handleVehicleUpdated_saveFails_savesSchemaValidationFailedLogOnRetry() {
-        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-        when(processingLogRepository.save(any()))
-                .thenThrow(new RuntimeException("simulated DB failure"))
-                .thenReturn(ProcessingLog.builder().build());
-        EventEnvelope envelope = EventEnvelope.builder()
-                .eventId(eventId)
-                .eventType("VehicleUpdated")
-                .eventVersion("1.0")
-                .sourceSystem("WorkorderExecution")
-                .correlationId(
-                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
-                .timestamp("2026-03-04T10:00:00Z")
-                .payload(Map.of(
-                        "vehicleId",
-                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
-                        "vin",
-                        "1HGBH41JXMN109186"))
-                .build();
-
-        handler.handleVehicleUpdated(envelope);
-
-        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-        verify(processingLogRepository, times(2)).save(captor.capture());
-        assertThat(captor.getAllValues().get(1).getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
-        assertThat(captor.getAllValues().get(1).getEventId()).isEqualTo(eventId);
-    }
-
-    // -----------------------------------------------------------------------
-    // handleVehicleUpdated — null payload path
-    // -----------------------------------------------------------------------
-
-    /**
-     * A {@code VehicleUpdated} envelope with a {@code null} payload map is
-     * handled gracefully: the null-check falls back to {@link Map#of()} and
-     * a {@link ProcessingStatus#SUCCESS} log is saved.
-     */
-    @Test
-    void handleVehicleUpdated_nullPayload_treatsAsEmptyMapAndSavesSuccessLog() {
-        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-        EventEnvelope envelope = EventEnvelope.builder()
-                .eventId(eventId)
-                .eventType("VehicleUpdated")
-                .eventVersion("1.0")
-                .sourceSystem("WorkorderExecution")
-                .correlationId(
-                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
-                .timestamp("2026-03-04T10:00:00Z")
-                .payload(null)
-                .build();
-
-        handler.handleVehicleUpdated(envelope);
-
-        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-        verify(processingLogRepository).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
     }
 
     // -----------------------------------------------------------------------

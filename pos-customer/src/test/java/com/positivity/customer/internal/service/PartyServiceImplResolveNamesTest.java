@@ -47,7 +47,7 @@ class PartyServiceImplResolveNamesTest {
     private PeopleClient peopleClient;
 
     @Mock
-    private com.positivity.customer.internal.client.VehicleInventoryClient vehicleInventoryClient;
+    private com.positivity.customer.internal.repository.ExtVehicleRepository extVehicleRepository;
 
     @InjectMocks
     private PartyServiceImpl service;

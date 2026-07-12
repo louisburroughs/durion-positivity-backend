@@ -473,6 +473,8 @@ services:
       - "8082:8080"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      # ADR-0044: workorder + vehicle event consumers and the customer outbox producer
+      POS_CUSTOMER_KAFKA_ENABLED: ${POS_CUSTOMER_KAFKA_ENABLED:-false}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_customer_db
@@ -1001,6 +1003,8 @@ services:
       MANAGEMENT_SERVER_PORT: 8080
       SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${SPRING_KAFKA_LISTENER_AUTO_STARTUP:-false}
       MANAGEMENT_HEALTH_KAFKA_ENABLED: ${MANAGEMENT_HEALTH_KAFKA_ENABLED:-false}
+      # ADR-0044 #843: vehicle.events.v1 outbox producer + commands/manifest loop
+      POS_VEHICLE_INVENTORY_KAFKA_ENABLED: ${POS_VEHICLE_INVENTORY_KAFKA_ENABLED:-false}
     depends_on:
       eureka-server:
         condition: service_healthy

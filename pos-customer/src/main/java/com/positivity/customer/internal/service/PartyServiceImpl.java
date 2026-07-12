@@ -1,7 +1,6 @@
 package com.positivity.customer.internal.service;
 
 import com.positivity.customer.internal.client.PeopleClient;
-import com.positivity.customer.internal.client.VehicleInventoryClient;
 import com.positivity.customer.internal.config.CacheConfig;
 import com.positivity.customer.internal.config.OutboxEventWriter;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
@@ -33,13 +32,13 @@ import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PartyService;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.customer.BillingRulesUpdatedV1;
-import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
@@ -85,7 +84,7 @@ public class PartyServiceImpl implements PartyService {
     private final PartyRelationshipRepository partyRelationshipRepository;
     private final CacheManager cacheManager;
     private final PeopleClient peopleClient;
-    private final VehicleInventoryClient vehicleInventoryClient;
+    private final ExtVehicleRepository extVehicleRepository;
 
     /** Present only when pos.customer.kafka.enabled=true (ADR-0044 producer, issue #842). */
     private final org.springframework.beans.factory.ObjectProvider<OutboxEventWriter> outboxEventWriter;
@@ -1028,29 +1027,24 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private CrmSnapshotDTO.VehicleSummary fetchVehicleSummaryByVin(String vinCode) {
-        try {
-            VehicleResponse vehicleData =
-                    vehicleInventoryClient.getVehicleByVin(vinCode).orElse(null);
-            if (vehicleData == null) {
-                log.debug("Vehicle lookup by VIN returned null: {}", vinCode);
-                return null;
-            }
-
-            CrmSnapshotDTO.VehicleSummary summary = new CrmSnapshotDTO.VehicleSummary();
-            String vehicleId = vehicleData.getVehicleId() != null
-                    ? vehicleData.getVehicleId().toString()
-                    : vinCode;
-            summary.setVehicleId(vehicleId);
-            summary.setVin(vehicleData.getVin() != null ? vehicleData.getVin() : vinCode);
-            summary.setLicensePlate(vehicleData.getLicensePlate());
-            summary.setMake(vehicleData.getMake());
-            summary.setModel(vehicleData.getModel());
-            summary.setYear(vehicleData.getYear());
-            return summary;
-        } catch (Exception ex) {
-            log.warn("Vehicle fetch failed for VIN {}: {}", vinCode, ex.getMessage());
-            return null;
-        }
+        // Served from the ext_vehicle replica fed by vehicle.events.v1 (ADR-0044 §6, #843);
+        // vin_normalized mirrors the owner's VinUtils normalization (trimmed uppercase).
+        return extVehicleRepository
+                .findByVinNormalizedAndActiveTrue(vinCode.trim().toUpperCase(Locale.ROOT))
+                .map(vehicle -> {
+                    CrmSnapshotDTO.VehicleSummary summary = new CrmSnapshotDTO.VehicleSummary();
+                    summary.setVehicleId(vehicle.getVehicleId().toString());
+                    summary.setVin(vehicle.getVin());
+                    summary.setLicensePlate(vehicle.getLicensePlate());
+                    summary.setMake(vehicle.getMake());
+                    summary.setModel(vehicle.getModel());
+                    summary.setYear(vehicle.getYear());
+                    return summary;
+                })
+                .orElseGet(() -> {
+                    log.debug("Vehicle lookup by VIN returned null: {}", vinCode);
+                    return null;
+                });
     }
 
     private CrmSnapshotDTO.BillingPreferences buildBillingPreferences() {

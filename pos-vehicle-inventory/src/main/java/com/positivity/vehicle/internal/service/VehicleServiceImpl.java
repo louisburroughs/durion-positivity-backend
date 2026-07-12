@@ -3,6 +3,7 @@ package com.positivity.vehicle.internal.service;
 import com.positivity.shared.dto.CreateVehicleRequest;
 import com.positivity.shared.dto.UpdateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
+import com.positivity.vehicle.internal.config.VehicleEventPublisher;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import com.positivity.vehicle.internal.util.VinUtils;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class VehicleServiceImpl implements VehicleService {
 
     private final VehicleRecordRepository vehicleRepository;
+    private final VehicleEventPublisher vehicleEventPublisher;
 
     /**
      * Creates a new vehicle with VIN validation and normalization.
@@ -44,13 +46,14 @@ public class VehicleServiceImpl implements VehicleService {
                     + "VINs must be globally unique across all active vehicles.");
         }
 
-        // Create entity
+        // Create entity. unitNumber/description are optional on the contract (frontends create
+        // vehicles directly per ADR-0044 §6) but non-null columns — default them to empty.
         VehicleRecord vehicle = VehicleRecord.builder()
                 .accountId(request.getAccountId())
                 .vin(request.getVin())
                 .vinNormalized(vinNormalized)
-                .unitNumber(request.getUnitNumber())
-                .description(request.getDescription())
+                .unitNumber(request.getUnitNumber() == null ? "" : request.getUnitNumber())
+                .description(request.getDescription() == null ? "" : request.getDescription())
                 .licensePlate(request.getLicensePlate())
                 .licensePlateJurisdiction(request.getLicensePlateJurisdiction())
                 .year(request.getYear())
@@ -61,6 +64,7 @@ public class VehicleServiceImpl implements VehicleService {
                 .build();
 
         VehicleRecord saved = vehicleRepository.save(vehicle);
+        vehicleEventPublisher.publishVehicleUpdated(saved);
         log.info("Created vehicle with ID {} for account {}", saved.getVehicleId(), saved.getAccountId());
 
         return mapToResponse(saved);
@@ -98,6 +102,11 @@ public class VehicleServiceImpl implements VehicleService {
                 .orElseThrow(() -> new EntityNotFoundException("Vehicle not found: " + vehicleId));
 
         // Patch semantics: only update fields that are explicitly provided.
+        // A different accountId is an ownership transfer; pos-customer's replica consumer
+        // moves the vehicle-party association it owns when it sees the change (ADR-0044 §6).
+        if (request.getAccountId() != null) {
+            vehicle.setAccountId(request.getAccountId());
+        }
         if (request.getDescription() != null) {
             vehicle.setDescription(request.getDescription());
         }
@@ -124,6 +133,7 @@ public class VehicleServiceImpl implements VehicleService {
         }
 
         VehicleRecord saved = vehicleRepository.save(vehicle);
+        vehicleEventPublisher.publishVehicleUpdated(saved);
         log.info("Updated vehicle {}", vehicleId);
 
         return mapToResponse(saved);
@@ -142,7 +152,8 @@ public class VehicleServiceImpl implements VehicleService {
                 .orElseThrow(() -> new EntityNotFoundException("Vehicle not found: " + vehicleId));
 
         vehicle.setIsActive(false);
-        vehicleRepository.save(vehicle);
+        VehicleRecord saved = vehicleRepository.save(vehicle);
+        vehicleEventPublisher.publishVehicleUpdated(saved);
 
         log.info("Deactivated vehicle {}", vehicleId);
     }
