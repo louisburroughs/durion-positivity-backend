@@ -48,12 +48,11 @@ public class CrmPermissionRegistry {
     public static final String CONTACT_PREFERENCE_VIEW = "crm:contact_preference:view";
     public static final String CONTACT_PREFERENCE_EDIT = "crm:contact_preference:edit";
 
-    // Vehicle Management
+    // Vehicle Management (reads + party association only; registry writes moved to
+    // pos-vehicle-inventory per ADR-0044 §6 — crm:vehicle:edit / crm:vehicle:deactivate retired)
     public static final String VEHICLE_VIEW = "crm:vehicle:view";
     public static final String VEHICLE_SEARCH = "crm:vehicle:search";
     public static final String VEHICLE_CREATE = "crm:vehicle:create";
-    public static final String VEHICLE_EDIT = "crm:vehicle:edit";
-    public static final String VEHICLE_DEACTIVATE = "crm:vehicle:deactivate";
 
     // Vehicle-Party Association
     public static final String VEHICLE_PARTY_ASSOC_CREATE = "crm:vehicle_party_association:create";
@@ -129,16 +128,14 @@ public class CrmPermissionRegistry {
                         "HIGH",
                         "Issue #171"),
 
-                // Vehicle Management (5 permissions)
+                // Vehicle Management (3 permissions; registry writes live in pos-vehicle-inventory)
                 permission(VEHICLE_VIEW, "View vehicle records (VIN, unit #, description, plate)", "LOW", "Issue #169"),
                 permission(VEHICLE_SEARCH, "Search vehicles by VIN, unit #, or plate", "LOW", "Issue #169"),
                 permission(
                         VEHICLE_CREATE,
-                        "Create new vehicle record with VIN and optional party association",
+                        "Associate a vehicle VIN with a party",
                         "MEDIUM",
                         "Issue #169"),
-                permission(VEHICLE_EDIT, "Edit vehicle details (unit #, description, license plate, status)", "MEDIUM"),
-                permission(VEHICLE_DEACTIVATE, "Deactivate vehicle record (soft delete)", "HIGH"),
 
                 // Vehicle-Party Association (3 permissions)
                 permission(
@@ -227,8 +224,6 @@ public class CrmPermissionRegistry {
                 VEHICLE_VIEW,
                 VEHICLE_SEARCH,
                 VEHICLE_CREATE,
-                VEHICLE_EDIT,
-                VEHICLE_DEACTIVATE,
                 VEHICLE_PARTY_ASSOC_CREATE,
                 VEHICLE_PARTY_ASSOC_VIEW,
                 VEHICLE_PARTY_ASSOC_EDIT,
