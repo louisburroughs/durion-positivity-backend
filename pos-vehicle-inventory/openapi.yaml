@@ -1254,14 +1254,12 @@ components:
           minLength: 1
         unitNumber:
           type: string
-          description: Fleet/unit number.
+          description: Fleet/unit number. Optional; stored as empty when omitted.
           example: UNIT-1024
-          minLength: 1
         description:
           type: string
-          description: Human-readable vehicle description.
+          description: Human-readable vehicle description. Optional; stored as empty when omitted.
           example: 2024 Ford F-150 XL
-          minLength: 1
         licensePlate:
           type: string
           description: License plate value.
@@ -1289,8 +1287,6 @@ components:
           example: XL
       required:
       - accountId
-      - description
-      - unitNumber
       - vin
     PreferencesMergeDto:
       type: object

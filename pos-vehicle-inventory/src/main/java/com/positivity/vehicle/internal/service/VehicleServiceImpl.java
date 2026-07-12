@@ -46,13 +46,14 @@ public class VehicleServiceImpl implements VehicleService {
                     + "VINs must be globally unique across all active vehicles.");
         }
 
-        // Create entity
+        // Create entity. unitNumber/description are optional on the contract (frontends create
+        // vehicles directly per ADR-0044 §6) but non-null columns — default them to empty.
         VehicleRecord vehicle = VehicleRecord.builder()
                 .accountId(request.getAccountId())
                 .vin(request.getVin())
                 .vinNormalized(vinNormalized)
-                .unitNumber(request.getUnitNumber())
-                .description(request.getDescription())
+                .unitNumber(request.getUnitNumber() == null ? "" : request.getUnitNumber())
+                .description(request.getDescription() == null ? "" : request.getDescription())
                 .licensePlate(request.getLicensePlate())
                 .licensePlateJurisdiction(request.getLicensePlateJurisdiction())
                 .year(request.getYear())
