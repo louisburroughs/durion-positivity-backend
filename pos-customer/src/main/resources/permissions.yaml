@@ -57,7 +57,7 @@ permissions:
   - name: "crm:suspense:view"
     description: "View quarantined/unprocessable events"
   - name: "crm:vehicle:create"
-    description: "Associate an existing vehicle VIN with a party"
+    description: "Associate a vehicle VIN with a party"
   - name: "crm:vehicle:search"
     description: "Search vehicles by VIN, unit #, or plate"
   - name: "crm:vehicle:view"

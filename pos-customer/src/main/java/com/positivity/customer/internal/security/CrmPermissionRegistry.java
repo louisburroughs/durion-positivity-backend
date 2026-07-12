@@ -133,7 +133,7 @@ public class CrmPermissionRegistry {
                 permission(VEHICLE_SEARCH, "Search vehicles by VIN, unit #, or plate", "LOW", "Issue #169"),
                 permission(
                         VEHICLE_CREATE,
-                        "Associate an existing vehicle VIN with a party",
+                        "Associate a vehicle VIN with a party",
                         "MEDIUM",
                         "Issue #169"),
 
