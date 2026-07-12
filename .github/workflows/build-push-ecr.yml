@@ -332,13 +332,17 @@ jobs:
           aws s3 cp deployment/alpha/docker-compose.prod.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml
           aws s3 cp deployment/alpha/deploy-backend.sh s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/deploy-backend.sh
           aws s3 cp postgres/init-databases.sql s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-databases.sql
+          # Observability config (#863): ship the whole tree as one object so the
+          # host pull needs only s3:GetObject (EC2-SSM-Role lacks s3:ListBucket).
+          tar czf observability.tgz observability
+          aws s3 cp observability.tgz s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/observability.tgz
 
       - name: Pull compose files on alpha host
         run: |
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters '{"commands":["mkdir -p /opt/durion/alpha/backend/postgres /opt/durion/alpha/scripts","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml /opt/durion/alpha/backend/docker-compose.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml /opt/durion/alpha/docker-compose.prod.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/deploy-backend.sh /opt/durion/alpha/scripts/deploy-backend.sh","chmod +x /opt/durion/alpha/scripts/deploy-backend.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-databases.sql /opt/durion/alpha/backend/postgres/init-databases.sql"]}' \
+            --parameters '{"commands":["mkdir -p /opt/durion/alpha/backend/postgres /opt/durion/alpha/scripts","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml /opt/durion/alpha/backend/docker-compose.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml /opt/durion/alpha/docker-compose.prod.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/deploy-backend.sh /opt/durion/alpha/scripts/deploy-backend.sh","chmod +x /opt/durion/alpha/scripts/deploy-backend.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-databases.sql /opt/durion/alpha/backend/postgres/init-databases.sql","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/observability.tgz /opt/durion/alpha/backend/observability.tgz","tar xzf /opt/durion/alpha/backend/observability.tgz -C /opt/durion/alpha/backend/","rm -f /opt/durion/alpha/backend/observability.tgz"]}' \
             --query "Command.CommandId" --output text)
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \

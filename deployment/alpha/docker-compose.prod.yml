@@ -55,6 +55,14 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  cadvisor:
+    restart: unless-stopped
+    logging: *logging
+
+  postgres-exporter:
+    restart: unless-stopped
+    logging: *logging
+
   promtail:
     restart: unless-stopped
     logging: *logging

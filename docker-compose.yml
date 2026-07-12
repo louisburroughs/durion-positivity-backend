@@ -138,6 +138,41 @@ services:
     networks:
       - pos-network
 
+  # cAdvisor - per-container resource metrics for Prometheus (#863)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    command: [ "--housekeeping_interval=15s", "--docker_only=true" ]
+    # No host port publish: Prometheus scrapes cadvisor:8080 over pos-network.
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    logging: *logging
+    networks:
+      - pos-network
+
+  # postgres-exporter - cluster-wide Postgres metrics for Prometheus (#863).
+  # DATA_SOURCE_URI targets the 'postgres' maintenance DB; pg_stat_database is
+  # cluster-scoped so this covers every per-service pos_*_db.
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres-exporter
+    environment:
+      DATA_SOURCE_URI: postgres:5432/postgres?sslmode=disable
+      DATA_SOURCE_USER: ${POSTGRES_USER}
+      DATA_SOURCE_PASS: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+    networks:
+      - pos-network
+
   # Promtail - Ships Docker json-file logs to Loki (#858)
   promtail:
     image: grafana/promtail:3.1.1
