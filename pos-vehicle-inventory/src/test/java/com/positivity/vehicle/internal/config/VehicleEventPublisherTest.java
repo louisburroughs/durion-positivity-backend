@@ -40,7 +40,7 @@ class VehicleEventPublisherTest {
 
     @BeforeEach
     void setUp() {
-        publisher = new VehicleEventPublisher(TEST_CLOCK, entityManager, writerProvider);
+        publisher = new VehicleEventPublisher(TEST_CLOCK, entityManager, writerProvider, "vehicle.events.v1");
     }
 
     private VehicleRecord vehicle() {

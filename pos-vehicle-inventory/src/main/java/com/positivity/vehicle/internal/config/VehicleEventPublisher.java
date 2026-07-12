@@ -1,15 +1,14 @@
 package com.positivity.vehicle.internal.config;
 
 import com.positivity.domainevents.DomainEventEnvelope;
-import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.vehicle.VehicleUpdatedV1;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,12 +21,25 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class VehicleEventPublisher {
 
     private final Clock clock;
     private final EntityManager entityManager;
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
+    private final String eventsTopic;
+
+    public VehicleEventPublisher(
+            Clock clock,
+            EntityManager entityManager,
+            ObjectProvider<OutboxEventWriter> outboxEventWriter,
+            // Same property ManifestPublisher scans event_outbox by, so an override can never
+            // desync the outbox rows from the manifest computation (PR #865 review).
+            @Value("${pos.vehicle-inventory.kafka.events-topic:vehicle.events.v1}") String eventsTopic) {
+        this.clock = clock;
+        this.entityManager = entityManager;
+        this.outboxEventWriter = outboxEventWriter;
+        this.eventsTopic = eventsTopic;
+    }
 
     public void publishVehicleUpdated(@NonNull VehicleRecord vehicle) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
@@ -64,7 +76,7 @@ public class VehicleEventPublisher {
                 null,
                 payload,
                 clock);
-        writer.publish(DomainTopics.events("vehicle"), envelope);
+        writer.publish(eventsTopic, envelope);
         log.debug(
                 "Queued vehicle.vehicle.updated vehicleId={} accountId={} active={}",
                 vehicle.getVehicleId(),
