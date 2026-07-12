@@ -1,1 +1,10 @@
 # Developer workstation profile intentionally minimal.
+
+# ADR-0046: developer-only DEBUG loggers moved out of application.yml
+logging:
+  level:
+    org:
+      springframework:
+        modulith: DEBUG
+    com:
+      positivity: DEBUG

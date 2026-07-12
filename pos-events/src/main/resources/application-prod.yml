@@ -1,1 +1,13 @@
 # Production runtime inherits base configuration for this internal service.
+
+# ADR-0046: deployed environments run INFO baseline; framework noise capped at WARN
+logging:
+  level:
+    root: INFO
+    com:
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN

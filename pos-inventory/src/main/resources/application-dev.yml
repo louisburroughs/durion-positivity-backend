@@ -32,3 +32,10 @@ eureka:
   instance:
     prefer-ip-address: true
     instance-id: ${spring.application.name}:${random.uuid}
+
+# ADR-0046: developer-only DEBUG loggers moved out of application.yml
+logging:
+  level:
+    org:
+      hibernate:
+        SQL: DEBUG
