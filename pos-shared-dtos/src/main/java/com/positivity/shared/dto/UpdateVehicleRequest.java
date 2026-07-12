@@ -5,6 +5,7 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,6 +20,14 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Schema(description = "Request payload for partially updating mutable vehicle fields.")
 public class UpdateVehicleRequest {
+
+    @Schema(
+            description = "Owning party (account) id. Providing a different accountId transfers the"
+                    + " vehicle to that party; the vehicle-party association follows via"
+                    + " vehicle.events.v1 (ADR-0044 §6).",
+            example = "018f6a2b-7c4d-7e3a-9b1c-2d3e4f5a6b7c",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private UUID accountId;
 
     @Size(max = 255)
     @Schema(description = "Fleet/unit number.", example = "UNIT-2048", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
@@ -61,7 +70,8 @@ public class UpdateVehicleRequest {
 
     @AssertTrue(message = "At least one field must be provided for update")
     private boolean isAtLeastOneFieldProvided() {
-        return unitNumber != null
+        return accountId != null
+                || unitNumber != null
                 || description != null
                 || licensePlate != null
                 || licensePlateJurisdiction != null

@@ -856,6 +856,11 @@ components:
       type: object
       description: Vehicle update request
       properties:
+        accountId:
+          type: string
+          format: uuid
+          description: Owning party (account) id. Providing a different accountId transfers the vehicle to that party; the vehicle-party association follows via vehicle.events.v1 (ADR-0044 §6).
+          example: 018f6a2b-7c4d-7e3a-9b1c-2d3e4f5a6b7c
         unitNumber:
           type: string
           description: Fleet/unit number.

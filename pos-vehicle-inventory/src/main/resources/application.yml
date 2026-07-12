@@ -60,3 +60,14 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
   default-produces-media-type: application/json
+pos:
+  vehicle-inventory:
+    kafka:
+      # ADR-0044 domain-event flow (vehicle.events.v1 facts via the transactional outbox,
+      # vehicle.commands.v1 replay/bootstrap commands, vehicle.manifest.v1 reconciliation).
+      enabled: ${POS_VEHICLE_INVENTORY_KAFKA_ENABLED:false}
+      events-topic: ${POS_VEHICLE_INVENTORY_EVENTS_TOPIC:vehicle.events.v1}
+      commands-topic: ${POS_VEHICLE_INVENTORY_COMMANDS_TOPIC:vehicle.commands.v1}
+      commands-consumer-group: ${POS_VEHICLE_INVENTORY_COMMANDS_CONSUMER_GROUP:pos-vehicle-inventory-commands}
+    manifest:
+      topic: ${POS_VEHICLE_INVENTORY_MANIFEST_TOPIC:vehicle.manifest.v1}

@@ -133,168 +133,6 @@ paths:
         - crm:party:deactivate
       x-required-permissions:
       - crm:party:deactivate
-  /v1/crm/{customerId}/vehicles/{vehicleId}:
-    get:
-      tags:
-      - CRM Vehicles
-      summary: Get vehicle for customer
-      description: Retrieve a specific vehicle for a given customer
-      operationId: getVehiclesForCustomer
-      parameters:
-      - name: customerId
-        in: path
-        description: Customer ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: vehicleId
-        in: path
-        description: Vehicle ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Vehicle found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleResponse'
-        '403':
-          description: Forbidden - insufficient permissions
-        '404':
-          description: Customer or vehicle not found
-      security:
-      - bearerAuth:
-        - crm:vehicle:view
-      x-required-permissions:
-      - crm:vehicle:view
-    put:
-      tags:
-      - CRM Vehicles
-      summary: Update vehicle
-      description: Update vehicle information for a customer
-      operationId: updateVehicles
-      parameters:
-      - name: customerId
-        in: path
-        description: Customer ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: vehicleId
-        in: path
-        description: Vehicle ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateVehicleForPartyRequest'
-        required: true
-      responses:
-        '200':
-          description: Vehicle updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleResponse'
-        '400':
-          description: Bad request - invalid input
-        '403':
-          description: Forbidden - insufficient permissions
-        '404':
-          description: Customer or vehicle not found
-      security:
-      - bearerAuth:
-        - crm:vehicle:edit
-      x-required-permissions:
-      - crm:vehicle:edit
-    delete:
-      tags:
-      - CRM Vehicles
-      summary: Delete vehicle
-      description: Delete or deactivate a vehicle for a customer
-      operationId: deleteVehicle
-      parameters:
-      - name: customerId
-        in: path
-        description: Customer ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: vehicleId
-        in: path
-        description: Vehicle ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '204':
-          description: Vehicle deleted successfully
-        '403':
-          description: Forbidden - insufficient permissions
-        '404':
-          description: Customer or vehicle not found
-      security:
-      - bearerAuth:
-        - crm:vehicle:deactivate
-      x-required-permissions:
-      - crm:vehicle:deactivate
-  /v1/crm/{customerId}/vehicles/{vehicleId}/transfer:
-    put:
-      tags:
-      - CRM Vehicles
-      summary: Transfer vehicle
-      description: Transfer vehicle ownership between customers
-      operationId: transferVehicles
-      parameters:
-      - name: customerId
-        in: path
-        description: Source customer ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: vehicleId
-        in: path
-        description: Vehicle ID to transfer
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VehicleTransferRequest'
-        required: true
-      responses:
-        '200':
-          description: Vehicle transferred successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleResponse'
-        '400':
-          description: Bad request - invalid input
-        '403':
-          description: Forbidden - insufficient permissions
-        '404':
-          description: Customer or vehicle not found
-      security:
-      - bearerAuth:
-        - crm:vehicle_party_association:edit
-      x-required-permissions:
-      - crm:vehicle_party_association:edit
   /v1/crm/parties/{partyId}/contacts/{contactId}/roles:
     put:
       tags:
@@ -551,77 +389,6 @@ paths:
         - crm:party:create
       x-required-permissions:
       - crm:party:create
-  /v1/crm/{customerId}/vehicles:
-    get:
-      tags:
-      - CRM Vehicles
-      summary: List vehicles for customer
-      description: Retrieve all vehicle summaries (vehicleId, VIN, make/model/year) associated with a customer. Returns the vehicle UUIDs the frontend needs to build estimates for a given Durion customer.
-      operationId: listVehiclesForCustomer
-      parameters:
-      - name: customerId
-        in: path
-        description: Customer ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Vehicles listed (possibly empty)
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/VehicleSummary'
-        '403':
-          description: Forbidden - insufficient permissions
-        '404':
-          description: Customer not found
-      security:
-      - bearerAuth:
-        - crm:vehicle:view
-      x-required-permissions:
-      - crm:vehicle:view
-    post:
-      tags:
-      - CRM Vehicles
-      summary: Create vehicle
-      description: Create a new vehicle for a customer
-      operationId: createVehicles
-      parameters:
-      - name: customerId
-        in: path
-        description: Customer ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateVehicleForPartyRequest'
-        required: true
-      responses:
-        '201':
-          description: Vehicle created successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleResponse'
-        '400':
-          description: Bad request - invalid input
-        '403':
-          description: Forbidden - insufficient permissions
-        '404':
-          description: Customer not found
-      security:
-      - bearerAuth:
-        - crm:vehicle:create
-      x-required-permissions:
-      - crm:vehicle:create
   /v1/crm/persons:
     get:
       tags:
@@ -1256,6 +1023,77 @@ paths:
         - crm:party:view
       x-required-permissions:
       - crm:party:view
+  /v1/crm/{customerId}/vehicles:
+    get:
+      tags:
+      - CRM Vehicles
+      summary: List vehicles for customer
+      description: Retrieve all vehicle summaries (vehicleId, VIN, make/model/year) associated with a customer. Returns the vehicle UUIDs the frontend needs to build estimates for a given Durion customer.
+      operationId: listVehiclesForCustomer
+      parameters:
+      - name: customerId
+        in: path
+        description: Customer ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Vehicles listed (possibly empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VehicleSummary'
+        '403':
+          description: Forbidden - insufficient permissions
+        '404':
+          description: Customer not found
+      security:
+      - bearerAuth:
+        - crm:vehicle:view
+      x-required-permissions:
+      - crm:vehicle:view
+  /v1/crm/{customerId}/vehicles/{vehicleId}:
+    get:
+      tags:
+      - CRM Vehicles
+      summary: Get vehicle for customer
+      description: Retrieve a specific vehicle for a given customer
+      operationId: getVehiclesForCustomer
+      parameters:
+      - name: customerId
+        in: path
+        description: Customer ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: vehicleId
+        in: path
+        description: Vehicle ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Vehicle found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+        '404':
+          description: Customer or vehicle not found
+      security:
+      - bearerAuth:
+        - crm:vehicle:view
+      x-required-permissions:
+      - crm:vehicle:view
   /v1/crm/snapshot/vehicle/{vehicleId}:
     get:
       tags:
@@ -1739,153 +1577,6 @@ components:
       required:
       - firstName
       - lastName
-    CreateVehicleForPartyRequest:
-      type: object
-      description: Vehicle creation request
-      properties:
-        vinNumber:
-          type: string
-          description: Vehicle Identification Number (uniqueness scope global or per-party)
-          example: 1HGCM82633A004352
-          maxLength: 17
-          minLength: 0
-        unitNumber:
-          type: string
-          description: Unit number or internal reference
-          example: UNIT-42
-          maxLength: 64
-          minLength: 0
-        description:
-          type: string
-          description: Vehicle description
-          example: 2019 Ford Transit 250 cargo van
-          maxLength: 255
-          minLength: 0
-        licensePlate:
-          type: string
-          description: License plate (single string or plate plus region)
-          example: ABC-1234
-          maxLength: 32
-          minLength: 0
-        licensePlateRegion:
-          type: string
-          description: License plate region/state
-          example: CA
-          maxLength: 64
-          minLength: 0
-      required:
-      - vinNumber
-    VehicleResponse:
-      type: object
-      description: Vehicle response payload.
-      properties:
-        vehicleId:
-          type: string
-          format: uuid
-          description: Vehicle identifier.
-          example: 550e8400-e29b-41d4-a716-446655440000
-        accountId:
-          type: string
-          format: uuid
-          description: Owning account identifier.
-          example: 550e8400-e29b-41d4-a716-446655440001
-        vin:
-          type: string
-          description: Vehicle VIN.
-          example: 1HGCM82633A004352
-        vinNormalized:
-          type: string
-          description: Normalized VIN used for lookup and uniqueness.
-          example: 1HGCM82633A004352
-        unitNumber:
-          type: string
-          description: Fleet/unit number.
-          example: UNIT-1024
-        description:
-          type: string
-          description: Human-readable vehicle description.
-          example: 2024 Ford F-150 XL
-        licensePlate:
-          type: string
-          description: License plate value.
-          example: ABC1234
-        licensePlateJurisdiction:
-          type: string
-          description: License plate jurisdiction/state or province.
-          example: CA
-        year:
-          type: integer
-          format: int32
-          description: Model year.
-          example: 2024
-        make:
-          type: string
-          description: Vehicle make.
-          example: Ford
-        model:
-          type: string
-          description: Vehicle model.
-          example: F-150
-        trim:
-          type: string
-          description: Vehicle trim.
-          example: XL
-        isActive:
-          type: boolean
-          description: Whether vehicle is active.
-          example: true
-        createdAt:
-          type: string
-          format: date-time
-          description: Record creation timestamp (UTC).
-          example: 2026-02-27 12:00:00+00:00
-        updatedAt:
-          type: string
-          format: date-time
-          description: Last update timestamp (UTC).
-          example: 2026-02-27 13:00:00+00:00
-        createdBy:
-          type: string
-          description: Username of the actor who created this record.
-          example: jsmith
-        updatedBy:
-          type: string
-          description: Username of the actor who last modified this record.
-          example: jsmith
-        version:
-          type: integer
-          format: int64
-          description: Optimistic lock version.
-          example: 1
-      required:
-      - accountId
-      - createdAt
-      - description
-      - isActive
-      - unitNumber
-      - updatedAt
-      - vehicleId
-      - version
-      - vin
-      - vinNormalized
-    VehicleTransferRequest:
-      type: object
-      description: Transfer request with target customer
-      properties:
-        targetCustomerId:
-          type: string
-          description: Target customer ID to transfer the vehicle to
-          example: 01960003-0000-7000-8000-000000000001
-          maxLength: 100
-          minLength: 0
-        notes:
-          type: string
-          description: Optional notes about the transfer
-          example: Vehicle reassigned to fleet account
-          maxLength: 1000
-          minLength: 0
-      required:
-      - targetCustomerId
     RoleAssignment:
       type: object
       description: Single role assignment detail
@@ -2894,6 +2585,42 @@ components:
           example: +1-555-0100
       required:
       - partyId
+    CreateVehicleForPartyRequest:
+      type: object
+      description: Vehicle creation request
+      properties:
+        vinNumber:
+          type: string
+          description: Vehicle Identification Number (uniqueness scope global or per-party)
+          example: 1HGCM82633A004352
+          maxLength: 17
+          minLength: 0
+        unitNumber:
+          type: string
+          description: Unit number or internal reference
+          example: UNIT-42
+          maxLength: 64
+          minLength: 0
+        description:
+          type: string
+          description: Vehicle description
+          example: 2019 Ford Transit 250 cargo van
+          maxLength: 255
+          minLength: 0
+        licensePlate:
+          type: string
+          description: License plate (single string or plate plus region)
+          example: ABC-1234
+          maxLength: 32
+          minLength: 0
+        licensePlateRegion:
+          type: string
+          description: License plate region/state
+          example: CA
+          maxLength: 64
+          minLength: 0
+      required:
+      - vinNumber
     CreateVehicleForPartyResponse:
       type: object
       description: Response returned after creating a vehicle record for a party
@@ -3259,6 +2986,99 @@ components:
           example: 2019
       required:
       - vehicleId
+    VehicleResponse:
+      type: object
+      description: Vehicle response payload.
+      properties:
+        vehicleId:
+          type: string
+          format: uuid
+          description: Vehicle identifier.
+          example: 550e8400-e29b-41d4-a716-446655440000
+        accountId:
+          type: string
+          format: uuid
+          description: Owning account identifier.
+          example: 550e8400-e29b-41d4-a716-446655440001
+        vin:
+          type: string
+          description: Vehicle VIN.
+          example: 1HGCM82633A004352
+        vinNormalized:
+          type: string
+          description: Normalized VIN used for lookup and uniqueness.
+          example: 1HGCM82633A004352
+        unitNumber:
+          type: string
+          description: Fleet/unit number.
+          example: UNIT-1024
+        description:
+          type: string
+          description: Human-readable vehicle description.
+          example: 2024 Ford F-150 XL
+        licensePlate:
+          type: string
+          description: License plate value.
+          example: ABC1234
+        licensePlateJurisdiction:
+          type: string
+          description: License plate jurisdiction/state or province.
+          example: CA
+        year:
+          type: integer
+          format: int32
+          description: Model year.
+          example: 2024
+        make:
+          type: string
+          description: Vehicle make.
+          example: Ford
+        model:
+          type: string
+          description: Vehicle model.
+          example: F-150
+        trim:
+          type: string
+          description: Vehicle trim.
+          example: XL
+        isActive:
+          type: boolean
+          description: Whether vehicle is active.
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Record creation timestamp (UTC).
+          example: 2026-02-27 12:00:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp (UTC).
+          example: 2026-02-27 13:00:00+00:00
+        createdBy:
+          type: string
+          description: Username of the actor who created this record.
+          example: jsmith
+        updatedBy:
+          type: string
+          description: Username of the actor who last modified this record.
+          example: jsmith
+        version:
+          type: integer
+          format: int64
+          description: Optimistic lock version.
+          example: 1
+      required:
+      - accountId
+      - createdAt
+      - description
+      - isActive
+      - unitNumber
+      - updatedAt
+      - vehicleId
+      - version
+      - vin
+      - vinNormalized
     AccountSummary:
       type: object
       description: Account summary surfaced in a CRM snapshot

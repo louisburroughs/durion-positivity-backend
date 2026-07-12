@@ -79,9 +79,13 @@ pos:
       workorder-manifest-topic: ${POS_CUSTOMER_WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
       workorder-commands-topic: ${POS_CUSTOMER_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
       manifest-consumer-group: ${POS_CUSTOMER_MANIFEST_CONSUMER_GROUP:pos-customer-workorder-manifests}
-      enabled: false
+      # Vehicle replica feed + reconciliation (ADR-0044 §6, #843)
+      vehicle-events-topic: ${POS_CUSTOMER_VEHICLE_EVENTS_TOPIC:vehicle.events.v1}
+      vehicle-events-consumer-group: ${POS_CUSTOMER_VEHICLE_EVENTS_CONSUMER_GROUP:pos-customer-vehicle-events}
+      vehicle-manifest-topic: ${POS_CUSTOMER_VEHICLE_MANIFEST_TOPIC:vehicle.manifest.v1}
+      vehicle-manifest-consumer-group: ${POS_CUSTOMER_VEHICLE_MANIFEST_CONSUMER_GROUP:pos-customer-vehicle-manifests}
+      vehicle-commands-topic: ${POS_CUSTOMER_VEHICLE_COMMANDS_TOPIC:vehicle.commands.v1}
+      enabled: ${POS_CUSTOMER_KAFKA_ENABLED:false}
   people:
     service-id: ${POS_PEOPLE_SERVICE_ID:people}
     allow-local-fallback: false
-  vehicle-inventory:
-    service-id: ${POS_VEHICLE_INVENTORY_SERVICE_ID:vehicle-inventory}

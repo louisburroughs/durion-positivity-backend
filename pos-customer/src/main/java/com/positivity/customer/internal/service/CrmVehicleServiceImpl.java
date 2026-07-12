@@ -1,20 +1,19 @@
 package com.positivity.customer.internal.service;
 
-import com.positivity.customer.internal.client.VehicleInventoryClient;
-import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
-import com.positivity.customer.internal.dto.VehicleTransferRequest;
 import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.entity.AbstractParty;
 import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.ExtVehicle;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.CrmVehicleService;
-import com.positivity.shared.dto.CreateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -24,9 +23,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service for managing customer-vehicle associations.
- * Handles CRUD operations for vehicles and their relationships to customers
- * (parties).
+ * Read-side of the customer-vehicle relationship (ADR-0044 §6, #843).
+ *
+ * <p>All vehicle facts are served from the local {@code ext_vehicle} replica fed by
+ * {@code vehicle.events.v1}; the previous synchronous {@code VehicleInventoryClient} is retired.
+ * Vehicle registry writes (create/update/transfer/deactivate) go straight to
+ * pos-vehicle-inventory through the gateway; the vehicle-party association this module owns
+ * (ADR-0012) follows via the event consumer.
  */
 @Slf4j
 @Service
@@ -34,41 +37,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class CrmVehicleServiceImpl implements CrmVehicleService {
     private final Clock clock;
 
-    private final VehicleInventoryClient vehicleInventoryClient;
+    private final ExtVehicleRepository extVehicleRepository;
     private final PersonPartyRepository personPartyRepository;
     private final CommercialPartyRepository commercialPartyRepository;
-
-    /**
-     * Creates a new vehicle and associates it with a customer.
-     */
-    @Override
-    @Transactional
-    public VehicleResponse createVehicle(@NonNull UUID customerId, @NonNull CreateVehicleForPartyRequest request) {
-        log.debug("Creating vehicle for customer: {}", customerId);
-
-        AbstractParty party = findPartyOrThrow(customerId);
-
-        // Map to vehicle inventory request
-        CreateVehicleRequest vehicleRequest = CreateVehicleRequest.builder()
-                .accountId(party.getPartyId())
-                .vin(request.getVinNumber())
-                .unitNumber(request.getUnitNumber() != null ? request.getUnitNumber() : "")
-                .description(request.getDescription() != null ? request.getDescription() : "")
-                .licensePlate(request.getLicensePlate())
-                .licensePlateJurisdiction(request.getLicensePlateRegion())
-                .build();
-
-        VehicleResponse response = vehicleInventoryClient.createVehicle(vehicleRequest);
-
-        // Associate VIN with party
-        if (response != null && response.getVin() != null) {
-            party.getVehicleVins().add(response.getVin());
-            saveParty(party);
-            log.info("Associated vehicle VIN {} with customer {}", response.getVin(), customerId);
-        }
-
-        return response;
-    }
 
     /**
      * Retrieves a vehicle for a specific customer.
@@ -78,233 +49,46 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
     public Optional<VehicleResponse> getVehicleForCustomer(@NonNull UUID customerId, @NonNull UUID vehicleId) {
         log.debug("Fetching vehicle {} for customer {}", vehicleId, customerId);
 
-        // Verify the customer exists
         AbstractParty party = findPartyOrThrow(customerId);
 
-        // Fetch the vehicle
-        Optional<VehicleResponse> vehicleOpt = vehicleInventoryClient.getVehicle(vehicleId);
-
-        if (vehicleOpt.isPresent()) {
-            VehicleResponse vehicle = vehicleOpt.get();
-            // Verify the vehicle belongs to this customer
-            if (!party.getVehicleVins().contains(vehicle.getVin())) {
-                log.warn("Vehicle {} does not belong to customer {}", vehicleId, customerId);
-                return Optional.empty();
-            }
-        }
-
-        return vehicleOpt;
-    }
-
-    /**
-     * Updates a vehicle for a customer.
-     */
-    @Override
-    @Transactional
-    public VehicleResponse updateVehicle(
-            @NonNull UUID customerId, @NonNull CreateVehicleForPartyRequest request, @NonNull UUID vehicleId) {
-        log.debug("Updating vehicle {} for customer {}", vehicleId, customerId);
-
-        AbstractParty party = findPartyOrThrow(customerId);
-
-        // Fetch existing vehicle to verify ownership
-        VehicleResponse existing = vehicleInventoryClient
-                .getVehicle(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
-        if (!party.getVehicleVins().contains(existing.getVin())) {
-            throw new IllegalArgumentException("Vehicle " + vehicleId + " does not belong to customer " + customerId);
-        }
-
-        // Map to vehicle inventory request
-        CreateVehicleRequest vehicleRequest = CreateVehicleRequest.builder()
-                .accountId(party.getPartyId())
-                .vin(request.getVinNumber() != null ? request.getVinNumber() : existing.getVin())
-                .unitNumber(request.getUnitNumber() != null ? request.getUnitNumber() : existing.getUnitNumber())
-                .description(request.getDescription() != null ? request.getDescription() : existing.getDescription())
-                .licensePlate(
-                        request.getLicensePlate() != null ? request.getLicensePlate() : existing.getLicensePlate())
-                .licensePlateJurisdiction(
-                        request.getLicensePlateRegion() != null
-                                ? request.getLicensePlateRegion()
-                                : existing.getLicensePlateJurisdiction())
-                .build();
-
-        return vehicleInventoryClient.updateVehicle(vehicleId, vehicleRequest);
-    }
-
-    /**
-     * Deletes (deactivates) a vehicle for a customer.
-     */
-    @Override
-    @Transactional
-    public void deleteVehicle(@NonNull UUID customerId, @NonNull UUID vehicleId) {
-        log.debug("Deleting vehicle {} for customer {}", vehicleId, customerId);
-
-        AbstractParty party = findPartyOrThrow(customerId);
-
-        // Fetch vehicle to verify ownership
-        VehicleResponse vehicle = vehicleInventoryClient
-                .getVehicle(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
-        if (!party.getVehicleVins().contains(vehicle.getVin())) {
-            throw new IllegalArgumentException("Vehicle " + vehicleId + " does not belong to customer " + customerId);
-        }
-
-        // Delete from vehicle inventory
-        vehicleInventoryClient.deleteVehicle(vehicleId);
-
-        // Remove VIN association from party
-        party.getVehicleVins().remove(vehicle.getVin());
-        saveParty(party);
-
-        log.info("Deleted vehicle {} for customer {}", vehicleId, customerId);
-    }
-
-    /**
-     * Transfers a vehicle from one customer to another.
-     */
-    @Override
-    @Transactional
-    public VehicleResponse transferVehicle(
-            @NonNull UUID sourceCustomerId, @NonNull UUID vehicleId, @NonNull VehicleTransferRequest request) {
-        log.debug("Transferring vehicle {} from {} to {}", vehicleId, sourceCustomerId, request.getTargetCustomerId());
-
-        UUID targetUuid = parseCustomerId(request.getTargetCustomerId());
-
-        AbstractParty sourceParty = findPartyOrThrow(sourceCustomerId);
-        AbstractParty targetParty = findPartyOrThrow(targetUuid);
-
-        // Fetch vehicle to verify ownership
-        VehicleResponse vehicle = vehicleInventoryClient
-                .getVehicle(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
-        if (!sourceParty.getVehicleVins().contains(vehicle.getVin())) {
-            throw new IllegalArgumentException(
-                    "Vehicle " + vehicleId + " does not belong to source customer " + sourceCustomerId);
-        }
-
-        // Remove from source, add to target
-        sourceParty.getVehicleVins().remove(vehicle.getVin());
-        targetParty.getVehicleVins().add(vehicle.getVin());
-
-        saveParty(sourceParty);
-        saveParty(targetParty);
-
-        // Update vehicle's accountId in vehicle inventory
-        CreateVehicleRequest updateRequest = CreateVehicleRequest.builder()
-                .accountId(targetParty.getPartyId())
-                .vin(vehicle.getVin())
-                .unitNumber(vehicle.getUnitNumber())
-                .description(vehicle.getDescription())
-                .licensePlate(vehicle.getLicensePlate())
-                .licensePlateJurisdiction(vehicle.getLicensePlateJurisdiction())
-                .year(vehicle.getYear())
-                .make(vehicle.getMake())
-                .model(vehicle.getModel())
-                .trim(vehicle.getTrim())
-                .build();
-
-        VehicleResponse updated = vehicleInventoryClient.updateVehicle(vehicleId, updateRequest);
-
-        log.info(
-                "Transferred vehicle {} from customer {} to customer {}",
-                vehicleId,
-                sourceCustomerId,
-                request.getTargetCustomerId());
-
-        return updated;
-    }
-
-    private UUID parseCustomerId(String customerId) {
-        try {
-            return UUID.fromString(customerId);
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid customer ID format: {}", customerId);
-            throw new IllegalArgumentException("Invalid customer ID format: " + customerId);
-        }
-    }
-
-    private AbstractParty findPartyOrThrow(UUID partyId) {
-        return personPartyRepository
-                .findById(partyId)
-                .map(p -> (AbstractParty) p)
-                .orElseGet(() -> commercialPartyRepository
-                        .findById(partyId)
-                        .map(p -> (AbstractParty) p)
-                        .orElseThrow(() -> new IllegalArgumentException("Customer not found: " + partyId)));
-    }
-
-    private void saveParty(AbstractParty party) {
-        if (party instanceof com.positivity.customer.internal.entity.PersonParty) {
-            personPartyRepository.save((com.positivity.customer.internal.entity.PersonParty) party);
-        } else if (party instanceof com.positivity.customer.internal.entity.CommercialParty) {
-            commercialPartyRepository.save((com.positivity.customer.internal.entity.CommercialParty) party);
-        }
+        return extVehicleRepository
+                .findById(vehicleId)
+                .filter(vehicle -> {
+                    if (party.getVehicleVins().contains(vehicle.getVin())) {
+                        return true;
+                    }
+                    log.warn("Vehicle {} does not belong to customer {}", vehicleId, customerId);
+                    return false;
+                })
+                .map(this::mapToResponse);
     }
 
     @Override
     @Transactional(readOnly = true)
     public CommercialParty findPartyByVehicleId(@NonNull UUID vehicleId) {
         log.debug("Finding party for vehicle: {}", vehicleId);
-        VehicleResponse vehicleData =
-                vehicleInventoryClient.getVehicle(vehicleId).orElse(null);
-
-        if (vehicleData == null || vehicleData.getVin() == null) {
-            log.debug("Vehicle not found: {}", vehicleId);
-            return null;
-        }
-
-        return findPartyByVin(vehicleData.getVin());
+        return extVehicleRepository
+                .findById(vehicleId)
+                .map(vehicle -> findPartyByVin(vehicle.getVin()))
+                .orElse(null);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary fetchVehicleSummaryByVin(
-            String vinCode) {
-        try {
-            VehicleResponse vehicleData =
-                    vehicleInventoryClient.getVehicleByVin(vinCode).orElse(null);
-
-            if (vehicleData == null) {
-                log.debug("Vehicle lookup by VIN returned null: {}", vinCode);
-                return null;
-            }
-
-            com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary summary =
-                    new com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary();
-            summary.setVehicleId(vehicleData.getVehicleId().toString());
-            summary.setVin(vehicleData.getVin());
-            summary.setLicensePlate(vehicleData.getLicensePlate());
-            summary.setMake(vehicleData.getMake());
-            summary.setModel(vehicleData.getModel());
-            summary.setYear(vehicleData.getYear());
-            return summary;
-        } catch (Exception ex) {
-            log.warn("Vehicle fetch failed for VIN {}: {}", vinCode, ex.getMessage());
-            return null;
-        }
+    public CrmSnapshotDTO.VehicleSummary fetchVehicleSummaryByVin(String vinCode) {
+        return findReplicaByVin(vinCode).map(this::toSummary).orElse(null);
     }
 
     private CommercialParty findPartyByVin(String vinCode) {
         if (vinCode == null || vinCode.isBlank()) {
             return null;
         }
-
-        // Search through commercial parties
-        List<com.positivity.customer.internal.entity.CommercialParty> allParties = commercialPartyRepository.findAll();
-
-        for (com.positivity.customer.internal.entity.CommercialParty candidate : allParties) {
-            if (candidate.getVehicleVins().contains(vinCode)) {
-                log.debug("Party located for VIN {}: {}", vinCode, candidate.getPartyId());
-                return candidate;
-            }
+        List<CommercialParty> holders = commercialPartyRepository.findByVehicleVin(vinCode);
+        if (holders.isEmpty()) {
+            log.debug("No party found owning VIN: {}", vinCode);
+            return null;
         }
-
-        log.debug("No party found owning VIN: {}", vinCode);
-        return null;
+        return holders.get(0);
     }
 
     @Override
@@ -337,8 +121,7 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
                         party.getDisplayName() != null ? party.getDisplayName() : party.getLegalName(),
                         party.getPartyType().name());
 
-        java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> vehicles =
-                collectVehiclesForParty(party);
+        List<CrmSnapshotDTO.VehicleSummary> vehicles = collectVehiclesForParty(party);
 
         CrmSnapshotDTO result = new CrmSnapshotDTO();
         result.setSnapshotMetadata(meta);
@@ -351,15 +134,13 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
     }
 
     @Override
-    public java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary>
-            collectVehiclesForParty(CommercialParty party) {
+    public List<CrmSnapshotDTO.VehicleSummary> collectVehiclesForParty(CommercialParty party) {
         return collectVehicleSummaries(party);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary>>
-            findVehiclesForCustomer(@NonNull UUID customerId) {
+    public Optional<List<CrmSnapshotDTO.VehicleSummary>> findVehiclesForCustomer(@NonNull UUID customerId) {
         log.debug("Listing vehicles for customer: {}", customerId);
         AbstractParty party = personPartyRepository
                 .findById(customerId)
@@ -373,14 +154,64 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
     }
 
     /**
-     * Resolves the VIN set of any party to vehicle summaries, dropping VINs the
-     * vehicle-inventory service cannot resolve.
+     * Resolves the VIN set of any party to vehicle summaries from the {@code ext_vehicle}
+     * replica, dropping VINs the replica cannot resolve (e.g. events not yet consumed).
      */
-    private java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary>
-            collectVehicleSummaries(AbstractParty party) {
+    private List<CrmSnapshotDTO.VehicleSummary> collectVehicleSummaries(AbstractParty party) {
         return party.getVehicleVins().stream()
-                .map(this::fetchVehicleSummaryByVin)
+                .map(vin -> findReplicaByVin(vin).map(this::toSummary).orElse(null))
                 .filter(java.util.Objects::nonNull)
                 .toList();
+    }
+
+    private Optional<ExtVehicle> findReplicaByVin(String vin) {
+        if (vin == null || vin.isBlank()) {
+            return Optional.empty();
+        }
+        // Mirrors the owner's VIN normalization (VinUtils): uppercase without surrounding
+        // whitespace, matching ext_vehicle.vin_normalized.
+        return extVehicleRepository.findByVinNormalizedAndActiveTrue(vin.trim().toUpperCase(Locale.ROOT));
+    }
+
+    private CrmSnapshotDTO.VehicleSummary toSummary(ExtVehicle vehicle) {
+        CrmSnapshotDTO.VehicleSummary summary = new CrmSnapshotDTO.VehicleSummary();
+        summary.setVehicleId(vehicle.getVehicleId().toString());
+        summary.setVin(vehicle.getVin());
+        summary.setLicensePlate(vehicle.getLicensePlate());
+        summary.setMake(vehicle.getMake());
+        summary.setModel(vehicle.getModel());
+        summary.setYear(vehicle.getYear());
+        return summary;
+    }
+
+    private VehicleResponse mapToResponse(ExtVehicle vehicle) {
+        return VehicleResponse.builder()
+                .vehicleId(vehicle.getVehicleId())
+                .accountId(vehicle.getAccountId())
+                .vin(vehicle.getVin())
+                .vinNormalized(vehicle.getVinNormalized())
+                .unitNumber(vehicle.getUnitNumber())
+                .description(vehicle.getDescription())
+                .licensePlate(vehicle.getLicensePlate())
+                .licensePlateJurisdiction(vehicle.getLicensePlateJurisdiction())
+                .year(vehicle.getYear())
+                .make(vehicle.getMake())
+                .model(vehicle.getModel())
+                .trim(vehicle.getTrim())
+                .isActive(vehicle.isActive())
+                .createdAt(vehicle.getVehicleCreatedAt())
+                .updatedAt(vehicle.getVehicleUpdatedAt())
+                .version(vehicle.getAggregateVersion())
+                .build();
+    }
+
+    private AbstractParty findPartyOrThrow(UUID partyId) {
+        return personPartyRepository
+                .findById(partyId)
+                .map(p -> (AbstractParty) p)
+                .orElseGet(() -> commercialPartyRepository
+                        .findById(partyId)
+                        .map(p -> (AbstractParty) p)
+                        .orElseThrow(() -> new IllegalArgumentException("Customer not found: " + partyId)));
     }
 }

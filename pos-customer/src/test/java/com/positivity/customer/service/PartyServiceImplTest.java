@@ -10,7 +10,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.customer.internal.client.PeopleClient;
-import com.positivity.customer.internal.client.VehicleInventoryClient;
 import com.positivity.customer.internal.config.CacheConfig;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
@@ -26,6 +25,7 @@ import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.dto.snapshot.SnapshotMetadata;
 import com.positivity.customer.internal.entity.BillingRulesEmbeddable;
 import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.ExtVehicle;
 import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
@@ -35,7 +35,6 @@ import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.service.PartyServiceImpl;
-import com.positivity.shared.dto.VehicleResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -82,7 +81,7 @@ class PartyServiceImplTest {
     private PeopleClient peopleClient;
 
     @Mock
-    private VehicleInventoryClient vehicleInventoryClient;
+    private com.positivity.customer.internal.repository.ExtVehicleRepository extVehicleRepository;
 
     private PartyServiceImpl service;
 
@@ -104,7 +103,7 @@ class PartyServiceImplTest {
                 partyRelationshipRepository,
                 cacheManager,
                 peopleClient,
-                vehicleInventoryClient,
+                extVehicleRepository,
                 emptyOutboxWriterProvider());
     }
 
@@ -318,13 +317,15 @@ class PartyServiceImplTest {
         CommercialParty p = party(partyId);
         p.getVehicleVins().add("VIN-123");
 
-        VehicleResponse vehicleResponse = VehicleResponse.builder()
+        ExtVehicle vehicle = ExtVehicle.builder()
                 .vehicleId(vehicleId)
                 .vin("VIN-123")
+                .vinNormalized("VIN-123")
                 .licensePlate("ABC-123")
                 .make("Ford")
                 .model("F-150")
                 .year(2024)
+                .active(true)
                 .build();
 
         when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
@@ -332,7 +333,7 @@ class PartyServiceImplTest {
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
         when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
                 .thenReturn(Collections.emptyList());
-        when(vehicleInventoryClient.getVehicleByVin("VIN-123")).thenReturn(Optional.of(vehicleResponse));
+        when(extVehicleRepository.findByVinNormalizedAndActiveTrue("VIN-123")).thenReturn(Optional.of(vehicle));
 
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
 
@@ -987,12 +988,14 @@ class PartyServiceImplTest {
         PersonParty personParty = personParty(partyId, personId);
         personParty.setVehicleVins(new HashSet<>(List.of("VIN-P-1")));
 
-        VehicleResponse vehicleResponse = VehicleResponse.builder()
+        ExtVehicle vehicle = ExtVehicle.builder()
                 .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000043"))
                 .vin("VIN-P-1")
+                .vinNormalized("VIN-P-1")
                 .make("Toyota")
                 .model("Camry")
                 .year(2025)
+                .active(true)
                 .build();
 
         when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
@@ -1001,7 +1004,7 @@ class PartyServiceImplTest {
         when(personPartyRepository.findById(partyId)).thenReturn(Optional.of(personParty));
         when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(personId)))
                 .thenReturn(java.util.Map.of(personId, identity(personId, "Sam", "Solo", null, null)));
-        when(vehicleInventoryClient.getVehicleByVin("VIN-P-1")).thenReturn(Optional.of(vehicleResponse));
+        when(extVehicleRepository.findByVinNormalizedAndActiveTrue("VIN-P-1")).thenReturn(Optional.of(vehicle));
 
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
 
