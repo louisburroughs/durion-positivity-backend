@@ -1,4 +1,12 @@
 # OpenTelemetry Collector Configuration for Durion POS Backend
+#
+# Metrics policy (#867): application metrics are PULL-ONLY — Prometheus scrapes
+# each service's /actuator/prometheus endpoint directly (see prometheus.yml).
+# The collector carries traces (OTLP -> Jaeger) and logs only; it has no metrics
+# pipeline and does not re-export app metrics. Services must run with
+# OTEL_METRICS_EXPORTER=none so the javaagent doesn't push OTLP metrics here.
+# Collector-internal telemetry is exposed on :8888 (service.telemetry below)
+# and scraped directly by Prometheus under job="otel-collector".
 receivers:
   # OTLP Receiver - Primary receiver for OpenTelemetry Protocol
   otlp:
@@ -10,15 +18,6 @@ receivers:
         cors:
           allowed_origins:
             - "*"
-
-  # Prometheus Receiver - Scrape metrics from services
-  prometheus:
-    config:
-      scrape_configs:
-        - job_name: 'otel-collector'
-          scrape_interval: 10s
-          static_configs:
-            - targets: ['localhost:8888']
 
 processors:
   # Batch Processor - Batch telemetry data for better performance
@@ -60,15 +59,6 @@ exporters:
     tls:
       insecure: true
 
-  # Prometheus Exporter - Expose metrics for Prometheus scraping
-  prometheus:
-    endpoint: "0.0.0.0:8889"
-    namespace: pos
-    # NB: do not add an `environment` const_label here — the attributes processor
-    # already inserts an `environment` datapoint attribute, and defining it in both
-    # places makes prometheusexporter drop every metric with
-    # "duplicate label names in constant and variable labels".
-
   # Logging Exporter - Output telemetry to collector logs (for debugging)
   logging:
     loglevel: debug
@@ -104,12 +94,9 @@ service:
       processors: [memory_limiter, batch, resource, attributes]
       exporters: [otlp/jaeger, logging]
     
-    # Metrics Pipeline
-    metrics:
-      receivers: [otlp, prometheus]
-      processors: [memory_limiter, batch, resource, attributes]
-      exporters: [prometheus, logging]
-    
+    # No metrics pipeline (#867): app metrics are scraped by Prometheus from
+    # /actuator/prometheus; collector-internal metrics are served on :8888.
+
     # Logs Pipeline
     logs:
       receivers: [otlp]

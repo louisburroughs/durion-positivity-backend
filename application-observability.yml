@@ -35,11 +35,10 @@ otel:
       # Sample all traces in development, adjust for production
       probability: ${OTEL_TRACES_SAMPLER_PROBABILITY:1.0}
 
-  # Metrics Configuration
+  # Metrics Configuration — app metrics are PULL-ONLY (#867): Prometheus scrapes
+  # /actuator/prometheus per service. Do not push OTLP metrics to the collector.
   metrics:
-    exporter: otlp
-    export:
-      interval: 60s
+    exporter: none
 
   # Logs Configuration
   logs:
@@ -141,10 +140,6 @@ otel:
   traces:
     sampler:
       probability: 0.1 # Sample 10% of traces in production
-
-  metrics:
-    export:
-      interval: 60s
 
 management:
   endpoint:

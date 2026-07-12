@@ -103,13 +103,13 @@ Defines scrape jobs for all POS services. Each service exposes metrics at `/actu
 
 ### `otel-collector-config.yml`
 
-Configures the OpenTelemetry Collector pipeline:
+Configures the OpenTelemetry Collector pipeline. The collector carries **traces and logs
+only** — application metrics are pull-only (see below).
 
 **Receivers**:
 
 - OTLP gRPC: Port 4317
 - OTLP HTTP: Port 4318
-- Prometheus: Self-scraping
 
 **Processors**:
 
@@ -121,8 +121,21 @@ Configures the OpenTelemetry Collector pipeline:
 **Exporters**:
 
 - Jaeger: Traces via OTLP
-- Prometheus: Metrics on port 8889
 - Logging: Debug output
+
+#### Metrics path — single authority (#867)
+
+Application metrics reach Prometheus **only** by pull: Prometheus scrapes each service's
+`/actuator/prometheus` endpoint (basic-auth) under a per-service `job` label
+(`pos-workorder`, `pos-order`, ...). Metric names are the plain Micrometer/Prometheus
+names (`jvm_memory_used_bytes`, `http_server_requests_seconds_*`, ...).
+
+The collector has **no metrics pipeline** and no `prometheus` exporter (`:8889` removed);
+it must not re-export app metrics. Services run with `OTEL_METRICS_EXPORTER=none` so the
+`grafana-opentelemetry-java` agent doesn't push OTLP metrics. Collector-internal telemetry
+(`otelcol_*`) is exposed on `:8888` and scraped under `job="otel-collector"`.
+
+Traces are unaffected: OTLP → collector → Jaeger.
 
 ### `loki-config.yml`
 
