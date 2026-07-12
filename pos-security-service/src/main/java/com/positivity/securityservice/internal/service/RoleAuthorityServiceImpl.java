@@ -106,9 +106,13 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
         set.addAll(List.of(
                 // Party edit
                 "crm:party:edit",
-                // Vehicles create/edit
+                // Vehicle-party association (crm:vehicle:create guards the
+                // POST /parties/{partyId}/vehicles association endpoint, ADR-0012)
                 "crm:vehicle:create",
-                "crm:vehicle:edit",
+                // Vehicle registry writes live in pos-vehicle-inventory (ADR-0044 §6, #843)
+                "vehicle-inventory:registry:view",
+                "vehicle-inventory:registry:create",
+                "vehicle-inventory:registry:update",
                 // Associations manage
                 "crm:vehicle_party_association:create",
                 "crm:vehicle_party_association:edit",
@@ -127,7 +131,8 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 "crm:person:create",
                 "crm:contact:delete",
                 "crm:contact_role:revoke",
-                "crm:vehicle:deactivate",
+                // Vehicle deactivation moved to the registry (ADR-0044 §6, #843)
+                "vehicle-inventory:registry:delete",
                 "crm:integration:audit",
                 "crm:billing_rules:edit",
                 "crm:relationship:create",
@@ -376,7 +381,13 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
                 // approve/reject pay-period time entries.
                 "pricing:promotion:view",
                 "workorder:timeEntry:approve",
-                "workorder:timeEntry:reject"));
+                "workorder:timeEntry:reject",
+                // Estimate-create vehicle panel (ADR-0044 §6, #843): list customer
+                // vehicles from the CRM replica and register new ones in pos-vehicle-inventory.
+                "crm:vehicle:view",
+                "crm:vehicle:search",
+                "vehicle-inventory:registry:view",
+                "vehicle-inventory:registry:create"));
         return authorities;
     }
 
