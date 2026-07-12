@@ -168,7 +168,7 @@ paths:
       - Vehicle API
       summary: Get vehicle by ID
       description: Retrieve a vehicle by its unique ID.
-      operationId: getVehicle
+      operationId: getVehicleLegacy
       parameters:
       - name: id
         in: path
@@ -200,7 +200,7 @@ paths:
       - Vehicle API
       summary: Update vehicle by ID
       description: Update an existing vehicle's details by its ID.
-      operationId: updateVehicle
+      operationId: updateVehicleLegacy
       parameters:
       - name: id
         in: path
@@ -238,7 +238,7 @@ paths:
       - Vehicle API
       summary: Delete vehicle by ID
       description: Delete a vehicle from the inventory by its ID.
-      operationId: deleteVehicle
+      operationId: deleteVehicleLegacy
       parameters:
       - name: id
         in: path
@@ -355,7 +355,7 @@ paths:
       - Vehicle Registry API
       summary: Get vehicle by ID
       description: Retrieve a vehicle by its unique ID
-      operationId: getVehicle_1
+      operationId: getVehicle
       parameters:
       - name: vehicleId
         in: path
@@ -386,7 +386,7 @@ paths:
       - Vehicle Registry API
       summary: Update vehicle
       description: Update an existing vehicle by ID
-      operationId: updateVehicle_1
+      operationId: updateVehicle
       parameters:
       - name: vehicleId
         in: path
@@ -429,7 +429,7 @@ paths:
       - Vehicle Registry API
       summary: Delete vehicle
       description: Deactivate a vehicle by ID
-      operationId: deleteVehicle_1
+      operationId: deleteVehicle
       parameters:
       - name: vehicleId
         in: path
@@ -578,7 +578,7 @@ paths:
       - Vehicle API
       summary: Create a new vehicle
       description: Add a new vehicle to the inventory.
-      operationId: createVehicle
+      operationId: createVehicleLegacy
       requestBody:
         content:
           application/json:
@@ -626,7 +626,7 @@ paths:
       - Vehicle Registry API
       summary: Create vehicle
       description: Create a new vehicle registry record
-      operationId: createVehicle_1
+      operationId: createVehicle
       requestBody:
         content:
           application/json:
