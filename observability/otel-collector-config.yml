@@ -64,8 +64,10 @@ exporters:
   prometheus:
     endpoint: "0.0.0.0:8889"
     namespace: pos
-    const_labels:
-      environment: development
+    # NB: do not add an `environment` const_label here — the attributes processor
+    # already inserts an `environment` datapoint attribute, and defining it in both
+    # places makes prometheusexporter drop every metric with
+    # "duplicate label names in constant and variable labels".
 
   # Logging Exporter - Output telemetry to collector logs (for debugging)
   logging:
