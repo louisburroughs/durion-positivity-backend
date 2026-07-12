@@ -1,0 +1,53 @@
+package com.positivity.peoplecontact.internal.entity;
+
+import com.positivity.shared.id.UUIDv7Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import java.time.Instant;
+import java.util.UUID;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+/**
+ * Person identity. Employment attributes (employee number, status, hire/termination dates)
+ * live on {@code employee.person_id} in pos-people (ADR-0044 §6). Email + phone consolidated into
+ * person_contact_point (EMAIL / PHONE_WORK); username is owned by pos-security and resolved
+ * via user_person_link.
+ */
+@Entity
+@EntityListeners(AuditingEntityListener.class)
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class Person {
+
+    @Id
+    @GeneratedValue
+    @UUIDv7Id
+    @Column(columnDefinition = "UUID")
+    private UUID id;
+
+    private String firstName;
+
+    private String lastName;
+
+    @Column(name = "preferred_name")
+    private String preferredName;
+
+    @CreatedDate
+    @Column(name = "created_at", updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private Instant updatedAt;
+}

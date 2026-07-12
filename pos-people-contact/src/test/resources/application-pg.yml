@@ -1,0 +1,27 @@
+# Test profile that runs the real Flyway baseline + repeatable seeds against a Testcontainers
+# Postgres, with Hibernate ddl-auto=validate. This executes the migrations and seed SQL in CI,
+# catching the class of breakages that H2 + flyway-disabled tests miss (column drift, cross-DB
+# refs, seed FK gaps). The datasource is supplied at runtime by @ServiceConnection.
+spring:
+  application:
+    name: pos-people-contact-pg-test
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: true
+
+security:
+  enabled: false
+
+eureka:
+  client:
+    enabled: false
+
+logging:
+  level:
+    com.positivity: INFO
