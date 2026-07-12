@@ -137,12 +137,9 @@ exa:
 
 logging:
   level:
+    # ADR-0046: deployed environments run INFO baseline; framework noise capped at WARN
+    root: INFO
     com:
-      positivity:
-        mcp:
-          internal:
-            orchestration: DEBUG
-
       netflix:
         discovery:
           shared:

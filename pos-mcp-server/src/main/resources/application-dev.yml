@@ -51,3 +51,10 @@ pos:
     employee-uri-template: ${POS_HR_EMPLOYEE_URI_TEMPLATE:/{employeeId}}
     search-uri-template: ${POS_HR_SEARCH_URI_TEMPLATE:?q={query}}
     schedule-uri-template: ${POS_HR_SCHEDULE_URI_TEMPLATE:/availability?employeeId={employeeId}}
+
+# ADR-0046: developer-only DEBUG loggers moved out of application.yml
+logging:
+  level:
+    com:
+      positivity:
+        mcp: DEBUG

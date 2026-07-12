@@ -8,3 +8,14 @@ eureka:
   client:
     serviceUrl:
       defaultZone: http://localhost:8761/eureka/
+
+# ADR-0046: developer-only DEBUG loggers moved out of application.yml
+logging:
+  level:
+    org:
+      springframework:
+        cloud:
+          gateway: DEBUG
+    com:
+      positivity:
+        gateway: DEBUG

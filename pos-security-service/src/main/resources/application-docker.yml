@@ -41,4 +41,4 @@ logging:
       springframework: INFO
     com:
       positivity:
-        security: DEBUG
+        security: INFO

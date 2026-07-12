@@ -17,9 +17,9 @@ logging:
     root: INFO
     org:
       springframework:
-        modulith: DEBUG
+        modulith: INFO
     com:
-      positivity: DEBUG
+      positivity: INFO
       netflix:
         discovery:
           shared:

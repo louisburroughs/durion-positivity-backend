@@ -231,10 +231,10 @@ logging:
     org:
       springframework:
         cloud:
-          gateway: DEBUG
+          gateway: INFO
     com:
       positivity:
-        gateway: DEBUG
+        gateway: INFO
 
       netflix:
         discovery:

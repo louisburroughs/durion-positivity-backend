@@ -273,7 +273,7 @@ logging:
   level:
     com:
       positivity:
-        mcp: DEBUG
+        mcp: INFO
       netflix:
         discovery:
           shared:

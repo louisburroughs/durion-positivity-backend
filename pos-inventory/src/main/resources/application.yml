@@ -56,8 +56,6 @@ logging:
     org:
       springframework:
         web: INFO
-      hibernate:
-        SQL: DEBUG
 springdoc:
   api-docs:
     enabled: true

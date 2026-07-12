@@ -42,3 +42,10 @@ stripe:
   api-key: ${STRIPE_API_KEY:DUMMY_STRIPE_API_KEY}
   connect-account: ${STRIPE_CONNECT_ACCOUNT:DUMMY_CONNECT_ACCOUNT_FOR_DEV}
   idempotency-window-hours: ${STRIPE_IDEMPOTENCY_WINDOW_HOURS:24}
+
+# ADR-0046: developer-only DEBUG loggers moved out of application.yml
+logging:
+  level:
+    org:
+      springframework:
+        security: DEBUG

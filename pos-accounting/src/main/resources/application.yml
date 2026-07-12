@@ -94,7 +94,6 @@ logging:
                 ConfigClusterResolver: WARN
     org:
       springframework:
-        security: DEBUG
         web: INFO
       hibernate:
         SQL: INFO
