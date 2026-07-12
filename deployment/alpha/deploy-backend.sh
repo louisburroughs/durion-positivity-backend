@@ -62,6 +62,11 @@ OBSERVABILITY_SERVICES=(
   prometheus
   otel-collector
   grafana
+  loki
+  promtail
+  docker-socket-proxy
+  cadvisor
+  postgres-exporter
 )
 
 KAFKA_SERVICES=(
@@ -146,6 +151,35 @@ if [[ -n "${DESIRED_POSTGRES_IMAGE}" && "${CURRENT_POSTGRES_IMAGE}" != "${DESIRE
   echo "Reconciling postgres image: current='${CURRENT_POSTGRES_IMAGE:-<none>}' desired='${DESIRED_POSTGRES_IMAGE}'"
   docker compose "${COMPOSE_ARGS[@]}" pull postgres
   docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate postgres
+fi
+
+# Inject the real Prometheus scrape secret into the deployed prometheus.yml (#863).
+# The committed file ships the local-dev default so `docker-compose up` works
+# out of the box; here we swap it for the real secret from the alpha env so
+# Prometheus authenticates against the pos-* /actuator/prometheus endpoints.
+# Prometheus static config cannot read env vars, hence the in-place render.
+PROM_CONFIG="${BACKEND_DIR}/observability/prometheus.yml"
+SCRAPE_PW="$(grep -E '^POS_SECURITY_METRICS_SCRAPE_PASSWORD=' "${ENV_FILE}" | head -n1 | cut -d= -f2-)"
+if [[ -n "${SCRAPE_PW}" && -f "${PROM_CONFIG}" ]]; then
+  echo "Injecting Prometheus scrape secret into ${PROM_CONFIG}"
+  python3 - "${PROM_CONFIG}" "${SCRAPE_PW}" <<'PY'
+import sys
+path, secret = sys.argv[1], sys.argv[2]
+# Strip one layer of surrounding quotes from the env value, if present.
+if len(secret) >= 2 and secret[0] == secret[-1] and secret[0] in ("'", '"'):
+    secret = secret[1:-1]
+# The placeholder sits inside a YAML single-quoted scalar (password: '...'),
+# so escape any single quote by doubling it — otherwise a secret containing '
+# would break the YAML and crash Prometheus.
+secret_yaml = secret.replace("'", "''")
+with open(path) as fh:
+    content = fh.read()
+content = content.replace("durion-local-prom-scrape-password", secret_yaml)
+with open(path, "w") as fh:
+    fh.write(content)
+PY
+else
+  echo "Warning: POS_SECURITY_METRICS_SCRAPE_PASSWORD not set or ${PROM_CONFIG} missing; Prometheus scrapes will use the committed default and likely 401." >&2
 fi
 
 echo "Pulling observability services: ${OBSERVABILITY_SERVICES[*]}"

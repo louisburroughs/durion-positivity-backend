@@ -1,6 +1,17 @@
 # Grafana Datasources Provisioning Configuration
 apiVersion: 1
 
+# Drop any pre-existing same-named datasources first (#863). Grafana provisioning
+# matches by name and will NOT change the uid of an existing datasource, so an
+# install that first created these without pinned uids keeps its auto-generated
+# uid (e.g. PBFA97...) and dashboards referencing uid 'prometheus'/'loki' render
+# no data. Deleting them here forces recreation with the pinned uids below.
+deleteDatasources:
+  - name: Prometheus
+    orgId: 1
+  - name: Loki
+    orgId: 1
+
 datasources:
   # Prometheus Datasource
   - name: Prometheus

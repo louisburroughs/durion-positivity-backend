@@ -60,7 +60,7 @@ scrape_configs:
       username: 'prometheus_scraper'
       password: 'durion-local-prom-scrape-password'
     static_configs:
-      - targets: ['pos-accounting:9001']
+      - targets: ['pos-accounting:8080']
         labels:
           service: 'pos-accounting'
           application: 'pos-accounting'
@@ -71,7 +71,7 @@ scrape_configs:
       username: 'prometheus_scraper'
       password: 'durion-local-prom-scrape-password'
     static_configs:
-      - targets: ['pos-catalog:8081']
+      - targets: ['pos-catalog:8080']
         labels:
           service: 'pos-catalog'
           application: 'pos-catalog'
@@ -82,7 +82,7 @@ scrape_configs:
       username: 'prometheus_scraper'
       password: 'durion-local-prom-scrape-password'
     static_configs:
-      - targets: ['pos-customer:8082']
+      - targets: ['pos-customer:8080']
         labels:
           service: 'pos-customer'
           application: 'pos-customer'
@@ -93,7 +93,7 @@ scrape_configs:
       username: 'prometheus_scraper'
       password: 'durion-local-prom-scrape-password'
     static_configs:
-      - targets: ['pos-event-receiver:9002']
+      - targets: ['pos-event-receiver:8080']
         labels:
           service: 'pos-event-receiver'
           application: 'pos-event-receiver'
@@ -104,7 +104,7 @@ scrape_configs:
       username: 'prometheus_scraper'
       password: 'durion-local-prom-scrape-password'
     static_configs:
-      - targets: ['pos-image:8083']
+      - targets: ['pos-image:8080']
         labels:
           service: 'pos-image'
           application: 'pos-image'
@@ -115,7 +115,7 @@ scrape_configs:
       username: 'prometheus_scraper'
       password: 'durion-local-prom-scrape-password'
     static_configs:
-      - targets: ['pos-inventory:9005']
+      - targets: ['pos-inventory:8080']
         labels:
           service: 'pos-inventory'
           application: 'pos-inventory'
@@ -126,7 +126,7 @@ scrape_configs:
       username: 'prometheus_scraper'
       password: 'durion-local-prom-scrape-password'
     static_configs:
-      - targets: ['pos-invoice:9006']
+      - targets: ['pos-invoice:8080']
         labels:
           service: 'pos-invoice'
           application: 'pos-invoice'
@@ -137,7 +137,7 @@ scrape_configs:
       username: 'prometheus_scraper'
       password: 'durion-local-prom-scrape-password'
     static_configs:
-      - targets: ['pos-location:8084']
+      - targets: ['pos-location:8080']
         labels:
           service: 'pos-location'
           application: 'pos-location'
@@ -148,7 +148,7 @@ scrape_configs:
       username: 'prometheus_scraper'
       password: 'durion-local-prom-scrape-password'
     static_configs:
-      - targets: ['pos-people:8085']
+      - targets: ['pos-people:8080']
         labels:
           service: 'pos-people'
           application: 'pos-people'
@@ -159,7 +159,7 @@ scrape_configs:
       username: 'prometheus_scraper'
       password: 'durion-local-prom-scrape-password'
     static_configs:
-      - targets: ['pos-price:9008']
+      - targets: ['pos-price:8080']
         labels:
           service: 'pos-price'
           application: 'pos-price'
@@ -170,7 +170,7 @@ scrape_configs:
       username: 'prometheus_scraper'
       password: 'durion-local-prom-scrape-password'
     static_configs:
-      - targets: ['pos-security-service:8086']
+      - targets: ['pos-security-service:8080']
         labels:
           service: 'pos-security-service'
           application: 'pos-security-service'
@@ -181,7 +181,7 @@ scrape_configs:
       username: 'prometheus_scraper'
       password: 'durion-local-prom-scrape-password'
     static_configs:
-      - targets: ['pos-shop-manager:8087']
+      - targets: ['pos-shop-manager:8080']
         labels:
           service: 'pos-shop-manager'
           application: 'pos-shop-manager'
@@ -192,7 +192,7 @@ scrape_configs:
       username: 'prometheus_scraper'
       password: 'durion-local-prom-scrape-password'
     static_configs:
-      - targets: ['pos-vehicle-inventory:8089']
+      - targets: ['pos-vehicle-inventory:8080']
         labels:
           service: 'pos-vehicle-inventory'
           application: 'pos-vehicle-inventory'
@@ -203,7 +203,7 @@ scrape_configs:
       username: 'prometheus_scraper'
       password: 'durion-local-prom-scrape-password'
     static_configs:
-      - targets: ['pos-workorder:8090']
+      - targets: ['pos-workorder:8080']
         labels:
           service: 'pos-workorder'
           application: 'pos-workorder'
@@ -214,3 +214,18 @@ scrape_configs:
       - targets: ['kafka-exporter:9308']
         labels:
           service: 'kafka'
+
+  # cAdvisor (#863): per-container CPU/memory/network metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          service: 'cadvisor'
+
+  # postgres-exporter (#863): cluster-wide Postgres stats (pg_stat_database is
+  # cluster-scoped, so scraping the 'postgres' maintenance DB covers every pos_*_db)
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          service: 'postgres'
