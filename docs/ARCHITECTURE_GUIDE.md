@@ -266,6 +266,14 @@ docker-compose up -d jaeger prometheus grafana otel-collector
 # Prometheus:  http://localhost:9090
 ```
 
+### Metrics path — single authority (#867)
+
+Application metrics are **pull-only**: Prometheus scrapes each service's
+`/actuator/prometheus` endpoint under a per-service `job` label (see
+`observability/prometheus.yml`). The OTel collector carries traces and logs only —
+it has no metrics pipeline, and services run with `OTEL_METRICS_EXPORTER=none` so the
+Java agent does not push OTLP metrics. See `observability/README.md` for details.
+
 ### OpenTelemetry Configuration
 
 All Dockerfiles include Grafana OpenTelemetry Java Agent v2.9.0:

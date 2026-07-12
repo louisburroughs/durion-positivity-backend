@@ -22,10 +22,12 @@ scrape_configs:
         labels:
           service: 'prometheus'
 
-  # OTEL Collector metrics
+  # OTEL Collector internal telemetry (otelcol_*) on :8888.
+  # App metrics come ONLY from the per-service /actuator/prometheus jobs below (#867);
+  # the collector no longer re-exports them (its :8889 prometheus exporter was removed).
   - job_name: 'otel-collector'
     static_configs:
-      - targets: ['otel-collector:8888', 'otel-collector:8889']
+      - targets: ['otel-collector:8888']
         labels:
           service: 'otel-collector'
 
