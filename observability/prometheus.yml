@@ -109,17 +109,6 @@ scrape_configs:
           service: 'pos-image'
           application: 'pos-image'
 
-  - job_name: 'pos-inquiry'
-    metrics_path: '/actuator/prometheus'
-    basic_auth:
-      username: 'prometheus_scraper'
-      password: 'durion-local-prom-scrape-password'
-    static_configs:
-      - targets: ['pos-inquiry:9004']
-        labels:
-          service: 'pos-inquiry'
-          application: 'pos-inquiry'
-
   - job_name: 'pos-inventory'
     metrics_path: '/actuator/prometheus'
     basic_auth:
@@ -152,17 +141,6 @@ scrape_configs:
         labels:
           service: 'pos-location'
           application: 'pos-location'
-
-  - job_name: 'pos-order'
-    metrics_path: '/actuator/prometheus'
-    basic_auth:
-      username: 'prometheus_scraper'
-      password: 'durion-local-prom-scrape-password'
-    static_configs:
-      - targets: ['pos-order:9007']
-        labels:
-          service: 'pos-order'
-          application: 'pos-order'
 
   - job_name: 'pos-people'
     metrics_path: '/actuator/prometheus'
@@ -208,17 +186,6 @@ scrape_configs:
           service: 'pos-shop-manager'
           application: 'pos-shop-manager'
 
-  - job_name: 'pos-vehicle-fitment'
-    metrics_path: '/actuator/prometheus'
-    basic_auth:
-      username: 'prometheus_scraper'
-      password: 'durion-local-prom-scrape-password'
-    static_configs:
-      - targets: ['pos-vehicle-fitment:8088']
-        labels:
-          service: 'pos-vehicle-fitment'
-          application: 'pos-vehicle-fitment'
-
   - job_name: 'pos-vehicle-inventory'
     metrics_path: '/actuator/prometheus'
     basic_auth:
@@ -240,39 +207,6 @@ scrape_configs:
         labels:
           service: 'pos-workorder'
           application: 'pos-workorder'
-
-  - job_name: 'pos-vehicle-reference-carapi'
-    metrics_path: '/actuator/prometheus'
-    basic_auth:
-      username: 'prometheus_scraper'
-      password: 'durion-local-prom-scrape-password'
-    static_configs:
-      - targets: ['pos-vehicle-reference-carapi:8091']
-        labels:
-          service: 'pos-vehicle-reference-carapi'
-          application: 'pos-vehicle-reference-carapi'
-
-  - job_name: 'pos-vehicle-reference-nhtsa'
-    metrics_path: '/actuator/prometheus'
-    basic_auth:
-      username: 'prometheus_scraper'
-      password: 'durion-local-prom-scrape-password'
-    static_configs:
-      - targets: ['pos-vehicle-reference-nhtsa:8092']
-        labels:
-          service: 'pos-vehicle-reference-nhtsa'
-          application: 'pos-vehicle-reference-nhtsa'
-
-  - job_name: 'pos-agent-framework'
-    metrics_path: '/actuator/prometheus'
-    basic_auth:
-      username: 'prometheus_scraper'
-      password: 'durion-local-prom-scrape-password'
-    static_configs:
-      - targets: ['pos-agent-framework:8080']
-        labels:
-          service: 'pos-agent-framework'
-          application: 'pos-agent-framework'
 
   # Kafka exporter (#838): topic depth (DLQ), consumer lag, manifest activity
   - job_name: 'kafka-exporter'
