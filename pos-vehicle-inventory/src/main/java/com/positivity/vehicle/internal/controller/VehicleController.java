@@ -33,7 +33,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class VehicleController {
     private final VehicleLegacyService vehicleLegacyService;
 
-    @Operation(summary = "Create a new vehicle", description = "Add a new vehicle to the inventory.")
+    @Operation(
+            operationId = "createVehicleLegacy",
+            summary = "Create a new vehicle",
+            description = "Add a new vehicle to the inventory.")
     @ApiResponse(responseCode = "200", description = "Vehicle created successfully.")
     @EmitEvent(id = "VEHICLE_CREATE", apiVersion = "1")
     @PostMapping
@@ -47,7 +50,10 @@ public class VehicleController {
         }
     }
 
-    @Operation(summary = "Get vehicle by ID", description = "Retrieve a vehicle by its unique ID.")
+    @Operation(
+            operationId = "getVehicleLegacy",
+            summary = "Get vehicle by ID",
+            description = "Retrieve a vehicle by its unique ID.")
     @ApiResponse(responseCode = "200", description = "Vehicle found and returned.")
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @GetMapping("/{id}")
@@ -66,7 +72,10 @@ public class VehicleController {
         return vehicleLegacyService.getAllVehicles();
     }
 
-    @Operation(summary = "Update vehicle by ID", description = "Update an existing vehicle's details by its ID.")
+    @Operation(
+            operationId = "updateVehicleLegacy",
+            summary = "Update vehicle by ID",
+            description = "Update an existing vehicle's details by its ID.")
     @ApiResponse(responseCode = "200", description = "Vehicle updated successfully.")
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @EmitEvent(id = "VEHICLE_UPDATE", apiVersion = "1")
@@ -83,7 +92,10 @@ public class VehicleController {
         }
     }
 
-    @Operation(summary = "Delete vehicle by ID", description = "Delete a vehicle from the inventory by its ID.")
+    @Operation(
+            operationId = "deleteVehicleLegacy",
+            summary = "Delete vehicle by ID",
+            description = "Delete a vehicle from the inventory by its ID.")
     @ApiResponse(responseCode = "204", description = "Vehicle deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @EmitEvent(id = "VEHICLE_DELETE", apiVersion = "1")
