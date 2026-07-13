@@ -104,7 +104,8 @@ class PartyServiceImplTest {
                 cacheManager,
                 personDirectoryService,
                 extVehicleRepository,
-                emptyOutboxWriterProvider());
+                emptyOutboxWriterProvider(),
+                org.mockito.Mockito.mock(com.positivity.customer.internal.service.CustomerFactPublisher.class));
     }
 
     private CommercialParty party(UUID id) {

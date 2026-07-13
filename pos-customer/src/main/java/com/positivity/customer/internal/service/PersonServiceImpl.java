@@ -47,6 +47,7 @@ public class PersonServiceImpl implements PersonService {
     private final PartyRelationshipRepository partyRelationshipRepository;
     private final PersonDirectoryService personDirectoryService;
     private final Clock clock;
+    private final CustomerFactPublisher customerFactPublisher;
 
     /**
      * Creates a new individual person record with optional contact points.
@@ -123,6 +124,7 @@ public class PersonServiceImpl implements PersonService {
         person.setCustomerNumber("CUST-PER-" + UUIDv7Generator.generate());
         person.setPreferredContactMethod(request.getPreferredContactMethod());
         PersonParty savedPerson = personRepository.save(person);
+        customerFactPublisher.partyChanged(savedPerson);
         log.debug(
                 "PersonParty created with partyId={} mapped to personId={}",
                 savedPerson.getPersonPartyId(),

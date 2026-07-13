@@ -29,7 +29,10 @@ class PersonPartyServiceImplSearchTest {
     private PersonDirectoryService personDirectoryService;
 
     private PersonPartyServiceImpl service() {
-        return new PersonPartyServiceImpl(personPartyRepository, personDirectoryService);
+        return new PersonPartyServiceImpl(
+                personPartyRepository,
+                personDirectoryService,
+                org.mockito.Mockito.mock(com.positivity.customer.internal.service.CustomerFactPublisher.class));
     }
 
     private PersonParty person(UUID partyId, UUID personId) {

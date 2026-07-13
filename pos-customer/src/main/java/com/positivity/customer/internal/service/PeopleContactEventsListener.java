@@ -38,6 +38,7 @@ public class PeopleContactEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
+    private final CustomerFactPublisher customerFactPublisher;
 
     @KafkaListener(
             topics = "${pos.customer.kafka.people-contact-events-topic:people-contact.events.v1}",
@@ -113,6 +114,10 @@ public class PeopleContactEventsListener {
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
+        // The person-party fact's displayName is materialized from this replica — re-emit it so
+        // ext_customer_party consumers pick up the name change (#889). No-op when the person has
+        // no individual-customer record.
+        customerFactPublisher.personReplicaChanged(payload.personId());
         log.info("Updated ext_people_contact_person personId={} version={}", payload.personId(), aggregateVersion);
     }
 

@@ -56,6 +56,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
     private final PersonPartyRepository personRepository;
     private final PersonDirectoryService personDirectoryService;
     private final Clock clock;
+    private final CustomerFactPublisher customerFactPublisher;
 
     /**
      * Creates a new party relationship between a commercial account and an
@@ -141,6 +142,9 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
         } else {
             relationship = partyRelationshipRepository.save(relationship);
         }
+
+        // The person's commercial-account linkage changed — re-emit their identity fact (#889).
+        customerFactPublisher.personIdentityChanged(relationship.getToPerson().getPersonId());
 
         log.info(
                 "Created party relationship {} for party {} and person {}",
@@ -265,6 +269,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
         relationship.deactivate(today);
         relationship.setUpdatedBy(userId);
         partyRelationshipRepository.save(relationship);
+        customerFactPublisher.personIdentityChanged(relationship.getToPerson().getPersonId());
 
         log.info(
                 "Deactivated relationship {} for party {} and person {}",
