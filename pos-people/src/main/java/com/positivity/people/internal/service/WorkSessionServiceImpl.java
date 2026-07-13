@@ -5,6 +5,7 @@ import com.positivity.people.internal.dto.WorkSessionDto;
 import com.positivity.people.internal.dto.WorkSessionSubmitRequest;
 import com.positivity.people.internal.entity.WorkSession;
 import com.positivity.people.internal.entity.WorkSessionBreak;
+import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
@@ -58,6 +59,12 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     public WorkSessionDto startSession(@NonNull UUID personId) {
         Objects.requireNonNull(personId, "personId must not be null");
         String resolvedActor = resolveActorFromSecurityContext();
+
+        // The person FK went with the ADR-0044 split (#875), so validate against the identity
+        // replica instead — sessions must not be creatable for unknown persons.
+        if (!extPersonReplicaRepository.existsById(personId)) {
+            throw new PersonNotFoundException(personId);
+        }
 
         if (workSessionRepository.findByPersonIdAndEndedAtIsNull(personId).isPresent()) {
             throw new IllegalStateException("An active session already exists for personId=" + personId);

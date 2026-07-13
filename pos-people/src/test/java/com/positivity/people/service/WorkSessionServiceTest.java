@@ -50,6 +50,19 @@ class WorkSessionServiceTest {
         service = new WorkSessionServiceImpl(
                 workSessionRepository, workSessionBreakRepository, extPersonReplicaRepository, Clock.systemUTC());
         personId = UUID.fromString("10000000-0000-0000-0000-000000000001");
+        org.mockito.Mockito.lenient()
+                .when(extPersonReplicaRepository.existsById(personId))
+                .thenReturn(true);
+    }
+
+    @Test
+    void startSession_whenPersonUnknownToReplica_throwsNotFound() {
+        UUID unknownPersonId = UUID.fromString("10000000-0000-0000-0000-0000000000ff");
+        when(extPersonReplicaRepository.existsById(unknownPersonId)).thenReturn(false);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                com.positivity.people.internal.exception.PersonNotFoundException.class,
+                () -> service.startSession(unknownPersonId));
     }
 
     @Test
