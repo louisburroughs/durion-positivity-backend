@@ -36,7 +36,6 @@ import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PartyService;
 import com.positivity.domainevents.DomainEventEnvelope;
-import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.customer.BillingRulesUpdatedV1;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
@@ -891,7 +890,9 @@ public class PartyServiceImpl implements PartyService {
                 null,
                 payload,
                 clock);
-        writer.publish(DomainTopics.events("customer"), envelope);
+        // Publish to the configured topic so the manifest computation (which scans by the same
+        // property) can never desync from the outbox rows (PR #893 review).
+        writer.publish(customerFactPublisher.eventsTopic(), envelope);
     }
 
     private BillingRuleRef mapToBillingRuleRef(BillingRulesEmbeddable embedded) {

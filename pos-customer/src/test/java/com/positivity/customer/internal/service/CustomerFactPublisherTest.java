@@ -55,7 +55,12 @@ class CustomerFactPublisherTest {
     void setUp() {
         when(writerProvider.getIfAvailable()).thenReturn(writer);
         publisher = new CustomerFactPublisher(
-                writerProvider, TEST_CLOCK, personDirectoryService, personPartyRepository, partyRelationshipRepository);
+                writerProvider,
+                TEST_CLOCK,
+                personDirectoryService,
+                personPartyRepository,
+                partyRelationshipRepository,
+                "customer.events.v1");
     }
 
     private CommercialParty commercialParty(AccountStatus status, Boolean creditHold) {
