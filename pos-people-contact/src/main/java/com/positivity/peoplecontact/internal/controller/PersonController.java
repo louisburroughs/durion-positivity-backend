@@ -66,12 +66,11 @@ public class PersonController {
                 .orElseThrow(() -> new EntityNotFoundException("No person found for id: " + personId));
     }
 
-    @Operation(summary = "Get all people", description = "Retrieve people with optional type and text filters.")
-    @Parameter(
-            name = "type",
-            description = "Filter by person type: EMPLOYEE, ACTIVE, INACTIVE, or ALL (default).",
-            schema = @Schema(allowableValues = {"ALL", "EMPLOYEE", "ACTIVE", "INACTIVE"}))
-    @Parameter(name = "q", description = "Case-insensitive text search on firstName, lastName, primaryEmail, username.")
+    @Operation(
+            summary = "Get all people",
+            description = "Retrieve people with an optional text filter. Employment filtering lives in pos-people"
+                    + " (ADR-0044 §6) and is not available on the identity directory.")
+    @Parameter(name = "q", description = "Case-insensitive text search on firstName, lastName, primaryEmail.")
     @ApiResponse(responseCode = "200", description = "List of people returned successfully.")
     @GetMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -84,7 +83,13 @@ public class PersonController {
 
     @Operation(summary = "Get person by ID", description = "Retrieve a person by their unique ID.")
     @ApiResponse(responseCode = "200", description = "Person found and returned.")
-    @ApiResponse(responseCode = "404", description = "Person not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Person not found.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @GetMapping("/{personId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -162,7 +167,13 @@ public class PersonController {
 
     @Operation(summary = "Update an existing person", description = "Update the details of an existing person.")
     @ApiResponse(responseCode = "200", description = "Person updated successfully.")
-    @ApiResponse(responseCode = "404", description = "Person not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Person not found.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @EmitEvent(id = "PEOPLE_CONTACT_PERSON_UPDATE", apiVersion = "1")
     @PutMapping("/{personId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -184,7 +195,13 @@ public class PersonController {
 
     @Operation(summary = "Delete a person", description = "Delete a person by their unique ID.")
     @ApiResponse(responseCode = "204", description = "Person deleted successfully.")
-    @ApiResponse(responseCode = "404", description = "Person not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Person not found.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @EmitEvent(id = "PEOPLE_CONTACT_PERSON_DELETE", apiVersion = "1")
     @DeleteMapping("/{personId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

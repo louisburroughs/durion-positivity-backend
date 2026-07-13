@@ -660,19 +660,22 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     private Set<String> peopleAuthorities() {
         return new HashSet<>(List.of(
                 "people:availability:view",
-                "people:person:view",
-                "people:person:create",
-                "people:person:edit",
-                "people:person:delete",
-                "people:userLink:view",
-                "people:userLink:write",
+                // Identity/link/access authorities moved to pos-people-contact with the
+                // ADR-0044 Phase 3 split (#874/#875); the retired people:person/userLink/role
+                // permissions are no longer registered.
+                "people-contact:person:view",
+                "people-contact:person:create",
+                "people-contact:person:edit",
+                "people-contact:person:delete",
+                "people-contact:userLink:view",
+                "people-contact:userLink:write",
+                "people-contact:role:view",
+                "people-contact:role:assign",
+                "people-contact:role:revoke",
                 "people:employee:view",
                 "people:employee:create",
                 "people:employee:edit",
                 "people:employee:deactivate",
-                "people:role:view",
-                "people:role:assign",
-                "people:role:revoke",
                 "people:skill:view",
                 "people:skill:edit",
                 "people:skill:assign",
