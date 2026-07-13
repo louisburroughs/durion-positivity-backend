@@ -1142,9 +1142,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 18")
-    void catalogVersionIsSeventeen() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(18);
+    @DisplayName("CATALOG_VERSION is 19")
+    void catalogVersionIsNineteen() {
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(19);
     }
 
     @Test
@@ -1187,8 +1187,11 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(349)).isEqualTo("PERM_inventory:location:sync");
         // catalog v18 (#823/#839): outbox replay authority appended (bit 350)
         assertThat(GatewayPermissionCatalog.authorityForBit(350)).isEqualTo("PERM_workorder:events:replay");
+        // catalog v19 (#823/#874): people-contact authorities appended (bits 351-359)
+        assertThat(GatewayPermissionCatalog.authorityForBit(351)).isEqualTo("PERM_people-contact:person:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(359)).isEqualTo("PERM_people-contact:userLink:write");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(351)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(360)).isNull();
     }
 
     @Test

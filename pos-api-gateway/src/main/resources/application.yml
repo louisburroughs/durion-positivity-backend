@@ -82,6 +82,12 @@ spring:
                 - Path=/people/**
               filters:
                 - StripPrefix=1
+            - id: people-contact
+              uri: lb://PEOPLE-CONTACT
+              predicates:
+                - Path=/people-contact/**
+              filters:
+                - StripPrefix=1
             - id: security-service
               uri: lb://SECURITY-SERVICE
               predicates:
@@ -211,6 +217,8 @@ springdoc:
         url: /order/v3/api-docs
       - name: People
         url: /people/v3/api-docs
+      - name: People Contact
+        url: /people-contact/v3/api-docs
       - name: Price
         url: /price/v3/api-docs
       - name: Security Service
