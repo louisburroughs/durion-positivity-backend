@@ -14,8 +14,6 @@ import org.springframework.web.client.RestClient;
 public class RestClientConfig {
 
     private static final String INTERNAL_USER = "pos-security-service";
-    private static final String PEOPLE_AUTHORITIES =
-            "people:person:create,people:person:delete,people:userLink:view,people:userLink:write";
     private static final String CUSTOMER_AUTHORITIES = "crm:person:read";
 
     @Bean
@@ -28,22 +26,6 @@ public class RestClientConfig {
     @LoadBalanced
     public RestClient.Builder loadBalancedRestClientBuilder() {
         return RestClient.builder();
-    }
-
-    @Bean
-    public RestClient peopleRegistrationRestClient(
-            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
-            @Value("${pos.people.service-id:people}") String serviceId,
-            @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
-            @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
-        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
-        return builder.requestFactory(factory)
-                .baseUrl("http://" + serviceId)
-                .defaultHeader("X-User", INTERNAL_USER)
-                .defaultHeader("X-Authorities", PEOPLE_AUTHORITIES)
-                .build();
     }
 
     @Bean

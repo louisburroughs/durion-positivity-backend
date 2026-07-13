@@ -1,11 +1,8 @@
 package com.positivity.securityservice.internal.service;
 
+import com.positivity.domainevents.peoplecontact.UserPersonLinkCreateRequestedV1;
 import com.positivity.securityservice.internal.client.CustomerRegistrationClient;
-import com.positivity.securityservice.internal.client.PeopleRegistrationClient;
 import com.positivity.securityservice.internal.client.dto.CustomerPersonSearchResponse;
-import com.positivity.securityservice.internal.client.dto.PeopleLinkUserRequest;
-import com.positivity.securityservice.internal.client.dto.PeopleResolvePersonRequest;
-import com.positivity.securityservice.internal.client.dto.PeopleResolvePersonResponse;
 import com.positivity.securityservice.internal.dto.CrmMatchSummaryDto;
 import com.positivity.securityservice.internal.dto.SelfRegistrationRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
@@ -44,7 +41,8 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
-    private final PeopleRegistrationClient peopleRegistrationClient;
+    private final PersonResolutionService personResolutionService;
+    private final PeopleContactCommandEmitter peopleContactCommandEmitter;
     private final CustomerRegistrationClient customerRegistrationClient;
     private final SelfRegistrationAttemptService selfRegistrationAttemptService;
     private final SelfRegistrationReviewService selfRegistrationReviewService;
@@ -123,48 +121,31 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
         CrmSignalAssessment crmSignalAssessment =
                 assessCrmMatches(crmMatches, normalizedEmail, normalizedPhone, normalizedFirstName, normalizedLastName);
 
-        PeopleResolvePersonResponse resolvedPerson =
-                peopleRegistrationClient.resolvePerson(PeopleResolvePersonRequest.builder()
-                        .email(normalizedEmail)
-                        .phone(normalizedPhone)
-                        .firstName(normalizedFirstName)
-                        .lastName(normalizedLastName)
-                        .build());
-        enforceCrmConflictRules(resolvedPerson, crmSignalAssessment, normalizedEmail, chosenUsername);
+        // Person resolution is local (amended ADR-0043, #876): match against the identity replica
+        // first, run every conflict rule, and only then create anything — so no compensation
+        // (user delete / person delete) is ever needed.
+        Optional<UUID> matchedPersonId = personResolutionService.match(
+                normalizedEmail, normalizedPhone, normalizedFirstName, normalizedLastName);
+        boolean matchedExisting = matchedPersonId.isPresent();
+        enforceCrmConflictRules(matchedExisting, crmSignalAssessment, normalizedEmail, chosenUsername);
+        matchedPersonId.ifPresent(personId -> enforceLinkedUserRules(personId, normalizedEmail, chosenUsername));
 
-        enforceLinkedUserRules(resolvedPerson.personId(), normalizedEmail, chosenUsername);
+        UUID personId = matchedPersonId.orElseGet(() -> personResolutionService.createPerson(
+                normalizedEmail, normalizedPhone, normalizedFirstName, normalizedLastName));
 
-        User createdUser = createUser(chosenUsername, rawPassword, resolvedPerson.personId());
-        try {
-            peopleRegistrationClient.linkUserToPerson(PeopleLinkUserRequest.builder()
-                    .userId(createdUser.getId())
-                    .personId(resolvedPerson.personId())
-                    .linkType("PRIMARY")
-                    .notes("Created by self-registration")
-                    .build());
-        } catch (RuntimeException ex) {
-            userRepository.deleteById(createdUser.getId());
-            UUID referenceId = selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
-                    .caseType(SelfRegistrationCaseType.IDENTITY_REVIEW)
-                    .reasonCode(USER_PERSON_LINK_CONFLICT)
-                    .reasonMessage("User was created but could not be linked to the resolved person")
-                    .email(normalizedEmail)
-                    .requestedUsername(chosenUsername)
-                    .personId(resolvedPerson.personId())
-                    .notes("User creation succeeded but link-to-person compensation was required")
-                    .build());
-            throw new SelfRegistrationConflictException(
-                    USER_PERSON_LINK_CONFLICT,
-                    "User was created but could not be linked to the resolved person",
-                    referenceId);
-        }
+        // users.person_id is a projection written only from link facts (amended ADR-0043 §2):
+        // the user row is created unlinked, the link travels as a command, and the confirming
+        // fact sets the projection. Callers see linkStatus=PENDING until then.
+        User createdUser = createUser(chosenUsername, rawPassword);
+        peopleContactCommandEmitter.requestLinkCreate(new UserPersonLinkCreateRequestedV1(
+                personId, createdUser.getUsername(), "PRIMARY", "Created by self-registration"));
 
         return SelfRegistrationResponse.builder()
                 .userId(createdUser.getId())
-                .personId(resolvedPerson.personId())
+                .personId(personId)
                 .username(createdUser.getUsername())
-                .linkStatus("LINKED")
-                .matchedExistingPerson(resolvedPerson.matchedExisting())
+                .linkStatus("PENDING")
+                .matchedExistingPerson(matchedExisting)
                 .crmMatchSummary(crmSignalAssessment.summary())
                 .idempotencyKey(idempotencyKey)
                 .issuedTokens(false)
@@ -246,27 +227,17 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
         }
     }
 
+    /**
+     * Existing-link checks run against the local {@code users.person_id} projection — exactly the
+     * data the retired {@code getLinkedUserIds} call surfaced, kept current by link facts.
+     */
     private void enforceLinkedUserRules(UUID personId, String normalizedEmail, String chosenUsername) {
-        List<UUID> linkedUserIds = peopleRegistrationClient.getLinkedUserIds(personId);
-        if (linkedUserIds.isEmpty()) {
+        Optional<User> linked = userRepository.findByPersonId(personId);
+        if (linked.isEmpty()) {
             return;
         }
-        UUID linkedUserId = linkedUserIds.get(0);
-        User linkedUser = userRepository
-                .findById(linkedUserId)
-                .orElseThrow(() -> new SelfRegistrationConflictException(
-                        USER_PERSON_LINK_CONFLICT,
-                        "Resolved person has an inconsistent existing user link",
-                        selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
-                                .caseType(SelfRegistrationCaseType.IDENTITY_REVIEW)
-                                .reasonCode(USER_PERSON_LINK_CONFLICT)
-                                .reasonMessage("Resolved person has an inconsistent existing user link")
-                                .email(normalizedEmail)
-                                .requestedUsername(chosenUsername)
-                                .personId(personId)
-                                .linkedUserId(linkedUserId)
-                                .notes("People link exists but security user record could not be found")
-                                .build())));
+        User linkedUser = linked.get();
+        UUID linkedUserId = linkedUser.getId();
         if (isActive(linkedUser)) {
             throw new SelfRegistrationConflictException(
                     "PERSON_ALREADY_HAS_ACTIVE_USER", "Resolved person is already linked to a different active user");
@@ -288,24 +259,24 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
     }
 
     private void enforceCrmConflictRules(
-            PeopleResolvePersonResponse resolvedPerson,
+            boolean matchedExisting,
             CrmSignalAssessment crmSignalAssessment,
             String normalizedEmail,
             String chosenUsername) {
-        if (resolvedPerson.matchedExisting() || !crmSignalAssessment.reviewRequired()) {
+        if (matchedExisting || !crmSignalAssessment.reviewRequired()) {
             return;
         }
+        // The conflict is detected before any person is created, so there is nothing to
+        // compensate (the old flow had to delete the just-resolved person here).
         UUID referenceId = selfRegistrationReviewService.openCase(SelfRegistrationReviewCaseCreateRequest.builder()
                 .caseType(SelfRegistrationCaseType.IDENTITY_REVIEW)
                 .reasonCode("CRM_PERSON_CONFLICT")
                 .reasonMessage(buildCrmConflictMessage(crmSignalAssessment.summary()))
                 .email(normalizedEmail)
                 .requestedUsername(chosenUsername)
-                .personId(resolvedPerson.personId())
                 .crmMatchSummary(crmSignalAssessment.summary())
                 .notes("CRM indicated an existing human identity that should be reviewed before creating a new account")
                 .build());
-        peopleRegistrationClient.deletePerson(resolvedPerson.personId());
         throw new SelfRegistrationConflictException(
                 "CRM_PERSON_CONFLICT", buildCrmConflictMessage(crmSignalAssessment.summary()), referenceId);
     }
@@ -390,7 +361,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                 + ". Please use account recovery or contact support for review.";
     }
 
-    private User createUser(String username, String password, UUID personId) {
+    private User createUser(String username, String password) {
         Role defaultRole = roleRepository
                 .findByName(DEFAULT_SELF_REGISTRATION_ROLE)
                 .orElseThrow(() -> new IllegalStateException(
@@ -398,7 +369,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
         User user = new User();
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(password));
-        user.setPersonId(personId);
+        // users.person_id is written only by the people-contact link-fact consumer (ADR-0043 §2).
         user.setRoles(Set.of(defaultRole));
         return userRepository.save(user);
     }

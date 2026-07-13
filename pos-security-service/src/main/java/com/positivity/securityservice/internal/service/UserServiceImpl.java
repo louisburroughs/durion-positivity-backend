@@ -25,6 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
+
+    private final com.positivity.securityservice.internal.service.PeopleContactCommandEmitter
+            peopleContactCommandEmitter;
     private final RoleRepository roleRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final PasswordEncoder passwordEncoder;
@@ -65,7 +68,16 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public void deleteUser(UUID id) {
+        // The user-person link is owned by pos-people-contact (amended ADR-0043, #876): queue its
+        // removal in the same transaction so the link (and every consumer's projection of it)
+        // follows the account out.
+        userRepository
+                .findById(id)
+                .ifPresent(user -> peopleContactCommandEmitter.requestLinkRemove(
+                        new com.positivity.domainevents.peoplecontact.UserPersonLinkRemoveRequestedV1(
+                                user.getUsername())));
         userRepository.deleteById(id);
     }
 
