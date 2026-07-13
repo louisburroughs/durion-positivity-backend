@@ -29,7 +29,7 @@ public class StorageLocationValidationService {
         try {
             parsedId = UUID.fromString(storageLocationId);
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("destinationLocationId must be a valid UUID", ex);
+            throw new IllegalArgumentException("storageLocationId must be a valid UUID", ex);
         }
 
         return extStorageLocationReplicaRepository

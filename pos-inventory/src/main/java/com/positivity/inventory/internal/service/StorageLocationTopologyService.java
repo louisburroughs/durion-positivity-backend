@@ -102,9 +102,10 @@ public class StorageLocationTopologyService {
         List<UUID> childIds =
                 edges.stream().map(ExtLocationParentReplica::getChildId).toList();
         Map<UUID, LocationRefEntity> byId = new HashMap<>();
-        for (UUID childId : childIds) {
-            locationRefRepository.findByLocationId(childId).ifPresent(ref -> byId.put(childId, ref));
+        if (childIds.isEmpty()) {
+            return byId;
         }
+        locationRefRepository.findByLocationIdIn(childIds).forEach(ref -> byId.put(ref.getLocationId(), ref));
         return byId;
     }
 

@@ -115,7 +115,15 @@ public class LocationEventsListener {
                     .active(active)
                     .build();
         }
-        ref.setName(payload.name());
+        // location_ref.name is NOT NULL (V4); a nameless fact must not stall the feed — keep
+        // the previous name, or fall back to the id, like the old sync's INVALID_PAYLOAD guard.
+        String name = payload.name();
+        if (name == null || name.isBlank()) {
+            name = ref.getName() == null || ref.getName().isBlank()
+                    ? payload.locationId().toString()
+                    : ref.getName();
+        }
+        ref.setName(name);
         ref.setCode(payload.code());
         ref.setStatus(payload.status() == null ? (active ? "ACTIVE" : "INACTIVE") : payload.status());
         ref.setHrLocationId(payload.hrLocationId());
