@@ -68,7 +68,7 @@ public class CustomerEventsListener {
                 // Ignored types still fall through to the processed_events insert below:
                 // the owner's manifest counts every fact in the window, so skipping the
                 // record would read as permanent drift and trigger useless replays.
-                default -> log.debug("Ignoring customer event type={}", eventType);
+                default -> log.debug("Ignoring customer event type={} eventId={}", eventType, eventId);
             }
         } catch (TransientDataAccessException e) {
             throw e;

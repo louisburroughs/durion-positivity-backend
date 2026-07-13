@@ -65,7 +65,7 @@ public class CustomerEventsListener {
             if (CustomerPersonIdentityUpdatedV1.EVENT_TYPE.equals(eventType)) {
                 applyPersonIdentityUpdated(envelope);
             } else {
-                log.debug("Ignoring customer event type={}", eventType);
+                log.debug("Ignoring customer event type={} eventId={}", eventType, eventId);
             }
         } catch (TransientDataAccessException e) {
             throw e;

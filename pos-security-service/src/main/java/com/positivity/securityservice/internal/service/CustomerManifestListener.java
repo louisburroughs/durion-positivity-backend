@@ -28,7 +28,7 @@ import tools.jackson.databind.ObjectMapper;
  * {@code customer.outbox.replay-requested} command for the window; the replayed events are
  * deduplicated by the {@code processed_events} primary key, so repair is idempotent.
  *
- * <p>Note: this module intentionally processes only the party facts on {@code customer.events.v1}
+ * <p>Note: this module intentionally processes only the person-identity facts on {@code customer.events.v1}
  * yet the owner's manifest counts every fact in the window, so unprocessed event types would show
  * as permanent drift — therefore the events listener records every eventId it sees (including
  * ignored types) in {@code processed_events}. That is exactly what its idempotency guard already

@@ -65,7 +65,7 @@ public class CustomerEventsListener {
             switch (eventType == null ? "" : eventType) {
                 case CustomerPartyUpdatedV1.EVENT_TYPE -> applyPartyUpdated(envelope);
                 case CustomerPartyDeletedV1.EVENT_TYPE -> applyPartyDeleted(envelope);
-                default -> log.debug("Ignoring customer event type={}", eventType);
+                default -> log.debug("Ignoring customer event type={} eventId={}", eventType, eventId);
             }
         } catch (TransientDataAccessException e) {
             throw e;

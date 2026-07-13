@@ -64,7 +64,7 @@ public class VehicleEventsListener {
             if (VehicleUpdatedV1.EVENT_TYPE.equals(eventType)) {
                 applyVehicleUpdated(envelope);
             } else {
-                log.debug("Ignoring vehicle event type={}", eventType);
+                log.debug("Ignoring vehicle event type={} eventId={}", eventType, eventId);
             }
         } catch (TransientDataAccessException e) {
             throw e;
