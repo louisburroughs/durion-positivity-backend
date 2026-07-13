@@ -390,12 +390,8 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         Instant queryEnd = endDate.plusDays(2).atStartOfDay(ZoneOffset.UTC).toInstant();
 
         Map<AttendanceReportKey, Long> minutesByKey = new HashMap<>();
-        for (ExtJobTimeReplica row : extJobTimeReplicaRepository.findByEndAtUtcBetween(queryStart, queryEnd)) {
-            if (row.getLocationId() == null
-                    || (!technicianIds.isEmpty() && !technicianIds.contains(row.getTechnicianId()))
-                    || (locationId != null && !locationId.equals(row.getLocationId()))) {
-                continue;
-            }
+        for (ExtJobTimeReplica row : extJobTimeReplicaRepository.findForReportWindow(
+                queryStart, queryEnd, locationId, technicianIds, technicianIds.isEmpty())) {
             LocalDate localDate = row.getEndAtUtc().atZone(zoneId).toLocalDate();
             if (localDate.isBefore(startDate) || localDate.isAfter(endDate)) {
                 continue;
