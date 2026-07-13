@@ -32,6 +32,7 @@ public class PersonPartyServiceImpl implements CustomerService {
 
     private final PersonPartyRepository customerRepository;
     private final PersonDirectoryService personDirectoryService;
+    private final CustomerFactPublisher customerFactPublisher;
 
     /**
      * Retrieves all customers as DTOs.
@@ -135,6 +136,7 @@ public class PersonPartyServiceImpl implements CustomerService {
 
         // Determine party type and save to appropriate repository
         PersonParty saved = customerRepository.save(customer);
+        customerFactPublisher.partyChanged(saved);
 
         return toDTO(saved);
     }
@@ -157,6 +159,7 @@ public class PersonPartyServiceImpl implements CustomerService {
             PersonParty existing = personOpt.get();
             updateEntityFromDTO(existing, dto);
             PersonParty saved = customerRepository.save(existing);
+            customerFactPublisher.partyChanged(saved);
             return Optional.of(toDTO(saved));
         }
 
@@ -175,8 +178,10 @@ public class PersonPartyServiceImpl implements CustomerService {
         log.debug("Deleting customer with id: {}", id);
 
         // Check person repository first
-        if (customerRepository.existsById(id)) {
+        Optional<PersonParty> existing = customerRepository.findById(id);
+        if (existing.isPresent()) {
             customerRepository.deleteById(id);
+            customerFactPublisher.partyDeleted(existing.get());
             return true;
         }
 

@@ -41,6 +41,7 @@ public class AccountTierServiceImpl implements AccountTierService {
     private final Clock clock;
 
     private final CommercialPartyRepository commercialPartyRepository;
+    private final CustomerFactPublisher customerFactPublisher;
 
     // Tier calculation thresholds
     private static final BigDecimal BRONZE_THRESHOLD = new BigDecimal("50000");
@@ -110,6 +111,7 @@ public class AccountTierServiceImpl implements AccountTierService {
             if (!manualOverride || request.isForceRecalculation()) {
                 applyTierToParty(party, recommendedTier, calculation.reason, request.isForceRecalculation());
                 commercialPartyRepository.save(party);
+                customerFactPublisher.partyChanged(party);
                 tierApplied = true;
                 log.info("Applied tier {} to account {}", recommendedTier, request.getAccountId());
             } else {

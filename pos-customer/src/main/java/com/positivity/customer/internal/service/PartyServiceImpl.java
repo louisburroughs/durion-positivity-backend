@@ -36,7 +36,6 @@ import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PartyService;
 import com.positivity.domainevents.DomainEventEnvelope;
-import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.customer.BillingRulesUpdatedV1;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
@@ -88,6 +87,8 @@ public class PartyServiceImpl implements PartyService {
     /** Present only when pos.customer.kafka.enabled=true (ADR-0044 producer, issue #842). */
     private final org.springframework.beans.factory.ObjectProvider<OutboxEventWriter> outboxEventWriter;
 
+    private final CustomerFactPublisher customerFactPublisher;
+
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_INSTANT.withLocale(Locale.US);
 
     @Override
@@ -115,6 +116,7 @@ public class PartyServiceImpl implements PartyService {
         }
 
         CommercialParty saved = partyRepository.save(party);
+        customerFactPublisher.partyChanged(saved);
         log.info(
                 "Created commercial account with partyId: {}, customerNumber: {}",
                 saved.getPartyId(),
@@ -485,6 +487,11 @@ public class PartyServiceImpl implements PartyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot merge party with itself");
         }
 
+        // Capture contacts whose commercial-account linkage the reassignment below changes, so
+        // their person-identity facts can be re-emitted after the merge (#889).
+        java.util.List<UUID> affectedPersonIds = CustomerFactPublisher.affectedPersonIds(
+                partyRelationshipRepository.findByFromPartyPartyId(loser.getPartyId()));
+
         // Transfer party relationships from loser to survivor
         partyRelationshipRepository.reassignFromParty(loser.getPartyId(), survivor.getPartyId());
 
@@ -499,6 +506,9 @@ public class PartyServiceImpl implements PartyService {
 
         partyRepository.save(survivor);
         partyRepository.save(loser);
+        customerFactPublisher.partyChanged(survivor);
+        customerFactPublisher.partyChanged(loser);
+        affectedPersonIds.forEach(customerFactPublisher::personIdentityChanged);
         log.info("Successfully merged parties - survivor: {}, loser: {}", survivor.getPartyId(), loser.getPartyId());
 
         return MergePartiesResponse.builder()
@@ -563,6 +573,7 @@ public class PartyServiceImpl implements PartyService {
 
         party.getVehicleVins().add(request.getVinNumber());
         partyRepository.save(party);
+        customerFactPublisher.partyChanged(party);
         log.info("Associated vehicle VIN {} with party {}", request.getVinNumber(), partyId);
 
         return CreateVehicleForPartyResponse.builder()
@@ -838,6 +849,8 @@ public class PartyServiceImpl implements PartyService {
         party.setBillingRules(embedded);
         partyRepository.save(party);
         publishBillingRulesUpdated(partyId, embedded);
+        // Credit hold feeds the party fact's requirementsMet verdict — re-emit it (#889).
+        customerFactPublisher.partyChanged(party);
         return mapToBillingRuleRef(embedded);
     }
 
@@ -877,7 +890,9 @@ public class PartyServiceImpl implements PartyService {
                 null,
                 payload,
                 clock);
-        writer.publish(DomainTopics.events("customer"), envelope);
+        // Publish to the configured topic so the manifest computation (which scans by the same
+        // property) can never desync from the outbox rows (PR #893 review).
+        writer.publish(customerFactPublisher.eventsTopic(), envelope);
     }
 
     private BillingRuleRef mapToBillingRuleRef(BillingRulesEmbeddable embedded) {

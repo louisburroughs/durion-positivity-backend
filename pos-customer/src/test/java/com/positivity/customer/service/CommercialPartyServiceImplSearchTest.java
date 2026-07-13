@@ -25,7 +25,9 @@ class CommercialPartyServiceImplSearchTest {
     private CommercialPartyRepository commercialRepository;
 
     private CommercialPartyServiceImpl service() {
-        return new CommercialPartyServiceImpl(commercialRepository);
+        return new CommercialPartyServiceImpl(
+                commercialRepository,
+                org.mockito.Mockito.mock(com.positivity.customer.internal.service.CustomerFactPublisher.class));
     }
 
     private CommercialParty party(UUID id, String legalName) {
