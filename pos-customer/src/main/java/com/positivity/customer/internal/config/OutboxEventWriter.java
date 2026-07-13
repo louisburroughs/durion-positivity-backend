@@ -47,6 +47,23 @@ public class OutboxEventWriter {
         log.debug("Queued outbox event type={} topic={} key={}", envelope.eventType(), topic, envelope.recordKey());
     }
 
+    /**
+     * Queue a pre-serialized message (e.g. a {@code {commandType, eventId, payload}} command for
+     * another owner's commands topic) in the caller's transaction. Same outbox semantics as
+     * {@link #publish}; the record key preserves per-aggregate ordering.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void publishRaw(@NonNull String topic, @NonNull String recordKey, @NonNull String message) {
+        OutboxEvent event = OutboxEvent.builder()
+                .topic(topic)
+                .recordKey(recordKey)
+                .payload(message)
+                .createdAt(Instant.now(clock))
+                .build();
+        outboxEventRepository.save(event);
+        log.debug("Queued raw outbox message topic={} key={}", topic, recordKey);
+    }
+
     private String serialize(DomainEventEnvelope<?> envelope) {
         try {
             return objectMapper.writeValueAsString(envelope);

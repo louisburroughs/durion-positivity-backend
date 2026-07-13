@@ -6,14 +6,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.location.internal.client.PersonClient;
 import com.positivity.location.internal.dto.HolidayClosureRequest;
 import com.positivity.location.internal.dto.LocationPatchRequest;
 import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationResponseDTO;
 import com.positivity.location.internal.dto.LocationTypeDTO;
 import com.positivity.location.internal.dto.OperatingHoursRequest;
-import com.positivity.location.internal.dto.PersonDTO;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.LocationParent;
 import com.positivity.location.internal.entity.LocationType;
@@ -67,9 +65,6 @@ class LocationServiceTest {
 
     @Mock
     private LocationTypeRepository locationTypeRepository;
-
-    @Mock
-    private PersonClient personClient;
 
     @InjectMocks
     private LocationServiceImpl locationService;
@@ -659,25 +654,18 @@ class LocationServiceTest {
     }
 
     @Test
-    void getResponsiblePerson_withId_callsPersonClient() {
+    void getResponsiblePerson_legacyLongId_returnsNull() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Location location = Location.builder()
                 .id(locationId)
                 .responsiblePersonId(99L)
                 .active(true)
                 .build();
-        PersonDTO person = new PersonDTO();
-        person.setId(99L);
-        person.setFirstName("Alex");
-        person.setLastName("Tech");
 
         when(locationRepository.findById(locationId)).thenReturn(Optional.of(location));
-        when(personClient.getPersonById(99L)).thenReturn(person);
 
-        PersonDTO result = locationService.getResponsiblePerson(locationId);
-
-        assertThat(result).isNotNull();
-        assertThat(result.getId()).isEqualTo(99L);
+        // Legacy Long ids predate UUIDv7 person ids and cannot resolve a person (#877).
+        assertThat(locationService.getResponsiblePerson(locationId)).isNull();
     }
 
     private static LocationRequestDTO validRequest(String name, String code) {

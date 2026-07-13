@@ -1,6 +1,5 @@
 package com.positivity.customer.internal.service;
 
-import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.config.CacheConfig;
 import com.positivity.customer.internal.config.OutboxEventWriter;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
@@ -83,7 +82,7 @@ public class PartyServiceImpl implements PartyService {
     private final PersonPartyRepository personPartyRepository;
     private final PartyRelationshipRepository partyRelationshipRepository;
     private final CacheManager cacheManager;
-    private final PeopleClient peopleClient;
+    private final PersonDirectoryService personDirectoryService;
     private final ExtVehicleRepository extVehicleRepository;
 
     /** Present only when pos.customer.kafka.enabled=true (ADR-0044 producer, issue #842). */
@@ -175,7 +174,7 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private String resolvePersonDisplayName(@NonNull PersonParty personParty) {
-        Map<UUID, PeopleClient.PersonIdentity> identities = fetchIdentitiesFor(List.of(personParty));
+        Map<UUID, PersonDirectoryService.PersonIdentity> identities = fetchIdentitiesFor(List.of(personParty));
         String displayName = resolveDisplayName(personParty, identities);
         if (StringUtils.hasText(displayName)) {
             return displayName;
@@ -223,7 +222,7 @@ public class PartyServiceImpl implements PartyService {
         partyRepository.findAll().stream().map(this::mapToPartySummary).forEach(all::add);
 
         List<PersonParty> individuals = personPartyRepository.findIndividualCustomers();
-        Map<UUID, PeopleClient.PersonIdentity> identities = fetchIdentitiesFor(individuals);
+        Map<UUID, PersonDirectoryService.PersonIdentity> identities = fetchIdentitiesFor(individuals);
         individuals.stream()
                 .map(person -> mapPersonToPartySummary(person, identities))
                 .forEach(all::add);
@@ -293,7 +292,7 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private SearchPartiesResponse.PartySummary mapPersonToPartySummary(
-            PersonParty person, Map<UUID, PeopleClient.PersonIdentity> identities) {
+            PersonParty person, Map<UUID, PersonDirectoryService.PersonIdentity> identities) {
         String displayName = resolveDisplayName(person, identities);
         return SearchPartiesResponse.PartySummary.builder()
                 .partyId(String.valueOf(person.getPartyId()))
@@ -313,8 +312,8 @@ public class PartyServiceImpl implements PartyService {
      * themselves: name plus their first email/phone (pos-people source of truth).
      */
     private SearchPartiesResponse.PrimaryContact resolvePersonPrimaryContact(
-            PersonParty person, String displayName, Map<UUID, PeopleClient.PersonIdentity> identities) {
-        PeopleClient.PersonIdentity identity =
+            PersonParty person, String displayName, Map<UUID, PersonDirectoryService.PersonIdentity> identities) {
+        PersonDirectoryService.PersonIdentity identity =
                 person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
         List<String> emails = resolveEmails(person, identity);
         List<String> phones = resolvePhones(person, identity);
@@ -332,12 +331,12 @@ public class PartyServiceImpl implements PartyService {
      * display read paths (directory browse, contact summaries) rather than failing the
      * whole request — there is no local fallback after issue #684.
      */
-    private Map<UUID, PeopleClient.PersonIdentity> fetchIdentitiesFor(Collection<PersonParty> persons) {
+    private Map<UUID, PersonDirectoryService.PersonIdentity> fetchIdentitiesFor(Collection<PersonParty> persons) {
         Set<UUID> personIds = persons.stream()
                 .map(PersonParty::getPersonId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        return peopleClient.fetchPersonIdentitiesQuietly(personIds);
+        return personDirectoryService.fetchPersonIdentitiesQuietly(personIds);
     }
 
     /**
@@ -345,19 +344,19 @@ public class PartyServiceImpl implements PartyService {
      * issue #684). Returns {@code null} when pos-people has no name for the canonical id
      * (or is unreachable) — there is no local fallback copy.
      */
-    private String resolveDisplayName(PersonParty person, Map<UUID, PeopleClient.PersonIdentity> identities) {
-        PeopleClient.PersonIdentity identity =
+    private String resolveDisplayName(PersonParty person, Map<UUID, PersonDirectoryService.PersonIdentity> identities) {
+        PersonDirectoryService.PersonIdentity identity =
                 (identities != null && person.getPersonId() != null) ? identities.get(person.getPersonId()) : null;
         return identity != null && !identity.displayName().isBlank() ? identity.displayName() : null;
     }
 
     /** Phone values from pos-people (sole source of truth, ADR-0015 I2; issue #684). */
-    private List<String> resolvePhones(PersonParty person, PeopleClient.PersonIdentity identity) {
+    private List<String> resolvePhones(PersonParty person, PersonDirectoryService.PersonIdentity identity) {
         return identity != null ? identity.phones() : List.of();
     }
 
     /** Email values from pos-people (sole source of truth, ADR-0015 I2; issue #684). */
-    private List<String> resolveEmails(PersonParty person, PeopleClient.PersonIdentity identity) {
+    private List<String> resolveEmails(PersonParty person, PersonDirectoryService.PersonIdentity identity) {
         return identity != null ? identity.emails() : List.of();
     }
 
@@ -424,10 +423,10 @@ public class PartyServiceImpl implements PartyService {
             }
         }
         if (!personIdByPartyId.isEmpty()) {
-            Map<UUID, PeopleClient.PersonIdentity> identities =
-                    peopleClient.fetchPersonIdentitiesQuietly(Set.copyOf(personIdByPartyId.values()));
+            Map<UUID, PersonDirectoryService.PersonIdentity> identities =
+                    personDirectoryService.fetchPersonIdentitiesQuietly(Set.copyOf(personIdByPartyId.values()));
             personIdByPartyId.forEach((partyId, personId) -> {
-                PeopleClient.PersonIdentity identity = identities.get(personId);
+                PersonDirectoryService.PersonIdentity identity = identities.get(personId);
                 if (identity != null && StringUtils.hasText(identity.displayName())) {
                     byPartyId.put(
                             partyId,
@@ -443,9 +442,9 @@ public class PartyServiceImpl implements PartyService {
      * Pick a best-effort phone from a person's contact points: the primary phone-type point if any,
      * otherwise the first non-blank phone-type point. Phone contact types are prefixed {@code PHONE}.
      */
-    private static @Nullable String primaryPhone(@NonNull List<PeopleClient.ContactPoint> contactPoints) {
-        PeopleClient.ContactPoint firstPhone = null;
-        for (PeopleClient.ContactPoint cp : contactPoints) {
+    private static @Nullable String primaryPhone(@NonNull List<PersonDirectoryService.ContactPoint> contactPoints) {
+        PersonDirectoryService.ContactPoint firstPhone = null;
+        for (PersonDirectoryService.ContactPoint cp : contactPoints) {
             if (cp.contactType() == null || !cp.contactType().startsWith("PHONE") || !StringUtils.hasText(cp.value())) {
                 continue;
             }
@@ -981,7 +980,7 @@ public class PartyServiceImpl implements PartyService {
         LocalDate today = LocalDate.now(clock);
         List<PartyRelationship> relationships =
                 partyRelationshipRepository.findActiveByFromPartyId(party.getPartyId(), today);
-        Map<UUID, PeopleClient.PersonIdentity> identities = fetchIdentitiesFor(
+        Map<UUID, PersonDirectoryService.PersonIdentity> identities = fetchIdentitiesFor(
                 relationships.stream().map(PartyRelationship::getToPerson).toList());
         return relationships.stream()
                 .map(rel -> convertRelationshipToSummary(rel, identities))
@@ -989,7 +988,7 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private ContactSummary convertRelationshipToSummary(
-            PartyRelationship rel, Map<UUID, PeopleClient.PersonIdentity> identities) {
+            PartyRelationship rel, Map<UUID, PersonDirectoryService.PersonIdentity> identities) {
         PersonParty person = rel.getToPerson();
         ContactSummary summary = new ContactSummary();
         summary.setContactId(Objects.requireNonNull(rel.getPartyRelationshipId(), "partyRelationshipId")
@@ -998,7 +997,7 @@ public class PartyServiceImpl implements PartyService {
         summary.setName(Objects.requireNonNullElse(resolveDisplayName(person, identities), "Unknown"));
         summary.setRoles(Collections.emptyList());
 
-        PeopleClient.PersonIdentity identity =
+        PersonDirectoryService.PersonIdentity identity =
                 person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
         summary.setPhoneNumbers(resolvePhones(person, identity).stream()
                 .map(v -> new ContactSummary.PhoneNumberDTO("PRIMARY", v))

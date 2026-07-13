@@ -1,6 +1,5 @@
 package com.positivity.customer.internal.service;
 
-import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
@@ -48,17 +47,17 @@ public class ContactRoleServiceImpl implements ContactRoleService {
     private final ContactRoleAssignmentRepository roleAssignmentRepository;
     private final CommercialPartyRepository partyRepository;
     private final PersonPartyRepository personRepository;
-    private final PeopleClient peopleClient;
+    private final PersonDirectoryService personDirectoryService;
 
     ContactRoleServiceImpl(
             ContactRoleAssignmentRepository roleAssignmentRepository,
             CommercialPartyRepository partyRepository,
             PersonPartyRepository personRepository,
-            PeopleClient peopleClient) {
+            PersonDirectoryService personDirectoryService) {
         this.roleAssignmentRepository = roleAssignmentRepository;
         this.partyRepository = partyRepository;
         this.personRepository = personRepository;
-        this.peopleClient = peopleClient;
+        this.personDirectoryService = personDirectoryService;
     }
 
     /**
@@ -84,8 +83,8 @@ public class ContactRoleServiceImpl implements ContactRoleService {
         var contactMap = assignments.stream().collect(Collectors.groupingBy(ContactRoleAssignment::getContactId));
 
         // Names from pos-people (source of truth, ADR-0015 I2), batched by canonical id.
-        Map<UUID, PeopleClient.PersonIdentity> identities =
-                peopleClient.fetchPersonIdentitiesQuietly(contactMap.keySet());
+        Map<UUID, PersonDirectoryService.PersonIdentity> identities =
+                personDirectoryService.fetchPersonIdentitiesQuietly(contactMap.keySet());
 
         List<GetContactsWithRolesResponse.ContactWithRoles> contacts = new ArrayList<>();
 
@@ -95,7 +94,7 @@ public class ContactRoleServiceImpl implements ContactRoleService {
 
             // Get person details
             personRepository.findByPersonId(contactId).ifPresent(person -> {
-                PeopleClient.PersonIdentity identity = identities.get(contactId);
+                PersonDirectoryService.PersonIdentity identity = identities.get(contactId);
                 // Name/email/phone from pos-people (sole source of truth, ADR-0015 I2; issue #684).
                 String contactName =
                         identity != null && !identity.displayName().isBlank() ? identity.displayName() : null;

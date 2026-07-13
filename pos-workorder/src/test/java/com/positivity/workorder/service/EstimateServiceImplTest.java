@@ -9,7 +9,6 @@ import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.workorder.internal.client.LocationClient;
-import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
@@ -28,6 +27,7 @@ import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.EstimateSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.service.EstimateServiceImpl;
+import com.positivity.workorder.internal.service.PeopleAvailabilityLocalService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -81,7 +81,7 @@ class EstimateServiceImplTest {
     private LocationClient locationClient;
 
     @Mock
-    private PeopleLocationClient peopleLocationClient;
+    private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
     @Mock
     private ObjectMapper objectMapper;
@@ -252,7 +252,7 @@ class EstimateServiceImplTest {
                 .customerId(LOCAL_CUSTOMER_ID)
                 .vehicleId(LOCAL_VEHICLE_ID)
                 .build();
-        when(peopleLocationClient.resolveCurrentUserPrimaryLocation()).thenReturn(java.util.Optional.empty());
+        when(peopleAvailabilityLocalService.resolveCurrentUserPrimaryLocation()).thenReturn(java.util.Optional.empty());
 
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class, () -> estimateService.createEstimate(request, "testuser"));

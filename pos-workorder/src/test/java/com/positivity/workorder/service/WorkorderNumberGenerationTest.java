@@ -6,7 +6,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.workorder.internal.client.CustomerValidationClient;
-import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
@@ -16,6 +15,7 @@ import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import com.positivity.workorder.internal.service.PeopleAvailabilityLocalService;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
 import java.time.Clock;
 import java.time.Instant;
@@ -82,7 +82,7 @@ class WorkorderNumberGenerationTest {
     private ShopmgrOperationalContextClient shopmgrClient;
 
     @Mock
-    private PeopleLocationClient peopleLocationClient;
+    private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
     @InjectMocks
     private com.positivity.workorder.internal.service.WorkorderServiceImpl service;

@@ -1,4 +1,7 @@
 spring:
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   application:
     name: shop-manager
   datasource:
@@ -75,8 +78,12 @@ pos:
     read-timeout-ms: ${POS_CRM_READ_TIMEOUT_MS:2000}
   customer:
     service-id: ${POS_CUSTOMER_SERVICE_ID:customer}
-  people:
-    service-id: ${POS_PEOPLE_SERVICE_ID:people}
+  shop-manager:
+    kafka:
+      # Staffing-assignment replica feed (ADR-0044 §6, #877)
+      enabled: ${POS_SHOP_MANAGER_KAFKA_ENABLED:false}
+      people-events-topic: ${POS_SHOP_MANAGER_PEOPLE_EVENTS_TOPIC:people.events.v1}
+      people-events-consumer-group: ${POS_SHOP_MANAGER_PEOPLE_EVENTS_CONSUMER_GROUP:pos-shop-manager-people-events}
   location:
     service-id: ${POS_LOCATION_SERVICE_ID:location}
   catalog:

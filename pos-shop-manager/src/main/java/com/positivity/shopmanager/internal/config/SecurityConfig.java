@@ -61,14 +61,4 @@ public class SecurityConfig {
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
         return builder.requestFactory(factory).baseUrl("http://" + serviceId).build();
     }
-
-    @Bean(name = "hrRestClient")
-    public RestClient hrRestClient(
-            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
-            @Value("${pos.people.service-id:people}") String serviceId) {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofMillis(200));
-        factory.setReadTimeout(Duration.ofMillis(200));
-        return builder.requestFactory(factory).baseUrl("http://" + serviceId).build();
-    }
 }

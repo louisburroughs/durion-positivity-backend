@@ -8,7 +8,6 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shopmanager.internal.client.CrmCustomerClient;
 import com.positivity.shopmanager.internal.client.CrmVehicleClient;
-import com.positivity.shopmanager.internal.client.HrAvailabilityClient;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
@@ -92,7 +91,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private final AppointmentLoadService appointmentLoadService;
     private final CrmCustomerClient crmCustomerClient;
     private final CrmVehicleClient crmVehicleClient;
-    private final HrAvailabilityClient hrAvailabilityClient;
+    private final StaffingScheduleService staffingScheduleService;
     private final ApplicationEventPublisher eventPublisher;
     private final ShopRepository shopRepository;
     private final SourceEligibilityService sourceEligibilityService;
@@ -530,14 +529,12 @@ public class AppointmentsServiceImpl implements AppointmentsService {
 
         List<String> warnings = new ArrayList<>();
         if (request.isIncludeAvailabilityOverlay()) {
-            try {
-                hrAvailabilityClient.getAvailabilityOverlay(
-                        request.getLocationId().toString(), targetDate);
-                response.setAvailabilityOverlayStatus("AVAILABLE");
-            } catch (Exception exception) {
-                response.setAvailabilityOverlayStatus("UNAVAILABLE");
+            // Availability data is local since #877 (staffing-assignment replica); the overlay
+            // probe reports whether the replica has staffing data for the location.
+            boolean hasData = staffingScheduleService.hasAssignmentData(request.getLocationId());
+            response.setAvailabilityOverlayStatus(hasData ? "AVAILABLE" : "UNAVAILABLE");
+            if (!hasData) {
                 warnings.add("HR_SYSTEM_UNAVAILABLE");
-                log.warn("HR overlay unavailable for location {}: {}", request.getLocationId(), exception.getMessage());
             }
         } else {
             response.setAvailabilityOverlayStatus("NOT_REQUESTED");

@@ -99,6 +99,11 @@ workorder:
   kafka:
     enabled: ${WORKORDER_KAFKA_ENABLED:false}
     events-topic: ${WORKORDER_KAFKA_EVENTS_TOPIC:workorder.events.v1}
+    # People replicas (ADR-0044 §6, #877)
+    people-contact-events-topic: ${WORKORDER_PC_EVENTS_TOPIC:people-contact.events.v1}
+    people-contact-events-consumer-group: ${WORKORDER_PC_EVENTS_CONSUMER_GROUP:pos-workorder-people-contact-events}
+    people-events-topic: ${WORKORDER_PEOPLE_EVENTS_TOPIC:people.events.v1}
+    people-events-consumer-group: ${WORKORDER_PEOPLE_EVENTS_CONSUMER_GROUP:pos-workorder-people-events}
     commands-topic: ${WORKORDER_KAFKA_COMMANDS_TOPIC:workorder.commands.v1}
     consumer-group: ${WORKORDER_KAFKA_CONSUMER_GROUP:${spring.application.name}-commands}
   # Reconciliation manifests (ADR-0044, one summary per closed window of the fact topic)

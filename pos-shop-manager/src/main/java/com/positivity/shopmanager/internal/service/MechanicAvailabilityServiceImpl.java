@@ -1,6 +1,5 @@
 package com.positivity.shopmanager.internal.service;
 
-import com.positivity.shopmanager.internal.client.HrAvailabilityClient;
 import com.positivity.shopmanager.internal.dto.HrScheduleBlock;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.TravelBlock;
@@ -38,7 +37,7 @@ public class MechanicAvailabilityServiceImpl implements MechanicAvailabilityServ
     private final MechanicRepository mechanicRepository;
     private final AppointmentRepository appointmentRepository;
     private final TravelBlockRepository travelBlockRepository;
-    private final HrAvailabilityClient hrAvailabilityClient;
+    private final StaffingScheduleService staffingScheduleService;
 
     @Override
     public @NonNull MechanicAvailabilityResult queryAvailability(
@@ -53,10 +52,9 @@ public class MechanicAvailabilityServiceImpl implements MechanicAvailabilityServ
                 .findByPersonId(personId)
                 .orElseThrow(() -> new IllegalArgumentException("Mechanic not found for personId: " + personId));
 
-        // Throws HrUnavailableException (wrapped RestClientException) on HR system
-        // failure —
-        // GlobalExceptionHandler translates that to HTTP 503 HR_UNAVAILABLE.
-        List<HrScheduleBlock> hrBlocks = hrAvailabilityClient.getScheduleBlocks(personId, windowStart, windowEnd);
+        // Schedule blocks come from the local staffing-assignment replica (#877); the HR
+        // remote-failure path (503 HR_UNAVAILABLE) is gone with the sync client.
+        List<HrScheduleBlock> hrBlocks = staffingScheduleService.getScheduleBlocks(personId, windowStart, windowEnd);
 
         List<ConflictBlock> conflicts = new ArrayList<>();
 

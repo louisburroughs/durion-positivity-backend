@@ -85,6 +85,9 @@ pos:
       # Domain-event publishing (ADR-0044, #842). Off until the broker is provisioned;
       # flip POS_INVOICE_KAFKA_ENABLED per environment.
       enabled: ${POS_INVOICE_KAFKA_ENABLED:false}
+      # Employment replica feed (ADR-0044 §6, #877)
+      people-events-topic: ${POS_INVOICE_PEOPLE_EVENTS_TOPIC:people.events.v1}
+      people-events-consumer-group: ${POS_INVOICE_PEOPLE_EVENTS_CONSUMER_GROUP:pos-invoice-people-events}
   events:
     api-secret: ${POS_EVENTS_API_SECRET:}
 

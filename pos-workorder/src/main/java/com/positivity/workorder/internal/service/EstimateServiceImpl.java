@@ -8,7 +8,6 @@ import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.common.enums.TaxReferenceType;
 import com.positivity.workorder.internal.client.DocumentClient;
 import com.positivity.workorder.internal.client.LocationClient;
-import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentRequest;
@@ -76,7 +75,7 @@ public class EstimateServiceImpl implements EstimateService {
     private final BillingRulesClientService billingRulesClientService;
     private final TaxClient taxClient;
     private final LocationClient locationClient;
-    private final PeopleLocationClient peopleLocationClient;
+    private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
     private final DocumentClient documentClient;
     private final ObjectMapper objectMapper;
     private final CustomerReferenceService customerReferenceService;
@@ -249,7 +248,7 @@ public class EstimateServiceImpl implements EstimateService {
         // consumer (e.g. the assign page finds no technicians staffed there).
         UUID locationId = request.getLocationId() != null
                 ? request.getLocationId()
-                : peopleLocationClient
+                : peopleAvailabilityLocalService
                         .resolveCurrentUserPrimaryLocation()
                         .orElseThrow(() -> new IllegalArgumentException(
                                 "locationId is required: none was provided and the current user has no primary "

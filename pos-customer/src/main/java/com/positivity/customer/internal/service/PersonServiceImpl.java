@@ -1,6 +1,5 @@
 package com.positivity.customer.internal.service;
 
-import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
@@ -46,7 +45,7 @@ public class PersonServiceImpl implements PersonService {
 
     private final PersonPartyRepository personRepository;
     private final PartyRelationshipRepository partyRelationshipRepository;
-    private final PeopleClient peopleClient;
+    private final PersonDirectoryService personDirectoryService;
     private final Clock clock;
 
     /**
@@ -88,11 +87,11 @@ public class PersonServiceImpl implements PersonService {
         // (the sole writer of identity now) — AC4 must persist nothing anywhere.
         // pos-people is the source of truth for contacts (ADR-0015 I2); pos-customer
         // keeps no local copy (issue #684).
-        List<PeopleClient.ContactPointUpsert> contactPoints = new ArrayList<>();
+        List<PersonDirectoryService.ContactPointUpsert> contactPoints = new ArrayList<>();
         if (request.getEmails() != null) {
             for (CreatePersonRequest.EmailInput emailInput : request.getEmails()) {
                 validateEmail(emailInput.getValue());
-                contactPoints.add(new PeopleClient.ContactPointUpsert(
+                contactPoints.add(new PersonDirectoryService.ContactPointUpsert(
                         ContactPointType.EMAIL.name(),
                         emailInput.getValue().trim().toLowerCase(),
                         emailInput.isPrimary()));
@@ -102,14 +101,15 @@ public class PersonServiceImpl implements PersonService {
             for (CreatePersonRequest.PhoneInput phoneInput : request.getPhones()) {
                 ContactPointType phoneType =
                         phoneInput.getType() != null ? phoneInput.getType() : ContactPointType.PHONE_MOBILE;
-                contactPoints.add(new PeopleClient.ContactPointUpsert(
+                contactPoints.add(new PersonDirectoryService.ContactPointUpsert(
                         phoneType.name(), phoneInput.getValue().trim(), phoneInput.isPrimary()));
             }
         }
 
         String primaryEmail = extractPrimaryEmail(request);
         String primaryPhone = extractPrimaryPhone(request);
-        UUID peoplePersonId = peopleClient.resolveOrCreatePersonId(primaryEmail, primaryPhone, lastName, firstName);
+        UUID peoplePersonId =
+                personDirectoryService.resolveOrCreatePersonId(primaryEmail, primaryPhone, lastName, firstName);
 
         // Reuse existing person-party if already associated to this canonical person
         PersonParty existing = personRepository.findByPersonId(peoplePersonId).orElse(null);
@@ -129,7 +129,7 @@ public class PersonServiceImpl implements PersonService {
                 savedPerson.getPersonId());
 
         // Write contact points to pos-people (source of truth, ADR-0015 I2).
-        peopleClient.setContactPoints(peoplePersonId, contactPoints);
+        personDirectoryService.setContactPoints(peoplePersonId, contactPoints);
 
         log.info(
                 "Successfully created person personId={} personPartyId={} with {} contact points",
@@ -193,7 +193,7 @@ public class PersonServiceImpl implements PersonService {
             return new ArrayList<>();
         }
 
-        List<GetPersonResponse> matches = peopleClient.searchPersons(query).stream()
+        List<GetPersonResponse> matches = personDirectoryService.searchPersons(query).stream()
                 .map(identity -> personRepository
                         .findByPersonId(identity.id())
                         .map(person -> toGetPersonResponse(person, identity))
@@ -280,8 +280,8 @@ public class PersonServiceImpl implements PersonService {
      * @return the response DTO
      */
     private GetPersonResponse toGetPersonResponse(PersonParty person) {
-        PeopleClient.PersonIdentity identity = person.getPersonId() != null
-                ? peopleClient
+        PersonDirectoryService.PersonIdentity identity = person.getPersonId() != null
+                ? personDirectoryService
                         .fetchPersonIdentitiesQuietly(Set.of(person.getPersonId()))
                         .get(person.getPersonId())
                 : null;
@@ -294,7 +294,7 @@ public class PersonServiceImpl implements PersonService {
      * {@code identity} is null (pos-people unreachable or no match) names and contacts
      * are absent — there is no local fallback after issue #684.
      */
-    private GetPersonResponse toGetPersonResponse(PersonParty person, PeopleClient.PersonIdentity identity) {
+    private GetPersonResponse toGetPersonResponse(PersonParty person, PersonDirectoryService.PersonIdentity identity) {
         List<PartyRelationship> commercialRelationships = partyRelationshipRepository.findActiveByToPersonPartyId(
                 person.getPersonPartyId(), LocalDate.now(clock));
         int commercialAccountCount = (int) commercialRelationships.stream()

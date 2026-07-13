@@ -8,7 +8,6 @@ import com.positivity.shopmanager.internal.exception.AppointmentValidationExcept
 import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
 import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
-import com.positivity.shopmanager.internal.exception.HrUnavailableException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
@@ -143,13 +142,6 @@ public class GlobalExceptionHandler {
         UUID correlationId = resolveCorrelationId(request);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(error(CODE_CRM_UNAVAILABLE, "CRM service is unavailable", correlationId));
-    }
-
-    @ExceptionHandler(HrUnavailableException.class)
-    public ResponseEntity<ApiError> handleHrUnavailable(HrUnavailableException exception, HttpServletRequest request) {
-        UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(error(CODE_HR_UNAVAILABLE, "HR service is unavailable", correlationId));
     }
 
     @ExceptionHandler(UnsupportedOperationException.class)

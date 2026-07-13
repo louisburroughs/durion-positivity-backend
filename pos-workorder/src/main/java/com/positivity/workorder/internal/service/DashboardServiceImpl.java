@@ -2,7 +2,6 @@ package com.positivity.workorder.internal.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.workorder.internal.client.PeopleAvailabilityClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.dto.BayStatus;
 import com.positivity.workorder.internal.dto.ConflictEntry;
@@ -47,7 +46,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final Clock clock;
 
     private final WorkorderRepository workorderRepository;
-    private final PeopleAvailabilityClient peopleAvailabilityClient;
+    private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
     private final ShopmgrOperationalContextClient shopmgrOperationalContextClient;
     private final ObjectMapper objectMapper;
 
@@ -57,13 +56,10 @@ public class DashboardServiceImpl implements DashboardService {
 
         List<Workorder> workorders = workorderRepository.findByScheduledDateAndLocationId(date, locationUuid);
 
-        PeopleAvailabilityResponse availability = null;
-        try {
-            availability = peopleAvailabilityClient.fetchAvailability(locationId, date);
-        } catch (RestClientException e) {
-            log.warn("People service unavailable for dashboard locationId={} date={}", locationId, date, e);
-        }
-        boolean peopleDegraded = availability == null;
+        // Availability is computed from local replicas (#877); the remote-failure degrade
+        // path is gone with the sync client.
+        PeopleAvailabilityResponse availability = peopleAvailabilityLocalService.fetchAvailability(locationId, date);
+        boolean peopleDegraded = false;
         List<PersonAvailability> people =
                 availability != null && availability.getPeople() != null ? availability.getPeople() : List.of();
 

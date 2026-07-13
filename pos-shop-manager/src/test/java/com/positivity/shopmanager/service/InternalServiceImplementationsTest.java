@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.shopmanager.internal.client.LocationClient;
-import com.positivity.shopmanager.internal.client.PersonClient;
 import com.positivity.shopmanager.internal.client.ServiceEntityClient;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import com.positivity.shopmanager.internal.dto.PersonDTO;
@@ -39,9 +38,6 @@ class InternalServiceImplementationsTest {
 
     @Mock
     private TechnicianRepository technicianRepository;
-
-    @Mock
-    private PersonClient personClient;
 
     @Mock
     private ServiceEntityClient serviceEntityClient;
@@ -174,8 +170,7 @@ class InternalServiceImplementationsTest {
 
     @Test
     void shopService_getTechnicianPerson_returnsNullWhenPersonIdMissing() {
-        ShopServiceImpl service =
-                new ShopServiceImpl(technicianRepository, personClient, serviceEntityClient, shopServiceRepository);
+        ShopServiceImpl service = new ShopServiceImpl(technicianRepository, serviceEntityClient, shopServiceRepository);
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID technicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Technician technician = new Technician();
@@ -189,28 +184,22 @@ class InternalServiceImplementationsTest {
     }
 
     @Test
-    void shopService_getTechnicianPerson_returnsPersonWhenPersonIdPresent() {
-        ShopServiceImpl service =
-                new ShopServiceImpl(technicianRepository, personClient, serviceEntityClient, shopServiceRepository);
+    void shopService_getTechnicianPerson_legacyLongId_returnsNull() {
+        ShopServiceImpl service = new ShopServiceImpl(technicianRepository, serviceEntityClient, shopServiceRepository);
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID technicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Technician technician = new Technician();
         technician.setId(technicianId);
         technician.setPersonId(42L);
-        PersonDTO expected = new PersonDTO();
-        expected.setId(42L);
         when(technicianRepository.findByIdAndShopId(technicianId, locationId)).thenReturn(Optional.of(technician));
-        when(personClient.getPersonById(42L)).thenReturn(expected);
 
-        PersonDTO result = service.getTechnicianPerson(locationId, technicianId);
-
-        assertEquals(expected, result);
+        // Legacy Long ids predate UUIDv7 person ids and cannot resolve a person (#877).
+        assertNull(service.getTechnicianPerson(locationId, technicianId));
     }
 
     @Test
     void shopService_getTechnicianPerson_throwsWhenTechnicianMissing() {
-        ShopServiceImpl service =
-                new ShopServiceImpl(technicianRepository, personClient, serviceEntityClient, shopServiceRepository);
+        ShopServiceImpl service = new ShopServiceImpl(technicianRepository, serviceEntityClient, shopServiceRepository);
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID technicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(technicianRepository.findByIdAndShopId(technicianId, locationId)).thenReturn(Optional.empty());
@@ -221,8 +210,7 @@ class InternalServiceImplementationsTest {
 
     @Test
     void shopService_getShopServiceDetails_returnsNullWhenServiceEntityIdMissing() {
-        ShopServiceImpl service =
-                new ShopServiceImpl(technicianRepository, personClient, serviceEntityClient, shopServiceRepository);
+        ShopServiceImpl service = new ShopServiceImpl(technicianRepository, serviceEntityClient, shopServiceRepository);
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID shopServiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ShopServiceEntry shopService = new ShopServiceEntry();
@@ -237,8 +225,7 @@ class InternalServiceImplementationsTest {
 
     @Test
     void shopService_getShopServiceDetails_returnsServiceEntityWhenPresent() {
-        ShopServiceImpl service =
-                new ShopServiceImpl(technicianRepository, personClient, serviceEntityClient, shopServiceRepository);
+        ShopServiceImpl service = new ShopServiceImpl(technicianRepository, serviceEntityClient, shopServiceRepository);
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID shopServiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ShopServiceEntry shopService = new ShopServiceEntry();
@@ -256,8 +243,7 @@ class InternalServiceImplementationsTest {
 
     @Test
     void shopService_getShopServiceDetails_throwsWhenShopServiceMissing() {
-        ShopServiceImpl service =
-                new ShopServiceImpl(technicianRepository, personClient, serviceEntityClient, shopServiceRepository);
+        ShopServiceImpl service = new ShopServiceImpl(technicianRepository, serviceEntityClient, shopServiceRepository);
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID shopServiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(shopServiceRepository.findByIdAndShopId(shopServiceId, locationId)).thenReturn(Optional.empty());
