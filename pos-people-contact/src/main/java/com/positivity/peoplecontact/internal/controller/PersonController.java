@@ -66,12 +66,11 @@ public class PersonController {
                 .orElseThrow(() -> new EntityNotFoundException("No person found for id: " + personId));
     }
 
-    @Operation(summary = "Get all people", description = "Retrieve people with optional type and text filters.")
-    @Parameter(
-            name = "type",
-            description = "Filter by person type: EMPLOYEE, ACTIVE, INACTIVE, or ALL (default).",
-            schema = @Schema(allowableValues = {"ALL", "EMPLOYEE", "ACTIVE", "INACTIVE"}))
-    @Parameter(name = "q", description = "Case-insensitive text search on firstName, lastName, primaryEmail, username.")
+    @Operation(
+            summary = "Get all people",
+            description = "Retrieve people with an optional text filter. Employment filtering lives in pos-people"
+                    + " (ADR-0044 §6) and is not available on the identity directory.")
+    @Parameter(name = "q", description = "Case-insensitive text search on firstName, lastName, primaryEmail.")
     @ApiResponse(responseCode = "200", description = "List of people returned successfully.")
     @GetMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

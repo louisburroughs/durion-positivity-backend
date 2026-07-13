@@ -151,25 +151,15 @@ paths:
       tags:
       - People API
       summary: Get all people
-      description: Retrieve people with optional type and text filters.
+      description: Retrieve people with an optional text filter. Employment filtering lives in pos-people (ADR-0044 §6) and is not available on the identity directory.
       operationId: getAllPeople
       parameters:
       - name: q
         in: query
-        description: Case-insensitive text search on firstName, lastName, primaryEmail, username.
+        description: Case-insensitive text search on firstName, lastName, primaryEmail.
         required: false
         schema:
           type: string
-      - name: type
-        in: query
-        description: 'Filter by person type: EMPLOYEE, ACTIVE, INACTIVE, or ALL (default).'
-        schema:
-          type: string
-          enum:
-          - ALL
-          - EMPLOYEE
-          - ACTIVE
-          - INACTIVE
       responses:
         '200':
           description: List of people returned successfully.
