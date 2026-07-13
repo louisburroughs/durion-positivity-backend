@@ -6,10 +6,10 @@ import com.positivity.people.internal.client.dto.WorkexecJobTimeTotal;
 import com.positivity.people.internal.dto.ApprovedTimeExportResponse;
 import com.positivity.people.internal.dto.AttendanceDiscrepancyReportResponse;
 import com.positivity.people.internal.dto.AttendanceReportKey;
-import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.service.PeopleReportsService;
 import java.math.BigDecimal;
@@ -26,9 +26,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
@@ -44,7 +46,7 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
 
     private final TimeEntryRepository timeEntryRepository;
 
-    private final PersonRepository personRepository;
+    private final ExtPersonReplicaRepository extPersonReplicaRepository;
 
     private final WorkexecJobTimeClient workexecJobTimeClient;
 
@@ -54,14 +56,14 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
 
     public PeopleReportsServiceImpl(
             TimeEntryRepository timeEntryRepository,
-            PersonRepository personRepository,
+            ExtPersonReplicaRepository extPersonReplicaRepository,
             WorkexecJobTimeClient workexecJobTimeClient,
             LocationReferenceClient locationReferenceClient,
             TimekeepingThresholdCache timekeepingThresholdCache,
             Clock clock) {
         this.clock = clock;
         this.timeEntryRepository = timeEntryRepository;
-        this.personRepository = personRepository;
+        this.extPersonReplicaRepository = extPersonReplicaRepository;
         this.workexecJobTimeClient = workexecJobTimeClient;
         this.locationReferenceClient = locationReferenceClient;
         this.timekeepingThresholdCache = timekeepingThresholdCache;
@@ -109,6 +111,10 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         }
 
         Map<UUID, String> locationNamesById = loadLocationNames(locationIds);
+        Map<UUID, ExtPersonReplica> peopleById = loadPeople(entries.stream()
+                .map(TimeEntry::getPersonId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
 
         return entries.stream()
                 .filter(entry -> entry.getApprovedAt() != null
@@ -123,7 +129,7 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
                             .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
 
                     String employeeId = getPersonIdString(entry);
-                    String employeeName = resolveDisplayName(entry.getPerson(), employeeId);
+                    String employeeName = resolveDisplayName(peopleById.get(entry.getPersonId()), employeeId);
                     String locationName = locationNamesById.getOrDefault(
                             entry.getLocationId(), entry.getLocationId().toString());
 
@@ -293,10 +299,7 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
     }
 
     private boolean hasAttendanceDimensions(TimeEntry entry) {
-        return entry.getAttendanceStartAt() != null
-                && entry.getPerson() != null
-                && entry.getPerson().getId() != null
-                && entry.getLocationId() != null;
+        return entry.getAttendanceStartAt() != null && entry.getPersonId() != null && entry.getLocationId() != null;
     }
 
     private Instant resolveAttendanceEnd(TimeEntry entry, Instant now) {
@@ -346,12 +349,19 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
     }
 
     private String getPersonIdString(TimeEntry entry) {
-        return entry.getPerson() == null || entry.getPerson().getId() == null
-                ? ""
-                : entry.getPerson().getId().toString();
+        return entry.getPersonId() == null ? "" : entry.getPersonId().toString();
     }
 
-    private String resolveDisplayName(Person person, String fallbackId) {
+    private Map<UUID, ExtPersonReplica> loadPeople(java.util.Set<UUID> personIds) {
+        if (personIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, ExtPersonReplica> byId = new HashMap<>();
+        extPersonReplicaRepository.findAllById(personIds).forEach(p -> byId.put(p.getPersonId(), p));
+        return byId;
+    }
+
+    private String resolveDisplayName(ExtPersonReplica person, String fallbackId) {
         if (person == null) {
             return fallbackId;
         }
@@ -406,13 +416,13 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         }
 
         Map<String, String> namesById = new HashMap<>();
-        for (Person person : personRepository.findAllById(technicianIds)) {
+        for (ExtPersonReplica person : extPersonReplicaRepository.findAllById(technicianIds)) {
             String fullName = ((person.getFirstName() == null ? "" : person.getFirstName()) + " "
                             + (person.getLastName() == null ? "" : person.getLastName()))
                     .trim();
             namesById.put(
-                    person.getId().toString(),
-                    fullName.isBlank() ? person.getId().toString() : fullName);
+                    person.getPersonId().toString(),
+                    fullName.isBlank() ? person.getPersonId().toString() : fullName);
         }
         return namesById;
     }

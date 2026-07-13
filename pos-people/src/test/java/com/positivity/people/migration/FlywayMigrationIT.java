@@ -32,9 +32,6 @@ class FlywayMigrationIT {
     @ServiceConnection
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
 
-    @org.springframework.test.context.bean.override.mockito.MockitoBean
-    private com.positivity.people.internal.client.SecurityServiceClient securityServiceClient;
-
     @Autowired
     private DataSource dataSource;
 
@@ -42,25 +39,24 @@ class FlywayMigrationIT {
     void baselineAndSeedsApply_andStructuralChangesTookEffect() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
 
-        // Employee table exists and is populated; person no longer carries employment columns.
+        // HR-only schema (ADR-0044 Phase 3.2, #875): identity tables dropped, replicas + outbox
+        // created; employees survive the split.
         assertThat(jdbc.queryForObject("SELECT count(*) FROM employee", Integer.class))
                 .isGreaterThanOrEqualTo(39);
-        assertThat(droppedColumn(jdbc, "person", "employee_number")).isTrue();
-        assertThat(droppedColumn(jdbc, "person", "status")).isTrue();
-        assertThat(droppedColumn(jdbc, "person", "contact_info_json")).isTrue();
-        // Name model unified on first_name/last_name (#726); redundant legal_name dropped.
-        assertThat(droppedColumn(jdbc, "person", "legal_name")).isTrue();
+        assertThat(droppedTable(jdbc, "person")).isTrue();
+        assertThat(droppedTable(jdbc, "person_contact_point")).isTrue();
+        assertThat(droppedTable(jdbc, "user_person_links")).isTrue();
 
-        // Assignments reference employee; user_person_links is keyed by username.
-        assertThat(hasColumn(jdbc, "employee_location_assignment", "employee_id"))
+        assertThat(hasColumn(jdbc, "ext_people_contact_person", "primary_email"))
                 .isTrue();
-        assertThat(hasColumn(jdbc, "user_person_links", "username")).isTrue();
-        assertThat(droppedColumn(jdbc, "user_person_links", "user_id")).isTrue();
+        assertThat(hasColumn(jdbc, "ext_people_contact_user_link", "username")).isTrue();
+        assertThat(hasColumn(jdbc, "event_outbox", "record_key")).isTrue();
+        assertThat(hasColumn(jdbc, "processed_events", "owner")).isTrue();
 
-        // Seeds loaded: persons + employees + links.
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM person", Integer.class))
-                .isGreaterThanOrEqualTo(40);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM user_person_links", Integer.class))
+        // Dev-bootstrap replica seeds loaded (names + usernames for HR views).
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM ext_people_contact_person", Integer.class))
+                .isGreaterThanOrEqualTo(39);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM ext_people_contact_user_link", Integer.class))
                 .isGreaterThanOrEqualTo(1);
     }
 
@@ -74,7 +70,11 @@ class FlywayMigrationIT {
         return n != null && n > 0;
     }
 
-    private boolean droppedColumn(JdbcTemplate jdbc, String table, String column) {
-        return !hasColumn(jdbc, table, column);
+    private boolean droppedTable(JdbcTemplate jdbc, String table) {
+        Integer n = jdbc.queryForObject(
+                "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name=?",
+                Integer.class,
+                table);
+        return n != null && n == 0;
     }
 }

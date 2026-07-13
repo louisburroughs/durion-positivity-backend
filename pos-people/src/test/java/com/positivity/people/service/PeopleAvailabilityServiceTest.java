@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.service.PeopleAvailabilityServiceImpl;
 import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.EntityNotFoundException;
@@ -45,7 +45,7 @@ class PeopleAvailabilityServiceTest {
     private EmployeeLocationAssignmentRepository assignmentRepository;
 
     @Mock
-    private PersonRepository personRepository;
+    private ExtPersonReplicaRepository extPersonReplicaRepository;
 
     @Mock
     private UserPersonTranslationService userPersonTranslationService;
@@ -55,7 +55,7 @@ class PeopleAvailabilityServiceTest {
     @BeforeEach
     void setUp() {
         service = new PeopleAvailabilityServiceImpl(
-                assignmentRepository, personRepository, userPersonTranslationService, FIXED_CLOCK);
+                assignmentRepository, extPersonReplicaRepository, userPersonTranslationService, FIXED_CLOCK);
     }
 
     private EmployeeLocationAssignment assignment(UUID locationId, boolean primary) {

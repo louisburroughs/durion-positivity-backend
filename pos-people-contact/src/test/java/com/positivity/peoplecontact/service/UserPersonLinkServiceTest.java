@@ -54,7 +54,7 @@ class UserPersonLinkServiceTest {
     private com.positivity.peoplecontact.internal.service.PersonUsernameService usernameService;
 
     @Mock
-    private com.positivity.peoplecontact.internal.config.PeopleContactEventPublisher eventPublisher;
+    private com.positivity.peoplecontact.internal.service.PeopleContactEventPublisher eventPublisher;
 
     private UserPersonLinkServiceImpl service;
 

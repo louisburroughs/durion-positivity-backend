@@ -9,11 +9,10 @@ import static org.mockito.Mockito.when;
 import com.positivity.people.internal.dto.BreakDto;
 import com.positivity.people.internal.dto.WorkSessionDto;
 import com.positivity.people.internal.dto.WorkSessionSubmitRequest;
-import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.WorkSession;
 import com.positivity.people.internal.entity.WorkSessionBreak;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
 import com.positivity.people.internal.repository.WorkSessionRepository;
 import com.positivity.people.internal.service.WorkSessionServiceImpl;
@@ -40,7 +39,7 @@ class WorkSessionServiceTest {
     private WorkSessionBreakRepository workSessionBreakRepository;
 
     @Mock
-    private PersonRepository personRepository;
+    private ExtPersonReplicaRepository extPersonReplicaRepository;
 
     private WorkSessionService service;
 
@@ -49,15 +48,13 @@ class WorkSessionServiceTest {
     @BeforeEach
     void setUp() {
         service = new WorkSessionServiceImpl(
-                workSessionRepository, workSessionBreakRepository, personRepository, Clock.systemUTC());
+                workSessionRepository, workSessionBreakRepository, extPersonReplicaRepository, Clock.systemUTC());
         personId = UUID.fromString("10000000-0000-0000-0000-000000000001");
     }
 
     @Test
     void startSession_whenNoActiveSessionExists_createsActiveSession() {
-        when(workSessionRepository.findByPerson_IdAndEndedAtIsNull(personId)).thenReturn(Optional.empty());
-        when(personRepository.getReferenceById(personId))
-                .thenReturn(Person.builder().id(personId).build());
+        when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.empty());
         when(workSessionRepository.save(any(WorkSession.class))).thenAnswer(invocation -> {
             WorkSession session = invocation.getArgument(0);
             session.setSessionId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
@@ -84,7 +81,7 @@ class WorkSessionServiceTest {
     void startSession_whenActiveSessionAlreadyExists_throwsException() {
         WorkSession existing = new WorkSession();
         existing.setSessionId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
-        when(workSessionRepository.findByPerson_IdAndEndedAtIsNull(personId)).thenReturn(Optional.of(existing));
+        when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.of(existing));
 
         try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
             helperMock
@@ -101,11 +98,11 @@ class WorkSessionServiceTest {
     void stopSession_whenActiveSessionExists_endsSession() {
         WorkSession active = new WorkSession();
         active.setSessionId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
-        active.setPerson(Person.builder().id(personId).build());
+        active.setPersonId(personId);
         active.setStatus("ACTIVE");
         active.setStartedAt(Instant.parse("2026-01-01T08:00:00Z"));
 
-        when(workSessionRepository.findByPerson_IdAndEndedAtIsNull(personId)).thenReturn(Optional.of(active));
+        when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.of(active));
         when(workSessionRepository.save(any(WorkSession.class))).thenAnswer(i -> i.getArgument(0));
         when(workSessionBreakRepository.findBySession_SessionIdAndEndedAtIsNull(
                         UUID.fromString("11111111-1111-1111-1111-111111111111")))
@@ -127,7 +124,7 @@ class WorkSessionServiceTest {
 
     @Test
     void stopSession_whenNoActiveSessionExists_throwsWorkSessionNotFoundException() {
-        when(workSessionRepository.findByPerson_IdAndEndedAtIsNull(personId)).thenReturn(Optional.empty());
+        when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.empty());
 
         try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
             helperMock
@@ -143,7 +140,7 @@ class WorkSessionServiceTest {
         UUID sessionId = UUID.fromString("11111111-1111-1111-1111-111111111111");
         WorkSession session = new WorkSession();
         session.setSessionId(sessionId);
-        session.setPerson(Person.builder().id(personId).build());
+        session.setPersonId(personId);
 
         when(workSessionRepository.findBySessionIdAndEndedAtIsNull(sessionId)).thenReturn(Optional.of(session));
         when(workSessionBreakRepository.findBySession_SessionIdAndEndedAtIsNull(sessionId))
@@ -252,7 +249,7 @@ class WorkSessionServiceTest {
     void stopSession_whenActiveBreakExists_alsoEndsBreak() {
         WorkSession active = new WorkSession();
         active.setSessionId(UUID.fromString("55555555-5555-5555-5555-555555555555"));
-        active.setPerson(Person.builder().id(personId).build());
+        active.setPersonId(personId);
         active.setStatus("ACTIVE");
         active.setStartedAt(Instant.parse("2026-01-01T08:00:00Z"));
 
@@ -261,7 +258,7 @@ class WorkSessionServiceTest {
         activeBreak.setSession(active);
         activeBreak.setStartedAt(Instant.parse("2026-01-01T09:00:00Z"));
 
-        when(workSessionRepository.findByPerson_IdAndEndedAtIsNull(personId)).thenReturn(Optional.of(active));
+        when(workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)).thenReturn(Optional.of(active));
         when(workSessionRepository.save(any(WorkSession.class))).thenAnswer(i -> i.getArgument(0));
         when(workSessionBreakRepository.findBySession_SessionIdAndEndedAtIsNull(
                         UUID.fromString("55555555-5555-5555-5555-555555555555")))
@@ -286,7 +283,7 @@ class WorkSessionServiceTest {
         UUID sessionId = UUID.fromString("33333333-3333-3333-3333-333333333333");
         WorkSession ended = new WorkSession();
         ended.setSessionId(sessionId);
-        ended.setPerson(Person.builder().id(personId).build());
+        ended.setPersonId(personId);
         ended.setStatus("ENDED");
         ended.setStartedAt(Instant.parse("2026-01-01T08:00:00Z"));
         ended.setEndedAt(Instant.parse("2026-01-01T16:00:00Z"));
@@ -338,7 +335,7 @@ class WorkSessionServiceTest {
         UUID sessionId = UUID.fromString("55555555-5555-5555-5555-555555555556");
         WorkSession active = new WorkSession();
         active.setSessionId(sessionId);
-        active.setPerson(Person.builder().id(personId).build());
+        active.setPersonId(personId);
         active.setStatus("ACTIVE");
 
         WorkSessionSubmitRequest request = new WorkSessionSubmitRequest();

@@ -1,8 +1,7 @@
 package com.positivity.people.internal.service;
 
-import com.positivity.people.internal.entity.UserPersonLink;
-import com.positivity.people.internal.enums.UserLinkStatus;
-import com.positivity.people.internal.repository.UserPersonLinkRepository;
+import com.positivity.people.internal.entity.ExtUserLinkReplica;
+import com.positivity.people.internal.repository.ExtUserLinkReplicaRepository;
 import com.positivity.people.service.UserPersonTranslationService;
 import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.EntityNotFoundException;
@@ -14,22 +13,28 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Username ↔ person translation backed by the {@code ext_people_contact_user_link} replica
+ * (ADR-0044 §6, #875): pos-people-contact owns the links; this module reads its event-fed copy.
+ */
 @Service
 @Transactional(readOnly = true)
 public class UserPersonTranslationServiceImpl implements UserPersonTranslationService {
 
-    private final UserPersonLinkRepository userPersonLinkRepository;
+    private static final String ACTIVE = "ACTIVE";
 
-    public UserPersonTranslationServiceImpl(@NonNull UserPersonLinkRepository userPersonLinkRepository) {
-        this.userPersonLinkRepository = userPersonLinkRepository;
+    private final ExtUserLinkReplicaRepository linkReplicaRepository;
+
+    public UserPersonTranslationServiceImpl(@NonNull ExtUserLinkReplicaRepository linkReplicaRepository) {
+        this.linkReplicaRepository = linkReplicaRepository;
     }
 
     @Override
     @NonNull
     public UUID getPersonUuidForUser(@NonNull String username) {
-        return userPersonLinkRepository
-                .findByUsername(username)
-                .map(UserPersonLink::getPersonId)
+        return linkReplicaRepository
+                .findFirstByUsername(username)
+                .map(ExtUserLinkReplica::getPersonId)
                 .orElseThrow(() -> new EntityNotFoundException("No person link found for username: " + username));
     }
 
@@ -53,13 +58,13 @@ public class UserPersonTranslationServiceImpl implements UserPersonTranslationSe
     @Override
     @NonNull
     public Optional<String> getUsernameForPerson(@NonNull UUID personUuid) {
-        return userPersonLinkRepository
-                .findByPerson_IdAndStatus(personUuid, UserLinkStatus.ACTIVE)
-                .map(UserPersonLink::getUsername);
+        return linkReplicaRepository.findByPersonIdAndStatus(personUuid, ACTIVE).stream()
+                .map(ExtUserLinkReplica::getUsername)
+                .findFirst();
     }
 
     @Override
     public boolean isUserLinkedToPerson(@NonNull String username, @NonNull UUID personUuid) {
-        return userPersonLinkRepository.existsByUsernameAndPerson_Id(username, personUuid);
+        return linkReplicaRepository.existsByUsernameAndPersonId(username, personUuid);
     }
 }

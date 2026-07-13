@@ -1,10 +1,7 @@
 -- Repeatable seed migration for people reference/bootstrap data.
 -- Notes:
--- - Includes only pos-people-owned tables.
--- - Employment lives on `employee`; user_person_links is keyed by username;
---   contact_info_json is derived (not stored).
--- - user_person_links and employee_location_assignment rows are inserted only when
---   referenced external rows exist.
+-- - HR tables (employee, assignments, timekeeping_policy) plus dev-bootstrap rows for the
+--   ext_people_contact_* replicas (identity is owned by pos-people-contact since #874/#875).
 SET TIME ZONE 'UTC';
 
 -- timekeeping_policy
@@ -21,14 +18,11 @@ INSERT INTO timekeeping_policy (
 VALUES ('7b1f81a7-34fa-f0f9-7caf-a55541d36a60'::uuid, 'GLOBAL', NULL, 10, NOW(), 'seed-generator', NOW(), NOW())
 ON CONFLICT (timekeeping_policy_id) DO NOTHING;
 
--- person (System Administrator) — admin.alpha's person record (identity only).
-INSERT INTO person (id, first_name, last_name, created_at, updated_at)
-VALUES (
-    '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid,
-    'System', 'Administrator',
-    NOW(), NOW()
-)
-ON CONFLICT (id) DO NOTHING;
+-- ext_people_contact_person replica bootstrap for admin.alpha (identity owned by
+-- pos-people-contact since #874; dev/docker convenience seed, ids match the authority's seed).
+INSERT INTO ext_people_contact_person (person_id, first_name, last_name, primary_email, aggregate_version, updated_at)
+VALUES ('583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid, 'System', 'Administrator', 'admin.alpha@durionpos.org', 0, NOW())
+ON CONFLICT (person_id) DO NOTHING;
 
 -- employee (employment record for admin.alpha; ACTIVE).
 INSERT INTO employee (id, person_id, employee_number, status, hire_date, status_effective_at, created_at, updated_at)
@@ -39,34 +33,10 @@ VALUES (
 )
 ON CONFLICT (person_id) DO NOTHING;
 
--- Email lives in person_contact_point (EMAIL); username is resolved via user_person_links.
-INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
-SELECT gen_random_uuid(), '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid, 'EMAIL', 'admin.alpha@durionpos.org', TRUE, NOW(), NOW()
-WHERE NOT EXISTS (
-    SELECT 1 FROM person_contact_point
-    WHERE person_id = '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid
-      AND contact_type = 'EMAIL'
-      AND value = 'admin.alpha@durionpos.org');
-
--- user_person_links (keyed by username; guarded by person existence).
-DO $$
-BEGIN
-    IF to_regclass('public.person') IS NOT NULL
-       AND EXISTS (SELECT 1 FROM person WHERE id = '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid)
-    THEN
-        INSERT INTO user_person_links (id, username, person_id, link_type, status, created_at, created_by)
-        VALUES (
-            '4790360f-65ab-20e9-88e3-7bf9277bf2b9'::uuid,
-            'admin.alpha',
-            '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid,
-            'PRIMARY',
-            'ACTIVE',
-            NOW(),
-            'seed-generator'
-        )
-        ON CONFLICT (username) DO NOTHING;
-    END IF;
-END $$;
+-- ext_people_contact_user_link replica bootstrap for admin.alpha.
+INSERT INTO ext_people_contact_user_link (link_id, person_id, username, status, aggregate_version, updated_at)
+VALUES ('4790360f-65ab-20e9-88e3-7bf9277bf2b9'::uuid, '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid, 'admin.alpha', 'ACTIVE', 0, NOW())
+ON CONFLICT (link_id) DO NOTHING;
 
 -- employee_location_assignment (guarded by external location + employee existence).
 DO $$

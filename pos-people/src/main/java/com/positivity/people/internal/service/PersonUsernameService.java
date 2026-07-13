@@ -1,7 +1,7 @@
 package com.positivity.people.internal.service;
 
-import com.positivity.people.internal.entity.UserPersonLink;
-import com.positivity.people.internal.repository.UserPersonLinkRepository;
+import com.positivity.people.internal.entity.ExtUserLinkReplica;
+import com.positivity.people.internal.repository.ExtUserLinkReplicaRepository;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -14,23 +14,23 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
- * Resolves a person's username from the user_person_link mapping. The username (the credential
- * identifier owned by pos-security) is stored directly on the link, so resolution is a local
- * read — no pos-security round-trip. Username is not a Person attribute.
+ * Resolves a person's username from the {@code ext_people_contact_user_link} replica
+ * (ADR-0044 §6, #875). Link facts are owned by pos-people-contact and consumed from
+ * {@code people-contact.events.v1}, so resolution stays a local read.
  */
 @Service
 @RequiredArgsConstructor
 public class PersonUsernameService {
 
-    private final UserPersonLinkRepository linkRepository;
+    private final ExtUserLinkReplicaRepository linkReplicaRepository;
 
     /** Username for a single person, or null if unlinked. */
     public @Nullable String usernameForPerson(@NonNull UUID personId) {
-        Optional<String> username = linkRepository.findByPerson_Id(personId).stream()
-                .map(UserPersonLink::getUsername)
+        Optional<String> username = linkReplicaRepository.findByPersonIdAndStatus(personId, "ACTIVE").stream()
+                .map(ExtUserLinkReplica::getUsername)
                 .filter(Objects::nonNull)
                 .findFirst();
-        return username.isPresent() ? username.get() : null;
+        return username.orElse(null);
     }
 
     /** Batch personId → username for directory/list paths. */
@@ -39,9 +39,9 @@ public class PersonUsernameService {
             return Map.of();
         }
         Map<UUID, String> result = new HashMap<>();
-        for (UserPersonLink link : linkRepository.findByPerson_IdIn(personIds)) {
-            if (link.getPerson() != null && link.getUsername() != null) {
-                result.putIfAbsent(link.getPerson().getId(), link.getUsername());
+        for (ExtUserLinkReplica link : linkReplicaRepository.findByPersonIdIn(personIds)) {
+            if (link.getUsername() != null && "ACTIVE".equals(link.getStatus())) {
+                result.putIfAbsent(link.getPersonId(), link.getUsername());
             }
         }
         return result;

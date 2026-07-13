@@ -847,6 +847,12 @@ services:
     ports:
       - "8085:8080"
     environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${SPRING_KAFKA_LISTENER_AUTO_STARTUP:-false}
+      MANAGEMENT_HEALTH_KAFKA_ENABLED: ${MANAGEMENT_HEALTH_KAFKA_ENABLED:-false}
+      # ADR-0044 #875: people.events.v1 outbox producer, identity replica consumer,
+      # and person upsert commands toward people-contact.commands.v1
+      POS_PEOPLE_KAFKA_ENABLED: ${POS_PEOPLE_KAFKA_ENABLED:-false}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_people_db

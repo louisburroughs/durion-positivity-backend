@@ -1,5 +1,8 @@
 package com.positivity.peoplecontact.internal.config;
 
+import com.positivity.domainevents.peoplecontact.PersonUpsertRequestedV1;
+import com.positivity.peoplecontact.internal.repository.ProcessedEventRepository;
+import com.positivity.peoplecontact.internal.service.PersonUpsertCommandHandler;
 import com.positivity.peoplecontact.service.OutboxReplayService;
 import java.time.Clock;
 import java.time.Duration;
@@ -38,6 +41,9 @@ public class PeopleContactCommandListener {
     /** Canonical dotted name normalized to command-type form: PEOPLE_CONTACT_OUTBOX_REPLAY_REQUESTED. */
     private static final String COMMAND_OUTBOX_REPLAY_REQUESTED = "PEOPLE_CONTACT_OUTBOX_REPLAY_REQUESTED";
 
+    /** Canonical dotted name normalized: people-contact.person.upsert-requested (#875). */
+    private static final String COMMAND_PERSON_UPSERT_REQUESTED = "PEOPLE_CONTACT_PERSON_UPSERT_REQUESTED";
+
     /** Covers the sub-millisecond skew between outbox createdAt and the eventId timestamp. */
     private static final Duration REPLAY_WINDOW_SLACK = Duration.ofSeconds(1);
 
@@ -48,6 +54,8 @@ public class PeopleContactCommandListener {
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final OutboxReplayService outboxReplayService;
+    private final PersonUpsertCommandHandler personUpsertCommandHandler;
+    private final ProcessedEventRepository processedEventRepository;
 
     @KafkaListener(
             topics = "${pos.people-contact.kafka.commands-topic:people-contact.commands.v1}",
@@ -68,6 +76,10 @@ public class PeopleContactCommandListener {
                 handleOutboxReplayRequested(root);
                 return;
             }
+            if (COMMAND_PERSON_UPSERT_REQUESTED.equals(commandType)) {
+                handlePersonUpsertRequested(root);
+                return;
+            }
             log.debug("Ignoring unsupported commandType={} message={}", commandType, message);
         } catch (TransientDataAccessException e) {
             // Let the container error handler retry with backoff and route to {topic}.dlq
@@ -78,6 +90,36 @@ public class PeopleContactCommandListener {
             // so log and drop instead of poisoning the partition.
             log.error("Failed to process Kafka command message: {}", message, e);
         }
+    }
+
+    /**
+     * Person upsert commands are last-writer-wins, so at-least-once redelivery of an OLD command
+     * after a newer write would regress identity attributes — dedupe by the command envelope's
+     * eventId via {@code processed_events} before applying (ADR-0044 §4).
+     */
+    private void handlePersonUpsertRequested(@NonNull JsonNode root) {
+        String eventId = root.path("eventId").stringValue(null);
+        if (eventId == null || eventId.isBlank()) {
+            log.warn("Ignoring person upsert command without eventId: {}", root);
+            return;
+        }
+        if (processedEventRepository.existsById(eventId)) {
+            log.debug("Skipping duplicate person upsert command eventId={}", eventId);
+            return;
+        }
+        PersonUpsertRequestedV1 command;
+        try {
+            command = objectMapper.treeToValue(root.get(PAYLOAD), PersonUpsertRequestedV1.class);
+        } catch (Exception e) {
+            log.warn("Ignoring person upsert command with malformed payload: {}", root, e);
+            return;
+        }
+        if (command == null || command.personId() == null) {
+            log.warn("Ignoring person upsert command with missing personId: {}", root);
+            return;
+        }
+        personUpsertCommandHandler.apply(eventId, command);
+        log.info("Person upsert command applied personId={} eventId={}", command.personId(), eventId);
     }
 
     private void handleOutboxReplayRequested(@NonNull JsonNode root) {

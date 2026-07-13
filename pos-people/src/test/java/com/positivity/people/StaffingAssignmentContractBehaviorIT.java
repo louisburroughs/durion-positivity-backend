@@ -10,11 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.entity.Employee;
-import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -52,7 +52,7 @@ class StaffingAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
     private static final String VALID_LOCATION_ID_2 = "018e1c9f-0000-7000-8000-200000000002";
 
     @Autowired
-    private PersonRepository personRepository;
+    private ExtPersonReplicaRepository extPersonReplicaRepository;
 
     @Autowired
     private EmployeeRepository employeeRepository;
@@ -69,15 +69,15 @@ class StaffingAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
         employeeRepository.deleteAll();
 
         UUID personId = UUID.fromString(VALID_PERSON_ID);
-        personRepository
-                .findById(personId)
-                .ifPresentOrElse(
-                        existing -> personRepository.save(existing),
-                        () -> personRepository.save(Person.builder()
-                                .id(personId)
-                                .firstName("Valid")
-                                .lastName("Person")
-                                .build()));
+        if (!extPersonReplicaRepository.existsById(personId)) {
+            extPersonReplicaRepository.save(ExtPersonReplica.builder()
+                    .personId(personId)
+                    .firstName("Valid")
+                    .lastName("Person")
+                    .aggregateVersion(0)
+                    .updatedAt(java.time.Instant.now())
+                    .build());
+        }
         employeeRepository.save(Employee.builder()
                 .personId(personId)
                 .status(EmployeeStatus.ACTIVE)
@@ -582,10 +582,12 @@ class StaffingAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("VE-119-107: Inactive person for staffing assignment returns 400")
     void VE_119_107_inactivePerson_returns400() throws Exception {
         UUID inactivePersonId = UUID.fromString("018e1c9f-0000-7000-8000-100000000099");
-        personRepository.save(Person.builder()
-                .id(inactivePersonId)
+        extPersonReplicaRepository.save(ExtPersonReplica.builder()
+                .personId(inactivePersonId)
                 .firstName("Inactive")
                 .lastName("Person")
+                .aggregateVersion(0)
+                .updatedAt(java.time.Instant.now())
                 .build());
         employeeRepository.save(Employee.builder()
                 .personId(inactivePersonId)

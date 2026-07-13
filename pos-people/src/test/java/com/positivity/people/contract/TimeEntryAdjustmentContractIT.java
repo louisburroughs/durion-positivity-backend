@@ -6,10 +6,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.people.BaseContractIntegrationTest;
-import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -24,7 +24,7 @@ class TimeEntryAdjustmentContractIT extends BaseContractIntegrationTest {
     private TimeEntryRepository timeEntryRepository;
 
     @Autowired
-    private PersonRepository personRepository;
+    private ExtPersonReplicaRepository extPersonReplicaRepository;
 
     @Test
     @DisplayName("CP-120-010: create adjustment returns 201")
@@ -80,16 +80,18 @@ class TimeEntryAdjustmentContractIT extends BaseContractIntegrationTest {
 
     private UUID seedPendingApprovalTimeEntry() {
         UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        Person person = personRepository
-                .findById(personId)
-                .orElseGet(() -> personRepository.save(Person.builder()
-                        .id(personId)
-                        .firstName("Contract")
-                        .lastName("User")
-                        .build()));
+        if (!extPersonReplicaRepository.existsById(personId)) {
+            extPersonReplicaRepository.save(ExtPersonReplica.builder()
+                    .personId(personId)
+                    .firstName("Contract")
+                    .lastName("User")
+                    .aggregateVersion(0)
+                    .updatedAt(java.time.Instant.now())
+                    .build());
+        }
 
         TimeEntry timeEntry = new TimeEntry();
-        timeEntry.setPerson(person);
+        timeEntry.setPersonId(personId);
         timeEntry.setTimesheetId("timesheet-1");
         timeEntry.setStatus(TimeEntryStatus.PENDING_APPROVAL);
         return timeEntryRepository.save(timeEntry).getTimeEntryId();

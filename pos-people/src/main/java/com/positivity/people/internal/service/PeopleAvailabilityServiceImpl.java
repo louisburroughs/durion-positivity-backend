@@ -2,9 +2,9 @@ package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.dto.PeopleAvailabilityResponse;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
-import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.service.PeopleAvailabilityService;
 import com.positivity.people.service.UserPersonTranslationService;
 import com.positivity.security.common.SecurityContextHelper;
@@ -28,7 +28,7 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
 
     private final EmployeeLocationAssignmentRepository assignmentRepository;
 
-    private final PersonRepository personRepository;
+    private final ExtPersonReplicaRepository extPersonReplicaRepository;
 
     private final UserPersonTranslationService userPersonTranslationService;
 
@@ -43,16 +43,16 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
         List<EmployeeLocationAssignment> assignments =
                 assignmentRepository.findActiveByDateAndOptionalLocation(targetDate, resolvedLocationId);
 
-        Map<UUID, Person> peopleById = personRepository
+        Map<UUID, ExtPersonReplica> peopleById = extPersonReplicaRepository
                 .findAllById(assignments.stream()
                         .map(EmployeeLocationAssignment::getPersonId)
                         .collect(Collectors.toSet()))
                 .stream()
-                .collect(Collectors.toMap(Person::getId, person -> person));
+                .collect(Collectors.toMap(ExtPersonReplica::getPersonId, person -> person));
 
         return assignments.stream()
                 .map(assignment -> {
-                    Person person = peopleById.get(assignment.getPersonId());
+                    ExtPersonReplica person = peopleById.get(assignment.getPersonId());
                     return PeopleAvailabilityResponse.builder()
                             .personId(assignment.getPersonId())
                             .firstName(person != null ? person.getFirstName() : null)

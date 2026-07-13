@@ -1,15 +1,21 @@
 # pos-people
 
-HR and workforce management service for the Durion Positivity ETSMS platform. Manages employees, persons, time entries, work sessions, staffing assignments, availability, access control assignments, and timekeeping ingestion.
+HR and workforce management service for the Durion Positivity ETSMS platform. Manages employees,
+time entries, work sessions, staffing assignments, availability, and timekeeping ingestion.
+Person identity, contact points, and user-person links are owned by pos-people-contact since the
+ADR-0044 Phase 3 split (#874/#875); this module reads them from event-fed
+`ext_people_contact_*` replicas and sends identity writes as
+`people-contact.person.upsert-requested` commands.
 
 ## Responsibilities
 
-- Manage employee and person records with linked user accounts
+- Manage employee employment records (identity attributes live in pos-people-contact)
 - Track time entries, adjustments, and exceptions per employee
 - Record work sessions (clock-in/clock-out) and compute job time totals
 - Manage staffing assignments across locations
 - Evaluate employee availability for scheduling
-- Link persons to security users (`UserPersonLinkService`)
+- Publish `people.employee.updated` / `people.staffing-assignment.updated` facts on
+  `people.events.v1` via a transactional outbox (ADR-0044)
 - Translate between user identity and person records (`UserPersonTranslationService`)
 - Ingest timekeeping data from external sources (`TimekeepingIngestionService`)
 - Support bulk employee import via `POST /v1/people/bulk-ingest`

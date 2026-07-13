@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface WorkSessionRepository extends JpaRepository<WorkSession, UUID> {
 
-    Optional<WorkSession> findByPerson_IdAndEndedAtIsNull(UUID personId);
+    Optional<WorkSession> findByPersonIdAndEndedAtIsNull(UUID personId);
 
     Optional<WorkSession> findBySessionIdAndEndedAtIsNull(UUID sessionId);
 }
