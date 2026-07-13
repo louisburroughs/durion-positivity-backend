@@ -1,6 +1,5 @@
 package com.positivity.people.internal.service;
 
-import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.config.PeopleEventPublisher;
 import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
@@ -39,7 +38,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
     private final EmployeeRepository employeeRepository;
 
-    private final LocationReferenceClient locationReferenceClient;
+    private final LocationReferenceService locationReferenceService;
 
     private final Clock clock;
 
@@ -255,7 +254,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Person is not active: " + personId);
         }
 
-        if (!locationReferenceClient.isLocationActive(locationId)) {
+        if (!locationReferenceService.isLocationActive(locationId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found or inactive: " + locationId);
         }
     }

@@ -119,6 +119,16 @@
             <artifactId>pos-events</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- ADR-0044 §6 (#892): location replica feed from location.events.v1 -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-domain-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- POS Security Common for authentication/authorization -->
         <dependency>
             <groupId>com.positivity</groupId>

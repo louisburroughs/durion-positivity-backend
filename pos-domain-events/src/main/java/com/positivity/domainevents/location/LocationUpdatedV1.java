@@ -1,6 +1,7 @@
 package com.positivity.domainevents.location;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -34,6 +35,9 @@ import org.jspecify.annotations.Nullable;
  * @param country country code (required for tax jurisdiction determination)
  * @param defaultStagingLocationId site default staging storage location
  * @param defaultQuarantineLocationId site default quarantine storage location
+ * @param parents typed parent edges of this location in the owner's hierarchy (issue #892 —
+ *     consumers rebuild descendant queries over the replica; null on events emitted before
+ *     this field existed, empty when the location has no parents)
  * @param createdAt owner row creation timestamp
  * @param updatedAt owner row last-update timestamp
  */
@@ -54,10 +58,19 @@ public record LocationUpdatedV1(
         @Nullable String country,
         @Nullable UUID defaultStagingLocationId,
         @Nullable UUID defaultQuarantineLocationId,
+        @Nullable List<ParentRef> parents,
         @Nullable Instant createdAt,
         @Nullable Instant updatedAt) {
 
     public static final String EVENT_TYPE = "location.location.updated";
+
+    /**
+     * One typed parent edge in the location hierarchy.
+     *
+     * @param parentId the parent location id
+     * @param parentType the owner's {@code ParentType} name, e.g. {@code PHYSICAL}
+     */
+    public record ParentRef(@NonNull UUID parentId, @NonNull String parentType) {}
 
     public LocationUpdatedV1 {
         if (locationId == null) {

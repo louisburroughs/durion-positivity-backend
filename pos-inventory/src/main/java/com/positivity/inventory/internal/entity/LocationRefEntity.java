@@ -63,6 +63,16 @@ public class LocationRefEntity {
     @Column(name = "source_updated_at")
     private Instant sourceUpdatedAt;
 
+    // Site defaults + stale guard for the event feed (ADR-0044 §6, #892)
+    @Column(name = "default_staging_location_id")
+    private UUID defaultStagingLocationId;
+
+    @Column(name = "default_quarantine_location_id")
+    private UUID defaultQuarantineLocationId;
+
+    @Column(name = "aggregate_version", nullable = false)
+    private long aggregateVersion;
+
     @Column(name = "deactivated_at")
     private Instant deactivatedAt;
 

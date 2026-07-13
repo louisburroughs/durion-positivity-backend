@@ -11,7 +11,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.positivity.inventory.internal.client.StorageLocationValidationClient;
+import com.positivity.inventory.internal.service.StorageLocationValidationService;
 import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
 import com.positivity.inventory.internal.dto.ValidationResult;
 import com.positivity.inventory.internal.enums.OverrideReasonCode;
@@ -174,10 +174,10 @@ class PutawayValidationServiceImplTest {
         InventoryLedgerEntryRepository ledger = mock(InventoryLedgerEntryRepository.class);
         PutawayRuleRepository putawayRuleRepository = mock(PutawayRuleRepository.class);
         ReplenishmentPolicyRepository replenishmentPolicyRepository = mock(ReplenishmentPolicyRepository.class);
-        StorageLocationValidationClient locationValidationClient = mock(StorageLocationValidationClient.class);
+        StorageLocationValidationService locationValidationClient = mock(StorageLocationValidationService.class);
 
-        StorageLocationValidationClient.StorageLocationValidation validation =
-                new StorageLocationValidationClient.StorageLocationValidation();
+        StorageLocationValidationService.StorageLocationValidation validation =
+                new StorageLocationValidationService.StorageLocationValidation();
         validation.setExists(true);
         validation.setActive(false);
 
@@ -197,10 +197,10 @@ class PutawayValidationServiceImplTest {
         InventoryLedgerEntryRepository ledger = mock(InventoryLedgerEntryRepository.class);
         PutawayRuleRepository putawayRuleRepository = mock(PutawayRuleRepository.class);
         ReplenishmentPolicyRepository replenishmentPolicyRepository = mock(ReplenishmentPolicyRepository.class);
-        StorageLocationValidationClient locationValidationClient = mock(StorageLocationValidationClient.class);
+        StorageLocationValidationService locationValidationClient = mock(StorageLocationValidationService.class);
 
-        StorageLocationValidationClient.StorageLocationValidation validation =
-                new StorageLocationValidationClient.StorageLocationValidation();
+        StorageLocationValidationService.StorageLocationValidation validation =
+                new StorageLocationValidationService.StorageLocationValidation();
         validation.setExists(true);
         validation.setActive(true);
 
@@ -222,10 +222,10 @@ class PutawayValidationServiceImplTest {
         InventoryLedgerEntryRepository ledger = mock(InventoryLedgerEntryRepository.class);
         PutawayRuleRepository putawayRuleRepository = mock(PutawayRuleRepository.class);
         ReplenishmentPolicyRepository replenishmentPolicyRepository = mock(ReplenishmentPolicyRepository.class);
-        StorageLocationValidationClient locationValidationClient = mock(StorageLocationValidationClient.class);
+        StorageLocationValidationService locationValidationClient = mock(StorageLocationValidationService.class);
 
-        StorageLocationValidationClient.StorageLocationValidation validation =
-                new StorageLocationValidationClient.StorageLocationValidation();
+        StorageLocationValidationService.StorageLocationValidation validation =
+                new StorageLocationValidationService.StorageLocationValidation();
         validation.setExists(true);
         validation.setActive(true);
 
@@ -251,10 +251,10 @@ class PutawayValidationServiceImplTest {
         InventoryLedgerEntryRepository ledger = mock(InventoryLedgerEntryRepository.class);
         PutawayRuleRepository putawayRuleRepository = mock(PutawayRuleRepository.class);
         ReplenishmentPolicyRepository replenishmentPolicyRepository = mock(ReplenishmentPolicyRepository.class);
-        StorageLocationValidationClient locationValidationClient = mock(StorageLocationValidationClient.class);
+        StorageLocationValidationService locationValidationClient = mock(StorageLocationValidationService.class);
 
-        StorageLocationValidationClient.StorageLocationValidation validation =
-                new StorageLocationValidationClient.StorageLocationValidation();
+        StorageLocationValidationService.StorageLocationValidation validation =
+                new StorageLocationValidationService.StorageLocationValidation();
         validation.setExists(true);
         validation.setActive(true);
         validation.setMaxUnitCapacity(10);

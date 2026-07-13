@@ -15,40 +15,6 @@ import org.springframework.web.client.RestClient;
 class InventoryClientUriTest {
 
     @Test
-    void siteDefaultsClient_usesDirectLocationDiscovery() throws Exception {
-        RestClient.Builder builder = RestClient.builder();
-        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        UUID siteId = UUID.randomUUID();
-
-        server.expect(requestTo("http://location/v1/locations/" + siteId + "/defaults"))
-                .andExpect(method(HttpMethod.GET))
-                .andExpect(header("X-User", "pos-inventory"))
-                .andExpect(header("X-Authorities", "location:read"))
-                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
-
-        SiteDefaultsClient client = new SiteDefaultsClient(builder, "location");
-        client.getDefaultStagingLocationId(siteId);
-        server.verify();
-    }
-
-    @Test
-    void storageLocationValidationClient_usesDirectLocationDiscovery() {
-        RestClient.Builder builder = RestClient.builder();
-        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        UUID storageLocationId = UUID.randomUUID();
-
-        server.expect(requestTo("http://location/v1/storage-locations/" + storageLocationId + "/validation"))
-                .andExpect(method(HttpMethod.GET))
-                .andExpect(header("X-User", "pos-inventory"))
-                .andExpect(header("X-Authorities", "location:read"))
-                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
-
-        StorageLocationValidationClient client = new StorageLocationValidationClient(builder, "location");
-        client.getStorageLocationValidation(storageLocationId.toString());
-        server.verify();
-    }
-
-    @Test
     void workorderValidationClient_usesDirectWorkorderDiscovery() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();

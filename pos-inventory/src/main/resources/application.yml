@@ -1,6 +1,12 @@
 spring:
   application:
     name: inventory
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
   datasource:
     url: ${SPRING_DATASOURCE_URL:}
     username: ${SPRING_DATASOURCE_USERNAME:}
@@ -103,7 +109,17 @@ pos:
         #   ]
         # }
         path: ${POS_INVENTORY_RECEIVING_STUB_PATH:/stub/v1/source-documents/{sourceDocumentType}/{sourceDocumentId}/lines}
-  location:
-    service-id: ${POS_LOCATION_SERVICE_ID:location}
+    kafka:
+      # Location replica feed + reconciliation (ADR-0044 §6, #892). Off until the broker is
+      # provisioned; flip POS_INVENTORY_KAFKA_ENABLED per environment.
+      enabled: ${POS_INVENTORY_KAFKA_ENABLED:false}
+      location-events-topic: ${POS_INVENTORY_LOCATION_EVENTS_TOPIC:location.events.v1}
+      location-events-consumer-group: ${POS_INVENTORY_LOCATION_EVENTS_CONSUMER_GROUP:pos-inventory-location-events}
+      location-manifest-topic: ${POS_INVENTORY_LOCATION_MANIFEST_TOPIC:location.manifest.v1}
+      location-manifest-consumer-group: ${POS_INVENTORY_LOCATION_MANIFEST_CONSUMER_GROUP:pos-inventory-location-manifests}
+      location-commands-topic: ${POS_INVENTORY_LOCATION_COMMANDS_TOPIC:location.commands.v1}
+    location:
+      # Window the manual sync endpoint asks pos-location to re-emit (owner caps lookback).
+      replay-lookback: ${POS_INVENTORY_LOCATION_REPLAY_LOOKBACK:P30D}
   workorder:
     service-id: ${POS_WORKORDER_SERVICE_ID:workorder}

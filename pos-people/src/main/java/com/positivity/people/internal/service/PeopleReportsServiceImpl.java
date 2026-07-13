@@ -1,6 +1,5 @@
 package com.positivity.people.internal.service;
 
-import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.dto.ApprovedTimeExportResponse;
 import com.positivity.people.internal.dto.AttendanceDiscrepancyReportResponse;
 import com.positivity.people.internal.dto.AttendanceReportKey;
@@ -51,7 +50,7 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
 
     private final ExtJobTimeReplicaRepository extJobTimeReplicaRepository;
 
-    private final LocationReferenceClient locationReferenceClient;
+    private final LocationReferenceService locationReferenceService;
 
     private final TimekeepingThresholdCache timekeepingThresholdCache;
 
@@ -59,14 +58,14 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
             TimeEntryRepository timeEntryRepository,
             ExtPersonReplicaRepository extPersonReplicaRepository,
             ExtJobTimeReplicaRepository extJobTimeReplicaRepository,
-            LocationReferenceClient locationReferenceClient,
+            LocationReferenceService locationReferenceService,
             TimekeepingThresholdCache timekeepingThresholdCache,
             Clock clock) {
         this.clock = clock;
         this.timeEntryRepository = timeEntryRepository;
         this.extPersonReplicaRepository = extPersonReplicaRepository;
         this.extJobTimeReplicaRepository = extJobTimeReplicaRepository;
-        this.locationReferenceClient = locationReferenceClient;
+        this.locationReferenceService = locationReferenceService;
         this.timekeepingThresholdCache = timekeepingThresholdCache;
     }
 
@@ -95,7 +94,7 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         }
 
         for (UUID locationId : locationIds) {
-            if (!locationReferenceClient.isLocationActive(locationId)) {
+            if (!locationReferenceService.isLocationActive(locationId)) {
                 throw new IllegalArgumentException("Unknown locationId: " + locationId);
             }
         }
@@ -447,7 +446,7 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
     private Map<UUID, String> loadLocationNames(List<UUID> locationIds) {
         Map<UUID, String> namesById = new HashMap<>();
         for (UUID locationId : locationIds) {
-            namesById.put(locationId, locationReferenceClient.getLocationName(locationId));
+            namesById.put(locationId, locationReferenceService.getLocationName(locationId));
         }
         return namesById;
     }

@@ -1,7 +1,7 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.client.StorageLocationTopologyClient;
-import com.positivity.inventory.internal.client.StorageLocationTopologyClient.StorageLocationNode;
+import com.positivity.inventory.internal.service.StorageLocationTopologyService;
+import com.positivity.inventory.internal.service.StorageLocationTopologyService.StorageLocationNode;
 import com.positivity.inventory.internal.dto.rollup.RollupQuantities;
 import com.positivity.inventory.internal.dto.rollup.SiteInventoryRollupResponse;
 import com.positivity.inventory.internal.dto.rollup.StorageLocationRollupNode;
@@ -31,12 +31,12 @@ public class SiteInventoryRollupServiceImpl implements SiteInventoryRollupServic
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SiteInventoryRollupServiceImpl.class);
 
-    private final StorageLocationTopologyClient storageLocationTopologyClient;
+    private final StorageLocationTopologyService storageLocationTopologyService;
     private final SiteInventoryQuantityLoader quantityLoader;
 
     public SiteInventoryRollupServiceImpl(
-            StorageLocationTopologyClient storageLocationTopologyClient, SiteInventoryQuantityLoader quantityLoader) {
-        this.storageLocationTopologyClient = storageLocationTopologyClient;
+            StorageLocationTopologyService storageLocationTopologyService, SiteInventoryQuantityLoader quantityLoader) {
+        this.storageLocationTopologyService = storageLocationTopologyService;
         this.quantityLoader = quantityLoader;
     }
 
@@ -44,7 +44,7 @@ public class SiteInventoryRollupServiceImpl implements SiteInventoryRollupServic
     @NonNull
     public SiteInventoryRollupResponse getSiteInventoryRollup(
             @NonNull UUID siteId, @Nullable String sku, @Nullable Integer depth, boolean includeEmpty) {
-        List<StorageLocationNode> topology = storageLocationTopologyClient.fetchSiteTopology(siteId);
+        List<StorageLocationNode> topology = storageLocationTopologyService.fetchSiteTopology(siteId);
         if (topology.isEmpty()) {
             return new SiteInventoryRollupResponse(siteId, RollupQuantities.ZERO, List.of());
         }

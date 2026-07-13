@@ -8,7 +8,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.inventory.internal.client.SiteDefaultsClient;
+import com.positivity.inventory.internal.service.SiteDefaultsService;
 import com.positivity.inventory.internal.client.SourceDocumentStubClient;
 import com.positivity.inventory.internal.client.WorkorderValidationClient;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
@@ -79,7 +79,7 @@ class ReceivingServiceImplTest {
     private SourceDocumentStubClient sourceDocumentStubClient;
 
     @Mock
-    private SiteDefaultsClient siteDefaultsClient;
+    private SiteDefaultsService siteDefaultsService;
 
     @Mock
     private WorkorderValidationClient workorderValidationClient;
@@ -610,7 +610,7 @@ class ReceivingServiceImplTest {
         line.setSession(session);
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(siteDefaultsClient.getDefaultStagingLocationId(siteId))
+        when(siteDefaultsService.getDefaultStagingLocationId(siteId))
                 .thenReturn(Optional.of(siteDefaultStagingLocationId));
         when(inventoryLedgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", siteDefaultStagingLocationId))

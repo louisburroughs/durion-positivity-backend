@@ -1,6 +1,5 @@
 package com.positivity.invoice.internal.service;
 
-import com.positivity.invoice.internal.client.LocationServiceClient;
 import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.client.WorkorderReferenceClient;
 import com.positivity.invoice.internal.config.InvoiceEventPublisher;
@@ -48,7 +47,7 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
     private final TaxServiceClient taxServiceClient;
-    private final LocationServiceClient locationServiceClient;
+    private final LocationReferenceService locationReferenceService;
     private final WorkorderReferenceClient workorderReferenceClient;
     private final InvoiceEventPublisher invoiceEventPublisher;
 
@@ -68,14 +67,14 @@ public class InvoiceServiceImpl implements InvoiceService {
     public InvoiceServiceImpl(
             @NonNull InvoiceRepository invoiceRepository,
             @NonNull TaxServiceClient taxServiceClient,
-            @NonNull LocationServiceClient locationServiceClient,
+            @NonNull LocationReferenceService locationReferenceService,
             @NonNull WorkorderReferenceClient workorderReferenceClient,
             @NonNull InvoiceEventPublisher invoiceEventPublisher,
             Clock clock) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.taxServiceClient = taxServiceClient;
-        this.locationServiceClient = locationServiceClient;
+        this.locationReferenceService = locationReferenceService;
         this.workorderReferenceClient = workorderReferenceClient;
         this.invoiceEventPublisher = invoiceEventPublisher;
     }
@@ -264,7 +263,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                     "invoice has taxable line items but no locationId to resolve the tax jurisdiction");
         }
 
-        TaxAddress destination = locationServiceClient.resolveTaxAddress(locationId);
+        TaxAddress destination = locationReferenceService.resolveTaxAddress(locationId);
         return taxServiceClient
                 .calculateTax(taxLineItems, destination, invoice.getWorkorderId())
                 .setScale(4, RoundingMode.HALF_UP);

@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.people.internal.client.LocationReferenceClient;
+import com.positivity.people.internal.service.LocationReferenceService;
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
 import com.positivity.people.internal.entity.ExtJobTimeReplica;
 import com.positivity.people.internal.entity.ExtPersonReplica;
@@ -44,7 +44,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     private ExtJobTimeReplicaRepository extJobTimeReplicaRepository;
 
     @MockitoBean
-    private LocationReferenceClient locationReferenceClient;
+    private LocationReferenceService locationReferenceService;
 
     @Autowired
     private TimeEntryRepository timeEntryRepository;
@@ -164,8 +164,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         approved.setApprovedBy("manager-1");
         timeEntryRepository.save(approved);
 
-        when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceClient.getLocationName(locationId)).thenReturn("North Shop");
+        when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
+        when(locationReferenceService.getLocationName(locationId)).thenReturn("North Shop");
 
         mockMvc.perform(withAuth(get("/v1/people/reports/approvedTime")
                         .param("startDate", reportDate.toString())
@@ -208,8 +208,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     void approvedTimeExport_dependencyFailure() throws Exception {
         seedTechnician(technicianId, "Jane", "Doe");
 
-        when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceClient.getLocationName(locationId))
+        when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
+        when(locationReferenceService.getLocationName(locationId))
                 .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to fetch location"));
 
         TimeEntry approved = new TimeEntry();

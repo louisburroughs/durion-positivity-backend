@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
-import com.positivity.workorder.internal.client.LocationClient;
+import com.positivity.workorder.internal.service.LocationReferenceService;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
@@ -78,7 +78,7 @@ class EstimateServiceImplTest {
     private TaxClient taxClient;
 
     @Mock
-    private LocationClient locationClient;
+    private LocationReferenceService locationReferenceService;
 
     @Mock
     private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
@@ -223,7 +223,7 @@ class EstimateServiceImplTest {
         when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.of(draft));
         when(estimateItemRepository.findByEstimate_IdAndDeletedFalse(ESTIMATE_ID))
                 .thenReturn(List.of(item));
-        when(locationClient.resolveTaxAddress(locationId)).thenReturn(resolved);
+        when(locationReferenceService.resolveTaxAddress(locationId)).thenReturn(resolved);
         when(taxClient.calculateTax(any(TaxCalculationRequest.class)))
                 .thenReturn(TaxCalculationResponse.builder()
                         .subtotal(new BigDecimal("50.00"))

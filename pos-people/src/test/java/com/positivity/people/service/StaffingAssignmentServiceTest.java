@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import com.positivity.people.internal.client.LocationReferenceClient;
+import com.positivity.people.internal.service.LocationReferenceService;
 import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
 import com.positivity.people.internal.entity.Employee;
@@ -55,7 +55,7 @@ class StaffingAssignmentServiceTest {
     private EmployeeRepository employeeRepository;
 
     @Mock
-    private LocationReferenceClient locationReferenceClient;
+    private LocationReferenceService locationReferenceService;
 
     private StaffingAssignmentServiceImpl service;
 
@@ -68,7 +68,7 @@ class StaffingAssignmentServiceTest {
                 extPersonReplicaRepository,
                 peopleEventPublisher,
                 employeeRepository,
-                locationReferenceClient,
+                locationReferenceService,
                 FIXED_CLOCK);
 
         employee = Employee.builder()
@@ -82,7 +82,7 @@ class StaffingAssignmentServiceTest {
                         .updatedAt(java.time.Instant.now())
                         .build()));
         when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee));
-        when(locationReferenceClient.isLocationActive(LOCATION_ID)).thenReturn(true);
+        when(locationReferenceService.isLocationActive(LOCATION_ID)).thenReturn(true);
         when(repository.existsOverlapping(any(), any(), any(), any(), any())).thenReturn(false);
         when(repository.save(any(EmployeeLocationAssignment.class))).thenAnswer(inv -> inv.getArgument(0));
     }

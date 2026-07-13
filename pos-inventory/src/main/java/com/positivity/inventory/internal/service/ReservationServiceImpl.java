@@ -1,6 +1,6 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.client.StorageLocationValidationClient;
+import com.positivity.inventory.internal.service.StorageLocationValidationService;
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
@@ -13,7 +13,6 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.ReservationStatus;
 import com.positivity.inventory.internal.exception.InsufficientAtpException;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
-import com.positivity.inventory.internal.exception.LocationServiceUnavailableException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.AllocationRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
@@ -38,7 +37,7 @@ public class ReservationServiceImpl implements ReservationService {
     private final ReservationRepository reservationRepository;
     private final AllocationRepository allocationRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
-    private final StorageLocationValidationClient storageLocationValidationClient;
+    private final StorageLocationValidationService storageLocationValidationService;
 
     @Override
     public @NonNull ReservationResponse createOrUpdateReservation(@NonNull CreateReservationRequest request) {
@@ -175,14 +174,8 @@ public class ReservationServiceImpl implements ReservationService {
             throw new IllegalArgumentException("storageLocationId is required to promote an allocation to HARD");
         }
 
-        StorageLocationValidationClient.StorageLocationValidation validation;
-        try {
-            validation = storageLocationValidationClient.getStorageLocationValidation(storageLocationId.toString());
-        } catch (org.springframework.web.client.HttpServerErrorException
-                | org.springframework.web.client.ResourceAccessException ex) {
-            throw new LocationServiceUnavailableException(
-                    "Location service unavailable while validating storage location", ex);
-        }
+        StorageLocationValidationService.StorageLocationValidation validation =
+                storageLocationValidationService.getStorageLocationValidation(storageLocationId.toString());
         if (!validation.isExists()) {
             throw new LocationNotFoundException(storageLocationId);
         }

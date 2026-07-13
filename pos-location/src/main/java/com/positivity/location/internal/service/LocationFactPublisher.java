@@ -7,8 +7,10 @@ import com.positivity.domainevents.location.StorageLocationUpdatedV1;
 import com.positivity.location.internal.config.OutboxEventWriter;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.StorageLocationEntity;
+import com.positivity.location.internal.repository.LocationParentRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -35,16 +37,19 @@ public class LocationFactPublisher {
     private static final String SOURCE = "pos-location";
 
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
+    private final LocationParentRepository locationParentRepository;
     private final Clock clock;
     private final String eventsTopic;
 
     public LocationFactPublisher(
             ObjectProvider<OutboxEventWriter> outboxEventWriter,
+            LocationParentRepository locationParentRepository,
             Clock clock,
             // Same property ManifestPublisher scans event_outbox by, so an override can never
             // desync the outbox rows from the manifest computation.
             @Value("${pos.location.kafka.events-topic:location.events.v1}") String eventsTopic) {
         this.outboxEventWriter = outboxEventWriter;
+        this.locationParentRepository = locationParentRepository;
         this.clock = clock;
         this.eventsTopic = eventsTopic;
     }
@@ -76,6 +81,7 @@ public class LocationFactPublisher {
                 location.getDefaultQuarantineLocation() != null
                         ? location.getDefaultQuarantineLocation().getId()
                         : null,
+                parentRefs(location.getId()),
                 location.getCreatedAt(),
                 location.getUpdatedAt());
         publish(writer, LocationUpdatedV1.EVENT_TYPE, location.getId(), payload);
@@ -112,10 +118,18 @@ public class LocationFactPublisher {
                         ? storageLocation.getParentStorageLocation().getId()
                         : null,
                 storageLocation.getCapacity(),
+                StorageCapacityJson.extractMaxUnitCapacity(storageLocation.getCapacity()),
                 storageLocation.getTemperature(),
                 storageLocation.getCreatedAt(),
                 storageLocation.getUpdatedAt());
         publish(writer, StorageLocationUpdatedV1.EVENT_TYPE, storageLocation.getId(), payload);
+    }
+
+    private List<LocationUpdatedV1.ParentRef> parentRefs(@NonNull UUID locationId) {
+        return locationParentRepository.findByChild_Id(locationId).stream()
+                .map(edge -> new LocationUpdatedV1.ParentRef(
+                        edge.getParent().getId(), edge.getParentType().name()))
+                .toList();
     }
 
     private void publish(

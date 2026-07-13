@@ -9,7 +9,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.positivity.people.internal.client.LocationReferenceClient;
+import com.positivity.people.internal.service.LocationReferenceService;
 import com.positivity.people.internal.dto.ApprovedTimeExportResponse;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.TimeEntry;
@@ -41,7 +41,7 @@ class PeopleReportsServiceTest {
 
     private TimekeepingThresholdCache timekeepingThresholdCache;
 
-    private LocationReferenceClient locationReferenceClient;
+    private LocationReferenceService locationReferenceService;
 
     private PeopleReportsService service;
 
@@ -51,13 +51,13 @@ class PeopleReportsServiceTest {
         extPersonReplicaRepository = mock(ExtPersonReplicaRepository.class);
         extJobTimeReplicaRepository = mock(ExtJobTimeReplicaRepository.class);
         timekeepingThresholdCache = mock(TimekeepingThresholdCache.class);
-        locationReferenceClient = mock(LocationReferenceClient.class);
+        locationReferenceService = mock(LocationReferenceService.class);
 
         service = new PeopleReportsServiceImpl(
                 timeEntryRepository,
                 extPersonReplicaRepository,
                 extJobTimeReplicaRepository,
-                locationReferenceClient,
+                locationReferenceService,
                 timekeepingThresholdCache,
                 java.time.Clock.systemUTC());
     }
@@ -89,8 +89,8 @@ class PeopleReportsServiceTest {
         rejected.setApprovedAt(Instant.parse("2026-02-11T01:15:00Z"));
         rejected.setApprovedBy("manager-1");
 
-        when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceClient.getLocationName(locationId)).thenReturn("North Shop");
+        when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
+        when(locationReferenceService.getLocationName(locationId)).thenReturn("North Shop");
         when(extPersonReplicaRepository.findAllById(any()))
                 .thenReturn(List.of(ExtPersonReplica.builder()
                         .personId(personUuid)
@@ -122,8 +122,8 @@ class PeopleReportsServiceTest {
     @Test
     void getApprovedTimeForExport_emptyResultReturns200EquivalentList() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceClient.getLocationName(locationId)).thenReturn("North Shop");
+        when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
+        when(locationReferenceService.getLocationName(locationId)).thenReturn("North Shop");
         when(timeEntryRepository.findApprovedForExport(
                         eq(TimeEntryStatus.APPROVED), any(), any(), eq(List.of(locationId))))
                 .thenReturn(List.of());
@@ -158,7 +158,7 @@ class PeopleReportsServiceTest {
         LocalDate startDate = LocalDate.parse("2026-02-10");
         LocalDate endDate = LocalDate.parse("2026-02-11");
         List<UUID> locations = List.of(locationId);
-        when(locationReferenceClient.isLocationActive(locationId)).thenReturn(false);
+        when(locationReferenceService.isLocationActive(locationId)).thenReturn(false);
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,

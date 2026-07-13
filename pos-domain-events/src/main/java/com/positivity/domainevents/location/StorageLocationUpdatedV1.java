@@ -22,6 +22,8 @@ import org.jspecify.annotations.Nullable;
  * @param status owner status name, e.g. {@code ACTIVE}, {@code DECOMMISSIONED}
  * @param parentStorageLocationId parent node in the site's storage tree (null for roots)
  * @param capacity free-form capacity descriptor
+ * @param maxUnitCapacity unit capacity the owner derives from the capacity descriptor for
+ *     validation (issue #892; null when the descriptor carries no unit count)
  * @param temperature free-form temperature/climate descriptor
  * @param createdAt owner row creation timestamp
  * @param updatedAt owner row last-update timestamp
@@ -35,6 +37,7 @@ public record StorageLocationUpdatedV1(
         @Nullable String status,
         @Nullable UUID parentStorageLocationId,
         @Nullable String capacity,
+        @Nullable Integer maxUnitCapacity,
         @Nullable String temperature,
         @Nullable Instant createdAt,
         @Nullable Instant updatedAt) {
