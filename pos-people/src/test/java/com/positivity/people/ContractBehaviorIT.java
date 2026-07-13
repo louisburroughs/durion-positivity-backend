@@ -1,6 +1,5 @@
 package com.positivity.people;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -11,14 +10,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.people.internal.client.LocationReferenceClient;
-import com.positivity.people.internal.client.WorkexecClientException;
-import com.positivity.people.internal.client.WorkexecJobTimeClient;
-import com.positivity.people.internal.client.dto.WorkexecJobTimeTotal;
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
+import com.positivity.people.internal.entity.ExtJobTimeReplica;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.entity.TimekeepingPolicy;
 import com.positivity.people.internal.enums.TimekeepingPolicyScopeType;
+import com.positivity.people.internal.repository.ExtJobTimeReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.repository.TimekeepingPolicyRepository;
@@ -42,8 +40,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     @MockitoBean
     private TimeEntryService timeEntryService;
 
-    @MockitoBean
-    private WorkexecJobTimeClient workexecJobTimeClient;
+    @Autowired
+    private ExtJobTimeReplicaRepository extJobTimeReplicaRepository;
 
     @MockitoBean
     private LocationReferenceClient locationReferenceClient;
@@ -78,8 +76,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 technicianId, locationId, Instant.parse("2026-02-16T08:00:00Z"), Instant.parse("2026-02-16T16:00:00Z"));
         seedGlobalThreshold(60);
 
-        when(workexecJobTimeClient.getJobTimeTotals(reportDate, reportDate, "UTC", locationId, List.of(technicianId)))
-                .thenReturn(List.of(jobTime(technicianId, locationId, reportDate, 360)));
+        seedJobTime(technicianId, locationId, Instant.parse("2026-02-16T15:00:00Z"), 360);
 
         mockMvc.perform(withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy")
                         .param("startDate", "2026-02-16")
@@ -114,9 +111,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         seedGlobalThreshold(30);
         seedLocationThreshold(strictLocationId, 60);
 
-        when(workexecJobTimeClient.getJobTimeTotals(
-                        reportDate, reportDate, "UTC", strictLocationId, List.of(strictTechnicianId)))
-                .thenReturn(List.of(jobTime(strictTechnicianId, strictLocationId, reportDate, 435)));
+        seedJobTime(strictTechnicianId, strictLocationId, Instant.parse("2026-02-17T15:00:00Z"), 435);
 
         mockMvc.perform(withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy")
                         .param("startDate", "2026-02-17")
@@ -149,21 +144,6 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                         .param("endDate", "2026-02-17")
                         .param("timezone", "UTC"))
                 .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    @DisplayName("dependency failure: workexec non-2xx fails request")
-    void attendanceDiscrepancyReport_workexecFailure() throws Exception {
-        when(workexecJobTimeClient.getJobTimeTotals(any(), any(), any(), any(), any()))
-                .thenThrow(new WorkexecClientException(
-                        "Work Execution request failed with status 503", 503, "WORKEXEC_UNAVAILABLE"));
-
-        mockMvc.perform(withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy")
-                        .param("startDate", "2026-02-17")
-                        .param("endDate", "2026-02-17")
-                        .param("timezone", "UTC")))
-                .andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.errorCode").value("WORKEXEC_UNAVAILABLE"));
     }
 
     @Test
@@ -382,18 +362,22 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         timekeepingPolicyRepository.save(policy);
     }
 
-    private WorkexecJobTimeTotal jobTime(UUID technicianId, UUID locationId, LocalDate localDate, int minutes) {
-        WorkexecJobTimeTotal row = new WorkexecJobTimeTotal();
-        row.setTechnicianId(technicianId);
-        row.setLocationId(locationId);
-        row.setLocalDate(localDate);
-        row.setTotalJobMinutes(minutes);
-        return row;
+    private void seedJobTime(UUID technicianId, UUID locationId, Instant endAtUtc, int minutes) {
+        extJobTimeReplicaRepository.save(ExtJobTimeReplica.builder()
+                .laborEntryId(UUID.randomUUID())
+                .workOrderId(UUID.randomUUID())
+                .technicianId(technicianId)
+                .locationId(locationId)
+                .endAtUtc(endAtUtc)
+                .minutes(minutes)
+                .updatedAt(Instant.now())
+                .build());
     }
 
     private void resetReportData() {
         timeEntryRepository.deleteAll();
         timekeepingPolicyRepository.deleteAll();
         extPersonReplicaRepository.deleteAll();
+        extJobTimeReplicaRepository.deleteAll();
     }
 }

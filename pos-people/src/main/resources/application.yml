@@ -85,9 +85,9 @@ pos:
       people-contact-manifest-topic: ${POS_PEOPLE_PC_MANIFEST_TOPIC:people-contact.manifest.v1}
       people-contact-manifest-consumer-group: ${POS_PEOPLE_PC_MANIFEST_CONSUMER_GROUP:pos-people-people-contact-manifests}
       people-contact-commands-topic: ${POS_PEOPLE_PC_COMMANDS_TOPIC:people-contact.commands.v1}
+      workorder-events-topic: ${POS_PEOPLE_WO_EVENTS_TOPIC:workorder.events.v1}
+      workorder-events-consumer-group: ${POS_PEOPLE_WO_EVENTS_CONSUMER_GROUP:pos-people-workorder-events}
     manifest:
       topic: ${POS_PEOPLE_MANIFEST_TOPIC:people.manifest.v1}
   location-service:
     service-id: ${POS_LOCATION_SERVICE_SERVICE_ID:location}
-  workexec:
-    service-id: ${POS_WORKEXEC_SERVICE_ID:workorder}
