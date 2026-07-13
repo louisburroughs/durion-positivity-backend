@@ -5,9 +5,7 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityScheme;
-import io.swagger.v3.oas.models.tags.Tag;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -33,14 +31,8 @@ public class OpenApiConfig {
                         .version("v1")
                         .contact(
                                 new Contact().email("louis.burroughs@gmail.com").name("Durion Support Services")))
-                .tags(Arrays.asList(
-                        new Tag().name("People API").description("Operations related to person identity records"),
-                        new Tag()
-                                .name("User Person Links API")
-                                .description("Operations for managing user-person links"),
-                        new Tag()
-                                .name("Person Access API")
-                                .description("Person role assignments (proxied to pos-security-service)")))
+                // Tags come from each controller's @Tag annotation; declaring them here too
+                // duplicates entries in the exported spec (OpenAPI validators reject that).
                 .components(new Components()
                         .addSecuritySchemes(
                                 "bearerAuth",

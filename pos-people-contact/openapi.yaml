@@ -11,15 +11,9 @@ servers:
   description: Generated server url
 tags:
 - name: People API
-  description: Operations related to person identity records
-- name: Person Access API
-  description: Person role assignments (proxied to pos-security-service)
-- name: People API
   description: Operations related to people records
 - name: User-Person Linking API
   description: Link authentication users to person records
-- name: User Person Links API
-  description: Operations for managing user-person links
 - name: People - Access Control
   description: APIs for managing person-to-role assignments for access control and permissions (CAP-120)
 paths:
