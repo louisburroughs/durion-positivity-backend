@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.positivity.workorder.internal.client.CustomerValidationClient;
-import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
@@ -15,6 +14,7 @@ import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import com.positivity.workorder.internal.service.PeopleAvailabilityLocalService;
 import com.positivity.workorder.internal.service.WorkorderServiceImpl;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
 import java.time.Clock;
@@ -92,7 +92,7 @@ class WorkorderServiceImplCrmPropagationTest {
     private ShopmgrOperationalContextClient shopmgrClient;
 
     @Mock
-    private PeopleLocationClient peopleLocationClient;
+    private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
     @InjectMocks
     private WorkorderServiceImpl workorderService;
@@ -242,7 +242,8 @@ class WorkorderServiceImplCrmPropagationTest {
     @DisplayName("createWorkorder(null, ...) — estimate-less falls back to the creator's primary location")
     void createWorkorder_nullEstimateId_shopIdFromPrimaryLocation() {
         UUID primaryLocation = UUID.fromString("30000000-0000-0000-0000-000000000002");
-        when(peopleLocationClient.resolveCurrentUserPrimaryLocation()).thenReturn(Optional.of(primaryLocation));
+        when(peopleAvailabilityLocalService.resolveCurrentUserPrimaryLocation())
+                .thenReturn(Optional.of(primaryLocation));
 
         Workorder result = workorderService.createWorkorder(null, CUSTOMER_ID);
 
@@ -253,7 +254,7 @@ class WorkorderServiceImplCrmPropagationTest {
     @Test
     @DisplayName("createWorkorder(null, ...) — no primary location leaves shopId null (no sentinel shop)")
     void createWorkorder_nullEstimateId_noPrimaryLocation_shopIdNull() {
-        when(peopleLocationClient.resolveCurrentUserPrimaryLocation()).thenReturn(Optional.empty());
+        when(peopleAvailabilityLocalService.resolveCurrentUserPrimaryLocation()).thenReturn(Optional.empty());
 
         Workorder result = workorderService.createWorkorder(null, CUSTOMER_ID);
 

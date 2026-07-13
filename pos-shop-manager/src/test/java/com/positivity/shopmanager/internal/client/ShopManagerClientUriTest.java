@@ -8,7 +8,6 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -49,44 +48,6 @@ class ShopManagerClientUriTest {
 
         CrmVehicleClient client = new CrmVehicleClient(builder.build());
         assertThat(client.getVehicleById(vehicleId)).isEmpty();
-        server.verify();
-    }
-
-    @Test
-    void hrAvailabilityClient_overlay_usesDirectPeopleDiscovery() {
-        RestClient.Builder builder = RestClient.builder().baseUrl("http://people");
-        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-
-        server.expect(requestTo("http://people/v1/people/availability?locationId=loc-1&date=2026-01-01"))
-                .andExpect(method(HttpMethod.GET))
-                .andExpect(header("X-User", "pos-shop-manager"))
-                .andExpect(header("X-Authorities", "people:availability:view"))
-                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
-
-        HrAvailabilityClient client = new HrAvailabilityClient(builder.build());
-        client.getAvailabilityOverlay("loc-1", LocalDate.parse("2026-01-01"));
-        server.verify();
-    }
-
-    @Test
-    void hrAvailabilityClient_schedules_usesDirectPeopleDiscovery() {
-        RestClient.Builder builder = RestClient.builder().baseUrl("http://people");
-        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-
-        server.expect(
-                        requestTo(
-                                "http://people/hr/v1/schedules?personId=person-1&startTime=2026-01-01T00:00:00Z&endTime=2026-01-02T00:00:00Z"))
-                .andExpect(method(HttpMethod.GET))
-                .andExpect(header("X-User", "pos-shop-manager"))
-                .andExpect(header("X-Authorities", "people:availability:view"))
-                .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
-
-        HrAvailabilityClient client = new HrAvailabilityClient(builder.build());
-        assertThat(client.getScheduleBlocks(
-                        "person-1",
-                        java.time.Instant.parse("2026-01-01T00:00:00Z"),
-                        java.time.Instant.parse("2026-01-02T00:00:00Z")))
-                .isEmpty();
         server.verify();
     }
 
@@ -239,22 +200,6 @@ class ShopManagerClientUriTest {
 
         assertThatThrownBy(() -> client.deleteMobileUnit(77L, 88L))
                 .isInstanceOf(org.springframework.web.client.RestClientResponseException.class);
-        server.verify();
-    }
-
-    @Test
-    void personClient_usesDirectPeopleDiscovery() {
-        RestClient.Builder builder = RestClient.builder();
-        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-
-        server.expect(requestTo("http://people/v1/people/42"))
-                .andExpect(method(HttpMethod.GET))
-                .andExpect(header("X-User", "pos-shop-manager"))
-                .andExpect(header("X-Authorities", "people:person:view"))
-                .andRespond(withSuccess("{\"id\":42}", MediaType.APPLICATION_JSON));
-
-        PersonClient client = new PersonClient(builder, "people");
-        assertThat(client.getPersonById(42L).getId()).isEqualTo(42L);
         server.verify();
     }
 

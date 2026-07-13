@@ -3,10 +3,10 @@ package com.positivity.customer.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CustomerDTO;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
+import com.positivity.customer.internal.service.PersonDirectoryService;
 import com.positivity.customer.internal.service.PersonPartyServiceImpl;
 import java.util.HashSet;
 import java.util.List;
@@ -26,10 +26,10 @@ class PersonPartyServiceImplSearchTest {
     private PersonPartyRepository personPartyRepository;
 
     @Mock
-    private PeopleClient peopleClient;
+    private PersonDirectoryService personDirectoryService;
 
     private PersonPartyServiceImpl service() {
-        return new PersonPartyServiceImpl(personPartyRepository, peopleClient);
+        return new PersonPartyServiceImpl(personPartyRepository, personDirectoryService);
     }
 
     private PersonParty person(UUID partyId, UUID personId) {
@@ -41,16 +41,17 @@ class PersonPartyServiceImplSearchTest {
         return p;
     }
 
-    private PeopleClient.PersonIdentity identity(UUID personId, String first, String last, String email) {
-        return new PeopleClient.PersonIdentity(
-                personId, first, last, email, List.of(new PeopleClient.ContactPoint("EMAIL", email, true)));
+    private PersonDirectoryService.PersonIdentity identity(UUID personId, String first, String last, String email) {
+        return new PersonDirectoryService.PersonIdentity(
+                personId, first, last, email, List.of(new PersonDirectoryService.ContactPoint("EMAIL", email, true)));
     }
 
     @Test
     void searchCustomers_byName_mapsIdentityToDto_withPartyId() {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000221");
         UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000222");
-        when(peopleClient.searchPersons("doe")).thenReturn(List.of(identity(personId, "John", "Doe", "jd@x.com")));
+        when(personDirectoryService.searchPersons("doe"))
+                .thenReturn(List.of(identity(personId, "John", "Doe", "jd@x.com")));
         when(personPartyRepository.findByPersonId(personId)).thenReturn(Optional.of(person(partyId, personId)));
 
         Page<CustomerDTO> page = service().searchCustomers("doe", null, PageRequest.of(0, 20));
@@ -68,7 +69,7 @@ class PersonPartyServiceImplSearchTest {
         UUID personA = UUID.fromString("00000000-0000-0000-0000-0000000002a1");
         UUID personB = UUID.fromString("00000000-0000-0000-0000-0000000002b1");
         UUID partyB = UUID.fromString("00000000-0000-0000-0000-0000000002b2");
-        when(peopleClient.searchPersons("jd@acme.com"))
+        when(personDirectoryService.searchPersons("jd@acme.com"))
                 .thenReturn(List.of(
                         identity(personA, "Jane", "Smith", "jane@other.com"),
                         identity(personB, "John", "Doe", "jd@acme.com")));

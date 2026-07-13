@@ -3,7 +3,6 @@ package com.positivity.location.internal.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
-import com.positivity.location.internal.client.PersonClient;
 import com.positivity.location.internal.dto.HolidayClosureRequest;
 import com.positivity.location.internal.dto.LocationDescendantResponseDTO;
 import com.positivity.location.internal.dto.LocationParentResponseDTO;
@@ -65,7 +64,6 @@ public class LocationServiceImpl implements LocationService {
     private final LocationRepository locationRepository;
     private final LocationParentRepository locationParentRepository;
     private final LocationTypeRepository locationTypeRepository;
-    private final PersonClient personClient;
 
     // Issue CAP-136 #78: lightweight process-level guard used with repository
     // checks.
@@ -419,7 +417,15 @@ public class LocationServiceImpl implements LocationService {
                 .findById(locationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         if (location.getResponsiblePersonId() == null) return null;
-        return personClient.getPersonById(location.getResponsiblePersonId());
+        // Legacy: responsible_person_id is a Long that predates UUIDv7 person ids, so it can
+        // never address a real person — the retired sync lookup failed for every non-null id.
+        // Returns null until the column is migrated to the UUID person id and this reads a
+        // people-contact replica (follow-up filed with #877).
+        log.warn(
+                "Legacy Long responsiblePersonId={} on location {} cannot resolve a person",
+                location.getResponsiblePersonId(),
+                locationId);
+        return null;
     }
 
     private boolean isDescendant(UUID ancestorId, UUID targetDescendantId) {

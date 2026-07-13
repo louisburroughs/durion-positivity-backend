@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.location.internal.client.PersonClient;
 import com.positivity.location.internal.dto.LocationDescendantResponseDTO;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.LocationParent;
@@ -48,9 +47,6 @@ class LocationDescendantsServiceTest {
 
     @Mock
     private LocationTypeRepository locationTypeRepository;
-
-    @Mock
-    private PersonClient personClient;
 
     @InjectMocks
     private LocationServiceImpl locationService;

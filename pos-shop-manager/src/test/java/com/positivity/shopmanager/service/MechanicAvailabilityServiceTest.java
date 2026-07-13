@@ -8,17 +8,16 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.positivity.shopmanager.internal.client.HrAvailabilityClient;
 import com.positivity.shopmanager.internal.dto.HrScheduleBlock;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.entity.TravelBlock;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
-import com.positivity.shopmanager.internal.exception.HrUnavailableException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
 import com.positivity.shopmanager.internal.repository.TravelBlockRepository;
 import com.positivity.shopmanager.internal.service.MechanicAvailabilityServiceImpl;
+import com.positivity.shopmanager.internal.service.StaffingScheduleService;
 import com.positivity.shopmanager.service.dto.MechanicAvailabilityResult;
 import com.positivity.shopmanager.service.enums.AvailabilityStatus;
 import com.positivity.shopmanager.service.enums.ConflictReasonCode;
@@ -31,7 +30,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.web.client.RestClientException;
 
 @ExtendWith(MockitoExtension.class)
 class MechanicAvailabilityServiceTest {
@@ -52,14 +50,14 @@ class MechanicAvailabilityServiceTest {
     private TravelBlockRepository travelBlockRepository;
 
     @Mock
-    private HrAvailabilityClient hrAvailabilityClient;
+    private StaffingScheduleService staffingScheduleService;
 
     private MechanicAvailabilityServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new MechanicAvailabilityServiceImpl(
-                mechanicRepository, appointmentRepository, travelBlockRepository, hrAvailabilityClient);
+                mechanicRepository, appointmentRepository, travelBlockRepository, staffingScheduleService);
     }
 
     // -------------------------------------------------------------------------
@@ -76,7 +74,7 @@ class MechanicAvailabilityServiceTest {
         Mechanic mechanic = buildMechanic();
         when(mechanicRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(mechanic));
         // HR returns one SHIFT block that fully covers the window
-        when(hrAvailabilityClient.getScheduleBlocks(eq(PERSON_ID), any(), any()))
+        when(staffingScheduleService.getScheduleBlocks(eq(PERSON_ID), any(), any()))
                 .thenReturn(List.of(HrScheduleBlock.builder()
                         .blockType("SHIFT")
                         .startTime(Instant.parse("2026-06-15T08:00:00Z"))
@@ -106,7 +104,7 @@ class MechanicAvailabilityServiceTest {
     void ac2_mechanicOnPto_returnsUnavailableWithPtoConflict() {
         Mechanic mechanic = buildMechanic();
         when(mechanicRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(mechanic));
-        when(hrAvailabilityClient.getScheduleBlocks(eq(PERSON_ID), any(), any()))
+        when(staffingScheduleService.getScheduleBlocks(eq(PERSON_ID), any(), any()))
                 .thenReturn(List.of(HrScheduleBlock.builder()
                         .blockType("PTO")
                         .startTime(Instant.parse("2026-06-15T00:00:00Z"))
@@ -136,7 +134,7 @@ class MechanicAvailabilityServiceTest {
         Mechanic mechanic = buildMechanic();
         when(mechanicRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(mechanic));
         // HR returns empty schedule — no shifts, no PTO
-        when(hrAvailabilityClient.getScheduleBlocks(eq(PERSON_ID), any(), any()))
+        when(staffingScheduleService.getScheduleBlocks(eq(PERSON_ID), any(), any()))
                 .thenReturn(List.of());
         when(appointmentRepository.findByResourceIdAndResourceTypeAndStartAtLessThanAndEndAtGreaterThan(
                         anyString(), anyString(), any(), any()))
@@ -162,7 +160,7 @@ class MechanicAvailabilityServiceTest {
     void ac4_appointmentPartiallyOverlaps_returnsPartiallyAvailable() {
         Mechanic mechanic = buildMechanic();
         when(mechanicRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(mechanic));
-        when(hrAvailabilityClient.getScheduleBlocks(eq(PERSON_ID), any(), any()))
+        when(staffingScheduleService.getScheduleBlocks(eq(PERSON_ID), any(), any()))
                 .thenReturn(List.of(HrScheduleBlock.builder()
                         .blockType("SHIFT")
                         .startTime(Instant.parse("2026-06-15T08:00:00Z"))
@@ -194,7 +192,7 @@ class MechanicAvailabilityServiceTest {
     void ac5_travelBlockOverlaps_returnsTravelBlockConflict() {
         Mechanic mechanic = buildMechanic();
         when(mechanicRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(mechanic));
-        when(hrAvailabilityClient.getScheduleBlocks(eq(PERSON_ID), any(), any()))
+        when(staffingScheduleService.getScheduleBlocks(eq(PERSON_ID), any(), any()))
                 .thenReturn(List.of(HrScheduleBlock.builder()
                         .blockType("SHIFT")
                         .startTime(Instant.parse("2026-06-15T08:00:00Z"))
@@ -222,23 +220,6 @@ class MechanicAvailabilityServiceTest {
     // AC6 – HR system unavailable
     // -------------------------------------------------------------------------
 
-    /**
-     * AC6: When the HR system throws a RestClientException, the client wraps it
-     * in HrUnavailableException so GlobalExceptionHandler maps it to HTTP 503
-     * with code HR_UNAVAILABLE.
-     */
-    @Test
-    void ac6_hrSystemUnresponsive_throwsHrUnavailableException() {
-        Mechanic mechanic = buildMechanic();
-        when(mechanicRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(mechanic));
-        when(hrAvailabilityClient.getScheduleBlocks(eq(PERSON_ID), any(), any()))
-                .thenThrow(new HrUnavailableException(
-                        "HR system is unavailable: Connection refused", new RestClientException("Connection refused")));
-
-        assertThatThrownBy(() -> service.queryAvailability(PERSON_ID, WINDOW_START, WINDOW_END))
-                .isInstanceOf(HrUnavailableException.class);
-    }
-
     // -------------------------------------------------------------------------
     // AC7 – Invalid window (startTime >= endTime)
     // -------------------------------------------------------------------------
@@ -253,7 +234,7 @@ class MechanicAvailabilityServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
 
         // Guard must fire before any repository or HR client interaction
-        verifyNoInteractions(mechanicRepository, appointmentRepository, travelBlockRepository, hrAvailabilityClient);
+        verifyNoInteractions(mechanicRepository, appointmentRepository, travelBlockRepository, staffingScheduleService);
     }
 
     // -------------------------------------------------------------------------
@@ -273,7 +254,7 @@ class MechanicAvailabilityServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining(PERSON_ID);
 
-        verifyNoInteractions(hrAvailabilityClient, appointmentRepository, travelBlockRepository);
+        verifyNoInteractions(staffingScheduleService, appointmentRepository, travelBlockRepository);
     }
 
     // -------------------------------------------------------------------------

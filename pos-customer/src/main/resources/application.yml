@@ -85,7 +85,11 @@ pos:
       vehicle-manifest-topic: ${POS_CUSTOMER_VEHICLE_MANIFEST_TOPIC:vehicle.manifest.v1}
       vehicle-manifest-consumer-group: ${POS_CUSTOMER_VEHICLE_MANIFEST_CONSUMER_GROUP:pos-customer-vehicle-manifests}
       vehicle-commands-topic: ${POS_CUSTOMER_VEHICLE_COMMANDS_TOPIC:vehicle.commands.v1}
+      # Person identity replica feed + reconciliation + outbound identity commands
+      # (ADR-0044 §6, #877)
+      people-contact-events-topic: ${POS_CUSTOMER_PC_EVENTS_TOPIC:people-contact.events.v1}
+      people-contact-events-consumer-group: ${POS_CUSTOMER_PC_EVENTS_CONSUMER_GROUP:pos-customer-people-contact-events}
+      people-contact-manifest-topic: ${POS_CUSTOMER_PC_MANIFEST_TOPIC:people-contact.manifest.v1}
+      people-contact-manifest-consumer-group: ${POS_CUSTOMER_PC_MANIFEST_CONSUMER_GROUP:pos-customer-people-contact-manifests}
+      people-contact-commands-topic: ${POS_CUSTOMER_PC_COMMANDS_TOPIC:people-contact.commands.v1}
       enabled: ${POS_CUSTOMER_KAFKA_ENABLED:false}
-  people:
-    service-id: ${POS_PEOPLE_SERVICE_ID:people}
-    allow-local-fallback: false

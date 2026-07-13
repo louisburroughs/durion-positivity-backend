@@ -3,7 +3,6 @@ package com.positivity.workorder.internal.service;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.client.CustomerValidationClient;
-import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
@@ -81,7 +80,7 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final IdempotencyService idempotencyService;
     private final PromotionValidationService promotionValidationService;
     private final ShopmgrOperationalContextClient shopmgrClient;
-    private final PeopleLocationClient peopleLocationClient;
+    private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
     @Override
     public List<Workorder> getAllWorkorders() {
@@ -121,7 +120,9 @@ public class WorkorderServiceImpl implements WorkorderService {
         UUID estimateLocationId = estimate != null ? estimate.getLocationId() : null;
         UUID resolvedLocationId = estimateLocationId != null
                 ? estimateLocationId
-                : peopleLocationClient.resolveCurrentUserPrimaryLocation().orElse(null);
+                : peopleAvailabilityLocalService
+                        .resolveCurrentUserPrimaryLocation()
+                        .orElse(null);
 
         Workorder workorder = Workorder.builder()
                 .estimate(estimate)

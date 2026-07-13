@@ -2,7 +2,9 @@ package com.positivity.invoice.internal.service;
 
 import com.positivity.invoice.internal.client.ManagerApprovalClient;
 import com.positivity.invoice.internal.dto.ElevateResponse;
+import com.positivity.invoice.internal.entity.ExtEmployeeReplica;
 import com.positivity.invoice.internal.exception.ElevationDeniedException;
+import com.positivity.invoice.internal.repository.ExtEmployeeReplicaRepository;
 import com.positivity.security.common.LogSanitizer;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -21,11 +23,17 @@ public class ElevationService {
     private static final Logger log = LoggerFactory.getLogger(ElevationService.class);
 
     private final ManagerApprovalClient managerApprovalClient;
+
+    private final ExtEmployeeReplicaRepository extEmployeeReplicaRepository;
+
     private final ElevationTokenService tokenService;
 
     public ElevationService(
-            @NonNull ManagerApprovalClient managerApprovalClient, @NonNull ElevationTokenService tokenService) {
+            @NonNull ManagerApprovalClient managerApprovalClient,
+            @NonNull ExtEmployeeReplicaRepository extEmployeeReplicaRepository,
+            @NonNull ElevationTokenService tokenService) {
         this.managerApprovalClient = managerApprovalClient;
+        this.extEmployeeReplicaRepository = extEmployeeReplicaRepository;
         this.tokenService = tokenService;
     }
 
@@ -37,8 +45,12 @@ public class ElevationService {
      */
     @NonNull
     public ElevateResponse elevate(@NonNull String managerEmployeeNumber, @NonNull UUID invoiceId) {
-        UUID managerPersonId = managerApprovalClient
-                .resolveActivePersonId(managerEmployeeNumber)
+        // Employee-number -> active person resolution is local since #877: the
+        // ext_people_employee replica mirrors people.employee.updated facts.
+        UUID managerPersonId = extEmployeeReplicaRepository
+                .findFirstByEmployeeNumberIgnoreCase(managerEmployeeNumber)
+                .filter(employee -> "ACTIVE".equals(employee.getStatus()))
+                .map(ExtEmployeeReplica::getPersonId)
                 .orElseThrow(() -> new ElevationDeniedException("Manager approval denied"));
 
         if (!managerApprovalClient.personHoldsFinalizeOverride(managerPersonId)) {

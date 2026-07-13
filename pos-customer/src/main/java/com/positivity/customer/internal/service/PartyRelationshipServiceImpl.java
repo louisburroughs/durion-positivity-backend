@@ -1,6 +1,5 @@
 package com.positivity.customer.internal.service;
 
-import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
 import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
 import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
@@ -55,7 +54,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
     private final PartyRelationshipRepository partyRelationshipRepository;
     private final CommercialPartyRepository partyRepository;
     private final PersonPartyRepository personRepository;
-    private final PeopleClient peopleClient;
+    private final PersonDirectoryService personDirectoryService;
     private final Clock clock;
 
     /**
@@ -201,8 +200,8 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
         }
 
         // Names from pos-people (source of truth, ADR-0015 I2), batched by canonical id.
-        Map<UUID, PeopleClient.PersonIdentity> identities =
-                peopleClient.fetchPersonIdentitiesQuietly(relationships.stream()
+        Map<UUID, PersonDirectoryService.PersonIdentity> identities =
+                personDirectoryService.fetchPersonIdentitiesQuietly(relationships.stream()
                         .map(rel -> rel.getToPerson().getPersonId())
                         .filter(Objects::nonNull)
                         .collect(Collectors.toSet()));
@@ -211,7 +210,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
         List<GetCommercialAccountContactsResponse.ContactWithRole> contacts = relationships.stream()
                 .map(rel -> {
                     PersonParty person = rel.getToPerson();
-                    PeopleClient.PersonIdentity identity =
+                    PersonDirectoryService.PersonIdentity identity =
                             person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
 
                     // Email/phone/name from pos-people (sole source of truth, ADR-0015 I2; issue #684).

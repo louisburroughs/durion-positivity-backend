@@ -131,11 +131,7 @@ public class CrmPermissionRegistry {
                 // Vehicle Management (3 permissions; registry writes live in pos-vehicle-inventory)
                 permission(VEHICLE_VIEW, "View vehicle records (VIN, unit #, description, plate)", "LOW", "Issue #169"),
                 permission(VEHICLE_SEARCH, "Search vehicles by VIN, unit #, or plate", "LOW", "Issue #169"),
-                permission(
-                        VEHICLE_CREATE,
-                        "Associate a vehicle VIN with a party",
-                        "MEDIUM",
-                        "Issue #169"),
+                permission(VEHICLE_CREATE, "Associate a vehicle VIN with a party", "MEDIUM", "Issue #169"),
 
                 // Vehicle-Party Association (3 permissions)
                 permission(

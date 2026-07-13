@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import com.positivity.workorder.internal.client.DocumentClient;
-import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
 import com.positivity.workorder.internal.entity.Estimate;
@@ -16,6 +15,7 @@ import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.EstimateSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.service.EstimateServiceImpl;
+import com.positivity.workorder.internal.service.PeopleAvailabilityLocalService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -91,7 +91,7 @@ class EstimateServiceImplCrmPropagationTest {
     private TaxClient taxClient;
 
     @Mock
-    private PeopleLocationClient peopleLocationClient;
+    private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
     @Mock
     private DocumentClient documentClient;

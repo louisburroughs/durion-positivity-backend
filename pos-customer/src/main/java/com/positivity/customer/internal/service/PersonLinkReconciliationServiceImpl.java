@@ -1,6 +1,5 @@
 package com.positivity.customer.internal.service;
 
-import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PersonLinkReconciliationService;
 import java.util.List;
@@ -18,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PersonLinkReconciliationServiceImpl implements PersonLinkReconciliationService {
 
     private final PersonPartyRepository personPartyRepository;
-    private final PeopleClient peopleClient;
+    private final PersonDirectoryService personDirectoryService;
 
     @Override
     @NonNull
@@ -26,9 +25,9 @@ public class PersonLinkReconciliationServiceImpl implements PersonLinkReconcilia
     public PersonLinkReport reconcile() {
         List<UUID> linkedIds = personPartyRepository.findDistinctPersonIds();
 
-        Map<UUID, PeopleClient.PersonIdentity> resolved;
+        Map<UUID, PersonDirectoryService.PersonIdentity> resolved;
         try {
-            resolved = peopleClient.fetchPersonIdentities(linkedIds);
+            resolved = personDirectoryService.fetchPersonIdentities(linkedIds);
         } catch (Exception exception) {
             // pos-people unreachable — report degraded rather than 500. I1 cannot be
             // verified right now; counts are not meaningful.
