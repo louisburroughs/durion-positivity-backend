@@ -9,7 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.inventory.internal.client.StorageLocationValidationClient;
+import com.positivity.inventory.internal.service.StorageLocationValidationService;
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
@@ -79,14 +79,14 @@ class ReservationServiceImplTest {
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
     @Mock
-    private StorageLocationValidationClient storageLocationValidationClient;
+    private StorageLocationValidationService storageLocationValidationService;
 
     private ReservationServiceImpl service;
 
-    private static StorageLocationValidationClient.StorageLocationValidation validation(
+    private static StorageLocationValidationService.StorageLocationValidation validation(
             boolean exists, boolean active) {
-        StorageLocationValidationClient.StorageLocationValidation result =
-                new StorageLocationValidationClient.StorageLocationValidation();
+        StorageLocationValidationService.StorageLocationValidation result =
+                new StorageLocationValidationService.StorageLocationValidation();
         result.setStorageLocationId(STORAGE_LOCATION_ID);
         result.setExists(exists);
         result.setActive(active);
@@ -100,7 +100,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
-                storageLocationValidationClient);
+                storageLocationValidationService);
         // Default lenient stubs for the SC1–SC7 scaffold tests
         lenient().when(reservationRepository.findByWorkorderLineId(any())).thenReturn(Optional.empty());
         lenient().when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -132,7 +132,7 @@ class ReservationServiceImplTest {
                 .when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class)))
                 .thenReturn(100);
         lenient()
-                .when(storageLocationValidationClient.getStorageLocationValidation(any(String.class)))
+                .when(storageLocationValidationService.getStorageLocationValidation(any(String.class)))
                 .thenReturn(validation(true, true));
         lenient()
                 .when(inventoryLedgerEntryRepository.save(any(InventoryLedgerEntry.class)))
@@ -377,7 +377,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
-                storageLocationValidationClient);
+                storageLocationValidationService);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ReservationEntity existing = ReservationEntity.builder()
@@ -408,7 +408,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
-                storageLocationValidationClient);
+                storageLocationValidationService);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(reservationRepository.findByWorkorderLineId(workorderLineId)).thenReturn(Optional.empty());
@@ -445,7 +445,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
-                storageLocationValidationClient);
+                storageLocationValidationService);
 
         UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(allocationRepository.findById(allocationId)).thenReturn(Optional.empty());
@@ -464,7 +464,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
-                storageLocationValidationClient);
+                storageLocationValidationService);
 
         ReservationEntity reservation = ReservationEntity.builder()
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -510,7 +510,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
-                storageLocationValidationClient);
+                storageLocationValidationService);
 
         ReservationEntity reservation = ReservationEntity.builder()
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -559,7 +559,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
-                storageLocationValidationClient);
+                storageLocationValidationService);
 
         ReservationEntity reservation = ReservationEntity.builder()
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -611,7 +611,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
-                storageLocationValidationClient);
+                storageLocationValidationService);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(reservationRepository.findByWorkorderLineId(workorderLineId)).thenReturn(Optional.empty());
@@ -629,7 +629,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
-                storageLocationValidationClient);
+                storageLocationValidationService);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ReservationEntity reservation = ReservationEntity.builder()
@@ -662,7 +662,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
-                storageLocationValidationClient);
+                storageLocationValidationService);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ReservationEntity reservation = ReservationEntity.builder()
@@ -870,7 +870,7 @@ class ReservationServiceImplTest {
     @DisplayName("promoteToHard surfaces 503-mapped exception when location validation service is down")
     void promoteToHard_validationServiceDown_throwsLocationServiceUnavailable() {
         // PR #661 review finding 5: outage must map to 503, not raw 500
-        when(storageLocationValidationClient.getStorageLocationValidation(any(String.class)))
+        when(storageLocationValidationService.getStorageLocationValidation(any(String.class)))
                 .thenThrow(new org.springframework.web.client.ResourceAccessException("connection refused"));
 
         UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -885,7 +885,7 @@ class ReservationServiceImplTest {
     @DisplayName("promoteToHard throws LocationNotFoundException when storage location does not exist")
     void promoteToHard_storageLocationMissing_throwsLocationNotFound() {
         // Issue #656: nonexistent storage location must fail before any state change
-        when(storageLocationValidationClient.getStorageLocationValidation(any(String.class)))
+        when(storageLocationValidationService.getStorageLocationValidation(any(String.class)))
                 .thenReturn(validation(false, false));
 
         UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -901,7 +901,7 @@ class ReservationServiceImplTest {
     @DisplayName("promoteToHard throws IllegalArgumentException when storage location is inactive")
     void promoteToHard_storageLocationInactive_throwsIllegalArgument() {
         // Issue #656: inactive storage location must be rejected
-        when(storageLocationValidationClient.getStorageLocationValidation(any(String.class)))
+        when(storageLocationValidationService.getStorageLocationValidation(any(String.class)))
                 .thenReturn(validation(true, false));
 
         UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");

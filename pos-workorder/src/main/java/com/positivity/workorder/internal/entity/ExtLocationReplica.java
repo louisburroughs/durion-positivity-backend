@@ -18,7 +18,7 @@ import lombok.NoArgsConstructor;
  *
  * <p>pos-location owns these facts; nothing in this module may write the table except the event
  * consumer. Carries the tax-jurisdiction address previously served by the retired
- * {@code LocationServiceClient} — ADR-0044 explicitly reversed the old "never replicate address
+ * {@code LocationClient} — ADR-0044 explicitly reversed the old "never replicate address
  * data" rule for this feed; tax flows still run ADR-0021 address validation on replica data.
  */
 @Data

@@ -1,6 +1,6 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.client.SiteDefaultsClient;
+import com.positivity.inventory.internal.service.SiteDefaultsService;
 import com.positivity.inventory.internal.client.SourceDocumentStubClient;
 import com.positivity.inventory.internal.client.WorkorderValidationClient;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
@@ -64,7 +64,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final InventoryVarianceRepository inventoryVarianceRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final SourceDocumentStubClient sourceDocumentStubClient;
-    private final SiteDefaultsClient siteDefaultsClient;
+    private final SiteDefaultsService siteDefaultsService;
     private final WorkorderValidationClient workorderValidationClient;
 
     @Value("${pos.inventory.receiving.source-document-service:}")
@@ -365,7 +365,7 @@ public class ReceivingServiceImpl implements ReceivingService {
             return fallbackStagingLocationId;
         }
 
-        return siteDefaultsClient.getDefaultStagingLocationId(siteId).orElse(fallbackStagingLocationId);
+        return siteDefaultsService.getDefaultStagingLocationId(siteId).orElse(fallbackStagingLocationId);
     }
 
     private Optional<UUID> resolveRequestScopedSiteId() {

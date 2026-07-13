@@ -1,7 +1,7 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.client.StorageLocationTopologyClient;
-import com.positivity.inventory.internal.client.StorageLocationTopologyClient.LocationDescendant;
+import com.positivity.inventory.internal.service.StorageLocationTopologyService;
+import com.positivity.inventory.internal.service.StorageLocationTopologyService.LocationDescendant;
 import com.positivity.inventory.internal.dto.rollup.LocationInventoryRollupResponse;
 import com.positivity.inventory.internal.dto.rollup.RollupQuantities;
 import com.positivity.inventory.internal.dto.rollup.SiteInventoryRollupResponse;
@@ -41,15 +41,15 @@ public class LocationInventoryRollupServiceImpl implements LocationInventoryRoll
     private static final Set<String> VALID_PARENT_TYPES = Set.of(
             "HOME_OFFICE", "HEADQUARTERS", "REGION", "DISTRICT", "PHYSICAL", "ORGANIZATIONAL", "FINANCIAL", "SHIPPING");
 
-    private final StorageLocationTopologyClient topologyClient;
+    private final StorageLocationTopologyService topologyService;
     private final SiteInventoryRollupService siteInventoryRollupService;
     private final int expandSiteCap;
 
     public LocationInventoryRollupServiceImpl(
-            StorageLocationTopologyClient topologyClient,
+            StorageLocationTopologyService topologyService,
             SiteInventoryRollupService siteInventoryRollupService,
             @Value("${pos.inventory.rollup.expand-site-cap:25}") int expandSiteCap) {
-        this.topologyClient = topologyClient;
+        this.topologyService = topologyService;
         this.siteInventoryRollupService = siteInventoryRollupService;
         this.expandSiteCap = expandSiteCap;
     }
@@ -65,7 +65,7 @@ public class LocationInventoryRollupServiceImpl implements LocationInventoryRoll
             boolean includeEmpty) {
         String resolvedParentType = resolveParentType(parentType);
 
-        List<LocationDescendant> descendants = topologyClient.fetchDescendants(locationId, resolvedParentType);
+        List<LocationDescendant> descendants = topologyService.fetchDescendants(locationId, resolvedParentType);
 
         if (expandTree && descendants.size() > expandSiteCap) {
             throw new RollupExpansionTooLargeException(descendants.size(), expandSiteCap);

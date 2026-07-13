@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.shopmanager.internal.client.LocationClient;
 import com.positivity.shopmanager.internal.client.ServiceEntityClient;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import com.positivity.shopmanager.internal.dto.PersonDTO;
@@ -18,9 +17,7 @@ import com.positivity.shopmanager.internal.entity.Technician;
 import com.positivity.shopmanager.internal.repository.ShopServiceRepository;
 import com.positivity.shopmanager.internal.repository.TechnicianRepository;
 import com.positivity.shopmanager.internal.service.AppointmentLoadServiceImpl;
-import com.positivity.shopmanager.internal.service.BayServiceImpl;
 import com.positivity.shopmanager.internal.service.ConflictDetectionServiceImpl;
-import com.positivity.shopmanager.internal.service.MobileUnitServiceImpl;
 import com.positivity.shopmanager.internal.service.ShopServiceImpl;
 import com.positivity.shopmanager.internal.service.SourceEligibilityServiceImpl;
 import java.util.Optional;
@@ -34,9 +31,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class InternalServiceImplementationsTest {
 
     @Mock
-    private LocationClient locationClient;
-
-    @Mock
     private TechnicianRepository technicianRepository;
 
     @Mock
@@ -44,94 +38,6 @@ class InternalServiceImplementationsTest {
 
     @Mock
     private ShopServiceRepository shopServiceRepository;
-
-    @Test
-    void bayService_getBays_withLocationAndBay_fetchesSingleBay() {
-        BayServiceImpl service = new BayServiceImpl(locationClient);
-        Object expected = new Object();
-        when(locationClient.getBayById(1L, 2L)).thenReturn(expected);
-
-        Object actual = service.getBays(1L, 2L);
-
-        assertEquals(expected, actual);
-        verify(locationClient).getBayById(1L, 2L);
-    }
-
-    @Test
-    void bayService_getBays_withoutFullIdentifiers_fetchesAllBays() {
-        BayServiceImpl service = new BayServiceImpl(locationClient);
-        Object expected = new Object();
-        when(locationClient.getBays()).thenReturn(expected);
-
-        Object actual = service.getBays(null, 2L);
-
-        assertEquals(expected, actual);
-        verify(locationClient).getBays();
-    }
-
-    @Test
-    void bayService_createManageDelete_delegateToLocationClient() {
-        BayServiceImpl service = new BayServiceImpl(locationClient);
-        Object request = new Object();
-        Object expectedCreateResult = new Object();
-        Object expectedManageResult = new Object();
-        when(locationClient.createBay(9L, request)).thenReturn(expectedCreateResult);
-        when(locationClient.updateBays(request)).thenReturn(expectedManageResult);
-
-        Object createResult = service.createBay(9L, request);
-        Object manageResult = service.manageBays(request);
-        service.deleteBay(9L, 10L);
-
-        assertEquals(expectedCreateResult, createResult);
-        assertEquals(expectedManageResult, manageResult);
-        verify(locationClient).createBay(9L, request);
-        verify(locationClient).updateBays(request);
-        verify(locationClient).deleteBay(9L, 10L);
-    }
-
-    @Test
-    void mobileUnitService_getMobileUnits_withLocationAndUnit_fetchesSingleUnit() {
-        MobileUnitServiceImpl service = new MobileUnitServiceImpl(locationClient);
-        Object expected = new Object();
-        when(locationClient.getMobileUnitById(3L, 4L)).thenReturn(expected);
-
-        Object actual = service.getMobileUnits(3L, 4L);
-
-        assertEquals(expected, actual);
-        verify(locationClient).getMobileUnitById(3L, 4L);
-    }
-
-    @Test
-    void mobileUnitService_getMobileUnits_withoutFullIdentifiers_fetchesAllUnits() {
-        MobileUnitServiceImpl service = new MobileUnitServiceImpl(locationClient);
-        Object expected = new Object();
-        when(locationClient.getMobileUnits()).thenReturn(expected);
-
-        Object actual = service.getMobileUnits(3L, null);
-
-        assertEquals(expected, actual);
-        verify(locationClient).getMobileUnits();
-    }
-
-    @Test
-    void mobileUnitService_createManageDelete_delegateToLocationClient() {
-        MobileUnitServiceImpl service = new MobileUnitServiceImpl(locationClient);
-        Object request = new Object();
-        Object expectedCreateResult = new Object();
-        Object expectedManageResult = new Object();
-        when(locationClient.createMobileUnit(7L, request)).thenReturn(expectedCreateResult);
-        when(locationClient.updateMobileUnits(request)).thenReturn(expectedManageResult);
-
-        Object createResult = service.createMobileUnit(7L, request);
-        Object manageResult = service.manageMobileUnits(request);
-        service.deleteMobileUnit(7L, 8L);
-
-        assertEquals(expectedCreateResult, createResult);
-        assertEquals(expectedManageResult, manageResult);
-        verify(locationClient).createMobileUnit(7L, request);
-        verify(locationClient).updateMobileUnits(request);
-        verify(locationClient).deleteMobileUnit(7L, 8L);
-    }
 
     @Test
     void sourceEligibilityService_returnsExpectedStubValues() {

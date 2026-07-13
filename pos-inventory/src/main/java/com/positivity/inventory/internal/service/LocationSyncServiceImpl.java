@@ -1,22 +1,18 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.client.LocationRosterClient;
-import com.positivity.inventory.internal.client.LocationRosterClient.LocationRosterEntry;
-import com.positivity.inventory.internal.dto.sync.LocationSyncRunResponse;
-import com.positivity.inventory.internal.dto.sync.SyncLogResponse;
-import com.positivity.inventory.internal.entity.LocationRefEntity;
 import com.positivity.inventory.internal.entity.LocationSyncLogEntity;
 import com.positivity.inventory.internal.enums.LocationSyncLogScope;
 import com.positivity.inventory.internal.enums.LocationSyncOutcome;
+import com.positivity.inventory.internal.dto.sync.LocationSyncRunResponse;
+import com.positivity.inventory.internal.dto.sync.SyncLogResponse;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
-import com.positivity.inventory.internal.repository.LocationRefRepository;
 import com.positivity.inventory.internal.repository.LocationSyncLogRepository;
 import com.positivity.inventory.service.LocationSyncService;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -24,32 +20,45 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 /**
- * Bulk REST sync of the location roster from pos-location into the local
- * {@code location_ref} table (CAP-214 #40). Event-driven sync is a
- * follow-up; this covers the on-demand/bulk mode of the story.
+ * On-demand location re-sync trigger and the sync audit trail (CAP-214 #40, reworked for
+ * ADR-0044 §6 #892). The {@code location_ref} roster is maintained continuously by
+ * {@link LocationEventsListener}; a manual trigger now performs an administrative re-emit — it
+ * publishes a {@code location.outbox.replay-requested} command so pos-location re-publishes its
+ * outbox for the lookback window, and the event consumer idempotently repairs the replica. The
+ * REST roster pull (retired {@code LocationRosterClient}) is gone.
  */
 @Service
 @RequiredArgsConstructor
 public class LocationSyncServiceImpl implements LocationSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(LocationSyncServiceImpl.class);
-    private static final String ACTIVE_STATUS = "ACTIVE";
+    private static final String REPLAY_COMMAND_TYPE = "location.outbox.replay-requested";
 
-    private final LocationRosterClient locationRosterClient;
-    private final LocationRefRepository locationRefRepository;
     private final LocationSyncLogRepository locationSyncLogRepository;
+    private final ObjectProvider<KafkaTemplate<String, String>> kafkaTemplate;
+    private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    // Intentionally not @Transactional: the roster fetch is a remote call, each
-    // upsert commits on its own, and the FAILED audit row must survive the rethrow.
+    @Value("${pos.inventory.kafka.location-commands-topic:location.commands.v1}")
+    private String locationCommandsTopic;
+
+    /** Window the owner is asked to re-emit; bounded by the owner's replay max-lookback. */
+    @Value("${pos.inventory.location.replay-lookback:P30D}")
+    private Duration replayLookback;
+
     @Override
     @NonNull
+    @Transactional
     public LocationSyncRunResponse triggerSync(
             @NonNull String triggeredBy, @Nullable String idempotencyKey, @Nullable String correlationId) {
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -62,147 +71,52 @@ public class LocationSyncServiceImpl implements LocationSyncService {
 
         UUID syncRunId = UUIDv7Generator.generate();
         Instant startedAt = clock.instant();
-        List<LocationRosterEntry> roster;
-        try {
-            roster = locationRosterClient.fetchRoster();
-        } catch (RuntimeException ex) {
-            locationSyncLogRepository.save(LocationSyncLogEntity.builder()
-                    .syncRunId(syncRunId)
-                    .scope(LocationSyncLogScope.RUN)
-                    .outcome(LocationSyncOutcome.FAILED)
-                    .correlationId(correlationId)
-                    .idempotencyKey(normalizeKey(idempotencyKey))
-                    .triggeredBy(triggeredBy)
-                    .errorMessage(truncate(ex.getMessage(), 2000))
-                    .locationsProcessed(0)
-                    .locationsCreated(0)
-                    .locationsUpdated(0)
-                    .locationsUnchanged(0)
-                    .locationsFailed(0)
-                    .startedAt(startedAt)
-                    .completedAt(clock.instant())
-                    .build());
-            throw ex;
-        }
-
-        int created = 0;
-        int updated = 0;
-        int unchanged = 0;
-        int failed = 0;
-        for (LocationRosterEntry entry : roster) {
-            if (entry.id() == null || entry.name() == null || entry.name().isBlank()) {
-                failed++;
-                locationSyncLogRepository.save(LocationSyncLogEntity.builder()
-                        .syncRunId(syncRunId)
-                        .scope(LocationSyncLogScope.RECORD)
-                        .outcome(LocationSyncOutcome.INVALID_PAYLOAD)
-                        .correlationId(correlationId)
-                        .triggeredBy(triggeredBy)
-                        .locationId(entry.id())
-                        .hrLocationId(entry.hrLocationId())
-                        .payload(truncate(entry.toString(), 4000))
-                        .errorMessage("Roster record is missing required fields (id, name)")
-                        .build());
-                continue;
-            }
-            switch (upsert(entry)) {
-                case CREATED -> created++;
-                case UPDATED -> updated++;
-                case UNCHANGED -> unchanged++;
-            }
-        }
-
-        LocationSyncOutcome outcome = failed == 0
-                ? LocationSyncOutcome.OK
-                : (failed == roster.size() ? LocationSyncOutcome.FAILED : LocationSyncOutcome.PARTIAL);
-        LocationSyncLogEntity runLog = locationSyncLogRepository.save(LocationSyncLogEntity.builder()
+        LocationSyncLogEntity.LocationSyncLogEntityBuilder runLog = LocationSyncLogEntity.builder()
                 .syncRunId(syncRunId)
                 .scope(LocationSyncLogScope.RUN)
-                .outcome(outcome)
                 .correlationId(correlationId)
                 .idempotencyKey(normalizeKey(idempotencyKey))
                 .triggeredBy(triggeredBy)
-                .locationsProcessed(roster.size())
-                .locationsCreated(created)
-                .locationsUpdated(updated)
-                .locationsUnchanged(unchanged)
-                .locationsFailed(failed)
-                .startedAt(startedAt)
+                .locationsProcessed(0)
+                .locationsCreated(0)
+                .locationsUpdated(0)
+                .locationsUnchanged(0)
+                .locationsFailed(0)
+                .startedAt(startedAt);
+
+        KafkaTemplate<String, String> template = kafkaTemplate.getIfAvailable();
+        if (template == null) {
+            LocationSyncLogEntity saved = locationSyncLogRepository.save(runLog.outcome(LocationSyncOutcome.FAILED)
+                    .errorMessage("Location event feed is disabled (pos.inventory.kafka.enabled=false);"
+                            + " cannot request an owner re-emit")
+                    .completedAt(clock.instant())
+                    .build());
+            return toRunResponse(saved);
+        }
+
+        Instant since = startedAt.minus(replayLookback);
+        try {
+            String command = objectMapper.writeValueAsString(
+                    new ReplayCommand(REPLAY_COMMAND_TYPE, new ReplayCommand.Payload(since.toString(), null)));
+            template.send(locationCommandsTopic, since.toString(), command);
+        } catch (Exception ex) {
+            LocationSyncLogEntity saved = locationSyncLogRepository.save(runLog.outcome(LocationSyncOutcome.FAILED)
+                    .errorMessage(truncate(ex.getMessage(), 2000))
+                    .completedAt(clock.instant())
+                    .build());
+            return toRunResponse(saved);
+        }
+
+        LocationSyncLogEntity saved = locationSyncLogRepository.save(runLog.outcome(LocationSyncOutcome.REQUESTED)
                 .completedAt(clock.instant())
                 .build());
         log.info(
-                "Location sync run {} finished: {} processed, {} created, {} updated, {} unchanged, {} failed",
+                "Location re-emit {} requested since={} on {} by {}",
                 syncRunId,
-                roster.size(),
-                created,
-                updated,
-                unchanged,
-                failed);
-        return toRunResponse(runLog);
-    }
-
-    private enum UpsertResult {
-        CREATED,
-        UPDATED,
-        UNCHANGED
-    }
-
-    private UpsertResult upsert(LocationRosterEntry entry) {
-        boolean entryActive = ACTIVE_STATUS.equalsIgnoreCase(entry.status());
-        Optional<LocationRefEntity> existing = locationRefRepository.findByLocationId(entry.id());
-        if (existing.isEmpty()) {
-            locationRefRepository.save(LocationRefEntity.builder()
-                    .locationId(entry.id())
-                    .hrLocationId(entry.hrLocationId())
-                    .name(entry.name())
-                    .code(entry.code())
-                    .status(entry.status() == null ? ACTIVE_STATUS : entry.status())
-                    .timezone(entry.timezone())
-                    .active(entry.status() == null || entryActive)
-                    .sourceUpdatedAt(entry.updatedAt())
-                    .deactivatedAt(entry.status() != null && !entryActive ? clock.instant() : null)
-                    .build());
-            return UpsertResult.CREATED;
-        }
-
-        LocationRefEntity ref = existing.get();
-        boolean changed = false;
-        if (!Objects.equals(ref.getName(), entry.name())) {
-            ref.setName(entry.name());
-            changed = true;
-        }
-        // Never overwrite existing fields with nulls (story: missing HR fields).
-        if (entry.code() != null && !Objects.equals(ref.getCode(), entry.code())) {
-            ref.setCode(entry.code());
-            changed = true;
-        }
-        if (entry.hrLocationId() != null && !Objects.equals(ref.getHrLocationId(), entry.hrLocationId())) {
-            ref.setHrLocationId(entry.hrLocationId());
-            changed = true;
-        }
-        if (entry.timezone() != null && !Objects.equals(ref.getTimezone(), entry.timezone())) {
-            ref.setTimezone(entry.timezone());
-            changed = true;
-        }
-        if (entry.status() != null && !Objects.equals(ref.getStatus(), entry.status())) {
-            ref.setStatus(entry.status());
-            if (ref.isActive() && !entryActive) {
-                ref.setDeactivatedAt(clock.instant());
-            } else if (entryActive) {
-                ref.setDeactivatedAt(null);
-            }
-            ref.setActive(entryActive);
-            changed = true;
-        }
-        if (entry.updatedAt() != null && !Objects.equals(ref.getSourceUpdatedAt(), entry.updatedAt())) {
-            ref.setSourceUpdatedAt(entry.updatedAt());
-            changed = true;
-        }
-        if (!changed) {
-            return UpsertResult.UNCHANGED;
-        }
-        locationRefRepository.save(ref);
-        return UpsertResult.UPDATED;
+                since,
+                locationCommandsTopic,
+                triggeredBy);
+        return toRunResponse(saved);
     }
 
     @Override
@@ -276,5 +190,10 @@ public class LocationSyncServiceImpl implements LocationSyncService {
             return value;
         }
         return value.substring(0, maxLength);
+    }
+
+    /** Command envelope for the owner's {@code location.commands.v1} listener. */
+    record ReplayCommand(@NonNull String commandType, @NonNull Payload payload) {
+        record Payload(@Nullable String since, @Nullable String until) {}
     }
 }

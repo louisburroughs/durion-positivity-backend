@@ -52,13 +52,15 @@ public class LocationSyncController {
     @PreAuthorize("hasAuthority('inventory:location:sync')")
     @Operation(
             operationId = "triggerLocationSync",
-            summary = "Trigger a location roster sync",
-            description = "Runs one bulk sync of the location roster from pos-location into the local reference "
-                    + "table. Re-sending the same Idempotency-Key returns the original run instead of syncing again.",
+            summary = "Trigger a location roster re-sync",
+            description = "Requests an administrative re-emit of pos-location's outbox on location.commands.v1 "
+                    + "(ADR-0044 #892); the location.events.v1 consumer then idempotently repairs the local "
+                    + "reference table, so the run completes asynchronously with outcome REQUESTED. Re-sending "
+                    + "the same Idempotency-Key returns the original run instead of requesting again.",
             tags = {"Location Sync"})
     @ApiResponse(
             responseCode = "202",
-            description = "Sync run completed and its summary returned",
+            description = "Re-emit requested (outcome REQUESTED) or the failure recorded in the sync log",
             content =
                     @Content(
                             mediaType = "application/json",
@@ -66,10 +68,6 @@ public class LocationSyncController {
     @ApiResponse(
             responseCode = "403",
             description = "User lacks required sync authority",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "503",
-            description = "pos-location unavailable; the failure is recorded in the sync log",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<LocationSyncRunResponse> triggerLocationSync(
             @Parameter(description = "Client-generated key that makes retries idempotent")

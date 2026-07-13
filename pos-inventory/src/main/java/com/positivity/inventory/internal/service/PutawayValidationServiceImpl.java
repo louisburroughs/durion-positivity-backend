@@ -1,7 +1,7 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.client.StorageLocationValidationClient;
-import com.positivity.inventory.internal.client.StorageLocationValidationClient.StorageLocationValidation;
+import com.positivity.inventory.internal.service.StorageLocationValidationService;
+import com.positivity.inventory.internal.service.StorageLocationValidationService.StorageLocationValidation;
 import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
 import com.positivity.inventory.internal.dto.ValidationResult;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
@@ -39,25 +39,25 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final PutawayRuleRepository putawayRuleRepository;
     private final ReplenishmentPolicyRepository replenishmentPolicyRepository;
-    private final StorageLocationValidationClient storageLocationValidationClient;
+    private final StorageLocationValidationService storageLocationValidationService;
 
     @Autowired
     public PutawayValidationServiceImpl(
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
             PutawayRuleRepository putawayRuleRepository,
             ReplenishmentPolicyRepository replenishmentPolicyRepository,
-            StorageLocationValidationClient storageLocationValidationClient) {
+            StorageLocationValidationService storageLocationValidationService) {
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
         this.putawayRuleRepository = putawayRuleRepository;
         this.replenishmentPolicyRepository = replenishmentPolicyRepository;
-        this.storageLocationValidationClient = storageLocationValidationClient;
+        this.storageLocationValidationService = storageLocationValidationService;
     }
 
     public PutawayValidationServiceImpl() {
         this.inventoryLedgerEntryRepository = null;
         this.putawayRuleRepository = null;
         this.replenishmentPolicyRepository = null;
-        this.storageLocationValidationClient = null;
+        this.storageLocationValidationService = null;
     }
 
     @Override
@@ -92,10 +92,10 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
     }
 
     private StorageLocationValidation getStorageLocationValidation(UUID destinationLocationId) {
-        if (storageLocationValidationClient == null) {
+        if (storageLocationValidationService == null) {
             return null;
         }
-        return storageLocationValidationClient.getStorageLocationValidation(destinationLocationId.toString());
+        return storageLocationValidationService.getStorageLocationValidation(destinationLocationId.toString());
     }
 
     private void validateStorageLocation(StorageLocationValidation locationValidation) {

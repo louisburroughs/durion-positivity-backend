@@ -4,24 +4,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.inventory.internal.client.LocationRosterClient;
-import com.positivity.inventory.internal.client.LocationRosterClient.LocationRosterEntry;
 import com.positivity.inventory.internal.dto.sync.LocationSyncRunResponse;
 import com.positivity.inventory.internal.dto.sync.SyncLogResponse;
-import com.positivity.inventory.internal.entity.LocationRefEntity;
 import com.positivity.inventory.internal.entity.LocationSyncLogEntity;
 import com.positivity.inventory.internal.enums.LocationSyncLogScope;
 import com.positivity.inventory.internal.enums.LocationSyncOutcome;
-import com.positivity.inventory.internal.exception.LocationServiceUnavailableException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
-import com.positivity.inventory.internal.repository.LocationRefRepository;
 import com.positivity.inventory.internal.repository.LocationSyncLogRepository;
 import com.positivity.inventory.internal.service.LocationSyncServiceImpl;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -33,168 +30,94 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.databind.ObjectMapper;
 
 /**
- * Unit tests for LocationSyncServiceImpl (CAP-214 #40).
+ * Unit tests for LocationSyncServiceImpl (CAP-214 #40, reworked for ADR-0044 #892).
  *
- * <p>
- * Covers idempotent upsert semantics (create / update / unchanged),
- * deactivation handling, invalid roster records, idempotency-key replay,
- * roster fetch failure auditing, and sync-log retrieval.
+ * <p>The manual trigger now performs an administrative re-emit: it publishes a
+ * {@code location.outbox.replay-requested} command and records a REQUESTED run; the
+ * location-events consumer repairs the replica asynchronously.
  */
 @ExtendWith(MockitoExtension.class)
 class LocationSyncServiceImplTest {
 
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-07-05T12:00:00Z"), ZoneOffset.UTC);
     private static final String USER = "sync-user";
-
-    @Mock
-    private LocationRosterClient locationRosterClient;
-
-    @Mock
-    private LocationRefRepository locationRefRepository;
+    private static final String TOPIC = "location.commands.v1";
 
     @Mock
     private LocationSyncLogRepository locationSyncLogRepository;
+
+    @SuppressWarnings("unchecked")
+    private final ObjectProvider<KafkaTemplate<String, String>> templateProvider = mock(ObjectProvider.class);
+
+    @SuppressWarnings("unchecked")
+    private final KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
 
     private LocationSyncServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new LocationSyncServiceImpl(
-                locationRosterClient, locationRefRepository, locationSyncLogRepository, FIXED_CLOCK);
+                locationSyncLogRepository, templateProvider, new ObjectMapper(), FIXED_CLOCK);
+        ReflectionTestUtils.setField(service, "locationCommandsTopic", TOPIC);
+        ReflectionTestUtils.setField(service, "replayLookback", Duration.ofDays(30));
     }
-
-    private static LocationRosterEntry entry(UUID id, String name, String status) {
-        return new LocationRosterEntry(
-                id, name, "LOC-1", status, "HR-1", "America/New_York", Instant.parse("2026-07-01T00:00:00Z"));
-    }
-
-    // ─── triggerSync ───────────────────────────────────────────────────────────
 
     @Test
-    void triggerSync_newLocation_createsRefAndLogsOkRun() {
-        UUID locationId = UUID.randomUUID();
-        when(locationRosterClient.fetchRoster()).thenReturn(List.of(entry(locationId, "Shop A", "ACTIVE")));
-        when(locationRefRepository.findByLocationId(locationId)).thenReturn(Optional.empty());
+    void triggerSync_publishesReplayCommandAndLogsRequestedRun() {
+        when(templateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
         when(locationSyncLogRepository.save(any(LocationSyncLogEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         LocationSyncRunResponse response = service.triggerSync(USER, null, "corr-1");
 
-        assertThat(response.getOutcome()).isEqualTo("OK");
-        assertThat(response.getLocationsProcessed()).isEqualTo(1);
-        assertThat(response.getLocationsCreated()).isEqualTo(1);
-        assertThat(response.getLocationsFailed()).isZero();
+        assertThat(response.getOutcome()).isEqualTo("REQUESTED");
         assertThat(response.getSyncRunId()).isNotNull();
         assertThat(response.getCorrelationId()).isEqualTo("corr-1");
 
-        ArgumentCaptor<LocationRefEntity> refCaptor = ArgumentCaptor.forClass(LocationRefEntity.class);
-        verify(locationRefRepository).save(refCaptor.capture());
-        LocationRefEntity saved = refCaptor.getValue();
-        assertThat(saved.getLocationId()).isEqualTo(locationId);
-        assertThat(saved.getName()).isEqualTo("Shop A");
-        assertThat(saved.getStatus()).isEqualTo("ACTIVE");
-        assertThat(saved.getTimezone()).isEqualTo("America/New_York");
-        assertThat(saved.isActive()).isTrue();
-        assertThat(saved.getDeactivatedAt()).isNull();
-    }
-
-    @Test
-    void triggerSync_sameRosterTwice_isIdempotentNoOp() {
-        UUID locationId = UUID.randomUUID();
-        LocationRosterEntry rosterEntry = entry(locationId, "Shop A", "ACTIVE");
-        LocationRefEntity existing = LocationRefEntity.builder()
-                .locationId(locationId)
-                .name("Shop A")
-                .code("LOC-1")
-                .status("ACTIVE")
-                .timezone("America/New_York")
-                .hrLocationId("HR-1")
-                .active(true)
-                .sourceUpdatedAt(rosterEntry.updatedAt())
-                .build();
-        when(locationRosterClient.fetchRoster()).thenReturn(List.of(rosterEntry));
-        when(locationRefRepository.findByLocationId(locationId)).thenReturn(Optional.of(existing));
-        when(locationSyncLogRepository.save(any(LocationSyncLogEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        LocationSyncRunResponse response = service.triggerSync(USER, null, null);
-
-        assertThat(response.getOutcome()).isEqualTo("OK");
-        assertThat(response.getLocationsUnchanged()).isEqualTo(1);
-        assertThat(response.getLocationsCreated()).isZero();
-        assertThat(response.getLocationsUpdated()).isZero();
-        verify(locationRefRepository, never()).save(any());
-    }
-
-    @Test
-    void triggerSync_deactivatedInRoster_marksRefInactiveWithTimestamp() {
-        UUID locationId = UUID.randomUUID();
-        LocationRosterEntry rosterEntry = entry(locationId, "Shop A", "INACTIVE");
-        LocationRefEntity existing = LocationRefEntity.builder()
-                .locationId(locationId)
-                .name("Shop A")
-                .code("LOC-1")
-                .status("ACTIVE")
-                .hrLocationId("HR-1")
-                .timezone("America/New_York")
-                .active(true)
-                .build();
-        when(locationRosterClient.fetchRoster()).thenReturn(List.of(rosterEntry));
-        when(locationRefRepository.findByLocationId(locationId)).thenReturn(Optional.of(existing));
-        when(locationSyncLogRepository.save(any(LocationSyncLogEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        LocationSyncRunResponse response = service.triggerSync(USER, null, null);
-
-        assertThat(response.getLocationsUpdated()).isEqualTo(1);
-        ArgumentCaptor<LocationRefEntity> refCaptor = ArgumentCaptor.forClass(LocationRefEntity.class);
-        verify(locationRefRepository).save(refCaptor.capture());
-        LocationRefEntity saved = refCaptor.getValue();
-        assertThat(saved.isActive()).isFalse();
-        assertThat(saved.getStatus()).isEqualTo("INACTIVE");
-        assertThat(saved.getDeactivatedAt()).isEqualTo(FIXED_CLOCK.instant());
-    }
-
-    @Test
-    void triggerSync_invalidRosterRecord_logsInvalidPayloadAndPartialRun() {
-        UUID goodId = UUID.randomUUID();
-        LocationRosterEntry invalid = new LocationRosterEntry(null, "No Id", null, "ACTIVE", null, null, null);
-        when(locationRosterClient.fetchRoster()).thenReturn(List.of(invalid, entry(goodId, "Shop A", "ACTIVE")));
-        when(locationRefRepository.findByLocationId(goodId)).thenReturn(Optional.empty());
-        when(locationSyncLogRepository.save(any(LocationSyncLogEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        LocationSyncRunResponse response = service.triggerSync(USER, null, null);
-
-        assertThat(response.getOutcome()).isEqualTo("PARTIAL");
-        assertThat(response.getLocationsFailed()).isEqualTo(1);
-        assertThat(response.getLocationsCreated()).isEqualTo(1);
+        Instant expectedSince = FIXED_CLOCK.instant().minus(Duration.ofDays(30));
+        ArgumentCaptor<String> commandCaptor = ArgumentCaptor.forClass(String.class);
+        verify(kafkaTemplate).send(eq(TOPIC), eq(expectedSince.toString()), commandCaptor.capture());
+        assertThat(commandCaptor.getValue())
+                .contains("location.outbox.replay-requested")
+                .contains(expectedSince.toString());
 
         ArgumentCaptor<LocationSyncLogEntity> logCaptor = ArgumentCaptor.forClass(LocationSyncLogEntity.class);
-        verify(locationSyncLogRepository, org.mockito.Mockito.times(2)).save(logCaptor.capture());
-        LocationSyncLogEntity recordLog = logCaptor.getAllValues().get(0);
-        assertThat(recordLog.getScope()).isEqualTo(LocationSyncLogScope.RECORD);
-        assertThat(recordLog.getOutcome()).isEqualTo(LocationSyncOutcome.INVALID_PAYLOAD);
-        LocationSyncLogEntity runLog = logCaptor.getAllValues().get(1);
+        verify(locationSyncLogRepository).save(logCaptor.capture());
+        LocationSyncLogEntity runLog = logCaptor.getValue();
         assertThat(runLog.getScope()).isEqualTo(LocationSyncLogScope.RUN);
-        assertThat(runLog.getSyncRunId()).isEqualTo(recordLog.getSyncRunId());
+        assertThat(runLog.getOutcome()).isEqualTo(LocationSyncOutcome.REQUESTED);
+        assertThat(runLog.getTriggeredBy()).isEqualTo(USER);
     }
 
     @Test
-    void triggerSync_replayedIdempotencyKey_returnsExistingRunWithoutSyncing() {
+    void triggerSync_eventFeedDisabled_recordsFailedRun() {
+        when(templateProvider.getIfAvailable()).thenReturn(null);
+        when(locationSyncLogRepository.save(any(LocationSyncLogEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        LocationSyncRunResponse response = service.triggerSync(USER, null, null);
+
+        assertThat(response.getOutcome()).isEqualTo("FAILED");
+        ArgumentCaptor<LocationSyncLogEntity> logCaptor = ArgumentCaptor.forClass(LocationSyncLogEntity.class);
+        verify(locationSyncLogRepository).save(logCaptor.capture());
+        assertThat(logCaptor.getValue().getErrorMessage()).contains("disabled");
+    }
+
+    @Test
+    void triggerSync_replayedIdempotencyKey_returnsExistingRunWithoutRequesting() {
         UUID syncRunId = UUID.randomUUID();
         LocationSyncLogEntity existingRun = LocationSyncLogEntity.builder()
                 .syncRunId(syncRunId)
                 .scope(LocationSyncLogScope.RUN)
-                .outcome(LocationSyncOutcome.OK)
+                .outcome(LocationSyncOutcome.REQUESTED)
                 .idempotencyKey("key-1")
-                .locationsProcessed(5)
-                .locationsCreated(2)
-                .locationsUpdated(1)
-                .locationsUnchanged(2)
-                .locationsFailed(0)
+                .locationsProcessed(0)
                 .build();
         when(locationSyncLogRepository.findFirstByIdempotencyKeyAndScope("key-1", LocationSyncLogScope.RUN))
                 .thenReturn(Optional.of(existingRun));
@@ -202,66 +125,10 @@ class LocationSyncServiceImplTest {
         LocationSyncRunResponse response = service.triggerSync(USER, "key-1", null);
 
         assertThat(response.getSyncRunId()).isEqualTo(syncRunId);
-        assertThat(response.getLocationsProcessed()).isEqualTo(5);
-        verify(locationRosterClient, never()).fetchRoster();
+        assertThat(response.getOutcome()).isEqualTo("REQUESTED");
+        verify(kafkaTemplate, never()).send(any(), any(), any());
         verify(locationSyncLogRepository, never()).save(any());
     }
-
-    @Test
-    void triggerSync_rosterFetchFails_recordsFailedRunAndRethrows() {
-        when(locationRosterClient.fetchRoster())
-                .thenThrow(new LocationServiceUnavailableException("location down", null));
-        when(locationSyncLogRepository.save(any(LocationSyncLogEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        assertThatThrownBy(() -> service.triggerSync(USER, null, "corr-9"))
-                .isInstanceOf(LocationServiceUnavailableException.class);
-
-        ArgumentCaptor<LocationSyncLogEntity> logCaptor = ArgumentCaptor.forClass(LocationSyncLogEntity.class);
-        verify(locationSyncLogRepository).save(logCaptor.capture());
-        LocationSyncLogEntity failedRun = logCaptor.getValue();
-        assertThat(failedRun.getScope()).isEqualTo(LocationSyncLogScope.RUN);
-        assertThat(failedRun.getOutcome()).isEqualTo(LocationSyncOutcome.FAILED);
-        assertThat(failedRun.getErrorMessage()).contains("location down");
-        assertThat(failedRun.getCorrelationId()).isEqualTo("corr-9");
-    }
-
-    @Test
-    void triggerSync_missingHrFields_doesNotOverwriteExistingValuesWithNull() {
-        UUID locationId = UUID.randomUUID();
-        LocationRosterEntry sparse =
-                new LocationRosterEntry(locationId, "Shop A Renamed", null, null, null, null, null);
-        Instant priorSourceUpdatedAt = Instant.parse("2026-06-01T00:00:00Z");
-        LocationRefEntity existing = LocationRefEntity.builder()
-                .locationId(locationId)
-                .name("Shop A")
-                .code("LOC-1")
-                .status("ACTIVE")
-                .hrLocationId("HR-1")
-                .timezone("America/New_York")
-                .sourceUpdatedAt(priorSourceUpdatedAt)
-                .active(true)
-                .build();
-        when(locationRosterClient.fetchRoster()).thenReturn(List.of(sparse));
-        when(locationRefRepository.findByLocationId(locationId)).thenReturn(Optional.of(existing));
-        when(locationSyncLogRepository.save(any(LocationSyncLogEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        service.triggerSync(USER, null, null);
-
-        ArgumentCaptor<LocationRefEntity> refCaptor = ArgumentCaptor.forClass(LocationRefEntity.class);
-        verify(locationRefRepository).save(refCaptor.capture());
-        LocationRefEntity saved = refCaptor.getValue();
-        assertThat(saved.getName()).isEqualTo("Shop A Renamed");
-        assertThat(saved.getCode()).isEqualTo("LOC-1");
-        assertThat(saved.getHrLocationId()).isEqualTo("HR-1");
-        assertThat(saved.getTimezone()).isEqualTo("America/New_York");
-        assertThat(saved.getStatus()).isEqualTo("ACTIVE");
-        assertThat(saved.isActive()).isTrue();
-        assertThat(saved.getSourceUpdatedAt()).isEqualTo(priorSourceUpdatedAt);
-    }
-
-    // ─── listSyncLogs / getSyncLog ─────────────────────────────────────────────
 
     @Test
     void listSyncLogs_mapsEntitiesNewestFirst() {

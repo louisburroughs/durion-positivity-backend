@@ -8,5 +8,7 @@ public enum LocationSyncOutcome {
     OK,
     PARTIAL,
     FAILED,
-    INVALID_PAYLOAD
+    INVALID_PAYLOAD,
+    /** ADR-0044 #892: an owner re-emit was requested on location.commands.v1 (async repair). */
+    REQUESTED
 }

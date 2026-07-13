@@ -95,7 +95,5 @@ pos:
       vehicle-manifest-topic: ${POS_SHOP_MANAGER_VEHICLE_MANIFEST_TOPIC:vehicle.manifest.v1}
       vehicle-manifest-consumer-group: ${POS_SHOP_MANAGER_VEHICLE_MANIFEST_CONSUMER_GROUP:pos-shop-manager-vehicle-manifests}
       vehicle-commands-topic: ${POS_SHOP_MANAGER_VEHICLE_COMMANDS_TOPIC:vehicle.commands.v1}
-  location:
-    service-id: ${POS_LOCATION_SERVICE_ID:location}
   catalog:
     service-id: ${POS_CATALOG_SERVICE_ID:catalog}
