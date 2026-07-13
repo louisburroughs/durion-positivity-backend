@@ -57,18 +57,21 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
     private final WorkorderPartRepository workorderPartRepository;
     private final WorkorderPartUsageEventRepository usageEventRepository;
     private final IdempotencyService idempotencyService;
+    private final WorkorderFactPublisher workorderFactPublisher;
 
     public WorkorderPartUsageServiceImpl(
             WorkorderRepository workorderRepository,
             WorkorderPartRepository workorderPartRepository,
             WorkorderPartUsageEventRepository usageEventRepository,
             IdempotencyService idempotencyService,
+            WorkorderFactPublisher workorderFactPublisher,
             Clock clock) {
         this.clock = clock;
         this.workorderRepository = workorderRepository;
         this.workorderPartRepository = workorderPartRepository;
         this.usageEventRepository = usageEventRepository;
         this.idempotencyService = idempotencyService;
+        this.workorderFactPublisher = workorderFactPublisher;
     }
 
     /**
@@ -140,6 +143,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         // Update part totals
         part.setQuantityIssued(part.getQuantityIssued().add(quantity));
         workorderPartRepository.save(part);
+        workorderFactPublisher.markChanged(part.getWorkorder().getId());
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -227,6 +231,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         // Update part totals
         part.setQuantityConsumed(newConsumed);
         workorderPartRepository.save(part);
+        workorderFactPublisher.markChanged(part.getWorkorder().getId());
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -322,6 +327,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         // Update part totals
         part.setQuantityReturned(part.getQuantityReturned().add(quantity));
         workorderPartRepository.save(part);
+        workorderFactPublisher.markChanged(part.getWorkorder().getId());
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {

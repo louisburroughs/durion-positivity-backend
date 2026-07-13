@@ -9,7 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.invoice.internal.service.LocationReferenceService;
 import com.positivity.invoice.internal.client.TaxServiceClient;
-import com.positivity.invoice.internal.client.WorkorderReferenceClient;
+import com.positivity.invoice.internal.service.WorkorderReferenceService;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
@@ -56,7 +56,7 @@ class InvoiceServiceImplTest {
     private LocationReferenceService locationReferenceService;
 
     @Mock
-    private WorkorderReferenceClient workorderReferenceClient;
+    private WorkorderReferenceService workorderReferenceService;
 
     @Mock
     private com.positivity.invoice.internal.config.InvoiceEventPublisher invoiceEventPublisher;
@@ -130,7 +130,7 @@ class InvoiceServiceImplTest {
         draftInvoice.addItem(labor);
 
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
-        when(workorderReferenceClient.resolveNumbers(any()))
+        when(workorderReferenceService.resolveNumbers(any()))
                 .thenReturn(java.util.Map.of(workorderId, "WO-2026-000045"));
 
         InvoiceDetailsResponse result = invoiceService.getInvoice(invoiceId);
@@ -144,7 +144,7 @@ class InvoiceServiceImplTest {
     @Test
     void getInvoice_shouldLeaveWorkorderNumberNull_whenWorkexecUnresolved() {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
-        when(workorderReferenceClient.resolveNumbers(any())).thenReturn(java.util.Map.of());
+        when(workorderReferenceService.resolveNumbers(any())).thenReturn(java.util.Map.of());
 
         InvoiceDetailsResponse result = invoiceService.getInvoice(invoiceId);
 

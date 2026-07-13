@@ -46,6 +46,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
     private final WorkOrderPartSubstitutionRepository substitutionRepository;
     private final WorkorderPartAdjustmentEventRepository adjustmentEventRepository;
     private final IdempotencyService idempotencyService;
+    private final WorkorderFactPublisher workorderFactPublisher;
     private final ObjectMapper objectMapper;
 
     public WorkorderSubstitutionServiceImpl(
@@ -54,6 +55,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
             WorkorderPartAdjustmentEventRepository adjustmentEventRepository,
             IdempotencyService idempotencyService,
             ObjectMapper objectMapper,
+            WorkorderFactPublisher workorderFactPublisher,
             Clock clock) {
         this.clock = clock;
         this.workorderPartRepository = workorderPartRepository;
@@ -61,6 +63,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
         this.adjustmentEventRepository = adjustmentEventRepository;
         this.idempotencyService = idempotencyService;
         this.objectMapper = objectMapper;
+        this.workorderFactPublisher = workorderFactPublisher;
     }
 
     @Override
@@ -122,6 +125,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
             originalPart.setOriginalProductId(originalProductReference);
         }
         workorderPartRepository.save(originalPart);
+        workorderFactPublisher.markChanged(workorderId);
 
         WorkorderPart substitutePart = WorkorderPart.builder()
                 .workorder(originalPart.getWorkorder())
@@ -142,6 +146,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
                 .build();
 
         substitutePart = workorderPartRepository.save(substitutePart);
+        workorderFactPublisher.markChanged(workorderId);
 
         // Issue #49: persist immutable substitution record with pricing snapshot.
         WorkOrderPartSubstitution substitutionRecord = WorkOrderPartSubstitution.builder()

@@ -1,7 +1,7 @@
 package com.positivity.invoice.internal.service;
 
 import com.positivity.invoice.internal.client.TaxServiceClient;
-import com.positivity.invoice.internal.client.WorkorderReferenceClient;
+
 import com.positivity.invoice.internal.config.InvoiceEventPublisher;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
@@ -48,7 +48,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final TaxServiceClient taxServiceClient;
     private final LocationReferenceService locationReferenceService;
-    private final WorkorderReferenceClient workorderReferenceClient;
+    private final WorkorderReferenceService workorderReferenceService;
     private final InvoiceEventPublisher invoiceEventPublisher;
 
     /**
@@ -68,14 +68,14 @@ public class InvoiceServiceImpl implements InvoiceService {
             @NonNull InvoiceRepository invoiceRepository,
             @NonNull TaxServiceClient taxServiceClient,
             @NonNull LocationReferenceService locationReferenceService,
-            @NonNull WorkorderReferenceClient workorderReferenceClient,
+            @NonNull WorkorderReferenceService workorderReferenceService,
             @NonNull InvoiceEventPublisher invoiceEventPublisher,
             Clock clock) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.taxServiceClient = taxServiceClient;
         this.locationReferenceService = locationReferenceService;
-        this.workorderReferenceClient = workorderReferenceClient;
+        this.workorderReferenceService = workorderReferenceService;
         this.invoiceEventPublisher = invoiceEventPublisher;
     }
 
@@ -401,7 +401,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         if (workorderId == null) {
             return null;
         }
-        return workorderReferenceClient.resolveNumbers(Set.of(workorderId)).get(workorderId);
+        return workorderReferenceService.resolveNumbers(Set.of(workorderId)).get(workorderId);
     }
 
     /**

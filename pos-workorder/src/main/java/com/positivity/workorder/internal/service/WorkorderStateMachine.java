@@ -39,6 +39,7 @@ public class WorkorderStateMachine {
     private final Clock clock;
 
     private final WorkorderRepository workorderRepository;
+    private final WorkorderFactPublisher workorderFactPublisher;
     private final WorkorderStateTransitionRepository transitionRepository;
     private final WorkorderSnapshotRepository snapshotRepository;
     private final WorkorderServiceRepository workorderServiceRepository;
@@ -99,6 +100,7 @@ public class WorkorderStateMachine {
 
         workorder.setStatus(toStatus);
         workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(workorderId);
 
         recordTransition(workorderId, fromStatus, toStatus, actorId, reason);
 
@@ -119,6 +121,7 @@ public class WorkorderStateMachine {
             if (AUTO_COMPLETABLE_ITEM_STATUSES.contains(part.getStatus())) {
                 part.setStatus(WorkorderItemStatus.COMPLETED);
                 workorderPartRepository.save(part);
+                workorderFactPublisher.markChanged(workorderId);
                 updated++;
             }
         }
@@ -290,6 +293,7 @@ public class WorkorderStateMachine {
         workorder.setReopenedBy(null);
         workorder.setReopenReason(null);
         workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(workorderId);
 
         // Transition to COMPLETED state
         transitionWorkorder(workorderId, WorkorderStatus.COMPLETED, actorId, "Work Order Completed");
@@ -328,6 +332,7 @@ public class WorkorderStateMachine {
         workorder.setReopenReason(reopenReason);
 
         Workorder saved = workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(workorderId);
 
         Map<String, Object> auditDetails = new LinkedHashMap<>();
         auditDetails.put("state", "COMPLETED");

@@ -43,6 +43,7 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
     private static final String IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE = "workorder.invoice.generate";
 
     private final WorkorderRepository workorderRepository;
+    private final WorkorderFactPublisher workorderFactPublisher;
     private final WorkorderServiceRepository workorderServiceRepository;
     private final WorkorderPartRepository workorderPartRepository;
     private final IdempotencyService idempotencyService;
@@ -78,6 +79,7 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
 
         workorder.setInvoiceId(invoiceId);
         workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(workorder.getId());
         return response;
     }
 
@@ -117,6 +119,7 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
         if (workorder.getInvoiceId() == null) {
             workorder.setInvoiceId(invoiceId);
             workorderRepository.save(workorder);
+            workorderFactPublisher.markChanged(workorder.getId());
         }
 
         log.info(

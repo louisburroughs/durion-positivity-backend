@@ -168,6 +168,8 @@ class WorkorderCompletionTest {
                 workorderServiceRepository,
                 workorderPartRepository,
                 extCustomerPartyReplicaRepository,
+                org.mockito.Mockito.mock(
+                        com.positivity.workorder.internal.service.WorkorderFactPublisher.class),
                 stateMachine,
                 workorderLaborEntryRepository,
                 applicationEventPublisher,

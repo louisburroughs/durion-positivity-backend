@@ -118,6 +118,12 @@ pos:
       location-manifest-topic: ${POS_INVENTORY_LOCATION_MANIFEST_TOPIC:location.manifest.v1}
       location-manifest-consumer-group: ${POS_INVENTORY_LOCATION_MANIFEST_CONSUMER_GROUP:pos-inventory-location-manifests}
       location-commands-topic: ${POS_INVENTORY_LOCATION_COMMANDS_TOPIC:location.commands.v1}
+      # Workorder replica feed + reconciliation (ADR-0044 §6, #897)
+      workorder-events-topic: ${POS_INVENTORY_WORKORDER_EVENTS_TOPIC:workorder.events.v1}
+      workorder-events-consumer-group: ${POS_INVENTORY_WORKORDER_EVENTS_CONSUMER_GROUP:pos-inventory-workorder-events}
+      workorder-manifest-topic: ${POS_INVENTORY_WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
+      workorder-manifest-consumer-group: ${POS_INVENTORY_WORKORDER_MANIFEST_CONSUMER_GROUP:pos-inventory-workorder-manifests}
+      workorder-commands-topic: ${POS_INVENTORY_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
     location:
       # Window the manual sync endpoint asks pos-location to re-emit (owner caps lookback).
       replay-lookback: ${POS_INVENTORY_LOCATION_REPLAY_LOOKBACK:P30D}

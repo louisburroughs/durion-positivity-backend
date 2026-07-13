@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.service.SiteDefaultsService;
 import com.positivity.inventory.internal.client.SourceDocumentStubClient;
-import com.positivity.inventory.internal.client.WorkorderValidationClient;
+import com.positivity.inventory.internal.service.WorkorderValidationService;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
@@ -82,7 +82,7 @@ class ReceivingServiceImplTest {
     private SiteDefaultsService siteDefaultsService;
 
     @Mock
-    private WorkorderValidationClient workorderValidationClient;
+    private WorkorderValidationService workorderValidationService;
 
     @InjectMocks
     private ReceivingServiceImpl receivingService;
@@ -766,8 +766,8 @@ class ReceivingServiceImplTest {
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
-                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
 
         CrossDockRequest request =
                 new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("10"), null);
@@ -813,8 +813,8 @@ class ReceivingServiceImplTest {
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
-                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
 
         CrossDockRequest request =
                 new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("3"), null);
@@ -852,8 +852,8 @@ class ReceivingServiceImplTest {
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
-                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
 
         CrossDockRequest request =
                 new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("3"), null);
@@ -886,8 +886,8 @@ class ReceivingServiceImplTest {
         line.setSession(session);
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
-        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
-                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
 
         CrossDockRequest request =
                 new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("3"), null);
@@ -931,8 +931,8 @@ class ReceivingServiceImplTest {
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
 
-        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
-                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation("CANCELLED", null));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("CANCELLED", null));
 
         CrossDockRequest request =
                 new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("10"), null);
@@ -992,8 +992,8 @@ class ReceivingServiceImplTest {
         line.setSession(session);
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
-        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
-                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
 
         CrossDockRequest request =
                 new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("1.5"), null);
@@ -1027,8 +1027,8 @@ class ReceivingServiceImplTest {
         line.setSession(session);
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
-        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
-                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation(
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation(
                         "WORK_IN_PROGRESS",
                         UUID.fromString("00000000-0000-0000-0000-000000000001").toString()));
 
@@ -1066,8 +1066,8 @@ class ReceivingServiceImplTest {
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
-                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation(
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation(
                         "WORK_IN_PROGRESS",
                         UUID.fromString("00000000-0000-0000-0000-000000000001").toString()));
 
@@ -1107,8 +1107,8 @@ class ReceivingServiceImplTest {
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(inventoryLedgerEntryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(workorderValidationClient.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
-                .thenReturn(new WorkorderValidationClient.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", CROSS_DOCK_LOCATION_ID))
                 .thenReturn(4, 14);
 
