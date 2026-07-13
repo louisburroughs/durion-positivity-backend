@@ -1,6 +1,7 @@
 package com.positivity.workorder.contract;
 
-import com.positivity.workorder.internal.client.CustomerValidationClient;
+import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
+import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -15,9 +16,11 @@ public class ContractTestConfiguration {
 
     @Bean
     @Primary
-    public CustomerValidationClient contractTestCustomerValidationClient() {
-        CustomerValidationClient mock = Mockito.mock(CustomerValidationClient.class);
-        Mockito.when(mock.checkRequirementsMet(Mockito.any())).thenReturn(Boolean.TRUE);
+    public ExtCustomerPartyReplicaRepository contractTestExtCustomerPartyReplicaRepository() {
+        ExtCustomerPartyReplicaRepository mock = Mockito.mock(ExtCustomerPartyReplicaRepository.class);
+        Mockito.when(mock.findById(Mockito.any()))
+                .thenReturn(java.util.Optional.of(
+                        ExtCustomerPartyReplica.builder().requirementsMet(true).build()));
         return mock;
     }
 }

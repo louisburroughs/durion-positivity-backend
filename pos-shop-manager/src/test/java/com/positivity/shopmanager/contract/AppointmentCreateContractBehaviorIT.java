@@ -8,10 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.shopmanager.BaseContractIntegrationTest;
 import com.positivity.shopmanager.PosShopManagerApplication;
-import com.positivity.shopmanager.internal.client.CrmCustomerClient;
-import com.positivity.shopmanager.internal.client.CrmVehicleClient;
 import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
+import com.positivity.shopmanager.internal.service.CrmSnapshotService;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,24 +64,21 @@ class AppointmentCreateContractBehaviorIT extends BaseContractIntegrationTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private CrmCustomerClient crmCustomerClient;
-
-    @MockitoBean
-    private CrmVehicleClient crmVehicleClient;
+    private CrmSnapshotService crmSnapshotService;
 
     @BeforeEach
     void setupCrmStubs() {
-        when(crmCustomerClient.getCustomerById(VALID_CRM_CUSTOMER_ID)).thenReturn(validCustomerSnapshot());
-        when(crmCustomerClient.getCustomerById(UNKNOWN_CRM_CUSTOMER_ID))
+        when(crmSnapshotService.getCustomerById(VALID_CRM_CUSTOMER_ID)).thenReturn(validCustomerSnapshot());
+        when(crmSnapshotService.getCustomerById(UNKNOWN_CRM_CUSTOMER_ID))
                 .thenThrow(new CrmCustomerNotFoundException(UNKNOWN_CRM_CUSTOMER_ID));
-        when(crmCustomerClient.getCustomerById(CRM_TIMEOUT_CUSTOMER_ID))
+        when(crmSnapshotService.getCustomerById(CRM_TIMEOUT_CUSTOMER_ID))
                 .thenThrow(new ResourceAccessException("Connection timeout"));
 
-        when(crmVehicleClient.getVehicleById(VALID_CRM_VEHICLE_ID))
+        when(crmSnapshotService.getVehicleById(VALID_CRM_VEHICLE_ID))
                 .thenReturn(validVehicleSnapshot(VALID_CRM_CUSTOMER_ID));
-        when(crmVehicleClient.getVehicleById(UNKNOWN_CRM_VEHICLE_ID))
+        when(crmSnapshotService.getVehicleById(UNKNOWN_CRM_VEHICLE_ID))
                 .thenThrow(new CrmVehicleNotFoundException(UNKNOWN_CRM_VEHICLE_ID));
-        when(crmVehicleClient.getVehicleById(MISMATCHED_VEHICLE_ID))
+        when(crmSnapshotService.getVehicleById(MISMATCHED_VEHICLE_ID))
                 .thenReturn(validVehicleSnapshot(DIFFERENT_CUSTOMER_ID));
     }
 

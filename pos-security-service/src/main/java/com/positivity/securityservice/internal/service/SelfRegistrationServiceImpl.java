@@ -1,8 +1,6 @@
 package com.positivity.securityservice.internal.service;
 
 import com.positivity.domainevents.peoplecontact.UserPersonLinkCreateRequestedV1;
-import com.positivity.securityservice.internal.client.CustomerRegistrationClient;
-import com.positivity.securityservice.internal.client.dto.CustomerPersonSearchResponse;
 import com.positivity.securityservice.internal.dto.CrmMatchSummaryDto;
 import com.positivity.securityservice.internal.dto.SelfRegistrationRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
@@ -20,7 +18,6 @@ import com.positivity.securityservice.service.SelfRegistrationService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
@@ -43,7 +40,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
     private final PasswordEncoder passwordEncoder;
     private final PersonResolutionService personResolutionService;
     private final PeopleContactCommandEmitter peopleContactCommandEmitter;
-    private final CustomerRegistrationClient customerRegistrationClient;
+    private final CrmSignalService crmSignalService;
     private final SelfRegistrationAttemptService selfRegistrationAttemptService;
     private final SelfRegistrationReviewService selfRegistrationReviewService;
 
@@ -116,10 +113,10 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
             String idempotencyKey) {
         ensureUserDoesNotAlreadyExist(chosenUsername, derivedUsername, normalizedEmail);
 
-        List<CustomerPersonSearchResponse> crmMatches = customerRegistrationClient.searchPersons(
-                buildFullName(normalizedFirstName, normalizedLastName), normalizedEmail, normalizedPhone);
-        CrmSignalAssessment crmSignalAssessment =
-                assessCrmMatches(crmMatches, normalizedEmail, normalizedPhone, normalizedFirstName, normalizedLastName);
+        // CRM conflict signals from local replicas (ADR-0044 §6, #891): person candidates from
+        // ext_people_contact_person, customer standing from ext_customer_person_identity.
+        CrmSignalAssessment crmSignalAssessment = new CrmSignalAssessment(
+                crmSignalService.assess(normalizedEmail, normalizedPhone, normalizedFirstName, normalizedLastName));
 
         // Person resolution is local (amended ADR-0043, #876): match against the identity replica
         // first, run every conflict rule, and only then create anything — so no compensation
@@ -281,72 +278,6 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                 "CRM_PERSON_CONFLICT", buildCrmConflictMessage(crmSignalAssessment.summary()), referenceId);
     }
 
-    private CrmSignalAssessment assessCrmMatches(
-            List<CustomerPersonSearchResponse> crmMatches,
-            String normalizedEmail,
-            String normalizedPhone,
-            String normalizedFirstName,
-            String normalizedLastName) {
-        boolean exactEmailMatch = crmMatches.stream().anyMatch(match -> hasMatchingEmail(match, normalizedEmail));
-        boolean exactPhoneMatch = normalizedPhone != null
-                && crmMatches.stream().anyMatch(match -> hasMatchingPhone(match, normalizedPhone));
-        boolean exactNameMatch =
-                crmMatches.stream().anyMatch(match -> hasMatchingName(match, normalizedFirstName, normalizedLastName));
-
-        int individualCustomerCandidateCount = Math.toIntExact(crmMatches.stream()
-                .filter(CustomerPersonSearchResponse::individualCustomer)
-                .count());
-        int commercialContactCandidateCount = Math.toIntExact(crmMatches.stream()
-                .filter(CustomerPersonSearchResponse::commercialContact)
-                .count());
-        int sharedIdentityCandidateCount = Math.toIntExact(crmMatches.stream()
-                .filter(match -> match.individualCustomer() && match.commercialContact())
-                .count());
-
-        boolean reviewRequired = !crmMatches.isEmpty()
-                && (exactEmailMatch || (exactPhoneMatch && exactNameMatch) || sharedIdentityCandidateCount > 0);
-
-        CrmMatchSummaryDto summary = CrmMatchSummaryDto.builder()
-                .candidateCount(crmMatches.size())
-                .anyMatches(!crmMatches.isEmpty())
-                .individualCustomerCandidateCount(individualCustomerCandidateCount)
-                .commercialContactCandidateCount(commercialContactCandidateCount)
-                .sharedIdentityCandidateCount(sharedIdentityCandidateCount)
-                .exactEmailMatch(exactEmailMatch)
-                .exactPhoneMatch(exactPhoneMatch)
-                .exactNameMatch(exactNameMatch)
-                .reviewRequired(reviewRequired)
-                .build();
-        return new CrmSignalAssessment(summary);
-    }
-
-    private boolean hasMatchingEmail(CustomerPersonSearchResponse match, String normalizedEmail) {
-        return match.contactPoints().stream()
-                .filter(contactPoint -> "EMAIL".equalsIgnoreCase(contactPoint.contactType()))
-                .map(contactPoint -> normalizeContactValue(contactPoint.value(), false))
-                .anyMatch(normalizedEmail::equals);
-    }
-
-    private boolean hasMatchingPhone(CustomerPersonSearchResponse match, String normalizedPhone) {
-        return match.contactPoints().stream()
-                .filter(contactPoint -> contactPoint.contactType() != null
-                        && contactPoint.contactType().toUpperCase(Locale.ROOT).startsWith("PHONE"))
-                .map(contactPoint -> normalizeContactValue(contactPoint.value(), true))
-                .anyMatch(normalizedPhone::equals);
-    }
-
-    private boolean hasMatchingName(
-            CustomerPersonSearchResponse match, String normalizedFirstName, String normalizedLastName) {
-        String matchFirstName = normalizeOptionalText(match.firstName());
-        String matchLastName = normalizeOptionalText(match.lastName());
-        if (normalizedFirstName.equals(matchFirstName) && normalizedLastName.equals(matchLastName)) {
-            return true;
-        }
-        String matchDisplayName = normalizeOptionalText(match.displayName());
-        return matchDisplayName != null
-                && matchDisplayName.equals((normalizedFirstName + " " + normalizedLastName).trim());
-    }
-
     private String buildCrmConflictMessage(CrmMatchSummaryDto summary) {
         String identityContext;
         if (summary.getSharedIdentityCandidateCount() > 0) {
@@ -436,14 +367,6 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
             return null;
         }
         return trimmed.startsWith("+") ? "+" + digits : digits;
-    }
-
-    private String normalizeContactValue(String value, boolean phone) {
-        return phone ? normalizePhone(value) : normalizeOptionalText(value);
-    }
-
-    private String buildFullName(String firstName, String lastName) {
-        return (firstName + " " + lastName).trim();
     }
 
     private String buildRequestFingerprint(

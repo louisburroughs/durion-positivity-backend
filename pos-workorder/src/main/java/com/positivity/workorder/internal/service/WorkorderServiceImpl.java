@@ -2,7 +2,6 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
-import com.positivity.workorder.internal.client.CustomerValidationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
@@ -26,6 +25,7 @@ import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 import com.positivity.workorder.internal.event.WorkCompletedEvent;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
+import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
@@ -49,6 +49,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -72,10 +73,10 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final EstimateItemRepository estimateItemRepository;
     private final WorkorderServiceRepository workorderServiceRepository;
     private final WorkorderPartRepository workorderPartRepository;
-    private final CustomerValidationClient customerValidationClient;
+    private final ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
     private final WorkorderStateMachine stateMachine;
     private final WorkorderLaborEntryRepository workorderLaborEntryRepository;
-    private final org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
+    private final ApplicationEventPublisher applicationEventPublisher;
     private final AuditEventRepository auditEventRepository;
     private final IdempotencyService idempotencyService;
     private final PromotionValidationService promotionValidationService;
@@ -403,8 +404,16 @@ public class WorkorderServiceImpl implements WorkorderService {
         workorderRepository.deleteById(id);
     }
 
+    /**
+     * Owner-computed requirements verdict from the ext_customer_party replica (ADR-0044 §6,
+     * #891). Fail-closed like the retired CustomerValidationClient: an unknown customer (no
+     * replica row yet) is treated as requirements not met.
+     */
     private boolean checkCustomerRequirements(UUID customerId) {
-        return customerValidationClient.checkRequirementsMet(customerId);
+        return extCustomerPartyReplicaRepository
+                .findById(customerId)
+                .map(com.positivity.workorder.internal.entity.ExtCustomerPartyReplica::isRequirementsMet)
+                .orElse(false);
     }
 
     private boolean isCustomerApproved(Workorder workorder) {

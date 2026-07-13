@@ -15,7 +15,7 @@ import org.springframework.web.client.RestClient;
  * authority (pos-security).
  *
  * <p>Service-to-service authority is asserted via trusted {@code X-User} /
- * {@code X-Authorities} headers, mirroring {@link CustomerReferenceClient}; the calling
+ * {@code X-Authorities} headers, mirroring the retired CustomerReferenceClient pattern; the calling
  * end user's own authorities are intentionally not propagated for these lookups.
  */
 @Component

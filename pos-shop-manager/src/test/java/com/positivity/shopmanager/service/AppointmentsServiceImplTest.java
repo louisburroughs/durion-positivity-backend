@@ -13,8 +13,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.shopmanager.internal.client.CrmCustomerClient;
-import com.positivity.shopmanager.internal.client.CrmVehicleClient;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
@@ -40,6 +38,7 @@ import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestR
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
+import com.positivity.shopmanager.internal.service.CrmSnapshotService;
 import com.positivity.shopmanager.internal.service.StaffingScheduleService;
 import java.time.Clock;
 import java.time.Instant;
@@ -75,10 +74,7 @@ class AppointmentsServiceImplTest {
     private AppointmentLoadService appointmentLoadService;
 
     @Mock
-    private CrmCustomerClient crmCustomerClient;
-
-    @Mock
-    private CrmVehicleClient crmVehicleClient;
+    private CrmSnapshotService crmSnapshotService;
 
     @Mock
     private StaffingScheduleService staffingScheduleService;
@@ -103,8 +99,7 @@ class AppointmentsServiceImplTest {
                 appointmentServiceRequestRepository,
                 new ObjectMapper(),
                 appointmentLoadService,
-                crmCustomerClient,
-                crmVehicleClient,
+                crmSnapshotService,
                 staffingScheduleService,
                 eventPublisher,
                 shopRepository,
@@ -376,9 +371,9 @@ class AppointmentsServiceImplTest {
         request.setEndAt(Instant.parse("2026-03-10T11:00:00Z"));
         request.setServiceRequestIds(List.of(serviceRequestId));
 
-        when(crmCustomerClient.getCustomerById(customerId))
+        when(crmSnapshotService.getCustomerById(customerId))
                 .thenReturn(java.util.Map.of("firstName", "Jane", "lastName", "Doe"));
-        when(crmVehicleClient.getVehicleById(vehicleId))
+        when(crmSnapshotService.getVehicleById(vehicleId))
                 .thenReturn(java.util.Map.of("ownerCustomerId", customerId.toString()));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(invocation -> {
             Appointment saved = invocation.getArgument(0);
@@ -425,9 +420,9 @@ class AppointmentsServiceImplTest {
         request.setEndAt(Instant.parse("2026-03-10T11:00:00Z"));
         request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000111")));
 
-        when(crmCustomerClient.getCustomerById(request.getCrmCustomerId()))
+        when(crmSnapshotService.getCustomerById(request.getCrmCustomerId()))
                 .thenReturn(java.util.Map.of("firstName", "Jane"));
-        when(crmVehicleClient.getVehicleById(request.getCrmVehicleId()))
+        when(crmSnapshotService.getVehicleById(request.getCrmVehicleId()))
                 .thenReturn(java.util.Map.of(
                         "ownerCustomerId",
                         UUID.fromString("00000000-0000-0000-0000-000000000002").toString()));

@@ -1,6 +1,5 @@
 package com.positivity.invoice.internal.service;
 
-import com.positivity.invoice.internal.client.CustomerReferenceClient;
 import com.positivity.invoice.internal.client.WorkorderReferenceClient;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.internal.entity.Invoice;
@@ -19,15 +18,15 @@ import org.springframework.util.StringUtils;
 
 /**
  * Free-text invoice search resolving the query against invoice numbers, customer names (via
- * the CRM reference client) and workorder numbers (via the workorder reference client),
+ * the local ext_customer_party replica) and workorder numbers (via the workorder reference client),
  * enriching each row with the resolved customer display name and human workorder number.
  *
  * <p>Mirrors the pos-workorder {@code WorkorderSearchServiceImpl} finder pattern.
  *
  * <p>No method-level transaction is declared: the search is a single repository read whose
- * mapping touches only scalar columns (no lazy associations), and the post-query CRM/workorder
- * enrichment performs remote HTTP calls — running those inside an open transaction would hold a
- * pooled DB connection for the duration of the remote calls.
+ * mapping touches only scalar columns (no lazy associations), and the post-query workorder
+ * enrichment performs a remote HTTP call — running it inside an open transaction would hold a
+ * pooled DB connection for the duration of the remote call.
  */
 @Service
 @RequiredArgsConstructor
@@ -40,7 +39,7 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
     private static final UUID NO_WORKORDER_SENTINEL = new UUID(0L, 0L);
 
     private final InvoiceRepository invoiceRepository;
-    private final CustomerReferenceClient customerReferenceClient;
+    private final CustomerReferenceService customerReferenceService;
     private final WorkorderReferenceClient workorderReferenceClient;
 
     @Override
@@ -52,7 +51,7 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
         }
 
         // Resolve the query against customer names and workorder numbers in sibling services.
-        List<String> nameMatchPartyIds = customerReferenceClient.searchIdsByName(q, 10);
+        List<String> nameMatchPartyIds = customerReferenceService.searchIdsByName(q, 10);
         List<UUID> numberMatchWorkorderIds = workorderReferenceClient.searchIdsByNumber(q, 10);
 
         List<String> customerIds = nameMatchPartyIds.isEmpty() ? List.of(NO_PARTY_SENTINEL) : nameMatchPartyIds;
@@ -74,7 +73,7 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
                 .distinct()
                 .toList();
 
-        Map<String, String> customerNames = customerReferenceClient.resolveNames(pagePartyIds);
+        Map<String, String> customerNames = customerReferenceService.resolveNames(pagePartyIds);
         Map<UUID, String> workorderNumbers = workorderReferenceClient.resolveNumbers(pageWorkorderIds);
 
         return page.map(invoice -> InvoiceSearchResult.builder()

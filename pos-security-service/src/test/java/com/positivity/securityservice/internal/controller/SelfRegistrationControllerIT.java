@@ -3,17 +3,16 @@ package com.positivity.securityservice.internal.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.domainevents.peoplecontact.UserPersonLinkCreateRequestedV1;
 import com.positivity.securityservice.BaseIntegrationTest;
-import com.positivity.securityservice.internal.client.CustomerRegistrationClient;
-import com.positivity.securityservice.internal.client.dto.CustomerPersonSearchResponse;
+import com.positivity.securityservice.internal.entity.ExtCustomerPersonIdentity;
 import com.positivity.securityservice.internal.entity.ExtPersonReplica;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.repository.ExtCustomerPersonIdentityRepository;
 import com.positivity.securityservice.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.SelfRegistrationAttemptRepository;
@@ -21,7 +20,6 @@ import com.positivity.securityservice.internal.repository.SelfRegistrationReview
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.service.PeopleContactCommandEmitter;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -61,8 +59,8 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
     @MockitoBean
     private PeopleContactCommandEmitter peopleContactCommandEmitter;
 
-    @MockitoBean
-    private CustomerRegistrationClient customerRegistrationClient;
+    @Autowired
+    private ExtCustomerPersonIdentityRepository extCustomerPersonIdentityRepository;
 
     @BeforeEach
     void clearUsers() {
@@ -70,6 +68,7 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
         selfRegistrationReviewCaseRepository.deleteAll();
         userRepository.deleteAll();
         extPersonReplicaRepository.deleteAll();
+        extCustomerPersonIdentityRepository.deleteAll();
         assertThat(roleRepository.findByName("SELF_SERVICE_CUSTOMER")).isPresent();
     }
 
@@ -85,14 +84,23 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
                 .build());
     }
 
+    private void seedCustomerStanding(UUID personId, boolean individual, boolean commercial, int accountCount) {
+        extCustomerPersonIdentityRepository.save(ExtCustomerPersonIdentity.builder()
+                .personId(personId)
+                .individualCustomer(individual)
+                .commercialContact(commercial)
+                .commercialAccountCount(accountCount)
+                .aggregateVersion(0)
+                .updatedAt(Instant.now())
+                .build());
+    }
+
     @Test
     @DisplayName("POST /v1/auth/self-register returns 201 with a pending link and an unlinked user")
     void selfRegister_success_returnsCreated() throws Exception {
         UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         seedReplicaPerson(personId, "jane@example.com", "+15551234567");
-        when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", "+15551234567"))
-                .thenReturn(List.of(new CustomerPersonSearchResponse(
-                        personId, "Jane", "Smith", "Jane Smith", List.of(), true, true, 2, null, null)));
+        seedCustomerStanding(personId, true, true, 2);
 
         mockMvc.perform(post("/v1/auth/self-register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -163,9 +171,6 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
     void selfRegister_personAlreadyLinked_returnsConflict() throws Exception {
         UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000202");
         seedReplicaPerson(personId, "jane@example.com", null);
-        when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", null))
-                .thenReturn(List.of());
-
         // The users.person_id projection is the local source for "who is linked to this person".
         User linked = new User();
         linked.setUsername("other.jane");
@@ -195,22 +200,9 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
     void selfRegister_crmConflict_returnsConflict() throws Exception {
         // No replica person seeded — the CRM conflict fires on the unmatched-person path,
         // before any person command or user row is created.
-        when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", null))
-                .thenReturn(List.of(new CustomerPersonSearchResponse(
-                        UUID.fromString("00000000-0000-0000-0000-000000000204"),
-                        "Jane",
-                        "Smith",
-                        "Jane Smith",
-                        List.of(new CustomerPersonSearchResponse.ContactPointDto(
-                                UUID.fromString("00000000-0000-0000-0000-000000000205"),
-                                "EMAIL",
-                                "jane@example.com",
-                                true)),
-                        true,
-                        true,
-                        1,
-                        null,
-                        null)));
+        UUID crmOnlyPersonId = UUID.fromString("00000000-0000-0000-0000-000000000204");
+        seedReplicaPerson(crmOnlyPersonId, "jane.other@example.com", null);
+        seedCustomerStanding(crmOnlyPersonId, true, true, 1);
 
         mockMvc.perform(post("/v1/auth/self-register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -241,9 +233,6 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
     @Test
     @DisplayName("POST /v1/auth/self-register replays the same successful result for a reused idempotency key")
     void selfRegister_sameIdempotencyKey_replaysCreatedResponse() throws Exception {
-        when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", null))
-                .thenReturn(List.of());
-
         String payload = """
                 {
                   "email": "jane@example.com",
@@ -277,22 +266,9 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
     @Test
     @DisplayName("GET /v1/self-registration/review-cases returns blocked CRM review cases")
     void listReviewCases_returnsBlockedIdentityReviewCases() throws Exception {
-        when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", null))
-                .thenReturn(List.of(new CustomerPersonSearchResponse(
-                        UUID.fromString("00000000-0000-0000-0000-000000000213"),
-                        "Jane",
-                        "Smith",
-                        "Jane Smith",
-                        List.of(new CustomerPersonSearchResponse.ContactPointDto(
-                                UUID.fromString("00000000-0000-0000-0000-000000000214"),
-                                "EMAIL",
-                                "jane@example.com",
-                                true)),
-                        true,
-                        true,
-                        1,
-                        null,
-                        null)));
+        UUID crmOnlyPersonId = UUID.fromString("00000000-0000-0000-0000-000000000213");
+        seedReplicaPerson(crmOnlyPersonId, "jane.other@example.com", null);
+        seedCustomerStanding(crmOnlyPersonId, true, true, 1);
 
         mockMvc.perform(post("/v1/auth/self-register")
                         .contentType(MediaType.APPLICATION_JSON)
