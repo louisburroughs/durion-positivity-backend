@@ -15,3 +15,7 @@ CREATE TABLE event_outbox (
 
 -- Drain scans: unpublished rows in id order (UUIDv7 ids are time-ordered).
 CREATE INDEX idx_event_outbox_unpublished ON event_outbox (id) WHERE published_at IS NULL;
+
+-- Manifest computation scans published rows of a topic by created_at window (ADR-0044 §4).
+CREATE INDEX idx_event_outbox_published_window ON event_outbox (topic, created_at)
+    WHERE published_at IS NOT NULL;
