@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.peoplecontact.internal.repository.ProcessedEventRepository;
+import com.positivity.peoplecontact.internal.service.LinkCommandHandler;
 import com.positivity.peoplecontact.internal.service.PersonUpsertCommandHandler;
 import com.positivity.peoplecontact.service.OutboxReplayService;
 import java.time.Clock;
@@ -35,6 +36,8 @@ class PeopleContactCommandListenerTest {
 
     private final PersonUpsertCommandHandler upsertHandler = mock(PersonUpsertCommandHandler.class);
 
+    private final LinkCommandHandler linkCommandHandler = mock(LinkCommandHandler.class);
+
     private final ProcessedEventRepository processedEventRepository = mock(ProcessedEventRepository.class);
 
     private PeopleContactCommandListener listener;
@@ -42,7 +45,12 @@ class PeopleContactCommandListenerTest {
     @BeforeEach
     void setUp() {
         listener = new PeopleContactCommandListener(
-                TEST_CLOCK, new ObjectMapper(), replayService, upsertHandler, processedEventRepository);
+                TEST_CLOCK,
+                new ObjectMapper(),
+                replayService,
+                upsertHandler,
+                linkCommandHandler,
+                processedEventRepository);
         ReflectionTestUtils.setField(listener, "replayMaxLookback", Duration.ofDays(30));
     }
 

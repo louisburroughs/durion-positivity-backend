@@ -1,7 +1,10 @@
 package com.positivity.peoplecontact.internal.config;
 
 import com.positivity.domainevents.peoplecontact.PersonUpsertRequestedV1;
+import com.positivity.domainevents.peoplecontact.UserPersonLinkCreateRequestedV1;
+import com.positivity.domainevents.peoplecontact.UserPersonLinkRemoveRequestedV1;
 import com.positivity.peoplecontact.internal.repository.ProcessedEventRepository;
+import com.positivity.peoplecontact.internal.service.LinkCommandHandler;
 import com.positivity.peoplecontact.internal.service.PersonUpsertCommandHandler;
 import com.positivity.peoplecontact.service.OutboxReplayService;
 import java.time.Clock;
@@ -44,6 +47,12 @@ public class PeopleContactCommandListener {
     /** Canonical dotted name normalized: people-contact.person.upsert-requested (#875). */
     private static final String COMMAND_PERSON_UPSERT_REQUESTED = "PEOPLE_CONTACT_PERSON_UPSERT_REQUESTED";
 
+    /** Canonical dotted name normalized: people-contact.user-person-link.create-requested (#876). */
+    private static final String COMMAND_LINK_CREATE_REQUESTED = "PEOPLE_CONTACT_USER_PERSON_LINK_CREATE_REQUESTED";
+
+    /** Canonical dotted name normalized: people-contact.user-person-link.remove-requested (#876). */
+    private static final String COMMAND_LINK_REMOVE_REQUESTED = "PEOPLE_CONTACT_USER_PERSON_LINK_REMOVE_REQUESTED";
+
     /** Covers the sub-millisecond skew between outbox createdAt and the eventId timestamp. */
     private static final Duration REPLAY_WINDOW_SLACK = Duration.ofSeconds(1);
 
@@ -55,6 +64,7 @@ public class PeopleContactCommandListener {
     private final ObjectMapper objectMapper;
     private final OutboxReplayService outboxReplayService;
     private final PersonUpsertCommandHandler personUpsertCommandHandler;
+    private final LinkCommandHandler linkCommandHandler;
     private final ProcessedEventRepository processedEventRepository;
 
     @KafkaListener(
@@ -80,10 +90,22 @@ public class PeopleContactCommandListener {
                 handlePersonUpsertRequested(root);
                 return;
             }
+            if (COMMAND_LINK_CREATE_REQUESTED.equals(commandType)) {
+                handleLinkCreateRequested(root);
+                return;
+            }
+            if (COMMAND_LINK_REMOVE_REQUESTED.equals(commandType)) {
+                handleLinkRemoveRequested(root);
+                return;
+            }
             log.debug("Ignoring unsupported commandType={} message={}", commandType, message);
         } catch (TransientDataAccessException e) {
             // Let the container error handler retry with backoff and route to {topic}.dlq
             // (ADR-0044 §4) — replay is idempotent, so redelivery is harmless (PR #865 review).
+            throw e;
+        } catch (com.positivity.peoplecontact.internal.exception.PersonNotFoundException e) {
+            // A link create can outrun its person upsert (different record keys → different
+            // partitions). Retry with backoff; DLQ if the person never materializes (#876).
             throw e;
         } catch (Exception e) {
             // Malformed/unsupported commands are permanent failures: retrying cannot fix them,
@@ -120,6 +142,50 @@ public class PeopleContactCommandListener {
         }
         personUpsertCommandHandler.apply(eventId, command);
         log.info("Person upsert command applied personId={} eventId={}", command.personId(), eventId);
+    }
+
+    /**
+     * Link commands from pos-security-service (amended ADR-0043, #876). Deduped by command
+     * eventId so a replayed create can never resurrect a link that was later removed. Permanent
+     * conflicts (username linked to a different person) are logged and dropped — the sender's
+     * reconciliation surfaces the unmatched projection.
+     */
+    private void handleLinkCreateRequested(@NonNull JsonNode root) {
+        String eventId = root.path("eventId").stringValue(null);
+        if (eventId == null || eventId.isBlank() || processedEventRepository.existsById(eventId)) {
+            return;
+        }
+        UserPersonLinkCreateRequestedV1 command;
+        try {
+            command = objectMapper.treeToValue(root.get(PAYLOAD), UserPersonLinkCreateRequestedV1.class);
+        } catch (Exception e) {
+            log.warn("Ignoring link create command with malformed payload: {}", root, e);
+            return;
+        }
+        if (command == null || command.personId() == null || command.username() == null) {
+            log.warn("Ignoring link create command with missing personId/username: {}", root);
+            return;
+        }
+        linkCommandHandler.applyCreate(eventId, command);
+    }
+
+    private void handleLinkRemoveRequested(@NonNull JsonNode root) {
+        String eventId = root.path("eventId").stringValue(null);
+        if (eventId == null || eventId.isBlank() || processedEventRepository.existsById(eventId)) {
+            return;
+        }
+        UserPersonLinkRemoveRequestedV1 command;
+        try {
+            command = objectMapper.treeToValue(root.get(PAYLOAD), UserPersonLinkRemoveRequestedV1.class);
+        } catch (Exception e) {
+            log.warn("Ignoring link remove command with malformed payload: {}", root, e);
+            return;
+        }
+        if (command == null || command.username() == null || command.username().isBlank()) {
+            log.warn("Ignoring link remove command with missing username: {}", root);
+            return;
+        }
+        linkCommandHandler.applyRemove(eventId, command.username());
     }
 
     private void handleOutboxReplayRequested(@NonNull JsonNode root) {
