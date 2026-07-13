@@ -16,6 +16,7 @@ import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
@@ -28,6 +29,7 @@ import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
@@ -73,6 +75,8 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final WorkorderPartRepository workorderPartRepository;
     private final CustomerValidationClient customerValidationClient;
     private final WorkorderStateMachine stateMachine;
+    private final WorkorderLaborEntryRepository workorderLaborEntryRepository;
+    private final org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
     private final AuditEventRepository auditEventRepository;
     private final IdempotencyService idempotencyService;
     private final PromotionValidationService promotionValidationService;
@@ -572,6 +576,8 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .orElseThrow(
                         () -> new IllegalArgumentException("Workorder not found after completion: " + workorderId));
 
+        publishJobTimeFacts(workorder);
+
         // Build the final billable scope
         Map<String, Object> finalBillableScope = buildFinalBillableScope(workorder);
 
@@ -598,6 +604,33 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         log.info("WorkCompleted event created with eventId={} for workorderId={}", eventId, workorderId);
         return event;
+    }
+
+    /**
+     * One {@code workorder.job_time.recorded.v1} fact per finalized labor entry (ADR-0044 §6,
+     * #875): pos-people replaces its synchronous job-time-totals lookup with a replica fed by
+     * these facts. Published inside the completion transaction; the Kafka relay writes them to
+     * the outbox BEFORE_COMMIT, so facts exist iff the completion committed. Re-completions
+     * re-emit; consumers upsert by laborEntryId.
+     */
+    private void publishJobTimeFacts(Workorder workorder) {
+        for (WorkorderLaborEntry entry :
+                workorderLaborEntryRepository.findByWorkorder_IdOrderByStartTimeDesc(workorder.getId())) {
+            if (entry.getEndTime() == null || entry.getHoursWorked() == null || entry.getTechnicianId() == null) {
+                continue;
+            }
+            int minutes = entry.getHoursWorked()
+                    .multiply(java.math.BigDecimal.valueOf(60))
+                    .setScale(0, java.math.RoundingMode.HALF_UP)
+                    .intValue();
+            applicationEventPublisher.publishEvent(new com.positivity.domainevents.workorder.JobTimeRecordedV1(
+                    entry.getId(),
+                    workorder.getId(),
+                    entry.getTechnicianId(),
+                    workorder.getShopId(),
+                    entry.getEndTime().atOffset(java.time.ZoneOffset.UTC).toInstant(),
+                    minutes));
+        }
     }
 
     @Override

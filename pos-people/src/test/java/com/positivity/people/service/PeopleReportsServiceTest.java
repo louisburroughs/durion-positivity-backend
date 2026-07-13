@@ -10,11 +10,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.positivity.people.internal.client.LocationReferenceClient;
-import com.positivity.people.internal.client.WorkexecJobTimeClient;
 import com.positivity.people.internal.dto.ApprovedTimeExportResponse;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
+import com.positivity.people.internal.repository.ExtJobTimeReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.service.PeopleReportsServiceImpl;
@@ -37,7 +37,7 @@ class PeopleReportsServiceTest {
 
     private ExtPersonReplicaRepository extPersonReplicaRepository;
 
-    private WorkexecJobTimeClient workexecJobTimeClient;
+    private ExtJobTimeReplicaRepository extJobTimeReplicaRepository;
 
     private TimekeepingThresholdCache timekeepingThresholdCache;
 
@@ -49,14 +49,14 @@ class PeopleReportsServiceTest {
     void setup() {
         timeEntryRepository = mock(TimeEntryRepository.class);
         extPersonReplicaRepository = mock(ExtPersonReplicaRepository.class);
-        workexecJobTimeClient = mock(WorkexecJobTimeClient.class);
+        extJobTimeReplicaRepository = mock(ExtJobTimeReplicaRepository.class);
         timekeepingThresholdCache = mock(TimekeepingThresholdCache.class);
         locationReferenceClient = mock(LocationReferenceClient.class);
 
         service = new PeopleReportsServiceImpl(
                 timeEntryRepository,
                 extPersonReplicaRepository,
-                workexecJobTimeClient,
+                extJobTimeReplicaRepository,
                 locationReferenceClient,
                 timekeepingThresholdCache,
                 java.time.Clock.systemUTC());

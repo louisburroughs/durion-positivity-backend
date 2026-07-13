@@ -1,6 +1,5 @@
 package com.positivity.people.internal.controller;
 
-import com.positivity.people.internal.client.WorkexecClientException;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.SemanticValidationException;
@@ -138,15 +137,6 @@ public class PeopleExceptionHandler {
         body.put("path", request.getRequestURI());
         body.put("message", "Malformed JSON request");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
-    }
-
-    @ExceptionHandler(WorkexecClientException.class)
-    public ProblemDetail handleWorkexecClientException(WorkexecClientException ex) {
-        HttpStatus status = determineHttpStatus(ex.getHttpStatus());
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
-        problem.setProperty("errorCode", ex.getErrorCode());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return problem;
     }
 
     @ExceptionHandler(ResponseStatusException.class)

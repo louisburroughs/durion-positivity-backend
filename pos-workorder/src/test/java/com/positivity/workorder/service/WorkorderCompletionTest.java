@@ -116,6 +116,12 @@ class WorkorderCompletionTest {
     @InjectMocks
     private WorkorderStateMachine stateMachine;
 
+    @Mock
+    private com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository workorderLaborEntryRepository;
+
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
+
     private WorkorderServiceImpl workOrderService;
 
     private Workorder testWorkorder;
@@ -163,6 +169,8 @@ class WorkorderCompletionTest {
                 workorderPartRepository,
                 customerValidationClient,
                 stateMachine,
+                workorderLaborEntryRepository,
+                applicationEventPublisher,
                 auditEventRepository,
                 idempotencyService,
                 promotionValidationService,
@@ -195,6 +203,50 @@ class WorkorderCompletionTest {
         verify(snapshotRepository).save(any(WorkorderSnapshot.class));
         verify(transitionRepository).save(any(WorkorderStateTransition.class));
         verify(auditEventRepository).save(any(AuditEvent.class));
+    }
+
+    @Test
+    void completeWorkorder_publishesJobTimeFactsPerFinalizedLaborEntry() throws Exception {
+        when(workOrderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
+        stubCompletionPreconditionsPass();
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+        com.positivity.workorder.internal.entity.WorkorderLaborEntry finalized =
+                com.positivity.workorder.internal.entity.WorkorderLaborEntry.builder()
+                        .id(UUID.fromString("550e8400-e29b-41d4-a716-446655440040"))
+                        .workorder(testWorkorder)
+                        .workorderService(org.mockito.Mockito.mock(
+                                com.positivity.workorder.internal.entity.WorkorderServiceLine.class))
+                        .technicianId(UUID.fromString("550e8400-e29b-41d4-a716-446655440041"))
+                        .startTime(java.time.LocalDateTime.parse("2026-02-16T13:30:00"))
+                        .createdBy("test-user")
+                        .endTime(java.time.LocalDateTime.parse("2026-02-16T15:00:00"))
+                        .hoursWorked(new java.math.BigDecimal("1.5"))
+                        .build();
+        com.positivity.workorder.internal.entity.WorkorderLaborEntry open =
+                com.positivity.workorder.internal.entity.WorkorderLaborEntry.builder()
+                        .id(UUID.fromString("550e8400-e29b-41d4-a716-446655440042"))
+                        .workorder(testWorkorder)
+                        .workorderService(org.mockito.Mockito.mock(
+                                com.positivity.workorder.internal.entity.WorkorderServiceLine.class))
+                        .technicianId(UUID.fromString("550e8400-e29b-41d4-a716-446655440041"))
+                        .startTime(java.time.LocalDateTime.parse("2026-02-16T16:00:00"))
+                        .createdBy("test-user")
+                        .hoursWorked(java.math.BigDecimal.ZERO)
+                        .build();
+        when(workorderLaborEntryRepository.findByWorkorder_IdOrderByStartTimeDesc(testWorkorderId))
+                .thenReturn(java.util.List.of(finalized, open));
+
+        workOrderService.completeWorkorder(testWorkorderId, userId, "Work completed successfully");
+
+        ArgumentCaptor<Object> published = ArgumentCaptor.forClass(Object.class);
+        verify(applicationEventPublisher).publishEvent(published.capture());
+        com.positivity.domainevents.workorder.JobTimeRecordedV1 fact =
+                (com.positivity.domainevents.workorder.JobTimeRecordedV1) published.getValue();
+        assertEquals(finalized.getId(), fact.laborEntryId());
+        assertEquals(testShopId, fact.locationId());
+        assertEquals(90, fact.minutes());
+        assertEquals(java.time.Instant.parse("2026-02-16T15:00:00Z"), fact.endAtUtc());
     }
 
     @Test
