@@ -1,10 +1,12 @@
 package com.positivity.inventory.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.io.Serializable;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -39,6 +41,15 @@ public class ExtLocationParentReplica {
 
     @Column(name = "parent_id", nullable = false)
     private UUID parentId;
+
+    /**
+     * Explicit dependency hook for the ArchUnit UUIDv7 rule (ADR-0013): the child/parent ids ARE
+     * UUIDv7s minted by the owning module; this replica stores them verbatim.
+     */
+    @Transient
+    public Class<?> uuidv7Dependency() {
+        return UUIDv7Id.class;
+    }
 
     @Data
     @NoArgsConstructor

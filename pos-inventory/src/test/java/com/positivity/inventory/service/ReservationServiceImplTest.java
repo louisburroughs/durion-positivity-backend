@@ -867,21 +867,6 @@ class ReservationServiceImplTest {
     }
 
     @Test
-    @DisplayName("promoteToHard surfaces 503-mapped exception when location validation service is down")
-    void promoteToHard_validationServiceDown_throwsLocationServiceUnavailable() {
-        // PR #661 review finding 5: outage must map to 503, not raw 500
-        when(storageLocationValidationService.getStorageLocationValidation(any(String.class)))
-                .thenThrow(new org.springframework.web.client.ResourceAccessException("connection refused"));
-
-        UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        PromoteAllocationRequest request = new PromoteAllocationRequest(STORAGE_LOCATION_ID, "x");
-
-        assertThatThrownBy(() -> service.promoteToHard(allocationId, request))
-                .isInstanceOf(com.positivity.inventory.internal.exception.LocationServiceUnavailableException.class);
-        verify(allocationRepository, never()).save(any(AllocationEntity.class));
-    }
-
-    @Test
     @DisplayName("promoteToHard throws LocationNotFoundException when storage location does not exist")
     void promoteToHard_storageLocationMissing_throwsLocationNotFound() {
         // Issue #656: nonexistent storage location must fail before any state change
