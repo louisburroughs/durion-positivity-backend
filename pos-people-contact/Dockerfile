@@ -17,5 +17,5 @@ ENV OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 # Default endpoint (otel-collector:4318) does not require authentication
 
 COPY target/pos-people-contact.jar pos-people-contact.jar
-EXPOSE 8095
+EXPOSE 8080
 ENTRYPOINT ["sh", "-c", "exec java -javaagent:/opt/grafana-opentelemetry-java.jar $JAVA_OPTS -jar pos-people-contact.jar"]

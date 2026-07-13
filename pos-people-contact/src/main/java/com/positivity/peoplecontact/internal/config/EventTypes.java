@@ -29,10 +29,6 @@ public final class EventTypes {
                 EventTypeRegistration.write("PEOPLE_CONTACT_PERSON_DELETE", "Delete an existing person record")
                         .build(),
 
-                // PersonBulkIngestController
-                EventTypeRegistration.write("PEOPLE_CONTACT_BULK_INGEST", "Bulk import person records")
-                        .build(),
-
                 // UserPersonLinkController
                 EventTypeRegistration.write("PEOPLE_CONTACT_USER_LINK_CREATE", "Link user to person")
                         .build(),

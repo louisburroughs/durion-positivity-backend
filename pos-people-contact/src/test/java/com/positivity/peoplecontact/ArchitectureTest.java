@@ -14,7 +14,7 @@ import com.tngtech.archunit.lang.ArchRule;
 import java.util.UUID;
 
 /**
- * ArchUnit tests enforcing architecture rules for pos-people module.
+ * ArchUnit tests enforcing architecture rules for pos-people-contact module.
  *
  * Enforces: - Internal package encapsulation - Service layer as only public API
  * -

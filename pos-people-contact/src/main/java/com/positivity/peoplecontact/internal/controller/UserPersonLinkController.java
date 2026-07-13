@@ -152,7 +152,7 @@ public class UserPersonLinkController {
             name = "bearerAuth",
             scopes = {"people-contact:userLink:view"})
     @PreAuthorize("hasAuthority('people-contact:userLink:view')")
-    public ResponseEntity<List<UserPersonLinkResponse>> getLinkByPersonId(
+    public ResponseEntity<List<UserPersonLinkResponse>> getLinksByPersonId(
             @Parameter(description = "Person ID", required = true) @PathVariable UUID personId) {
         return ResponseEntity.ok(linkService.getUserLinks(personId));
     }
