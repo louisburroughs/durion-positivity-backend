@@ -7,7 +7,7 @@ import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.common.enums.TaxReferenceType;
 import com.positivity.workorder.internal.client.DocumentClient;
-import com.positivity.workorder.internal.client.LocationClient;
+
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentRequest;
@@ -74,7 +74,7 @@ public class EstimateServiceImpl implements EstimateService {
     private final ApplicationEventPublisher eventPublisher;
     private final BillingRulesClientService billingRulesClientService;
     private final TaxClient taxClient;
-    private final LocationClient locationClient;
+    private final LocationReferenceService locationReferenceService;
     private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
     private final DocumentClient documentClient;
     private final ObjectMapper objectMapper;
@@ -1047,7 +1047,7 @@ public class EstimateServiceImpl implements EstimateService {
         try {
             // Resolve the estimate's shop-location address from pos-location so tax is
             // calculated against the real jurisdiction (estimate.getLocationId()).
-            TaxAddress destinationAddress = locationClient.resolveTaxAddress(estimate.getLocationId());
+            TaxAddress destinationAddress = locationReferenceService.resolveTaxAddress(estimate.getLocationId());
 
             TaxCalculationRequest taxRequest = TaxCalculationRequest.builder()
                     .lineItems(taxLineItems)

@@ -14,12 +14,16 @@ import com.positivity.domainevents.location.LocationUpdatedV1;
 import com.positivity.domainevents.location.StorageLocationUpdatedV1;
 import com.positivity.location.internal.config.OutboxEventWriter;
 import com.positivity.location.internal.entity.Location;
+import com.positivity.location.internal.entity.LocationParent;
+import com.positivity.location.internal.entity.ParentType;
 import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
+import com.positivity.location.internal.repository.LocationParentRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,13 +42,15 @@ class LocationFactPublisherTest {
     private final ObjectProvider<OutboxEventWriter> writerProvider = mock(ObjectProvider.class);
 
     private final OutboxEventWriter writer = mock(OutboxEventWriter.class);
+    private final LocationParentRepository locationParentRepository = mock(LocationParentRepository.class);
 
     private LocationFactPublisher publisher;
 
     @BeforeEach
     void setUp() {
         when(writerProvider.getIfAvailable()).thenReturn(writer);
-        publisher = new LocationFactPublisher(writerProvider, TEST_CLOCK, "location.events.v1");
+        when(locationParentRepository.findByChild_Id(any())).thenReturn(List.of());
+        publisher = new LocationFactPublisher(writerProvider, locationParentRepository, TEST_CLOCK, "location.events.v1");
     }
 
     @Test
@@ -67,6 +73,14 @@ class LocationFactPublisherTest {
                 .name("Staging")
                 .build();
         location.setDefaultStagingLocation(staging);
+        Location parentSite = new Location();
+        parentSite.setId(UUID.randomUUID());
+        when(locationParentRepository.findByChild_Id(location.getId()))
+                .thenReturn(List.of(LocationParent.builder()
+                        .child(location)
+                        .parent(parentSite)
+                        .parentType(ParentType.PHYSICAL)
+                        .build()));
 
         publisher.locationChanged(location);
 
@@ -83,6 +97,8 @@ class LocationFactPublisherTest {
         assertThat(fact.country()).isEqualTo("US");
         assertThat(fact.defaultStagingLocationId()).isEqualTo(staging.getId());
         assertThat(fact.defaultQuarantineLocationId()).isNull();
+        assertThat(fact.parents())
+                .containsExactly(new LocationUpdatedV1.ParentRef(parentSite.getId(), "PHYSICAL"));
     }
 
     @Test
@@ -114,6 +130,7 @@ class LocationFactPublisherTest {
                 .status(StorageLocationStatus.ACTIVE)
                 .site(site)
                 .parentStorageLocation(parent)
+                .capacity("{\"maxUnitCount\": 12}")
                 .build();
 
         publisher.storageLocationChanged(storage);
@@ -128,6 +145,7 @@ class LocationFactPublisherTest {
         assertThat(fact.parentStorageLocationId()).isEqualTo(parent.getId());
         assertThat(fact.storageLocationType()).isEqualTo("BIN");
         assertThat(fact.status()).isEqualTo("ACTIVE");
+        assertThat(fact.maxUnitCapacity()).isEqualTo(12);
     }
 
     @Test

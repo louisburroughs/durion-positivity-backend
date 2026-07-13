@@ -87,7 +87,11 @@ pos:
       people-contact-commands-topic: ${POS_PEOPLE_PC_COMMANDS_TOPIC:people-contact.commands.v1}
       workorder-events-topic: ${POS_PEOPLE_WO_EVENTS_TOPIC:workorder.events.v1}
       workorder-events-consumer-group: ${POS_PEOPLE_WO_EVENTS_CONSUMER_GROUP:pos-people-workorder-events}
+      # Location replica feed + reconciliation (ADR-0044 §6, #892)
+      location-events-topic: ${POS_PEOPLE_LOCATION_EVENTS_TOPIC:location.events.v1}
+      location-events-consumer-group: ${POS_PEOPLE_LOCATION_EVENTS_CONSUMER_GROUP:pos-people-location-events}
+      location-manifest-topic: ${POS_PEOPLE_LOCATION_MANIFEST_TOPIC:location.manifest.v1}
+      location-manifest-consumer-group: ${POS_PEOPLE_LOCATION_MANIFEST_CONSUMER_GROUP:pos-people-location-manifests}
+      location-commands-topic: ${POS_PEOPLE_LOCATION_COMMANDS_TOPIC:location.commands.v1}
     manifest:
       topic: ${POS_PEOPLE_MANIFEST_TOPIC:people.manifest.v1}
-  location-service:
-    service-id: ${POS_LOCATION_SERVICE_SERVICE_ID:location}

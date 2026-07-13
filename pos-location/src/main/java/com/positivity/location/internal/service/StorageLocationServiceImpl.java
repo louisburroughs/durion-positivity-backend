@@ -42,10 +42,6 @@ public class StorageLocationServiceImpl implements StorageLocationService {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final String CAPACITY = "capacity";
     private static final String TEMPERATURE = "temperature";
-    private static final String UNIT_COUNT = "unitCount";
-    private static final String UNIT_COUNT_SNAKE = "unit_count";
-    private static final String MAX_UNIT_COUNT = "maxUnitCount";
-    private static final String MAX_UNIT_COUNT_SNAKE = "max_unit_count";
     private static final String STORAGE_LOCATION_NOT_FOUND = "STORAGE_LOCATION_NOT_FOUND";
     private static final String DESTINATION_REQUIRED = "DESTINATION_REQUIRED";
     private static final String DESTINATION_NOT_FOUND = "DESTINATION_NOT_FOUND";
@@ -457,39 +453,6 @@ public class StorageLocationServiceImpl implements StorageLocationService {
     }
 
     private Integer extractMaxUnitCapacity(String capacityJson) {
-        Map<String, Object> capacity = deserializeJson(capacityJson, CAPACITY);
-        if (capacity == null) {
-            return null;
-        }
-        Integer unitCapacity = toInteger(capacity.get(MAX_UNIT_COUNT));
-        if (unitCapacity != null) {
-            return unitCapacity;
-        }
-        unitCapacity = toInteger(capacity.get(MAX_UNIT_COUNT_SNAKE));
-        if (unitCapacity != null) {
-            return unitCapacity;
-        }
-        unitCapacity = toInteger(capacity.get(UNIT_COUNT));
-        if (unitCapacity != null) {
-            return unitCapacity;
-        }
-        return toInteger(capacity.get(UNIT_COUNT_SNAKE));
-    }
-
-    private Integer toInteger(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        if (value instanceof String text) {
-            try {
-                return Integer.valueOf(text.trim());
-            } catch (NumberFormatException ex) {
-                return null;
-            }
-        }
-        return null;
+        return StorageCapacityJson.extractMaxUnitCapacity(capacityJson);
     }
 }

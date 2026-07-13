@@ -7,7 +7,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.invoice.internal.client.LocationServiceClient;
+import com.positivity.invoice.internal.service.LocationReferenceService;
 import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.client.WorkorderReferenceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
@@ -53,7 +53,7 @@ class InvoiceServiceImplTest {
     private TaxServiceClient taxServiceClient;
 
     @Mock
-    private LocationServiceClient locationServiceClient;
+    private LocationReferenceService locationReferenceService;
 
     @Mock
     private WorkorderReferenceClient workorderReferenceClient;
@@ -223,7 +223,7 @@ class InvoiceServiceImplTest {
                 .build();
 
         when(invoiceRepository.findByWorkorderId(workorderId)).thenReturn(Optional.empty());
-        when(locationServiceClient.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
+        when(locationReferenceService.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
         when(taxServiceClient.calculateTax(any(), any(), any())).thenReturn(BigDecimal.valueOf(5));
         when(invoiceRepository.save(any())).thenReturn(draftInvoice);
 
@@ -312,7 +312,7 @@ class InvoiceServiceImplTest {
         request.setAuthorizedBy("manager1");
 
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
-        when(locationServiceClient.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
+        when(locationReferenceService.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
         when(taxServiceClient.calculateTax(any(), any(), any())).thenReturn(BigDecimal.valueOf(8));
         when(invoiceRepository.save(any())).thenReturn(draftInvoice);
 

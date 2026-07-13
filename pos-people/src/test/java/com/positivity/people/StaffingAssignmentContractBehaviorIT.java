@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.people.internal.client.LocationReferenceClient;
+import com.positivity.people.internal.service.LocationReferenceService;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.enums.EmployeeStatus;
@@ -61,7 +61,7 @@ class StaffingAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
     private EmployeeLocationAssignmentRepository assignmentRepository;
 
     @MockitoBean
-    private LocationReferenceClient locationReferenceClient;
+    private LocationReferenceService locationReferenceService;
 
     @BeforeEach
     void setUpReferenceData() {
@@ -83,11 +83,11 @@ class StaffingAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
                 .status(EmployeeStatus.ACTIVE)
                 .build());
 
-        when(locationReferenceClient.isLocationActive(UUID.fromString(VALID_LOCATION_ID)))
+        when(locationReferenceService.isLocationActive(UUID.fromString(VALID_LOCATION_ID)))
                 .thenReturn(true);
-        when(locationReferenceClient.isLocationActive(UUID.fromString(VALID_LOCATION_ID_2)))
+        when(locationReferenceService.isLocationActive(UUID.fromString(VALID_LOCATION_ID_2)))
                 .thenReturn(true);
-        when(locationReferenceClient.isLocationActive(UUID.fromString("018e1c9f-dead-7000-8000-000000000000")))
+        when(locationReferenceService.isLocationActive(UUID.fromString("018e1c9f-dead-7000-8000-000000000000")))
                 .thenReturn(false);
     }
 

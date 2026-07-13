@@ -399,6 +399,9 @@ public class LocationServiceImpl implements LocationService {
         if (locationParentRepository.existsByChild_IdAndParent_Id(parentId, childId)) {
             throw new IllegalStateException("Circular relationship detected after save");
         }
+        // Parent edges travel on the child's location.location.updated fact (issue #892), so
+        // replica consumers see hierarchy changes without a dedicated edge event.
+        locationFactPublisher.locationChanged(child);
         return saved;
     }
 
