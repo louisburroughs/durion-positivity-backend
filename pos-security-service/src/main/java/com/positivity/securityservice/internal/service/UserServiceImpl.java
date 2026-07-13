@@ -68,7 +68,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public void deleteUser(UUID id) {
         // The user-person link is owned by pos-people-contact (amended ADR-0043, #876): queue its
         // removal in the same transaction so the link (and every consumer's projection of it)

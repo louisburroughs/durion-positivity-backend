@@ -13,8 +13,9 @@ import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
  * does not block the main startup sequence; containers are started once the application context
  * is fully ready.
  *
- * <p>This module's inbound surface is {@code people.commands.v1}
- * ({@link PeopleContactEventsListener}).
+ * <p>This module's inbound surface is {@code people-contact.events.v1} and
+ * {@code people-contact.manifest.v1} — the {@code users.person_id} projection and identity
+ * replica consumers (amended ADR-0043, #876).
  */
 @Slf4j
 @Configuration
