@@ -6,10 +6,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.people.BaseContractIntegrationTest;
 import com.positivity.people.internal.entity.Employee;
-import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeRepository;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
 import com.positivity.people.internal.repository.WorkSessionRepository;
 import java.util.UUID;
@@ -29,7 +29,7 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
     private WorkSessionBreakRepository workSessionBreakRepository;
 
     @Autowired
-    private PersonRepository personRepository;
+    private ExtPersonReplicaRepository extPersonReplicaRepository;
 
     @Autowired
     private EmployeeRepository employeeRepository;
@@ -260,16 +260,18 @@ class WorkSessionContractIT extends BaseContractIntegrationTest {
     }
 
     private void ensurePersonExists(UUID personId, String firstName, String lastName) {
-        if (personRepository.existsById(personId)) {
+        if (extPersonReplicaRepository.existsById(personId)) {
             return;
         }
-        Person person = personRepository.save(Person.builder()
-                .id(personId)
+        extPersonReplicaRepository.save(ExtPersonReplica.builder()
+                .personId(personId)
                 .firstName(firstName)
                 .lastName(lastName)
+                .aggregateVersion(0)
+                .updatedAt(java.time.Instant.now())
                 .build());
         employeeRepository.save(Employee.builder()
-                .personId(person.getId())
+                .personId(personId)
                 .employeeNumber("EMP-" + personId.toString().substring(0, 8))
                 .status(EmployeeStatus.ACTIVE)
                 .build());

@@ -1,12 +1,9 @@
 package com.positivity.people.internal.controller;
 
-import com.positivity.people.internal.client.SecurityServiceException;
 import com.positivity.people.internal.client.WorkexecClientException;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.SemanticValidationException;
-import com.positivity.people.internal.exception.UserAlreadyLinkedException;
-import com.positivity.people.internal.exception.UserPersonLinkNotFoundException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -42,20 +39,6 @@ public class PeopleExceptionHandler {
     @ExceptionHandler(PersonNotFoundException.class)
     public ProblemDetail handlePersonNotFound(PersonNotFoundException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return problem;
-    }
-
-    @ExceptionHandler(UserPersonLinkNotFoundException.class)
-    public ProblemDetail handleLinkNotFound(UserPersonLinkNotFoundException ex) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return problem;
-    }
-
-    @ExceptionHandler(UserAlreadyLinkedException.class)
-    public ProblemDetail handleUserAlreadyLinked(UserAlreadyLinkedException ex) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
@@ -157,14 +140,6 @@ public class PeopleExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
-    @ExceptionHandler(SecurityServiceException.class)
-    public ProblemDetail handleSecurityServiceException(SecurityServiceException ex) {
-        HttpStatus status = determineHttpStatus(ex);
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return problem;
-    }
-
     @ExceptionHandler(WorkexecClientException.class)
     public ProblemDetail handleWorkexecClientException(WorkexecClientException ex) {
         HttpStatus status = determineHttpStatus(ex.getHttpStatus());
@@ -190,12 +165,6 @@ public class PeopleExceptionHandler {
                 ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
-    }
-
-    private HttpStatus determineHttpStatus(SecurityServiceException ex) {
-        int statusCode = ex.getHttpStatus();
-
-        return determineHttpStatus(statusCode);
     }
 
     private HttpStatus determineHttpStatus(int statusCode) {

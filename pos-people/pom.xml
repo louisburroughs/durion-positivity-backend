@@ -210,6 +210,16 @@
             <artifactId>pos-bulk-ingest-lib</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Domain event contracts + Kafka for the transactional outbox and replicas (ADR-0044) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-domain-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-stream-kafka</artifactId>
+        </dependency>
     </dependencies>
     <build>
         <plugins>

@@ -36,9 +36,11 @@ class PeopleApiErrorContractIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("Non-UUID path variable returns 400, not 500")
     void malformedPathVariableReturnsBadRequest() throws Exception {
-        mockMvc.perform(withAuth(get("/v1/people/not-a-uuid")))
+        // Person CRUD moved to pos-people-contact (#875); the employee profile route keeps the
+        // UUID path-variable error contract in this module.
+        mockMvc.perform(withAuth(get("/v1/people/employees/not-a-uuid")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").value("Invalid value for parameter 'personId'"));
+                .andExpect(jsonPath("$.detail").value("Invalid value for parameter 'employeeId'"));
     }
 
     @Test

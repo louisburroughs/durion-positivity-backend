@@ -26,23 +26,6 @@ public class RestClientConfig {
     }
 
     @Bean
-    public RestClient securityServiceRestClient(
-            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
-            @Value("${pos.security-service.service-id:security-service}") String serviceId,
-            @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
-            @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
-        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
-
-        return builder.requestFactory(factory)
-                .baseUrl("http://" + serviceId)
-                .defaultHeader("X-User", "pos-people")
-                .defaultHeader("X-Authorities", "security:user:view,security:role:view,security:role:assign")
-                .build();
-    }
-
-    @Bean
     public RestClient workexecRestClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder builder,
             @Value("${pos.workexec.service-id:workorder}") String serviceId,

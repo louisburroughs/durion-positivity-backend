@@ -3,26 +3,19 @@ package com.positivity.people.internal.entity;
 import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
-import jakarta.persistence.ConstraintMode;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import lombok.ToString;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -47,15 +40,10 @@ public class TimeEntry {
     @Column(name = "time_entry_id", columnDefinition = "UUID", nullable = false)
     private UUID timeEntryId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(
-            name = "person_id",
-            referencedColumnName = "id",
-            columnDefinition = "UUID",
-            foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    private Person person;
+    // Plain reference into the people-contact identity domain (ADR-0044 §6, #875):
+    // no local person table, no FK; resolve display data via ext_people_contact_person.
+    @Column(name = "person_id", columnDefinition = "UUID")
+    private UUID personId;
 
     /**
      * Optional association to timesheet (if this time entry was created via

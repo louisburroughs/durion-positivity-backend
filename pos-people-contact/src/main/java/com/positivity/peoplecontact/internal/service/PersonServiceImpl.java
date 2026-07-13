@@ -1,6 +1,5 @@
 package com.positivity.peoplecontact.internal.service;
 
-import com.positivity.peoplecontact.internal.config.PeopleContactEventPublisher;
 import com.positivity.peoplecontact.internal.dto.Person;
 import com.positivity.peoplecontact.internal.dto.ResolvePersonRequest;
 import com.positivity.peoplecontact.internal.dto.ResolvePersonResponse;

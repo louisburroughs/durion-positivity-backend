@@ -5,8 +5,9 @@ import com.positivity.people.internal.dto.WorkSessionDto;
 import com.positivity.people.internal.dto.WorkSessionSubmitRequest;
 import com.positivity.people.internal.entity.WorkSession;
 import com.positivity.people.internal.entity.WorkSessionBreak;
+import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
 import com.positivity.people.internal.repository.WorkSessionRepository;
 import com.positivity.people.service.WorkSessionService;
@@ -38,19 +39,20 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
     private final WorkSessionBreakRepository workSessionBreakRepository;
 
-    private final PersonRepository personRepository;
+    private final ExtPersonReplicaRepository extPersonReplicaRepository;
 
     public WorkSessionServiceImpl(
             WorkSessionRepository workSessionRepository,
             WorkSessionBreakRepository workSessionBreakRepository,
-            PersonRepository personRepository,
+            ExtPersonReplicaRepository extPersonReplicaRepository,
             Clock clock) {
         this.clock = clock;
         this.workSessionRepository =
                 Objects.requireNonNull(workSessionRepository, "workSessionRepository must not be null");
         this.workSessionBreakRepository =
                 Objects.requireNonNull(workSessionBreakRepository, "workSessionBreakRepository must not be null");
-        this.personRepository = Objects.requireNonNull(personRepository, "personRepository must not be null");
+        this.extPersonReplicaRepository =
+                Objects.requireNonNull(extPersonReplicaRepository, "extPersonReplicaRepository must not be null");
     }
 
     @Override
@@ -58,12 +60,18 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         Objects.requireNonNull(personId, "personId must not be null");
         String resolvedActor = resolveActorFromSecurityContext();
 
-        if (workSessionRepository.findByPerson_IdAndEndedAtIsNull(personId).isPresent()) {
+        // The person FK went with the ADR-0044 split (#875), so validate against the identity
+        // replica instead — sessions must not be creatable for unknown persons.
+        if (!extPersonReplicaRepository.existsById(personId)) {
+            throw new PersonNotFoundException(personId);
+        }
+
+        if (workSessionRepository.findByPersonIdAndEndedAtIsNull(personId).isPresent()) {
             throw new IllegalStateException("An active session already exists for personId=" + personId);
         }
 
         WorkSession session = new WorkSession();
-        session.setPerson(personRepository.getReferenceById(personId));
+        session.setPersonId(personId);
         session.setStatus(STATUS_ACTIVE);
         session.setStartedAt(Instant.now(clock));
         session.setEndedAt(null);
@@ -84,7 +92,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         String resolvedActor = resolveActorFromSecurityContext();
 
         WorkSession session = workSessionRepository
-                .findByPerson_IdAndEndedAtIsNull(personId)
+                .findByPersonIdAndEndedAtIsNull(personId)
                 .orElseThrow(
                         () -> new WorkSessionNotFoundException("No active session found for personId=" + personId));
 

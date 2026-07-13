@@ -1,6 +1,5 @@
 package com.positivity.peoplecontact.internal.service;
 
-import com.positivity.peoplecontact.internal.config.PeopleContactEventPublisher;
 import com.positivity.peoplecontact.internal.dto.LinkUserToPersonRequest;
 import com.positivity.peoplecontact.internal.dto.PersonResponse;
 import com.positivity.peoplecontact.internal.dto.UserPersonLinkResponse;

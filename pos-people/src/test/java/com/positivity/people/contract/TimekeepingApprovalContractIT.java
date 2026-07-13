@@ -5,12 +5,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.positivity.people.BaseIntegrationTest;
-import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.TimePeriod;
 import com.positivity.people.internal.entity.TimekeepingEntry;
 import com.positivity.people.internal.enums.ApprovalStatus;
 import com.positivity.people.internal.enums.TimePeriodStatus;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimePeriodRepository;
 import com.positivity.people.internal.repository.TimekeepingEntryRepository;
 import java.time.Instant;
@@ -31,7 +31,7 @@ class TimekeepingApprovalContractIT extends BaseIntegrationTest {
     private static final UUID PERSON_ID = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000001");
 
     @Autowired
-    private PersonRepository personRepository;
+    private ExtPersonReplicaRepository extPersonReplicaRepository;
 
     @Autowired
     private TimePeriodRepository timePeriodRepository;
@@ -39,13 +39,15 @@ class TimekeepingApprovalContractIT extends BaseIntegrationTest {
     @Autowired
     private TimekeepingEntryRepository timekeepingEntryRepository;
 
-    private Person seedPerson() {
-        return personRepository
+    private ExtPersonReplica seedPerson() {
+        return extPersonReplicaRepository
                 .findById(PERSON_ID)
-                .orElseGet(() -> personRepository.save(Person.builder()
-                        .id(PERSON_ID)
+                .orElseGet(() -> extPersonReplicaRepository.save(ExtPersonReplica.builder()
+                        .personId(PERSON_ID)
                         .firstName("Jane")
                         .lastName("Approver")
+                        .aggregateVersion(0)
+                        .updatedAt(java.time.Instant.now())
                         .build()));
     }
 
