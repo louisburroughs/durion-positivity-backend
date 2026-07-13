@@ -83,7 +83,13 @@ public class PersonController {
 
     @Operation(summary = "Get person by ID", description = "Retrieve a person by their unique ID.")
     @ApiResponse(responseCode = "200", description = "Person found and returned.")
-    @ApiResponse(responseCode = "404", description = "Person not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Person not found.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @GetMapping("/{personId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -161,7 +167,13 @@ public class PersonController {
 
     @Operation(summary = "Update an existing person", description = "Update the details of an existing person.")
     @ApiResponse(responseCode = "200", description = "Person updated successfully.")
-    @ApiResponse(responseCode = "404", description = "Person not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Person not found.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @EmitEvent(id = "PEOPLE_CONTACT_PERSON_UPDATE", apiVersion = "1")
     @PutMapping("/{personId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -183,7 +195,13 @@ public class PersonController {
 
     @Operation(summary = "Delete a person", description = "Delete a person by their unique ID.")
     @ApiResponse(responseCode = "204", description = "Person deleted successfully.")
-    @ApiResponse(responseCode = "404", description = "Person not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Person not found.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @EmitEvent(id = "PEOPLE_CONTACT_PERSON_DELETE", apiVersion = "1")
     @DeleteMapping("/{personId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

@@ -43,9 +43,9 @@ paths:
         '404':
           description: Person not found.
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/Person'
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - people-contact:person:view
@@ -82,9 +82,9 @@ paths:
         '404':
           description: Person not found.
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/Person'
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - people-contact:person:edit
@@ -110,6 +110,10 @@ paths:
           description: Person deleted successfully.
         '404':
           description: Person not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - people-contact:person:delete
@@ -733,6 +737,24 @@ components:
       required:
       - firstName
       - lastName
+    ProblemDetail:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        properties:
+          type: object
     PersonRoleAssignmentRequest:
       type: object
       description: Request to assign a role to a person
@@ -790,24 +812,6 @@ components:
           type: boolean
           description: Whether the assignment is active
           example: true
-    ProblemDetail:
-      type: object
-      properties:
-        type:
-          type: string
-          format: uri
-        title:
-          type: string
-        status:
-          type: integer
-          format: int32
-        detail:
-          type: string
-        instance:
-          type: string
-          format: uri
-        properties:
-          type: object
     LinkUserToPersonRequest:
       type: object
       description: Request to link a user account to a person record
