@@ -33,6 +33,7 @@ public class SiteDefaultsServiceImpl implements SiteDefaultsService {
 
     private final LocationRepository locationRepository;
     private final StorageLocationRepository storageLocationRepository;
+    private final LocationFactPublisher locationFactPublisher;
 
     /**
      * Configures default staging and quarantine storage locations for a site.
@@ -64,6 +65,8 @@ public class SiteDefaultsServiceImpl implements SiteDefaultsService {
         location.setDefaultStagingLocation(stagingLocation);
         location.setDefaultQuarantineLocation(quarantineLocation);
         locationRepository.save(location);
+        // Site defaults travel on the location fact (ADR-0044 §6, #890).
+        locationFactPublisher.locationChanged(location);
 
         return SiteDefaultsResponse.builder()
                 .siteId(siteId)

@@ -54,16 +54,19 @@ public class StorageLocationServiceImpl implements StorageLocationService {
 
     private final StorageLocationRepository storageLocationRepository;
     private final LocationRepository locationRepository;
+    private final LocationFactPublisher locationFactPublisher;
     private final StorageLocationInventoryTransferService storageLocationInventoryTransferService;
     private final LocationInventoryInquiryClient locationInventoryInquiryClient;
 
     public StorageLocationServiceImpl(
             StorageLocationRepository storageLocationRepository,
             LocationRepository locationRepository,
+            LocationFactPublisher locationFactPublisher,
             StorageLocationInventoryTransferService storageLocationInventoryTransferService,
             LocationInventoryInquiryClient locationInventoryInquiryClient) {
         this.storageLocationRepository = storageLocationRepository;
         this.locationRepository = locationRepository;
+        this.locationFactPublisher = locationFactPublisher;
         this.storageLocationInventoryTransferService = storageLocationInventoryTransferService;
         this.locationInventoryInquiryClient = locationInventoryInquiryClient;
     }
@@ -116,6 +119,7 @@ public class StorageLocationServiceImpl implements StorageLocationService {
                 .capacity(serializeJson(request.getCapacity(), CAPACITY))
                 .temperature(serializeJson(request.getTemperature(), TEMPERATURE))
                 .build());
+        locationFactPublisher.storageLocationChanged(saved);
 
         return toResponse(saved);
     }
@@ -243,6 +247,7 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         applyPatchedStatus(siteId, storageLocationId, patch, existing);
 
         StorageLocationEntity saved = storageLocationRepository.saveAndFlush(existing);
+        locationFactPublisher.storageLocationChanged(saved);
         return toResponse(saved);
     }
 
@@ -267,6 +272,7 @@ public class StorageLocationServiceImpl implements StorageLocationService {
 
         existing.setStatus(StorageLocationStatus.INACTIVE);
         StorageLocationEntity saved = storageLocationRepository.saveAndFlush(existing);
+        locationFactPublisher.storageLocationChanged(saved);
         return toResponse(saved);
     }
 

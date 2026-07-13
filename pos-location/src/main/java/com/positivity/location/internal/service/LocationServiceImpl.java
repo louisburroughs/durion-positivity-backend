@@ -64,6 +64,7 @@ public class LocationServiceImpl implements LocationService {
     private final LocationRepository locationRepository;
     private final LocationParentRepository locationParentRepository;
     private final LocationTypeRepository locationTypeRepository;
+    private final LocationFactPublisher locationFactPublisher;
 
     // Issue CAP-136 #78: lightweight process-level guard used with repository
     // checks.
@@ -296,7 +297,9 @@ public class LocationServiceImpl implements LocationService {
 
     private Location saveLocationInternal(Location location) {
         try {
-            return locationRepository.saveAndFlush(location);
+            Location saved = locationRepository.saveAndFlush(location);
+            locationFactPublisher.locationChanged(saved);
+            return saved;
         } catch (OptimisticLockingFailureException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "OPTIMISTIC_LOCK_FAILED", e);
         } catch (DataIntegrityViolationException e) {
@@ -341,8 +344,10 @@ public class LocationServiceImpl implements LocationService {
         return all.toString();
     }
 
+    @Transactional
     public void deleteLocation(UUID id) {
         locationRepository.deleteById(id);
+        locationFactPublisher.locationDeleted(id);
     }
 
     @Transactional

@@ -66,6 +66,9 @@ class LocationServiceTest {
     @Mock
     private LocationTypeRepository locationTypeRepository;
 
+    @Mock
+    private com.positivity.location.internal.service.LocationFactPublisher locationFactPublisher;
+
     @InjectMocks
     private LocationServiceImpl locationService;
 

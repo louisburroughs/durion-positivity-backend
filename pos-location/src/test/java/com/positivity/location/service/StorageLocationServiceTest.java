@@ -70,6 +70,9 @@ class StorageLocationServiceTest {
     @Mock
     private LocationInventoryInquiryClient locationInventoryInquiryClient;
 
+    @Mock
+    private com.positivity.location.internal.service.LocationFactPublisher locationFactPublisher;
+
     @InjectMocks
     private StorageLocationServiceImpl storageLocationService;
 
