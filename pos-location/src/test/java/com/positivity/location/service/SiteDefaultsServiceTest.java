@@ -59,6 +59,9 @@ class SiteDefaultsServiceTest {
     @Mock
     private StorageLocationRepository storageLocationRepository;
 
+    @Mock
+    private com.positivity.location.internal.service.LocationFactPublisher locationFactPublisher;
+
     @InjectMocks
     private SiteDefaultsServiceImpl siteDefaultsService;
 

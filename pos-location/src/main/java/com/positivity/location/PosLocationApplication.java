@@ -6,9 +6,11 @@ import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoCon
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.web.client.RestClient;
 
 @SpringBootApplication(exclude = {UserDetailsServiceAutoConfiguration.class})
+@EnableScheduling
 public class PosLocationApplication {
     public static void main(String[] args) {
         SpringApplication.run(PosLocationApplication.class, args);
