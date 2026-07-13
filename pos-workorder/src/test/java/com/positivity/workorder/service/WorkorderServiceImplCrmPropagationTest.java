@@ -4,13 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import com.positivity.workorder.internal.client.CustomerValidationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
@@ -74,7 +74,7 @@ class WorkorderServiceImplCrmPropagationTest {
     private WorkorderPartRepository workorderPartRepository;
 
     @Mock
-    private CustomerValidationClient customerValidationClient;
+    private ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
 
     @Mock
     private WorkorderStateMachine stateMachine;
@@ -105,8 +105,12 @@ class WorkorderServiceImplCrmPropagationTest {
 
     @BeforeEach
     void stubCustomerRequirements() {
-        // Stub CustomerValidationClient to allow workorder creation
-        when(customerValidationClient.checkRequirementsMet(any())).thenReturn(true);
+        // Stub the customer-party replica to allow workorder creation
+        when(extCustomerPartyReplicaRepository.findById(any()))
+                .thenReturn(
+                        java.util.Optional.of(com.positivity.workorder.internal.entity.ExtCustomerPartyReplica.builder()
+                                .requirementsMet(true)
+                                .build()));
 
         // Default workorderRepository.save() behaviour: return the Workorder passed in
         when(workorderRepository.save(any(Workorder.class))).thenAnswer(inv -> {

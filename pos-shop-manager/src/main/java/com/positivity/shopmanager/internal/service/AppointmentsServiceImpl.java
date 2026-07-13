@@ -6,8 +6,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
-import com.positivity.shopmanager.internal.client.CrmCustomerClient;
-import com.positivity.shopmanager.internal.client.CrmVehicleClient;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
@@ -32,7 +30,6 @@ import com.positivity.shopmanager.internal.event.AppointmentRescheduledEvent;
 import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
-import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
@@ -68,7 +65,6 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClientException;
 
 /**
  * Orchestration service for appointment operations.
@@ -89,8 +85,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private final AppointmentServiceRequestRepository appointmentServiceRequestRepository;
     private final ObjectMapper objectMapper;
     private final AppointmentLoadService appointmentLoadService;
-    private final CrmCustomerClient crmCustomerClient;
-    private final CrmVehicleClient crmVehicleClient;
+    private final CrmSnapshotService crmSnapshotService;
     private final StaffingScheduleService staffingScheduleService;
     private final ApplicationEventPublisher eventPublisher;
     private final ShopRepository shopRepository;
@@ -150,14 +145,10 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         }
 
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
-        Map<String, Object> customerSnapshot;
-        Map<String, Object> vehicleSnapshot;
-        try {
-            customerSnapshot = crmCustomerClient.getCustomerById(request.getCrmCustomerId());
-            vehicleSnapshot = crmVehicleClient.getVehicleById(request.getCrmVehicleId());
-        } catch (RestClientException exception) {
-            throw new CrmUnavailableException("CRM service is unavailable", exception);
-        }
+        // Local replica reads (ADR-0044 §6, #891): unknown ids raise the same not-found
+        // exceptions the retired CRM HTTP clients mapped 404s to.
+        Map<String, Object> customerSnapshot = crmSnapshotService.getCustomerById(request.getCrmCustomerId());
+        Map<String, Object> vehicleSnapshot = crmSnapshotService.getVehicleById(request.getCrmVehicleId());
         validateCrmRelationship(request.getCrmCustomerId(), request.getCrmVehicleId(), vehicleSnapshot);
 
         // Source eligibility validation (CAP-249 Story #12)

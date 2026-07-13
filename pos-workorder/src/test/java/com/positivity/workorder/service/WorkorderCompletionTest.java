@@ -13,7 +13,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.security.common.GatewaySecurityConstants;
-import com.positivity.workorder.internal.client.CustomerValidationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.ChangeRequest;
@@ -27,6 +26,7 @@ import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
@@ -105,7 +105,7 @@ class WorkorderCompletionTest {
     private ObjectMapper objectMapper;
 
     @Mock
-    private CustomerValidationClient customerValidationClient;
+    private ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
 
     @Mock
     private ShopmgrOperationalContextClient shopmgrClient;
@@ -167,7 +167,7 @@ class WorkorderCompletionTest {
                 estimateItemRepository,
                 workorderServiceRepository,
                 workorderPartRepository,
-                customerValidationClient,
+                extCustomerPartyReplicaRepository,
                 stateMachine,
                 workorderLaborEntryRepository,
                 applicationEventPublisher,

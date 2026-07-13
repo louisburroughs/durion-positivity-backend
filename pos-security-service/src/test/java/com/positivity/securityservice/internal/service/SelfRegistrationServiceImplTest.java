@@ -11,8 +11,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.peoplecontact.UserPersonLinkCreateRequestedV1;
-import com.positivity.securityservice.internal.client.CustomerRegistrationClient;
-import com.positivity.securityservice.internal.client.dto.CustomerPersonSearchResponse;
+import com.positivity.securityservice.internal.dto.CrmMatchSummaryDto;
 import com.positivity.securityservice.internal.dto.SelfRegistrationRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
 import com.positivity.securityservice.internal.entity.Role;
@@ -23,7 +22,6 @@ import com.positivity.securityservice.internal.exception.SelfRegistrationConflic
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.service.SelfRegistrationReviewService;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -58,7 +56,7 @@ class SelfRegistrationServiceImplTest {
     private PeopleContactCommandEmitter peopleContactCommandEmitter;
 
     @Mock
-    private CustomerRegistrationClient customerRegistrationClient;
+    private CrmSignalService crmSignalService;
 
     @Mock
     private SelfRegistrationAttemptService selfRegistrationAttemptService;
@@ -77,9 +75,18 @@ class SelfRegistrationServiceImplTest {
         customerRole.setName("SELF_SERVICE_CUSTOMER");
 
         when(userRepository.findByUsername("jane")).thenReturn(Optional.empty());
-        when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", "+15551234567"))
-                .thenReturn(List.of(new CustomerPersonSearchResponse(
-                        personId, "Jane", "Smith", "Jane Smith", List.of(), true, true, 2, null, null)));
+        when(crmSignalService.assess("jane@example.com", "+15551234567", "Jane", "Smith"))
+                .thenReturn(CrmMatchSummaryDto.builder()
+                        .candidateCount(1)
+                        .anyMatches(true)
+                        .individualCustomerCandidateCount(1)
+                        .commercialContactCandidateCount(1)
+                        .sharedIdentityCandidateCount(1)
+                        .exactEmailMatch(false)
+                        .exactPhoneMatch(false)
+                        .exactNameMatch(true)
+                        .reviewRequired(true)
+                        .build());
         when(personResolutionService.match("jane@example.com", "+15551234567", "Jane", "Smith"))
                 .thenReturn(Optional.of(personId));
         when(userRepository.findByPersonId(personId)).thenReturn(Optional.empty());
@@ -126,8 +133,7 @@ class SelfRegistrationServiceImplTest {
         customerRole.setName("SELF_SERVICE_CUSTOMER");
 
         when(userRepository.findByUsername("jane")).thenReturn(Optional.empty());
-        when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", null))
-                .thenReturn(List.of());
+        when(crmSignalService.assess("jane@example.com", null, "Jane", "Smith")).thenReturn(emptyCrmSummary());
         when(personResolutionService.match("jane@example.com", null, "Jane", "Smith"))
                 .thenReturn(Optional.empty());
         when(personResolutionService.createPerson("jane@example.com", null, "Jane", "Smith"))
@@ -190,11 +196,7 @@ class SelfRegistrationServiceImplTest {
         assertThat(response.username()).isEqualTo("jane");
         assertThat(response.idempotencyKey()).isEqualTo("retry-001");
         verifyNoInteractions(
-                userRepository,
-                roleRepository,
-                customerRegistrationClient,
-                personResolutionService,
-                peopleContactCommandEmitter);
+                userRepository, roleRepository, crmSignalService, personResolutionService, peopleContactCommandEmitter);
     }
 
     @Test
@@ -230,8 +232,7 @@ class SelfRegistrationServiceImplTest {
         linkedUser.setCredentialsNonExpired(true);
 
         when(userRepository.findByUsername("jane")).thenReturn(Optional.empty());
-        when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", null))
-                .thenReturn(List.of());
+        when(crmSignalService.assess("jane@example.com", null, "Jane", "Smith")).thenReturn(emptyCrmSummary());
         when(personResolutionService.match("jane@example.com", null, "Jane", "Smith"))
                 .thenReturn(Optional.of(personId));
         // The projection answers "who is linked to this person" locally now.
@@ -272,8 +273,7 @@ class SelfRegistrationServiceImplTest {
         linkedUser.setCredentialsNonExpired(true);
 
         when(userRepository.findByUsername("jane")).thenReturn(Optional.empty());
-        when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", null))
-                .thenReturn(List.of());
+        when(crmSignalService.assess("jane@example.com", null, "Jane", "Smith")).thenReturn(emptyCrmSummary());
         when(personResolutionService.match("jane@example.com", null, "Jane", "Smith"))
                 .thenReturn(Optional.of(personId));
         when(userRepository.findByPersonId(personId)).thenReturn(Optional.of(linkedUser));
@@ -292,22 +292,18 @@ class SelfRegistrationServiceImplTest {
     void selfRegister_crmConflictOnUnmatchedPerson_blocksBeforeAnythingIsCreated() {
         UUID reviewCaseId = UUID.fromString("00000000-0000-0000-0000-000000000114");
         when(userRepository.findByUsername("jane")).thenReturn(Optional.empty());
-        when(customerRegistrationClient.searchPersons("Jane Smith", "jane@example.com", null))
-                .thenReturn(List.of(new CustomerPersonSearchResponse(
-                        UUID.fromString("00000000-0000-0000-0000-000000000108"),
-                        "Jane",
-                        "Smith",
-                        "Jane Smith",
-                        List.of(new CustomerPersonSearchResponse.ContactPointDto(
-                                UUID.fromString("00000000-0000-0000-0000-000000000109"),
-                                "EMAIL",
-                                "jane@example.com",
-                                true)),
-                        true,
-                        true,
-                        1,
-                        null,
-                        null)));
+        when(crmSignalService.assess("jane@example.com", null, "Jane", "Smith"))
+                .thenReturn(CrmMatchSummaryDto.builder()
+                        .candidateCount(1)
+                        .anyMatches(true)
+                        .individualCustomerCandidateCount(1)
+                        .commercialContactCandidateCount(1)
+                        .sharedIdentityCandidateCount(1)
+                        .exactEmailMatch(true)
+                        .exactPhoneMatch(false)
+                        .exactNameMatch(true)
+                        .reviewRequired(true)
+                        .build());
         when(personResolutionService.match("jane@example.com", null, "Jane", "Smith"))
                 .thenReturn(Optional.empty());
         when(selfRegistrationReviewService.openCase(any())).thenReturn(reviewCaseId);
@@ -325,5 +321,19 @@ class SelfRegistrationServiceImplTest {
         verify(personResolutionService, never()).createPerson(any(), any(), any(), any());
         verify(userRepository, never()).save(any(User.class));
         verifyNoInteractions(peopleContactCommandEmitter);
+    }
+
+    private static CrmMatchSummaryDto emptyCrmSummary() {
+        return CrmMatchSummaryDto.builder()
+                .candidateCount(0)
+                .anyMatches(false)
+                .individualCustomerCandidateCount(0)
+                .commercialContactCandidateCount(0)
+                .sharedIdentityCandidateCount(0)
+                .exactEmailMatch(false)
+                .exactPhoneMatch(false)
+                .exactNameMatch(false)
+                .reviewRequired(false)
+                .build();
     }
 }

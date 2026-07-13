@@ -2,7 +2,6 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
-import com.positivity.workorder.internal.client.CustomerValidationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
@@ -72,7 +71,8 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final EstimateItemRepository estimateItemRepository;
     private final WorkorderServiceRepository workorderServiceRepository;
     private final WorkorderPartRepository workorderPartRepository;
-    private final CustomerValidationClient customerValidationClient;
+    private final com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository
+            extCustomerPartyReplicaRepository;
     private final WorkorderStateMachine stateMachine;
     private final WorkorderLaborEntryRepository workorderLaborEntryRepository;
     private final org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
@@ -403,8 +403,16 @@ public class WorkorderServiceImpl implements WorkorderService {
         workorderRepository.deleteById(id);
     }
 
+    /**
+     * Owner-computed requirements verdict from the ext_customer_party replica (ADR-0044 §6,
+     * #891). Fail-closed like the retired CustomerValidationClient: an unknown customer (no
+     * replica row yet) is treated as requirements not met.
+     */
     private boolean checkCustomerRequirements(UUID customerId) {
-        return customerValidationClient.checkRequirementsMet(customerId);
+        return extCustomerPartyReplicaRepository
+                .findById(customerId)
+                .map(com.positivity.workorder.internal.entity.ExtCustomerPartyReplica::isRequirementsMet)
+                .orElse(false);
     }
 
     private boolean isCustomerApproved(Workorder workorder) {

@@ -5,13 +5,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.workorder.internal.client.CustomerValidationClient;
 import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
@@ -64,7 +64,7 @@ class WorkorderNumberGenerationTest {
     private WorkorderPartRepository workorderPartRepository;
 
     @Mock
-    private CustomerValidationClient customerValidationClient;
+    private ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
 
     @Mock
     private WorkorderStateMachine stateMachine;
@@ -95,7 +95,11 @@ class WorkorderNumberGenerationTest {
                 .customerId(CUSTOMER)
                 .build();
         when(estimateRepository.findById(any())).thenReturn(Optional.of(estimate));
-        when(customerValidationClient.checkRequirementsMet(any())).thenReturn(true);
+        when(extCustomerPartyReplicaRepository.findById(any()))
+                .thenReturn(
+                        java.util.Optional.of(com.positivity.workorder.internal.entity.ExtCustomerPartyReplica.builder()
+                                .requirementsMet(true)
+                                .build()));
         when(estimateItemRepository.findByEstimate_IdAndApprovalStatusAndDeletedFalse(any(), any()))
                 .thenReturn(List.of());
         when(workorderRepository.existsByWorkorderNumber(any())).thenReturn(false);
@@ -114,7 +118,11 @@ class WorkorderNumberGenerationTest {
                 .customerId(CUSTOMER)
                 .build();
         when(estimateRepository.findById(any())).thenReturn(Optional.of(estimate));
-        when(customerValidationClient.checkRequirementsMet(any())).thenReturn(true);
+        when(extCustomerPartyReplicaRepository.findById(any()))
+                .thenReturn(
+                        java.util.Optional.of(com.positivity.workorder.internal.entity.ExtCustomerPartyReplica.builder()
+                                .requirementsMet(true)
+                                .build()));
         when(estimateItemRepository.findByEstimate_IdAndApprovalStatusAndDeletedFalse(any(), any()))
                 .thenReturn(List.of());
         when(workorderRepository.existsByWorkorderNumber("WO-2026-1001")).thenReturn(true);
@@ -128,7 +136,11 @@ class WorkorderNumberGenerationTest {
 
     @Test
     void withoutEstimate_usesSequence() {
-        when(customerValidationClient.checkRequirementsMet(any())).thenReturn(true);
+        when(extCustomerPartyReplicaRepository.findById(any()))
+                .thenReturn(
+                        java.util.Optional.of(com.positivity.workorder.internal.entity.ExtCustomerPartyReplica.builder()
+                                .requirementsMet(true)
+                                .build()));
         when(workorderRepository.existsByWorkorderNumber(any())).thenReturn(false);
         when(workorderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 

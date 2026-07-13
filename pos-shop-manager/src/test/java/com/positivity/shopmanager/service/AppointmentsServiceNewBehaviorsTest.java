@@ -13,8 +13,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.shopmanager.internal.client.CrmCustomerClient;
-import com.positivity.shopmanager.internal.client.CrmVehicleClient;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
 import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
@@ -34,6 +32,7 @@ import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestR
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
+import com.positivity.shopmanager.internal.service.CrmSnapshotService;
 import com.positivity.shopmanager.internal.service.StaffingScheduleService;
 import java.time.Clock;
 import java.time.Instant;
@@ -71,10 +70,7 @@ class AppointmentsServiceNewBehaviorsTest {
     private AppointmentLoadService appointmentLoadService;
 
     @Mock
-    private CrmCustomerClient crmCustomerClient;
-
-    @Mock
-    private CrmVehicleClient crmVehicleClient;
+    private CrmSnapshotService crmSnapshotService;
 
     @Mock
     private StaffingScheduleService staffingScheduleService;
@@ -105,8 +101,7 @@ class AppointmentsServiceNewBehaviorsTest {
                 appointmentServiceRequestRepository,
                 new ObjectMapper(),
                 appointmentLoadService,
-                crmCustomerClient,
-                crmVehicleClient,
+                crmSnapshotService,
                 staffingScheduleService,
                 applicationEventPublisher,
                 shopRepository,
@@ -119,8 +114,8 @@ class AppointmentsServiceNewBehaviorsTest {
         appointment.setStatus(AppointmentStatus.SCHEDULED);
         appointment.setStartAt(Instant.now(TEST_CLOCK).plus(24, ChronoUnit.HOURS));
         appointment.setEndAt(Instant.now(TEST_CLOCK).plus(25, ChronoUnit.HOURS));
-        lenient().when(crmCustomerClient.getCustomerById(any(UUID.class))).thenReturn(Map.of());
-        lenient().when(crmVehicleClient.getVehicleById(any(UUID.class))).thenReturn(Map.of());
+        lenient().when(crmSnapshotService.getCustomerById(any(UUID.class))).thenReturn(Map.of());
+        lenient().when(crmSnapshotService.getVehicleById(any(UUID.class))).thenReturn(Map.of());
         lenient()
                 .when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(any(UUID.class)))
                 .thenReturn(List.of());
@@ -370,7 +365,7 @@ class AppointmentsServiceNewBehaviorsTest {
     @Test
     void createAppointment_throwsCrmCustomerNotFound_when404() {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        when(crmCustomerClient.getCustomerById(any())).thenThrow(new CrmCustomerNotFoundException(customerId));
+        when(crmSnapshotService.getCustomerById(any())).thenThrow(new CrmCustomerNotFoundException(customerId));
 
         AppointmentCreateRequest request = new AppointmentCreateRequest();
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
@@ -390,7 +385,7 @@ class AppointmentsServiceNewBehaviorsTest {
     void createAppointment_throwsCrmVehicleNotFound_when404() {
         UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         // customer call succeeds; vehicle call throws 404
-        when(crmVehicleClient.getVehicleById(any())).thenThrow(new CrmVehicleNotFoundException(vehicleId));
+        when(crmSnapshotService.getVehicleById(any())).thenThrow(new CrmVehicleNotFoundException(vehicleId));
 
         AppointmentCreateRequest request = new AppointmentCreateRequest();
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));

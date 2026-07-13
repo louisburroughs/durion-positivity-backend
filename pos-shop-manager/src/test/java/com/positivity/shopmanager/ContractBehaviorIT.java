@@ -5,8 +5,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.positivity.shopmanager.internal.client.CrmCustomerClient;
-import com.positivity.shopmanager.internal.client.CrmVehicleClient;
+import com.positivity.shopmanager.internal.service.CrmSnapshotService;
 import com.positivity.shopmanager.internal.service.StaffingScheduleService;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,10 +34,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private CrmCustomerClient crmCustomerClient;
-
-    @MockitoBean
-    private CrmVehicleClient crmVehicleClient;
+    private CrmSnapshotService crmSnapshotService;
 
     @MockitoBean
     private StaffingScheduleService staffingScheduleService;
@@ -53,8 +49,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        when(crmCustomerClient.getCustomerById(any())).thenReturn(Map.of("id", "customer-snapshot"));
-        when(crmVehicleClient.getVehicleById(any())).thenReturn(Map.of("id", "vehicle-snapshot"));
+        when(crmSnapshotService.getCustomerById(any())).thenReturn(Map.of("id", "customer-snapshot"));
+        when(crmSnapshotService.getVehicleById(any())).thenReturn(Map.of("id", "vehicle-snapshot"));
     }
 
     @Override

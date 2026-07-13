@@ -8,7 +8,6 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -16,40 +15,6 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 class ShopManagerClientUriTest {
-
-    @Test
-    void crmCustomerClient_usesDirectCustomerDiscovery() {
-        RestClient.Builder builder = RestClient.builder().baseUrl("http://customer");
-        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        UUID customerId = UUID.randomUUID();
-
-        server.expect(requestTo("http://customer/v1/crm/" + customerId))
-                .andExpect(method(HttpMethod.GET))
-                .andExpect(header("X-User", "pos-shop-manager"))
-                .andExpect(header("X-Authorities", "crm:party:view"))
-                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
-
-        CrmCustomerClient client = new CrmCustomerClient(builder.build());
-        assertThat(client.getCustomerById(customerId)).isEmpty();
-        server.verify();
-    }
-
-    @Test
-    void crmVehicleClient_usesDirectCustomerDiscovery() {
-        RestClient.Builder builder = RestClient.builder().baseUrl("http://customer");
-        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        UUID vehicleId = UUID.randomUUID();
-
-        server.expect(requestTo("http://customer/v1/crm/snapshot/vehicle/" + vehicleId))
-                .andExpect(method(HttpMethod.GET))
-                .andExpect(header("X-User", "pos-shop-manager"))
-                .andExpect(header("X-Authorities", "crm:vehicle:view"))
-                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
-
-        CrmVehicleClient client = new CrmVehicleClient(builder.build());
-        assertThat(client.getVehicleById(vehicleId)).isEmpty();
-        server.verify();
-    }
 
     @Test
     void locationClient_usesDirectLocationDiscovery() {
