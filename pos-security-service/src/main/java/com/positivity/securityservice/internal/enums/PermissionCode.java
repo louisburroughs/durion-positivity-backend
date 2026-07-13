@@ -456,13 +456,23 @@ public enum PermissionCode {
     // ── Inventory (new) ────────────────────────────────────────────────────────
     INVENTORY__LOCATION__SYNC(349, "inventory:location:sync"),
     // ── Workorder (new) ────────────────────────────────────────────────────────
-    WORKORDER__EVENTS__REPLAY(350, "workorder:events:replay");
+    WORKORDER__EVENTS__REPLAY(350, "workorder:events:replay"),
+    // ── People Contact (new, ADR-0044 Phase 3 split — #874) ───────────────────
+    PEOPLE_CONTACT__PERSON__VIEW(351, "people-contact:person:view"),
+    PEOPLE_CONTACT__PERSON__CREATE(352, "people-contact:person:create"),
+    PEOPLE_CONTACT__PERSON__EDIT(353, "people-contact:person:edit"),
+    PEOPLE_CONTACT__PERSON__DELETE(354, "people-contact:person:delete"),
+    PEOPLE_CONTACT__ROLE__VIEW(355, "people-contact:role:view"),
+    PEOPLE_CONTACT__ROLE__ASSIGN(356, "people-contact:role:assign"),
+    PEOPLE_CONTACT__ROLE__REVOKE(357, "people-contact:role:revoke"),
+    PEOPLE_CONTACT__USER_LINK__VIEW(358, "people-contact:userLink:view"),
+    PEOPLE_CONTACT__USER_LINK__WRITE(359, "people-contact:userLink:write");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 18;
+    public static final int CATALOG_VERSION = 19;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
