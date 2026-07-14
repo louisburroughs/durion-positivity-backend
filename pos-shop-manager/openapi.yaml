@@ -18,8 +18,6 @@ tags:
   description: Create and list technician and resource assignments for an appointment
 - name: Shop Audit
   description: Shop schedule and assignment audit trail.
-- name: Workorder Operational Context API
-  description: Read-only operational context view for workorders
 - name: Schedule API
   description: Read-only schedule view operations for shop management UI
 - name: Conflict Override API
@@ -341,48 +339,6 @@ paths:
       x-required-permissions:
       - shop:schedule:view
       - appointments:view
-  /v1/shop-manager/{locationId}/workorders/{workorderId}/operationalContext:
-    get:
-      tags:
-      - Workorder Operational Context API
-      summary: View workorder operational context
-      description: Read-only operational context view for workorders used by UI with optional filters.
-      operationId: getOperationalContext
-      parameters:
-      - name: locationId
-        in: path
-        description: Shop location ID
-        required: true
-        schema:
-          type: integer
-          format: int64
-        example: 1
-      - name: workorderId
-        in: path
-        description: Workorder ID
-        required: true
-        schema:
-          type: integer
-          format: int64
-        example: 1
-      - name: filters
-        in: query
-        description: Optional filter parameters
-        required: false
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Operational context retrieved successfully.
-          content:
-            application/json:
-              schema:
-                type: object
-      security:
-      - bearerAuth:
-        - shop:schedule:view
-      x-required-permissions:
-      - shop:schedule:view
   /v1/shop-manager/{locationId}/technicians/{personId}/person:
     get:
       tags:

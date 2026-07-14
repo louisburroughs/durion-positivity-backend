@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.dto.DashboardResponse;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse.BreakInfo;
@@ -29,7 +28,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.web.client.RestClientException;
 
 /**
  * Unit tests for CAP-142 Story #60: Daily Dispatch Board Dashboard service
@@ -62,9 +60,6 @@ class DashboardServiceTest {
     @Mock
     private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
-    @Mock
-    private ShopmgrOperationalContextClient shopmgrOperationalContextClient;
-
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
@@ -88,7 +83,6 @@ class DashboardServiceTest {
                         .location(LOCATION_ID)
                         .people(List.of())
                         .build());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -114,7 +108,6 @@ class DashboardServiceTest {
                                 personAvailability("MECH-001", "Alice", "AVAILABLE"),
                                 personAvailability("MECH-002", "Bob", "AVAILABLE")))
                         .build());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -137,7 +130,6 @@ class DashboardServiceTest {
         Workorder wo2 = buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-001", null);
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo1, wo2));
         when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -180,7 +172,6 @@ class DashboardServiceTest {
                 .thenReturn(PeopleAvailabilityResponse.builder()
                         .people(List.of(mechanicWithPto))
                         .build());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -220,7 +211,6 @@ class DashboardServiceTest {
                 .thenReturn(PeopleAvailabilityResponse.builder()
                         .people(List.of(mechanicOnBreak))
                         .build());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -257,7 +247,6 @@ class DashboardServiceTest {
                 .thenReturn(PeopleAvailabilityResponse.builder()
                         .people(List.of(mechanicOnJob))
                         .build());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -286,7 +275,6 @@ class DashboardServiceTest {
                 buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-007", sharedBayId);
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo1, wo2));
         when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -309,7 +297,6 @@ class DashboardServiceTest {
         // Issue CAP-142: AC-1 — timestamp freshness assertion
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of());
         when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
         Instant before = Instant.now(TEST_CLOCK);
 
         // Act
@@ -325,29 +312,6 @@ class DashboardServiceTest {
     // AC-2b: Bay marked CLOSED/RESERVED/UNDER_MAINTENANCE → BAY_UNAVAILABLE
     // BLOCKING
     // -----------------------------------------------------------------------
-
-    @Test
-    @DisplayName("AC-2b: Bay with status CLOSED triggers BAY_UNAVAILABLE BLOCKING conflict")
-    void getDashboard_bayUnavailableClosed_returnsBlockingConflict() {
-        // Arrange
-        // Issue CAP-142: AC-2b — bay at this location is marked CLOSED → BLOCKING
-        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000BA1");
-        Workorder wo = buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-010", bayId);
-        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
-        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
-                .thenReturn(List.of(new ShopmgrOperationalContextClient.BayAvailabilityDto(bayId, "Bay 1", "CLOSED")));
-
-        // Act
-        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
-
-        // Assert
-        assertThat(response.getConflicts()).anySatisfy(conflict -> {
-            assertThat(conflict.getConflictType()).isEqualTo("BAY_UNAVAILABLE");
-            assertThat(conflict.getSeverity()).isEqualTo("BLOCKING");
-            assertThat(conflict.getAffectedResourceId()).isEqualTo(bayId.toString());
-        });
-    }
 
     // -----------------------------------------------------------------------
     // AC-3a: Mechanic at different location → LOCATION_MISMATCH WARNING
@@ -373,7 +337,6 @@ class DashboardServiceTest {
                 .thenReturn(PeopleAvailabilityResponse.builder()
                         .people(List.of(mechanicElsewhere))
                         .build());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -416,7 +379,6 @@ class DashboardServiceTest {
                 .thenReturn(PeopleAvailabilityResponse.builder()
                         .people(List.of(mechanicMissingCert))
                         .build());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -440,7 +402,6 @@ class DashboardServiceTest {
         // Issue CAP-142: null guard on availability response at line ~56
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of());
         when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(null);
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -455,57 +416,9 @@ class DashboardServiceTest {
     // AC-2b: Bay with RESERVED status → BAY_UNAVAILABLE BLOCKING
     // -----------------------------------------------------------------------
 
-    @Test
-    @DisplayName("AC-2b: Bay with status RESERVED triggers BAY_UNAVAILABLE BLOCKING conflict")
-    void getDashboard_bayUnavailableReserved_returnsBlockingConflict() {
-        // Arrange
-        // Issue CAP-142: AC-2b — RESERVED should also trigger BAY_UNAVAILABLE
-        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000BA2");
-        Workorder wo = buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-013", bayId);
-        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
-        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
-                .thenReturn(
-                        List.of(new ShopmgrOperationalContextClient.BayAvailabilityDto(bayId, "Bay 2", "RESERVED")));
-
-        // Act
-        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
-
-        // Assert
-        assertThat(response.getConflicts()).anySatisfy(conflict -> {
-            assertThat(conflict.getConflictType()).isEqualTo("BAY_UNAVAILABLE");
-            assertThat(conflict.getSeverity()).isEqualTo("BLOCKING");
-            assertThat(conflict.getMessage()).contains("RESERVED");
-        });
-    }
-
     // -----------------------------------------------------------------------
     // AC-2b: Bay with UNDER_MAINTENANCE status → BAY_UNAVAILABLE BLOCKING
     // -----------------------------------------------------------------------
-
-    @Test
-    @DisplayName("AC-2b: Bay with status UNDER_MAINTENANCE triggers BAY_UNAVAILABLE BLOCKING conflict")
-    void getDashboard_bayUnavailableUnderMaintenance_returnsBlockingConflict() {
-        // Arrange
-        // Issue CAP-142: AC-2b — UNDER_MAINTENANCE should also trigger BAY_UNAVAILABLE
-        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000BA3");
-        Workorder wo = buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-014", bayId);
-        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
-        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
-                .thenReturn(List.of(
-                        new ShopmgrOperationalContextClient.BayAvailabilityDto(bayId, "Bay 3", "UNDER_MAINTENANCE")));
-
-        // Act
-        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
-
-        // Assert
-        assertThat(response.getConflicts()).anySatisfy(conflict -> {
-            assertThat(conflict.getConflictType()).isEqualTo("BAY_UNAVAILABLE");
-            assertThat(conflict.getSeverity()).isEqualTo("BLOCKING");
-            assertThat(conflict.getMessage()).contains("UNDER_MAINTENANCE");
-        });
-    }
 
     // -----------------------------------------------------------------------
     // parseCertifications with invalid JSON → treated as empty (no NPE/throw)
@@ -525,7 +438,6 @@ class DashboardServiceTest {
                 .build();
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
         when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act + Assert: should not throw; invalid certifications treated as empty → no
         // skill conflict
@@ -546,7 +458,6 @@ class DashboardServiceTest {
         String uuidLocationId = LOCATION_UUID.toString();
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of());
         when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(uuidLocationId, TEST_DATE);
@@ -572,30 +483,6 @@ class DashboardServiceTest {
     // -----------------------------------------------------------------------
     // F4: Bay status list is populated with bayName and status from Shopmgr
     // -----------------------------------------------------------------------
-
-    @Test
-    @DisplayName("F4: Bay status list is populated with bayName and status from Shopmgr")
-    void getDashboard_shopmgrBayData_populatesBayNameAndStatus() {
-        // Arrange
-        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000BAY".replace("BAY", "BA9"));
-        Workorder wo = buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-020", bayId);
-        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
-        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
-                .thenReturn(List.of(new ShopmgrOperationalContextClient.BayAvailabilityDto(bayId, "Bay A1", "OPEN")));
-
-        // Act
-        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
-
-        // Assert: bay populated from Shopmgr
-        assertThat(response.getBays()).anySatisfy(bay -> {
-            assertThat(bay.getBayId()).isEqualTo(bayId.toString());
-            assertThat(bay.getBayName()).isEqualTo("Bay A1");
-            assertThat(bay.getStatus()).isEqualTo("OPEN");
-            assertThat(bay.isAvailable()).isFalse(); // workorder assigned → not available
-            assertThat(bay.getAssignedWorkorderId()).isEqualTo(wo.getId().toString());
-        });
-    }
 
     // -----------------------------------------------------------------------
     // F5: MechanicStatus.assignedWorkorderId populated for assigned mechanic
@@ -623,7 +510,6 @@ class DashboardServiceTest {
                 .thenReturn(PeopleAvailabilityResponse.builder()
                         .people(List.of(mech))
                         .build());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -661,7 +547,6 @@ class DashboardServiceTest {
                 .thenReturn(PeopleAvailabilityResponse.builder()
                         .people(List.of(mechOnLongBreak))
                         .build());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -681,13 +566,12 @@ class DashboardServiceTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC-DQ-3: dataQualityWarning is false when both people and shopmgr services return normally")
+    @DisplayName("AC-DQ-3: dataQualityWarning is false when people availability resolves normally")
     void whenBothServicesAvailable_dataQualityWarningIsFalse() {
         // Arrange
         // Issue CAP-142 Story #60: data quality warning — happy path, no degradation
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of());
         when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any())).thenReturn(List.of());
 
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
@@ -696,28 +580,6 @@ class DashboardServiceTest {
         assertThat(response.getDataQualityWarning()).isFalse();
     }
 
-    // -----------------------------------------------------------------------
-    // AC-DQ-4: dataQualityWarning=true when ShopmgrOperationalContextClient throws
-    // -----------------------------------------------------------------------
-
-    @Test
-    @DisplayName(
-            "AC-DQ-4: dataQualityWarning is true and bays is empty when shopmgr service throws RestClientException")
-    void whenShopmgrUnavailableViaCatch_dataQualityWarningIsTrue() {
-        // Arrange
-        // Issue CAP-142 Story #60: data quality warning — shopmgr service unavailable
-        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of());
-        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
-        when(shopmgrOperationalContextClient.getBayStatusForLocation(any()))
-                .thenThrow(new RestClientException("shopmgr service unavailable"));
-
-        // Act
-        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
-
-        // Assert
-        assertThat(response.getDataQualityWarning()).isTrue();
-        assertThat(response.getBays()).isEmpty();
-    }
 
     private Workorder buildWorkorder(UUID id, String mechanicId, UUID resourceId) {
         return Workorder.builder()

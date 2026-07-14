@@ -2,7 +2,6 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
-import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
@@ -81,7 +80,6 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final AuditEventRepository auditEventRepository;
     private final IdempotencyService idempotencyService;
     private final PromotionValidationService promotionValidationService;
-    private final ShopmgrOperationalContextClient shopmgrClient;
     private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
     @Override
@@ -826,7 +824,21 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .findById(workorderId)
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
         log.debug("Fetching operational context for existing workorder {}", workorder.getId());
-        return shopmgrClient.getOperationalContext(workorderId);
+        // Served from the workorder's own assignment state (#898): the retired shopmgr proxy
+        // hit a nonexistent path and shopmgr's context view was stub data, so local state is
+        // the only real source — the same fields the override endpoint persists.
+        return OperationalContextResponse.builder()
+                .version(workorder.getOperationalContextVersion())
+                .locationId(workorder.getLocationId())
+                .bayId(workorder.getResourceId() != null ? workorder.getResourceId().toString() : null)
+                .assignedMechanics(parseMechanicIds(workorder.getMechanicIds()))
+                .assignedResources(
+                        workorder.getResourceId() == null
+                                ? Collections.emptyList()
+                                : List.of(workorder.getResourceId()))
+                .constraints(Collections.emptyList())
+                .locked(workorder.getWorkStartedAt() != null)
+                .build();
     }
 
     @Override
