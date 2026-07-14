@@ -20,20 +20,22 @@ tags:
   description: Operations for querying people availability
 - name: Work Sessions API
   description: Operations for managing work sessions and breaks
-- name: People API
-  description: Operations related to people records
 - name: People - TimeEntries
   description: Time entry adjustments and related APIs
+- name: People Compliance API
+  description: Identity-compliance reports (ADR-0015 §4)
+- name: Employee API
+  description: Employee profile and offboarding operations
+- name: Timekeeping Approval API
+  description: Pay-period-based timekeeping approval operations
+- name: People API
+  description: Operations related to people records
 - name: People TimeEntries
   description: Time entry adjustments and related APIs
 - name: People - Exceptions
   description: Time entry exception APIs
 - name: People Bulk Ingest API
   description: Bulk import employee records
-- name: Employee API
-  description: Employee profile and offboarding operations
-- name: Timekeeping Approval API
-  description: Pay-period-based timekeeping approval operations
 paths:
   /v1/people/staffing/assignments/{assignmentId}:
     get:
@@ -1528,6 +1530,41 @@ paths:
         - people:employee:view
       x-required-permissions:
       - people:employee:view
+  /v1/people/compliance/inactive-person-active-user:
+    get:
+      tags:
+      - People Compliance API
+      summary: List active users linked to inactive persons
+      description: 'Compliance check (ADR-0015 §4): returns every ACTIVE user-person link whose linked person is in an inactive employment status (SUSPENDED, TERMINATED, DISABLED). Each row is a user that should have been disabled when the person was disabled/archived. Returns an empty list when none. Link facts come from the people-contact replica, so results can trail the link authority by the event-propagation delay.'
+      operationId: findActiveUsersForInactivePersons
+      responses:
+        '200':
+          description: Offending links returned (possibly empty)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InactivePersonActiveUserResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InactivePersonActiveUserResponse'
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InactivePersonActiveUserResponse'
+      security:
+      - bearerAuth:
+        - people:compliance:view
+      x-required-permissions:
+      - people:compliance:view
   /v1/people/availability:
     get:
       tags:
@@ -2883,6 +2920,44 @@ components:
       - employeeNumber
       - personId
       - status
+    InactivePersonActiveUserResponse:
+      type: object
+      description: An active user-person link whose linked person is in an inactive status (ADR-0015 §4 violation)
+      properties:
+        linkId:
+          type: string
+          format: uuid
+          description: User-person link identifier
+          example: 01960012-0000-7000-8000-000000000001
+        username:
+          type: string
+          description: Username of the security user account with the still-active link
+          example: marcus.webb
+        personId:
+          type: string
+          format: uuid
+          description: Person identifier in an inactive status
+          example: 01960011-0000-7000-8000-000000000001
+        personStatus:
+          type: string
+          description: Inactive status of the linked person
+          enum:
+          - ACTIVE
+          - ON_LEAVE
+          - SUSPENDED
+          - TERMINATED
+          - DISABLED
+          example: TERMINATED
+        personStatusEffectiveAt:
+          type: string
+          format: date-time
+          description: When the person's status last became effective
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - linkId
+      - personId
+      - personStatus
+      - username
     PeopleAvailabilityResponse:
       type: object
       description: Availability of a person at a location for a given date based on staffing assignments

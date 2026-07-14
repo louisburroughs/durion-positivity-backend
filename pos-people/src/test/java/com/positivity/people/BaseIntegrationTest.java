@@ -58,6 +58,7 @@ public abstract class BaseIntegrationTest {
             "people:userLink:write",
             "people:userLink:view",
             "people:availability:view",
+            "people:compliance:view",
             "people:timeAdjustment:create",
             "people:timeAdjustment:view",
             "people:timeAdjustment:approve",

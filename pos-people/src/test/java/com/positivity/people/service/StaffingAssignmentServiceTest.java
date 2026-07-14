@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import com.positivity.people.internal.service.LocationReferenceService;
 import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
 import com.positivity.people.internal.entity.Employee;
@@ -15,6 +14,7 @@ import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
+import com.positivity.people.internal.service.LocationReferenceService;
 import com.positivity.people.internal.service.StaffingAssignmentServiceImpl;
 import java.time.Clock;
 import java.time.Instant;

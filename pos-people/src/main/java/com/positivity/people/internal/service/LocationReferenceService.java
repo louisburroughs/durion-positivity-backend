@@ -42,8 +42,8 @@ public class LocationReferenceService {
     public String getLocationName(@NonNull UUID locationId) {
         ExtLocationReplica location = extLocationReplicaRepository
                 .findById(locationId)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown location: " + locationId));
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown location: " + locationId));
         String name = location.getName();
         return name == null || name.isBlank() ? locationId.toString() : name;
     }
