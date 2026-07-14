@@ -8,6 +8,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.env.Environment;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.stereotype.Component;
@@ -34,7 +35,13 @@ public class EventListenerConfig {
     }
 
     @EventListener(ApplicationReadyEvent.class)
-    public void startKafkaListeners(ApplicationReadyEvent event) {
+    public void startKafkaListeners(ApplicationReadyEvent event, Environment environment) {
+        String autoStartup = environment.getProperty("spring.kafka.listener.auto-startup", "true");
+        if (!Boolean.parseBoolean(autoStartup)) {
+            log.info("Kafka listener auto-startup is disabled; skipping listener startup");
+            return;
+        }
+
         KafkaListenerEndpointRegistry registry =
                 event.getApplicationContext().getBean(KafkaListenerEndpointRegistry.class);
         registry.start();
