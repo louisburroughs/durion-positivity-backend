@@ -111,7 +111,11 @@ public class InvoiceEventsListener {
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
-        log.info("Updated ext_billing_rules version={}", aggregateVersion);
+        // partyId is logged as a hash, matching the owner's masking of party identifiers.
+        log.info(
+                "Updated ext_billing_rules partyId(hash)={} version={}",
+                payload.partyId().hashCode(),
+                aggregateVersion);
     }
 
     private void applyInvoiceUpdated(JsonNode envelope) {
