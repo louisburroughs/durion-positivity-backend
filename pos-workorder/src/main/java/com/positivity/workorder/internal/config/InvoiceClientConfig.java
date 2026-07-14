@@ -7,9 +7,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
 
 /**
- * Configuration for pos-invoice service client.
- * Enables cross-service communication for billing rules lookup (CAP:092 Story
- * #98).
+ * RestClient for the pos-invoice billing-rules lookup (CAP:092 Story #98), the one remaining
+ * synchronous workorder→invoice read after ADR-0044 Phase 5.4 (#900) moved invoice generation to
+ * {@code invoice.commands.v1} / {@code invoice.events.v1}. Retiring this read needs its own
+ * billing-rules fact/replica and is out of #900's scope.
  */
 @Configuration
 public class InvoiceClientConfig {

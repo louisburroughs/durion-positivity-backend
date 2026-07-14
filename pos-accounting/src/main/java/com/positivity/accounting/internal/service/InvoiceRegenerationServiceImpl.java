@@ -1,7 +1,5 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.client.WorkorderInvoiceClient;
-import com.positivity.accounting.internal.client.WorkorderServiceException;
 import com.positivity.accounting.internal.config.WorkorderCommandPublisher;
 import com.positivity.accounting.service.InvoiceRegenerationService;
 import com.positivity.security.common.SecurityContextHelper;
@@ -19,12 +17,11 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * Requests invoice regeneration from pos-workorder.
  *
- * <p>ADR-0044 (#842): when Kafka is enabled ({@code pos.accounting.kafka.enabled}) this publishes
- * a {@code workorder.invoice.regenerate-requested} command to {@code workorder.commands.v1} and
- * returns a {@code PENDING} response — the regenerated invoice arrives asynchronously via
- * {@code invoice.events.v1} into the {@code ext_invoice} replica. The synchronous
- * {@link WorkorderInvoiceClient} path remains as the fallback until the broker rollout completes,
- * after which it will be removed (#842 follow-up).
+ * <p>ADR-0044 (#842/#900): publishes a {@code workorder.invoice.regenerate-requested} command to
+ * {@code workorder.commands.v1} and returns a {@code PENDING} response — the regenerated invoice
+ * arrives asynchronously via {@code invoice.events.v1} into the {@code ext_invoice} replica. The
+ * synchronous fallback client was removed in Phase 5.4 (#900); with the event feed disabled the
+ * endpoint fails fast with 503.
  */
 @Service
 @RequiredArgsConstructor
@@ -35,7 +32,6 @@ public class InvoiceRegenerationServiceImpl implements InvoiceRegenerationServic
 
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(InvoiceRegenerationServiceImpl.class);
 
-    private final WorkorderInvoiceClient workorderInvoiceClient;
     private final ObjectProvider<WorkorderCommandPublisher> commandPublisher;
 
     @Override
@@ -47,19 +43,13 @@ public class InvoiceRegenerationServiceImpl implements InvoiceRegenerationServic
         }
 
         WorkorderCommandPublisher publisher = commandPublisher.getIfAvailable();
-        if (publisher != null) {
-            return requestAsyncRegeneration(publisher, workorderId, idempotencyKey);
+        if (publisher == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Invoice regeneration is asynchronous (ADR-0044 #900) and requires the Kafka event feed;"
+                            + " enable pos.accounting.kafka.enabled");
         }
-
-        try {
-            return workorderInvoiceClient.regenerateInvoiceFromWorkorder(workorderId, idempotencyKey);
-        } catch (WorkorderServiceException e) {
-            HttpStatus status = HttpStatus.resolve(e.getHttpStatus());
-            if (status == null) {
-                status = HttpStatus.SERVICE_UNAVAILABLE;
-            }
-            throw new ResponseStatusException(status, e.getMessage(), e);
-        }
+        return requestAsyncRegeneration(publisher, workorderId, idempotencyKey);
     }
 
     private InvoiceGenerationResponse requestAsyncRegeneration(

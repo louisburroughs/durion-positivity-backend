@@ -106,6 +106,14 @@ pos:
       workorder-manifest-topic: ${POS_INVOICE_WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
       workorder-manifest-consumer-group: ${POS_INVOICE_WORKORDER_MANIFEST_CONSUMER_GROUP:pos-invoice-workorder-manifests}
       workorder-commands-topic: ${POS_INVOICE_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
+      # Own command intake + reconciliation manifests (ADR-0044 §4, #900)
+      commands-topic: ${POS_INVOICE_COMMANDS_TOPIC:invoice.commands.v1}
+      commands-consumer-group: ${POS_INVOICE_COMMANDS_CONSUMER_GROUP:pos-invoice-commands}
+    manifest:
+      topic: ${POS_INVOICE_MANIFEST_TOPIC:invoice.manifest.v1}
+      window: ${POS_INVOICE_MANIFEST_WINDOW:PT1H}
+      grace: ${POS_INVOICE_MANIFEST_GRACE:PT5M}
+      poll-interval-ms: ${POS_INVOICE_MANIFEST_POLL_INTERVAL_MS:300000}
   events:
     api-secret: ${POS_EVENTS_API_SECRET:}
 

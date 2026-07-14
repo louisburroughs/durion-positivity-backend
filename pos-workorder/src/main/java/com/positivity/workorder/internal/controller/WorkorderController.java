@@ -268,11 +268,15 @@ public class WorkorderController {
     }
 
     @Operation(
-            summary = "Generate invoice draft from completed workorder",
-            description = "Generate an invoice draft from a completed workorder with optional idempotency key.")
+            summary = "Request invoice generation from a completed workorder",
+            description = "Queues asynchronous invoice generation (ADR-0044 #900): the response is 202 with "
+                    + "status PENDING and the invoiceId appears on the workorder once the invoice.events.v1 "
+                    + "fact links it. Re-sending the same Idempotency-Key collapses to one generation. When "
+                    + "the workorder is already invoiced, the linked invoice is returned with 200.")
     @ApiResponse(
-            responseCode = "200",
-            description = "Invoice generated successfully or existing invoice returned for idempotent replay.")
+            responseCode = "202",
+            description = "Generation queued; poll the workorder for the linked invoiceId (status PENDING).")
+    @ApiResponse(responseCode = "200", description = "Existing linked invoice returned for idempotent replay.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @ApiResponse(responseCode = "409", description = "Work order is not in COMPLETED state.")
     @PostMapping("/{workorderId}/generate-invoice")
@@ -293,7 +297,9 @@ public class WorkorderController {
                     String idempotencyKey) {
 
         InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, idempotencyKey);
-        return ResponseEntity.ok(response);
+        return WorkorderInvoiceService.STATUS_PENDING.equals(response.getStatus())
+                ? ResponseEntity.accepted().body(response)
+                : ResponseEntity.ok(response);
     }
 
     @Operation(
