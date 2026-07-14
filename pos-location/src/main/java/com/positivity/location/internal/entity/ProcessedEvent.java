@@ -1,6 +1,6 @@
 package com.positivity.location.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -44,6 +44,6 @@ public class ProcessedEvent {
      */
     @Transient
     public Class<?> uuidv7Dependency() {
-        return UUIDv7Generator.class;
+        return UUIDv7Id.class;
     }
 }

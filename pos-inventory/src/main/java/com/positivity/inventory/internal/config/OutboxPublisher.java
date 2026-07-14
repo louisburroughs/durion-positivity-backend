@@ -17,7 +17,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Drains {@code event_outbox} to Kafka (ADR-0044 §4, issue #890).
+ * Drains {@code event_outbox} to Kafka (ADR-0044 §4, issue #899).
  *
  * <p>At-least-once: a row is marked published (in its own short transaction, so no DB connection
  * is held across the blocking broker send) only after the broker acknowledges, and a crash between
@@ -51,12 +51,12 @@ public class OutboxPublisher {
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.publishedCounter = registry == null
                 ? null
-                : Counter.builder("location.outbox.published")
+                : Counter.builder("inventory.outbox.published")
                         .description("Outbox events successfully published to Kafka")
                         .register(registry);
         this.failedCounter = registry == null
                 ? null
-                : Counter.builder("location.outbox.publish.failures")
+                : Counter.builder("inventory.outbox.publish.failures")
                         .description("Outbox publish attempts that failed")
                         .register(registry);
     }

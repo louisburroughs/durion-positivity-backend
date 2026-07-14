@@ -5,7 +5,7 @@ import org.jspecify.annotations.NonNull;
 
 /**
  * Re-queues already-published outbox events for re-publication (ADR-0044 §4 backfill/drift
- * repair, issue #890). Consumers dedupe by eventId, so replay is idempotent.
+ * repair, issue #899). Consumers dedupe by eventId, so replay is idempotent.
  */
 public interface OutboxReplayService {
 

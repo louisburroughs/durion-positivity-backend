@@ -28,7 +28,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Publishes reconciliation manifests for the location fact topic (ADR-0044 §4, issue #890).
+ * Publishes reconciliation manifests for the inventory fact topic (ADR-0044 §4, issue #899).
  *
  * <p>Each closed window gets one {@link ReconciliationManifestV1} on {@code inventory.manifest.v1}
  * summarizing the events published from {@code event_outbox} whose eventId (UUIDv7) timestamp
@@ -49,7 +49,7 @@ public class ManifestPublisher {
     /** Covers the sub-millisecond skew between outbox {@code createdAt} and the eventId timestamp. */
     private static final Duration CREATED_AT_SLACK = Duration.ofSeconds(1);
 
-    private static final String DOMAIN = "location";
+    private static final String DOMAIN = "inventory";
 
     /** Catch-up bound per run — 24 windows covers a day-long outage at the default 1h window. */
     private static final int MAX_WINDOWS_PER_RUN = 24;
@@ -94,12 +94,12 @@ public class ManifestPublisher {
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.publishedCounter = registry == null
                 ? null
-                : Counter.builder("location.manifest.published")
+                : Counter.builder("inventory.manifest.published")
                         .description("Reconciliation manifests published")
                         .register(registry);
         this.failedCounter = registry == null
                 ? null
-                : Counter.builder("location.manifest.publish.failures")
+                : Counter.builder("inventory.manifest.publish.failures")
                         .description("Reconciliation manifest publish attempts that failed")
                         .register(registry);
     }

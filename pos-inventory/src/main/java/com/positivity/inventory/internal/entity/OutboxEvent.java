@@ -14,7 +14,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Transactional-outbox row (ADR-0044 §4, issue #890): a serialized Kafka event written in the
+ * Transactional-outbox row (ADR-0044 §4, issue #899). a serialized Kafka event written in the
  * same transaction as the business state change and drained by {@code OutboxPublisher}.
  */
 @Entity

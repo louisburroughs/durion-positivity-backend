@@ -18,7 +18,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Kafka command listener for {@code inventory.commands.v1} (ADR-0044 §4, issue #890).
+ * Kafka command listener for {@code inventory.commands.v1} (ADR-0044 §4, issue #899).
  *
  * <p>Supported command types:
  * <ul>

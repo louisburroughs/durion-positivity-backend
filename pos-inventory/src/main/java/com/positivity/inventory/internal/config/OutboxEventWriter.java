@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Transactional-outbox writer for location domain events (ADR-0044 §4, issue #890).
+ * Transactional-outbox writer for inventory domain events (ADR-0044 §4, issue #899).
  *
  * <p>Serializes a full {@link DomainEventEnvelope} into {@code event_outbox} within the caller's
  * transaction, so an event exists if and only if the business state change committed.
