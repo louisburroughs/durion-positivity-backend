@@ -13,7 +13,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.security.common.GatewaySecurityConstants;
-import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.ChangeRequest;
 import com.positivity.workorder.internal.entity.Workorder;
@@ -108,9 +107,6 @@ class WorkorderCompletionTest {
     private ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
 
     @Mock
-    private ShopmgrOperationalContextClient shopmgrClient;
-
-    @Mock
     private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
     @Mock
@@ -179,7 +175,6 @@ class WorkorderCompletionTest {
                 auditEventRepository,
                 idempotencyService,
                 promotionValidationService,
-                shopmgrClient,
                 peopleAvailabilityLocalService);
     }
 

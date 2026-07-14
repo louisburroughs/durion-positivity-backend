@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
 import com.positivity.workorder.internal.dto.OperationalContextResponse;
 import com.positivity.workorder.internal.dto.WorkorderStartResponse;
@@ -76,9 +75,6 @@ class OperationalContextServiceTest {
     @Mock
     private PromotionValidationService promotionValidationService;
 
-    @Mock
-    private ShopmgrOperationalContextClient shopmgrClient;
-
     @org.mockito.Mock
     private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
 
@@ -91,29 +87,31 @@ class OperationalContextServiceTest {
     private static final UUID RESOURCE_ID = UUID.fromString("00000000-0000-0000-0000-000000000062");
 
     // -----------------------------------------------------------------------
-    // AC7 — getOperationalContext delegates to shopmgrClient
+    // AC7 — getOperationalContext serves the workorder's own assignment state (#898)
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC7: getOperationalContext delegates to shopmgrClient and returns result")
-    void whenGetOperationalContext_thenDelegatesToShopmgrClientAndReturnsResult() {
-        // Issue CAP-140: AC7 — confirm delegation and transparent return
+    @DisplayName("AC7: getOperationalContext returns the workorder's local assignment state")
+    void whenGetOperationalContext_thenReturnsLocalAssignmentState() {
         var existingWorkorder = Workorder.builder()
                 .id(WORKORDER_ID)
                 .status(WorkorderStatus.ASSIGNED)
-                .build();
-        var expected = OperationalContextResponse.builder()
-                .version("v1")
+                .operationalContextVersion("ctx-v1")
                 .locationId(LOCATION_ID)
-                .locked(false)
+                .resourceId(RESOURCE_ID)
+                .mechanicIds("[\"" + MECHANIC_ID + "\"]")
+                .workStartedAt(null)
                 .build();
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(existingWorkorder));
-        when(shopmgrClient.getOperationalContext(WORKORDER_ID)).thenReturn(expected);
 
         OperationalContextResponse result = workorderService.getOperationalContext(WORKORDER_ID);
 
-        assertThat(result).isEqualTo(expected);
-        verify(shopmgrClient).getOperationalContext(WORKORDER_ID);
+        assertThat(result.getVersion()).isEqualTo("ctx-v1");
+        assertThat(result.getLocationId()).isEqualTo(LOCATION_ID);
+        assertThat(result.getBayId()).isEqualTo(RESOURCE_ID.toString());
+        assertThat(result.getAssignedMechanics()).containsExactly(MECHANIC_ID);
+        assertThat(result.getAssignedResources()).containsExactly(RESOURCE_ID);
+        assertThat(result.isLocked()).isFalse();
     }
 
     @Test

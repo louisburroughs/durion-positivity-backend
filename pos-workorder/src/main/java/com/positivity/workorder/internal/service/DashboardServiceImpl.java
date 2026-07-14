@@ -2,7 +2,6 @@ package com.positivity.workorder.internal.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.dto.BayStatus;
 import com.positivity.workorder.internal.dto.ConflictEntry;
 import com.positivity.workorder.internal.dto.DashboardResponse;
@@ -31,7 +30,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClientException;
 
 /**
  * Implementation of {@link DashboardService} for the Daily Dispatch Board
@@ -47,7 +45,6 @@ public class DashboardServiceImpl implements DashboardService {
 
     private final WorkorderRepository workorderRepository;
     private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
-    private final ShopmgrOperationalContextClient shopmgrOperationalContextClient;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -56,29 +53,21 @@ public class DashboardServiceImpl implements DashboardService {
 
         List<Workorder> workorders = workorderRepository.findByScheduledDateAndLocationId(date, locationUuid);
 
-        // Availability is computed from local replicas (#877); the remote-failure degrade
-        // path is gone with the sync client.
+        // Availability is computed from local replicas (#877); a null response means the
+        // replica lookup could not produce data, which the dashboard surfaces as degraded.
         PeopleAvailabilityResponse availability = peopleAvailabilityLocalService.fetchAvailability(locationId, date);
-        boolean peopleDegraded = false;
+        boolean peopleDegraded = availability == null;
         List<PersonAvailability> people =
                 availability != null && availability.getPeople() != null ? availability.getPeople() : List.of();
 
-        List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays = null;
-        try {
-            shopmgrBays = shopmgrOperationalContextClient.getBayStatusForLocation(locationUuid);
-        } catch (RestClientException e) {
-            log.warn("Shopmgr service unavailable for dashboard locationId={}", locationId, e);
-        }
-        boolean shopmgrDegraded = shopmgrBays == null;
-        if (shopmgrBays == null) {
-            shopmgrBays = List.of();
-        }
-
+        // Bay panel is derived from the workorders' own assignments (#898): the shopmgr
+        // bay-status client was retired — its endpoint no longer existed and always yielded an
+        // empty list, so bay open/closed enrichment never reached this dashboard.
         List<WorkorderSummary> workorderSummaries = buildWorkorderSummaries(workorders);
         List<MechanicStatus> mechanicStatuses = buildMechanicStatuses(workorders, people);
-        List<BayStatus> bayStatuses = buildBayStatuses(workorders, shopmgrBays);
+        List<BayStatus> bayStatuses = buildBayStatuses(workorders);
 
-        List<ConflictEntry> conflicts = detectAllConflicts(workorders, people, shopmgrBays, date);
+        List<ConflictEntry> conflicts = detectAllConflicts(workorders, people, date);
 
         return DashboardResponse.builder()
                 .date(date)
@@ -88,7 +77,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .bays(bayStatuses)
                 .conflicts(conflicts)
                 .lastRefreshed(Instant.now(clock))
-                .dataQualityWarning(peopleDegraded || shopmgrDegraded)
+                .dataQualityWarning(peopleDegraded)
                 .build();
     }
 
@@ -147,59 +136,30 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
     }
 
-    private List<BayStatus> buildBayStatuses(
-            List<Workorder> workorders, List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays) {
+    private List<BayStatus> buildBayStatuses(List<Workorder> workorders) {
         Map<UUID, BayStatus> bayMap = new LinkedHashMap<>();
-        for (ShopmgrOperationalContextClient.BayAvailabilityDto bayDto : shopmgrBays) {
-            bayMap.put(
-                    bayDto.bayId(),
-                    BayStatus.builder()
-                            .bayId(bayDto.bayId().toString())
-                            .bayName(bayDto.bayName())
-                            .status(bayDto.status())
-                            .available(!"CLOSED".equals(bayDto.status())
-                                    && !"RESERVED".equals(bayDto.status())
-                                    && !"UNDER_MAINTENANCE".equals(bayDto.status()))
-                            .build());
-        }
         for (Workorder workorder : workorders) {
             if (workorder.getResourceId() != null) {
                 UUID bayUuid = workorder.getResourceId();
                 String assignedId =
                         workorder.getId() != null ? workorder.getId().toString() : null;
-                BayStatus existing = bayMap.get(bayUuid);
-                if (existing != null) {
-                    bayMap.put(
-                            bayUuid,
-                            BayStatus.builder()
-                                    .bayId(existing.getBayId())
-                                    .bayName(existing.getBayName())
-                                    .status(existing.getStatus())
-                                    .available(false)
-                                    .assignedWorkorderId(assignedId)
-                                    .build());
-                } else {
-                    bayMap.put(
-                            bayUuid,
-                            BayStatus.builder()
-                                    .bayId(bayUuid.toString())
-                                    .available(false)
-                                    .assignedWorkorderId(assignedId)
-                                    .build());
-                }
+                bayMap.put(
+                        bayUuid,
+                        BayStatus.builder()
+                                .bayId(bayUuid.toString())
+                                .status("OCCUPIED")
+                                .available(false)
+                                .assignedWorkorderId(assignedId)
+                                .build());
             }
         }
         return new ArrayList<>(bayMap.values());
     }
 
     private List<ConflictEntry> detectAllConflicts(
-            List<Workorder> workorders,
-            List<PersonAvailability> people,
-            List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays,
-            LocalDate date) {
+            List<Workorder> workorders, List<PersonAvailability> people, LocalDate date) {
         List<ConflictEntry> conflicts = new ArrayList<>();
         detectBayDoubleBooking(workorders, conflicts);
-        detectBayUnavailable(workorders, shopmgrBays, conflicts);
         detectMechanicDoubleBookingFromWorkorders(workorders, conflicts);
         detectMechanicStatusConflicts(workorders, people, date, conflicts);
         detectLocationMismatch(workorders, people, conflicts);
@@ -250,30 +210,6 @@ public class DashboardServiceImpl implements DashboardService {
                         .message("Bay " + entry.getKey() + " is assigned to multiple workorders")
                         .affectedResourceId(entry.getKey().toString())
                         .build());
-            }
-        }
-    }
-
-    private void detectBayUnavailable(
-            List<Workorder> workorders,
-            List<ShopmgrOperationalContextClient.BayAvailabilityDto> shopmgrBays,
-            List<ConflictEntry> conflicts) {
-        Map<UUID, String> statusByBayId = shopmgrBays.stream()
-                .collect(Collectors.toMap(
-                        ShopmgrOperationalContextClient.BayAvailabilityDto::bayId,
-                        ShopmgrOperationalContextClient.BayAvailabilityDto::status,
-                        (a, b) -> a));
-        for (Workorder wo : workorders) {
-            if (wo.getResourceId() != null) {
-                String status = statusByBayId.get(wo.getResourceId());
-                if ("CLOSED".equals(status) || "RESERVED".equals(status) || "UNDER_MAINTENANCE".equals(status)) {
-                    conflicts.add(ConflictEntry.builder()
-                            .conflictType("BAY_UNAVAILABLE")
-                            .severity("BLOCKING")
-                            .message("Bay " + wo.getResourceId() + " is not available (status: " + status + ")")
-                            .affectedResourceId(wo.getResourceId().toString())
-                            .build());
-                }
             }
         }
     }

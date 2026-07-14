@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
@@ -87,9 +86,6 @@ class WorkorderServiceImplCrmPropagationTest {
 
     @Mock
     private PromotionValidationService promotionValidationService;
-
-    @Mock
-    private ShopmgrOperationalContextClient shopmgrClient;
 
     @Mock
     private PeopleAvailabilityLocalService peopleAvailabilityLocalService;

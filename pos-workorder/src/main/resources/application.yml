@@ -88,8 +88,6 @@ pos:
     service-id: ${POS_INVENTORY_SERVICE_ID:inventory}
   people:
     service-id: ${POS_PEOPLE_SERVICE_ID:people}
-  shopmgr:
-    service-id: ${POS_SHOPMGR_SERVICE_ID:shop-manager}
   documents:
     service-id: ${POS_DOCUMENTS_SERVICE_ID:documents}
 
