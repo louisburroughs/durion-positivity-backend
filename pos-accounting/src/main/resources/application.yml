@@ -50,10 +50,6 @@ eureka:
 
 # Cross-service configuration
 pos:
-  workorder:
-    service-id: workorder
-  # RestClient timeouts configured via pos.restclient.connect.timeout and pos.restclient.read.timeout
-  # See RestClientConfig.java for timeout configuration
   accounting:
     credit-memo:
       # Required: GL account for revenue reversals (typically 4000-4999 range)

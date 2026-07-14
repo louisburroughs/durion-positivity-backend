@@ -112,6 +112,13 @@ workorder:
     location-manifest-topic: ${WORKORDER_LOCATION_MANIFEST_TOPIC:location.manifest.v1}
     location-manifest-consumer-group: ${WORKORDER_LOCATION_MANIFEST_CONSUMER_GROUP:pos-workorder-location-manifests}
     location-commands-topic: ${WORKORDER_LOCATION_COMMANDS_TOPIC:location.commands.v1}
+    # Invoice replica feed + async generation commands (ADR-0044 §4/§6, #900)
+    invoice-events-topic: ${WORKORDER_INVOICE_EVENTS_TOPIC:invoice.events.v1}
+    invoice-events-consumer-group: ${WORKORDER_INVOICE_EVENTS_CONSUMER_GROUP:pos-workorder-invoice-events}
+    invoice-manifest-topic: ${WORKORDER_INVOICE_MANIFEST_TOPIC:invoice.manifest.v1}
+    invoice-manifest-consumer-group: ${WORKORDER_INVOICE_MANIFEST_CONSUMER_GROUP:pos-workorder-invoice-manifests}
+    invoice-commands-topic: ${WORKORDER_INVOICE_COMMANDS_TOPIC:invoice.commands.v1}
+    command-send-timeout-ms: ${WORKORDER_COMMAND_SEND_TIMEOUT_MS:10000}
     commands-topic: ${WORKORDER_KAFKA_COMMANDS_TOPIC:workorder.commands.v1}
     consumer-group: ${WORKORDER_KAFKA_CONSUMER_GROUP:${spring.application.name}-commands}
   # Reconciliation manifests (ADR-0044, one summary per closed window of the fact topic)
