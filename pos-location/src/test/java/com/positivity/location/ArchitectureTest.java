@@ -156,7 +156,7 @@ public class ArchitectureTest {
             .because("cyclic dependencies make modules harder to maintain and evolve");
 
     @ArchTest
-    static final ArchRule entities_should_use_uuidv7_id_annotation = classes()
+    static final ArchRule entities_should_use_uuidv7_id_or_generator = classes()
             .that()
             .resideInAnyPackage("..internal.entity..", "..internal.model..")
             .and()
@@ -168,7 +168,7 @@ public class ArchitectureTest {
             .dependOnClassesThat()
             .haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Id")
             .allowEmptyShould(true)
-            .because("ADR-0013 addendum mandates UUID v7 identifiers via shared @UUIDv7Id");
+            .because("ADR-0013 addendum mandates UUID v7 identifiers via @UUIDv7Id or UUIDv7Generator");
 
     @ArchTest
     static final ArchRule entities_should_not_call_uuid_randomUUID = noClasses()
