@@ -464,6 +464,7 @@ public class LocationServiceImpl implements LocationService {
         dto.setPhoneNumbers(contactPoints.stream()
                 .filter(cp -> cp.contactType() != null && cp.contactType().startsWith("PHONE"))
                 .map(ContactPoint::value)
+                .filter(value -> value != null && !value.isBlank())
                 .toList());
         return dto;
     }

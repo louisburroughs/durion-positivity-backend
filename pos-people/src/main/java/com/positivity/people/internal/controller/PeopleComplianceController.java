@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.InactivePersonActiveUserResponse;
 import com.positivity.people.service.PeopleComplianceService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -34,7 +35,11 @@ public class PeopleComplianceController {
     @ApiResponse(
             responseCode = "200",
             description = "Offending links returned (possibly empty)",
-            content = @Content(schema = @Schema(implementation = InactivePersonActiveUserResponse.class)))
+            content =
+                    @Content(
+                            array =
+                                    @ArraySchema(
+                                            schema = @Schema(implementation = InactivePersonActiveUserResponse.class))))
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @ApiResponse(responseCode = "500", description = "Unexpected server error")
     @EmitEvent(id = "REPORT_INACTIVE_PERSON_ACTIVE_USER_GENERATED", apiVersion = "1")

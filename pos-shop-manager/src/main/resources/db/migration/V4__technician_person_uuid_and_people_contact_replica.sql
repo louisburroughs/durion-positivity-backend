@@ -3,6 +3,8 @@
 -- legacy values, and add the people-contact person replica the read path resolves against.
 ALTER TABLE technician DROP COLUMN person_id;
 ALTER TABLE technician ADD COLUMN person_id uuid;
+-- Lookup path for GET .../technicians/{personId}/person (findFirstByShopIdAndPersonId).
+CREATE INDEX idx_sm_technician_shop_person ON technician (shop_id, person_id);
 
 -- ADR-0044 §6 / #877 pattern: read-only person identity replica fed by people-contact.events.v1
 -- (names + contact points). pos-people-contact publishes the facts; nothing in this module may

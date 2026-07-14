@@ -447,7 +447,7 @@
               "type": "string",
               "format": "uuid"
             },
-            "example": 1
+            "example": "018e1c9f-6b5a-7890-abcd-1234567890ab"
           },
           {
             "name": "personId",
@@ -458,7 +458,7 @@
               "type": "string",
               "format": "uuid"
             },
-            "example": 1
+            "example": "01960011-0000-7000-8000-000000000001"
           }
         ],
         "responses": {

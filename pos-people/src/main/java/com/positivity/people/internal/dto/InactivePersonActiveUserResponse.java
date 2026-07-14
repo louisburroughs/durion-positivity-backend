@@ -31,9 +31,10 @@ public class InactivePersonActiveUserResponse {
     private UUID personId;
 
     @Schema(
-            description = "Inactive status of the linked person",
+            description = "Inactive status of the linked person; absent when the employee row"
+                    + " disappeared between the link query and the mapping step",
             example = "TERMINATED",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private EmployeeStatus personStatus;
 
     @Schema(
