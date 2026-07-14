@@ -26,10 +26,15 @@ public class PickListServiceImpl implements PickListService {
     private static final String PICK_LIST = "PickList";
     private final PickListRepository pickListRepository;
     private final PickTaskRepository pickTaskRepository;
+    private final InventoryFactPublisher inventoryFactPublisher;
 
-    public PickListServiceImpl(PickListRepository pickListRepository, PickTaskRepository pickTaskRepository) {
+    public PickListServiceImpl(
+            PickListRepository pickListRepository,
+            PickTaskRepository pickTaskRepository,
+            InventoryFactPublisher inventoryFactPublisher) {
         this.pickListRepository = pickListRepository;
         this.pickTaskRepository = pickTaskRepository;
+        this.inventoryFactPublisher = inventoryFactPublisher;
     }
 
     @Override
@@ -49,6 +54,7 @@ public class PickListServiceImpl implements PickListService {
         if (savedPickList.getPickListId() == null) {
             savedPickList.setPickListId(UUIDv7Generator.generate());
         }
+        inventoryFactPublisher.markPickListChanged(savedPickList.getPickListId());
 
         if (request.getReservationId() != null) {
             pickTaskRepository.findByPickListOrderBySortOrderAsc(savedPickList);
@@ -84,6 +90,7 @@ public class PickListServiceImpl implements PickListService {
 
         pickList.setStatus(status);
         PickListEntity saved = pickListRepository.save(pickList);
+        inventoryFactPublisher.markPickListChanged(saved.getPickListId());
         return toResponse(saved);
     }
 
@@ -94,6 +101,7 @@ public class PickListServiceImpl implements PickListService {
                 .orElseThrow(() -> new ResourceNotFoundException(PICK_LIST, pickListId.toString()));
         pickList.setStatus(PickListStatus.READY_TO_PICK);
         PickListEntity saved = pickListRepository.save(pickList);
+        inventoryFactPublisher.markPickListChanged(saved.getPickListId());
         return toResponse(saved);
     }
 
@@ -131,12 +139,14 @@ public class PickListServiceImpl implements PickListService {
         UUID actualLocationId = scannedLocationId;
         task.setSuggestedLocationId(actualLocationId);
         PickTaskEntity savedTask = pickTaskRepository.save(task);
+        inventoryFactPublisher.markPickTaskChanged(savedTask.getPickTaskId());
 
         List<PickTaskEntity> allTasks = pickTaskRepository.findByPickListOrderBySortOrderAsc(pickList);
         boolean allPicked = allTasks.stream().allMatch(pickTask -> PickTaskStatus.PICKED.equals(pickTask.getStatus()));
         if (allPicked) {
             pickList.setStatus(PickListStatus.COMPLETED);
             pickListRepository.save(pickList);
+            inventoryFactPublisher.markPickListChanged(pickListId);
         }
 
         return toTaskResponse(savedTask);
@@ -157,6 +167,7 @@ public class PickListServiceImpl implements PickListService {
         }
         pickList.setStatus(PickListStatus.CANCELLED);
         pickListRepository.save(pickList);
+        inventoryFactPublisher.markPickListChanged(pickListId);
     }
 
     private PickListResponse toResponse(PickListEntity entity) {

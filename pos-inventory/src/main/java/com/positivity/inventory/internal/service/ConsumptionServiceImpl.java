@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.domainevents.inventory.ConsumptionRecordedV1;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemLine;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
 import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
@@ -115,12 +116,26 @@ public class ConsumptionServiceImpl implements ConsumptionService {
         int totalItemsConsumed =
                 items.stream().mapToInt(ConsumeItemLine::getQuantity).sum();
 
-        return new ConsumptionResponse(
-                UUIDv7Generator.generate(),
+        UUID consumptionId = UUIDv7Generator.generate();
+        Instant consumedAt = Instant.now(clock);
+        // #901: workorder's ext_pick_task replica accumulates consumed quantities from this fact.
+        inventoryFactPublisher.recordConsumption(new ConsumptionRecordedV1(
+                consumptionId,
                 request.getWorkorderId(),
                 request.getPickListId(),
                 totalItemsConsumed,
-                Instant.now(clock),
+                consumedAt,
+                items.stream()
+                        .map(item -> new ConsumptionRecordedV1.Line(
+                                item.getPickTaskId(), item.getSkuId(), item.getQuantity()))
+                        .toList()));
+
+        return new ConsumptionResponse(
+                consumptionId,
+                request.getWorkorderId(),
+                request.getPickListId(),
+                totalItemsConsumed,
+                consumedAt,
                 ledgerEntryIds);
     }
 

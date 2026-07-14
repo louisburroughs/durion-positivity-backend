@@ -84,8 +84,6 @@ pos:
     base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
   invoice:
     service-id: ${POS_INVOICE_SERVICE_ID:invoice}
-  inventory:
-    service-id: ${POS_INVENTORY_SERVICE_ID:inventory}
   people:
     service-id: ${POS_PEOPLE_SERVICE_ID:people}
   documents:
@@ -112,6 +110,12 @@ workorder:
     location-manifest-topic: ${WORKORDER_LOCATION_MANIFEST_TOPIC:location.manifest.v1}
     location-manifest-consumer-group: ${WORKORDER_LOCATION_MANIFEST_CONSUMER_GROUP:pos-workorder-location-manifests}
     location-commands-topic: ${WORKORDER_LOCATION_COMMANDS_TOPIC:location.commands.v1}
+    # Pick replica feed + async pick commands (ADR-0044 §4/§6, #901)
+    inventory-events-topic: ${WORKORDER_INVENTORY_EVENTS_TOPIC:inventory.events.v1}
+    inventory-events-consumer-group: ${WORKORDER_INVENTORY_EVENTS_CONSUMER_GROUP:pos-workorder-inventory-events}
+    inventory-manifest-topic: ${WORKORDER_INVENTORY_MANIFEST_TOPIC:inventory.manifest.v1}
+    inventory-manifest-consumer-group: ${WORKORDER_INVENTORY_MANIFEST_CONSUMER_GROUP:pos-workorder-inventory-manifests}
+    inventory-commands-topic: ${WORKORDER_INVENTORY_COMMANDS_TOPIC:inventory.commands.v1}
     # Invoice replica feed + async generation commands (ADR-0044 §4/§6, #900)
     invoice-events-topic: ${WORKORDER_INVOICE_EVENTS_TOPIC:invoice.events.v1}
     invoice-events-consumer-group: ${WORKORDER_INVOICE_EVENTS_CONSUMER_GROUP:pos-workorder-invoice-events}

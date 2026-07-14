@@ -140,7 +140,7 @@ class WorkorderPickedItemsControllerTest {
         mockMvc.perform(post(CONSUME_URL, WORKORDER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
+                .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.workorderId").value(WORKORDER_ID.toString()))
                 .andExpect(jsonPath("$.totalItemsConsumed").value(3))
                 .andExpect(jsonPath("$.results[0].status").value("SUCCESS"));

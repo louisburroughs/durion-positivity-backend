@@ -76,10 +76,12 @@ public class WorkorderPickedItemsController {
     @EmitEvent(id = "WORKORDER_PICKED_ITEMS_CONSUME", apiVersion = "1")
     @Operation(
             summary = "Consume picked items into workorder",
-            description = "Consume the picked items for a workorder so parts usage is recorded against the job")
+            description = "Queues asynchronous consumption of picked items (ADR-0044 #901): the response is "
+                    + "202 with per-item status PENDING; the inventory.consumption.recorded fact updates the "
+                    + "pick replicas and subsequent picked-items reads observe the consumed quantities.")
     @ApiResponse(
-            responseCode = "200",
-            description = "Picked items consumed successfully",
+            responseCode = "202",
+            description = "Consumption queued; poll the picked items for consumed quantities (status PENDING).",
             content = @Content(schema = @Schema(implementation = ConsumePickedItemsResponse.class)))
     @ApiResponse(
             responseCode = "400",
@@ -106,6 +108,6 @@ public class WorkorderPickedItemsController {
                     ConsumePickedItemsRequest request) {
 
         ConsumePickedItemsResponse response = workorderPickFacadeService.consumePickedItems(workorderId, request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.accepted().body(response);
     }
 }
