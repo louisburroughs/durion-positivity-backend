@@ -934,14 +934,20 @@ public class WorkorderServiceImpl implements WorkorderService {
         if (mechanicIds == null || mechanicIds.isBlank() || "[]".equals(mechanicIds)) {
             return Collections.emptyList();
         }
-        return java.util.Arrays.stream(
-                        mechanicIds.replace("[", "").replace("]", "").split(","))
-                .map(String::trim)
-                .filter(value -> !value.isBlank())
-                .map(value -> value.replace("\"", ""))
-                .filter(value -> !value.isBlank())
-                .map(UUID::fromString)
-                .toList();
+        try {
+            return java.util.Arrays.stream(
+                            mechanicIds.replace("[", "").replace("]", "").split(","))
+                    .map(String::trim)
+                    .filter(value -> !value.isBlank())
+                    .map(value -> value.replace("\"", ""))
+                    .filter(value -> !value.isBlank())
+                    .map(UUID::fromString)
+                    .toList();
+        } catch (IllegalArgumentException e) {
+            // Malformed persisted assignment data must not turn a read endpoint into a 500.
+            log.warn("Ignoring malformed mechanicIds value: {}", mechanicIds, e);
+            return Collections.emptyList();
+        }
     }
 
     private String buildAuditDetails(

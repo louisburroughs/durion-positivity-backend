@@ -53,10 +53,10 @@ public class DashboardServiceImpl implements DashboardService {
 
         List<Workorder> workorders = workorderRepository.findByScheduledDateAndLocationId(date, locationUuid);
 
-        // Availability is computed from local replicas (#877); the remote-failure degrade
-        // path is gone with the sync client.
+        // Availability is computed from local replicas (#877); a null response means the
+        // replica lookup could not produce data, which the dashboard surfaces as degraded.
         PeopleAvailabilityResponse availability = peopleAvailabilityLocalService.fetchAvailability(locationId, date);
-        boolean peopleDegraded = false;
+        boolean peopleDegraded = availability == null;
         List<PersonAvailability> people =
                 availability != null && availability.getPeople() != null ? availability.getPeople() : List.of();
 
@@ -147,6 +147,7 @@ public class DashboardServiceImpl implements DashboardService {
                         bayUuid,
                         BayStatus.builder()
                                 .bayId(bayUuid.toString())
+                                .status("OCCUPIED")
                                 .available(false)
                                 .assignedWorkorderId(assignedId)
                                 .build());
