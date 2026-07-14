@@ -18,6 +18,8 @@ tags:
   description: Shop schedule and assignment audit trail.
 - name: Schedule API
   description: Read-only schedule view operations for shop management UI
+- name: Technician API
+  description: Technician identity lookups for a shop location
 - name: Conflict Override API
   description: Operations for appointment conflict override decisions
 paths:
@@ -337,6 +339,48 @@ paths:
       x-required-permissions:
       - shop:schedule:view
       - appointments:view
+  /v1/shop-manager/{locationId}/technicians/{personId}/person:
+    get:
+      tags:
+      - Technician API
+      summary: Get technician person details
+      description: Resolves the person identity (names, contact details) of a technician working at the given shop location from the local people-contact replica. Identity fields can trail the people-contact authority by the event-propagation delay.
+      operationId: getTechnicianPerson
+      parameters:
+      - name: locationId
+        in: path
+        description: Shop location ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      - name: personId
+        in: path
+        description: People-contact person ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 01960011-0000-7000-8000-000000000001
+      responses:
+        '200':
+          description: Technician person details returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonDTO'
+        '404':
+          description: No technician links this person to this location.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonDTO'
+      security:
+      - bearerAuth:
+        - shop:technician:view
+      x-required-permissions:
+      - shop:technician:view
   /v1/schedules/view:
     get:
       tags:
@@ -1061,6 +1105,38 @@ components:
       - id
       - recordedAt
       - retentionYears
+    PersonDTO:
+      type: object
+      description: Person details for a technician
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: People-contact person identifier
+          example: 01960011-0000-7000-8000-000000000001
+        firstName:
+          type: string
+          description: First name of the person
+          example: Jane
+        lastName:
+          type: string
+          description: Last name of the person
+          example: Doe
+        primaryEmail:
+          type: string
+          description: Primary email address of the person
+          example: jane.doe@example.com
+        secondaryEmail:
+          type: string
+          description: Secondary email address of the person
+          example: jane.d@example.com
+        phoneNumbers:
+          type: array
+          description: Phone numbers associated with the person
+          example:
+          - +1-217-555-0100
+          items:
+            type: string
     ConflictDetails:
       type: object
       description: Details about a conflict associated with a schedule event

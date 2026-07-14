@@ -282,6 +282,10 @@ services:
           ["workorder.manifest.v1.dlq"]=2592000000
           ["customer.events.v1"]=604800000
           ["customer.events.v1.dlq"]=2592000000
+          ["people-contact.events.v1"]=604800000
+          ["people-contact.commands.v1"]=604800000
+          ["people-contact.manifest.v1"]=259200000
+          ["people-contact.events.v1.dlq"]=2592000000
           ["invoice.events.v1"]=604800000
           ["invoice.events.v1.dlq"]=2592000000
           ["payment.cleared.v1"]=604800000

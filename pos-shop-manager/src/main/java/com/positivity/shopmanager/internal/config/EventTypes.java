@@ -72,6 +72,11 @@ public final class EventTypes {
                 EventTypeRegistration.write(
                                 "SHOPMGR_APPOINTMENT_CREATED_FROM_WORKORDER",
                                 "Appointment created from a work order; WorkExec notified")
+                        .build(),
+                // TechnicianController - 1 event (#885)
+                EventTypeRegistration.fastRead(
+                                "SHOPMGR_TECHNICIAN_PERSON_GET",
+                                "Get technician person details from the people-contact replica")
                         .build());
     }
 }

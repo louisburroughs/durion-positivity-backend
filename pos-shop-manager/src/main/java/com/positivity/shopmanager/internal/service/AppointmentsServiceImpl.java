@@ -36,6 +36,7 @@ import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchExce
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.service.AppointmentLoadService;
@@ -90,6 +91,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private final ApplicationEventPublisher eventPublisher;
     private final ShopRepository shopRepository;
     private final SourceEligibilityService sourceEligibilityService;
+    private final ExtPersonReplicaRepository extPersonReplicaRepository;
     private final Clock clock;
 
     /**
@@ -756,11 +758,19 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         }
     }
 
-    private String resolveTechnicianDisplayName(String technicianId, Long personId) {
+    private String resolveTechnicianDisplayName(String technicianId, UUID personId) {
         if (personId == null) {
             return technicianId;
         }
-        return "Technician " + personId;
+        // #885: person names come from the local people-contact replica; fall back to a
+        // placeholder while the replica catches up.
+        return extPersonReplicaRepository
+                .findById(personId)
+                .map(person -> ((person.getFirstName() == null ? "" : person.getFirstName() + " ")
+                                + (person.getLastName() == null ? "" : person.getLastName()))
+                        .trim())
+                .filter(name -> !name.isBlank())
+                .orElse("Technician " + personId);
     }
 
     private ScheduleViewResponse.ScheduleEventView toScheduleEvent(Appointment appointment) {

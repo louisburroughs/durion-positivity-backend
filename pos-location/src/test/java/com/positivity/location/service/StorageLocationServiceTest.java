@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
-import com.positivity.location.internal.repository.ExtStorageLocationOnHandReplicaRepository;
 import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
@@ -14,6 +13,7 @@ import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
+import com.positivity.location.internal.repository.ExtStorageLocationOnHandReplicaRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.StorageLocationRepository;
 import com.positivity.location.internal.service.StorageLocationServiceImpl;
@@ -437,7 +437,12 @@ class StorageLocationServiceTest {
                 .build();
 
         when(storageLocationRepository.findByIdAndSiteId(id, siteId)).thenReturn(Optional.of(entity));
-        when(extStorageLocationOnHandReplicaRepository.findById(id)).thenReturn(java.util.Optional.of(com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica.builder().storageLocationId(id).onHandQuantity(5).build()));
+        when(extStorageLocationOnHandReplicaRepository.findById(id))
+                .thenReturn(java.util.Optional.of(
+                        com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica.builder()
+                                .storageLocationId(id)
+                                .onHandQuantity(5)
+                                .build()));
 
         assertThatThrownBy(() -> storageLocationService.deactivateStorageLocation(siteId, id, null))
                 .isInstanceOf(ResponseStatusException.class)
@@ -471,7 +476,12 @@ class StorageLocationServiceTest {
 
         when(storageLocationRepository.findByIdAndSiteId(sourceId, siteId)).thenReturn(Optional.of(source));
         when(storageLocationRepository.findByIdAndSiteId(destinationId, siteId)).thenReturn(Optional.of(destination));
-        when(extStorageLocationOnHandReplicaRepository.findById(sourceId)).thenReturn(java.util.Optional.of(com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica.builder().storageLocationId(sourceId).onHandQuantity(5).build()));
+        when(extStorageLocationOnHandReplicaRepository.findById(sourceId))
+                .thenReturn(java.util.Optional.of(
+                        com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica.builder()
+                                .storageLocationId(sourceId)
+                                .onHandQuantity(5)
+                                .build()));
         when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
@@ -497,7 +507,12 @@ class StorageLocationServiceTest {
                 .build();
 
         when(storageLocationRepository.findByIdAndSiteId(sourceId, siteId)).thenReturn(Optional.of(source));
-        when(extStorageLocationOnHandReplicaRepository.findById(sourceId)).thenReturn(java.util.Optional.of(com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica.builder().storageLocationId(sourceId).onHandQuantity(2).build()));
+        when(extStorageLocationOnHandReplicaRepository.findById(sourceId))
+                .thenReturn(java.util.Optional.of(
+                        com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica.builder()
+                                .storageLocationId(sourceId)
+                                .onHandQuantity(2)
+                                .build()));
         when(storageLocationRepository.findByIdAndSiteId(destinationId, siteId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> storageLocationService.deactivateStorageLocation(siteId, sourceId, destinationId))
@@ -531,7 +546,12 @@ class StorageLocationServiceTest {
                 .build();
 
         when(storageLocationRepository.findByIdAndSiteId(sourceId, siteId)).thenReturn(Optional.of(source));
-        when(extStorageLocationOnHandReplicaRepository.findById(sourceId)).thenReturn(java.util.Optional.of(com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica.builder().storageLocationId(sourceId).onHandQuantity(2).build()));
+        when(extStorageLocationOnHandReplicaRepository.findById(sourceId))
+                .thenReturn(java.util.Optional.of(
+                        com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica.builder()
+                                .storageLocationId(sourceId)
+                                .onHandQuantity(2)
+                                .build()));
         when(storageLocationRepository.findByIdAndSiteId(destinationId, siteId)).thenReturn(Optional.of(destination));
 
         assertThatThrownBy(() -> storageLocationService.deactivateStorageLocation(siteId, sourceId, destinationId))

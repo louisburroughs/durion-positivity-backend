@@ -444,8 +444,8 @@
             "description": "Shop location ID",
             "required": true,
             "schema": {
-              "type": "integer",
-              "format": "int64"
+              "type": "string",
+              "format": "uuid"
             },
             "example": 1
           },
@@ -455,8 +455,8 @@
             "description": "Technician person ID",
             "required": true,
             "schema": {
-              "type": "integer",
-              "format": "int64"
+              "type": "string",
+              "format": "uuid"
             },
             "example": 1
           }
@@ -758,9 +758,9 @@
         "description": "Person details for a technician",
         "properties": {
           "id": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Person ID"
+            "type": "string",
+            "format": "uuid",
+            "description": "People-contact person identifier"
           },
           "firstName": {
             "type": "string",
@@ -786,10 +786,6 @@
               "type": "string"
             },
             "description": "List of phone numbers"
-          },
-          "username": {
-            "type": "string",
-            "description": "Username"
           }
         }
       },

@@ -50,7 +50,8 @@ class LocationFactPublisherTest {
     void setUp() {
         when(writerProvider.getIfAvailable()).thenReturn(writer);
         when(locationParentRepository.findByChild_Id(any())).thenReturn(List.of());
-        publisher = new LocationFactPublisher(writerProvider, locationParentRepository, TEST_CLOCK, "location.events.v1");
+        publisher =
+                new LocationFactPublisher(writerProvider, locationParentRepository, TEST_CLOCK, "location.events.v1");
     }
 
     @Test
@@ -97,8 +98,7 @@ class LocationFactPublisherTest {
         assertThat(fact.country()).isEqualTo("US");
         assertThat(fact.defaultStagingLocationId()).isEqualTo(staging.getId());
         assertThat(fact.defaultQuarantineLocationId()).isNull();
-        assertThat(fact.parents())
-                .containsExactly(new LocationUpdatedV1.ParentRef(parentSite.getId(), "PHYSICAL"));
+        assertThat(fact.parents()).containsExactly(new LocationUpdatedV1.ParentRef(parentSite.getId(), "PHYSICAL"));
     }
 
     @Test

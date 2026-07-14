@@ -1,8 +1,8 @@
-package com.positivity.location.internal.service;
+package com.positivity.shopmanager.internal.service;
 
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
-import com.positivity.location.internal.repository.ProcessedEventRepository;
+import com.positivity.shopmanager.internal.repository.ProcessedEventRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
@@ -19,34 +19,32 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Consumer-side reconciliation for the {@code ext_storage_location_on_hand} replica (ADR-0044 §4, issue #899).
+ * Consumer-side reconciliation for the {@code ext_people_contact_person} replica (ADR-0044 §4,
+ * issue #885). Doubles as the bootstrap path: a brand-new empty replica mismatches every manifest
+ * window, so replay requests backfill it without dedicated snapshot code.
  *
- * <p>For every {@link ReconciliationManifestV1} on {@code inventory.manifest.v1}, recomputes the
- * same count + checksum from {@code processed_events} (owner {@code inventory}) — window
- * membership is the UUIDv7 timestamp embedded in each recorded eventId, exactly the definition
- * the owner used. On mismatch it increments {@code replica.drift} and publishes a
- * {@code inventory.outbox.replay-requested} command for the window; the replayed events are
+ * <p>For every {@link ReconciliationManifestV1} on {@code people-contact.manifest.v1}, recomputes
+ * the same count + checksum from {@code processed_events} (owner {@code people-contact}). On
+ * mismatch it increments {@code replica.drift} and publishes a
+ * {@code people-contact.outbox.replay-requested} command for the window; replayed events are
  * deduplicated by the {@code processed_events} primary key, so repair is idempotent.
- *
- * <p>The owner's manifest counts every fact in the window (including availability and lead-time facts this
- * module ignores), which is why {@link InventoryEventsListener} records every eventId it sees.
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "pos.location.kafka", name = "enabled", havingValue = "true")
-public class InventoryManifestListener {
+@ConditionalOnProperty(prefix = "pos.shop-manager.kafka", name = "enabled", havingValue = "true")
+public class PeopleContactManifestListener {
 
-    private static final String REPLAY_COMMAND_TYPE = "inventory.outbox.replay-requested";
+    private static final String REPLAY_COMMAND_TYPE = "people-contact.outbox.replay-requested";
 
     private final ProcessedEventRepository processedEventRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final Counter driftCounter;
 
-    @Value("${pos.location.kafka.inventory-commands-topic:inventory.commands.v1}")
-    private String locationCommandsTopic;
+    @Value("${pos.shop-manager.kafka.people-contact-commands-topic:people-contact.commands.v1}")
+    private String peopleContactCommandsTopic;
 
-    public InventoryManifestListener(
+    public PeopleContactManifestListener(
             ProcessedEventRepository processedEventRepository,
             KafkaTemplate<String, String> kafkaTemplate,
             ObjectMapper objectMapper,
@@ -59,14 +57,15 @@ public class InventoryManifestListener {
                 ? null
                 : Counter.builder("replica.drift")
                         .description("Reconciliation manifests that did not match the local replica")
-                        .tag("owner", "inventory")
-                        .tag("entity", "inventory-events")
+                        .tag("owner", "people-contact")
+                        .tag("entity", "people-contact-events")
                         .register(registry);
     }
 
     @KafkaListener(
-            topics = "${pos.location.kafka.inventory-manifest-topic:inventory.manifest.v1}",
-            groupId = "${pos.location.kafka.inventory-manifest-consumer-group:pos-location-inventory-manifests}")
+            topics = "${pos.shop-manager.kafka.people-contact-manifest-topic:people-contact.manifest.v1}",
+            groupId =
+                    "${pos.shop-manager.kafka.people-contact-manifest-consumer-group:pos-shop-manager-people-contact-manifests}")
     public void onManifest(@NonNull String message) {
         ReconciliationManifestV1 manifest;
         try {
@@ -79,7 +78,7 @@ public class InventoryManifestListener {
         }
 
         List<String> receivedIds = processedEventRepository.findEventIdsInRange(
-                InventoryEventsListener.OWNER,
+                PeopleContactEventsListener.OWNER,
                 UuidV7Timestamps.minStringAt(manifest.windowStartUtc()),
                 UuidV7Timestamps.minStringAt(manifest.windowEndUtc()));
         String observedChecksum = ReconciliationManifestV1.checksumOf(receivedIds);
@@ -97,7 +96,7 @@ public class InventoryManifestListener {
             driftCounter.increment();
         }
         log.warn(
-                "Replica drift detected owner=inventory window=[{}, {}) expectedCount={} observedCount={}"
+                "Replica drift detected owner=people-contact window=[{}, {}) expectedCount={} observedCount={}"
                         + " expectedChecksum={} observedChecksum={} eventTypeCounts={} — requesting outbox replay",
                 manifest.windowStartUtc(),
                 manifest.windowEndUtc(),
@@ -116,14 +115,15 @@ public class InventoryManifestListener {
                     new ReplayCommand.Payload(
                             manifest.windowStartUtc().toString(),
                             manifest.windowEndUtc().toString())));
-            kafkaTemplate.send(locationCommandsTopic, manifest.windowStartUtc().toString(), command);
+            kafkaTemplate.send(
+                    peopleContactCommandsTopic, manifest.windowStartUtc().toString(), command);
         } catch (Exception e) {
             // Best effort: the drift metric already fired, and the next manifest re-detects.
             log.warn("Failed to publish outbox replay request for window starting {}", manifest.windowStartUtc(), e);
         }
     }
 
-    /** Command envelope for the owner's {@code inventory.commands.v1} listener. */
+    /** Command envelope for the owner's {@code people-contact.commands.v1} listener. */
     record ReplayCommand(
             @NonNull String commandType, @NonNull Payload payload) {
         record Payload(@Nullable String since, @Nullable String until) {}

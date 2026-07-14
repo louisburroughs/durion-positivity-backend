@@ -2,17 +2,17 @@ package com.positivity.location.internal.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica;
-import com.positivity.location.internal.repository.ExtStorageLocationOnHandReplicaRepository;
 import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
 import com.positivity.location.internal.dto.StorageLocationTopologyResponse;
 import com.positivity.location.internal.dto.StorageLocationValidationResponseDTO;
+import com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
+import com.positivity.location.internal.repository.ExtStorageLocationOnHandReplicaRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.StorageLocationRepository;
 import com.positivity.location.service.StorageLocationInventoryTransferService;
@@ -398,8 +398,7 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         if (requested == null) {
             return;
         }
-        if (requested == StorageLocationStatus.INACTIVE
-                && replicaOnHandQuantity(storageLocationId) > 0) {
+        if (requested == StorageLocationStatus.INACTIVE && replicaOnHandQuantity(storageLocationId) > 0) {
             UUID destinationStorageLocationId = patch.getDestinationStorageLocationId();
             if (destinationStorageLocationId != null && destinationStorageLocationId.equals(storageLocationId)) {
                 throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, INVALID_DESTINATION);

@@ -1,14 +1,16 @@
-package com.positivity.location.internal.dto;
+package com.positivity.shopmanager.internal.dto;
 
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.UUID;
+import lombok.Builder;
 import lombok.Data;
 
 @Data
-@Schema(description = "Person reference associated with a location")
+@Builder
+@Schema(description = "Person details for a technician")
 public class PersonDTO {
 
     @Schema(

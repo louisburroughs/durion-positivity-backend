@@ -95,5 +95,11 @@ pos:
       vehicle-manifest-topic: ${POS_SHOP_MANAGER_VEHICLE_MANIFEST_TOPIC:vehicle.manifest.v1}
       vehicle-manifest-consumer-group: ${POS_SHOP_MANAGER_VEHICLE_MANIFEST_CONSUMER_GROUP:pos-shop-manager-vehicle-manifests}
       vehicle-commands-topic: ${POS_SHOP_MANAGER_VEHICLE_COMMANDS_TOPIC:vehicle.commands.v1}
+      # Person identity replica feed + reconciliation (ADR-0044 §6, #885)
+      people-contact-events-topic: ${POS_SHOP_MANAGER_PC_EVENTS_TOPIC:people-contact.events.v1}
+      people-contact-events-consumer-group: ${POS_SHOP_MANAGER_PC_EVENTS_CONSUMER_GROUP:pos-shop-manager-people-contact-events}
+      people-contact-manifest-topic: ${POS_SHOP_MANAGER_PC_MANIFEST_TOPIC:people-contact.manifest.v1}
+      people-contact-manifest-consumer-group: ${POS_SHOP_MANAGER_PC_MANIFEST_CONSUMER_GROUP:pos-shop-manager-people-contact-manifests}
+      people-contact-commands-topic: ${POS_SHOP_MANAGER_PC_COMMANDS_TOPIC:people-contact.commands.v1}
   catalog:
     service-id: ${POS_CATALOG_SERVICE_ID:catalog}
