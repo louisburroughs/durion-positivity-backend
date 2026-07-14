@@ -929,10 +929,6 @@ paths:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1appointments~1{appointmentId}~1reschedule
   /v1/schedules/view:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1schedules~1view
-  /v1/shop-manager/{locationId}/services/{serviceId}/details:
-    $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1{locationId}~1services~1{serviceId}~1details
-  /v1/shop-manager/{locationId}/technicians/{personId}/person:
-    $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1{locationId}~1technicians~1{personId}~1person
   /v1/shop/audit:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop~1audit
   /v1/shop/audit/{id}:

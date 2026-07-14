@@ -1,6 +1,8 @@
 # ADR-0044 Event-Only Domain Walls and Module Communication Policy
 
-- Status: **Accepted** (2026-07-08 — issue [#823](https://github.com/louisburroughs/durion-positivity-backend/issues/823))
+- Status: **Accepted** (2026-07-08 — issue [#823](https://github.com/louisburroughs/durion-positivity-backend/issues/823));
+  **enforcement live since 2026-07-14** — the Phase 5.6 flip (#902) made the `pos-archunit`
+  `DomainWallsTest` build-failing with an empty violation list
 - Date: 2026-07-08
 - Supersedes: the domain-to-domain portions of the service-discovery client policy
   (`docs/service-discovery-migration/client-policy-matrix.md`) and the javadoc-only

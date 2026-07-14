@@ -8,8 +8,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.workorder.internal.entity.ExtBillingRulesReplica;
 import com.positivity.workorder.internal.entity.ExtInvoiceReplica;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.repository.ExtBillingRulesReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtInvoiceReplicaRepository;
 import com.positivity.workorder.internal.repository.ProcessedEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -35,6 +37,7 @@ class InvoiceEventsListenerTest {
 
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final ExtInvoiceReplicaRepository replica = mock(ExtInvoiceReplicaRepository.class);
+    private final ExtBillingRulesReplicaRepository billingRules = mock(ExtBillingRulesReplicaRepository.class);
     private final WorkorderRepository workorders = mock(WorkorderRepository.class);
     private final WorkorderFactPublisher factPublisher = mock(WorkorderFactPublisher.class);
 
@@ -43,7 +46,7 @@ class InvoiceEventsListenerTest {
     @BeforeEach
     void setUp() {
         listener = new InvoiceEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, workorders, factPublisher);
+                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, billingRules, workorders, factPublisher);
     }
 
     private String event(String eventId, long version) {
@@ -106,6 +109,50 @@ class InvoiceEventsListenerTest {
         assertThat(workorder.getInvoiceId()).isEqualTo(otherInvoiceId);
         verify(workorders, never()).save(any());
         verify(factPublisher, never()).markChanged(any());
+    }
+
+    @Test
+    @DisplayName("Materializes billing-rules fact into ext_billing_rules (#902)")
+    void upsertsBillingRulesReplica() {
+        when(processedEvents.existsById("e-br")).thenReturn(false);
+        when(billingRules.findById("party-001")).thenReturn(Optional.empty());
+
+        listener.onInvoiceEvent("""
+                {"eventId":"e-br","eventType":"invoice.billing-rules.updated","schemaVersion":1,
+                 "aggregateId":"00000000-0000-0000-0000-00000000000b","aggregateVersion":3,
+                 "payload":{"partyId":"party-001","purchaseOrderRequired":true,
+                            "paymentTermsCode":"NET_30","invoiceDeliveryMethod":"EMAIL",
+                            "invoiceGroupingStrategy":"PER_WORKORDER"}}
+                """);
+
+        ArgumentCaptor<ExtBillingRulesReplica> saved = ArgumentCaptor.forClass(ExtBillingRulesReplica.class);
+        verify(billingRules).save(saved.capture());
+        assertThat(saved.getValue().getPartyId()).isEqualTo("party-001");
+        assertThat(saved.getValue().isPurchaseOrderRequired()).isTrue();
+        assertThat(saved.getValue().getAggregateVersion()).isEqualTo(3L);
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Skips stale billing-rules facts below the replica's version")
+    void skipsStaleBillingRules() {
+        when(processedEvents.existsById("e-br-old")).thenReturn(false);
+        when(billingRules.findById("party-001"))
+                .thenReturn(Optional.of(ExtBillingRulesReplica.builder()
+                        .partyId("party-001")
+                        .purchaseOrderRequired(true)
+                        .aggregateVersion(9L)
+                        .updatedAt(Instant.now(TEST_CLOCK))
+                        .build()));
+
+        listener.onInvoiceEvent("""
+                {"eventId":"e-br-old","eventType":"invoice.billing-rules.updated","schemaVersion":1,
+                 "aggregateId":"00000000-0000-0000-0000-00000000000b","aggregateVersion":2,
+                 "payload":{"partyId":"party-001","purchaseOrderRequired":false}}
+                """);
+
+        verify(billingRules, never()).save(any());
+        verify(processedEvents).save(any());
     }
 
     @Test

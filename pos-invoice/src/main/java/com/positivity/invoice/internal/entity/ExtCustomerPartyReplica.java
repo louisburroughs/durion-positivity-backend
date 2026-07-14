@@ -1,8 +1,9 @@
 package com.positivity.invoice.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
@@ -12,6 +13,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Read-only customer-party replica fed by {@code customer.events.v1}
@@ -24,6 +27,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "ext_customer_party")
 public class ExtCustomerPartyReplica {
 
@@ -43,12 +47,13 @@ public class ExtCustomerPartyReplica {
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    /** ArchUnit UUIDv7 rule hook (ADR-0013): the key is the owner's UUIDv7, stored verbatim. */
+    /** ArchUnit UUIDv7 rule hook (ADR-0013, generator-owned upstream): the key is the owner's UUIDv7, stored verbatim. */
     @Transient
     public Class<?> uuidv7Dependency() {
-        return UUIDv7Id.class;
+        return UUIDv7Generator.class;
     }
 }

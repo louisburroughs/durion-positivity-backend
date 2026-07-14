@@ -1,9 +1,12 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.domainevents.invoice.BillingRulesUpdatedV1;
 import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
+import com.positivity.workorder.internal.entity.ExtBillingRulesReplica;
 import com.positivity.workorder.internal.entity.ExtInvoiceReplica;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.repository.ExtBillingRulesReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtInvoiceReplicaRepository;
 import com.positivity.workorder.internal.repository.ProcessedEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -43,6 +46,7 @@ public class InvoiceEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtInvoiceReplicaRepository extInvoiceReplicaRepository;
+    private final ExtBillingRulesReplicaRepository extBillingRulesReplicaRepository;
     private final WorkorderRepository workorderRepository;
     private final WorkorderFactPublisher workorderFactPublisher;
 
@@ -71,6 +75,8 @@ public class InvoiceEventsListener {
         try {
             if (InvoiceUpdatedV1.EVENT_TYPE.equals(eventType)) {
                 applyInvoiceUpdated(envelope);
+            } else if (BillingRulesUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                applyBillingRulesUpdated(envelope);
             } else {
                 // Ignored types still fall through to the processed_events insert below: the
                 // owner's manifest counts every fact in the window.
@@ -86,6 +92,30 @@ public class InvoiceEventsListener {
                 .owner(OWNER)
                 .processedAt(Instant.now(clock))
                 .build());
+    }
+
+    private void applyBillingRulesUpdated(JsonNode envelope) {
+        BillingRulesUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), BillingRulesUpdatedV1.class);
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        ExtBillingRulesReplica existing =
+                extBillingRulesReplicaRepository.findById(payload.partyId()).orElse(null);
+        if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
+            return;
+        }
+        extBillingRulesReplicaRepository.save(ExtBillingRulesReplica.builder()
+                .partyId(payload.partyId())
+                .purchaseOrderRequired(payload.purchaseOrderRequired())
+                .paymentTermsCode(payload.paymentTermsCode())
+                .invoiceDeliveryMethod(payload.invoiceDeliveryMethod())
+                .invoiceGroupingStrategy(payload.invoiceGroupingStrategy())
+                .aggregateVersion(aggregateVersion)
+                .updatedAt(Instant.now(clock))
+                .build());
+        // partyId is logged as a hash, matching the owner's masking of party identifiers.
+        log.info(
+                "Updated ext_billing_rules partyId(hash)={} version={}",
+                payload.partyId().hashCode(),
+                aggregateVersion);
     }
 
     private void applyInvoiceUpdated(JsonNode envelope) {
