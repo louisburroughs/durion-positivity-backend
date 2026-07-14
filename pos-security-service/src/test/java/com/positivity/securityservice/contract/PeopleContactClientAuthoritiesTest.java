@@ -6,7 +6,10 @@ import com.positivity.securityservice.internal.controller.RoleController;
 import com.positivity.securityservice.internal.controller.UserController;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -52,14 +55,25 @@ class PeopleContactClientAuthoritiesTest {
                 .as("%s#%s must declare @PreAuthorize", controller.getSimpleName(), methodName)
                 .isNotNull();
         String expression = preAuthorize.value();
-        boolean covered =
-                PEOPLE_CONTACT_GRANT.stream().anyMatch(authority -> expression.contains("'" + authority + "'"));
-        assertThat(covered)
+        // Every authority referenced by the expression must be inside the grant: an expression
+        // like hasAuthority('a') and hasAuthority('b') with b outside the grant would 403 the
+        // client at runtime even though a is granted.
+        Set<String> required = new HashSet<>();
+        Matcher matcher = Pattern.compile("'([^']+)'").matcher(expression);
+        while (matcher.find()) {
+            required.add(matcher.group(1));
+        }
+        assertThat(required)
+                .as(
+                        "%s#%s declares no authorities in its @PreAuthorize expression: %s",
+                        controller.getSimpleName(), methodName, expression)
+                .isNotEmpty();
+        assertThat(required)
                 .as(
                         "%s#%s requires %s, which is outside pos-people-contact's static grant %s —"
                                 + " update the client's X-Authorities header (see"
                                 + " pos-people-contact RestClientConfig, #880)",
                         controller.getSimpleName(), methodName, expression, PEOPLE_CONTACT_GRANT)
-                .isTrue();
+                .isSubsetOf(PEOPLE_CONTACT_GRANT);
     }
 }
