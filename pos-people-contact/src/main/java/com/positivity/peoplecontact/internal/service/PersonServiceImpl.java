@@ -4,9 +4,11 @@ import com.positivity.peoplecontact.internal.dto.Person;
 import com.positivity.peoplecontact.internal.dto.ResolvePersonRequest;
 import com.positivity.peoplecontact.internal.dto.ResolvePersonResponse;
 import com.positivity.peoplecontact.internal.entity.PersonContactPoint;
+import com.positivity.peoplecontact.internal.exception.PersonHasLinkedUsersException;
 import com.positivity.peoplecontact.internal.repository.PersonContactPointRepository;
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
 import com.positivity.peoplecontact.internal.repository.PersonSpecifications;
+import com.positivity.peoplecontact.internal.repository.UserPersonLinkRepository;
 import com.positivity.peoplecontact.service.PersonService;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -43,6 +45,8 @@ public class PersonServiceImpl implements PersonService {
     private final PersonRepository personRepository;
 
     private final PersonContactPointRepository personContactPointRepository;
+
+    private final UserPersonLinkRepository userPersonLinkRepository;
 
     private final PeopleContactEventPublisher eventPublisher;
 
@@ -233,6 +237,14 @@ public class PersonServiceImpl implements PersonService {
     @Override
     @Transactional
     public void deletePerson(@NonNull UUID id) {
+        // #881: fail fast with 409 instead of letting the user_person_links FK violation
+        // escape as a 500; the caller must unlink users first.
+        if (userPersonLinkRepository.existsByPerson_Id(id)) {
+            throw new PersonHasLinkedUsersException(id);
+        }
+        // #881: contact points have no FK to person — remove them in the same transaction so
+        // the person.deleted fact and the authority's own tables cannot drift apart.
+        personContactPointRepository.deleteByPersonId(id);
         personRepository.deleteById(id);
         eventPublisher.publishPersonDeleted(id);
     }

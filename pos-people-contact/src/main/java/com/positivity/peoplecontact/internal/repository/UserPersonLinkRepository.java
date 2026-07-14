@@ -24,6 +24,8 @@ public interface UserPersonLinkRepository extends JpaRepository<UserPersonLink, 
 
     boolean existsByUsername(@NonNull String username);
 
+    boolean existsByPerson_Id(@NonNull UUID personId);
+
     boolean existsByUsernameAndPerson_Id(@NonNull String username, @NonNull UUID personId);
 
     void deleteByUsername(@NonNull String username);
