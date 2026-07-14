@@ -84,6 +84,9 @@ class WorkorderNumberGenerationTest {
     @Mock
     private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
+    @org.mockito.Mock
+    private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
+
     @InjectMocks
     private com.positivity.workorder.internal.service.WorkorderServiceImpl service;
 

@@ -113,6 +113,9 @@ class WorkorderCompletionTest {
     @Mock
     private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
+    @Mock
+    private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
+
     @InjectMocks
     private WorkorderStateMachine stateMachine;
 

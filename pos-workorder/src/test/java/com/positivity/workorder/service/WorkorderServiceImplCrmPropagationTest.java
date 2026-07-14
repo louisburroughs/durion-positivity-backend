@@ -94,6 +94,9 @@ class WorkorderServiceImplCrmPropagationTest {
     @Mock
     private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
+    @org.mockito.Mock
+    private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
+
     @InjectMocks
     private WorkorderServiceImpl workorderService;
 
