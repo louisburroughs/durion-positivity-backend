@@ -209,8 +209,21 @@ jobs:
         run: ./scripts/check-flyway-hygiene.sh
 
       - name: Run unit tests
-        run: ./mvnw -pl ${{ matrix.module }} test
-          org.jacoco:jacoco-maven-plugin:0.8.14:report -DskipITs -T 1C -B -q -o
+        # pos-archunit's cross-module rules need sibling modules' target/classes on the
+        # classpath: the installed Spring Boot fat jars hide application classes under
+        # BOOT-INF/classes and every rule passes vacuously (#909). Build it as a reactor
+        # (-am) while running only its own tests in the upstream modules' place.
+        run: |
+          if [[ "${{ matrix.module }}" == "pos-archunit" ]]; then
+            ./mvnw -pl pos-archunit -am test \
+              org.jacoco:jacoco-maven-plugin:0.8.14:report \
+              -Dtest='com.positivity.archunit.*' \
+              -Dsurefire.failIfNoSpecifiedTests=false \
+              -DskipITs -T 1C -B -q -o
+          else
+            ./mvnw -pl ${{ matrix.module }} test \
+              org.jacoco:jacoco-maven-plugin:0.8.14:report -DskipITs -T 1C -B -q -o
+          fi
 
       - name: Upload test results
         if: always()
@@ -282,7 +295,19 @@ jobs:
           ./mvnw -pl pos-events test -DskipITs -T 1C -B -q
 
       - name: Run integration tests
-        run: ./mvnw -pl ${{ matrix.module }} -DskipTests=false verify -T 1C -B -q -o
+        # verify re-runs surefire, so pos-archunit needs the same reactor treatment as in
+        # the unit-tests job (#909); scope surefire and failsafe to its own tests.
+        run: |
+          if [[ "${{ matrix.module }}" == "pos-archunit" ]]; then
+            ./mvnw -pl pos-archunit -am -DskipTests=false verify \
+              -Dtest='com.positivity.archunit.*' \
+              -Dsurefire.failIfNoSpecifiedTests=false \
+              -Dit.test='com.positivity.archunit.*' \
+              -Dfailsafe.failIfNoSpecifiedTests=false \
+              -T 1C -B -q -o
+          else
+            ./mvnw -pl ${{ matrix.module }} -DskipTests=false verify -T 1C -B -q -o
+          fi
 
       - name: Upload integration test results
         if: always()
