@@ -89,6 +89,7 @@ BACKEND_SERVICES=(
   pos-location
   pos-mcp-server
   pos-people
+  pos-people-contact
   pos-price
   pos-security-service
   pos-shop-manager
