@@ -165,6 +165,9 @@ public class ArchitectureTest {
             .areAnnotatedWith("jakarta.persistence.Entity")
             .should()
             .dependOnClassesThat()
+            .haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
+            .orShould()
+            .dependOnClassesThat()
             .haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Id")
             .allowEmptyShould(true)
             .because("ADR-0013 mandates UUID v7 generation for all entity identifiers");
