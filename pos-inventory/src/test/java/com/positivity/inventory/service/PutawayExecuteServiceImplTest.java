@@ -62,7 +62,11 @@ class PutawayExecuteServiceImplTest {
     void setUp() {
         Clock fixedClock = Clock.fixed(Instant.parse("2026-02-25T12:00:00Z"), ZoneOffset.UTC);
         putawayExecuteService = new PutawayExecuteServiceImpl(
-                putawayTaskRepository, inventoryLedgerEntryRepository, putawayValidationService, fixedClock);
+                putawayTaskRepository,
+                inventoryLedgerEntryRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
+                putawayValidationService,
+                fixedClock);
 
         taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         sourceLocationId = UUID.fromString("11111111-1111-1111-1111-111111111111");

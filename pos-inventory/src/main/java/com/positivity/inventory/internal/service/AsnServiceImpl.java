@@ -55,6 +55,7 @@ public class AsnServiceImpl implements AsnService {
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderLineRepository purchaseOrderLineRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final InventoryFactPublisher inventoryFactPublisher;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
@@ -240,6 +241,7 @@ public class AsnServiceImpl implements AsnService {
                     .notes("Goods receipt " + persistedReceipt.getReceiptNumber())
                     .build();
             inventoryLedgerEntryRepository.save(entry);
+            inventoryFactPublisher.markEntry(entry);
         }
 
         long nextOpenBalance = Math.max(0L, currentOpenBalance - receiptTotalMinor);

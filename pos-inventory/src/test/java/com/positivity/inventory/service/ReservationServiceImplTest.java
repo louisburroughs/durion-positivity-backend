@@ -100,6 +100,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
         // Default lenient stubs for the SC1–SC7 scaffold tests
         lenient().when(reservationRepository.findByWorkorderLineId(any())).thenReturn(Optional.empty());
@@ -377,6 +378,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -408,6 +410,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -445,6 +448,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
         UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -464,6 +468,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
         ReservationEntity reservation = ReservationEntity.builder()
@@ -510,6 +515,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
         ReservationEntity reservation = ReservationEntity.builder()
@@ -559,6 +565,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
         ReservationEntity reservation = ReservationEntity.builder()
@@ -611,6 +618,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -629,6 +637,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -662,6 +671,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");

@@ -81,6 +81,12 @@ pos:
       commands-topic: ${POS_LOCATION_COMMANDS_TOPIC:location.commands.v1}
       commands-consumer-group: ${POS_LOCATION_COMMANDS_CONSUMER_GROUP:pos-location-commands}
       enabled: ${POS_LOCATION_KAFKA_ENABLED:false}
+      # Inventory on-hand replica feed + reconciliation (ADR-0044 §6, #899)
+      inventory-events-topic: ${POS_LOCATION_INVENTORY_EVENTS_TOPIC:inventory.events.v1}
+      inventory-events-consumer-group: ${POS_LOCATION_INVENTORY_EVENTS_CONSUMER_GROUP:pos-location-inventory-events}
+      inventory-manifest-topic: ${POS_LOCATION_INVENTORY_MANIFEST_TOPIC:inventory.manifest.v1}
+      inventory-manifest-consumer-group: ${POS_LOCATION_INVENTORY_MANIFEST_CONSUMER_GROUP:pos-location-inventory-manifests}
+      inventory-commands-topic: ${POS_LOCATION_INVENTORY_COMMANDS_TOPIC:inventory.commands.v1}
     manifest:
       topic: ${POS_LOCATION_MANIFEST_TOPIC:location.manifest.v1}
       window: ${POS_LOCATION_MANIFEST_WINDOW:PT1H}

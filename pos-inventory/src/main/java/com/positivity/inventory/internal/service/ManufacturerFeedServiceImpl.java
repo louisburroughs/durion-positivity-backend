@@ -29,14 +29,17 @@ public class ManufacturerFeedServiceImpl implements ManufacturerFeedService {
     private final NormalizedAvailabilityRepository normalizedAvailabilityRepository;
     private final UnmappedManufacturerPartRepository unmappedManufacturerPartRepository;
     private final Clock clock;
+    private final InventoryFactPublisher inventoryFactPublisher;
 
     public ManufacturerFeedServiceImpl(
             NormalizedAvailabilityRepository normalizedAvailabilityRepository,
             UnmappedManufacturerPartRepository unmappedManufacturerPartRepository,
-            Clock clock) {
+            Clock clock,
+            InventoryFactPublisher inventoryFactPublisher) {
         this.normalizedAvailabilityRepository = normalizedAvailabilityRepository;
         this.unmappedManufacturerPartRepository = unmappedManufacturerPartRepository;
         this.clock = clock;
+        this.inventoryFactPublisher = inventoryFactPublisher;
     }
 
     @Override
@@ -79,6 +82,7 @@ public class ManufacturerFeedServiceImpl implements ManufacturerFeedService {
         normalized.setSchemaVersion(CURRENT_SCHEMA_VERSION);
 
         normalizedAvailabilityRepository.save(normalized);
+        inventoryFactPublisher.markLeadTimeChanged(item.getProductId());
     }
 
     private void upsertUnmapped(ManufacturerFeedItemDto item, Instant eventTime) {

@@ -50,7 +50,10 @@ class ManufacturerFeedServiceImplTest {
     void setUp() {
         fixedClock = Clock.fixed(Instant.parse("2026-02-25T00:00:00Z"), ZoneOffset.UTC);
         service = new ManufacturerFeedServiceImpl(
-                normalizedAvailabilityRepository, unmappedManufacturerPartRepository, fixedClock);
+                normalizedAvailabilityRepository,
+                unmappedManufacturerPartRepository,
+                fixedClock,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class));
     }
 
     @Test

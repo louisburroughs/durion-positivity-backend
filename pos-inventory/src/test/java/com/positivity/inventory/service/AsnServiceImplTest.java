@@ -98,6 +98,7 @@ class AsnServiceImplTest {
                 purchaseOrderRepository,
                 purchaseOrderLineRepository,
                 inventoryLedgerEntryRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 applicationEventPublisher);
         authenticateAs("asn-test-user");
     }

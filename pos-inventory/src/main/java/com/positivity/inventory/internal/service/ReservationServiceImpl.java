@@ -37,6 +37,7 @@ public class ReservationServiceImpl implements ReservationService {
     private final ReservationRepository reservationRepository;
     private final AllocationRepository allocationRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final InventoryFactPublisher inventoryFactPublisher;
     private final StorageLocationValidationService storageLocationValidationService;
 
     @Override
@@ -205,6 +206,7 @@ public class ReservationServiceImpl implements ReservationService {
                 .timestamp(Instant.now(clock))
                 .build();
         inventoryLedgerEntryRepository.save(entry);
+        inventoryFactPublisher.markEntry(entry);
     }
 
     private ReservationEntity updateExistingReservation(ReservationEntity existing, CreateReservationRequest request) {

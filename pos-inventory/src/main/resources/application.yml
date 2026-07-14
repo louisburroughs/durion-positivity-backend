@@ -124,6 +124,16 @@ pos:
       workorder-manifest-topic: ${POS_INVENTORY_WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
       workorder-manifest-consumer-group: ${POS_INVENTORY_WORKORDER_MANIFEST_CONSUMER_GROUP:pos-inventory-workorder-manifests}
       workorder-commands-topic: ${POS_INVENTORY_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
+      # Own fact publishing (ADR-0044 §6, #899): availability / storage-location on-hand /
+      # lead-time facts via the transactional outbox, with manifests and replay commands.
+      events-topic: ${POS_INVENTORY_EVENTS_TOPIC:inventory.events.v1}
+      commands-topic: ${POS_INVENTORY_COMMANDS_TOPIC:inventory.commands.v1}
+      commands-consumer-group: ${POS_INVENTORY_COMMANDS_CONSUMER_GROUP:pos-inventory-commands}
+    manifest:
+      topic: ${POS_INVENTORY_MANIFEST_TOPIC:inventory.manifest.v1}
+      window: ${POS_INVENTORY_MANIFEST_WINDOW:PT1H}
+      grace: ${POS_INVENTORY_MANIFEST_GRACE:PT5M}
+      poll-interval-ms: ${POS_INVENTORY_MANIFEST_POLL_INTERVAL_MS:300000}
     location:
       # Window the manual sync endpoint asks pos-location to re-emit (owner caps lookback).
       replay-lookback: ${POS_INVENTORY_LOCATION_REPLAY_LOOKBACK:P30D}
