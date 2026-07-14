@@ -2,6 +2,7 @@ package com.positivity.workorder.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -16,6 +17,7 @@ import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.internal.controller.SubstituteLinkController;
 import com.positivity.workorder.internal.dto.pick.CreateSubstituteLinkRequest;
 import com.positivity.workorder.internal.dto.pick.SubstituteLinkResponse;
+import com.positivity.workorder.internal.dto.pick.SuggestSubstitutesRequest;
 import com.positivity.workorder.internal.dto.pick.UpdateSubstituteLinkRequest;
 import com.positivity.workorder.internal.enums.SubstituteType;
 import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkException;
@@ -298,12 +300,42 @@ class SubstituteLinkControllerTest {
     @DisplayName("AC8: POST /v1/workorders/{workorderId}/suggestSubstitutes returns 200")
     void whenSuggestSubstitutes_thenReturns200() throws Exception {
         // Arrange
-        when(substituteLinkService.suggestSubstitutes(eq(WORKORDER_ID))).thenReturn(List.of());
+        when(substituteLinkService.suggestSubstitutes(eq(WORKORDER_ID), isNull()))
+                .thenReturn(List.of());
 
         // Act & Assert
         mockMvc.perform(post(SUGGEST_URL, WORKORDER_ID).contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());
+    }
+
+    // Issue #914: suggestSubstitutes accepts an optional part identifier
+    @Test
+    @DisplayName("Issue #914: POST suggestSubstitutes with partId body forwards part scope to service")
+    void whenSuggestSubstitutesWithPartId_thenScopesToPart() throws Exception {
+        // Arrange
+        var response = SubstituteLinkResponse.builder()
+                .id(LINK_ID)
+                .productId(PRODUCT_ID)
+                .substitutePartId(SUBSTITUTE_PART_ID)
+                .substituteType(SubstituteType.EQUIVALENT)
+                .priority(100)
+                .isActive(true)
+                .version(0)
+                .build();
+        when(substituteLinkService.suggestSubstitutes(eq(WORKORDER_ID), eq(PRODUCT_ID)))
+                .thenReturn(List.of(response));
+
+        var request = SuggestSubstitutesRequest.builder().partId(PRODUCT_ID).build();
+
+        // Act & Assert
+        mockMvc.perform(post(SUGGEST_URL, WORKORDER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].productId").value(PRODUCT_ID.toString()))
+                .andExpect(jsonPath("$[0].substitutePartId").value(SUBSTITUTE_PART_ID.toString()));
     }
 }

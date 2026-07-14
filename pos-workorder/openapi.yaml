@@ -451,7 +451,7 @@ paths:
       tags:
       - Substitute Link API
       summary: Suggest workorder substitutes
-      description: Suggest substitute parts for a workorder based on the parts currently required
+      description: Suggest substitute parts for a workorder. Provide a request body with partId to scope suggestions to that part's active substitute links. Without a part scope this currently returns an empty list; workorder-wide suggestions are not yet implemented.
       operationId: suggestSubstitutes
       parameters:
       - name: workorderId
@@ -460,6 +460,11 @@ paths:
         schema:
           type: string
           format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuggestSubstitutesRequest'
       responses:
         '200':
           description: Substitute suggestions returned
@@ -4516,6 +4521,15 @@ components:
           example: Assigned to senior tech for brake system work
       required:
       - technicianId
+    SuggestSubstitutesRequest:
+      type: object
+      description: Request to scope workorder substitute suggestions to a specific part
+      properties:
+        partId:
+          type: string
+          format: uuid
+          description: Identifier of the part (product) on the workorder to suggest substitutes for; omit for workorder-wide suggestions
+          example: 01960003-0000-7000-8000-000000000001
     SubstituteLinkResponse:
       type: object
       description: A substitute-part link associating a product with an approved substitute

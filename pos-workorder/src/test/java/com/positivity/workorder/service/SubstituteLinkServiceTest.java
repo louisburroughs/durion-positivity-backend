@@ -277,6 +277,35 @@ class SubstituteLinkServiceTest {
                 .isLessThanOrEqualTo(results.get(2).getPriority());
     }
 
+    // Issue #914: part-scoped suggestions return the part's active links
+    @Test
+    @DisplayName("Issue #914: suggestSubstitutes with partId returns active links for that part")
+    void suggestSubstitutes_withPartId_returnsLinksForPart() {
+        // Arrange
+        var link = buildLink(LINK_ID, 100, true);
+        when(substituteLinkRepository.findByProductIdAndIsActiveTrueOrderByPriorityAsc(PRODUCT_ID))
+                .thenReturn(List.of(link));
+
+        // Act
+        List<SubstituteLinkResponse> results = substituteLinkService.suggestSubstitutes(UUID.randomUUID(), PRODUCT_ID);
+
+        // Assert
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().getProductId()).isEqualTo(PRODUCT_ID);
+        assertThat(results.getFirst().getSubstitutePartId()).isEqualTo(SUBSTITUTE_PART_ID);
+    }
+
+    // Issue #914: workorder-wide suggestions remain a stub until line-item lookup lands
+    @Test
+    @DisplayName("Issue #914: suggestSubstitutes without partId returns empty list")
+    void suggestSubstitutes_withoutPartId_returnsEmpty() {
+        // Act
+        List<SubstituteLinkResponse> results = substituteLinkService.suggestSubstitutes(UUID.randomUUID(), null);
+
+        // Assert
+        assertThat(results).isEmpty();
+    }
+
     // --- Helpers ---
 
     private void setAuthenticatedUserInSecurityContext(String username) {

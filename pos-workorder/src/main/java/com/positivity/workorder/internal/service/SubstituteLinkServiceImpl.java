@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -163,10 +164,15 @@ public class SubstituteLinkServiceImpl implements SubstituteLinkService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<SubstituteLinkResponse> suggestSubstitutes(@NonNull UUID workorderId) {
-        // Stub: full implementation requires WorkorderService to look up workorder
-        // line items. Returns empty list until WorkorderService integration is added
-        // in a future story.
+    public List<SubstituteLinkResponse> suggestSubstitutes(@NonNull UUID workorderId, @Nullable UUID partId) {
+        if (partId != null) {
+            return substituteLinkRepository.findByProductIdAndIsActiveTrueOrderByPriorityAsc(partId).stream()
+                    .map(this::toResponse)
+                    .toList();
+        }
+        // Workorder-wide stub: full implementation requires WorkorderService to look
+        // up workorder line items. Returns empty list until WorkorderService
+        // integration is added in a future story.
         return List.of();
     }
 

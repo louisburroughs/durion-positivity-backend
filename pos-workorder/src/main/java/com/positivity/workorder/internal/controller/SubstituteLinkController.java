@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.pick.CreateSubstituteLinkRequest;
 import com.positivity.workorder.internal.dto.pick.SubstituteLinkResponse;
+import com.positivity.workorder.internal.dto.pick.SuggestSubstitutesRequest;
 import com.positivity.workorder.internal.dto.pick.UpdateSubstituteLinkRequest;
 import com.positivity.workorder.service.SubstituteLinkService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -84,11 +85,15 @@ public class SubstituteLinkController {
     @EmitEvent(id = "WORKORDER_SUBSTITUTE_SUGGEST", apiVersion = "1")
     @Operation(
             summary = "Suggest workorder substitutes",
-            description = "Suggest substitute parts for a workorder based on the parts currently required")
+            description = "Suggest substitute parts for a workorder. Provide a request body with partId to scope "
+                    + "suggestions to that part's active substitute links. Without a part scope this currently "
+                    + "returns an empty list; workorder-wide suggestions are not yet implemented.")
     @ApiResponse(responseCode = "200", description = "Substitute suggestions returned")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<SubstituteLinkResponse>> suggestSubstitutes(@PathVariable UUID workorderId) {
-        return ResponseEntity.ok(substituteLinkService.suggestSubstitutes(workorderId));
+    public ResponseEntity<List<SubstituteLinkResponse>> suggestSubstitutes(
+            @PathVariable UUID workorderId, @RequestBody(required = false) @Valid SuggestSubstitutesRequest request) {
+        UUID partId = request != null ? request.getPartId() : null;
+        return ResponseEntity.ok(substituteLinkService.suggestSubstitutes(workorderId, partId));
     }
 }
