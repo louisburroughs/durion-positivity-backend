@@ -19,8 +19,9 @@ public interface SubstituteLinkService {
 
     /**
      * Suggest substitute parts for a workorder. When {@code partId} is provided, suggestions are
-     * scoped to active substitute links for that part; when null, suggestions cover the whole
-     * workorder.
+     * scoped to active substitute links for that part. When null, this currently returns an empty
+     * list — workorder-wide suggestions require line-item lookup via WorkorderService and are not
+     * yet implemented (see issue #45).
      */
     List<SubstituteLinkResponse> suggestSubstitutes(@NonNull UUID workorderId, @Nullable UUID partId);
 }

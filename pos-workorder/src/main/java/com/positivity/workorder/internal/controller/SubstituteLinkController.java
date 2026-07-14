@@ -85,8 +85,9 @@ public class SubstituteLinkController {
     @EmitEvent(id = "WORKORDER_SUBSTITUTE_SUGGEST", apiVersion = "1")
     @Operation(
             summary = "Suggest workorder substitutes",
-            description = "Suggest substitute parts for a workorder based on the parts currently required. "
-                    + "An optional request body scopes the suggestions to a single part.")
+            description = "Suggest substitute parts for a workorder. Provide a request body with partId to scope "
+                    + "suggestions to that part's active substitute links. Without a part scope this currently "
+                    + "returns an empty list; workorder-wide suggestions are not yet implemented.")
     @ApiResponse(responseCode = "200", description = "Substitute suggestions returned")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("isAuthenticated()")
