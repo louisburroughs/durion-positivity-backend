@@ -1,10 +1,10 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.inventory.internal.dto.sync.LocationSyncRunResponse;
+import com.positivity.inventory.internal.dto.sync.SyncLogResponse;
 import com.positivity.inventory.internal.entity.LocationSyncLogEntity;
 import com.positivity.inventory.internal.enums.LocationSyncLogScope;
 import com.positivity.inventory.internal.enums.LocationSyncOutcome;
-import com.positivity.inventory.internal.dto.sync.LocationSyncRunResponse;
-import com.positivity.inventory.internal.dto.sync.SyncLogResponse;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.LocationSyncLogRepository;
 import com.positivity.inventory.service.LocationSyncService;
@@ -193,7 +193,8 @@ public class LocationSyncServiceImpl implements LocationSyncService {
     }
 
     /** Command envelope for the owner's {@code location.commands.v1} listener. */
-    record ReplayCommand(@NonNull String commandType, @NonNull Payload payload) {
+    record ReplayCommand(
+            @NonNull String commandType, @NonNull Payload payload) {
         record Payload(@Nullable String since, @Nullable String until) {}
     }
 }

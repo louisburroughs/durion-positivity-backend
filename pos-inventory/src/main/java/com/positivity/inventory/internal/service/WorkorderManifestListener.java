@@ -122,7 +122,8 @@ public class WorkorderManifestListener {
     }
 
     /** Command envelope for the owner's {@code workorder.commands.v1} listener. */
-    record ReplayCommand(@NonNull String commandType, @NonNull Payload payload) {
+    record ReplayCommand(
+            @NonNull String commandType, @NonNull Payload payload) {
         record Payload(@Nullable String since, @Nullable String until) {}
     }
 }

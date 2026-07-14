@@ -1,8 +1,9 @@
 package com.positivity.people.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
@@ -12,6 +13,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Read-only user-person-link replica fed by {@code people-contact.events.v1} (ADR-0044 §6, #875).
@@ -22,6 +25,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "ext_people_contact_user_link")
 public class ExtUserLinkReplica {
 
@@ -41,6 +45,7 @@ public class ExtUserLinkReplica {
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -50,6 +55,6 @@ public class ExtUserLinkReplica {
      */
     @Transient
     public Class<?> uuidv7Dependency() {
-        return UUIDv7Id.class;
+        return UUIDv7Generator.class;
     }
 }

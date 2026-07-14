@@ -1,7 +1,5 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.service.StorageLocationValidationService;
-import com.positivity.inventory.internal.service.StorageLocationValidationService.StorageLocationValidation;
 import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
 import com.positivity.inventory.internal.dto.ValidationResult;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
@@ -13,6 +11,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.security.PutawayPermissions;
+import com.positivity.inventory.internal.service.StorageLocationValidationService.StorageLocationValidation;
 import com.positivity.inventory.service.PutawayValidationService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.util.Arrays;

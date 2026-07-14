@@ -43,5 +43,5 @@ application classes live under `BOOT-INF/classes/` where ArchUnit cannot see the
 zero classes and pass vacuously. `ClasspathVisibilityGuardTest` turns that silent pass into a loud failure
 by asserting each module dependency contributes at least one imported class (and each enforced entity
 package contains at least one `@Entity`). The CI job therefore runs this module with
-`-am -Dtest='com.positivity.archunit.*' -Dsurefire.failIfNoSpecifiedTests=false` so upstream modules are
+`-am -Dtest='com/positivity/archunit/*' -Dsurefire.failIfNoSpecifiedTests=false` so upstream modules are
 compiled but only this module's tests execute.

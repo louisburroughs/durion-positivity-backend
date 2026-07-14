@@ -23,8 +23,6 @@ public class SiteDefaultsService {
 
     @NonNull
     public Optional<UUID> getDefaultStagingLocationId(@NonNull UUID siteId) {
-        return locationRefRepository
-                .findByLocationId(siteId)
-                .map(LocationRefEntity::getDefaultStagingLocationId);
+        return locationRefRepository.findByLocationId(siteId).map(LocationRefEntity::getDefaultStagingLocationId);
     }
 }

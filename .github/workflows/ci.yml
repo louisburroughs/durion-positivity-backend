@@ -217,7 +217,7 @@ jobs:
           if [[ "${{ matrix.module }}" == "pos-archunit" ]]; then
             ./mvnw -pl pos-archunit -am test \
               org.jacoco:jacoco-maven-plugin:0.8.14:report \
-              -Dtest='com.positivity.archunit.*' \
+              -Dtest='com/positivity/archunit/*' \
               -Dsurefire.failIfNoSpecifiedTests=false \
               -DskipITs -T 1C -B -q -o
           else
@@ -300,9 +300,9 @@ jobs:
         run: |
           if [[ "${{ matrix.module }}" == "pos-archunit" ]]; then
             ./mvnw -pl pos-archunit -am -DskipTests=false verify \
-              -Dtest='com.positivity.archunit.*' \
+              -Dtest='com/positivity/archunit/*' \
               -Dsurefire.failIfNoSpecifiedTests=false \
-              -Dit.test='com.positivity.archunit.*' \
+              -Dit.test='com/positivity/archunit/*' \
               -Dfailsafe.failIfNoSpecifiedTests=false \
               -T 1C -B -q -o
           else
