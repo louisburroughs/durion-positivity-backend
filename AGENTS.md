@@ -240,6 +240,65 @@ Modules using `@EmitEvent` MUST include pos-events dependency in pom.xml:
 
 - Failing to register events results in silent audit failures and compliance violations.
 
+### Domain Events over Kafka (ADR-0044)
+
+Module-to-module communication is **events-only** — synchronous REST between domain modules is
+prohibited; only the utility modules (gateway, security-service, documents, image, tax,
+event-receiver, price) may be called synchronously. The `@EmitEvent`/pos-event-receiver pipeline
+above is **audit-only** and is not a module-to-module channel. See
+`docs/adr-0044-event-only-domain-walls.md` for the full rules.
+
+- **Contracts live in `pos-domain-events`** (importable by every module): the
+  `DomainEventEnvelope<T>` record and `DomainTopics` naming helpers. Payload DTOs are versioned
+  per domain (additive-only within a version; breaking changes require a `.v2` topic).
+- **Topics**: facts on `{domain}.events.v1` (published only by the owning module), commands on
+  `{domain}.commands.v1` (consumed only by the owning module), poison messages to `{topic}.dlq`.
+  Records are keyed by `aggregateId` (`envelope.recordKey()`), preserving per-aggregate order.
+- **Producing**: build envelopes with `DomainEventEnvelope.of(...)` using the module's injected
+  `Clock`; publish through the module's transactional outbox — never call `KafkaTemplate` directly
+  from a business transaction.
+- **Consuming**: record each `eventId` in the module's `processed_events` table in the same
+  transaction as the replica update (redelivery must be harmless), and use `aggregateVersion` to
+  ignore stale updates and detect gaps.
+- **Replicas**: read-only copies of another domain's data live in `ext_{owner}_{entity}` tables,
+  written only by the event consumer, with minimum fields required.
+- **Reconciliation** (mandatory wherever a replica exists — "duplication without reconciliation is
+  not permitted"): the owner publishes a `ReconciliationManifestV1` per closed time window on
+  `{domain}.manifest.v1` (`DomainTopics.manifest(domain)`), summarizing the window's published
+  events (count + SHA-256 checksum over sorted eventIds, `ReconciliationManifestV1.checksumOf`).
+  Window membership is the UUIDv7 timestamp embedded in each `eventId`
+  (`UuidV7Timestamps.instantOf`) — identical on both sides, no shared clock needed. The consumer
+  recomputes the summary from its processing log (range-scan the eventId column with
+  `UuidV7Timestamps.minStringAt(windowStart/End)`), and on mismatch increments a `replica.drift`
+  counter (tags `owner`, `entity`) and publishes a `{domain}.outbox.replay-requested` command with
+  `payload.since = windowStartUtc`; the owner re-emits through its outbox and the consumer's
+  eventId dedupe makes the repair idempotent. Manifests are sent directly (not via outbox): a lost
+  manifest self-heals on the owner's next run, and zero-event windows still get manifests so
+  consumers can alert on absence. Reference pair: `pos-workorder` `ManifestPublisher` (owner) and
+  `pos-customer` `WorkorderManifestListener` (consumer).
+
+```java
+DomainEventEnvelope<PartyUpdatedV1> event = DomainEventEnvelope.of(
+        "customer.party.updated",   // eventType: dotted lowercase
+        1,                          // schemaVersion
+        partyId,                    // aggregateId (also the Kafka key)
+        aggregateVersion,           // monotonic per-aggregate sequence
+        "pos-customer",             // sourceService
+        correlationId,              // nullable
+        actorUserId,                // nullable; audit only, never authorization
+        new PartyUpdatedV1(...),    // versioned payload DTO from pos-domain-events
+        clock);
+outbox.append(DomainTopics.events("customer"), event); // same transaction as the state change
+```
+
+```xml
+<dependency>
+    <groupId>com.positivity</groupId>
+    <artifactId>pos-domain-events</artifactId>
+    <version>${project.version}</version>
+</dependency>
+```
+
 ## Null Safety Standards
 
 ### ⚠️ MANDATORY: @NonNull Annotation for Null Safety

@@ -6,8 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
-import com.positivity.inventory.internal.client.StorageLocationTopologyClient;
-import com.positivity.inventory.internal.client.StorageLocationTopologyClient.StorageLocationNode;
+import com.positivity.inventory.internal.service.StorageLocationTopologyService;
+import com.positivity.inventory.internal.service.StorageLocationTopologyService.StorageLocationNode;
 import com.positivity.inventory.internal.dto.rollup.SiteInventoryRollupResponse;
 import com.positivity.inventory.internal.dto.rollup.StorageLocationRollupNode;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
@@ -44,7 +44,7 @@ class SiteInventoryRollupServiceImplTest {
     private static final UUID BIN_ID = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
 
     @Mock
-    private StorageLocationTopologyClient topologyClient;
+    private StorageLocationTopologyService topologyService;
 
     @Mock
     private InventoryLedgerEntryRepository ledgerRepository;
@@ -53,7 +53,7 @@ class SiteInventoryRollupServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new SiteInventoryRollupServiceImpl(topologyClient, new SiteInventoryQuantityLoader(ledgerRepository));
+        service = new SiteInventoryRollupServiceImpl(topologyService, new SiteInventoryQuantityLoader(ledgerRepository));
     }
 
     private static List<StorageLocationNode> threeLevelTopology() {
@@ -67,7 +67,7 @@ class SiteInventoryRollupServiceImplTest {
     @DisplayName("three-level tree: own vs rolledUp math and site totals are correct")
     void rollup_threeLevelTree_correctOwnAndRolledUp() {
         // Issue #658: rolledUp = own + sum of descendants' own, depth-first
-        when(topologyClient.fetchSiteTopology(SITE_ID)).thenReturn(threeLevelTopology());
+        when(topologyService.fetchSiteTopology(SITE_ID)).thenReturn(threeLevelTopology());
         when(ledgerRepository.sumQuantityByLocationChunked(any(), any()))
                 .thenReturn(Map.of(SHELF_ID, 120L, BIN_ID, 360L));
         when(ledgerRepository.calculateOutstandingAllocationsByLocation(any()))
@@ -100,7 +100,7 @@ class SiteInventoryRollupServiceImplTest {
     @DisplayName("sku filter routes through SKU-scoped queries including CREATED-RELEASED allocation math")
     void rollup_skuFilter_usesSkuScopedQueries() {
         // Issue #658: when sku given, all quantities are for that SKU only
-        when(topologyClient.fetchSiteTopology(SITE_ID)).thenReturn(threeLevelTopology());
+        when(topologyService.fetchSiteTopology(SITE_ID)).thenReturn(threeLevelTopology());
         when(ledgerRepository.sumQuantityByLocationForSkuChunked(eq("SKU-1"), any(), any()))
                 .thenAnswer(invocation -> {
                     Collection<InventoryLedgerEventType> types = invocation.getArgument(2);
@@ -125,7 +125,7 @@ class SiteInventoryRollupServiceImplTest {
     void rollup_orphanParentId_attachesToRoot() {
         // Issue #658: node whose parent id is missing from the site set becomes a root
         UUID ghostParent = UUID.fromString("00000000-0000-0000-0000-00000000dead");
-        when(topologyClient.fetchSiteTopology(SITE_ID))
+        when(topologyService.fetchSiteTopology(SITE_ID))
                 .thenReturn(List.of(
                         new StorageLocationNode(FLOOR_ID, "Floor A", "FLOOR", "ACTIVE", null),
                         new StorageLocationNode(SHELF_ID, "Orphan Shelf", "SHELF", "ACTIVE", ghostParent)));
@@ -142,7 +142,7 @@ class SiteInventoryRollupServiceImplTest {
     @DisplayName("negative available passes through unclamped")
     void rollup_overAllocated_negativeAvailableUnclamped() {
         // Issue #658: available may be negative — real over-allocation signal
-        when(topologyClient.fetchSiteTopology(SITE_ID))
+        when(topologyService.fetchSiteTopology(SITE_ID))
                 .thenReturn(List.of(new StorageLocationNode(BIN_ID, "Bin", "BIN", "ACTIVE", null)));
         when(ledgerRepository.sumQuantityByLocationChunked(any(), any())).thenReturn(Map.of(BIN_ID, 3L));
         when(ledgerRepository.calculateOutstandingAllocationsByLocation(any())).thenReturn(Map.of(BIN_ID, 8L));
@@ -157,7 +157,7 @@ class SiteInventoryRollupServiceImplTest {
     void rollup_includeEmptyFalse_prunesZeroNodes() {
         // Issue #658: empty BIN pruned; FLOOR kept (rolledUp nonzero via SHELF)
         UUID emptyBin = UUID.fromString("00000000-0000-0000-0000-0000000000b2");
-        when(topologyClient.fetchSiteTopology(SITE_ID))
+        when(topologyService.fetchSiteTopology(SITE_ID))
                 .thenReturn(List.of(
                         new StorageLocationNode(FLOOR_ID, "Floor A", "FLOOR", "ACTIVE", null),
                         new StorageLocationNode(SHELF_ID, "Shelf A-1", "SHELF", "ACTIVE", FLOOR_ID),
@@ -177,7 +177,7 @@ class SiteInventoryRollupServiceImplTest {
     @DisplayName("depth=1 returns roots only; totals remain full-tree")
     void rollup_depthOne_truncatesChildrenButKeepsFullTotals() {
         // Issue #658: depth truncates the returned tree, not the math
-        when(topologyClient.fetchSiteTopology(SITE_ID)).thenReturn(threeLevelTopology());
+        when(topologyService.fetchSiteTopology(SITE_ID)).thenReturn(threeLevelTopology());
         when(ledgerRepository.sumQuantityByLocationChunked(any(), any())).thenReturn(Map.of(BIN_ID, 360L));
         when(ledgerRepository.calculateOutstandingAllocationsByLocation(any())).thenReturn(Map.of());
 
@@ -193,7 +193,7 @@ class SiteInventoryRollupServiceImplTest {
     @DisplayName("site with no storage locations returns empty nodes and zero totals")
     void rollup_emptySite_returnsEmptyResponse() {
         // Issue #658: 200 with empty nodes, not 404
-        when(topologyClient.fetchSiteTopology(SITE_ID)).thenReturn(List.of());
+        when(topologyService.fetchSiteTopology(SITE_ID)).thenReturn(List.of());
 
         SiteInventoryRollupResponse response = service.getSiteInventoryRollup(SITE_ID, null, null, false);
 
@@ -206,7 +206,7 @@ class SiteInventoryRollupServiceImplTest {
     @DisplayName("unknown site propagates LocationNotFoundException from the topology client")
     void rollup_unknownSite_propagatesNotFound() {
         // Issue #658: pos-location 404 → 404 ProblemDetail at the controller
-        when(topologyClient.fetchSiteTopology(SITE_ID)).thenThrow(new LocationNotFoundException(SITE_ID));
+        when(topologyService.fetchSiteTopology(SITE_ID)).thenThrow(new LocationNotFoundException(SITE_ID));
 
         assertThatThrownBy(() -> service.getSiteInventoryRollup(SITE_ID, null, null, false))
                 .isInstanceOf(LocationNotFoundException.class);
@@ -216,7 +216,7 @@ class SiteInventoryRollupServiceImplTest {
     @DisplayName("pos-location outage propagates LocationServiceUnavailableException")
     void rollup_locationOutage_propagatesUnavailable() {
         // Issue #658: never fabricate partial topology; surface 503
-        when(topologyClient.fetchSiteTopology(SITE_ID))
+        when(topologyService.fetchSiteTopology(SITE_ID))
                 .thenThrow(new LocationServiceUnavailableException("down", null));
 
         assertThatThrownBy(() -> service.getSiteInventoryRollup(SITE_ID, null, null, false))

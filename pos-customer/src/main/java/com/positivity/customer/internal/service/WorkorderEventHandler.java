@@ -3,17 +3,14 @@ package com.positivity.customer.internal.service;
 import com.positivity.customer.internal.entity.CommunicationPreference;
 import com.positivity.customer.internal.entity.PartyNote;
 import com.positivity.customer.internal.entity.ProcessingLog;
-import com.positivity.customer.internal.entity.VehicleProjection;
 import com.positivity.customer.internal.enums.ProcessingStatus;
 import com.positivity.customer.internal.event.ContactPreferenceUpdatedPayload;
 import com.positivity.customer.internal.event.EventEnvelope;
 import com.positivity.customer.internal.event.PartyNoteAddedPayload;
-import com.positivity.customer.internal.event.VehicleUpdatedPayload;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
 import com.positivity.customer.internal.repository.PartyNoteRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessingLogRepository;
-import com.positivity.customer.internal.repository.VehicleProjectionRepository;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
@@ -23,10 +20,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -35,8 +32,10 @@ import tools.jackson.databind.ObjectMapper;
  * topic.
  *
  * <p>
- * Processes {@code VehicleUpdated}, {@code ContactPreferenceUpdated}, and
- * {@code PartyNoteAdded} events with idempotency and atomicity guarantees.
+ * Processes {@code ContactPreferenceUpdated} and {@code PartyNoteAdded} events with idempotency
+ * and atomicity guarantees. {@code VehicleUpdated} handling was retired with ADR-0044 (#843):
+ * vehicle facts are owned by pos-vehicle-inventory and consumed from {@code vehicle.events.v1}
+ * by {@link VehicleEventsListener}.
  * </p>
  *
  * <p>
@@ -65,7 +64,6 @@ public class WorkorderEventHandler {
     private final CommunicationPreferenceRepository communicationPreferenceRepository;
     private final PersonPartyRepository personPartyRepository;
     private final PartyNoteRepository partyNoteRepository;
-    private final VehicleProjectionRepository vehicleProjectionRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -108,6 +106,10 @@ public class WorkorderEventHandler {
                     .failureReason(truncateFailureReason("SCHEMA validation failed: " + ex.getMessage()))
                     .processedAt(Instant.now(clock))
                     .build());
+        } catch (TransientDataAccessException ex) {
+            // Let the container error handler retry with backoff / route to the DLQ (ADR-0044 §4)
+            // instead of committing a permanent failure log for a transient infrastructure error.
+            throw ex;
         } catch (Exception ex) {
             log.error("Unhandled exception while processing workorder event", ex);
             processingLogRepository.save(ProcessingLog.builder()
@@ -123,89 +125,6 @@ public class WorkorderEventHandler {
                     .processedAt(Instant.now(clock))
                     .build());
         }
-    }
-
-    /**
-     * Handles a {@code VehicleUpdated} event payload.
-     *
-     * @param envelope the deserialized event envelope
-     */
-    void handleVehicleUpdated(@NonNull EventEnvelope envelope) {
-        if (processingLogRepository.findByEventId(envelope.getEventId()).isPresent()) {
-            log.debug(DUPLICATE_EVENT_MESSAGE, envelope.getEventId(), envelope.getEventType());
-            try {
-                processingLogRepository.save(ProcessingLog.builder()
-                        .eventId(UUIDv7Generator.generate().toString())
-                        .eventType(envelope.getEventType())
-                        .correlationId(envelope.getCorrelationId())
-                        .status(ProcessingStatus.SKIPPED_DUPLICATE)
-                        .failureReason(truncateFailureReason(DUPLICATE_FAILURE_REASON_PREFIX + envelope.getEventId()))
-                        .processedAt(Instant.now(clock))
-                        .build());
-            } catch (org.springframework.dao.DataIntegrityViolationException dive) {
-                log.debug(DUPLICATE_SAVE_COLLISION_MESSAGE, envelope.getEventId());
-            }
-            return;
-        }
-
-        try {
-            final Map<String, Object> payloadMap = envelope.getPayload() == null ? Map.of() : envelope.getPayload();
-            final VehicleUpdatedPayload payload = objectMapper.convertValue(payloadMap, VehicleUpdatedPayload.class);
-            upsertVehicleProjection(payload);
-
-            processingLogRepository.save(ProcessingLog.builder()
-                    .eventId(envelope.getEventId())
-                    .eventType(envelope.getEventType())
-                    .correlationId(envelope.getCorrelationId())
-                    .status(ProcessingStatus.SUCCESS)
-                    .processedAt(Instant.now(clock))
-                    .build());
-        } catch (Exception ex) {
-            log.error(
-                    "VehicleUpdated payload processing failed eventId={} eventType={}",
-                    envelope.getEventId(),
-                    envelope.getEventType(),
-                    ex);
-            processingLogRepository.save(ProcessingLog.builder()
-                    .eventId(envelope.getEventId())
-                    .eventType(envelope.getEventType())
-                    .correlationId(envelope.getCorrelationId())
-                    .status(ProcessingStatus.SCHEMA_VALIDATION_FAILED)
-                    .failureReason(truncateFailureReason(ex.getMessage()))
-                    .processedAt(Instant.now(clock))
-                    .build());
-        }
-    }
-
-    private void upsertVehicleProjection(@NonNull VehicleUpdatedPayload payload) {
-        if (!StringUtils.hasText(payload.getVehicleId())) {
-            log.warn("VehicleUpdated payload missing vehicleId; skipping vehicle projection update");
-            return;
-        }
-
-        final UUID vehicleId = UUID.fromString(payload.getVehicleId());
-        final VehicleProjection projection = vehicleProjectionRepository
-                .findById(vehicleId)
-                .orElseGet(
-                        () -> VehicleProjection.builder().vehicleId(vehicleId).build());
-
-        if (payload.getVin() != null) {
-            projection.setVin(normalizeOptionalText(payload.getVin()));
-        }
-        if (payload.getMake() != null) {
-            projection.setMake(normalizeOptionalText(payload.getMake()));
-        }
-        if (payload.getModel() != null) {
-            projection.setModel(normalizeOptionalText(payload.getModel()));
-        }
-        if (payload.getColor() != null) {
-            projection.setColor(normalizeOptionalText(payload.getColor()));
-        }
-        if (payload.getYear() != null) {
-            projection.setYear(payload.getYear());
-        }
-        projection.setLastEventAt(Instant.now(clock));
-        vehicleProjectionRepository.save(projection);
     }
 
     private String normalizeOptionalText(String value) {
@@ -266,6 +185,8 @@ public class WorkorderEventHandler {
                     .status(ProcessingStatus.SUCCESS)
                     .processedAt(Instant.now(clock))
                     .build());
+        } catch (TransientDataAccessException ex) {
+            throw ex;
         } catch (Exception ex) {
             log.error(
                     "ContactPreferenceUpdated processing failed eventId={} eventType={}",
@@ -349,6 +270,8 @@ public class WorkorderEventHandler {
                     .status(ProcessingStatus.SUCCESS)
                     .processedAt(Instant.now(clock))
                     .build());
+        } catch (TransientDataAccessException ex) {
+            throw ex;
         } catch (Exception ex) {
             log.error(
                     "PartyNoteAdded processing failed eventId={} eventType={}",
@@ -368,10 +291,6 @@ public class WorkorderEventHandler {
 
     private boolean dispatchByEventType(EventEnvelope envelope) {
         final String eventType = envelope.getEventType();
-        if ("VehicleUpdated".equals(eventType)) {
-            handleVehicleUpdated(envelope);
-            return true;
-        }
         if ("ContactPreferenceUpdated".equals(eventType)) {
             handleContactPreferenceUpdated(envelope);
             return true;

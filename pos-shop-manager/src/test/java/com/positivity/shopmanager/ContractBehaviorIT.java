@@ -5,9 +5,8 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.positivity.shopmanager.internal.client.CrmCustomerClient;
-import com.positivity.shopmanager.internal.client.CrmVehicleClient;
-import com.positivity.shopmanager.internal.client.HrAvailabilityClient;
+import com.positivity.shopmanager.internal.service.CrmSnapshotService;
+import com.positivity.shopmanager.internal.service.StaffingScheduleService;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -35,13 +34,10 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private CrmCustomerClient crmCustomerClient;
+    private CrmSnapshotService crmSnapshotService;
 
     @MockitoBean
-    private CrmVehicleClient crmVehicleClient;
-
-    @MockitoBean
-    private HrAvailabilityClient hrAvailabilityClient;
+    private StaffingScheduleService staffingScheduleService;
 
     // Fixed UUIDs shared across tests
     private static final String CUSTOMER_1 = "aaaaaaaa-0000-0000-0000-000000000001";
@@ -53,8 +49,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        when(crmCustomerClient.getCustomerById(any())).thenReturn(Map.of("id", "customer-snapshot"));
-        when(crmVehicleClient.getVehicleById(any())).thenReturn(Map.of("id", "vehicle-snapshot"));
+        when(crmSnapshotService.getCustomerById(any())).thenReturn(Map.of("id", "customer-snapshot"));
+        when(crmSnapshotService.getVehicleById(any())).thenReturn(Map.of("id", "vehicle-snapshot"));
     }
 
     @Override

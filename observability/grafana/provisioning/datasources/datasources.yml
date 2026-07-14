@@ -1,9 +1,21 @@
 # Grafana Datasources Provisioning Configuration
 apiVersion: 1
 
+# Drop any pre-existing same-named datasources first (#863). Grafana provisioning
+# matches by name and will NOT change the uid of an existing datasource, so an
+# install that first created these without pinned uids keeps its auto-generated
+# uid (e.g. PBFA97...) and dashboards referencing uid 'prometheus'/'loki' render
+# no data. Deleting them here forces recreation with the pinned uids below.
+deleteDatasources:
+  - name: Prometheus
+    orgId: 1
+  - name: Loki
+    orgId: 1
+
 datasources:
   # Prometheus Datasource
   - name: Prometheus
+    uid: prometheus
     type: prometheus
     access: proxy
     url: http://prometheus:9090
@@ -40,6 +52,26 @@ datasources:
       httpMethod: GET
       tracesToLogs:
         datasourceUid: 'loki'
+    version: 1
+
+  # Loki Datasource for logs (#858)
+  # uid 'loki' satisfies the Jaeger/Tempo tracesToLogs.datasourceUid references above.
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: true
+    jsonData:
+      maxLines: 1000
+      # Correlate a log line back to a trace. Spring Boot + Micrometer tracing
+      # emits the default pattern "[<app>,<traceId>,<spanId>]" (comma-delimited,
+      # app name may be empty or contain '.'/'-'); capture the middle traceId.
+      derivedFields:
+        - name: TraceID
+          matcherRegex: '\[[\w.\-]*,(\w+),\w*\]'
+          url: '$${__value.raw}'
+          datasourceUid: 'jaeger'
     version: 1
 
   # TestData Datasource for testing and demos

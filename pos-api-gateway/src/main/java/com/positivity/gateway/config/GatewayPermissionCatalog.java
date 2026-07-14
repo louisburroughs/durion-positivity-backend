@@ -3,7 +3,7 @@ package com.positivity.gateway.config;
 public final class GatewayPermissionCatalog {
     private GatewayPermissionCatalog() {}
 
-    public static final int CATALOG_VERSION = 17;
+    public static final int CATALOG_VERSION = 19;
 
     protected static final String[] AUTHORITY_BY_BIT = {
         "PERM_accounting:je:view",
@@ -373,11 +373,24 @@ public final class GatewayPermissionCatalog {
         "PERM_invoice:finalize:override", // 346
 
         // ── New batch (bits 347–348) ──────────────────────────────────────────
-        "PERM_mcp:tool:manage",                              // 347
-        "PERM_mcp:tool:view",                                // 348
+        "PERM_mcp:tool:manage", // 347
+        "PERM_mcp:tool:view", // 348
 
         // ── New batch (bits 349–349) ──────────────────────────────────────────
-        "PERM_inventory:location:sync"                      // 349
+        "PERM_inventory:location:sync", // 349
+
+        // ── New batch (bits 350–350) ──────────────────────────────────────────
+        "PERM_workorder:events:replay", // 350
+        // ── People Contact (bits 351–359, ADR-0044 Phase 3 split #874) ────────
+        "PERM_people-contact:person:view", // 351
+        "PERM_people-contact:person:create", // 352
+        "PERM_people-contact:person:edit", // 353
+        "PERM_people-contact:person:delete", // 354
+        "PERM_people-contact:role:view", // 355
+        "PERM_people-contact:role:assign", // 356
+        "PERM_people-contact:role:revoke", // 357
+        "PERM_people-contact:userLink:view", // 358
+        "PERM_people-contact:userLink:write" // 359
     };
 
     public static String authorityForBit(int bitIndex) {

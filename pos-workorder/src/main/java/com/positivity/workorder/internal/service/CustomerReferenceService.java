@@ -124,9 +124,8 @@ public class CustomerReferenceService {
                     continue;
                 }
                 UUID id = UUID.fromString(partyId.trim());
-                String displayName = Objects.requireNonNullElse(
-                        firstNonBlank(extract(row, "displayName"), extract(row, "legalName"), "customer-" + id),
-                        "customer-" + id);
+                String resolvedName = firstNonBlank(extract(row, "displayName"), extract(row, "legalName"));
+                String displayName = resolvedName != null ? resolvedName : "customer-" + id;
                 refs.add(new CustomerRef(id, displayName));
             }
             return refs;

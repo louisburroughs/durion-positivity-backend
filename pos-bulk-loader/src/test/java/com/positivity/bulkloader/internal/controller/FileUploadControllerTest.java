@@ -15,6 +15,7 @@ import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
 import com.positivity.bulkloader.service.BulkLoadJobService;
+import com.positivity.bulkloader.service.ColumnMappingService;
 import com.positivity.bulkloader.service.FileStorageService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.util.UUID;
@@ -46,6 +47,9 @@ class FileUploadControllerTest {
     @MockitoBean
     FileStorageService fileStorageService;
 
+    @MockitoBean
+    ColumnMappingService columnMappingService;
+
     // ─── POST /v1/bulk-jobs/{jobId}/upload ───────────────────────────────────
 
     @Test
@@ -66,6 +70,8 @@ class FileUploadControllerTest {
                 .andExpect(jsonPath("$.fileName").value("products.csv"));
 
         verify(bulkLoadJobService).markUploadStored(JOB_ID, "test-operator", "/uploads/products.csv");
+        verify(columnMappingService)
+                .detectUploadedFile(JOB_ID, "test-operator", "/uploads/products.csv", "products.csv");
     }
 
     @Test

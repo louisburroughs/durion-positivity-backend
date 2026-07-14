@@ -6,7 +6,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.PartyNameRef;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.PersonParty;
@@ -44,10 +43,10 @@ class PartyServiceImplResolveNamesTest {
     private org.springframework.cache.CacheManager cacheManager;
 
     @Mock
-    private PeopleClient peopleClient;
+    private PersonDirectoryService personDirectoryService;
 
     @Mock
-    private com.positivity.customer.internal.client.VehicleInventoryClient vehicleInventoryClient;
+    private com.positivity.customer.internal.repository.ExtVehicleRepository extVehicleRepository;
 
     @InjectMocks
     private PartyServiceImpl service;
@@ -67,13 +66,13 @@ class PartyServiceImplResolveNamesTest {
         return p;
     }
 
-    private static PeopleClient.PersonIdentity identity(UUID personId, String first, String last) {
-        return new PeopleClient.PersonIdentity(personId, first, last, null, List.of());
+    private static PersonDirectoryService.PersonIdentity identity(UUID personId, String first, String last) {
+        return new PersonDirectoryService.PersonIdentity(personId, first, last, null, List.of());
     }
 
-    private static PeopleClient.PersonIdentity identityWithPhones(
-            UUID personId, String first, String last, List<PeopleClient.ContactPoint> contactPoints) {
-        return new PeopleClient.PersonIdentity(personId, first, last, null, contactPoints);
+    private static PersonDirectoryService.PersonIdentity identityWithPhones(
+            UUID personId, String first, String last, List<PersonDirectoryService.ContactPoint> contactPoints) {
+        return new PersonDirectoryService.PersonIdentity(personId, first, last, null, contactPoints);
     }
 
     @Test
@@ -99,7 +98,7 @@ class PartyServiceImplResolveNamesTest {
                 .containsExactlyInAnyOrder(
                         new PartyNameRef(withDisplay, "Acme Supply", null),
                         new PartyNameRef(legalOnly, "Legal Only Inc", null));
-        verify(peopleClient, never()).fetchPersonIdentitiesQuietly(anyCollection());
+        verify(personDirectoryService, never()).fetchPersonIdentitiesQuietly(anyCollection());
     }
 
     @Test
@@ -111,7 +110,7 @@ class PartyServiceImplResolveNamesTest {
         when(partyRepository.findAllById(List.of(partyA, partyB))).thenReturn(List.of());
         when(personPartyRepository.findAllById(List.of(partyA, partyB)))
                 .thenReturn(List.of(person(partyA, personA), person(partyB, personB)));
-        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(anyCollection()))
                 .thenReturn(
                         Map.of(personA, identity(personA, "John", "Smith"), personB, identity(personB, "Jane", "Doe")));
 
@@ -121,7 +120,7 @@ class PartyServiceImplResolveNamesTest {
                 .containsExactlyInAnyOrder(
                         new PartyNameRef(partyA, "John Smith", null), new PartyNameRef(partyB, "Jane Doe", null));
         // single batch call, not one per person
-        verify(peopleClient).fetchPersonIdentitiesQuietly(anyCollection());
+        verify(personDirectoryService).fetchPersonIdentitiesQuietly(anyCollection());
     }
 
     @Test
@@ -130,7 +129,7 @@ class PartyServiceImplResolveNamesTest {
         UUID personA = UUID.fromString("77777777-0000-0000-0000-000000000001");
         when(partyRepository.findAllById(List.of(partyA))).thenReturn(List.of());
         when(personPartyRepository.findAllById(List.of(partyA))).thenReturn(List.of(person(partyA, personA)));
-        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(anyCollection()))
                 .thenReturn(Map.of(
                         personA,
                         identityWithPhones(
@@ -138,9 +137,10 @@ class PartyServiceImplResolveNamesTest {
                                 "John",
                                 "Smith",
                                 List.of(
-                                        new PeopleClient.ContactPoint("EMAIL", "j@x.com", true),
-                                        new PeopleClient.ContactPoint("PHONE_HOME", "+1-555-0001", false),
-                                        new PeopleClient.ContactPoint("PHONE_MOBILE", "+1-555-0002", true)))));
+                                        new PersonDirectoryService.ContactPoint("EMAIL", "j@x.com", true),
+                                        new PersonDirectoryService.ContactPoint("PHONE_HOME", "+1-555-0001", false),
+                                        new PersonDirectoryService.ContactPoint(
+                                                "PHONE_MOBILE", "+1-555-0002", true)))));
 
         List<PartyNameRef> result = service.resolveNames(List.of(partyA));
 
@@ -153,7 +153,7 @@ class PartyServiceImplResolveNamesTest {
         UUID personA = UUID.fromString("77777777-0000-0000-0000-000000000002");
         when(partyRepository.findAllById(List.of(partyA))).thenReturn(List.of());
         when(personPartyRepository.findAllById(List.of(partyA))).thenReturn(List.of(person(partyA, personA)));
-        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(anyCollection()))
                 .thenReturn(Map.of(
                         personA,
                         identityWithPhones(
@@ -161,9 +161,9 @@ class PartyServiceImplResolveNamesTest {
                                 "John",
                                 "Smith",
                                 List.of(
-                                        new PeopleClient.ContactPoint("EMAIL", "j@x.com", false),
-                                        new PeopleClient.ContactPoint("PHONE_WORK", "  +1-555-0009  ", false),
-                                        new PeopleClient.ContactPoint("PHONE_HOME", "+1-555-0010", false)))));
+                                        new PersonDirectoryService.ContactPoint("EMAIL", "j@x.com", false),
+                                        new PersonDirectoryService.ContactPoint("PHONE_WORK", "  +1-555-0009  ", false),
+                                        new PersonDirectoryService.ContactPoint("PHONE_HOME", "+1-555-0010", false)))));
 
         List<PartyNameRef> result = service.resolveNames(List.of(partyA));
 
@@ -177,7 +177,7 @@ class PartyServiceImplResolveNamesTest {
         UUID personA = UUID.fromString("77777777-0000-0000-0000-000000000003");
         when(partyRepository.findAllById(List.of(partyA))).thenReturn(List.of());
         when(personPartyRepository.findAllById(List.of(partyA))).thenReturn(List.of(person(partyA, personA)));
-        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(anyCollection()))
                 .thenReturn(Map.of(
                         personA,
                         identityWithPhones(
@@ -185,8 +185,8 @@ class PartyServiceImplResolveNamesTest {
                                 "John",
                                 "Smith",
                                 List.of(
-                                        new PeopleClient.ContactPoint("EMAIL", "j@x.com", true),
-                                        new PeopleClient.ContactPoint("PHONE_MOBILE", "   ", true)))));
+                                        new PersonDirectoryService.ContactPoint("EMAIL", "j@x.com", true),
+                                        new PersonDirectoryService.ContactPoint("PHONE_MOBILE", "   ", true)))));
 
         List<PartyNameRef> result = service.resolveNames(List.of(partyA));
 
@@ -203,7 +203,7 @@ class PartyServiceImplResolveNamesTest {
                 .thenReturn(List.of(commercial(commercialId, "Acme Supply", "Acme LLC")));
         when(personPartyRepository.findAllById(List.of(commercialId, personPartyId)))
                 .thenReturn(List.of(person(personPartyId, personId)));
-        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(anyCollection()))
                 .thenReturn(Map.of(personId, identity(personId, "Jane", "Doe")));
 
         List<PartyNameRef> result = service.resolveNames(List.of(commercialId, personPartyId));
@@ -221,7 +221,7 @@ class PartyServiceImplResolveNamesTest {
         when(partyRepository.findAllById(List.of(personPartyId))).thenReturn(List.of());
         when(personPartyRepository.findAllById(List.of(personPartyId)))
                 .thenReturn(List.of(person(personPartyId, personId)));
-        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection()))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(anyCollection()))
                 .thenReturn(Map.of(personId, identity(personId, "  ", "  ")));
 
         assertThat(service.resolveNames(List.of(personPartyId))).isEmpty();
@@ -238,7 +238,8 @@ class PartyServiceImplResolveNamesTest {
                 .thenReturn(List.of(commercial(known, "Known Co", "Known Co LLC")));
         when(personPartyRepository.findAllById(List.of(known, unknown, personNoIdentity)))
                 .thenReturn(List.of(person(personNoIdentity, personId)));
-        when(peopleClient.fetchPersonIdentitiesQuietly(anyCollection())).thenReturn(Map.of());
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(anyCollection()))
+                .thenReturn(Map.of());
 
         List<PartyNameRef> result = service.resolveNames(List.of(known, known, unknown, personNoIdentity));
 

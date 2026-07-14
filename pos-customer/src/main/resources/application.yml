@@ -75,9 +75,29 @@ pos:
   customer:
     kafka:
       workorder-events-topic: workorder-events
-      enabled: false
-  people:
-    service-id: ${POS_PEOPLE_SERVICE_ID:people}
-    allow-local-fallback: false
-  vehicle-inventory:
-    service-id: ${POS_VEHICLE_INVENTORY_SERVICE_ID:vehicle-inventory}
+      # Reconciliation manifests + drift-repair commands (ADR-0044)
+      workorder-manifest-topic: ${POS_CUSTOMER_WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
+      workorder-commands-topic: ${POS_CUSTOMER_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
+      manifest-consumer-group: ${POS_CUSTOMER_MANIFEST_CONSUMER_GROUP:pos-customer-workorder-manifests}
+      # Vehicle replica feed + reconciliation (ADR-0044 §6, #843)
+      vehicle-events-topic: ${POS_CUSTOMER_VEHICLE_EVENTS_TOPIC:vehicle.events.v1}
+      vehicle-events-consumer-group: ${POS_CUSTOMER_VEHICLE_EVENTS_CONSUMER_GROUP:pos-customer-vehicle-events}
+      vehicle-manifest-topic: ${POS_CUSTOMER_VEHICLE_MANIFEST_TOPIC:vehicle.manifest.v1}
+      vehicle-manifest-consumer-group: ${POS_CUSTOMER_VEHICLE_MANIFEST_CONSUMER_GROUP:pos-customer-vehicle-manifests}
+      vehicle-commands-topic: ${POS_CUSTOMER_VEHICLE_COMMANDS_TOPIC:vehicle.commands.v1}
+      # Person identity replica feed + reconciliation + outbound identity commands
+      # (ADR-0044 §6, #877)
+      people-contact-events-topic: ${POS_CUSTOMER_PC_EVENTS_TOPIC:people-contact.events.v1}
+      people-contact-events-consumer-group: ${POS_CUSTOMER_PC_EVENTS_CONSUMER_GROUP:pos-customer-people-contact-events}
+      people-contact-manifest-topic: ${POS_CUSTOMER_PC_MANIFEST_TOPIC:people-contact.manifest.v1}
+      people-contact-manifest-consumer-group: ${POS_CUSTOMER_PC_MANIFEST_CONSUMER_GROUP:pos-customer-people-contact-manifests}
+      people-contact-commands-topic: ${POS_CUSTOMER_PC_COMMANDS_TOPIC:people-contact.commands.v1}
+      # Own fact topic + reconciliation + inbound replay commands (ADR-0044 §6, #889)
+      events-topic: ${POS_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
+      commands-topic: ${POS_CUSTOMER_COMMANDS_TOPIC:customer.commands.v1}
+      commands-consumer-group: ${POS_CUSTOMER_COMMANDS_CONSUMER_GROUP:pos-customer-commands}
+      enabled: ${POS_CUSTOMER_KAFKA_ENABLED:false}
+    manifest:
+      topic: ${POS_CUSTOMER_MANIFEST_TOPIC:customer.manifest.v1}
+      window: ${POS_CUSTOMER_MANIFEST_WINDOW:PT1H}
+      grace: ${POS_CUSTOMER_MANIFEST_GRACE:PT5M}

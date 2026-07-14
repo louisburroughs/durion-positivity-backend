@@ -1,6 +1,5 @@
 package com.positivity.customer.internal.service;
 
-import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CustomerDTO;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.PartyType;
@@ -32,7 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class PersonPartyServiceImpl implements CustomerService {
 
     private final PersonPartyRepository customerRepository;
-    private final PeopleClient peopleClient;
+    private final PersonDirectoryService personDirectoryService;
+    private final CustomerFactPublisher customerFactPublisher;
 
     /**
      * Retrieves all customers as DTOs.
@@ -65,7 +65,7 @@ public class PersonPartyServiceImpl implements CustomerService {
     /**
      * Searches person customers by name and/or email. Names and emails live in
      * pos-people (ADR-0015 I2; issue #684), so the search delegates to
-     * {@link PeopleClient#searchPersons(String)} and maps the resolved person ids
+     * {@link PersonDirectoryService#searchPersons(String)} and maps the resolved person ids
      * back to local person parties. Email filtering is applied client-side against
      * the resolved identities.
      */
@@ -81,7 +81,7 @@ public class PersonPartyServiceImpl implements CustomerService {
 
         String emailNeedle = hasEmail ? email.trim().toLowerCase() : null;
         List<CustomerDTO> matches = new ArrayList<>();
-        for (PeopleClient.PersonIdentity identity : peopleClient.searchPersons(query)) {
+        for (PersonDirectoryService.PersonIdentity identity : personDirectoryService.searchPersons(query)) {
             if (identity.id() == null) {
                 continue;
             }
@@ -136,6 +136,7 @@ public class PersonPartyServiceImpl implements CustomerService {
 
         // Determine party type and save to appropriate repository
         PersonParty saved = customerRepository.save(customer);
+        customerFactPublisher.partyChanged(saved);
 
         return toDTO(saved);
     }
@@ -158,6 +159,7 @@ public class PersonPartyServiceImpl implements CustomerService {
             PersonParty existing = personOpt.get();
             updateEntityFromDTO(existing, dto);
             PersonParty saved = customerRepository.save(existing);
+            customerFactPublisher.partyChanged(saved);
             return Optional.of(toDTO(saved));
         }
 
@@ -176,8 +178,10 @@ public class PersonPartyServiceImpl implements CustomerService {
         log.debug("Deleting customer with id: {}", id);
 
         // Check person repository first
-        if (customerRepository.existsById(id)) {
+        Optional<PersonParty> existing = customerRepository.findById(id);
+        if (existing.isPresent()) {
             customerRepository.deleteById(id);
+            customerFactPublisher.partyDeleted(existing.get());
             return true;
         }
 
@@ -204,8 +208,8 @@ public class PersonPartyServiceImpl implements CustomerService {
      */
     private CustomerDTO toDTO(PersonParty entity) {
         // Names from pos-people (sole source of truth, ADR-0015 I2; issue #684).
-        PeopleClient.PersonIdentity identity = entity.getPersonId() != null
-                ? peopleClient
+        PersonDirectoryService.PersonIdentity identity = entity.getPersonId() != null
+                ? personDirectoryService
                         .fetchPersonIdentitiesQuietly(Set.of(entity.getPersonId()))
                         .get(entity.getPersonId())
                 : null;
@@ -216,7 +220,7 @@ public class PersonPartyServiceImpl implements CustomerService {
      * Builds a DTO from an entity and an already-resolved pos-people identity,
      * avoiding a redundant identity fetch (used by name/email search).
      */
-    private CustomerDTO toDTO(PersonParty entity, PeopleClient.PersonIdentity identity) {
+    private CustomerDTO toDTO(PersonParty entity, PersonDirectoryService.PersonIdentity identity) {
         PartyType customerType = determineCustomerType(entity);
         return CustomerDTO.builder()
                 .id(entity.getPartyId())
@@ -253,7 +257,7 @@ public class PersonPartyServiceImpl implements CustomerService {
     private PersonParty toEntity(CustomerDTO dto) {
         PersonParty entity = createEntityByType(dto.getCustomerType());
         UUID canonicalPersonId =
-                peopleClient.resolveOrCreatePersonId(null, null, dto.getLastName(), dto.getFirstName());
+                personDirectoryService.resolveOrCreatePersonId(null, null, dto.getLastName(), dto.getFirstName());
         entity.setPersonId(canonicalPersonId);
         entity.setCustomerNumber(dto.getCustomerNumber());
         // Names are resolved/created in pos-people via resolveOrCreatePersonId above;

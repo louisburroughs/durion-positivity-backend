@@ -60,16 +60,19 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
     private final WorkorderPartRepository workorderPartRepository;
     private final WorkorderPartAdjustmentEventRepository adjustmentEventRepository;
     private final IdempotencyService idempotencyService;
+    private final WorkorderFactPublisher workorderFactPublisher;
 
     public WorkorderPartAdjustmentServiceImpl(
             WorkorderPartRepository workorderPartRepository,
             WorkorderPartAdjustmentEventRepository adjustmentEventRepository,
             IdempotencyService idempotencyService,
+            WorkorderFactPublisher workorderFactPublisher,
             Clock clock) {
         this.clock = clock;
         this.workorderPartRepository = workorderPartRepository;
         this.adjustmentEventRepository = adjustmentEventRepository;
         this.idempotencyService = idempotencyService;
+        this.workorderFactPublisher = workorderFactPublisher;
     }
 
     /**
@@ -161,6 +164,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
                 .build();
 
         substitutePart = workorderPartRepository.save(substitutePart);
+        workorderFactPublisher.markChanged(substitutePart.getWorkorder().getId());
         if (log.isInfoEnabled()) {
             log.info(
                     "Created substitute part {} for original part {}",
@@ -273,6 +277,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         // Update part.quantityReturned
         part.setQuantityReturned(part.getQuantityReturned().add(quantity));
         workorderPartRepository.save(part);
+        workorderFactPublisher.markChanged(part.getWorkorder().getId());
 
         // Create ADDITIONAL_RETURN adjustment event (negative quantity)
         WorkorderPartAdjustmentEvent event = WorkorderPartAdjustmentEvent.builder()
@@ -369,6 +374,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             part.setLineTotal(newQuantity.multiply(part.getUnitPrice()));
         }
         workorderPartRepository.save(part);
+        workorderFactPublisher.markChanged(part.getWorkorder().getId());
 
         // Create CORRECTION adjustment event
         WorkorderPartAdjustmentEvent event = WorkorderPartAdjustmentEvent.builder()

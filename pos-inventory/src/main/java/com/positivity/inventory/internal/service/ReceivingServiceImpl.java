@@ -1,8 +1,8 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.client.SiteDefaultsClient;
+import com.positivity.inventory.internal.service.SiteDefaultsService;
 import com.positivity.inventory.internal.client.SourceDocumentStubClient;
-import com.positivity.inventory.internal.client.WorkorderValidationClient;
+import com.positivity.inventory.internal.service.WorkorderValidationService;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
@@ -63,9 +63,10 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final ReceivingSessionRepository receivingSessionRepository;
     private final InventoryVarianceRepository inventoryVarianceRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final InventoryFactPublisher inventoryFactPublisher;
     private final SourceDocumentStubClient sourceDocumentStubClient;
-    private final SiteDefaultsClient siteDefaultsClient;
-    private final WorkorderValidationClient workorderValidationClient;
+    private final SiteDefaultsService siteDefaultsService;
+    private final WorkorderValidationService workorderValidationService;
 
     @Value("${pos.inventory.receiving.source-document-service:}")
     private String configuredSourceDocumentService;
@@ -206,8 +207,8 @@ public class ReceivingServiceImpl implements ReceivingService {
                         () -> new ReceivingSessionNotFoundException("Receiving line not found in session: " + lineId));
 
         String workorderId = request.getWorkorderId();
-        WorkorderValidationClient.WorkorderLineValidation workorderValidation =
-                workorderValidationClient.getWorkorderLineValidation(workorderId, request.getWorkorderLineId());
+        WorkorderValidationService.WorkorderLineValidation workorderValidation =
+                workorderValidationService.getWorkorderLineValidation(workorderId, request.getWorkorderLineId());
         if (isClosedWorkorderStatus(workorderValidation.status())) {
             throw new WorkorderClosedException("Cannot issue parts to a closed workorder: " + workorderId);
         }
@@ -247,6 +248,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .build();
 
         InventoryLedgerEntry savedReceiptEntry = inventoryLedgerEntryRepository.save(receiptEntry);
+        inventoryFactPublisher.markEntry(savedReceiptEntry);
         int issueQuantityAfter = calculateQuantityAfter(line.getProductId(), crossDockLocationId, -quantityDelta);
 
         InventoryLedgerEntry issueEntry = InventoryLedgerEntry.builder()
@@ -262,6 +264,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .build();
 
         InventoryLedgerEntry savedIssueEntry = inventoryLedgerEntryRepository.save(issueEntry);
+        inventoryFactPublisher.markEntry(savedIssueEntry);
 
         line.setWorkorderId(workorderId);
         line.setWorkorderLineId(request.getWorkorderLineId());
@@ -334,6 +337,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .build();
 
         inventoryLedgerEntryRepository.save(entry);
+        inventoryFactPublisher.markEntry(entry);
     }
 
     private int toWholeLedgerQuantity(BigDecimal quantity, String fieldName) {
@@ -365,7 +369,7 @@ public class ReceivingServiceImpl implements ReceivingService {
             return fallbackStagingLocationId;
         }
 
-        return siteDefaultsClient.getDefaultStagingLocationId(siteId).orElse(fallbackStagingLocationId);
+        return siteDefaultsService.getDefaultStagingLocationId(siteId).orElse(fallbackStagingLocationId);
     }
 
     private Optional<UUID> resolveRequestScopedSiteId() {

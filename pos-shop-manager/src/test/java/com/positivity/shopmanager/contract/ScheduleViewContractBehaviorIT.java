@@ -6,14 +6,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.shopmanager.BaseContractIntegrationTest;
 import com.positivity.shopmanager.PosShopManagerApplication;
-import com.positivity.shopmanager.internal.client.CrmCustomerClient;
-import com.positivity.shopmanager.internal.client.CrmVehicleClient;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.Shop;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
+import com.positivity.shopmanager.internal.service.CrmSnapshotService;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -111,10 +110,7 @@ class ScheduleViewContractBehaviorIT extends BaseContractIntegrationTest {
     // Mocked to prevent context-startup failures; not invoked by schedule view
     // operations
     @MockitoBean
-    private CrmCustomerClient crmCustomerClient;
-
-    @MockitoBean
-    private CrmVehicleClient crmVehicleClient;
+    private CrmSnapshotService crmSnapshotService;
 
     /**
      * Wipes appointment and audit tables before each test to ensure full isolation.

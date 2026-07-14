@@ -66,12 +66,6 @@
       "defaultValue": "people"
     },
     {
-      "name": "pos.shopmgr.service-id",
-      "type": "java.lang.String",
-      "description": "Eureka service-id for the pos-shop-manager service.",
-      "defaultValue": "shop-manager"
-    },
-    {
       "name": "gateway.base-url",
       "type": "java.lang.String",
       "description": "Gateway base URL used for event type registration.",

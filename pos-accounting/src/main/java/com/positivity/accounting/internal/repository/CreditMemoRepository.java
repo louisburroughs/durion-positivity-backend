@@ -56,4 +56,16 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
      * @return true if credit memos exist
      */
     boolean existsByOriginalInvoiceId(UUID originalInvoiceId);
+
+    /**
+     * Sum of credit memo totals (credit + reversed tax) for an invoice in a given status.
+     *
+     * @param originalInvoiceId invoice identifier
+     * @param status            credit memo status to include (normally POSTED)
+     * @return total credited amount
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT COALESCE(SUM(cm.creditAmount + cm.taxAmountReversed), 0) FROM CreditMemo cm"
+                    + " WHERE cm.originalInvoiceId = :originalInvoiceId AND cm.status = :status")
+    java.math.BigDecimal sumCreditedAmountByInvoiceIdAndStatus(UUID originalInvoiceId, CreditMemoStatus status);
 }

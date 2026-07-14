@@ -1,8 +1,7 @@
 package com.positivity.customer.internal.service;
 
-import com.positivity.customer.internal.client.PeopleClient;
-import com.positivity.customer.internal.client.VehicleInventoryClient;
 import com.positivity.customer.internal.config.CacheConfig;
+import com.positivity.customer.internal.config.OutboxEventWriter;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateCommercialAccountResponse;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
@@ -32,10 +31,12 @@ import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PartyService;
-import com.positivity.shared.dto.VehicleResponse;
+import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.domainevents.customer.BillingRulesUpdatedV1;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
@@ -80,8 +81,13 @@ public class PartyServiceImpl implements PartyService {
     private final PersonPartyRepository personPartyRepository;
     private final PartyRelationshipRepository partyRelationshipRepository;
     private final CacheManager cacheManager;
-    private final PeopleClient peopleClient;
-    private final VehicleInventoryClient vehicleInventoryClient;
+    private final PersonDirectoryService personDirectoryService;
+    private final ExtVehicleRepository extVehicleRepository;
+
+    /** Present only when pos.customer.kafka.enabled=true (ADR-0044 producer, issue #842). */
+    private final org.springframework.beans.factory.ObjectProvider<OutboxEventWriter> outboxEventWriter;
+
+    private final CustomerFactPublisher customerFactPublisher;
 
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_INSTANT.withLocale(Locale.US);
 
@@ -110,6 +116,7 @@ public class PartyServiceImpl implements PartyService {
         }
 
         CommercialParty saved = partyRepository.save(party);
+        customerFactPublisher.partyChanged(saved);
         log.info(
                 "Created commercial account with partyId: {}, customerNumber: {}",
                 saved.getPartyId(),
@@ -162,15 +169,14 @@ public class PartyServiceImpl implements PartyService {
                 .legalName(personName)
                 .displayName(personName)
                 .status(personParty.getStatus().toString())
-            .createdAt(ISO_FORMATTER.format(requireNonNullField(personParty.getCreatedAt(), "createdAt")))
-                .modifiedAt(personParty.getModifiedAt() != null
-                        ? ISO_FORMATTER.format(personParty.getModifiedAt())
-                        : null)
+                .createdAt(ISO_FORMATTER.format(requireNonNullField(personParty.getCreatedAt(), "createdAt")))
+                .modifiedAt(
+                        personParty.getModifiedAt() != null ? ISO_FORMATTER.format(personParty.getModifiedAt()) : null)
                 .build();
     }
 
     private String resolvePersonDisplayName(@NonNull PersonParty personParty) {
-        Map<UUID, PeopleClient.PersonIdentity> identities = fetchIdentitiesFor(List.of(personParty));
+        Map<UUID, PersonDirectoryService.PersonIdentity> identities = fetchIdentitiesFor(List.of(personParty));
         String displayName = resolveDisplayName(personParty, identities);
         if (StringUtils.hasText(displayName)) {
             return displayName;
@@ -218,7 +224,7 @@ public class PartyServiceImpl implements PartyService {
         partyRepository.findAll().stream().map(this::mapToPartySummary).forEach(all::add);
 
         List<PersonParty> individuals = personPartyRepository.findIndividualCustomers();
-        Map<UUID, PeopleClient.PersonIdentity> identities = fetchIdentitiesFor(individuals);
+        Map<UUID, PersonDirectoryService.PersonIdentity> identities = fetchIdentitiesFor(individuals);
         individuals.stream()
                 .map(person -> mapPersonToPartySummary(person, identities))
                 .forEach(all::add);
@@ -288,7 +294,7 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private SearchPartiesResponse.PartySummary mapPersonToPartySummary(
-            PersonParty person, Map<UUID, PeopleClient.PersonIdentity> identities) {
+            PersonParty person, Map<UUID, PersonDirectoryService.PersonIdentity> identities) {
         String displayName = resolveDisplayName(person, identities);
         return SearchPartiesResponse.PartySummary.builder()
                 .partyId(String.valueOf(person.getPartyId()))
@@ -308,8 +314,8 @@ public class PartyServiceImpl implements PartyService {
      * themselves: name plus their first email/phone (pos-people source of truth).
      */
     private SearchPartiesResponse.PrimaryContact resolvePersonPrimaryContact(
-            PersonParty person, String displayName, Map<UUID, PeopleClient.PersonIdentity> identities) {
-        PeopleClient.PersonIdentity identity =
+            PersonParty person, String displayName, Map<UUID, PersonDirectoryService.PersonIdentity> identities) {
+        PersonDirectoryService.PersonIdentity identity =
                 person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
         List<String> emails = resolveEmails(person, identity);
         List<String> phones = resolvePhones(person, identity);
@@ -327,12 +333,12 @@ public class PartyServiceImpl implements PartyService {
      * display read paths (directory browse, contact summaries) rather than failing the
      * whole request — there is no local fallback after issue #684.
      */
-    private Map<UUID, PeopleClient.PersonIdentity> fetchIdentitiesFor(Collection<PersonParty> persons) {
+    private Map<UUID, PersonDirectoryService.PersonIdentity> fetchIdentitiesFor(Collection<PersonParty> persons) {
         Set<UUID> personIds = persons.stream()
                 .map(PersonParty::getPersonId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        return peopleClient.fetchPersonIdentitiesQuietly(personIds);
+        return personDirectoryService.fetchPersonIdentitiesQuietly(personIds);
     }
 
     /**
@@ -340,19 +346,19 @@ public class PartyServiceImpl implements PartyService {
      * issue #684). Returns {@code null} when pos-people has no name for the canonical id
      * (or is unreachable) — there is no local fallback copy.
      */
-    private String resolveDisplayName(PersonParty person, Map<UUID, PeopleClient.PersonIdentity> identities) {
-        PeopleClient.PersonIdentity identity =
+    private String resolveDisplayName(PersonParty person, Map<UUID, PersonDirectoryService.PersonIdentity> identities) {
+        PersonDirectoryService.PersonIdentity identity =
                 (identities != null && person.getPersonId() != null) ? identities.get(person.getPersonId()) : null;
         return identity != null && !identity.displayName().isBlank() ? identity.displayName() : null;
     }
 
     /** Phone values from pos-people (sole source of truth, ADR-0015 I2; issue #684). */
-    private List<String> resolvePhones(PersonParty person, PeopleClient.PersonIdentity identity) {
+    private List<String> resolvePhones(PersonParty person, PersonDirectoryService.PersonIdentity identity) {
         return identity != null ? identity.phones() : List.of();
     }
 
     /** Email values from pos-people (sole source of truth, ADR-0015 I2; issue #684). */
-    private List<String> resolveEmails(PersonParty person, PeopleClient.PersonIdentity identity) {
+    private List<String> resolveEmails(PersonParty person, PersonDirectoryService.PersonIdentity identity) {
         return identity != null ? identity.emails() : List.of();
     }
 
@@ -419,10 +425,10 @@ public class PartyServiceImpl implements PartyService {
             }
         }
         if (!personIdByPartyId.isEmpty()) {
-            Map<UUID, PeopleClient.PersonIdentity> identities =
-                    peopleClient.fetchPersonIdentitiesQuietly(Set.copyOf(personIdByPartyId.values()));
+            Map<UUID, PersonDirectoryService.PersonIdentity> identities =
+                    personDirectoryService.fetchPersonIdentitiesQuietly(Set.copyOf(personIdByPartyId.values()));
             personIdByPartyId.forEach((partyId, personId) -> {
-                PeopleClient.PersonIdentity identity = identities.get(personId);
+                PersonDirectoryService.PersonIdentity identity = identities.get(personId);
                 if (identity != null && StringUtils.hasText(identity.displayName())) {
                     byPartyId.put(
                             partyId,
@@ -438,9 +444,9 @@ public class PartyServiceImpl implements PartyService {
      * Pick a best-effort phone from a person's contact points: the primary phone-type point if any,
      * otherwise the first non-blank phone-type point. Phone contact types are prefixed {@code PHONE}.
      */
-    private static @Nullable String primaryPhone(@NonNull List<PeopleClient.ContactPoint> contactPoints) {
-        PeopleClient.ContactPoint firstPhone = null;
-        for (PeopleClient.ContactPoint cp : contactPoints) {
+    private static @Nullable String primaryPhone(@NonNull List<PersonDirectoryService.ContactPoint> contactPoints) {
+        PersonDirectoryService.ContactPoint firstPhone = null;
+        for (PersonDirectoryService.ContactPoint cp : contactPoints) {
             if (cp.contactType() == null || !cp.contactType().startsWith("PHONE") || !StringUtils.hasText(cp.value())) {
                 continue;
             }
@@ -481,6 +487,11 @@ public class PartyServiceImpl implements PartyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot merge party with itself");
         }
 
+        // Capture contacts whose commercial-account linkage the reassignment below changes, so
+        // their person-identity facts can be re-emitted after the merge (#889).
+        java.util.List<UUID> affectedPersonIds = CustomerFactPublisher.affectedPersonIds(
+                partyRelationshipRepository.findByFromPartyPartyId(loser.getPartyId()));
+
         // Transfer party relationships from loser to survivor
         partyRelationshipRepository.reassignFromParty(loser.getPartyId(), survivor.getPartyId());
 
@@ -495,6 +506,9 @@ public class PartyServiceImpl implements PartyService {
 
         partyRepository.save(survivor);
         partyRepository.save(loser);
+        customerFactPublisher.partyChanged(survivor);
+        customerFactPublisher.partyChanged(loser);
+        affectedPersonIds.forEach(customerFactPublisher::personIdentityChanged);
         log.info("Successfully merged parties - survivor: {}, loser: {}", survivor.getPartyId(), loser.getPartyId());
 
         return MergePartiesResponse.builder()
@@ -559,6 +573,7 @@ public class PartyServiceImpl implements PartyService {
 
         party.getVehicleVins().add(request.getVinNumber());
         partyRepository.save(party);
+        customerFactPublisher.partyChanged(party);
         log.info("Associated vehicle VIN {} with party {}", request.getVinNumber(), partyId);
 
         return CreateVehicleForPartyResponse.builder()
@@ -833,7 +848,51 @@ public class PartyServiceImpl implements PartyService {
         embedded.setDiscountPolicyRef(request.getDiscountPolicyRef());
         party.setBillingRules(embedded);
         partyRepository.save(party);
+        publishBillingRulesUpdated(partyId, embedded);
+        // Credit hold feeds the party fact's requirementsMet verdict — re-emit it (#889).
+        customerFactPublisher.partyChanged(party);
         return mapToBillingRuleRef(embedded);
+    }
+
+    /**
+     * ADR-0044 (issue #842): billing-rule changes are facts owned by this module; consumers
+     * (pos-accounting) maintain read-only replicas from customer.events.v1. Written through the
+     * outbox inside this transaction — no event on rollback. The envelope's aggregateVersion uses
+     * the update timestamp (epoch millis): CommercialParty has no optimistic-lock version, and
+     * millisecond ordering is sufficient for replica staleness checks on this low-frequency data.
+     */
+    private void publishBillingRulesUpdated(UUID partyId, BillingRulesEmbeddable embedded) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        BillingRulesUpdatedV1 payload = new BillingRulesUpdatedV1(
+                partyId,
+                embedded.getPoRequired(),
+                embedded.getTaxExempt(),
+                embedded.getCreditHold(),
+                embedded.getAutoPayEnabled(),
+                embedded.getPaymentTerms(),
+                embedded.getCreditLimit(),
+                embedded.getCurrency(),
+                embedded.getInvoiceDeliveryMethod() == null
+                        ? null
+                        : embedded.getInvoiceDeliveryMethod().name(),
+                embedded.getBillingAddressId(),
+                embedded.getDiscountPolicyRef());
+        DomainEventEnvelope<BillingRulesUpdatedV1> envelope = DomainEventEnvelope.of(
+                BillingRulesUpdatedV1.EVENT_TYPE,
+                1,
+                partyId,
+                java.time.Instant.now(clock).toEpochMilli(),
+                "pos-customer",
+                null,
+                null,
+                payload,
+                clock);
+        // Publish to the configured topic so the manifest computation (which scans by the same
+        // property) can never desync from the outbox rows (PR #893 review).
+        writer.publish(customerFactPublisher.eventsTopic(), envelope);
     }
 
     private BillingRuleRef mapToBillingRuleRef(BillingRulesEmbeddable embedded) {
@@ -885,8 +944,8 @@ public class PartyServiceImpl implements PartyService {
         SnapshotMetadata meta = createMetadata();
         AccountSummary acct = buildAccountSummary(personParty);
         List<CrmSnapshotDTO.VehicleSummary> vehicles = buildVehicleSummaries(personParty);
-        return new CrmSnapshotDTO(meta, acct, Collections.emptyList(), vehicles, buildBillingPreferences(),
-                BillingRuleRef.defaults());
+        return new CrmSnapshotDTO(
+                meta, acct, Collections.emptyList(), vehicles, buildBillingPreferences(), BillingRuleRef.defaults());
     }
 
     private SnapshotMetadata createMetadata() {
@@ -936,7 +995,7 @@ public class PartyServiceImpl implements PartyService {
         LocalDate today = LocalDate.now(clock);
         List<PartyRelationship> relationships =
                 partyRelationshipRepository.findActiveByFromPartyId(party.getPartyId(), today);
-        Map<UUID, PeopleClient.PersonIdentity> identities = fetchIdentitiesFor(
+        Map<UUID, PersonDirectoryService.PersonIdentity> identities = fetchIdentitiesFor(
                 relationships.stream().map(PartyRelationship::getToPerson).toList());
         return relationships.stream()
                 .map(rel -> convertRelationshipToSummary(rel, identities))
@@ -944,7 +1003,7 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private ContactSummary convertRelationshipToSummary(
-            PartyRelationship rel, Map<UUID, PeopleClient.PersonIdentity> identities) {
+            PartyRelationship rel, Map<UUID, PersonDirectoryService.PersonIdentity> identities) {
         PersonParty person = rel.getToPerson();
         ContactSummary summary = new ContactSummary();
         summary.setContactId(Objects.requireNonNull(rel.getPartyRelationshipId(), "partyRelationshipId")
@@ -953,7 +1012,7 @@ public class PartyServiceImpl implements PartyService {
         summary.setName(Objects.requireNonNullElse(resolveDisplayName(person, identities), "Unknown"));
         summary.setRoles(Collections.emptyList());
 
-        PeopleClient.PersonIdentity identity =
+        PersonDirectoryService.PersonIdentity identity =
                 person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
         summary.setPhoneNumbers(resolvePhones(person, identity).stream()
                 .map(v -> new ContactSummary.PhoneNumberDTO("PRIMARY", v))
@@ -982,29 +1041,24 @@ public class PartyServiceImpl implements PartyService {
     }
 
     private CrmSnapshotDTO.VehicleSummary fetchVehicleSummaryByVin(String vinCode) {
-        try {
-            VehicleResponse vehicleData =
-                    vehicleInventoryClient.getVehicleByVin(vinCode).orElse(null);
-            if (vehicleData == null) {
-                log.debug("Vehicle lookup by VIN returned null: {}", vinCode);
-                return null;
-            }
-
-            CrmSnapshotDTO.VehicleSummary summary = new CrmSnapshotDTO.VehicleSummary();
-            String vehicleId = vehicleData.getVehicleId() != null
-                    ? vehicleData.getVehicleId().toString()
-                    : vinCode;
-            summary.setVehicleId(vehicleId);
-            summary.setVin(vehicleData.getVin() != null ? vehicleData.getVin() : vinCode);
-            summary.setLicensePlate(vehicleData.getLicensePlate());
-            summary.setMake(vehicleData.getMake());
-            summary.setModel(vehicleData.getModel());
-            summary.setYear(vehicleData.getYear());
-            return summary;
-        } catch (Exception ex) {
-            log.warn("Vehicle fetch failed for VIN {}: {}", vinCode, ex.getMessage());
-            return null;
-        }
+        // Served from the ext_vehicle replica fed by vehicle.events.v1 (ADR-0044 §6, #843);
+        // vin_normalized mirrors the owner's VinUtils normalization (trimmed uppercase).
+        return extVehicleRepository
+                .findByVinNormalizedAndActiveTrue(vinCode.trim().toUpperCase(Locale.ROOT))
+                .map(vehicle -> {
+                    CrmSnapshotDTO.VehicleSummary summary = new CrmSnapshotDTO.VehicleSummary();
+                    summary.setVehicleId(vehicle.getVehicleId().toString());
+                    summary.setVin(vehicle.getVin());
+                    summary.setLicensePlate(vehicle.getLicensePlate());
+                    summary.setMake(vehicle.getMake());
+                    summary.setModel(vehicle.getModel());
+                    summary.setYear(vehicle.getYear());
+                    return summary;
+                })
+                .orElseGet(() -> {
+                    log.debug("Vehicle lookup by VIN returned null: {}", vinCode);
+                    return null;
+                });
     }
 
     private CrmSnapshotDTO.BillingPreferences buildBillingPreferences() {

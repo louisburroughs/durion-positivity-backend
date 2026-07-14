@@ -1,8 +1,8 @@
 package com.positivity.invoice.internal.service;
 
-import com.positivity.invoice.internal.client.LocationServiceClient;
 import com.positivity.invoice.internal.client.TaxServiceClient;
-import com.positivity.invoice.internal.client.WorkorderReferenceClient;
+
+import com.positivity.invoice.internal.config.InvoiceEventPublisher;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
@@ -47,8 +47,9 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
     private final TaxServiceClient taxServiceClient;
-    private final LocationServiceClient locationServiceClient;
-    private final WorkorderReferenceClient workorderReferenceClient;
+    private final LocationReferenceService locationReferenceService;
+    private final WorkorderReferenceService workorderReferenceService;
+    private final InvoiceEventPublisher invoiceEventPublisher;
 
     /**
      * Self-reference (lazy to break the construction cycle) used so the public
@@ -66,14 +67,16 @@ public class InvoiceServiceImpl implements InvoiceService {
     public InvoiceServiceImpl(
             @NonNull InvoiceRepository invoiceRepository,
             @NonNull TaxServiceClient taxServiceClient,
-            @NonNull LocationServiceClient locationServiceClient,
-            @NonNull WorkorderReferenceClient workorderReferenceClient,
+            @NonNull LocationReferenceService locationReferenceService,
+            @NonNull WorkorderReferenceService workorderReferenceService,
+            @NonNull InvoiceEventPublisher invoiceEventPublisher,
             Clock clock) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.taxServiceClient = taxServiceClient;
-        this.locationServiceClient = locationServiceClient;
-        this.workorderReferenceClient = workorderReferenceClient;
+        this.locationReferenceService = locationReferenceService;
+        this.workorderReferenceService = workorderReferenceService;
+        this.invoiceEventPublisher = invoiceEventPublisher;
     }
 
     @Override
@@ -144,6 +147,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         recalculateTotals(invoice);
 
         Invoice saved = invoiceRepository.save(invoice);
+        invoiceEventPublisher.publishInvoiceUpdated(saved);
         InvoiceDetailsResponse response = toDetailsResponse(saved);
         response.setWorkorderNumber(resolveWorkorderNumber(saved.getWorkorderId()));
         return response;
@@ -189,6 +193,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             saved.setInvoiceNumber(generateInvoiceNumber(saved));
             saved = invoiceRepository.save(saved);
         }
+        invoiceEventPublisher.publishInvoiceUpdated(saved);
         return toGenerationResponse(saved);
     }
 
@@ -258,7 +263,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                     "invoice has taxable line items but no locationId to resolve the tax jurisdiction");
         }
 
-        TaxAddress destination = locationServiceClient.resolveTaxAddress(locationId);
+        TaxAddress destination = locationReferenceService.resolveTaxAddress(locationId);
         return taxServiceClient
                 .calculateTax(taxLineItems, destination, invoice.getWorkorderId())
                 .setScale(4, RoundingMode.HALF_UP);
@@ -396,7 +401,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         if (workorderId == null) {
             return null;
         }
-        return workorderReferenceClient.resolveNumbers(Set.of(workorderId)).get(workorderId);
+        return workorderReferenceService.resolveNumbers(Set.of(workorderId)).get(workorderId);
     }
 
     /**
@@ -415,8 +420,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             return false;
         }
         BigDecimal total = invoice.getTotal();
-        return total != null
-                && total.compareTo(InvoiceFinalizationServiceImpl.SERVICE_ADVISOR_LIMIT) > 0;
+        return total != null && total.compareTo(InvoiceFinalizationServiceImpl.SERVICE_ADVISOR_LIMIT) > 0;
     }
 
     @NonNull

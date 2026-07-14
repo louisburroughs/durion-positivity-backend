@@ -1,6 +1,9 @@
 spring:
   application:
     name: people
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   datasource:
     url: ${SPRING_DATASOURCE_URL:}
     username: ${SPRING_DATASOURCE_USERNAME:}
@@ -68,9 +71,27 @@ pos:
         max-resolution-cache-entries: ${POS_PEOPLE_REPORTS_THRESHOLD_CACHE_MAX_ENTRIES:4096}
         preload-location-policies: ${POS_PEOPLE_REPORTS_THRESHOLD_CACHE_PRELOAD_LOCATION:true}
         preload-global-policies: ${POS_PEOPLE_REPORTS_THRESHOLD_CACHE_PRELOAD_GLOBAL:true}
-  location-service:
-    service-id: ${POS_LOCATION_SERVICE_SERVICE_ID:location}
-  security-service:
-    service-id: ${POS_SECURITY_SERVICE_SERVICE_ID:security-service}
-  workexec:
-    service-id: ${POS_WORKEXEC_SERVICE_ID:workorder}
+    kafka:
+      # ADR-0044 domain-event flow (#875): people.events.v1 facts via the transactional outbox,
+      # people.commands.v1 replay commands, people.manifest.v1 reconciliation, plus the
+      # people-contact.events.v1 replica consumer and person upsert commands toward
+      # people-contact.commands.v1.
+      enabled: ${POS_PEOPLE_KAFKA_ENABLED:false}
+      events-topic: ${POS_PEOPLE_EVENTS_TOPIC:people.events.v1}
+      commands-topic: ${POS_PEOPLE_COMMANDS_TOPIC:people.commands.v1}
+      commands-consumer-group: ${POS_PEOPLE_COMMANDS_CONSUMER_GROUP:pos-people-commands}
+      people-contact-events-topic: ${POS_PEOPLE_PC_EVENTS_TOPIC:people-contact.events.v1}
+      people-contact-events-consumer-group: ${POS_PEOPLE_PC_EVENTS_CONSUMER_GROUP:pos-people-people-contact-events}
+      people-contact-manifest-topic: ${POS_PEOPLE_PC_MANIFEST_TOPIC:people-contact.manifest.v1}
+      people-contact-manifest-consumer-group: ${POS_PEOPLE_PC_MANIFEST_CONSUMER_GROUP:pos-people-people-contact-manifests}
+      people-contact-commands-topic: ${POS_PEOPLE_PC_COMMANDS_TOPIC:people-contact.commands.v1}
+      workorder-events-topic: ${POS_PEOPLE_WO_EVENTS_TOPIC:workorder.events.v1}
+      workorder-events-consumer-group: ${POS_PEOPLE_WO_EVENTS_CONSUMER_GROUP:pos-people-workorder-events}
+      # Location replica feed + reconciliation (ADR-0044 §6, #892)
+      location-events-topic: ${POS_PEOPLE_LOCATION_EVENTS_TOPIC:location.events.v1}
+      location-events-consumer-group: ${POS_PEOPLE_LOCATION_EVENTS_CONSUMER_GROUP:pos-people-location-events}
+      location-manifest-topic: ${POS_PEOPLE_LOCATION_MANIFEST_TOPIC:location.manifest.v1}
+      location-manifest-consumer-group: ${POS_PEOPLE_LOCATION_MANIFEST_CONSUMER_GROUP:pos-people-location-manifests}
+      location-commands-topic: ${POS_PEOPLE_LOCATION_COMMANDS_TOPIC:location.commands.v1}
+    manifest:
+      topic: ${POS_PEOPLE_MANIFEST_TOPIC:people.manifest.v1}

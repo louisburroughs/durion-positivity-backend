@@ -16,7 +16,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -62,11 +61,12 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
             List<StaticRagPreloadProperties.StaticDocEntry> docs = preloadProperties.docs();
             for (StaticRagPreloadProperties.StaticDocEntry entry : docs) {
                 try {
+                    List<String> requiredPermissions = entry.requiredPermissions();
                     preloadDocument(
                             entry.id(),
                             entry.sourcePath(),
                             entry.ragScope(),
-                            Objects.requireNonNullElse(entry.requiredPermissions(), List.of()));
+                            requiredPermissions != null ? requiredPermissions : List.of());
                 } catch (Exception exception) {
                     String hash = resolveHashOrNull(entry.sourcePath());
                     persistFailedRecord(entry.id(), hash, entry.sourcePath(), entry.ragScope());

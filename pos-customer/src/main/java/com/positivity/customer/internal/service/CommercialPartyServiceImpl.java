@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CommercialPartyServiceImpl implements CustomerService {
 
     private final CommercialPartyRepository commercialRepository;
+    private final CustomerFactPublisher customerFactPublisher;
 
     /**
      * Retrieves all customers as DTOs.
@@ -131,7 +132,9 @@ public class CommercialPartyServiceImpl implements CustomerService {
         // Determine party type and save to appropriate repository
         PartyType partyType = customer.getPartyType();
         if (partyType == PartyType.COMMERCIAL) {
-            return toDTO(commercialRepository.save(customer));
+            CommercialParty saved = commercialRepository.save(customer);
+            customerFactPublisher.partyChanged(saved);
+            return toDTO(saved);
         }
 
         return null; // This service only handles commercial parties, return null or throw exception
@@ -155,6 +158,7 @@ public class CommercialPartyServiceImpl implements CustomerService {
             CommercialParty existing = commercialOpt.get();
             updateEntityFromDTO(existing, dto);
             CommercialParty saved = commercialRepository.save(existing);
+            customerFactPublisher.partyChanged(saved);
             return Optional.of(toDTO(saved));
         }
 
@@ -172,8 +176,10 @@ public class CommercialPartyServiceImpl implements CustomerService {
         log.debug("Deleting customer with id: {}", id);
 
         // Check commercial repository
-        if (commercialRepository.existsById(id)) {
+        Optional<CommercialParty> existing = commercialRepository.findById(id);
+        if (existing.isPresent()) {
             commercialRepository.deleteById(id);
+            customerFactPublisher.partyDeleted(existing.get());
             return true;
         }
 

@@ -2,44 +2,46 @@ package com.positivity.customer.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.customer.internal.client.VehicleInventoryClient;
-import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
-import com.positivity.customer.internal.dto.VehicleTransferRequest;
 import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.ExtVehicle;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.service.CrmVehicleServiceImpl;
-import com.positivity.shared.dto.CreateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+/**
+ * Unit tests for {@link CrmVehicleServiceImpl} after ADR-0044 (#843): all vehicle reads are
+ * served from the {@code ext_vehicle} replica; there is no synchronous call to
+ * pos-vehicle-inventory.
+ */
 @ExtendWith(MockitoExtension.class)
 class CrmVehicleServiceImplTest {
+
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
+    private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID VEHICLE_ID = UUID.fromString("00000000-0000-0000-0000-000000000099");
+    private static final String VIN = "1HGBH41JXMN109186";
+
     @Mock
-    private VehicleInventoryClient vehicleInventoryClient;
+    private ExtVehicleRepository extVehicleRepository;
 
     @Mock
     private PersonPartyRepository personPartyRepository;
@@ -52,341 +54,175 @@ class CrmVehicleServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new CrmVehicleServiceImpl(
-                TEST_CLOCK, vehicleInventoryClient, personPartyRepository, commercialPartyRepository);
+                TEST_CLOCK, extVehicleRepository, personPartyRepository, commercialPartyRepository);
     }
 
     private CommercialParty commercialParty(UUID id) {
-        CommercialParty party = new CommercialParty();
-        party.setPartyId(id);
-        party.setCustomerNumber("CUST-" + id.toString().substring(0, 8));
-        party.setLegalName("Acme Fleet");
-        party.setDisplayName("Acme");
-        party.setPartyType(PartyType.COMMERCIAL);
-        party.setVehicleVins(new HashSet<>());
-        return party;
+        CommercialParty p = new CommercialParty();
+        p.setPartyId(id);
+        p.setCustomerNumber("CUST-001");
+        p.setLegalName("Acme Corp");
+        p.setPartyType(PartyType.COMMERCIAL);
+        return p;
     }
 
-    private PersonParty personParty(UUID id) {
-        PersonParty party = new PersonParty();
-        party.setPartyId(id);
-        party.setVehicleVins(new HashSet<>());
-        return party;
-    }
-
-    private VehicleResponse vehicle(UUID vehicleId, String vin) {
-        return VehicleResponse.builder()
+    private ExtVehicle vehicle(UUID vehicleId, UUID accountId, String vin) {
+        return ExtVehicle.builder()
                 .vehicleId(vehicleId)
+                .accountId(accountId)
                 .vin(vin)
-                .unitNumber("U-1")
-                .description("Truck")
-                .licensePlate("ABC-123")
-                .licensePlateJurisdiction("TX")
+                .vinNormalized(vin)
+                .make("Honda")
+                .model("Accord")
                 .year(2022)
-                .make("Ford")
-                .model("F-150")
-                .trim("XLT")
+                .licensePlate("ABC-123")
+                .active(true)
+                .aggregateVersion(3L)
+                .updatedAt(Instant.parse("2024-01-01T00:00:00Z"))
                 .build();
     }
 
     @Test
-    void createVehicle_associatesVin_andSavesCommercialParty() {
-        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        CommercialParty party = commercialParty(customerId);
-        CreateVehicleForPartyRequest request = CreateVehicleForPartyRequest.builder()
-                .vinNumber("VIN-001")
-                .unitNumber("U-9")
-                .description("Service Van")
-                .licensePlate("PLATE")
-                .licensePlateRegion("CA")
-                .build();
+    void getVehicleForCustomer_returnsVehicle_whenVinOwnedByCustomer() {
+        CommercialParty party = commercialParty(CUSTOMER_ID);
+        party.getVehicleVins().add(VIN);
+        when(personPartyRepository.findById(CUSTOMER_ID)).thenReturn(Optional.empty());
+        when(commercialPartyRepository.findById(CUSTOMER_ID)).thenReturn(Optional.of(party));
+        when(extVehicleRepository.findById(VEHICLE_ID)).thenReturn(Optional.of(vehicle(VEHICLE_ID, CUSTOMER_ID, VIN)));
 
-        when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
-        when(commercialPartyRepository.findById(customerId)).thenReturn(Optional.of(party));
-        when(vehicleInventoryClient.createVehicle(any(CreateVehicleRequest.class)))
-                .thenReturn(vehicle(UUID.fromString("00000000-0000-0000-0000-000000000001"), "VIN-001"));
+        Optional<VehicleResponse> result = service.getVehicleForCustomer(CUSTOMER_ID, VEHICLE_ID);
 
-        VehicleResponse result = service.createVehicle(customerId, request);
-
-        assertThat(result).isNotNull();
-        assertThat(party.getVehicleVins()).contains("VIN-001");
-        verify(commercialPartyRepository).save(party);
-    }
-
-    @Test
-    void createVehicle_doesNotSaveParty_whenClientReturnsNull() {
-        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        CommercialParty party = commercialParty(customerId);
-
-        when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
-        when(commercialPartyRepository.findById(customerId)).thenReturn(Optional.of(party));
-        when(vehicleInventoryClient.createVehicle(any(CreateVehicleRequest.class)))
-                .thenReturn(null);
-
-        VehicleResponse result = service.createVehicle(
-                customerId,
-                CreateVehicleForPartyRequest.builder().vinNumber("VIN-NULL").build());
-
-        assertThat(result).isNull();
-        verify(commercialPartyRepository, never()).save(any());
+        assertThat(result).isPresent();
+        assertThat(result.get().getVehicleId()).isEqualTo(VEHICLE_ID);
+        assertThat(result.get().getVin()).isEqualTo(VIN);
+        assertThat(result.get().getVersion()).isEqualTo(3L);
     }
 
     @Test
     void getVehicleForCustomer_returnsEmpty_whenVinNotOwned() {
-        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        CommercialParty party = commercialParty(customerId);
+        CommercialParty party = commercialParty(CUSTOMER_ID);
+        when(personPartyRepository.findById(CUSTOMER_ID)).thenReturn(Optional.empty());
+        when(commercialPartyRepository.findById(CUSTOMER_ID)).thenReturn(Optional.of(party));
+        when(extVehicleRepository.findById(VEHICLE_ID)).thenReturn(Optional.of(vehicle(VEHICLE_ID, CUSTOMER_ID, VIN)));
 
-        when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
-        when(commercialPartyRepository.findById(customerId)).thenReturn(Optional.of(party));
-        when(vehicleInventoryClient.getVehicle(vehicleId)).thenReturn(Optional.of(vehicle(vehicleId, "VIN-X")));
-
-        Optional<VehicleResponse> result = service.getVehicleForCustomer(customerId, vehicleId);
+        Optional<VehicleResponse> result = service.getVehicleForCustomer(CUSTOMER_ID, VEHICLE_ID);
 
         assertThat(result).isEmpty();
     }
 
     @Test
-    void updateVehicle_mergesRequestWithExistingData() {
-        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        CommercialParty party = commercialParty(customerId);
-        party.getVehicleVins().add("VIN-OLD");
+    void getVehicleForCustomer_throws_whenCustomerUnknown() {
+        when(personPartyRepository.findById(CUSTOMER_ID)).thenReturn(Optional.empty());
+        when(commercialPartyRepository.findById(CUSTOMER_ID)).thenReturn(Optional.empty());
 
-        VehicleResponse existing = vehicle(vehicleId, "VIN-OLD");
-        CreateVehicleForPartyRequest request =
-                CreateVehicleForPartyRequest.builder().vinNumber("VIN-NEW").build();
-
-        when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
-        when(commercialPartyRepository.findById(customerId)).thenReturn(Optional.of(party));
-        when(vehicleInventoryClient.getVehicle(vehicleId)).thenReturn(Optional.of(existing));
-        when(vehicleInventoryClient.updateVehicle(eq(vehicleId), any(CreateVehicleRequest.class)))
-                .thenReturn(vehicle(vehicleId, "VIN-NEW"));
-
-        VehicleResponse result = service.updateVehicle(customerId, request, vehicleId);
-
-        assertThat(result.getVin()).isEqualTo("VIN-NEW");
-
-        ArgumentCaptor<CreateVehicleRequest> captor = ArgumentCaptor.forClass(CreateVehicleRequest.class);
-        verify(vehicleInventoryClient).updateVehicle(eq(vehicleId), captor.capture());
-        assertThat(captor.getValue().getVin()).isEqualTo("VIN-NEW");
-        assertThat(captor.getValue().getDescription()).isEqualTo("Truck");
-    }
-
-    @Test
-    void updateVehicle_throws_whenVehicleNotOwned() {
-        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        CreateVehicleForPartyRequest request =
-                CreateVehicleForPartyRequest.builder().build();
-        CommercialParty party = commercialParty(customerId);
-
-        when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
-        when(commercialPartyRepository.findById(customerId)).thenReturn(Optional.of(party));
-        when(vehicleInventoryClient.getVehicle(vehicleId)).thenReturn(Optional.of(vehicle(vehicleId, "VIN-OTHER")));
-
-        assertThatThrownBy(() -> service.updateVehicle(customerId, request, vehicleId))
+        assertThatThrownBy(() -> service.getVehicleForCustomer(CUSTOMER_ID, VEHICLE_ID))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("does not belong to customer");
-    }
-
-    @Test
-    void deleteVehicle_removesVinAndSaves() {
-        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        CommercialParty party = commercialParty(customerId);
-        party.getVehicleVins().add("VIN-1");
-
-        when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
-        when(commercialPartyRepository.findById(customerId)).thenReturn(Optional.of(party));
-        when(vehicleInventoryClient.getVehicle(vehicleId)).thenReturn(Optional.of(vehicle(vehicleId, "VIN-1")));
-
-        service.deleteVehicle(customerId, vehicleId);
-
-        verify(vehicleInventoryClient).deleteVehicle(vehicleId);
-        verify(commercialPartyRepository).save(party);
-        assertThat(party.getVehicleVins()).doesNotContain("VIN-1");
-    }
-
-    @Test
-    void transferVehicle_movesVinBetweenParties_andUpdatesInventoryAccount() {
-        UUID sourceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID targetId = UUID.fromString("00000000-0000-0000-0000-000000000002");
-        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-
-        CommercialParty source = commercialParty(sourceId);
-        CommercialParty target = commercialParty(targetId);
-        source.getVehicleVins().add("VIN-T");
-
-        VehicleTransferRequest transferRequest = VehicleTransferRequest.builder()
-                .targetCustomerId(targetId.toString())
-                .notes("Ownership change")
-                .build();
-
-        when(personPartyRepository.findById(sourceId)).thenReturn(Optional.empty());
-        when(personPartyRepository.findById(targetId)).thenReturn(Optional.empty());
-        when(commercialPartyRepository.findById(sourceId)).thenReturn(Optional.of(source));
-        when(commercialPartyRepository.findById(targetId)).thenReturn(Optional.of(target));
-        when(vehicleInventoryClient.getVehicle(vehicleId)).thenReturn(Optional.of(vehicle(vehicleId, "VIN-T")));
-        when(vehicleInventoryClient.updateVehicle(eq(vehicleId), any(CreateVehicleRequest.class)))
-                .thenReturn(vehicle(vehicleId, "VIN-T"));
-
-        VehicleResponse result = service.transferVehicle(sourceId, vehicleId, transferRequest);
-
-        assertThat(result).isNotNull();
-        assertThat(source.getVehicleVins()).doesNotContain("VIN-T");
-        assertThat(target.getVehicleVins()).contains("VIN-T");
-        verify(commercialPartyRepository).save(source);
-        verify(commercialPartyRepository).save(target);
-
-        ArgumentCaptor<CreateVehicleRequest> captor = ArgumentCaptor.forClass(CreateVehicleRequest.class);
-        verify(vehicleInventoryClient).updateVehicle(eq(vehicleId), captor.capture());
-        assertThat(captor.getValue().getAccountId()).isEqualTo(targetId);
-    }
-
-    @Test
-    void transferVehicle_throwsOnInvalidTargetId() {
-        UUID sourceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        VehicleTransferRequest badRequest =
-                VehicleTransferRequest.builder().targetCustomerId("not-a-uuid").build();
-
-        assertThatThrownBy(() -> service.transferVehicle(sourceId, vehicleId, badRequest))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid customer ID format");
+                .hasMessageContaining("Customer not found");
     }
 
     @Test
     void findPartyByVehicleId_returnsNull_whenVehicleMissing() {
-        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        when(vehicleInventoryClient.getVehicle(vehicleId)).thenReturn(Optional.empty());
+        when(extVehicleRepository.findById(VEHICLE_ID)).thenReturn(Optional.empty());
 
-        CommercialParty result = service.findPartyByVehicleId(vehicleId);
-
-        assertThat(result).isNull();
+        assertThat(service.findPartyByVehicleId(VEHICLE_ID)).isNull();
     }
 
     @Test
     void findPartyByVehicleId_returnsOwner_whenVinMatchesCommercialParty() {
-        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        CommercialParty owner = commercialParty(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        owner.getVehicleVins().add("VIN-OWNER");
+        CommercialParty party = commercialParty(CUSTOMER_ID);
+        party.getVehicleVins().add(VIN);
+        when(extVehicleRepository.findById(VEHICLE_ID)).thenReturn(Optional.of(vehicle(VEHICLE_ID, CUSTOMER_ID, VIN)));
+        when(commercialPartyRepository.findByVehicleVin(VIN)).thenReturn(List.of(party));
 
-        when(vehicleInventoryClient.getVehicle(vehicleId)).thenReturn(Optional.of(vehicle(vehicleId, "VIN-OWNER")));
-        when(commercialPartyRepository.findAll()).thenReturn(List.of(owner));
+        CommercialParty result = service.findPartyByVehicleId(VEHICLE_ID);
 
-        CommercialParty result = service.findPartyByVehicleId(vehicleId);
-
-        assertThat(result).isSameAs(owner);
+        assertThat(result).isNotNull();
+        assertThat(result.getPartyId()).isEqualTo(CUSTOMER_ID);
     }
 
     @Test
-    void fetchVehicleSummaryByVin_returnsSummary_whenVehicleExists() {
-        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        VehicleResponse vehicle = vehicle(vehicleId, "VIN-SUM");
-        when(vehicleInventoryClient.getVehicleByVin("VIN-SUM")).thenReturn(Optional.of(vehicle));
+    void fetchVehicleSummaryByVin_returnsSummary_fromReplica() {
+        when(extVehicleRepository.findByVinNormalizedAndActiveTrue(VIN))
+                .thenReturn(Optional.of(vehicle(VEHICLE_ID, CUSTOMER_ID, VIN)));
 
-        CrmSnapshotDTO.VehicleSummary summary = service.fetchVehicleSummaryByVin("VIN-SUM");
+        CrmSnapshotDTO.VehicleSummary summary = service.fetchVehicleSummaryByVin(VIN);
 
         assertThat(summary).isNotNull();
-        assertThat(summary.getVehicleId()).isEqualTo(vehicleId.toString());
-        assertThat(summary.getVin()).isEqualTo("VIN-SUM");
-    }
-
-    @Test
-    void fetchVehicleSummaryByVin_returnsNull_whenMappingFails() {
-        VehicleResponse malformed = VehicleResponse.builder().vin("VIN-BAD").build();
-        when(vehicleInventoryClient.getVehicleByVin("VIN-BAD")).thenReturn(Optional.of(malformed));
-
-        CrmSnapshotDTO.VehicleSummary summary = service.fetchVehicleSummaryByVin("VIN-BAD");
-
-        assertThat(summary).isNull();
-    }
-
-    @Test
-    void buildSnapshotForVehicleOwner_andCollectVehicles_filtersMissingVehicles() {
-        UUID ownerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-
-        CommercialParty owner = commercialParty(ownerId);
-        owner.getVehicleVins().add("VIN-OK");
-        owner.getVehicleVins().add("VIN-MISS");
-        owner.setDisplayName(null);
-        owner.setLegalName("Fallback Name");
-
-        when(vehicleInventoryClient.getVehicle(vehicleId)).thenReturn(Optional.of(vehicle(vehicleId, "VIN-OK")));
-        when(commercialPartyRepository.findAll()).thenReturn(List.of(owner));
-        when(vehicleInventoryClient.getVehicleByVin("VIN-OK"))
-                .thenReturn(Optional.of(vehicle(UUID.fromString("00000000-0000-0000-0000-000000000001"), "VIN-OK")));
-        when(vehicleInventoryClient.getVehicleByVin("VIN-MISS")).thenReturn(Optional.empty());
-
-        CrmSnapshotDTO snapshot = service.buildSnapshotForVehicleOwner(vehicleId);
-
-        assertThat(snapshot).isNotNull();
-        assertThat(snapshot.getAccount().getAccountName()).isEqualTo("Fallback Name");
-        assertThat(snapshot.getVehicles()).hasSize(1);
-        assertThat(snapshot.getVehicles().getFirst().getVin()).isEqualTo("VIN-OK");
-    }
-
-    @Test
-    void createVehicle_savesPersonParty_whenCustomerIsPerson() {
-        UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        PersonParty person = personParty(customerId);
-        when(personPartyRepository.findById(customerId)).thenReturn(Optional.of(person));
-        when(vehicleInventoryClient.createVehicle(any(CreateVehicleRequest.class)))
-                .thenReturn(vehicle(UUID.fromString("00000000-0000-0000-0000-000000000001"), "VIN-PER"));
-
-        service.createVehicle(
-                customerId,
-                CreateVehicleForPartyRequest.builder().vinNumber("VIN-PER").build());
-
-        verify(personPartyRepository).save(person);
-        verify(commercialPartyRepository, never()).save(any());
-    }
-
-    @Test
-    void findVehiclesForCustomer_returnsEmptyOptional_whenCustomerUnknown() {
-        UUID customerId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
-        when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
-        when(commercialPartyRepository.findById(customerId)).thenReturn(Optional.empty());
-
-        assertThat(service.findVehiclesForCustomer(customerId)).isEmpty();
-        verify(vehicleInventoryClient, never()).getVehicleByVin(any());
-    }
-
-    @Test
-    void findVehiclesForCustomer_returnsSummaries_forCommercialPartyVins() {
-        UUID customerId = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
-        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-0000000000cc");
-        CommercialParty party = commercialParty(customerId);
-        party.getVehicleVins().add("VIN-OWNED");
-
-        when(personPartyRepository.findById(customerId)).thenReturn(Optional.empty());
-        when(commercialPartyRepository.findById(customerId)).thenReturn(Optional.of(party));
-        when(vehicleInventoryClient.getVehicleByVin("VIN-OWNED"))
-                .thenReturn(Optional.of(vehicle(vehicleId, "VIN-OWNED")));
-
-        Optional<List<CrmSnapshotDTO.VehicleSummary>> result = service.findVehiclesForCustomer(customerId);
-
-        assertThat(result).isPresent();
-        assertThat(result.get()).hasSize(1);
-        CrmSnapshotDTO.VehicleSummary summary = result.get().get(0);
-        assertThat(summary.getVehicleId()).isEqualTo(vehicleId.toString());
-        assertThat(summary.getVin()).isEqualTo("VIN-OWNED");
-        assertThat(summary.getMake()).isEqualTo("Ford");
-        assertThat(summary.getModel()).isEqualTo("F-150");
+        assertThat(summary.getVehicleId()).isEqualTo(VEHICLE_ID.toString());
+        assertThat(summary.getVin()).isEqualTo(VIN);
+        assertThat(summary.getMake()).isEqualTo("Honda");
+        assertThat(summary.getModel()).isEqualTo("Accord");
         assertThat(summary.getYear()).isEqualTo(2022);
     }
 
     @Test
-    void findVehiclesForCustomer_resolvesPersonParty_andReturnsEmptyListWhenNoVins() {
-        UUID customerId = UUID.fromString("00000000-0000-0000-0000-0000000000dd");
-        PersonParty person = personParty(customerId);
-        when(personPartyRepository.findById(customerId)).thenReturn(Optional.of(person));
+    void fetchVehicleSummaryByVin_normalizesVinBeforeLookup() {
+        when(extVehicleRepository.findByVinNormalizedAndActiveTrue(VIN))
+                .thenReturn(Optional.of(vehicle(VEHICLE_ID, CUSTOMER_ID, VIN)));
 
-        Optional<List<CrmSnapshotDTO.VehicleSummary>> result = service.findVehiclesForCustomer(customerId);
+        CrmSnapshotDTO.VehicleSummary summary = service.fetchVehicleSummaryByVin("  " + VIN.toLowerCase() + " ");
+
+        assertThat(summary).isNotNull();
+        assertThat(summary.getVin()).isEqualTo(VIN);
+    }
+
+    @Test
+    void fetchVehicleSummaryByVin_returnsNull_whenReplicaHasNoRow() {
+        when(extVehicleRepository.findByVinNormalizedAndActiveTrue(VIN)).thenReturn(Optional.empty());
+
+        assertThat(service.fetchVehicleSummaryByVin(VIN)).isNull();
+    }
+
+    @Test
+    void buildSnapshotForVehicleOwner_andCollectVehicles_filtersMissingVehicles() {
+        String otherVin = "2HGBH41JXMN109187";
+        CommercialParty party = commercialParty(CUSTOMER_ID);
+        party.getVehicleVins().add(VIN);
+        party.getVehicleVins().add(otherVin);
+        when(extVehicleRepository.findById(VEHICLE_ID)).thenReturn(Optional.of(vehicle(VEHICLE_ID, CUSTOMER_ID, VIN)));
+        when(commercialPartyRepository.findByVehicleVin(VIN)).thenReturn(List.of(party));
+        when(extVehicleRepository.findByVinNormalizedAndActiveTrue(VIN))
+                .thenReturn(Optional.of(vehicle(VEHICLE_ID, CUSTOMER_ID, VIN)));
+        // The second VIN is not in the replica yet (event not consumed) — it is dropped.
+        when(extVehicleRepository.findByVinNormalizedAndActiveTrue(otherVin)).thenReturn(Optional.empty());
+
+        CrmSnapshotDTO snapshot = service.buildSnapshotForVehicleOwner(VEHICLE_ID);
+
+        assertThat(snapshot).isNotNull();
+        assertThat(snapshot.getAccount().getPartyId()).isEqualTo(CUSTOMER_ID.toString());
+        assertThat(snapshot.getVehicles()).hasSize(1);
+        assertThat(snapshot.getVehicles().getFirst().getVin()).isEqualTo(VIN);
+    }
+
+    @Test
+    void buildSnapshotForVehicleOwner_returnsNull_whenNoOwner() {
+        when(extVehicleRepository.findById(VEHICLE_ID)).thenReturn(Optional.of(vehicle(VEHICLE_ID, CUSTOMER_ID, VIN)));
+        when(commercialPartyRepository.findByVehicleVin(VIN)).thenReturn(List.of());
+
+        assertThat(service.buildSnapshotForVehicleOwner(VEHICLE_ID)).isNull();
+    }
+
+    @Test
+    void findVehiclesForCustomer_returnsEmptyOptional_whenCustomerUnknown() {
+        when(personPartyRepository.findById(CUSTOMER_ID)).thenReturn(Optional.empty());
+        when(commercialPartyRepository.findById(CUSTOMER_ID)).thenReturn(Optional.empty());
+
+        assertThat(service.findVehiclesForCustomer(CUSTOMER_ID)).isEmpty();
+    }
+
+    @Test
+    void findVehiclesForCustomer_resolvesPersonPartyVins_fromReplica() {
+        PersonParty person = new PersonParty();
+        person.setPartyId(CUSTOMER_ID);
+        person.getVehicleVins().add(VIN);
+        when(personPartyRepository.findById(CUSTOMER_ID)).thenReturn(Optional.of(person));
+        when(extVehicleRepository.findByVinNormalizedAndActiveTrue(VIN))
+                .thenReturn(Optional.of(vehicle(VEHICLE_ID, CUSTOMER_ID, VIN)));
+
+        Optional<List<CrmSnapshotDTO.VehicleSummary>> result = service.findVehiclesForCustomer(CUSTOMER_ID);
 
         assertThat(result).isPresent();
-        assertThat(result.get()).isEmpty();
-        verify(commercialPartyRepository, never()).findById(any());
+        assertThat(result.get()).hasSize(1);
+        assertThat(result.get().getFirst().getVehicleId()).isEqualTo(VEHICLE_ID.toString());
     }
 }

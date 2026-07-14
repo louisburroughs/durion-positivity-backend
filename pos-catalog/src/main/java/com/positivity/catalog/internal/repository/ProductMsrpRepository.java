@@ -2,6 +2,7 @@ package com.positivity.catalog.internal.repository;
 
 import com.positivity.catalog.internal.entity.ProductMsrpEntity;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -36,6 +37,23 @@ public interface ProductMsrpRepository extends JpaRepository<ProductMsrpEntity, 
     default Optional<ProductMsrpEntity> findActive(UUID productId, LocalDate asOf) {
         return findActiveCandidates(productId, asOf).stream().findFirst();
     }
+
+    /**
+     * Batch variant of {@link #findActiveCandidates} for enriched catalog search
+     * (#828): returns every MSRP record active as of {@code asOf} across the given
+     * products in a single query, ordered so the winning record per product (most
+     * recently started, tie-broken by id) appears first. Callers pick the first
+     * record encountered per product id to mirror {@link #findActive}.
+     */
+    @Query("""
+            select m from ProductMsrpEntity m
+            where m.product.id in :productIds
+              and m.effectiveStartDate <= :asOf
+              and (m.effectiveEndDate is null or m.effectiveEndDate >= :asOf)
+            order by m.product.id asc, m.effectiveStartDate desc, m.msrpId asc
+            """)
+    List<ProductMsrpEntity> findActiveForProducts(
+            @Param("productIds") Collection<UUID> productIds, @Param("asOf") LocalDate asOf);
 
     List<ProductMsrpEntity> findByProduct_IdOrderByEffectiveStartDateDesc(UUID productId);
 

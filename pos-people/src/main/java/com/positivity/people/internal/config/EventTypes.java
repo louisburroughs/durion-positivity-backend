@@ -17,20 +17,12 @@ public final class EventTypes {
     }
 
     /**
-     * All event type registrations for the people module. Total: 38 event types.
+     * All event type registrations for the people HR module (person/link/access events moved
+     * to pos-people-contact, #874/#875).
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
-                // PersonController - 5 events
-                EventTypeRegistration.write("PEOPLE_PERSON_CREATE", "Create a new person record")
-                        .build(),
-                EventTypeRegistration.write("PEOPLE_PERSON_UPDATE", "Update an existing person record")
-                        .build(),
-                EventTypeRegistration.write(
-                                "PEOPLE_PERSON_RESOLVE", "Resolve person by weighted match or create a new record")
-                        .build(),
-                EventTypeRegistration.write("PEOPLE_PERSON_DELETE", "Delete an existing person record")
-                        .build(),
+                // PersonBulkIngestController (person CRUD moved to pos-people-contact, #874/#875)
                 EventTypeRegistration.write("PEOPLE_BULK_INGEST", "Bulk import employee records")
                         .build(),
 
@@ -87,24 +79,6 @@ public final class EventTypes {
                 EventTypeRegistration.write("PEOPLE_TIME_ENTRY_EXCEPTION_RESOLVE", "Mark an exception as resolved")
                         .build(),
                 EventTypeRegistration.write("PEOPLE_TIME_ENTRY_EXCEPTION_WAIVE", "Waive an exception with a reason")
-                        .build(),
-
-                // UserPersonLinkController - 3 events
-                EventTypeRegistration.write("PEOPLE_USER_LINK_CREATE", "Link user to person")
-                        .build(),
-                EventTypeRegistration.fastRead("PEOPLE_USER_LINK_GET", "Get user links by person")
-                        .build(),
-                EventTypeRegistration.write("PEOPLE_USER_PERSON_LINK_DELETE", "Unlink user from person")
-                        .build(),
-
-                // PersonAccessController - 4 events
-                EventTypeRegistration.fastRead("PEOPLE_ACCESS_ROLES_LIST", "List available access roles for people")
-                        .build(),
-                EventTypeRegistration.fastRead("PEOPLE_ACCESS_ASSIGNMENTS_LIST", "List role assignments for a person")
-                        .build(),
-                EventTypeRegistration.write("PEOPLE_ACCESS_ASSIGNMENT_CREATE", "Create role assignment for a person")
-                        .build(),
-                EventTypeRegistration.write("PEOPLE_ACCESS_ASSIGNMENT_REVOKE", "Revoke role assignment for a person")
                         .build(),
 
                 // PeopleAvailabilityController - 5 events

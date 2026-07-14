@@ -33,16 +33,15 @@ public class CreateVehicleRequest {
     @Schema(description = "Vehicle VIN.", requiredMode = Schema.RequiredMode.REQUIRED, example = "1HGCM82633A004352")
     private String vin;
 
-    @NonNull
-    @NotBlank
-    @Schema(description = "Fleet/unit number.", requiredMode = Schema.RequiredMode.REQUIRED, example = "UNIT-1024")
+    @Schema(
+            description = "Fleet/unit number. Optional; stored as empty when omitted.",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+            example = "UNIT-1024")
     private String unitNumber;
 
-    @NonNull
-    @NotBlank
     @Schema(
-            description = "Human-readable vehicle description.",
-            requiredMode = Schema.RequiredMode.REQUIRED,
+            description = "Human-readable vehicle description. Optional; stored as empty when omitted.",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED,
             example = "2024 Ford F-150 XL")
     private String description;
 

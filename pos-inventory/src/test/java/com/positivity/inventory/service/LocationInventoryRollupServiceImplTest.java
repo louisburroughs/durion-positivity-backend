@@ -8,8 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.inventory.internal.client.StorageLocationTopologyClient;
-import com.positivity.inventory.internal.client.StorageLocationTopologyClient.LocationDescendant;
+import com.positivity.inventory.internal.service.StorageLocationTopologyService;
+import com.positivity.inventory.internal.service.StorageLocationTopologyService.LocationDescendant;
 import com.positivity.inventory.internal.dto.rollup.LocationInventoryRollupResponse;
 import com.positivity.inventory.internal.dto.rollup.RollupQuantities;
 import com.positivity.inventory.internal.dto.rollup.SiteInventoryRollupResponse;
@@ -39,7 +39,7 @@ class LocationInventoryRollupServiceImplTest {
     private static final UUID SITE_B = UUID.fromString("00000000-0000-0000-0000-0000000000a2");
 
     @Mock
-    private StorageLocationTopologyClient topologyClient;
+    private StorageLocationTopologyService topologyService;
 
     @Mock
     private SiteInventoryRollupService siteInventoryRollupService;
@@ -48,7 +48,7 @@ class LocationInventoryRollupServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new LocationInventoryRollupServiceImpl(topologyClient, siteInventoryRollupService, 25);
+        service = new LocationInventoryRollupServiceImpl(topologyService, siteInventoryRollupService, 25);
     }
 
     private static LocationDescendant descendant(UUID id, String name, int depth) {
@@ -71,7 +71,7 @@ class LocationInventoryRollupServiceImplTest {
     @DisplayName("grand total equals sum of site totals; summaries carry no trees by default")
     void rollup_summaries_grandTotalIsSumOfSites() {
         // Issue #659: per-site summaries plus grand total, nodes omitted without expand
-        when(topologyClient.fetchDescendants(BUILDING_ID, "PHYSICAL"))
+        when(topologyService.fetchDescendants(BUILDING_ID, "PHYSICAL"))
                 .thenReturn(List.of(descendant(SITE_A, "Site A", 1), descendant(SITE_B, "Site B", 1)));
         when(siteInventoryRollupService.getSiteInventoryRollup(SITE_A, null, null, false))
                 .thenReturn(siteRollup(SITE_A, 100, 10));
@@ -95,7 +95,7 @@ class LocationInventoryRollupServiceImplTest {
     @DisplayName("expand=tree inlines per-site trees matching the site rollup output")
     void rollup_expandTree_inlinesSiteTrees() {
         // Issue #659: expand=tree carries full FR-1 trees per site
-        when(topologyClient.fetchDescendants(BUILDING_ID, "PHYSICAL"))
+        when(topologyService.fetchDescendants(BUILDING_ID, "PHYSICAL"))
                 .thenReturn(List.of(descendant(SITE_A, "Site A", 1)));
         SiteInventoryRollupResponse siteRollup = siteRollup(SITE_A, 100, 10);
         when(siteInventoryRollupService.getSiteInventoryRollup(SITE_A, "SKU-1", 3, true))
@@ -114,7 +114,7 @@ class LocationInventoryRollupServiceImplTest {
         List<LocationDescendant> many = IntStream.range(0, 26)
                 .mapToObj(i -> descendant(UUID.randomUUID(), "Site " + i, 1))
                 .toList();
-        when(topologyClient.fetchDescendants(BUILDING_ID, "PHYSICAL")).thenReturn(many);
+        when(topologyService.fetchDescendants(BUILDING_ID, "PHYSICAL")).thenReturn(many);
 
         assertThatThrownBy(() -> service.getLocationInventoryRollup(BUILDING_ID, null, null, true, null, false))
                 .isInstanceOf(RollupExpansionTooLargeException.class)
@@ -130,7 +130,7 @@ class LocationInventoryRollupServiceImplTest {
         List<LocationDescendant> many = IntStream.range(0, 26)
                 .mapToObj(i -> descendant(UUID.randomUUID(), "Site " + i, 1))
                 .toList();
-        when(topologyClient.fetchDescendants(BUILDING_ID, "PHYSICAL")).thenReturn(many);
+        when(topologyService.fetchDescendants(BUILDING_ID, "PHYSICAL")).thenReturn(many);
         when(siteInventoryRollupService.getSiteInventoryRollup(any(), any(), any(), eq(false)))
                 .thenAnswer(inv -> siteRollup(inv.getArgument(0), 1, 0));
 
@@ -149,7 +149,7 @@ class LocationInventoryRollupServiceImplTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("BOGUS");
 
-        when(topologyClient.fetchDescendants(BUILDING_ID, "REGION")).thenReturn(List.of());
+        when(topologyService.fetchDescendants(BUILDING_ID, "REGION")).thenReturn(List.of());
         LocationInventoryRollupResponse response =
                 service.getLocationInventoryRollup(BUILDING_ID, "region", null, false, null, false);
         assertThat(response.parentType()).isEqualTo("REGION");
@@ -159,7 +159,7 @@ class LocationInventoryRollupServiceImplTest {
     @DisplayName("no descendants → 200 with empty sites and zero totals")
     void rollup_noDescendants_returnsEmpty() {
         // Issue #659: empty result, not an error
-        when(topologyClient.fetchDescendants(BUILDING_ID, "PHYSICAL")).thenReturn(List.of());
+        when(topologyService.fetchDescendants(BUILDING_ID, "PHYSICAL")).thenReturn(List.of());
 
         LocationInventoryRollupResponse response =
                 service.getLocationInventoryRollup(BUILDING_ID, null, null, false, null, false);
@@ -172,7 +172,7 @@ class LocationInventoryRollupServiceImplTest {
     @DisplayName("unknown location propagates LocationNotFoundException from the client")
     void rollup_unknownLocation_propagatesNotFound() {
         // Issue #659: pos-location 404 → 404 at the controller
-        when(topologyClient.fetchDescendants(BUILDING_ID, "PHYSICAL"))
+        when(topologyService.fetchDescendants(BUILDING_ID, "PHYSICAL"))
                 .thenThrow(new LocationNotFoundException(BUILDING_ID));
 
         assertThatThrownBy(() -> service.getLocationInventoryRollup(BUILDING_ID, null, null, false, null, false))

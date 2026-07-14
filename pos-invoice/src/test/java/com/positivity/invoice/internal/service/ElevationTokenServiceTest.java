@@ -6,7 +6,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -62,7 +61,8 @@ class ElevationTokenServiceTest {
     @Test
     void verify_returnsEmpty_whenSignedWithDifferentSecret() {
         UUID invoiceId = UUID.randomUUID();
-        String token = service(fixedClock(NOW)).mint(invoiceId, UUID.randomUUID()).token();
+        String token =
+                service(fixedClock(NOW)).mint(invoiceId, UUID.randomUUID()).token();
         ElevationTokenService otherSecret =
                 new ElevationTokenService(fixedClock(NOW), "a-different-secret-of-sufficient-length", 300);
 
@@ -102,16 +102,14 @@ class ElevationTokenServiceTest {
     void verify_returnsEmpty_whenSecretMissing() {
         ElevationTokenService noSecret = new ElevationTokenService(fixedClock(NOW), "", 300);
         // Both mint and verify require a configured secret; verify on a random string fails fast.
-        org.assertj.core.api.Assertions.assertThatThrownBy(
-                        () -> noSecret.verify("anything", UUID.randomUUID()))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> noSecret.verify("anything", UUID.randomUUID()))
                 .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     void verify_failsFast_whenSecretTooShort() {
         ElevationTokenService shortSecret = new ElevationTokenService(fixedClock(NOW), "too-short", 300);
-        org.assertj.core.api.Assertions.assertThatThrownBy(
-                        () -> shortSecret.verify("anything", UUID.randomUUID()))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> shortSecret.verify("anything", UUID.randomUUID()))
                 .isInstanceOf(IllegalStateException.class);
     }
 }

@@ -107,6 +107,68 @@ class ApiVersionHeaderToPathFilterTest {
     }
 
     @Test
+    void shouldStripApiPrefixAndRecordItInXForwardedPrefix() {
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.patch("/api/bulk-loader/v1/tus/00000000-0000-0000-0000-000000000052")
+                        .build());
+        AtomicReference<String> downstreamPath = new AtomicReference<>();
+        AtomicReference<String> downstreamForwardedPrefix = new AtomicReference<>();
+        GatewayFilterChain chain = chainedExchange -> {
+            downstreamPath.set(chainedExchange
+                    .getRequest()
+                    .getPath()
+                    .pathWithinApplication()
+                    .value());
+            downstreamForwardedPrefix.set(
+                    chainedExchange.getRequest().getHeaders().getFirst("X-Forwarded-Prefix"));
+            return Mono.empty();
+        };
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isNull();
+        // Already-versioned path passes through unchanged apart from the /api strip,
+        // which is preserved for downstream URL reconstruction via X-Forwarded-Prefix.
+        assertThat(downstreamPath.get()).isEqualTo("/bulk-loader/v1/tus/00000000-0000-0000-0000-000000000052");
+        assertThat(downstreamForwardedPrefix.get()).isEqualTo("/api");
+    }
+
+    @Test
+    void shouldAppendApiPrefixAfterOuterProxyForwardedPrefix() {
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/customer/v1/crm/accounts")
+                .header("X-Forwarded-Prefix", "/outer")
+                .build());
+        AtomicReference<java.util.List<String>> downstreamForwardedPrefixes = new AtomicReference<>();
+        GatewayFilterChain chain = chainedExchange -> {
+            downstreamForwardedPrefixes.set(
+                    chainedExchange.getRequest().getHeaders().get("X-Forwarded-Prefix"));
+            return Mono.empty();
+        };
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isNull();
+        assertThat(downstreamForwardedPrefixes.get()).containsExactly("/outer", "/api");
+    }
+
+    @Test
+    void shouldNotAddXForwardedPrefixWhenNoApiPrefixIsStripped() {
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/customer/v1/crm/accounts").build());
+        AtomicReference<String> downstreamForwardedPrefix = new AtomicReference<>();
+        GatewayFilterChain chain = chainedExchange -> {
+            downstreamForwardedPrefix.set(
+                    chainedExchange.getRequest().getHeaders().getFirst("X-Forwarded-Prefix"));
+            return Mono.empty();
+        };
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isNull();
+        assertThat(downstreamForwardedPrefix.get()).isNull();
+    }
+
+    @Test
     void shouldNotRewriteAlreadyVersionedPath() {
         var exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/customer/v1/crm/accounts").build());

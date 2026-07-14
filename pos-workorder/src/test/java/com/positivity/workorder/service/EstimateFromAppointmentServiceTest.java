@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.workorder.internal.client.DocumentClient;
-import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentResponse;
@@ -22,6 +21,7 @@ import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.EstimateSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.service.EstimateServiceImpl;
+import com.positivity.workorder.internal.service.PeopleAvailabilityLocalService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -77,7 +77,7 @@ class EstimateFromAppointmentServiceTest {
     private TaxClient taxClient;
 
     @Mock
-    private PeopleLocationClient peopleLocationClient;
+    private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
     @Mock
     private DocumentClient documentClient;

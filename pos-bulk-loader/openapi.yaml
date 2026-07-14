@@ -205,7 +205,7 @@ paths:
       tags:
       - TUS Resumable Upload API
       summary: Create a resumable upload
-      description: Creates a new TUS upload scoped to a bulk load job. Returns a Location header with the upload URL for subsequent HEAD and PATCH requests.
+      description: Creates a new TUS upload scoped to a bulk load job. Returns a Location header with the absolute upload URL for subsequent HEAD and PATCH requests. The URL is reconstructed from the X-Forwarded-Proto/Host/Port/Prefix headers supplied by the API gateway / reverse-proxy chain, so it reflects the public address (including any proxy path prefix) rather than this service's internal one.
       operationId: createUpload
       parameters:
       - name: jobId
@@ -917,6 +917,45 @@ components:
       - fileName
       - id
       - status
+    ContentDetectionResult:
+      type: object
+      description: Result of content detection over an uploaded file, used to infer the target domain and mappings
+      properties:
+        detectedDomain:
+          type: string
+          description: Domain detected from the file content
+          enum:
+          - CATALOG_PRODUCT
+          - INVENTORY_STOCK_COUNT
+          - LOCATION
+          - CUSTOMER
+          - PERSON
+          - BASE_PRICE
+          - VEHICLE
+          - VEHICLE_FITMENT
+          example: CATALOG_PRODUCT
+        confidence:
+          type: number
+          format: double
+          description: Confidence score of the detection, between 0 and 1
+          example: 0.92
+        suggestedColumnMappings:
+          type: object
+          additionalProperties:
+            type: string
+          description: Suggested mappings from source column names to target field names
+          example:
+            Product SKU: sku
+            Price: basePrice
+        llmFallbackUsed:
+          type: boolean
+          default: false
+          description: Whether an LLM fallback was used to perform the detection
+          example: false
+      required:
+      - confidence
+      - detectedDomain
+      - llmFallbackUsed
     FileUploadResponse:
       type: object
       description: Result of uploading a source file for a bulk load job
@@ -939,6 +978,8 @@ components:
           format: int64
           description: Size of the uploaded file in bytes
           example: 204800
+        detection:
+          $ref: '#/components/schemas/ContentDetectionResult'
       required:
       - fileName
       - jobId

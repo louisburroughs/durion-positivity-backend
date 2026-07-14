@@ -1,0 +1,232 @@
+package com.positivity.peoplecontact.internal.config;
+
+import com.positivity.domainevents.peoplecontact.PersonUpsertRequestedV1;
+import com.positivity.domainevents.peoplecontact.UserPersonLinkCreateRequestedV1;
+import com.positivity.domainevents.peoplecontact.UserPersonLinkRemoveRequestedV1;
+import com.positivity.peoplecontact.internal.repository.ProcessedEventRepository;
+import com.positivity.peoplecontact.internal.service.LinkCommandHandler;
+import com.positivity.peoplecontact.internal.service.PersonUpsertCommandHandler;
+import com.positivity.peoplecontact.service.OutboxReplayService;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Locale;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.TransientDataAccessException;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
+/**
+ * Kafka command listener for {@code people-contact.commands.v1} (ADR-0044 §4, issue #874).
+ *
+ * <p>Supported command types:
+ * <ul>
+ * <li>{@code people-contact.outbox.replay-requested} — consumer-initiated drift repair and replica
+ * bootstrap: re-queues published outbox events created in the requested window for
+ * re-publication; consumers dedupe by eventId so replay is idempotent.</li>
+ * </ul>
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "pos.people-contact.kafka", name = "enabled", havingValue = "true")
+public class PeopleContactCommandListener {
+
+    private static final String PAYLOAD = "payload";
+
+    /** Canonical dotted name normalized to command-type form: PEOPLE_CONTACT_OUTBOX_REPLAY_REQUESTED. */
+    private static final String COMMAND_OUTBOX_REPLAY_REQUESTED = "PEOPLE_CONTACT_OUTBOX_REPLAY_REQUESTED";
+
+    /** Canonical dotted name normalized: people-contact.person.upsert-requested (#875). */
+    private static final String COMMAND_PERSON_UPSERT_REQUESTED = "PEOPLE_CONTACT_PERSON_UPSERT_REQUESTED";
+
+    /** Canonical dotted name normalized: people-contact.user-person-link.create-requested (#876). */
+    private static final String COMMAND_LINK_CREATE_REQUESTED = "PEOPLE_CONTACT_USER_PERSON_LINK_CREATE_REQUESTED";
+
+    /** Canonical dotted name normalized: people-contact.user-person-link.remove-requested (#876). */
+    private static final String COMMAND_LINK_REMOVE_REQUESTED = "PEOPLE_CONTACT_USER_PERSON_LINK_REMOVE_REQUESTED";
+
+    /** Covers the sub-millisecond skew between outbox createdAt and the eventId timestamp. */
+    private static final Duration REPLAY_WINDOW_SLACK = Duration.ofSeconds(1);
+
+    /** Replay commands older than this are rejected — bounds repair cost. */
+    @Value("${pos.people-contact.outbox.replay.max-lookback:P30D}")
+    private Duration replayMaxLookback;
+
+    private final Clock clock;
+    private final ObjectMapper objectMapper;
+    private final OutboxReplayService outboxReplayService;
+    private final PersonUpsertCommandHandler personUpsertCommandHandler;
+    private final LinkCommandHandler linkCommandHandler;
+    private final ProcessedEventRepository processedEventRepository;
+
+    @KafkaListener(
+            topics = "${pos.people-contact.kafka.commands-topic:people-contact.commands.v1}",
+            groupId = "${pos.people-contact.kafka.commands-consumer-group:pos-people-contact-commands}")
+    public void onCommand(@NonNull String message) {
+        try {
+            JsonNode root = objectMapper.readTree(message);
+            String rawCommandType = root.path("commandType").stringValue(null);
+            if (rawCommandType == null || rawCommandType.isBlank()) {
+                log.debug("Ignoring command without commandType: {}", message);
+                return;
+            }
+            // Normalize dotted command names (people-contact.outbox.replay-requested) to one form.
+            String commandType =
+                    rawCommandType.toUpperCase(Locale.ROOT).replace('.', '_').replace('-', '_');
+
+            if (COMMAND_OUTBOX_REPLAY_REQUESTED.equals(commandType)) {
+                handleOutboxReplayRequested(root);
+                return;
+            }
+            if (COMMAND_PERSON_UPSERT_REQUESTED.equals(commandType)) {
+                handlePersonUpsertRequested(root);
+                return;
+            }
+            if (COMMAND_LINK_CREATE_REQUESTED.equals(commandType)) {
+                handleLinkCreateRequested(root);
+                return;
+            }
+            if (COMMAND_LINK_REMOVE_REQUESTED.equals(commandType)) {
+                handleLinkRemoveRequested(root);
+                return;
+            }
+            log.debug("Ignoring unsupported commandType={} message={}", commandType, message);
+        } catch (TransientDataAccessException e) {
+            // Let the container error handler retry with backoff and route to {topic}.dlq
+            // (ADR-0044 §4) — replay is idempotent, so redelivery is harmless (PR #865 review).
+            throw e;
+        } catch (com.positivity.peoplecontact.internal.exception.PersonNotFoundException e) {
+            // A link create can outrun its person upsert (different record keys → different
+            // partitions). Retry with backoff; DLQ if the person never materializes (#876).
+            throw e;
+        } catch (Exception e) {
+            // Malformed/unsupported commands are permanent failures: retrying cannot fix them,
+            // so log and drop instead of poisoning the partition.
+            log.error("Failed to process Kafka command message: {}", message, e);
+        }
+    }
+
+    /**
+     * Person upsert commands are last-writer-wins, so at-least-once redelivery of an OLD command
+     * after a newer write would regress identity attributes — dedupe by the command envelope's
+     * eventId via {@code processed_events} before applying (ADR-0044 §4).
+     */
+    private void handlePersonUpsertRequested(@NonNull JsonNode root) {
+        String eventId = root.path("eventId").stringValue(null);
+        if (eventId == null || eventId.isBlank()) {
+            log.warn("Ignoring person upsert command without eventId: {}", root);
+            return;
+        }
+        if (processedEventRepository.existsById(eventId)) {
+            log.debug("Skipping duplicate person upsert command eventId={}", eventId);
+            return;
+        }
+        PersonUpsertRequestedV1 command;
+        try {
+            command = objectMapper.treeToValue(root.get(PAYLOAD), PersonUpsertRequestedV1.class);
+        } catch (Exception e) {
+            log.warn("Ignoring person upsert command with malformed payload: {}", root, e);
+            return;
+        }
+        if (command == null || command.personId() == null) {
+            log.warn("Ignoring person upsert command with missing personId: {}", root);
+            return;
+        }
+        personUpsertCommandHandler.apply(eventId, command);
+        log.info("Person upsert command applied personId={} eventId={}", command.personId(), eventId);
+    }
+
+    /**
+     * Link commands from pos-security-service (amended ADR-0043, #876). Deduped by command
+     * eventId so a replayed create can never resurrect a link that was later removed. Permanent
+     * conflicts (username linked to a different person) are logged and dropped — the sender's
+     * reconciliation surfaces the unmatched projection.
+     */
+    private void handleLinkCreateRequested(@NonNull JsonNode root) {
+        String eventId = root.path("eventId").stringValue(null);
+        if (eventId == null || eventId.isBlank() || processedEventRepository.existsById(eventId)) {
+            return;
+        }
+        UserPersonLinkCreateRequestedV1 command;
+        try {
+            command = objectMapper.treeToValue(root.get(PAYLOAD), UserPersonLinkCreateRequestedV1.class);
+        } catch (Exception e) {
+            log.warn("Ignoring link create command with malformed payload: {}", root, e);
+            return;
+        }
+        if (command == null || command.personId() == null || command.username() == null) {
+            log.warn("Ignoring link create command with missing personId/username: {}", root);
+            return;
+        }
+        linkCommandHandler.applyCreate(eventId, command);
+    }
+
+    private void handleLinkRemoveRequested(@NonNull JsonNode root) {
+        String eventId = root.path("eventId").stringValue(null);
+        if (eventId == null || eventId.isBlank() || processedEventRepository.existsById(eventId)) {
+            return;
+        }
+        UserPersonLinkRemoveRequestedV1 command;
+        try {
+            command = objectMapper.treeToValue(root.get(PAYLOAD), UserPersonLinkRemoveRequestedV1.class);
+        } catch (Exception e) {
+            log.warn("Ignoring link remove command with malformed payload: {}", root, e);
+            return;
+        }
+        if (command == null || command.username() == null || command.username().isBlank()) {
+            log.warn("Ignoring link remove command with missing username: {}", root);
+            return;
+        }
+        linkCommandHandler.applyRemove(eventId, command.username());
+    }
+
+    private void handleOutboxReplayRequested(@NonNull JsonNode root) {
+        JsonNode payloadNode = root.get(PAYLOAD);
+        Instant since = parseInstant(payloadNode, "since");
+        if (since == null) {
+            log.warn("Ignoring outbox replay command with missing/malformed payload.since: {}", root);
+            return;
+        }
+        Instant lookbackLimit = Instant.now(clock).minus(replayMaxLookback);
+        if (since.isBefore(lookbackLimit)) {
+            // A malformed or ancient `since` must not trigger a huge re-emit.
+            log.warn(
+                    "Ignoring outbox replay command: since={} exceeds max lookback {} (limit {})",
+                    since,
+                    replayMaxLookback,
+                    lookbackLimit);
+            return;
+        }
+        Instant until = parseInstant(payloadNode, "until");
+        int queued;
+        if (until != null && until.isAfter(since)) {
+            // Bounded window repair; +/- slack covers createdAt vs eventId-timestamp skew.
+            queued = outboxReplayService.replayBetween(
+                    since.minus(REPLAY_WINDOW_SLACK), until.plus(REPLAY_WINDOW_SLACK));
+        } else {
+            queued = outboxReplayService.replaySince(since.minus(REPLAY_WINDOW_SLACK));
+        }
+        log.info("Outbox replay command processed since={} until={} eventsQueued={}", since, until, queued);
+    }
+
+    private @Nullable Instant parseInstant(@Nullable JsonNode payloadNode, @NonNull String field) {
+        String value = payloadNode == null ? null : payloadNode.path(field).stringValue(null);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (Exception _) {
+            log.warn("Malformed payload.{}={} on outbox replay command", field, value);
+            return null;
+        }
+    }
+}

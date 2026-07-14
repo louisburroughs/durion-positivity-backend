@@ -7,11 +7,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
@@ -34,13 +31,10 @@ public class EmployeeOffboardingRetry {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "employee_id", nullable = false)
-    private Person employee;
-
-    public UUID getEmployeeId() {
-        return employee != null ? employee.getId() : null;
-    }
+    // Historically referenced the person row (the pre-split "employee id" IS the person id);
+    // now a plain UUID into the people-contact identity domain (ADR-0044 §6, #875).
+    @Column(name = "employee_id", nullable = false, columnDefinition = "uuid")
+    private UUID employeeId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "assignment_policy", nullable = false)

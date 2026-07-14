@@ -1,6 +1,5 @@
 package com.positivity.accounting.internal.config;
 
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.time.Duration;
@@ -49,39 +48,5 @@ public class AccountingCircuitBreakerConfig {
                 .build();
 
         return CircuitBreakerRegistry.of(defaultConfig);
-    }
-
-    /**
-     * Invoice service-specific circuit breaker configuration.
-     * More lenient: invoices are critical, but invoice service should be reliable.
-     */
-    @Bean("invoiceServiceCircuitBreaker")
-    public CircuitBreaker invoiceServiceCircuitBreaker(CircuitBreakerRegistry registry) {
-        CircuitBreakerConfig invoiceConfig = CircuitBreakerConfig.custom()
-                .failureRateThreshold(50.0f)
-                .slowCallRateThreshold(100.0f)
-                .slowCallDurationThreshold(Duration.ofSeconds(5))
-                .waitDurationInOpenState(Duration.ofSeconds(30))
-                .permittedNumberOfCallsInHalfOpenState(3)
-                .minimumNumberOfCalls(10)
-                .recordExceptions(Exception.class)
-                .build();
-
-        CircuitBreaker circuitBreaker = registry.circuitBreaker("invoice-service", invoiceConfig);
-
-        // Log transitions
-        circuitBreaker
-                .getEventPublisher()
-                .onStateTransition(event -> log.warn(
-                        "Invoice service circuit breaker transitioned: {} -> {}",
-                        event.getStateTransition().getFromState(),
-                        event.getStateTransition().getToState()))
-                .onError(event -> log.debug(
-                        "Invoice service call failed: {}", event.getThrowable().getMessage()))
-                .onSuccess(event -> log.debug(
-                        "Invoice service call succeeded in {}ms",
-                        event.getElapsedDuration().toMillis()));
-
-        return circuitBreaker;
     }
 }

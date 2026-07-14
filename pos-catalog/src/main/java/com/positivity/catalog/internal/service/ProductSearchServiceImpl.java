@@ -3,11 +3,19 @@ package com.positivity.catalog.internal.service;
 import com.positivity.catalog.internal.dto.CatalogSearchResultDto;
 import com.positivity.catalog.internal.dto.ProductSummary;
 import com.positivity.catalog.internal.entity.ProductEntity;
+import com.positivity.catalog.internal.entity.ProductMsrpEntity;
+import com.positivity.catalog.internal.repository.ProductMsrpRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.service.ProductSearchService;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -39,12 +47,14 @@ public class ProductSearchServiceImpl implements ProductSearchService {
     private static final int MAX_LIMIT = 100;
 
     private final ProductRepository productRepository;
+    private final ProductMsrpRepository productMsrpRepository;
+    private final Clock clock;
 
     @Override
     @NonNull
     @Transactional(readOnly = true)
     public CatalogSearchResultDto searchProducts(
-            String q, String brand, String category, String sku, String cursor, int limit) {
+            String q, String brand, String category, String sku, String cursor, int limit, boolean detailed) {
 
         int effectiveLimit = Math.clamp(limit, 1, MAX_LIMIT);
         int pageNumber = decodeCursor(cursor);
@@ -56,24 +66,33 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         String normalizedCategory = (category == null || category.isBlank()) ? null : category.strip();
 
         log.debug(
-                "Catalog search: q={}, brand={}, category={}, sku={}, page={}, limit={}",
+                "Catalog search: q={}, brand={}, category={}, sku={}, page={}, limit={}, detailed={}",
                 normalizedQ,
                 normalizedBrand,
                 normalizedCategory,
                 normalizedSku,
                 pageNumber,
-                effectiveLimit);
+                effectiveLimit,
+                detailed);
 
         var typedSort = Sort.sort(ProductEntity.class);
         PageRequest pageable = PageRequest.of(
                 pageNumber,
                 effectiveLimit,
-                typedSort.by(ProductEntity::getName).ascending().and(typedSort.by(ProductEntity::getId).ascending()));
+                typedSort
+                        .by(ProductEntity::getName)
+                        .ascending()
+                        .and(typedSort.by(ProductEntity::getId).ascending()));
         Page<ProductEntity> page = productRepository.searchProductsFiltered(
                 normalizedQ, normalizedSku, normalizedBrand, normalizedCategory, pageable);
 
-        List<ProductSummary> data = page.getContent().stream()
-                .map(ProductSearchServiceImpl::toSummary)
+        List<ProductEntity> products = page.getContent();
+        Map<UUID, ProductMsrpEntity> activeMsrpByProduct = detailed ? loadActiveMsrps(products) : Map.of();
+
+        List<ProductSummary> data = products.stream()
+                .map(entity -> detailed
+                        ? toDetailedSummary(entity, activeMsrpByProduct.get(entity.getId()))
+                        : toSummary(entity))
                 .toList();
 
         String nextCursor = page.hasNext() ? encodeCursor(pageNumber + 1) : null;
@@ -133,5 +152,48 @@ public class ProductSearchServiceImpl implements ProductSearchService {
                 .thumbnailUrl(thumbnailUrl)
                 .manufacturerBrand(entity.getManufacturerBrand())
                 .build();
+    }
+
+    // -----------------------------------------------------------------------
+    // Enrichment (detailed=true) — #828
+    // -----------------------------------------------------------------------
+
+    /**
+     * Batch-loads the active MSRP (as of today) for every product on the current
+     * page in a single query, returning the winning record per product id. Mirrors
+     * {@link ProductMsrpRepository#findActive} selection semantics (most recently
+     * started, tie-broken by id) without an N+1 fan-out.
+     */
+    private Map<UUID, ProductMsrpEntity> loadActiveMsrps(List<ProductEntity> products) {
+        if (products.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> productIds = products.stream().map(ProductEntity::getId).toList();
+        LocalDate asOf = LocalDate.now(clock);
+        // Query orders by (productId, effectiveStartDate desc, msrpId asc); the first
+        // record seen for each product id is therefore the winning active MSRP.
+        return productMsrpRepository.findActiveForProducts(productIds, asOf).stream()
+                .collect(Collectors.toMap(m -> m.getProduct().getId(), Function.identity(), (first, later) -> first));
+    }
+
+    /**
+     * Maps a {@link ProductEntity} plus its resolved active MSRP (nullable) to an
+     * enriched {@link ProductSummary}. A null MSRP leaves all price fields null,
+     * matching the client's graceful-degradation behavior.
+     */
+    static ProductSummary toDetailedSummary(ProductEntity entity, ProductMsrpEntity activeMsrp) {
+        ProductSummary summary = toSummary(entity);
+        summary.setLifecycleState(entity.getLifecycleState());
+        summary.setLifecycleStateEffectiveAt(entity.getLifecycleStateEffectiveAt());
+        if (activeMsrp != null) {
+            summary.setMsrpAmount(
+                    activeMsrp.getAmount() == null
+                            ? null
+                            : activeMsrp.getAmount().toPlainString());
+            summary.setMsrpCurrency(activeMsrp.getCurrency());
+            summary.setMsrpEffectiveStartDate(activeMsrp.getEffectiveStartDate());
+            summary.setMsrpEffectiveEndDate(activeMsrp.getEffectiveEndDate());
+        }
+        return summary;
     }
 }

@@ -9,8 +9,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.customer.internal.client.PeopleClient;
-import com.positivity.customer.internal.client.VehicleInventoryClient;
 import com.positivity.customer.internal.config.CacheConfig;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
@@ -26,6 +24,7 @@ import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.dto.snapshot.SnapshotMetadata;
 import com.positivity.customer.internal.entity.BillingRulesEmbeddable;
 import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.ExtVehicle;
 import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
@@ -35,7 +34,7 @@ import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.service.PartyServiceImpl;
-import com.positivity.shared.dto.VehicleResponse;
+import com.positivity.customer.internal.service.PersonDirectoryService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -79,12 +78,21 @@ class PartyServiceImplTest {
     private Cache cache;
 
     @Mock
-    private PeopleClient peopleClient;
+    private PersonDirectoryService personDirectoryService;
 
     @Mock
-    private VehicleInventoryClient vehicleInventoryClient;
+    private com.positivity.customer.internal.repository.ExtVehicleRepository extVehicleRepository;
 
     private PartyServiceImpl service;
+
+    private static org.springframework.beans.factory.ObjectProvider<
+                    com.positivity.customer.internal.config.OutboxEventWriter>
+            emptyOutboxWriterProvider() {
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<com.positivity.customer.internal.config.OutboxEventWriter>
+                provider = org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+        return provider;
+    }
 
     @BeforeEach
     void setUp() {
@@ -94,8 +102,10 @@ class PartyServiceImplTest {
                 personPartyRepository,
                 partyRelationshipRepository,
                 cacheManager,
-                peopleClient,
-                vehicleInventoryClient);
+                personDirectoryService,
+                extVehicleRepository,
+                emptyOutboxWriterProvider(),
+                org.mockito.Mockito.mock(com.positivity.customer.internal.service.CustomerFactPublisher.class));
     }
 
     private CommercialParty party(UUID id) {
@@ -124,16 +134,16 @@ class PartyServiceImplTest {
     }
 
     /** Build a canonical pos-people identity (sole source of name/contacts, ADR-0015 I2). */
-    private static PeopleClient.PersonIdentity identity(
+    private static PersonDirectoryService.PersonIdentity identity(
             UUID id, String first, String last, String email, String phone) {
-        List<PeopleClient.ContactPoint> cps = new ArrayList<>();
+        List<PersonDirectoryService.ContactPoint> cps = new ArrayList<>();
         if (email != null) {
-            cps.add(new PeopleClient.ContactPoint("EMAIL", email, true));
+            cps.add(new PersonDirectoryService.ContactPoint("EMAIL", email, true));
         }
         if (phone != null) {
-            cps.add(new PeopleClient.ContactPoint("PHONE_MOBILE", phone, true));
+            cps.add(new PersonDirectoryService.ContactPoint("PHONE_MOBILE", phone, true));
         }
-        return new PeopleClient.PersonIdentity(id, first, last, email, cps);
+        return new PersonDirectoryService.PersonIdentity(id, first, last, email, cps);
     }
 
     @Test
@@ -226,7 +236,7 @@ class PartyServiceImplTest {
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
         when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
                 .thenReturn(List.of(rel));
-        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(personId)))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(java.util.Set.of(personId)))
                 .thenReturn(java.util.Map.of(personId, identity(personId, "Jane", "Doe", "jane@acme.com", "555-1234")));
 
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
@@ -308,13 +318,15 @@ class PartyServiceImplTest {
         CommercialParty p = party(partyId);
         p.getVehicleVins().add("VIN-123");
 
-        VehicleResponse vehicleResponse = VehicleResponse.builder()
+        ExtVehicle vehicle = ExtVehicle.builder()
                 .vehicleId(vehicleId)
                 .vin("VIN-123")
+                .vinNormalized("VIN-123")
                 .licensePlate("ABC-123")
                 .make("Ford")
                 .model("F-150")
                 .year(2024)
+                .active(true)
                 .build();
 
         when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
@@ -322,7 +334,7 @@ class PartyServiceImplTest {
         when(partyRepository.findByPartyId(partyId)).thenReturn(p);
         when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
                 .thenReturn(Collections.emptyList());
-        when(vehicleInventoryClient.getVehicleByVin("VIN-123")).thenReturn(Optional.of(vehicleResponse));
+        when(extVehicleRepository.findByVinNormalizedAndActiveTrue("VIN-123")).thenReturn(Optional.of(vehicle));
 
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
 
@@ -409,7 +421,7 @@ class PartyServiceImplTest {
 
         when(partyRepository.findByPartyId(partyId)).thenReturn(null);
         when(personPartyRepository.findById(partyId)).thenReturn(Optional.of(personParty));
-        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(personId)))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(java.util.Set.of(personId)))
                 .thenReturn(java.util.Map.of(personId, identity(personId, "Pat", "Person", null, null)));
 
         GetPartyResponse response = service.getParty(partyId);
@@ -505,7 +517,7 @@ class PartyServiceImplTest {
         when(partyRepository.findAll()).thenReturn(List.of(commercial));
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
         lenient()
-                .when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(aliceId)))
+                .when(personDirectoryService.fetchPersonIdentitiesQuietly(java.util.Set.of(aliceId)))
                 .thenReturn(java.util.Map.of(aliceId, identity(aliceId, "Alice", "Anders", null, null)));
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
@@ -636,10 +648,10 @@ class PartyServiceImplTest {
 
         when(partyRepository.findAll()).thenReturn(List.of());
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
-        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(canonicalPersonId)))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(java.util.Set.of(canonicalPersonId)))
                 .thenReturn(java.util.Map.of(
                         canonicalPersonId,
-                        new PeopleClient.PersonIdentity(
+                        new PersonDirectoryService.PersonIdentity(
                                 canonicalPersonId, "Fresh", "Canonical", "f@x.com", java.util.List.of())));
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
@@ -661,7 +673,7 @@ class PartyServiceImplTest {
 
         when(partyRepository.findAll()).thenReturn(List.of());
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
-        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(canonicalId)))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(java.util.Set.of(canonicalId)))
                 .thenReturn(java.util.Map.of());
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
@@ -691,7 +703,7 @@ class PartyServiceImplTest {
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
         when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
                 .thenReturn(List.of(rel));
-        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(contactPersonId)))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(java.util.Set.of(contactPersonId)))
                 .thenReturn(java.util.Map.of(
                         contactPersonId, identity(contactPersonId, "Jane", "Doe", "jane@acme.com", "555-1234")));
 
@@ -715,7 +727,7 @@ class PartyServiceImplTest {
 
         when(partyRepository.findAll()).thenReturn(List.of());
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
-        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(aliceId)))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(java.util.Set.of(aliceId)))
                 .thenReturn(java.util.Map.of(aliceId, identity(aliceId, "Alice", "Anders", "alice@example.com", null)));
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
@@ -743,7 +755,7 @@ class PartyServiceImplTest {
         when(partyRepository.findAll()).thenReturn(List.of(commercial));
         when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
         lenient()
-                .when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(noVehId)))
+                .when(personDirectoryService.fetchPersonIdentitiesQuietly(java.util.Set.of(noVehId)))
                 .thenReturn(java.util.Map.of(noVehId, identity(noVehId, "No", "Vehicles", null, null)));
 
         SearchPartiesResponse response = service.browseParties(Pageable.unpaged());
@@ -977,21 +989,23 @@ class PartyServiceImplTest {
         PersonParty personParty = personParty(partyId, personId);
         personParty.setVehicleVins(new HashSet<>(List.of("VIN-P-1")));
 
-        VehicleResponse vehicleResponse = VehicleResponse.builder()
+        ExtVehicle vehicle = ExtVehicle.builder()
                 .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000043"))
                 .vin("VIN-P-1")
+                .vinNormalized("VIN-P-1")
                 .make("Toyota")
                 .model("Camry")
                 .year(2025)
+                .active(true)
                 .build();
 
         when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
         when(cache.get(partyId)).thenReturn(null);
         when(partyRepository.findByPartyId(partyId)).thenReturn(null);
         when(personPartyRepository.findById(partyId)).thenReturn(Optional.of(personParty));
-        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(personId)))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(java.util.Set.of(personId)))
                 .thenReturn(java.util.Map.of(personId, identity(personId, "Sam", "Solo", null, null)));
-        when(vehicleInventoryClient.getVehicleByVin("VIN-P-1")).thenReturn(Optional.of(vehicleResponse));
+        when(extVehicleRepository.findByVinNormalizedAndActiveTrue("VIN-P-1")).thenReturn(Optional.of(vehicle));
 
         CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
 

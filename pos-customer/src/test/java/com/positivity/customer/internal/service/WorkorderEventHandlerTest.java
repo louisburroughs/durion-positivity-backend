@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -11,14 +12,12 @@ import com.positivity.customer.internal.entity.CommunicationPreference;
 import com.positivity.customer.internal.entity.PartyNote;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.entity.ProcessingLog;
-import com.positivity.customer.internal.entity.VehicleProjection;
 import com.positivity.customer.internal.enums.ProcessingStatus;
 import com.positivity.customer.internal.event.EventEnvelope;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
 import com.positivity.customer.internal.repository.PartyNoteRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessingLogRepository;
-import com.positivity.customer.internal.repository.VehicleProjectionRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -31,6 +30,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -42,6 +42,12 @@ import tools.jackson.databind.ObjectMapper;
  * idempotency (SKIPPED_DUPLICATE), happy-path persistence (SUCCESS), business
  * rule violation handling (BUSINESS_RULE_VIOLATION), and exception isolation
  * (no exception may escape to the Kafka broker/retry mechanism).
+ * </p>
+ *
+ * <p>
+ * {@code VehicleUpdated} handling was retired with ADR-0044 (#843): vehicle facts are
+ * consumed from {@code vehicle.events.v1} by {@link VehicleEventsListener}. Envelopes of
+ * that type are now logged as unsupported with their real eventId.
  * </p>
  *
  * <p>
@@ -72,9 +78,6 @@ class WorkorderEventHandlerTest {
     private PartyNoteRepository partyNoteRepository;
 
     @Mock
-    private VehicleProjectionRepository vehicleProjectionRepository;
-
-    @Mock
     private PersonParty personParty;
 
     private WorkorderEventHandler handler;
@@ -88,108 +91,7 @@ class WorkorderEventHandlerTest {
                 communicationPreferenceRepository,
                 personPartyRepository,
                 partyNoteRepository,
-                vehicleProjectionRepository,
                 new ObjectMapper());
-    }
-
-    // -----------------------------------------------------------------------
-    // AC-1 VehicleUpdated — new event (happy path)
-    // -----------------------------------------------------------------------
-
-    /**
-     * AC-1: A fresh {@code VehicleUpdated} envelope is processed and a
-     * {@link ProcessingStatus#SUCCESS} {@link ProcessingLog} entry is saved.
-     */
-    @Test
-    void handleVehicleUpdated_novelEvent_savesSuccessLog() {
-        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-        EventEnvelope envelope = vehicleUpdatedEnvelope(eventId);
-
-        handler.handleVehicleUpdated(envelope);
-
-        ArgumentCaptor<VehicleProjection> vehicleCaptor = ArgumentCaptor.forClass(VehicleProjection.class);
-        verify(vehicleProjectionRepository).save(vehicleCaptor.capture());
-        assertThat(vehicleCaptor.getValue().getVehicleId())
-                .isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        assertThat(vehicleCaptor.getValue().getVin()).isEqualTo("1HGBH41JXMN109186");
-
-        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-        verify(processingLogRepository).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
-        assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
-    }
-
-    @Test
-    void handleVehicleUpdated_snakeCasePayload_mapsAndSavesSuccessLog() {
-        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000010").toString();
-        EventEnvelope envelope = EventEnvelope.builder()
-                .eventId(eventId)
-                .eventType("VehicleUpdated")
-                .eventVersion("1.0")
-                .sourceSystem("WorkorderExecution")
-                .correlationId(
-                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
-                .timestamp("2026-03-03T10:00:00Z")
-                .payload(Map.of(
-                        "vehicle_id",
-                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
-                        "vin_normalized",
-                        "1HGBH41JXMN109186",
-                        "vehicle_make",
-                        "Honda",
-                        "vehicle_model",
-                        "Accord",
-                        "model_year",
-                        2022,
-                        "vehicle_color",
-                        "White"))
-                .build();
-
-        handler.handleVehicleUpdated(envelope);
-
-        ArgumentCaptor<VehicleProjection> vehicleCaptor = ArgumentCaptor.forClass(VehicleProjection.class);
-        verify(vehicleProjectionRepository).save(vehicleCaptor.capture());
-        assertThat(vehicleCaptor.getValue().getVehicleId())
-                .isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        assertThat(vehicleCaptor.getValue().getVin()).isEqualTo("1HGBH41JXMN109186");
-        assertThat(vehicleCaptor.getValue().getMake()).isEqualTo("Honda");
-        assertThat(vehicleCaptor.getValue().getModel()).isEqualTo("Accord");
-        assertThat(vehicleCaptor.getValue().getYear()).isEqualTo(2022);
-        assertThat(vehicleCaptor.getValue().getColor()).isEqualTo("White");
-
-        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-        verify(processingLogRepository).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
-        assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
-    }
-
-    // -----------------------------------------------------------------------
-    // AC-2 VehicleUpdated — duplicate detection
-    // -----------------------------------------------------------------------
-
-    /**
-     * AC-2: A {@code VehicleUpdated} envelope with a duplicate {@code eventId}
-     * causes a {@link ProcessingStatus#SKIPPED_DUPLICATE} {@link ProcessingLog}
-     * to be saved with a surrogate eventId, leaving the original record intact.
-     */
-    @Test
-    void handleVehicleUpdated_duplicateEvent_savesSkippedDuplicateLog() {
-        String duplicateId =
-                UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
-        when(processingLogRepository.findByEventId(duplicateId))
-                .thenReturn(Optional.of(ProcessingLog.builder()
-                        .eventId(duplicateId)
-                        .status(ProcessingStatus.SUCCESS)
-                        .build()));
-        EventEnvelope envelope = vehicleUpdatedEnvelope(duplicateId);
-
-        handler.handleVehicleUpdated(envelope);
-
-        verify(vehicleProjectionRepository, never()).save(any());
-        ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
-        verify(processingLogRepository).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SKIPPED_DUPLICATE);
-        assertThat(captor.getValue().getFailureReason()).contains(duplicateId);
     }
 
     // -----------------------------------------------------------------------
@@ -397,22 +299,23 @@ class WorkorderEventHandlerTest {
     // -----------------------------------------------------------------------
 
     /**
-     * AC-7: The top-level Kafka listener dispatches a {@code VehicleUpdated} JSON
-     * message to the correct typed handler and saves a
-     * {@link ProcessingStatus#SUCCESS}
-     * {@link ProcessingLog}.
+     * AC-7: The top-level Kafka listener dispatches a
+     * {@code ContactPreferenceUpdated} JSON message to the correct typed handler
+     * and saves a {@link ProcessingStatus#SUCCESS} {@link ProcessingLog}.
      */
     @Test
-    void handleWorkorderEvent_vehicleUpdatedJson_dispatchesAndSavesSuccessLog() {
+    void handleWorkorderEvent_contactPreferenceUpdatedJson_dispatchesAndSavesSuccessLog() {
         String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
         String json = "{\"eventId\":\"" + eventId + "\","
-                + "\"eventType\":\"VehicleUpdated\","
+                + "\"eventType\":\"ContactPreferenceUpdated\","
                 + "\"eventVersion\":\"1.0\","
                 + "\"sourceSystem\":\"WorkorderExecution\","
                 + "\"correlationId\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001")
                 + "\","
                 + "\"timestamp\":\"2026-03-03T10:00:00Z\","
-                + "\"payload\":{}}";
+                + "\"payload\":{\"partyId\":\""
+                + UUID.fromString("00000000-0000-0000-0000-000000000001")
+                + "\",\"emailPreference\":\"OPT_IN\"}}";
 
         handler.handleWorkorderEvent(json);
 
@@ -422,25 +325,29 @@ class WorkorderEventHandlerTest {
         assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
     }
 
+    /**
+     * ADR-0044 (#843): {@code VehicleUpdated} is no longer handled here — vehicle
+     * facts come from {@code vehicle.events.v1}. The envelope is logged as
+     * unsupported with its REAL eventId (not a surrogate), so the workorder
+     * reconciliation-manifest window scan still accounts for it and reports no
+     * false drift.
+     */
     @Test
-    void handleWorkorderEvent_vehicleUpdatedSnakeCaseJson_dispatchesAndSavesSuccessLog() {
-        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000013").toString();
-        String json = "{\"event_id\":\"" + eventId + "\","
-                + "\"event_type\":\"VehicleUpdated\","
-                + "\"event_version\":\"1.0\","
-                + "\"source_system\":\"WorkorderExecution\","
-                + "\"correlation_id\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001")
-                + "\","
-                + "\"event_timestamp\":\"2026-03-03T10:00:00Z\","
-                + "\"payload\":{\"vehicle_id\":\""
-                + UUID.fromString("00000000-0000-0000-0000-000000000001")
-                + "\",\"vin_normalized\":\"1HGBH41JXMN109186\"}}";
+    void handleWorkorderEvent_vehicleUpdatedJson_logsUnsupportedWithRealEventId() {
+        String eventId = UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        String json = "{\"eventId\":\"" + eventId + "\","
+                + "\"eventType\":\"VehicleUpdated\","
+                + "\"eventVersion\":\"1.0\","
+                + "\"sourceSystem\":\"WorkorderExecution\","
+                + "\"timestamp\":\"2026-03-03T10:00:00Z\","
+                + "\"payload\":{}}";
 
         handler.handleWorkorderEvent(json);
 
         ArgumentCaptor<ProcessingLog> captor = ArgumentCaptor.forClass(ProcessingLog.class);
         verify(processingLogRepository).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCESS);
+        assertThat(captor.getValue().getStatus()).isEqualTo(ProcessingStatus.SCHEMA_VALIDATION_FAILED);
+        assertThat(captor.getValue().getFailureReason()).contains("Unsupported event type");
         assertThat(captor.getValue().getEventId()).isEqualTo(eventId);
     }
 
@@ -466,7 +373,7 @@ class WorkorderEventHandlerTest {
     void handleWorkorderEvent_handlerThrowsException_doesNotPropagateAndSavesSchemaValidationFailedLog() {
         when(processingLogRepository.findByEventId(any())).thenThrow(new RuntimeException("simulated DB error"));
         String json = "{\"eventId\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001") + "\","
-                + "\"eventType\":\"VehicleUpdated\","
+                + "\"eventType\":\"ContactPreferenceUpdated\","
                 + "\"eventVersion\":\"1.0\","
                 + "\"sourceSystem\":\"WorkorderExecution\","
                 + "\"correlationId\":\"" + UUID.fromString("00000000-0000-0000-0000-000000000001")
@@ -514,31 +421,6 @@ class WorkorderEventHandlerTest {
     // Helpers
     // -----------------------------------------------------------------------
 
-    private EventEnvelope vehicleUpdatedEnvelope(String eventId) {
-        return EventEnvelope.builder()
-                .eventId(eventId)
-                .eventType("VehicleUpdated")
-                .eventVersion("1.0")
-                .sourceSystem("WorkorderExecution")
-                .correlationId(
-                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
-                .timestamp("2026-03-03T10:00:00Z")
-                .payload(Map.of(
-                        "vehicleId",
-                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
-                        "vin",
-                        "1HGBH41JXMN109186",
-                        "make",
-                        "Honda",
-                        "model",
-                        "Accord",
-                        "year",
-                        2022,
-                        "color",
-                        "White"))
-                .build();
-    }
-
     private EventEnvelope contactPreferenceUpdatedEnvelope(String eventId) {
         return EventEnvelope.builder()
                 .eventId(eventId)
@@ -581,5 +463,24 @@ class WorkorderEventHandlerTest {
                         "sourceWorkorderId",
                         UUID.fromString("00000000-0000-0000-0000-000000000001").toString()))
                 .build();
+    }
+
+    /**
+     * ADR-0044 §4: transient infrastructure errors must escape to the container
+     * error handler (retry with backoff, then DLQ) instead of being committed as
+     * permanent failure log entries.
+     */
+    @Test
+    void transientDataAccessErrorsPropagateForRetry() {
+        when(processingLogRepository.findByEventId(any())).thenReturn(Optional.empty());
+        when(communicationPreferenceRepository.findByPartyId(any())).thenThrow(new QueryTimeoutException("db timeout"));
+
+        String json = """
+                {"eventId":"11111111-1111-7111-8111-111111111111","eventType":"ContactPreferenceUpdated",
+                 "payload":{"partyId":"22222222-2222-7222-8222-222222222222","emailPreference":"OPT_IN"}}
+                """;
+
+        assertThatExceptionOfType(QueryTimeoutException.class).isThrownBy(() -> handler.handleWorkorderEvent(json));
+        verify(communicationPreferenceRepository, never()).save(any());
     }
 }

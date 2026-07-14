@@ -81,6 +81,47 @@ class CatalogBulkIngestControllerTest {
 
     @Test
     @WithMockUser(authorities = {"catalog:product:create"})
+    void bulkIngest_forwardsMpnAndUnitOfMeasure_withFallbacks() throws Exception {
+        CatalogBulkIngestRecord withValues = new CatalogBulkIngestRecord();
+        withValues.setSku("ABC-001");
+        withValues.setName("Widget");
+        withValues.setMpn("MPN-42");
+        withValues.setUnitOfMeasure("KIT");
+
+        CatalogBulkIngestRecord withoutValues = new CatalogBulkIngestRecord();
+        withoutValues.setSku("ABC-002");
+        withoutValues.setName("Gadget");
+
+        BulkIngestRequest<CatalogBulkIngestRecord> request = new BulkIngestRequest<>();
+        request.setJobId(JOB_ID);
+        request.setLocationId(LOCATION_ID);
+        request.setRecords(List.of(withValues, withoutValues));
+
+        ProductDto productDto = new ProductDto();
+        productDto.setId(PRODUCT_ID);
+        when(productMasterDataService.createProduct(any())).thenReturn(productDto);
+
+        mockMvc.perform(post("/v1/catalog/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(2));
+
+        var captor =
+                org.mockito.ArgumentCaptor.forClass(com.positivity.catalog.internal.dto.ProductCreateRequestDto.class);
+        org.mockito.Mockito.verify(productMasterDataService, org.mockito.Mockito.times(2))
+                .createProduct(captor.capture());
+        var requests = captor.getAllValues();
+        org.assertj.core.api.Assertions.assertThat(requests.get(0).getMpn()).isEqualTo("MPN-42");
+        org.assertj.core.api.Assertions.assertThat(requests.get(0).getUnitOfMeasure())
+                .isEqualTo("KIT");
+        org.assertj.core.api.Assertions.assertThat(requests.get(1).getMpn()).isEqualTo("ABC-002");
+        org.assertj.core.api.Assertions.assertThat(requests.get(1).getUnitOfMeasure())
+                .isEqualTo("EA");
+    }
+
+    @Test
+    @WithMockUser(authorities = {"catalog:product:create"})
     void bulkIngest_whenServiceThrows_recordsAsFailure() throws Exception {
         CatalogBulkIngestRecord catalogRecord = new CatalogBulkIngestRecord();
         catalogRecord.setSku("BAD-001");

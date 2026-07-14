@@ -9,13 +9,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.positivity.people.internal.client.LocationReferenceClient;
-import com.positivity.people.internal.client.WorkexecJobTimeClient;
+import com.positivity.people.internal.service.LocationReferenceService;
 import com.positivity.people.internal.dto.ApprovedTimeExportResponse;
-import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtJobTimeReplicaRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.service.PeopleReportsServiceImpl;
 import com.positivity.people.internal.service.TimekeepingThresholdCache;
@@ -35,29 +35,29 @@ class PeopleReportsServiceTest {
 
     private TimeEntryRepository timeEntryRepository;
 
-    private PersonRepository personRepository;
+    private ExtPersonReplicaRepository extPersonReplicaRepository;
 
-    private WorkexecJobTimeClient workexecJobTimeClient;
+    private ExtJobTimeReplicaRepository extJobTimeReplicaRepository;
 
     private TimekeepingThresholdCache timekeepingThresholdCache;
 
-    private LocationReferenceClient locationReferenceClient;
+    private LocationReferenceService locationReferenceService;
 
     private PeopleReportsService service;
 
     @BeforeEach
     void setup() {
         timeEntryRepository = mock(TimeEntryRepository.class);
-        personRepository = mock(PersonRepository.class);
-        workexecJobTimeClient = mock(WorkexecJobTimeClient.class);
+        extPersonReplicaRepository = mock(ExtPersonReplicaRepository.class);
+        extJobTimeReplicaRepository = mock(ExtJobTimeReplicaRepository.class);
         timekeepingThresholdCache = mock(TimekeepingThresholdCache.class);
-        locationReferenceClient = mock(LocationReferenceClient.class);
+        locationReferenceService = mock(LocationReferenceService.class);
 
         service = new PeopleReportsServiceImpl(
                 timeEntryRepository,
-                personRepository,
-                workexecJobTimeClient,
-                locationReferenceClient,
+                extPersonReplicaRepository,
+                extJobTimeReplicaRepository,
+                locationReferenceService,
                 timekeepingThresholdCache,
                 java.time.Clock.systemUTC());
     }
@@ -71,11 +71,7 @@ class PeopleReportsServiceTest {
 
         TimeEntry approved = new TimeEntry();
         approved.setTimeEntryId(approvedId);
-        approved.setPerson(Person.builder()
-                .id(personUuid)
-                .firstName("Jane")
-                .lastName("Doe")
-                .build());
+        approved.setPersonId(personUuid);
         approved.setLocationId(locationId);
         approved.setStatus(TimeEntryStatus.APPROVED);
         approved.setAttendanceStartAt(Instant.parse("2026-02-10T08:00:00Z"));
@@ -85,11 +81,7 @@ class PeopleReportsServiceTest {
 
         TimeEntry rejected = new TimeEntry();
         rejected.setTimeEntryId(rejectedId);
-        rejected.setPerson(Person.builder()
-                .id(personUuid)
-                .firstName("Jane")
-                .lastName("Doe")
-                .build());
+        rejected.setPersonId(personUuid);
         rejected.setLocationId(locationId);
         rejected.setStatus(TimeEntryStatus.REJECTED);
         rejected.setAttendanceStartAt(Instant.parse("2026-02-10T09:00:00Z"));
@@ -97,8 +89,16 @@ class PeopleReportsServiceTest {
         rejected.setApprovedAt(Instant.parse("2026-02-11T01:15:00Z"));
         rejected.setApprovedBy("manager-1");
 
-        when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceClient.getLocationName(locationId)).thenReturn("North Shop");
+        when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
+        when(locationReferenceService.getLocationName(locationId)).thenReturn("North Shop");
+        when(extPersonReplicaRepository.findAllById(any()))
+                .thenReturn(List.of(ExtPersonReplica.builder()
+                        .personId(personUuid)
+                        .firstName("Jane")
+                        .lastName("Doe")
+                        .aggregateVersion(0)
+                        .updatedAt(Instant.now())
+                        .build()));
         when(timeEntryRepository.findApprovedForExport(
                         eq(TimeEntryStatus.APPROVED), any(), any(), eq(List.of(locationId))))
                 .thenReturn(List.of(approved));
@@ -122,8 +122,8 @@ class PeopleReportsServiceTest {
     @Test
     void getApprovedTimeForExport_emptyResultReturns200EquivalentList() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceClient.getLocationName(locationId)).thenReturn("North Shop");
+        when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
+        when(locationReferenceService.getLocationName(locationId)).thenReturn("North Shop");
         when(timeEntryRepository.findApprovedForExport(
                         eq(TimeEntryStatus.APPROVED), any(), any(), eq(List.of(locationId))))
                 .thenReturn(List.of());
@@ -158,7 +158,7 @@ class PeopleReportsServiceTest {
         LocalDate startDate = LocalDate.parse("2026-02-10");
         LocalDate endDate = LocalDate.parse("2026-02-11");
         List<UUID> locations = List.of(locationId);
-        when(locationReferenceClient.isLocationActive(locationId)).thenReturn(false);
+        when(locationReferenceService.isLocationActive(locationId)).thenReturn(false);
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,

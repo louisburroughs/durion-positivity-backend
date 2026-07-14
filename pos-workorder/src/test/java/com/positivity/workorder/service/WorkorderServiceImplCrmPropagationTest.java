@@ -4,17 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import com.positivity.workorder.internal.client.CustomerValidationClient;
-import com.positivity.workorder.internal.client.PeopleLocationClient;
-import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import com.positivity.workorder.internal.service.PeopleAvailabilityLocalService;
 import com.positivity.workorder.internal.service.WorkorderServiceImpl;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
 import java.time.Clock;
@@ -74,7 +73,7 @@ class WorkorderServiceImplCrmPropagationTest {
     private WorkorderPartRepository workorderPartRepository;
 
     @Mock
-    private CustomerValidationClient customerValidationClient;
+    private ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
 
     @Mock
     private WorkorderStateMachine stateMachine;
@@ -89,10 +88,10 @@ class WorkorderServiceImplCrmPropagationTest {
     private PromotionValidationService promotionValidationService;
 
     @Mock
-    private ShopmgrOperationalContextClient shopmgrClient;
+    private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
-    @Mock
-    private PeopleLocationClient peopleLocationClient;
+    @org.mockito.Mock
+    private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
 
     @InjectMocks
     private WorkorderServiceImpl workorderService;
@@ -105,8 +104,12 @@ class WorkorderServiceImplCrmPropagationTest {
 
     @BeforeEach
     void stubCustomerRequirements() {
-        // Stub CustomerValidationClient to allow workorder creation
-        when(customerValidationClient.checkRequirementsMet(any())).thenReturn(true);
+        // Stub the customer-party replica to allow workorder creation
+        when(extCustomerPartyReplicaRepository.findById(any()))
+                .thenReturn(
+                        java.util.Optional.of(com.positivity.workorder.internal.entity.ExtCustomerPartyReplica.builder()
+                                .requirementsMet(true)
+                                .build()));
 
         // Default workorderRepository.save() behaviour: return the Workorder passed in
         when(workorderRepository.save(any(Workorder.class))).thenAnswer(inv -> {
@@ -242,7 +245,8 @@ class WorkorderServiceImplCrmPropagationTest {
     @DisplayName("createWorkorder(null, ...) — estimate-less falls back to the creator's primary location")
     void createWorkorder_nullEstimateId_shopIdFromPrimaryLocation() {
         UUID primaryLocation = UUID.fromString("30000000-0000-0000-0000-000000000002");
-        when(peopleLocationClient.resolveCurrentUserPrimaryLocation()).thenReturn(Optional.of(primaryLocation));
+        when(peopleAvailabilityLocalService.resolveCurrentUserPrimaryLocation())
+                .thenReturn(Optional.of(primaryLocation));
 
         Workorder result = workorderService.createWorkorder(null, CUSTOMER_ID);
 
@@ -253,7 +257,7 @@ class WorkorderServiceImplCrmPropagationTest {
     @Test
     @DisplayName("createWorkorder(null, ...) — no primary location leaves shopId null (no sentinel shop)")
     void createWorkorder_nullEstimateId_noPrimaryLocation_shopIdNull() {
-        when(peopleLocationClient.resolveCurrentUserPrimaryLocation()).thenReturn(Optional.empty());
+        when(peopleAvailabilityLocalService.resolveCurrentUserPrimaryLocation()).thenReturn(Optional.empty());
 
         Workorder result = workorderService.createWorkorder(null, CUSTOMER_ID);
 

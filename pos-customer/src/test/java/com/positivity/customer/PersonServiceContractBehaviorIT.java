@@ -9,7 +9,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
@@ -21,6 +20,7 @@ import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
+import com.positivity.customer.internal.service.PersonDirectoryService;
 import com.positivity.customer.service.PersonService;
 import java.time.LocalDate;
 import java.util.List;
@@ -43,7 +43,7 @@ import org.springframework.web.server.ResponseStatusException;
  * <p>
  * Tests acceptance criteria from Issue #111 (Create Individual PersonParty Record),
  * updated for issue #684: pos-people is the sole source of truth for person identity
- * and contact points (ADR-0015 I2), so {@link PeopleClient} is mocked here and
+ * and contact points (ADR-0015 I2), so {@link PersonDirectoryService} is mocked here and
  * pos-customer persists only the thin link.
  * </p>
  */
@@ -68,7 +68,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
     private PartyRelationshipRepository partyRelationshipRepository;
 
     @MockitoBean
-    private PeopleClient peopleClient;
+    private PersonDirectoryService personDirectoryService;
 
     @BeforeEach
     void setUp() {
@@ -77,11 +77,12 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         personRepository.deleteAll();
     }
 
-    private static PeopleClient.PersonIdentity identity(UUID id, String first, String last, String... emails) {
-        List<PeopleClient.ContactPoint> cps = java.util.Arrays.stream(emails)
-                .map(e -> new PeopleClient.ContactPoint("EMAIL", e, true))
+    private static PersonDirectoryService.PersonIdentity identity(
+            UUID id, String first, String last, String... emails) {
+        List<PersonDirectoryService.ContactPoint> cps = java.util.Arrays.stream(emails)
+                .map(e -> new PersonDirectoryService.ContactPoint("EMAIL", e, true))
                 .toList();
-        return new PeopleClient.PersonIdentity(id, first, last, emails.length > 0 ? emails[0] : null, cps);
+        return new PersonDirectoryService.PersonIdentity(id, first, last, emails.length > 0 ? emails[0] : null, cps);
     }
 
     // ==========================================================================
@@ -93,7 +94,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
     @Order(1)
     void ac1_minimalCreate_persistsPerson() {
         UUID personId = UUID.randomUUID();
-        when(peopleClient.resolveOrCreatePersonId(any(), any(), eq("Doe"), eq("John")))
+        when(personDirectoryService.resolveOrCreatePersonId(any(), any(), eq("Doe"), eq("John")))
                 .thenReturn(personId);
 
         CreatePersonRequest request = CreatePersonRequest.builder()
@@ -119,7 +120,8 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
     @Order(2)
     void ac2_createWithContactPoints_mirrorsAllContactPointsToPeople() {
         UUID personId = UUID.randomUUID();
-        when(peopleClient.resolveOrCreatePersonId(any(), any(), any(), any())).thenReturn(personId);
+        when(personDirectoryService.resolveOrCreatePersonId(any(), any(), any(), any()))
+                .thenReturn(personId);
 
         CreatePersonRequest request = CreatePersonRequest.builder()
                 .firstName("Jane")
@@ -151,7 +153,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
         assertThat(response.getContactPointsCreated()).isEqualTo(4);
         // Contacts are written to pos-people (source of truth), not stored locally.
-        verify(peopleClient).setContactPoints(eq(personId), argThat(list -> list.size() == 4));
+        verify(personDirectoryService).setContactPoints(eq(personId), argThat(list -> list.size() == 4));
     }
 
     /** AC3: Missing lastName returns 400 and persists nothing. */
@@ -198,7 +200,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         // Persists nothing locally AND never creates a canonical person in pos-people:
         // email validation runs before resolveOrCreatePersonId (issue #684 review).
         assertThat(personRepository.count()).isZero();
-        verify(peopleClient, never()).resolveOrCreatePersonId(any(), any(), any(), any());
+        verify(personDirectoryService, never()).resolveOrCreatePersonId(any(), any(), any(), any());
     }
 
     // ==========================================================================
@@ -209,7 +211,8 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
     @Order(5)
     void getPerson_existingPerson_returnsPersonWithContactPointsFromPeople() {
         UUID personId = UUID.randomUUID();
-        when(peopleClient.resolveOrCreatePersonId(any(), any(), any(), any())).thenReturn(personId);
+        when(personDirectoryService.resolveOrCreatePersonId(any(), any(), any(), any()))
+                .thenReturn(personId);
 
         CreatePersonRequest request = CreatePersonRequest.builder()
                 .firstName("Test")
@@ -222,7 +225,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                 .build();
         CreatePersonResponse created = personService.createPerson(request, USER);
 
-        when(peopleClient.fetchPersonIdentitiesQuietly(Set.of(personId)))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(Set.of(personId)))
                 .thenReturn(java.util.Map.of(personId, identity(personId, "Test", "User", "test@example.com")));
 
         GetPersonResponse response = personService.getPerson(created.getPersonId());
@@ -252,11 +255,11 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         UUID aliceId = UUID.randomUUID();
         UUID bobId = UUID.randomUUID();
         UUID charlieId = UUID.randomUUID();
-        when(peopleClient.resolveOrCreatePersonId(any(), any(), eq("Johnson"), eq("Alice")))
+        when(personDirectoryService.resolveOrCreatePersonId(any(), any(), eq("Johnson"), eq("Alice")))
                 .thenReturn(aliceId);
-        when(peopleClient.resolveOrCreatePersonId(any(), any(), eq("Johnson"), eq("Bob")))
+        when(personDirectoryService.resolveOrCreatePersonId(any(), any(), eq("Johnson"), eq("Bob")))
                 .thenReturn(bobId);
-        when(peopleClient.resolveOrCreatePersonId(any(), any(), eq("Brown"), eq("Charlie")))
+        when(personDirectoryService.resolveOrCreatePersonId(any(), any(), eq("Brown"), eq("Charlie")))
                 .thenReturn(charlieId);
 
         personService.createPerson(
@@ -281,7 +284,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                         .build(),
                 USER);
 
-        when(peopleClient.searchPersons("Johnson"))
+        when(personDirectoryService.searchPersons("Johnson"))
                 .thenReturn(List.of(identity(aliceId, "Alice", "Johnson"), identity(bobId, "Bob", "Johnson")));
 
         List<GetPersonResponse> results = personService.searchPersons("Johnson", null, null, 20, 0);
@@ -294,7 +297,8 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
     @Order(8)
     void emailNormalization_mirrorsLowercaseToPeople() {
         UUID personId = UUID.randomUUID();
-        when(peopleClient.resolveOrCreatePersonId(any(), any(), any(), any())).thenReturn(personId);
+        when(personDirectoryService.resolveOrCreatePersonId(any(), any(), any(), any()))
+                .thenReturn(personId);
 
         CreatePersonRequest request = CreatePersonRequest.builder()
                 .firstName("Test")
@@ -308,7 +312,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
         personService.createPerson(request, USER);
 
-        verify(peopleClient)
+        verify(personDirectoryService)
                 .setContactPoints(
                         eq(personId),
                         argThat(list -> list.size() == 1 && list.get(0).value().equals("test.user@example.com")));
@@ -318,7 +322,8 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
     @Order(9)
     void searchPersons_includesCommercialIdentitySummary() {
         UUID janeId = UUID.randomUUID();
-        when(peopleClient.resolveOrCreatePersonId(any(), any(), any(), any())).thenReturn(janeId);
+        when(personDirectoryService.resolveOrCreatePersonId(any(), any(), any(), any()))
+                .thenReturn(janeId);
 
         CreatePersonResponse created = personService.createPerson(
                 CreatePersonRequest.builder()
@@ -346,7 +351,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         relationship.setEffectiveStartDate(LocalDate.of(2024, 1, 1));
         partyRelationshipRepository.save(relationship);
 
-        when(peopleClient.searchPersons("jane@example.com"))
+        when(personDirectoryService.searchPersons("jane@example.com"))
                 .thenReturn(List.of(identity(janeId, "Jane", "Smith", "jane@example.com")));
 
         List<GetPersonResponse> results = personService.searchPersons(null, "jane@example.com", null, 20, 0);

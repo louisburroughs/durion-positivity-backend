@@ -41,14 +41,17 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
     private final DistributorNormalizedInventoryRepository distributorNormalizedInventoryRepository;
     private final DistributorFeedExceptionRepository distributorFeedExceptionRepository;
     private final ObjectMapper objectMapper;
+    private final InventoryFactPublisher inventoryFactPublisher;
 
     public DistributorFeedServiceImpl(
             DistributorNormalizedInventoryRepository distributorNormalizedInventoryRepository,
             DistributorFeedExceptionRepository distributorFeedExceptionRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            InventoryFactPublisher inventoryFactPublisher) {
         this.distributorNormalizedInventoryRepository = distributorNormalizedInventoryRepository;
         this.distributorFeedExceptionRepository = distributorFeedExceptionRepository;
         this.objectMapper = objectMapper;
+        this.inventoryFactPublisher = inventoryFactPublisher;
     }
 
     @Override
@@ -95,6 +98,7 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
         normalized.setRawShipFromRegion(item.getRawShipFromRegion());
 
         distributorNormalizedInventoryRepository.save(normalized);
+        inventoryFactPublisher.markLeadTimeChanged(normalized.getProductId());
     }
 
     private void queueException(DistributorFeedItemDto item, DistributorExceptionReason reason) {

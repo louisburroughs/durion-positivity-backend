@@ -11,7 +11,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.workorder.internal.client.PeopleLocationClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
 import com.positivity.workorder.internal.dto.EstimateResponse;
@@ -21,6 +20,7 @@ import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.service.EstimateServiceImpl;
+import com.positivity.workorder.internal.service.PeopleAvailabilityLocalService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -56,7 +56,7 @@ class EstimateServiceTest {
     private TaxClient taxClient;
 
     @Mock
-    private PeopleLocationClient peopleLocationClient;
+    private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -95,7 +95,7 @@ class EstimateServiceTest {
                 .thenReturn(false);
 
         // Requests without an explicit location resolve the creator's primary location.
-        when(peopleLocationClient.resolveCurrentUserPrimaryLocation())
+        when(peopleAvailabilityLocalService.resolveCurrentUserPrimaryLocation())
                 .thenReturn(java.util.Optional.of(UUID.fromString("01960003-0000-7000-8000-000000000001")));
     }
 

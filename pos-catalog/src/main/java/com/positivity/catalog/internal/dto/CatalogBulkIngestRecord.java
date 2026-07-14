@@ -40,4 +40,16 @@ public class CatalogBulkIngestRecord {
 
     @Schema(description = "List price for the item", example = "29.99", requiredMode = NOT_REQUIRED)
     private BigDecimal price;
+
+    @Schema(
+            description = "Manufacturer part number; falls back to the SKU when absent",
+            example = "MPN-98765",
+            requiredMode = NOT_REQUIRED)
+    private String mpn;
+
+    @Schema(
+            description = "Unit of measure for the item; defaults to EA when absent",
+            example = "EA",
+            requiredMode = NOT_REQUIRED)
+    private String unitOfMeasure;
 }

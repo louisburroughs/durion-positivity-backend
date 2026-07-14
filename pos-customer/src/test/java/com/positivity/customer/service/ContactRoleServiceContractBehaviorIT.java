@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.positivity.customer.BaseContractIntegrationTest;
-import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest.RoleAssignment;
@@ -18,6 +17,7 @@ import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ContactRoleAssignmentRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
+import com.positivity.customer.internal.service.PersonDirectoryService;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -58,7 +58,7 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
     private ContactRoleAssignmentRepository roleAssignmentRepository;
 
     @MockitoBean
-    private PeopleClient peopleClient;
+    private PersonDirectoryService personDirectoryService;
 
     private CommercialParty testParty;
     private UUID testContactUuid;
@@ -99,10 +99,10 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
         roleAssignmentRepository.save(assignment);
 
         // Names come from pos-people (sole source of truth, ADR-0015 I2; issue #684).
-        when(peopleClient.fetchPersonIdentitiesQuietly(java.util.Set.of(testContactUuid)))
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(java.util.Set.of(testContactUuid)))
                 .thenReturn(java.util.Map.of(
                         testContactUuid,
-                        new PeopleClient.PersonIdentity(
+                        new PersonDirectoryService.PersonIdentity(
                                 testContactUuid, "John", "Doe", "john@example.com", java.util.List.of())));
 
         GetContactsWithRolesResponse response = contactRoleService.getContactsWithRoles(testParty.getPartyId());

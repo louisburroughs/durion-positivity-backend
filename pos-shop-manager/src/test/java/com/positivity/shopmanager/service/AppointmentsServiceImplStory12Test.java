@@ -12,9 +12,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.shopmanager.internal.client.CrmCustomerClient;
-import com.positivity.shopmanager.internal.client.CrmVehicleClient;
-import com.positivity.shopmanager.internal.client.HrAvailabilityClient;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
 import com.positivity.shopmanager.internal.entity.Appointment;
@@ -31,6 +28,8 @@ import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestR
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
+import com.positivity.shopmanager.internal.service.CrmSnapshotService;
+import com.positivity.shopmanager.internal.service.StaffingScheduleService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -87,13 +86,10 @@ class AppointmentsServiceImplStory12Test {
     private AppointmentLoadService appointmentLoadService;
 
     @Mock
-    private CrmCustomerClient crmCustomerClient;
+    private CrmSnapshotService crmSnapshotService;
 
     @Mock
-    private CrmVehicleClient crmVehicleClient;
-
-    @Mock
-    private HrAvailabilityClient hrAvailabilityClient;
+    private StaffingScheduleService staffingScheduleService;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -124,9 +120,8 @@ class AppointmentsServiceImplStory12Test {
                 appointmentServiceRequestRepository,
                 new ObjectMapper(),
                 appointmentLoadService,
-                crmCustomerClient,
-                crmVehicleClient,
-                hrAvailabilityClient,
+                crmSnapshotService,
+                staffingScheduleService,
                 eventPublisher,
                 shopRepository,
                 sourceEligibilityService,
@@ -134,8 +129,8 @@ class AppointmentsServiceImplStory12Test {
 
         // Stub CRM clients for tests that reach the CRM call path (before source
         // validation)
-        lenient().when(crmCustomerClient.getCustomerById(any(UUID.class))).thenReturn(Map.of());
-        lenient().when(crmVehicleClient.getVehicleById(any(UUID.class))).thenReturn(Map.of());
+        lenient().when(crmSnapshotService.getCustomerById(any(UUID.class))).thenReturn(Map.of());
+        lenient().when(crmSnapshotService.getVehicleById(any(UUID.class))).thenReturn(Map.of());
     }
 
     // ─── AC1: Source fields persisted ────────────────────────────────────────

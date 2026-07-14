@@ -1,0 +1,1040 @@
+openapi: 3.1.0
+info:
+  title: POS People Contact Service API
+  description: Identity, contact, and user-link authority service (ADR-0044 Phase 3)
+  contact:
+    name: Durion Support Services
+    email: louis.burroughs@gmail.com
+  version: v1
+servers:
+- url: http://localhost:8086
+  description: Generated server url
+tags:
+- name: People API
+  description: Operations related to people records
+- name: User-Person Linking API
+  description: Link authentication users to person records
+- name: People - Access Control
+  description: APIs for managing person-to-role assignments for access control and permissions (CAP-120)
+paths:
+  /v1/people/{personId}:
+    get:
+      tags:
+      - People API
+      summary: Get person by ID
+      description: Retrieve a person by their unique ID.
+      operationId: getPersonById
+      parameters:
+      - name: personId
+        in: path
+        description: ID of the person to retrieve
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 123e4567-e89b-12d3-a456-426614174000
+      responses:
+        '200':
+          description: Person found and returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+        '404':
+          description: Person not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+      security:
+      - bearerAuth:
+        - people-contact:person:view
+      x-required-permissions:
+      - people-contact:person:view
+    put:
+      tags:
+      - People API
+      summary: Update an existing person
+      description: Update the details of an existing person.
+      operationId: updatePerson
+      parameters:
+      - name: personId
+        in: path
+        description: ID of the person to update
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 123e4567-e89b-12d3-a456-426614174000
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Person'
+        required: true
+      responses:
+        '200':
+          description: Person updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+        '404':
+          description: Person not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+      security:
+      - bearerAuth:
+        - people-contact:person:edit
+      x-required-permissions:
+      - people-contact:person:edit
+    delete:
+      tags:
+      - People API
+      summary: Delete a person
+      description: Delete a person by their unique ID.
+      operationId: deletePerson
+      parameters:
+      - name: personId
+        in: path
+        description: ID of the person to delete
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 123e4567-e89b-12d3-a456-426614174000
+      responses:
+        '204':
+          description: Person deleted successfully.
+        '404':
+          description: Person not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+      security:
+      - bearerAuth:
+        - people-contact:person:delete
+      x-required-permissions:
+      - people-contact:person:delete
+  /v1/people/{personId}/contact-points:
+    put:
+      tags:
+      - People API
+      summary: Replace a person's contact points
+      description: Replaces all typed contact points (email/phone) for a person. pos-people-contact is the source of truth for contacts (ADR-0015).
+      operationId: replaceContactPoints
+      parameters:
+      - name: personId
+        in: path
+        description: Person id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/ContactPointDto'
+        required: true
+      responses:
+        '204':
+          description: Contact points replaced.
+      security:
+      - bearerAuth:
+        - people-contact:person:edit
+      x-required-permissions:
+      - people-contact:person:edit
+  /v1/people:
+    get:
+      tags:
+      - People API
+      summary: Get all people
+      description: Retrieve people with an optional text filter. Employment filtering lives in pos-people (ADR-0044 §6) and is not available on the identity directory.
+      operationId: getAllPeople
+      parameters:
+      - name: q
+        in: query
+        description: Case-insensitive text search on firstName, lastName, primaryEmail.
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: List of people returned successfully.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Person'
+      security:
+      - bearerAuth:
+        - people-contact:person:view
+      x-required-permissions:
+      - people-contact:person:view
+    post:
+      tags:
+      - People API
+      summary: Create a new person
+      description: Add a new person to the system.
+      operationId: createPerson
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Person'
+        required: true
+      responses:
+        '201':
+          description: Person created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+      security:
+      - bearerAuth:
+        - people-contact:person:create
+      x-required-permissions:
+      - people-contact:person:create
+  /v1/people/{personUuid}/access/assignments:
+    get:
+      tags:
+      - People - Access Control
+      summary: Get role assignments
+      description: Retrieve role assignments for a person with optional history and date filtering
+      operationId: getAssignments
+      parameters:
+      - name: personUuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: includeHistory
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - name: endDate
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: Assignments retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserRoleDto'
+      security:
+      - bearerAuth:
+        - people-contact:role:view
+      x-required-permissions:
+      - people-contact:role:view
+    post:
+      tags:
+      - People - Access Control
+      summary: Assign role to person
+      description: Assign a role to a person with optional location scope and date range
+      operationId: createAssignment
+      parameters:
+      - name: personUuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonRoleAssignmentRequest'
+        required: true
+      responses:
+        '201':
+          description: Role assignment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRoleDto'
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Person or role not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+      security:
+      - bearerAuth:
+        - people-contact:role:assign
+      x-required-permissions:
+      - people-contact:role:assign
+  /v1/people/users/link:
+    post:
+      tags:
+      - User-Person Linking API
+      summary: Link user to person
+      description: Create a link between an authentication user and a person record
+      operationId: linkUserToPerson
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkUserToPersonRequest'
+        required: true
+      responses:
+        '201':
+          description: Link created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '200':
+          description: Link already exists and is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '404':
+          description: Person not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '409':
+          description: User already linked to different person
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+      security:
+      - bearerAuth:
+        - people-contact:userLink:write
+      x-required-permissions:
+      - people-contact:userLink:write
+  /v1/people/user-links:
+    post:
+      tags:
+      - User-Person Linking API
+      summary: Create user-person link (admin)
+      description: Create a link between an authentication user and a person record
+      operationId: createUserPersonLink
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserLinkRequest'
+        required: true
+      responses:
+        '201':
+          description: Link created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '200':
+          description: Link already exists and is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '404':
+          description: Person not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '409':
+          description: User already linked to different person
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+      security:
+      - bearerAuth:
+        - people-contact:userLink:write
+      x-required-permissions:
+      - people-contact:userLink:write
+  /v1/people/resolve:
+    post:
+      tags:
+      - People API
+      summary: Resolve person
+      description: Find best matching person by score or create a new person
+      operationId: resolvePerson
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolvePersonRequest'
+        required: true
+      responses:
+        '200':
+          description: Person resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolvePersonResponse'
+      security:
+      - bearerAuth:
+        - people-contact:person:create
+      x-required-permissions:
+      - people-contact:person:create
+  /v1/people/by-ids:
+    post:
+      tags:
+      - People API
+      summary: Get people by IDs
+      description: Batch-resolve persons by id in one request. Unknown ids are omitted; the result may be smaller than the request. Used for cross-service identity reads (ADR-0015).
+      operationId: getPeopleByIds
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              description: Person ids to resolve
+              items:
+                type: string
+                format: uuid
+        required: true
+      responses:
+        '200':
+          description: Persons resolved.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Person'
+      security:
+      - bearerAuth:
+        - people-contact:person:view
+      x-required-permissions:
+      - people-contact:person:view
+  /v1/people/{personUuid}/access/roles:
+    get:
+      tags:
+      - People - Access Control
+      summary: Get available roles
+      description: Retrieve list of roles that can be assigned to people
+      operationId: getRoles
+      parameters:
+      - name: personUuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Roles retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoleDto'
+      security:
+      - bearerAuth:
+        - people-contact:role:view
+      x-required-permissions:
+      - people-contact:role:view
+  /v1/people/{personId}/users:
+    get:
+      tags:
+      - User-Person Linking API
+      summary: Get users linked to person
+      description: Retrieve all usernames linked to a person record
+      operationId: getUsernamesByPersonId
+      parameters:
+      - name: personId
+        in: path
+        description: Person ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Usernames returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        '404':
+          description: Person not found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+      security:
+      - bearerAuth:
+        - people-contact:userLink:view
+      x-required-permissions:
+      - people-contact:userLink:view
+  /v1/people/users/{username}/person:
+    get:
+      tags:
+      - User-Person Linking API
+      summary: Get person by username
+      description: Retrieve the person record linked to a user
+      operationId: getPersonByUsername
+      parameters:
+      - name: username
+        in: path
+        description: Username
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Person found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonResponse'
+        '404':
+          description: Link or person not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonResponse'
+      security:
+      - bearerAuth:
+        - people-contact:userLink:view
+      x-required-permissions:
+      - people-contact:userLink:view
+  /v1/people/user-links/{personId}:
+    get:
+      tags:
+      - User-Person Linking API
+      summary: Get links by person ID
+      description: Retrieve user-person links for person
+      operationId: getLinksByPersonId
+      parameters:
+      - name: personId
+        in: path
+        description: Person ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Links found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPersonLinkResponse'
+        '404':
+          description: Link or person not found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserPersonLinkResponse'
+      security:
+      - bearerAuth:
+        - people-contact:userLink:view
+      x-required-permissions:
+      - people-contact:userLink:view
+  /v1/people/me:
+    get:
+      tags:
+      - People API
+      summary: Get current user's person record
+      description: Resolve the authenticated user to their linked person record. Returns 404 when the user has no person link or the linked person no longer exists.
+      operationId: getCurrentPerson
+      responses:
+        '200':
+          description: Person found and returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+        '404':
+          description: No person linked to the current user.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+      security:
+      - bearerAuth:
+        - people-contact:person:view
+      x-required-permissions:
+      - people-contact:person:view
+  /v1/people/{personUuid}/access/assignments/{roleCode}:
+    delete:
+      tags:
+      - People - Access Control
+      summary: Revoke role assignment
+      description: Revoke a role assignment from a person
+      operationId: revokeAssignment
+      parameters:
+      - name: personUuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: roleCode
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: endDate
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '204':
+          description: Role assignment revoked successfully
+        '400':
+          description: Invalid request for revoking role assignment
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Person or role assignment not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+      security:
+      - bearerAuth:
+        - people-contact:role:revoke
+      x-required-permissions:
+      - people-contact:role:revoke
+  /v1/people/users/{username}/link:
+    delete:
+      tags:
+      - User-Person Linking API
+      summary: Unlink user from person
+      description: Remove the link between a user and person
+      operationId: unlinkUserFromPerson
+      parameters:
+      - name: username
+        in: path
+        description: Username
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Link deleted successfully
+        '404':
+          description: Link not found
+      security:
+      - bearerAuth:
+        - people-contact:userLink:write
+      x-required-permissions:
+      - people-contact:userLink:write
+components:
+  schemas:
+    ContactPointDto:
+      type: object
+      description: Typed contact point (email, phone) for a person
+      properties:
+        contactType:
+          type: string
+          description: Type of contact point
+          enum:
+          - EMAIL
+          - PHONE_MOBILE
+          - PHONE_HOME
+          - PHONE_WORK
+          example: EMAIL
+        value:
+          type: string
+          description: Contact point value
+          example: jane.smith@example.com
+        primary:
+          type: boolean
+          description: Whether this is the primary contact point of its type
+          example: true
+      required:
+      - contactType
+      - primary
+      - value
+    Person:
+      type: object
+      description: Person object to be created
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the person
+          example: 01960011-0000-7000-8000-000000000001
+        firstName:
+          type: string
+          description: First name of the person
+          example: Jane
+          minLength: 1
+        lastName:
+          type: string
+          description: Last name of the person
+          example: Smith
+          minLength: 1
+        primaryEmail:
+          type: string
+          description: Primary email address
+          example: jane.smith@example.com
+        secondaryEmail:
+          type: string
+          description: Secondary email address
+          example: jane.alt@example.com
+        phoneNumbers:
+          type: array
+          description: Phone numbers on record
+          example:
+          - +1-555-123-4567
+          items:
+            type: string
+        username:
+          type: string
+          description: Linked username, if any
+          example: jane.smith
+        contactPoints:
+          type: array
+          description: Typed contact points (email, phone). Populated on batch by-id lookups.
+          items:
+            $ref: '#/components/schemas/ContactPointDto'
+      required:
+      - firstName
+      - lastName
+    ProblemDetail:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        properties:
+          type: object
+    PersonRoleAssignmentRequest:
+      type: object
+      description: Request to assign a role to a person
+      properties:
+        roleCode:
+          type: string
+          description: Stable role code to assign
+          example: TECHNICIAN
+          minLength: 1
+        locationId:
+          type: string
+          format: uuid
+          description: Location identifier the role is scoped to
+          example: 01960011-0000-7000-8000-000000000010
+        startDate:
+          type: string
+          format: date-time
+          description: Date and time the assignment becomes effective
+          example: 2026-01-01 00:00:00
+        endDate:
+          type: string
+          format: date-time
+          description: Date and time the assignment ends
+          example: 2026-12-31 23:59:59
+      required:
+      - roleCode
+    UserRoleDto:
+      type: object
+      description: User role assignment as exposed by the security service
+      properties:
+        userId:
+          type: string
+          description: User identifier
+          example: 01960011-0000-7000-8000-000000000001
+        roleCode:
+          type: string
+          description: Stable role code
+          example: TECHNICIAN
+        locationId:
+          type: string
+          format: uuid
+          description: Location identifier the role is scoped to
+          example: 01960011-0000-7000-8000-000000000010
+        startDate:
+          type: string
+          format: date
+          description: Date the assignment becomes effective
+          example: 2026-01-01
+        endDate:
+          type: string
+          format: date
+          description: Date the assignment ends
+          example: 2026-12-31
+        active:
+          type: boolean
+          description: Whether the assignment is active
+          example: true
+    LinkUserToPersonRequest:
+      type: object
+      description: Request to link a user account to a person record
+      properties:
+        username:
+          type: string
+          description: Username of the security user account
+          example: marcus.webb
+        personId:
+          type: string
+          format: uuid
+          description: Person identifier
+          example: 01960011-0000-7000-8000-000000000002
+        linkType:
+          type: string
+          description: Type of link between user and person
+          example: PRIMARY
+        notes:
+          type: string
+          description: Optional notes describing the link
+          example: Linked during onboarding
+      required:
+      - personId
+      - username
+    UserPersonLinkResponse:
+      type: object
+      description: Response describing a link between a user account and a person record
+      properties:
+        linkId:
+          type: string
+          format: uuid
+          description: Link identifier
+          example: 01960011-0000-7000-8000-000000000001
+        username:
+          type: string
+          description: Username of the security user account
+          example: marcus.webb
+        personId:
+          type: string
+          format: uuid
+          description: Person identifier
+          example: 01960011-0000-7000-8000-000000000003
+        linkType:
+          type: string
+          description: Type of link between user and person
+          example: PRIMARY
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp in UTC
+          example: 2026-01-15 09:30:00+00:00
+        createdBy:
+          type: string
+          description: Identifier of the actor that created the link
+          example: admin.user
+        notes:
+          type: string
+          description: Optional notes describing the link
+          example: Linked during onboarding
+      required:
+      - linkId
+      - personId
+      - username
+    CreateUserLinkRequest:
+      type: object
+      description: Request to link a user account to a person record
+      properties:
+        username:
+          type: string
+          description: Username of the security user account
+          example: marcus.webb
+        personId:
+          type: string
+          format: uuid
+          description: Person identifier
+          example: 01960011-0000-7000-8000-000000000002
+      required:
+      - personId
+      - username
+    ResolvePersonRequest:
+      type: object
+      description: Resolve criteria
+      properties:
+        email:
+          type: string
+          description: Email used for matching
+          example: jane.smith@example.com
+        phone:
+          type: string
+          description: Phone number used for matching
+          example: +1-555-123-4567
+        lastName:
+          type: string
+          description: Last name used for matching
+          example: Smith
+        firstName:
+          type: string
+          description: First name used for matching
+          example: Jane
+        threshold:
+          type: integer
+          format: int32
+          description: Optional score threshold override
+          example: 30
+    ResolvePersonResponse:
+      type: object
+      description: Resolve person result
+      properties:
+        personId:
+          type: string
+          format: uuid
+          description: Canonical person ID
+          example: 01960011-0000-7000-8000-000000000001
+        matchedExisting:
+          type: boolean
+          description: True when an existing person matched threshold
+          example: true
+        score:
+          type: integer
+          format: int32
+          description: Score of selected match (0 when created)
+          example: 85
+        thresholdApplied:
+          type: integer
+          format: int32
+          description: Threshold used for decision
+          example: 30
+        matchedBy:
+          type: array
+          description: Which fields contributed to the winning match
+          example:
+          - email
+          - lastName
+          items:
+            type: string
+        firstName:
+          type: string
+          description: Resolved first name
+          example: Jane
+        lastName:
+          type: string
+          description: Resolved last name
+          example: Smith
+        primaryEmail:
+          type: string
+          description: Resolved primary email
+          example: jane.smith@example.com
+        phoneNumbers:
+          type: array
+          description: Resolved phone numbers
+          example:
+          - +1-555-123-4567
+          items:
+            type: string
+      required:
+      - matchedExisting
+      - personId
+      - score
+      - thresholdApplied
+    RoleDto:
+      type: object
+      description: Role definition as exposed by the security service
+      properties:
+        code:
+          type: string
+          description: Stable role code
+          example: TECHNICIAN
+        name:
+          type: string
+          description: Human-readable role name
+          example: Technician
+        description:
+          type: string
+          description: Description of the role
+          example: Performs service work on vehicles
+        scopeType:
+          type: string
+          description: Scope at which the role applies
+          example: LOCATION
+        active:
+          type: boolean
+          description: Whether the role is active
+          example: true
+    PersonResponse:
+      type: object
+      description: Person summary returned by person read operations
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Person identifier
+          example: 01960011-0000-7000-8000-000000000001
+        firstName:
+          type: string
+          description: First name of the person
+          example: Jane
+        lastName:
+          type: string
+          description: Last name of the person
+          example: Smith
+        primaryEmail:
+          type: string
+          description: Primary email address
+          example: jane.smith@example.com
+        secondaryEmail:
+          type: string
+          description: Secondary email address
+          example: jane.alt@example.com
+        phoneNumbers:
+          type: array
+          description: Phone numbers on record
+          example:
+          - +1-555-123-4567
+          items:
+            type: string
+        username:
+          type: string
+          description: Linked username, if any
+          example: jane.smith
+      required:
+      - id
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

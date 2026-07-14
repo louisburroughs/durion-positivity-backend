@@ -1,16 +1,11 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.client.InvoiceServiceClient;
-import com.positivity.accounting.internal.client.InvoiceServiceException;
 import com.positivity.accounting.internal.config.CreditMemoGLConfig;
-import com.positivity.accounting.internal.dto.ApplyCreditMemoRequest;
-import com.positivity.accounting.internal.dto.ApplyCreditMemoResponse;
 import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.CreditMemoResponse;
-import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.entity.CreditMemo;
+import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
-import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.service.AccountingPeriodService;
 import com.positivity.accounting.service.CreditMemoService;
@@ -58,8 +53,10 @@ import org.springframework.web.server.ResponseStatusException;
 public class CreditMemoServiceImpl implements CreditMemoService {
     private final Clock clock;
 
+    private static final String DEFAULT_CURRENCY = "USD";
+
     private final CreditMemoRepository creditMemoRepository;
-    private final InvoiceServiceClient invoiceServiceClient;
+    private final InvoiceBalanceCalculator invoiceBalanceCalculator;
     private final GLPostingService glPostingService;
     private final AccountingPeriodService periodService;
     private final CreditMemoGLConfig glConfig;
@@ -68,10 +65,10 @@ public class CreditMemoServiceImpl implements CreditMemoService {
      * Create a Credit Memo to reverse invoice charges.
      *
      * Phase 2.1 implementation with full integrations:
-     * - Invoice validation via InvoiceServiceClient
+     * - Invoice validation via the ext_invoice replica (ADR-0044)
      * - GL posting via GLPostingService
      * - Prior period adjustment logic via AccountingPeriodService
-     * - Invoice balance update via InvoiceServiceClient
+     * - Invoice balance derived from accounting's own records (ADR-0044 R6)
      *
      * @param request     Credit Memo creation request
      * @param currentUser User creating the Credit Memo
@@ -88,10 +85,10 @@ public class CreditMemoServiceImpl implements CreditMemoService {
                 request.getCreditAmount(),
                 request.getReasonCode());
 
-        InvoiceDetails invoice = fetchInvoiceDetails(request.getOriginalInvoiceId());
+        ExtInvoice invoice = fetchInvoice(request.getOriginalInvoiceId());
         validateInvoiceStatus(invoice);
 
-        BigDecimal balanceDue = resolveBalanceDue(invoice);
+        BigDecimal balanceDue = invoiceBalanceCalculator.balanceDue(invoice);
         validateBalanceDue(invoice, balanceDue);
 
         CreditAmountCalculation creditCalculation = calculateCreditAmounts(request, balanceDue);
@@ -108,57 +105,44 @@ public class CreditMemoServiceImpl implements CreditMemoService {
                 creditMemo.calculateTotalAmount());
 
         postGlEntries(creditMemo, request, creditCalculation.taxReversed(), priorPeriodInfo);
-        ApplyCreditMemoResponse invoiceResponse = applyCreditMemoToInvoice(creditMemo, invoice, currentUser);
+
+        // The balance is derived from accounting's own records (ADR-0044 R6): the POSTED memo
+        // saved above already reduces it — nothing to tell pos-invoice.
+        BigDecimal balanceAfter = balanceDue.subtract(creditMemo.calculateTotalAmount());
 
         log.info(
                 "Applied Credit Memo {} to invoice {}: balance {} -> {}",
                 creditMemo.getCreditMemoId(),
                 invoice.getInvoiceId(),
-                invoiceResponse.getBalanceBefore(),
-                invoiceResponse.getBalanceAfter());
+                balanceDue,
+                balanceAfter);
 
         // Build and return response
-        return buildResponse(creditMemo, invoiceResponse.getBalanceAfter());
+        return buildResponse(creditMemo, balanceAfter);
     }
 
-    private InvoiceDetails fetchInvoiceDetails(UUID invoiceId) {
-        try {
-            return invoiceServiceClient.getInvoiceDetails(invoiceId);
-        } catch (InvoiceServiceException e) {
-            log.error("Failed to fetch invoice details for {}: {}", invoiceId, e.getMessage());
-            HttpStatus status = HttpStatus.resolve(e.getHttpStatus());
-            if (status == null) {
-                status = HttpStatus.INTERNAL_SERVER_ERROR;
-            }
-            throw new ResponseStatusException(status, "Invoice not found or unavailable: " + e.getMessage());
-        }
+    private ExtInvoice fetchInvoice(UUID invoiceId) {
+        return invoiceBalanceCalculator
+                .findInvoice(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Invoice " + invoiceId + " not found in the invoice replica"));
     }
 
-    private void validateInvoiceStatus(InvoiceDetails invoice) {
-        if (InvoiceStatus.VOIDED.equals(invoice.getStatus()) || InvoiceStatus.CANCELLED.equals(invoice.getStatus())) {
+    private void validateInvoiceStatus(ExtInvoice invoice) {
+        if (!invoiceBalanceCalculator.isArEligible(invoice)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "Credit memos cannot be issued against " + invoice.getStatus() + " invoices");
         }
     }
 
-    private BigDecimal resolveBalanceDue(InvoiceDetails invoice) {
-        if (invoice.getBalanceDue().compareTo(BigDecimal.ZERO) != 0) {
-            return invoice.getBalanceDue();
-        }
-        BigDecimal totalPaid = invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO;
-        return invoice.getTotalAmount().subtract(totalPaid);
-    }
-
-    private void validateBalanceDue(InvoiceDetails invoice, BigDecimal balanceDue) {
+    private void validateBalanceDue(ExtInvoice invoice, BigDecimal balanceDue) {
         if (balanceDue.compareTo(BigDecimal.ZERO) > 0) {
             return;
         }
-        BigDecimal totalPaid = invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO;
         throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
-                "Invoice has no remaining balance to credit. Balance due: " + balanceDue
-                        + ", Total amount: " + invoice.getTotalAmount()
-                        + ", Total paid: " + totalPaid);
+                "Invoice has no remaining balance to credit. Balance due: " + balanceDue + ", Total amount: "
+                        + invoice.getTotal());
     }
 
     private CreditAmountCalculation calculateCreditAmounts(CreateCreditMemoRequest request, BigDecimal balanceDue) {
@@ -182,15 +166,17 @@ public class CreditMemoServiceImpl implements CreditMemoService {
                         + " exceeds invoice outstanding balance " + balanceDue);
     }
 
-    private PriorPeriodInfo determinePriorPeriodInfo(InvoiceDetails invoice) {
-        if (invoice.getInvoiceDate() == null) {
+    private PriorPeriodInfo determinePriorPeriodInfo(ExtInvoice invoice) {
+        Instant invoiceDate =
+                invoice.getFinalizedAt() != null ? invoice.getFinalizedAt() : invoice.getInvoiceCreatedAt();
+        if (invoiceDate == null) {
             return new PriorPeriodInfo(false, null);
         }
-        boolean isPriorPeriod = periodService.isPriorPeriod(invoice.getInvoiceDate());
+        boolean isPriorPeriod = periodService.isPriorPeriod(invoiceDate);
         if (!isPriorPeriod) {
             return new PriorPeriodInfo(false, null);
         }
-        String originalPeriodId = periodService.getPeriodIdForDate(invoice.getInvoiceDate());
+        String originalPeriodId = periodService.getPeriodIdForDate(invoiceDate);
         log.info(
                 "Credit Memo is a prior period adjustment: invoice period {}, current period {}",
                 originalPeriodId,
@@ -201,12 +187,12 @@ public class CreditMemoServiceImpl implements CreditMemoService {
     private CreditMemo buildCreditMemo(
             CreateCreditMemoRequest request,
             String currentUser,
-            InvoiceDetails invoice,
+            ExtInvoice invoice,
             BigDecimal taxReversed,
             PriorPeriodInfo priorPeriodInfo) {
         CreditMemo creditMemo = new CreditMemo();
         creditMemo.setOriginalInvoiceId(request.getOriginalInvoiceId());
-        creditMemo.setCustomerId(invoice.getCustomerId());
+        creditMemo.setCustomerId(resolveCustomerId(invoice));
         creditMemo.setCreditAmount(request.getCreditAmount());
         creditMemo.setTaxAmountReversed(taxReversed);
         creditMemo.setReasonCode(request.getReasonCode());
@@ -215,9 +201,30 @@ public class CreditMemoServiceImpl implements CreditMemoService {
         creditMemo.setCreatedByUserId(currentUser);
         creditMemo.setPriorPeriodAdjustment(priorPeriodInfo.priorPeriod());
         creditMemo.setOriginalPeriodId(priorPeriodInfo.originalPeriodId());
-        creditMemo.setCurrency(invoice.getCurrency());
+        // pos-invoice carries no currency (single-currency platform); AR records default USD.
+        creditMemo.setCurrency(DEFAULT_CURRENCY);
         creditMemo.setPostedTimestamp(Instant.now(clock));
         return creditMemo;
+    }
+
+    /**
+     * The replica's partyId is a free-form string (pos-invoice stores it that way); AR records
+     * require a customer UUID. Reject invoices whose party reference is missing or malformed.
+     */
+    private UUID resolveCustomerId(ExtInvoice invoice) {
+        String partyId = invoice.getPartyId();
+        if (partyId == null || partyId.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Invoice " + invoice.getInvoiceId() + " has no billed party; cannot issue a credit memo");
+        }
+        try {
+            return UUID.fromString(partyId.trim());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Invoice " + invoice.getInvoiceId() + " has a non-UUID party reference: " + partyId);
+        }
     }
 
     private void postGlEntries(
@@ -244,29 +251,6 @@ public class CreditMemoServiceImpl implements CreditMemoService {
                     e);
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR, "Failed to post GL entries: " + e.getMessage());
-        }
-    }
-
-    private ApplyCreditMemoResponse applyCreditMemoToInvoice(
-            CreditMemo creditMemo, InvoiceDetails invoice, String currentUser) {
-        try {
-            return invoiceServiceClient.applyCreditMemo(
-                    invoice.getInvoiceId(),
-                    ApplyCreditMemoRequest.builder()
-                            .creditMemoId(creditMemo.getCreditMemoId())
-                            .totalAmount(creditMemo.calculateTotalAmount())
-                            .appliedBy(currentUser)
-                            .currency(creditMemo.getCurrency())
-                            .build());
-        } catch (InvoiceServiceException e) {
-            log.error(
-                    "Failed to apply Credit Memo {} to invoice {}: {}",
-                    creditMemo.getCreditMemoId(),
-                    invoice.getInvoiceId(),
-                    e.getMessage());
-            throw new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Credit Memo created but failed to update invoice: " + e.getMessage());
         }
     }
 
@@ -319,15 +303,17 @@ public class CreditMemoServiceImpl implements CreditMemoService {
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "Credit Memo not found: " + creditMemoId));
 
-        // Fetch current invoice balance from InvoiceServiceClient
-        BigDecimal invoiceBalanceAfter = BigDecimal.ZERO;
-        try {
-            InvoiceDetails invoice = invoiceServiceClient.getInvoiceDetails(creditMemo.getOriginalInvoiceId());
-            invoiceBalanceAfter = invoice.getBalanceDue();
-        } catch (InvoiceServiceException e) {
-            log.warn("Failed to fetch invoice balance for Credit Memo {}: {}", creditMemoId, e.getMessage());
-            // Balance unavailable but don't fail the request
-        }
+        // Balance derived from the ext_invoice replica + accounting's own records (ADR-0044).
+        BigDecimal invoiceBalanceAfter = invoiceBalanceCalculator
+                .findInvoice(creditMemo.getOriginalInvoiceId())
+                .map(invoiceBalanceCalculator::balanceDue)
+                .orElseGet(() -> {
+                    log.warn(
+                            "Invoice {} not in replica while resolving balance for Credit Memo {}",
+                            creditMemo.getOriginalInvoiceId(),
+                            creditMemoId);
+                    return BigDecimal.ZERO;
+                });
 
         return buildResponse(creditMemo, invoiceBalanceAfter);
     }

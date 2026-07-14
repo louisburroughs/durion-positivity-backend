@@ -1,6 +1,9 @@
 spring:
   application:
     name: accounting
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   datasource:
     url: ${SPRING_DATASOURCE_URL:}
     username: ${SPRING_DATASOURCE_USERNAME:}
@@ -47,10 +50,6 @@ eureka:
 
 # Cross-service configuration
 pos:
-  invoice:
-    service-id: invoice
-  customer:
-    service-id: customer
   workorder:
     service-id: workorder
   # RestClient timeouts configured via pos.restclient.connect.timeout and pos.restclient.read.timeout
@@ -66,6 +65,9 @@ pos:
     kafka:
       enabled: ${POS_ACCOUNTING_KAFKA_ENABLED:false}
       payments-topic: ${POS_ACCOUNTING_KAFKA_PAYMENTS_TOPIC:payment.cleared.v1}
+      customer-events-topic: ${POS_ACCOUNTING_KAFKA_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
+      invoice-events-topic: ${POS_ACCOUNTING_KAFKA_INVOICE_EVENTS_TOPIC:invoice.events.v1}
+      workorder-commands-topic: ${POS_ACCOUNTING_KAFKA_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
       consumer-group: ${POS_ACCOUNTING_KAFKA_CONSUMER_GROUP:${spring.application.name}-payments}
 
 # Payment Gateway Configuration
@@ -92,7 +94,6 @@ logging:
                 ConfigClusterResolver: WARN
     org:
       springframework:
-        security: DEBUG
         web: INFO
       hibernate:
         SQL: INFO

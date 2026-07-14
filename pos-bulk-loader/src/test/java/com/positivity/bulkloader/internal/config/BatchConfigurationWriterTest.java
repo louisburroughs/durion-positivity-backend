@@ -114,6 +114,8 @@ class BatchConfigurationWriterTest {
                 vehicleLoaderStrategy,
                 vehicleFitmentLoaderStrategy,
                 bulkLoadAuthorizationContext,
+                null,
+                null,
                 null);
     }
 

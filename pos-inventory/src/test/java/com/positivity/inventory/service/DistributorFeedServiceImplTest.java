@@ -46,7 +46,11 @@ class DistributorFeedServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new DistributorFeedServiceImpl(normalizedRepository, exceptionRepository, objectMapper);
+        service = new DistributorFeedServiceImpl(
+                normalizedRepository,
+                exceptionRepository,
+                objectMapper,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class));
     }
 
     @Test

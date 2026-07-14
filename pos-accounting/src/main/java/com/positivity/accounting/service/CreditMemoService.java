@@ -14,10 +14,10 @@ public interface CreditMemoService {
      * Create a Credit Memo to reverse invoice charges.
      *
      * Phase 2.1 implementation with full integrations:
-     * - Invoice validation via InvoiceServiceClient
+     * - Invoice validation via the ext_invoice replica (ADR-0044)
      * - GL posting via GLPostingService
      * - Prior period adjustment logic via AccountingPeriodService
-     * - Invoice balance update via InvoiceServiceClient
+     * - Invoice balance derived from accounting's own records (ADR-0044 R6)
      *
      * @param request     Credit Memo creation request
      * @param currentUser User creating the Credit Memo

@@ -1,15 +1,14 @@
 package com.positivity.people.internal.service;
 
-import com.positivity.people.internal.client.LocationReferenceClient;
-import com.positivity.people.internal.client.WorkexecJobTimeClient;
-import com.positivity.people.internal.client.dto.WorkexecJobTimeTotal;
 import com.positivity.people.internal.dto.ApprovedTimeExportResponse;
 import com.positivity.people.internal.dto.AttendanceDiscrepancyReportResponse;
 import com.positivity.people.internal.dto.AttendanceReportKey;
-import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.entity.ExtJobTimeReplica;
+import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtJobTimeReplicaRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.service.PeopleReportsService;
 import java.math.BigDecimal;
@@ -19,6 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.zone.ZoneRulesException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -26,9 +26,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
@@ -44,26 +46,26 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
 
     private final TimeEntryRepository timeEntryRepository;
 
-    private final PersonRepository personRepository;
+    private final ExtPersonReplicaRepository extPersonReplicaRepository;
 
-    private final WorkexecJobTimeClient workexecJobTimeClient;
+    private final ExtJobTimeReplicaRepository extJobTimeReplicaRepository;
 
-    private final LocationReferenceClient locationReferenceClient;
+    private final LocationReferenceService locationReferenceService;
 
     private final TimekeepingThresholdCache timekeepingThresholdCache;
 
     public PeopleReportsServiceImpl(
             TimeEntryRepository timeEntryRepository,
-            PersonRepository personRepository,
-            WorkexecJobTimeClient workexecJobTimeClient,
-            LocationReferenceClient locationReferenceClient,
+            ExtPersonReplicaRepository extPersonReplicaRepository,
+            ExtJobTimeReplicaRepository extJobTimeReplicaRepository,
+            LocationReferenceService locationReferenceService,
             TimekeepingThresholdCache timekeepingThresholdCache,
             Clock clock) {
         this.clock = clock;
         this.timeEntryRepository = timeEntryRepository;
-        this.personRepository = personRepository;
-        this.workexecJobTimeClient = workexecJobTimeClient;
-        this.locationReferenceClient = locationReferenceClient;
+        this.extPersonReplicaRepository = extPersonReplicaRepository;
+        this.extJobTimeReplicaRepository = extJobTimeReplicaRepository;
+        this.locationReferenceService = locationReferenceService;
         this.timekeepingThresholdCache = timekeepingThresholdCache;
     }
 
@@ -92,7 +94,7 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         }
 
         for (UUID locationId : locationIds) {
-            if (!locationReferenceClient.isLocationActive(locationId)) {
+            if (!locationReferenceService.isLocationActive(locationId)) {
                 throw new IllegalArgumentException("Unknown locationId: " + locationId);
             }
         }
@@ -109,6 +111,10 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         }
 
         Map<UUID, String> locationNamesById = loadLocationNames(locationIds);
+        Map<UUID, ExtPersonReplica> peopleById = loadPeople(entries.stream()
+                .map(TimeEntry::getPersonId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
 
         return entries.stream()
                 .filter(entry -> entry.getApprovedAt() != null
@@ -123,7 +129,7 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
                             .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
 
                     String employeeId = getPersonIdString(entry);
-                    String employeeName = resolveDisplayName(entry.getPerson(), employeeId);
+                    String employeeName = resolveDisplayName(peopleById.get(entry.getPersonId()), employeeId);
                     String locationName = locationNamesById.getOrDefault(
                             entry.getLocationId(), entry.getLocationId().toString());
 
@@ -182,9 +188,8 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         Map<AttendanceReportKey, Long> attendanceMinutesByKey =
                 aggregateAttendanceMinutes(attendanceEntries, windowStartInclusive, windowEndExclusive, zoneId);
 
-        List<WorkexecJobTimeTotal> jobTotals =
-                workexecJobTimeClient.getJobTimeTotals(startDate, endDate, timezone, locationId, technicianIds);
-        Map<AttendanceReportKey, Long> jobMinutesByKey = aggregateJobMinutes(jobTotals);
+        Map<AttendanceReportKey, Long> jobMinutesByKey =
+                aggregateJobMinutes(startDate, endDate, zoneId, locationId, technicianIds);
 
         Set<AttendanceReportKey> allKeys = new HashSet<>();
         allKeys.addAll(attendanceMinutesByKey.keySet());
@@ -293,10 +298,7 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
     }
 
     private boolean hasAttendanceDimensions(TimeEntry entry) {
-        return entry.getAttendanceStartAt() != null
-                && entry.getPerson() != null
-                && entry.getPerson().getId() != null
-                && entry.getLocationId() != null;
+        return entry.getAttendanceStartAt() != null && entry.getPersonId() != null && entry.getLocationId() != null;
     }
 
     private Instant resolveAttendanceEnd(TimeEntry entry, Instant now) {
@@ -346,12 +348,19 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
     }
 
     private String getPersonIdString(TimeEntry entry) {
-        return entry.getPerson() == null || entry.getPerson().getId() == null
-                ? ""
-                : entry.getPerson().getId().toString();
+        return entry.getPersonId() == null ? "" : entry.getPersonId().toString();
     }
 
-    private String resolveDisplayName(Person person, String fallbackId) {
+    private Map<UUID, ExtPersonReplica> loadPeople(java.util.Set<UUID> personIds) {
+        if (personIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, ExtPersonReplica> byId = new HashMap<>();
+        extPersonReplicaRepository.findAllById(personIds).forEach(p -> byId.put(p.getPersonId(), p));
+        return byId;
+    }
+
+    private String resolveDisplayName(ExtPersonReplica person, String fallbackId) {
         if (person == null) {
             return fallbackId;
         }
@@ -366,19 +375,29 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         return displayName.isBlank() ? fallbackId : displayName;
     }
 
-    private Map<AttendanceReportKey, Long> aggregateJobMinutes(List<WorkexecJobTimeTotal> rows) {
+    /**
+     * Job minutes per technician/location/local-date from the {@code ext_workorder_job_time}
+     * replica (ADR-0044 §6, #875) — same semantics as the retired workexec job-time-totals
+     * endpoint: rows are fetched over a padded UTC window, bucketed into local dates by the
+     * requested timezone from {@code endAtUtc}, and filtered on location/technicians.
+     */
+    private Map<AttendanceReportKey, Long> aggregateJobMinutes(
+            LocalDate startDate, LocalDate endDate, ZoneId zoneId, UUID locationId, List<UUID> technicianIds) {
+        // Padding mirrors the old owner-side query: a local date can start/end up to a day away
+        // from its UTC calendar date depending on the zone offset.
+        Instant queryStart = startDate.minusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant queryEnd = endDate.plusDays(2).atStartOfDay(ZoneOffset.UTC).toInstant();
+
         Map<AttendanceReportKey, Long> minutesByKey = new HashMap<>();
-        for (WorkexecJobTimeTotal row : rows) {
-            if (row.getTechnicianId() == null
-                    || row.getLocationId() == null
-                    || row.getLocalDate() == null
-                    || row.getTotalJobMinutes() == null) {
+        for (ExtJobTimeReplica row : extJobTimeReplicaRepository.findForReportWindow(
+                queryStart, queryEnd, locationId, technicianIds, technicianIds.isEmpty())) {
+            LocalDate localDate = row.getEndAtUtc().atZone(zoneId).toLocalDate();
+            if (localDate.isBefore(startDate) || localDate.isAfter(endDate)) {
                 continue;
             }
             AttendanceReportKey key = new AttendanceReportKey(
-                    row.getTechnicianId().toString(), row.getLocationId().toString(), row.getLocalDate());
-            long currentMinutes = minutesByKey.getOrDefault(key, 0L);
-            minutesByKey.put(key, currentMinutes + row.getTotalJobMinutes().longValue());
+                    row.getTechnicianId().toString(), row.getLocationId().toString(), localDate);
+            minutesByKey.merge(key, (long) row.getMinutes(), Long::sum);
         }
         return minutesByKey;
     }
@@ -406,13 +425,13 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         }
 
         Map<String, String> namesById = new HashMap<>();
-        for (Person person : personRepository.findAllById(technicianIds)) {
+        for (ExtPersonReplica person : extPersonReplicaRepository.findAllById(technicianIds)) {
             String fullName = ((person.getFirstName() == null ? "" : person.getFirstName()) + " "
                             + (person.getLastName() == null ? "" : person.getLastName()))
                     .trim();
             namesById.put(
-                    person.getId().toString(),
-                    fullName.isBlank() ? person.getId().toString() : fullName);
+                    person.getPersonId().toString(),
+                    fullName.isBlank() ? person.getPersonId().toString() : fullName);
         }
         return namesById;
     }
@@ -427,7 +446,7 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
     private Map<UUID, String> loadLocationNames(List<UUID> locationIds) {
         Map<UUID, String> namesById = new HashMap<>();
         for (UUID locationId : locationIds) {
-            namesById.put(locationId, locationReferenceClient.getLocationName(locationId));
+            namesById.put(locationId, locationReferenceService.getLocationName(locationId));
         }
         return namesById;
     }

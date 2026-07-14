@@ -8,14 +8,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.shopmanager.BaseContractIntegrationTest;
 import com.positivity.shopmanager.PosShopManagerApplication;
-import com.positivity.shopmanager.internal.client.CrmCustomerClient;
-import com.positivity.shopmanager.internal.client.CrmVehicleClient;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.AppointmentAudit;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
+import com.positivity.shopmanager.internal.service.CrmSnapshotService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -101,10 +100,7 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
     // Mocked to prevent context-startup failures; not invoked by reschedule/cancel
     // stubs
     @MockitoBean
-    private CrmCustomerClient crmCustomerClient;
-
-    @MockitoBean
-    private CrmVehicleClient crmVehicleClient;
+    private CrmSnapshotService crmSnapshotService;
 
     /**
      * Wipes appointment and audit tables before each test to ensure full isolation.

@@ -1,6 +1,6 @@
 package com.positivity.people.internal.service;
 
-import com.positivity.people.internal.client.LocationReferenceClient;
+import com.positivity.people.internal.config.PeopleEventPublisher;
 import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
 import com.positivity.people.internal.dto.UpdateStaffingAssignmentRequest;
@@ -10,7 +10,7 @@ import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.service.StaffingAssignmentService;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -32,11 +32,13 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
     private final EmployeeLocationAssignmentRepository repository;
 
-    private final PersonRepository personRepository;
+    private final ExtPersonReplicaRepository extPersonReplicaRepository;
+
+    private final PeopleEventPublisher peopleEventPublisher;
 
     private final EmployeeRepository employeeRepository;
 
-    private final LocationReferenceClient locationReferenceClient;
+    private final LocationReferenceService locationReferenceService;
 
     private final Clock clock;
 
@@ -78,7 +80,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
                         existing.setEffectiveTo(demotionDate);
                         existing.setStatus(AssignmentStatus.ENDED);
-                        repository.save(existing);
+                        peopleEventPublisher.publishStaffingAssignmentUpdated(repository.save(existing));
                     });
         } else if (repository
                 .findFirstByEmployee_PersonIdAndIsPrimaryTrueAndStatus(request.getPersonId(), AssignmentStatus.ACTIVE)
@@ -104,6 +106,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                 .build();
 
         EmployeeLocationAssignment saved = repository.save(assignment);
+        peopleEventPublisher.publishStaffingAssignmentUpdated(saved);
         log.info(
                 "Created staffing assignment {} for person {} at location {}",
                 saved.getId(),
@@ -177,7 +180,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
                         existing.setEffectiveTo(demotionDate);
                         existing.setStatus(AssignmentStatus.ENDED);
-                        repository.save(existing);
+                        peopleEventPublisher.publishStaffingAssignmentUpdated(repository.save(existing));
                     });
         }
 
@@ -189,6 +192,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         assignment.setEffectiveTo(request.getEffectiveTo());
 
         EmployeeLocationAssignment saved = repository.save(assignment);
+        peopleEventPublisher.publishStaffingAssignmentUpdated(saved);
         log.info("Updated staffing assignment {} by actor {}", saved.getId(), actor);
         return Optional.of(toResponse(saved));
     }
@@ -204,7 +208,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         if (assignment.getEffectiveTo() == null) {
             assignment.setEffectiveTo(LocalDate.now(clock));
         }
-        repository.save(assignment);
+        peopleEventPublisher.publishStaffingAssignmentUpdated(repository.save(assignment));
     }
 
     private StaffingAssignmentResponse toResponse(EmployeeLocationAssignment assignment) {
@@ -238,7 +242,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
     }
 
     private void validatePersonAndLocation(@NonNull UUID personId, @NonNull UUID locationId) {
-        personRepository
+        extPersonReplicaRepository
                 .findById(personId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found: " + personId));
 
@@ -250,7 +254,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Person is not active: " + personId);
         }
 
-        if (!locationReferenceClient.isLocationActive(locationId)) {
+        if (!locationReferenceService.isLocationActive(locationId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found or inactive: " + locationId);
         }
     }

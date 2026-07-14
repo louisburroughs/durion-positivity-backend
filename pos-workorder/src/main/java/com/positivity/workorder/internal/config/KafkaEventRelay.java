@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.config;
 
+import com.positivity.domainevents.workorder.JobTimeRecordedV1;
 import com.positivity.workorder.internal.domain.TimeEntryApprovedEvent;
 import com.positivity.workorder.internal.domain.TimeEntryRejectedEvent;
 import com.positivity.workorder.internal.domain.TravelSegmentStartedEvent;
@@ -16,7 +17,11 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * Relays committed domain events to Kafka.
+ * Relays domain events into the transactional outbox (ADR-0044 §4).
+ *
+ * <p>Listeners run BEFORE_COMMIT so the outbox row joins the business transaction: the event is
+ * recorded if and only if the state change commits. {@code OutboxPublisher} performs the actual
+ * Kafka send.
  */
 @Slf4j
 @Component
@@ -24,48 +29,53 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
 public class KafkaEventRelay {
 
-    private final KafkaProducer producer;
+    private final OutboxEventWriter producer;
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onWorkSessionStarted(WorkSessionStartedEvent event) {
         producer.publish(
                 "workorder.work_session.started.v1", event.workSessionId().toString(), event);
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onWorkSessionStopped(WorkSessionStoppedEvent event) {
         producer.publish(
                 "workorder.work_session.stopped.v1", event.workSessionId().toString(), event);
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onTravelSegmentStarted(TravelSegmentStartedEvent event) {
         producer.publish(
                 "workorder.travel_segment.started.v1", event.travelSegmentId().toString(), event);
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onTravelSegmentStopped(TravelSegmentStoppedEvent event) {
         producer.publish(
                 "workorder.travel_segment.stopped.v1", event.travelSegmentId().toString(), event);
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    public void onJobTimeRecorded(JobTimeRecordedV1 event) {
+        producer.publish(JobTimeRecordedV1.EVENT_TYPE, event.laborEntryId().toString(), event);
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onTimeEntryApproved(TimeEntryApprovedEvent event) {
         producer.publish("workorder.time_entry.approved.v1", event.timeEntryId().toString(), event);
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onTimeEntryRejected(TimeEntryRejectedEvent event) {
         producer.publish("workorder.time_entry.rejected.v1", event.timeEntryId().toString(), event);
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onEstimateCreated(EstimateCreatedEvent event) {
         producer.publish("workorder.estimate.created.v1", event.getEstimateId().toString(), event);
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onEstimateRevised(EstimateRevisedEvent event) {
         if (event.getWorkorderId() == null) {
             log.debug(

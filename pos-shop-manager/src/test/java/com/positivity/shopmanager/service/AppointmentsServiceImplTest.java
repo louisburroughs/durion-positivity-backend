@@ -7,16 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyIterable;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.shopmanager.internal.client.CrmCustomerClient;
-import com.positivity.shopmanager.internal.client.CrmVehicleClient;
-import com.positivity.shopmanager.internal.client.HrAvailabilityClient;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
@@ -42,6 +38,8 @@ import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestR
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
+import com.positivity.shopmanager.internal.service.CrmSnapshotService;
+import com.positivity.shopmanager.internal.service.StaffingScheduleService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -76,13 +74,10 @@ class AppointmentsServiceImplTest {
     private AppointmentLoadService appointmentLoadService;
 
     @Mock
-    private CrmCustomerClient crmCustomerClient;
+    private CrmSnapshotService crmSnapshotService;
 
     @Mock
-    private CrmVehicleClient crmVehicleClient;
-
-    @Mock
-    private HrAvailabilityClient hrAvailabilityClient;
+    private StaffingScheduleService staffingScheduleService;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -104,9 +99,8 @@ class AppointmentsServiceImplTest {
                 appointmentServiceRequestRepository,
                 new ObjectMapper(),
                 appointmentLoadService,
-                crmCustomerClient,
-                crmVehicleClient,
-                hrAvailabilityClient,
+                crmSnapshotService,
+                staffingScheduleService,
                 eventPublisher,
                 shopRepository,
                 sourceEligibilityService,
@@ -337,7 +331,7 @@ class AppointmentsServiceImplTest {
     }
 
     @Test
-    void getScheduleView_setsUnavailableOverlay_whenHrOverlayFails() {
+    void getScheduleView_setsUnavailableOverlay_whenReplicaHasNoStaffingData() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ScheduleViewRequest request = scheduleRequest(locationId, LocalDate.of(2026, 3, 10), true);
 
@@ -346,8 +340,9 @@ class AppointmentsServiceImplTest {
                         any(UUID.class), any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of());
         when(shopRepository.existsById(locationId)).thenReturn(true);
-        when(hrAvailabilityClient.getAvailabilityOverlay(anyString(), any(LocalDate.class)))
-                .thenThrow(new RuntimeException("HR unavailable"));
+        // Overlay data is local since #877: "unavailable" now means the staffing replica has
+        // no assignment rows for the location.
+        when(staffingScheduleService.hasAssignmentData(any(UUID.class))).thenReturn(false);
 
         ScheduleViewResponse response =
                 appointmentsService.getScheduleView(request, UUID.fromString("00000000-0000-0000-0000-000000000011"));
@@ -376,9 +371,9 @@ class AppointmentsServiceImplTest {
         request.setEndAt(Instant.parse("2026-03-10T11:00:00Z"));
         request.setServiceRequestIds(List.of(serviceRequestId));
 
-        when(crmCustomerClient.getCustomerById(customerId))
+        when(crmSnapshotService.getCustomerById(customerId))
                 .thenReturn(java.util.Map.of("firstName", "Jane", "lastName", "Doe"));
-        when(crmVehicleClient.getVehicleById(vehicleId))
+        when(crmSnapshotService.getVehicleById(vehicleId))
                 .thenReturn(java.util.Map.of("ownerCustomerId", customerId.toString()));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(invocation -> {
             Appointment saved = invocation.getArgument(0);
@@ -425,9 +420,9 @@ class AppointmentsServiceImplTest {
         request.setEndAt(Instant.parse("2026-03-10T11:00:00Z"));
         request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000111")));
 
-        when(crmCustomerClient.getCustomerById(request.getCrmCustomerId()))
+        when(crmSnapshotService.getCustomerById(request.getCrmCustomerId()))
                 .thenReturn(java.util.Map.of("firstName", "Jane"));
-        when(crmVehicleClient.getVehicleById(request.getCrmVehicleId()))
+        when(crmSnapshotService.getVehicleById(request.getCrmVehicleId()))
                 .thenReturn(java.util.Map.of(
                         "ownerCustomerId",
                         UUID.fromString("00000000-0000-0000-0000-000000000002").toString()));

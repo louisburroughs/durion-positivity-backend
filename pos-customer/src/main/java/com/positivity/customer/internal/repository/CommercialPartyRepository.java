@@ -16,4 +16,12 @@ public interface CommercialPartyRepository extends JpaRepository<CommercialParty
     @Query(
             "SELECT p FROM CommercialParty p WHERE LOWER(p.legalName) LIKE LOWER(CONCAT('%', :legalName, '%')) ORDER BY p.legalName")
     List<CommercialParty> findByLegalNameContaining(@Param("legalName") String legalName);
+
+    /**
+     * Commercial parties currently associated with the given vehicle VIN. Used by the
+     * {@code vehicle.events.v1} consumer to keep the customer-owned vehicle-party association
+     * aligned with the owner's accountId fact (ADR-0044 §6, ADR-0012).
+     */
+    @Query("SELECT p FROM CommercialParty p WHERE :vin MEMBER OF p.vehicleVins")
+    List<CommercialParty> findByVehicleVin(@Param("vin") String vin);
 }

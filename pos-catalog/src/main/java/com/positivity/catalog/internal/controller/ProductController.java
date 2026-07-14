@@ -187,7 +187,10 @@ public class ProductController {
     @Operation(
             summary = "Search catalog products",
             description =
-                    "Cursor-based product search with optional free-text query and exact filters for brand, category, and SKU.")
+                    "Cursor-based product search with optional free-text query and exact filters for brand, category, and SKU. "
+                            + "Pass detailed=true to enrich each row inline with lifecycle state + effective instant and the "
+                            + "product's active MSRP (amount, currency, effective window), resolved server-side in a single "
+                            + "request. Products without an active MSRP return null price fields.")
     @ApiResponse(
             responseCode = "200",
             description = "Search results",
@@ -210,9 +213,13 @@ public class ProductController {
                     String sku,
             @Parameter(description = "Pagination cursor from previous response") @RequestParam(required = false)
                     String cursor,
-            @Parameter(description = "Maximum number of results (1–100)") @RequestParam(defaultValue = "20")
-                    int limit) {
-        return ResponseEntity.ok(productSearchService.searchProducts(q, brand, category, sku, cursor, limit));
+            @Parameter(description = "Maximum number of results (1–100)") @RequestParam(defaultValue = "20") int limit,
+            @Parameter(
+                            description =
+                                    "When true, enrich each row with lifecycle state, effective instant, and active MSRP")
+                    @RequestParam(defaultValue = "false")
+                    boolean detailed) {
+        return ResponseEntity.ok(productSearchService.searchProducts(q, brand, category, sku, cursor, limit, detailed));
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")

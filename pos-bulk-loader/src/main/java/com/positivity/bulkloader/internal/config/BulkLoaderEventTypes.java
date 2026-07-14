@@ -21,6 +21,13 @@ public final class BulkLoaderEventTypes {
                         .build(),
                 EventTypeRegistration.approval("BULK_LOADER_MAPPING_APPROVE", "Column mappings approved by operator")
                         .build(),
+                EventTypeRegistration.write("BULK_LOADER_TUS_UPLOAD_CREATE", "Create a TUS resumable upload")
+                        .build(),
+                EventTypeRegistration.write(
+                                "BULK_LOADER_TUS_UPLOAD_CHUNK_APPEND", "Append a chunk to a TUS resumable upload")
+                        .build(),
+                EventTypeRegistration.write("BULK_LOADER_TUS_UPLOAD_CANCEL", "Cancel a TUS resumable upload")
+                        .build(),
                 EventTypeRegistration.write("BULK_LOADER_TUS_UPLOAD_COMPLETE", "TUS resumable upload completed")
                         .build(),
                 EventTypeRegistration.write("BULK_LOADER_JOB_RETRY", "Retry a failed bulk load job")

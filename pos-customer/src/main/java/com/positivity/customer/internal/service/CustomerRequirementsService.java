@@ -24,10 +24,16 @@ public class CustomerRequirementsService {
                 .findPartyById(customerId)
                 .<AbstractParty>map(party -> party)
                 .or(() -> personPartyService.findPartyById(customerId).map(party -> party))
-                .map(this::requirementsMet);
+                .map(CustomerRequirementsService::requirementsMet);
     }
 
-    private boolean requirementsMet(@NonNull AbstractParty party) {
+    /**
+     * Owner-computed verdict for an already-loaded party — also the source of the
+     * {@code requirementsMet} field on the {@code customer.party.updated} fact (#889). Static
+     * (pure function of the entity) so {@code CustomerFactPublisher} can use it without a bean
+     * dependency back into the party services.
+     */
+    public static boolean requirementsMet(@NonNull AbstractParty party) {
         if (party.getStatus() != AccountStatus.ACTIVE) {
             return false;
         }

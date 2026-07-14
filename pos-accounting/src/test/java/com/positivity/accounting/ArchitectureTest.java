@@ -163,6 +163,13 @@ public class ArchitectureTest {
             .resideInAnyPackage("..internal.entity..", "..internal.model..")
             .and()
             .areAnnotatedWith("jakarta.persistence.Entity")
+            // Replica (Ext*) and idempotency-guard entities carry externally assigned identifiers
+            // (owner-domain aggregate ids / envelope eventIds per ADR-0044 R3), so generating a
+            // local UUID v7 for them would be incorrect.
+            .and()
+            .haveSimpleNameNotStartingWith("Ext")
+            .and()
+            .doNotHaveSimpleName("ProcessedEvent")
             .should()
             .dependOnClassesThat()
             .haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Id")

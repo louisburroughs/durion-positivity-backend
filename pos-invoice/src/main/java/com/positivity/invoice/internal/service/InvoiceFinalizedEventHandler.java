@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.config.InvoiceEventPublisher;
 import com.positivity.invoice.internal.dto.InvoiceFinalizedEvent;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
@@ -12,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * CAP-248 AC5: GL posting handler — idempotent by invoiceId, retry logic TBD.
@@ -28,9 +30,12 @@ public class InvoiceFinalizedEventHandler {
     private static final Logger log = LoggerFactory.getLogger(InvoiceFinalizedEventHandler.class);
 
     private final InvoiceRepository invoiceRepository;
+    private final InvoiceEventPublisher invoiceEventPublisher;
 
-    public InvoiceFinalizedEventHandler(@NonNull InvoiceRepository invoiceRepository) {
+    public InvoiceFinalizedEventHandler(
+            @NonNull InvoiceRepository invoiceRepository, @NonNull InvoiceEventPublisher invoiceEventPublisher) {
         this.invoiceRepository = invoiceRepository;
+        this.invoiceEventPublisher = invoiceEventPublisher;
     }
 
     /**
@@ -46,6 +51,7 @@ public class InvoiceFinalizedEventHandler {
      */
     @Async
     @EventListener
+    @Transactional
     public void onInvoiceFinalized(@NonNull InvoiceFinalizedEvent event) {
         UUID invoiceId = event.invoiceId();
 
@@ -80,6 +86,7 @@ public class InvoiceFinalizedEventHandler {
             invoice.setStatus(InvoiceStatus.POSTED);
             invoice.setGlEntryId(glEntryId);
             invoiceRepository.save(invoice);
+            invoiceEventPublisher.publishInvoiceUpdated(invoice);
             if (log.isInfoEnabled()) {
                 log.info(
                         "GL posting succeeded: invoiceId(mask)={}, glEntryId(mask)={}, amount={}",
@@ -93,6 +100,7 @@ public class InvoiceFinalizedEventHandler {
 
             invoice.setStatus(InvoiceStatus.ERROR);
             invoiceRepository.save(invoice);
+            invoiceEventPublisher.publishInvoiceUpdated(invoice);
         }
     }
 

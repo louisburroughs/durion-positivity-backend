@@ -12,6 +12,14 @@ spring:
       ddl-auto: validate
   flyway:
     out-of-order: ${SPRING_FLYWAY_OUT_OF_ORDER:false}
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: pos-location-commands
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 server:
   port: 0
@@ -66,3 +74,20 @@ pos:
     service-id: ${POS_PEOPLE_SERVICE_ID:people}
   inventory:
     service-id: ${POS_INVENTORY_SERVICE_ID:inventory}
+  location:
+    # Fact producer + reconciliation + inbound replay commands (ADR-0044 §6, #890)
+    kafka:
+      events-topic: ${POS_LOCATION_EVENTS_TOPIC:location.events.v1}
+      commands-topic: ${POS_LOCATION_COMMANDS_TOPIC:location.commands.v1}
+      commands-consumer-group: ${POS_LOCATION_COMMANDS_CONSUMER_GROUP:pos-location-commands}
+      enabled: ${POS_LOCATION_KAFKA_ENABLED:false}
+      # Inventory on-hand replica feed + reconciliation (ADR-0044 §6, #899)
+      inventory-events-topic: ${POS_LOCATION_INVENTORY_EVENTS_TOPIC:inventory.events.v1}
+      inventory-events-consumer-group: ${POS_LOCATION_INVENTORY_EVENTS_CONSUMER_GROUP:pos-location-inventory-events}
+      inventory-manifest-topic: ${POS_LOCATION_INVENTORY_MANIFEST_TOPIC:inventory.manifest.v1}
+      inventory-manifest-consumer-group: ${POS_LOCATION_INVENTORY_MANIFEST_CONSUMER_GROUP:pos-location-inventory-manifests}
+      inventory-commands-topic: ${POS_LOCATION_INVENTORY_COMMANDS_TOPIC:inventory.commands.v1}
+    manifest:
+      topic: ${POS_LOCATION_MANIFEST_TOPIC:location.manifest.v1}
+      window: ${POS_LOCATION_MANIFEST_WINDOW:PT1H}
+      grace: ${POS_LOCATION_MANIFEST_GRACE:PT5M}

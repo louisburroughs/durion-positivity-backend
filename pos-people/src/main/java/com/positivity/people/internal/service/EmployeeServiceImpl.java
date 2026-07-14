@@ -1,5 +1,7 @@
 package com.positivity.people.internal.service;
 
+import com.positivity.domainevents.peoplecontact.PersonUpsertRequestedV1;
+import com.positivity.people.internal.config.PeopleEventPublisher;
 import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeContactInfoDto;
@@ -8,7 +10,7 @@ import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
-import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.people.internal.enums.DuplicatePolicy;
 import com.positivity.people.internal.enums.EmployeeStatus;
@@ -16,21 +18,32 @@ import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.service.EmployeeService;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Employment lifecycle (ADR-0044 §6 Phase 3.2, #875). Identity attributes (names, contacts) are
+ * owned by pos-people-contact: writes travel as {@code people-contact.person.upsert-requested}
+ * commands (the sender generates the personId for creates), reads come from the
+ * {@code ext_people_contact_person} replica. Create/update responses echo the request's identity
+ * fields so callers see their write immediately while the fact event catches the replica up.
+ * Every employment mutation also publishes a {@code people.employee.updated} fact.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -40,26 +53,29 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     private static final String SYSTEM_ACTOR = "system";
 
-    private final PersonRepository personRepository;
+    private final ExtPersonReplicaRepository extPersonReplicaRepository;
 
     private final EmployeeRepository employeeRepository;
 
-    private final PersonWorkPhoneService workPhoneService;
-
-    private final PersonEmailService emailService;
-
     private final EmployeeOffboardingRetryRepository offboardingRetryRepository;
+
+    private final PeopleEventPublisher peopleEventPublisher;
 
     @Override
     @Transactional(readOnly = true)
     public @NonNull Optional<EmployeeIdentityDto> resolveByEmployeeNumber(@NonNull String employeeNumber) {
-        return employeeRepository.findByEmployeeNumberIgnoreCase(employeeNumber).map(employee -> EmployeeIdentityDto.builder()
-                .employeeId(employee.getId())
-                .personId(employee.getPersonId())
-                .employeeNumber(employee.getEmployeeNumber())
-                .status(employee.getStatus() != null ? employee.getStatus().name() : null)
-                .active(employee.getStatus() == EmployeeStatus.ACTIVE)
-                .build());
+        return employeeRepository
+                .findByEmployeeNumberIgnoreCase(employeeNumber)
+                .map(employee -> EmployeeIdentityDto.builder()
+                        .employeeId(employee.getId())
+                        .personId(employee.getPersonId())
+                        .employeeNumber(employee.getEmployeeNumber())
+                        .status(
+                                employee.getStatus() != null
+                                        ? employee.getStatus().name()
+                                        : null)
+                        .active(employee.getStatus() == EmployeeStatus.ACTIVE)
+                        .build());
     }
 
     @Override
@@ -74,11 +90,17 @@ public class EmployeeServiceImpl implements EmployeeService {
                 request.getFirstName(),
                 request.getLastName());
 
-        Person person = new Person();
-        applyIdentity(person, request.getFirstName(), request.getLastName(), request.getPreferredName());
-        Person savedPerson = personRepository.save(person);
+        // Identity is owned by pos-people-contact: generate the person id here so the employee
+        // row can reference it immediately, and send the attributes as an upsert command.
+        UUID personId = UUIDv7Generator.generate();
+        requestIdentityUpsert(
+                personId,
+                request.getFirstName(),
+                request.getLastName(),
+                request.getPreferredName(),
+                request.getContactInfo());
 
-        Employee employee = Employee.builder().personId(savedPerson.getId()).build();
+        Employee employee = Employee.builder().personId(personId).build();
         applyEmployment(
                 employee,
                 request.getEmployeeNumber(),
@@ -86,18 +108,31 @@ public class EmployeeServiceImpl implements EmployeeService {
                 request.getHireDate(),
                 request.getTerminationDate());
         Employee savedEmployee = employeeRepository.save(employee);
+        peopleEventPublisher.publishEmployeeUpdated(savedEmployee);
 
-        replaceContactPoints(savedPerson.getId(), request.getContactInfo());
-        return toEmployeeProfile(savedPerson, savedEmployee, warnings);
+        return profileFromRequestIdentity(
+                personId,
+                request.getFirstName(),
+                request.getLastName(),
+                request.getPreferredName(),
+                request.getContactInfo(),
+                savedEmployee,
+                warnings);
     }
 
     @Override
     @Transactional(readOnly = true)
     public @NonNull EmployeeProfileDto getEmployee(@NonNull UUID employeeId) {
-        Person person =
-                personRepository.findById(employeeId).orElseThrow(() -> new PersonNotFoundException(employeeId));
+        // Pre-split contract: the path parameter is the person id (employee id == person id at
+        // the API surface). The replica row may lag a just-issued upsert command, so an existing
+        // employee row alone is enough to serve the profile.
+        ExtPersonReplica person =
+                extPersonReplicaRepository.findById(employeeId).orElse(null);
         Employee employee = employeeRepository.findByPersonId(employeeId).orElse(null);
-        return toEmployeeProfile(person, employee, List.of());
+        if (person == null && employee == null) {
+            throw new PersonNotFoundException(employeeId);
+        }
+        return profileFromReplica(employeeId, person, employee, List.of());
     }
 
     @Override
@@ -106,8 +141,10 @@ public class EmployeeServiceImpl implements EmployeeService {
             @NonNull UUID employeeId, @NonNull UpdateEmployeeRequest request) {
         validateEmployeeRequest(request.getHireDate(), request.getTerminationDate());
 
-        Person person =
-                personRepository.findById(employeeId).orElseThrow(() -> new PersonNotFoundException(employeeId));
+        Employee employee = employeeRepository.findByPersonId(employeeId).orElse(null);
+        if (employee == null && !extPersonReplicaRepository.existsById(employeeId)) {
+            throw new PersonNotFoundException(employeeId);
+        }
 
         List<String> warnings = evaluateDuplicatePolicy(
                 employeeId,
@@ -117,12 +154,16 @@ public class EmployeeServiceImpl implements EmployeeService {
                 request.getFirstName(),
                 request.getLastName());
 
-        applyIdentity(person, request.getFirstName(), request.getLastName(), request.getPreferredName());
-        Person savedPerson = personRepository.save(person);
+        requestIdentityUpsert(
+                employeeId,
+                request.getFirstName(),
+                request.getLastName(),
+                request.getPreferredName(),
+                request.getContactInfo());
 
-        Employee employee = employeeRepository
-                .findByPersonId(employeeId)
-                .orElseGet(() -> Employee.builder().personId(employeeId).build());
+        if (employee == null) {
+            employee = Employee.builder().personId(employeeId).build();
+        }
         EmployeeStatus previousStatus = employee.getStatus();
         applyEmployment(
                 employee,
@@ -134,17 +175,22 @@ public class EmployeeServiceImpl implements EmployeeService {
             employee.setStatusEffectiveAt(Instant.now(clock));
         }
         Employee savedEmployee = employeeRepository.save(employee);
+        peopleEventPublisher.publishEmployeeUpdated(savedEmployee);
 
-        replaceContactPoints(savedPerson.getId(), request.getContactInfo());
-        return toEmployeeProfile(savedPerson, savedEmployee, warnings);
+        return profileFromRequestIdentity(
+                employeeId,
+                request.getFirstName(),
+                request.getLastName(),
+                request.getPreferredName(),
+                request.getContactInfo(),
+                savedEmployee,
+                warnings);
     }
 
     @Override
     @Transactional
     public @NonNull EmployeeProfileDto disableEmployee(
             @NonNull UUID employeeId, @NonNull DisableEmployeeRequestDto request) {
-        Person person =
-                personRepository.findById(employeeId).orElseThrow(() -> new PersonNotFoundException(employeeId));
         Employee employee = employeeRepository
                 .findByPersonId(employeeId)
                 .orElseThrow(() -> new PersonNotFoundException(employeeId));
@@ -160,6 +206,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         employee.setStatus(EmployeeStatus.DISABLED);
         employee.setStatusEffectiveAt(Instant.now(clock));
         Employee savedEmployee = employeeRepository.save(employee);
+        peopleEventPublisher.publishEmployeeUpdated(savedEmployee);
 
         String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
         try {
@@ -172,16 +219,22 @@ public class EmployeeServiceImpl implements EmployeeService {
             queueOffboardingRetry(employeeId, request, actorId, exception.getMessage());
         }
 
-        return toEmployeeProfile(person, savedEmployee, List.of());
+        ExtPersonReplica person =
+                extPersonReplicaRepository.findById(employeeId).orElse(null);
+        return profileFromReplica(employeeId, person, savedEmployee, List.of());
     }
 
-    /** Persist email + phone contact points from the request's contact info (replaces existing). */
-    private void replaceContactPoints(UUID personId, EmployeeContactInfoDto contactInfo) {
-        workPhoneService.replaceWorkPhones(personId, extractPhones(contactInfo));
-        emailService.replaceEmails(
+    /** Queue the identity attributes as an upsert command toward pos-people-contact. */
+    private void requestIdentityUpsert(
+            UUID personId, String firstName, String lastName, String preferredName, EmployeeContactInfoDto contact) {
+        peopleEventPublisher.requestPersonUpsert(new PersonUpsertRequestedV1(
                 personId,
-                contactInfo == null ? null : normalize(contactInfo.getPrimaryEmail()),
-                contactInfo == null ? null : normalize(contactInfo.getSecondaryEmail()));
+                normalize(firstName),
+                normalize(lastName),
+                normalize(preferredName),
+                contact == null ? null : normalize(contact.getPrimaryEmail()),
+                contact == null ? null : normalize(contact.getSecondaryEmail()),
+                extractPhones(contact)));
     }
 
     private void validateEmployeeRequest(java.time.LocalDate hireDate, java.time.LocalDate terminationDate) {
@@ -220,6 +273,11 @@ public class EmployeeServiceImpl implements EmployeeService {
         return warnings;
     }
 
+    /**
+     * Duplicate signals over the identity replica (email/phone) and local employment rows
+     * (employee number). Replica-based checks are eventually consistent — a person written
+     * moments ago may not be visible yet, which is acceptable for a warning/policy signal.
+     */
     private DuplicateSignals collectDuplicateSignals(
             UUID employeeId, String employeeNumber, EmployeeContactInfoDto contactInfo) {
         String primaryEmail = contactInfo != null ? normalize(contactInfo.getPrimaryEmail()) : null;
@@ -233,8 +291,9 @@ public class EmployeeServiceImpl implements EmployeeService {
                                 employeeNumber, employeeId));
 
         boolean duplicatePrimaryEmail = primaryEmail != null
-                && emailService.findPersonIdsByPrimaryEmail(primaryEmail).stream()
-                        .anyMatch(id -> employeeId == null || !id.equals(employeeId));
+                && extPersonReplicaRepository.findByPrimaryEmailIgnoreCase(primaryEmail).stream()
+                        .anyMatch(person ->
+                                employeeId == null || !person.getPersonId().equals(employeeId));
 
         boolean duplicatePhone = hasDuplicatePhone(employeeId, primaryPhone, secondaryPhone);
         return new DuplicateSignals(duplicateEmployeeNumber, duplicatePrimaryEmail, duplicatePhone);
@@ -244,20 +303,9 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (firstName == null || firstName.isBlank() || lastName == null || lastName.isBlank()) {
             return false;
         }
-        return personRepository.findByLastNameIgnoreCase(lastName).stream()
+        return extPersonReplicaRepository.findByLastNameIgnoreCase(lastName).stream()
                 .filter(person -> firstName.equalsIgnoreCase(person.getFirstName()))
-                .anyMatch(person -> employeeId == null || !person.getId().equals(employeeId));
-    }
-
-    /**
-     * Person identity: authoritative structured name. Email + phone are persisted as
-     * EMAIL / PHONE_WORK contact points after save (see createEmployee/updateEmployee), so no
-     * contact value is written here.
-     */
-    private void applyIdentity(Person entity, String firstName, String lastName, String preferredName) {
-        entity.setFirstName(normalize(firstName));
-        entity.setLastName(normalize(lastName));
-        entity.setPreferredName(normalize(preferredName));
+                .anyMatch(person -> employeeId == null || !person.getPersonId().equals(employeeId));
     }
 
     /** Employment attributes on the Employee record. */
@@ -281,8 +329,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (contactInfo == null) {
             return List.of();
         }
-        return java.util.stream.Stream.of(
-                        normalize(contactInfo.getPrimaryPhone()), normalize(contactInfo.getSecondaryPhone()))
+        return Stream.of(normalize(contactInfo.getPrimaryPhone()), normalize(contactInfo.getSecondaryPhone()))
                 .filter(value -> value != null && !value.isBlank())
                 .toList();
     }
@@ -299,36 +346,71 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (phoneValue == null || phoneValue.isBlank()) {
             return false;
         }
-        return workPhoneService.findPersonIdsByWorkPhone(phoneValue).stream()
-                .anyMatch(personId -> employeeId == null || !personId.equals(employeeId));
+        return extPersonReplicaRepository.findByPrimaryPhoneOrSecondaryPhone(phoneValue, phoneValue).stream()
+                .anyMatch(person -> employeeId == null || !person.getPersonId().equals(employeeId));
     }
 
-    private EmployeeProfileDto toEmployeeProfile(Person person, Employee employee, List<String> warnings) {
+    /** Profile for create/update responses: identity echoed from the request (replica may lag). */
+    private EmployeeProfileDto profileFromRequestIdentity(
+            UUID personId,
+            String firstName,
+            String lastName,
+            String preferredName,
+            EmployeeContactInfoDto contactInfo,
+            Employee employee,
+            List<String> warnings) {
         return EmployeeProfileDto.builder()
-                .id(person.getId())
-                .firstName(person.getFirstName())
-                .lastName(person.getLastName())
-                .preferredName(person.getPreferredName())
+                .id(personId)
+                .firstName(normalize(firstName))
+                .lastName(normalize(lastName))
+                .preferredName(normalize(preferredName))
+                .employeeNumber(employee != null ? employee.getEmployeeNumber() : null)
+                .status(employee != null ? employee.getStatus() : null)
+                .hireDate(employee != null ? employee.getHireDate() : null)
+                .terminationDate(employee != null ? employee.getTerminationDate() : null)
+                .contactInfo(contactInfo)
+                .statusEffectiveAt(employee != null ? employee.getStatusEffectiveAt() : null)
+                .createdAt(employee != null ? employee.getCreatedAt() : null)
+                .updatedAt(employee != null ? employee.getUpdatedAt() : null)
+                .warnings(warnings)
+                .build();
+    }
+
+    /** Profile for reads: identity from the {@code ext_people_contact_person} replica. */
+    private EmployeeProfileDto profileFromReplica(
+            UUID personId, @Nullable ExtPersonReplica person, @Nullable Employee employee, List<String> warnings) {
+        return EmployeeProfileDto.builder()
+                .id(personId)
+                .firstName(person != null ? person.getFirstName() : null)
+                .lastName(person != null ? person.getLastName() : null)
+                .preferredName(person != null ? person.getPreferredName() : null)
                 .employeeNumber(employee != null ? employee.getEmployeeNumber() : null)
                 .status(employee != null ? employee.getStatus() : null)
                 .hireDate(employee != null ? employee.getHireDate() : null)
                 .terminationDate(employee != null ? employee.getTerminationDate() : null)
                 .contactInfo(buildContactInfo(person))
                 .statusEffectiveAt(employee != null ? employee.getStatusEffectiveAt() : null)
-                .createdAt(person.getCreatedAt())
-                .updatedAt(person.getUpdatedAt())
+                .createdAt(
+                        person != null
+                                ? person.getPersonCreatedAt()
+                                : (employee != null ? employee.getCreatedAt() : null))
+                .updatedAt(
+                        person != null
+                                ? person.getPersonUpdatedAt()
+                                : (employee != null ? employee.getUpdatedAt() : null))
                 .warnings(warnings)
                 .build();
     }
 
-    /** Read contact info from the authoritative person_contact_point rows (EMAIL / PHONE_WORK). */
-    private EmployeeContactInfoDto buildContactInfo(Person person) {
-        PersonEmailService.EmailPair emails = emailService.getEmails(person.getId());
-        String primaryEmail = normalize(emails.primary());
-        String secondaryEmail = normalize(emails.secondary());
-        List<String> phones = workPhoneService.getWorkPhones(person.getId());
-        String primaryPhone = phones.size() > 0 ? normalize(phones.get(0)) : null;
-        String secondaryPhone = phones.size() > 1 ? normalize(phones.get(1)) : null;
+    /** Contact info from the replica's flattened contact columns. */
+    private @Nullable EmployeeContactInfoDto buildContactInfo(@Nullable ExtPersonReplica person) {
+        if (person == null) {
+            return null;
+        }
+        String primaryEmail = normalize(person.getPrimaryEmail());
+        String secondaryEmail = normalize(person.getSecondaryEmail());
+        String primaryPhone = normalize(person.getPrimaryPhone());
+        String secondaryPhone = normalize(person.getSecondaryPhone());
 
         if (primaryEmail == null && secondaryEmail == null && primaryPhone == null && secondaryPhone == null) {
             return null;
@@ -363,7 +445,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     private void queueOffboardingRetry(
             UUID employeeId, DisableEmployeeRequestDto request, String actorId, String failureReason) {
         EmployeeOffboardingRetry retry = new EmployeeOffboardingRetry();
-        retry.setEmployee(personRepository.getReferenceById(employeeId));
+        retry.setEmployeeId(employeeId);
         retry.setAssignmentPolicy(
                 request.getAssignmentPolicy() != null
                         ? request.getAssignmentPolicy()

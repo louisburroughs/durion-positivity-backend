@@ -1,0 +1,22 @@
+domain: people-contact
+serviceName: pos-people-contact
+version: "1.0"
+permissions:
+  - name: "people-contact:person:create"
+    description: "Create person"
+  - name: "people-contact:person:delete"
+    description: "Delete person"
+  - name: "people-contact:person:edit"
+    description: "Edit person"
+  - name: "people-contact:person:view"
+    description: "View person"
+  - name: "people-contact:role:assign"
+    description: "Assign roles to people"
+  - name: "people-contact:role:revoke"
+    description: "Revoke roles from people"
+  - name: "people-contact:role:view"
+    description: "View role assignments"
+  - name: "people-contact:userLink:view"
+    description: "View user-person links"
+  - name: "people-contact:userLink:write"
+    description: "Write user-person links"

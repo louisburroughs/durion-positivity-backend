@@ -253,6 +253,7 @@
 	<modules>
 		<module>pos-dependencies</module>
 		<module>pos-shared-dtos</module>
+		<module>pos-domain-events</module>
 		<module>pos-security-common</module>
 		<module>pos-tax-common</module>
 		<module>pos-archunit</module>
@@ -276,6 +277,7 @@
 		<module>pos-vehicle-reference-carapi</module>
 		<module>pos-security-service</module>
 		<module>pos-people</module>
+		<module>pos-people-contact</module>
 		<module>pos-location</module>
 		<module>pos-tax</module>
 		<module>pos-documents</module>

@@ -13,4 +13,6 @@ public class CatalogProductRecord {
     private String categoryName;
     private String subcategoryName;
     private BigDecimal price;
+    private String mpn;
+    private String unitOfMeasure;
 }

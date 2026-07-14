@@ -56,14 +56,17 @@ public class ConsumptionServiceImpl implements ConsumptionService {
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final ReservationRepository reservationRepository;
     private final AllocationRepository allocationRepository;
+    private final InventoryFactPublisher inventoryFactPublisher;
 
     public ConsumptionServiceImpl(
             PickTaskRepository pickTaskRepository,
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
             ReservationRepository reservationRepository,
             AllocationRepository allocationRepository,
+            InventoryFactPublisher inventoryFactPublisher,
             Clock clock) {
         this.clock = clock;
+        this.inventoryFactPublisher = inventoryFactPublisher;
         this.pickTaskRepository = pickTaskRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
         this.reservationRepository = reservationRepository;
@@ -103,6 +106,7 @@ public class ConsumptionServiceImpl implements ConsumptionService {
         }
 
         List<InventoryLedgerEntry> savedEntries = inventoryLedgerEntryRepository.saveAll(entriesToSave);
+        inventoryFactPublisher.markEntries(savedEntries);
         List<UUID> ledgerEntryIds = savedEntries.stream()
                 .map(InventoryLedgerEntry::getLedgerEntryId)
                 .filter(Objects::nonNull)

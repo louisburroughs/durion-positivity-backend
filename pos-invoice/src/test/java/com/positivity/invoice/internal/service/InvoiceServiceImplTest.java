@@ -7,9 +7,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.invoice.internal.client.LocationServiceClient;
+import com.positivity.invoice.internal.service.LocationReferenceService;
 import com.positivity.invoice.internal.client.TaxServiceClient;
-import com.positivity.invoice.internal.client.WorkorderReferenceClient;
+import com.positivity.invoice.internal.service.WorkorderReferenceService;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
@@ -53,10 +53,13 @@ class InvoiceServiceImplTest {
     private TaxServiceClient taxServiceClient;
 
     @Mock
-    private LocationServiceClient locationServiceClient;
+    private LocationReferenceService locationReferenceService;
 
     @Mock
-    private WorkorderReferenceClient workorderReferenceClient;
+    private WorkorderReferenceService workorderReferenceService;
+
+    @Mock
+    private com.positivity.invoice.internal.config.InvoiceEventPublisher invoiceEventPublisher;
 
     @InjectMocks
     private InvoiceServiceImpl invoiceService;
@@ -127,18 +130,21 @@ class InvoiceServiceImplTest {
         draftInvoice.addItem(labor);
 
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
-        when(workorderReferenceClient.resolveNumbers(any())).thenReturn(java.util.Map.of(workorderId, "WO-2026-000045"));
+        when(workorderReferenceService.resolveNumbers(any()))
+                .thenReturn(java.util.Map.of(workorderId, "WO-2026-000045"));
 
         InvoiceDetailsResponse result = invoiceService.getInvoice(invoiceId);
 
         assertThat(result.getWorkorderNumber()).isEqualTo("WO-2026-000045");
-        assertThat(result.getItems()).singleElement().satisfies(item -> assertThat(item.getType()).isEqualTo("LABOR"));
+        assertThat(result.getItems())
+                .singleElement()
+                .satisfies(item -> assertThat(item.getType()).isEqualTo("LABOR"));
     }
 
     @Test
     void getInvoice_shouldLeaveWorkorderNumberNull_whenWorkexecUnresolved() {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
-        when(workorderReferenceClient.resolveNumbers(any())).thenReturn(java.util.Map.of());
+        when(workorderReferenceService.resolveNumbers(any())).thenReturn(java.util.Map.of());
 
         InvoiceDetailsResponse result = invoiceService.getInvoice(invoiceId);
 
@@ -217,7 +223,7 @@ class InvoiceServiceImplTest {
                 .build();
 
         when(invoiceRepository.findByWorkorderId(workorderId)).thenReturn(Optional.empty());
-        when(locationServiceClient.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
+        when(locationReferenceService.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
         when(taxServiceClient.calculateTax(any(), any(), any())).thenReturn(BigDecimal.valueOf(5));
         when(invoiceRepository.save(any())).thenReturn(draftInvoice);
 
@@ -306,7 +312,7 @@ class InvoiceServiceImplTest {
         request.setAuthorizedBy("manager1");
 
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
-        when(locationServiceClient.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
+        when(locationReferenceService.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
         when(taxServiceClient.calculateTax(any(), any(), any())).thenReturn(BigDecimal.valueOf(8));
         when(invoiceRepository.save(any())).thenReturn(draftInvoice);
 

@@ -21,6 +21,18 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  # ── Kafka domain-event backbone (ADR-0044, #838) ───────────────────────────
+
+  kafka:
+    restart: unless-stopped
+    logging: *logging
+
+  kafka-exporter:
+    restart: unless-stopped
+    logging: *logging
+
+  # kafka-topic-init runs once (restart: no) — no override needed.
+
   # ── Observability ──────────────────────────────────────────────────────────
 
   prometheus:
@@ -32,6 +44,26 @@ services:
     logging: *logging
 
   otel-collector:
+    restart: unless-stopped
+    logging: *logging
+
+  loki:
+    restart: unless-stopped
+    logging: *logging
+
+  docker-socket-proxy:
+    restart: unless-stopped
+    logging: *logging
+
+  cadvisor:
+    restart: unless-stopped
+    logging: *logging
+
+  postgres-exporter:
+    restart: unless-stopped
+    logging: *logging
+
+  promtail:
     restart: unless-stopped
     logging: *logging
 
@@ -54,6 +86,9 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-accounting:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    # #838 flag flip — uncomment in the second deploy, after the broker is verified healthy:
+    # environment:
+    #   POS_ACCOUNTING_KAFKA_ENABLED: "true"
 
   pos-api-gateway:
     image: ${ECR_REGISTRY}/durion/pos-api-gateway:${BACKEND_TAG}
@@ -74,6 +109,9 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-customer:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    # #838 flag flip — uncomment in the second deploy, after the broker is verified healthy:
+    # environment:
+    #   POS_CUSTOMER_KAFKA_ENABLED: "true"
 
   pos-event-receiver:
     image: ${ECR_REGISTRY}/durion/pos-event-receiver:${BACKEND_TAG}
@@ -94,6 +132,9 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-invoice:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    # #838 flag flip — uncomment in the second deploy, after the broker is verified healthy:
+    # environment:
+    #   POS_INVOICE_KAFKA_ENABLED: "true"
 
   pos-location:
     image: ${ECR_REGISTRY}/durion/pos-location:${BACKEND_TAG}
@@ -144,6 +185,9 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-workorder:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    # #838 flag flip — uncomment in the second deploy, after the broker is verified healthy:
+    # environment:
+    #   WORKORDER_KAFKA_ENABLED: "true"
 
   # ── Frontend ───────────────────────────────────────────────────────────────
 

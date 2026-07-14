@@ -76,6 +76,7 @@ services:
     depends_on:
       - prometheus
       - jaeger
+      - loki
     logging: *logging
     networks:
       - pos-network
@@ -89,13 +90,103 @@ services:
       - "4317:4317" # OTLP gRPC receiver
       - "4318:4318" # OTLP HTTP receiver
       - "8888:8888" # Prometheus metrics exposed by the collector
-      - "8889:8889" # Prometheus exporter metrics
       - "13133:13133" # Health check extension
     volumes:
       - ./observability:/etc/otel-observability:ro
     depends_on:
       - jaeger
       - prometheus
+    logging: *logging
+    networks:
+      - pos-network
+
+  # Loki - Log aggregation (#858)
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: loki
+    ports:
+      # Localhost only — Grafana/Promtail reach Loki over the pos-network;
+      # no need to expose all container logs on shared/remote host interfaces.
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./observability/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    command: [ "-config.file=/etc/loki/loki-config.yml" ]
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:3100/ready || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *logging
+    networks:
+      - pos-network
+
+  # docker-socket-proxy - Read-only, whitelisted Docker API for Promtail SD (#858)
+  # Promtail needs container metadata for labels but not root-equivalent socket
+  # access; the proxy exposes only GET /containers and /version over TCP.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: docker-socket-proxy
+    environment:
+      CONTAINERS: 1   # allow GET /containers/* (SD target list)
+      NETWORKS: 1     # allow GET /networks/* (promtail computes network labels)
+      VERSION: 1      # allow GET /version (API negotiation)
+      # All other API groups (POST, exec, images, ...) denied by default.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    logging: *logging
+    networks:
+      - pos-network
+
+  # cAdvisor - per-container resource metrics for Prometheus (#863)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    command: [ "--housekeeping_interval=15s", "--docker_only=true" ]
+    # No host port publish: Prometheus scrapes cadvisor:8080 over pos-network.
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    logging: *logging
+    networks:
+      - pos-network
+
+  # postgres-exporter - cluster-wide Postgres metrics for Prometheus (#863).
+  # DATA_SOURCE_URI targets the 'postgres' maintenance DB; pg_stat_database is
+  # cluster-scoped so this covers every per-service pos_*_db.
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres-exporter
+    environment:
+      DATA_SOURCE_URI: postgres:5432/postgres?sslmode=disable
+      DATA_SOURCE_USER: ${POSTGRES_USER}
+      DATA_SOURCE_PASS: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+    networks:
+      - pos-network
+
+  # Promtail - Ships Docker json-file logs to Loki (#858)
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: promtail
+    volumes:
+      - ./observability/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      # Container log files (read directly; container metadata comes from the proxy).
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      # Persist read positions across container recreation.
+      - promtail-positions:/promtail
+    command: [ "-config.file=/etc/promtail/promtail-config.yml" ]
+    depends_on:
+      - loki
+      - docker-socket-proxy
     logging: *logging
     networks:
       - pos-network
@@ -121,6 +212,92 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    logging: *logging
+    networks:
+      - pos-network
+
+  kafka:
+    # ADR-0044: Kafka is the domain-event backbone. Single-node KRaft broker for local dev.
+    image: apache/kafka:3.9.0
+    container_name: kafka-positivity
+    ports:
+      - "127.0.0.1:9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      # Host-less bind ("://:") — Kafka 3.9 StorageTool rejects the 0.0.0.0 meta-address
+      # in listeners when it (re)formats an empty data dir, crash-looping the broker.
+      KAFKA_LISTENERS: INTERNAL://:29092,CONTROLLER://:9093,EXTERNAL://:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # Persist log segments so a container recreate (alpha deploys use
+      # --force-recreate) does not wipe topics, offsets, and consumer state.
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *logging
+    networks:
+      - pos-network
+
+  kafka-exporter:
+    # #838: topic depth (DLQ), consumer lag, and manifest-topic activity for Prometheus.
+    image: danielqsj/kafka-exporter:v1.8.0
+    container_name: kafka-exporter-positivity
+    command: [ "--kafka.server=kafka:29092" ]
+    ports:
+      - "127.0.0.1:9308:9308"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    logging: *logging
+    networks:
+      - pos-network
+
+  kafka-topic-init:
+    # #838 Q6/Q7/Q9: provision domain-event topics with delete retention, 1 partition.
+    image: apache/kafka:3.9.0
+    container_name: kafka-topic-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: [ "/bin/bash", "-c" ]
+    command:
+      - |
+        set -e
+        declare -A topics=(
+          ["workorder.events.v1"]=604800000
+          ["workorder.commands.v1"]=604800000
+          ["workorder.manifest.v1"]=259200000
+          ["workorder.events.v1.dlq"]=2592000000
+          ["workorder.commands.v1.dlq"]=2592000000
+          ["workorder.manifest.v1.dlq"]=2592000000
+          ["customer.events.v1"]=604800000
+          ["customer.events.v1.dlq"]=2592000000
+          ["invoice.events.v1"]=604800000
+          ["invoice.events.v1.dlq"]=2592000000
+          ["payment.cleared.v1"]=604800000
+        )
+        for t in "$${!topics[@]}"; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists \
+            --topic "$$t" --partitions 1 --replication-factor 1 || true
+          /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:29092 --alter \
+            --entity-type topics --entity-name "$$t" \
+            --add-config "retention.ms=$${topics[$$t]},cleanup.policy=delete"
+        done
+        echo "topic init complete"
+    restart: "no"
     logging: *logging
     networks:
       - pos-network
@@ -175,6 +352,7 @@ services:
       SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
     depends_on:
       postgres:
@@ -196,6 +374,7 @@ services:
     ports:
       - "9001:8080"
     environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
@@ -210,6 +389,7 @@ services:
       POS_ACCOUNTING_CREDIT_MEMO_AR_ACCOUNT_ID: ${POS_ACCOUNTING_CREDIT_MEMO_AR_ACCOUNT_ID}
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
@@ -245,6 +425,7 @@ services:
       POS_VEHICLE_FITMENT_BASE_URL: http://pos-vehicle-fitment:8080
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
@@ -275,8 +456,13 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      # ADR-0044 #899: inventory availability/lead-time replica feed from inventory.events.v1
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      MANAGEMENT_HEALTH_KAFKA_ENABLED: ${MANAGEMENT_HEALTH_KAFKA_ENABLED:-false}
+      POS_CATALOG_KAFKA_ENABLED: ${POS_CATALOG_KAFKA_ENABLED:-false}
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
@@ -301,6 +487,9 @@ services:
       - "8082:8080"
     environment:
       SPRING_PROFILES_ACTIVE: accelerated
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      # ADR-0044: workorder + vehicle event consumers and the customer outbox producer
+      POS_CUSTOMER_KAFKA_ENABLED: ${POS_CUSTOMER_KAFKA_ENABLED:-false}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_customer_db
@@ -309,6 +498,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
@@ -347,6 +537,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
@@ -379,6 +570,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
@@ -408,6 +600,7 @@ services:
   #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
   #     POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
   #     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  #     OTEL_METRICS_EXPORTER: none
   #     SERVER_PORT: 8080
   #     MANAGEMENT_SERVER_PORT: 8080
   #   depends_on:
@@ -433,8 +626,13 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      # ADR-0044 #892: location replica feed from location.events.v1
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      MANAGEMENT_HEALTH_KAFKA_ENABLED: ${MANAGEMENT_HEALTH_KAFKA_ENABLED:-false}
+      POS_INVENTORY_KAFKA_ENABLED: ${POS_INVENTORY_KAFKA_ENABLED:-false}
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
@@ -465,8 +663,14 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
+      # Domain events (ADR-0044, #842) — opt-in until the tier-1 flip.
+      # application.yml binds spring.kafka.bootstrap-servers from KAFKA_BOOTSTRAP_SERVERS,
+      # so that single variable is the source of truth here.
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      POS_INVOICE_KAFKA_ENABLED: ${POS_INVOICE_KAFKA_ENABLED:-false}
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -492,6 +696,7 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8091
       MANAGEMENT_SERVER_PORT: 8091
       SPRING_FLYWAY_ENABLED: "false"
@@ -522,6 +727,7 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8092
       MANAGEMENT_SERVER_PORT: 8092
     depends_on:
@@ -547,6 +753,9 @@ services:
       - "8084:8080"
     environment:
       SPRING_PROFILES_ACTIVE: accelerated
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      # ADR-0044 §6 (#890): location fact producer (outbox drain, manifests, replay commands)
+      POS_LOCATION_KAFKA_ENABLED: ${POS_LOCATION_KAFKA_ENABLED:-false}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_location_db
@@ -555,6 +764,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
@@ -602,6 +812,7 @@ services:
       MCP_RAG_MAX_OVERLAP_SIZE: ${MCP_RAG_MAX_OVERLAP_SIZE:-200}
       EXA_API_KEY: ${EXA_API_KEY:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8086
       MANAGEMENT_SERVER_PORT: 8086
     depends_on:
@@ -639,6 +850,7 @@ services:
   #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
   #     POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
   #     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  #     OTEL_METRICS_EXPORTER: none
   #     SERVER_PORT: 8080
   #     MANAGEMENT_SERVER_PORT: 8080
   #   depends_on:
@@ -660,6 +872,12 @@ services:
       - "8085:8080"
     environment:
       SPRING_PROFILES_ACTIVE: accelerated
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${SPRING_KAFKA_LISTENER_AUTO_STARTUP:-false}
+      MANAGEMENT_HEALTH_KAFKA_ENABLED: ${MANAGEMENT_HEALTH_KAFKA_ENABLED:-false}
+      # ADR-0044 #875: people.events.v1 outbox producer, identity replica consumer,
+      # and person upsert commands toward people-contact.commands.v1
+      POS_PEOPLE_KAFKA_ENABLED: ${POS_PEOPLE_KAFKA_ENABLED:-false}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       POS_LOCATION_SERVICE_BASE_URL: http://pos-location:8080
@@ -669,6 +887,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
@@ -685,6 +904,44 @@ services:
       timeout: 3s
       retries: 20
 
+  pos-people-contact:
+    build:
+      context: ./pos-people-contact
+      dockerfile: Dockerfile
+    ports:
+      - "8095:8080"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_people_contact_db
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
+      SERVER_PORT: 8080
+      MANAGEMENT_SERVER_PORT: 8080
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${SPRING_KAFKA_LISTENER_AUTO_STARTUP:-false}
+      MANAGEMENT_HEALTH_KAFKA_ENABLED: ${MANAGEMENT_HEALTH_KAFKA_ENABLED:-false}
+      # ADR-0044 #874: people-contact.events.v1 outbox producer + commands/manifest loop
+      POS_PEOPLE_CONTACT_KAFKA_ENABLED: ${POS_PEOPLE_CONTACT_KAFKA_ENABLED:-false}
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      pos-security-service:
+        condition: service_healthy
+    logging: *logging
+    networks:
+      - pos-network
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+
   pos-price:
     build:
       context: ./pos-price
@@ -699,6 +956,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
@@ -723,6 +981,11 @@ services:
       - "8086:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker,accelerated
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${SPRING_KAFKA_LISTENER_AUTO_STARTUP:-false}
+      MANAGEMENT_HEALTH_KAFKA_ENABLED: ${MANAGEMENT_HEALTH_KAFKA_ENABLED:-false}
+      # ADR-0043/#876: users.person_id projection consumer + people-contact command outbox
+      POS_SECURITY_SERVICE_KAFKA_ENABLED: ${POS_SECURITY_SERVICE_KAFKA_ENABLED:-false}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_security_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
@@ -735,6 +998,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
@@ -761,6 +1025,11 @@ services:
       - "8087:8080"
     environment:
       SPRING_PROFILES_ACTIVE: accelerated
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${SPRING_KAFKA_LISTENER_AUTO_STARTUP:-false}
+      MANAGEMENT_HEALTH_KAFKA_ENABLED: ${MANAGEMENT_HEALTH_KAFKA_ENABLED:-false}
+      # ADR-0044 #877: staffing-assignment replica consumer
+      POS_SHOP_MANAGER_KAFKA_ENABLED: ${POS_SHOP_MANAGER_KAFKA_ENABLED:-false}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_shop_manager_db
@@ -769,6 +1038,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
@@ -800,6 +1070,7 @@ services:
   #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
   #     POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
   #     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  #     OTEL_METRICS_EXPORTER: none
   #     SERVER_PORT: 8080
   #     MANAGEMENT_SERVER_PORT: 8080
   #   depends_on:
@@ -821,6 +1092,7 @@ services:
       - "8089:8080"
     environment:
       SPRING_PROFILES_ACTIVE: accelerated
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_vehicle_inventory_db
@@ -829,10 +1101,13 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
       SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${SPRING_KAFKA_LISTENER_AUTO_STARTUP:-false}
       MANAGEMENT_HEALTH_KAFKA_ENABLED: ${MANAGEMENT_HEALTH_KAFKA_ENABLED:-false}
+      # ADR-0044 #843: vehicle.events.v1 outbox producer + commands/manifest loop
+      POS_VEHICLE_INVENTORY_KAFKA_ENABLED: ${POS_VEHICLE_INVENTORY_KAFKA_ENABLED:-false}
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -863,6 +1138,7 @@ services:
   #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
   #     POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
   #     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  #     OTEL_METRICS_EXPORTER: none
   #     SERVER_PORT: 8080
   #     MANAGEMENT_SERVER_PORT: 8080
   #   depends_on:
@@ -891,6 +1167,7 @@ services:
   #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
   #     POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
   #     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  #     OTEL_METRICS_EXPORTER: none
   #     SERVER_PORT: 8080
   #     MANAGEMENT_SERVER_PORT: 8080
   #   depends_on:
@@ -912,6 +1189,7 @@ services:
       - "8090:8080"
     environment:
       SPRING_PROFILES_ACTIVE: accelerated
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_workorder_db
@@ -920,6 +1198,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
@@ -948,6 +1227,7 @@ services:
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -975,6 +1255,7 @@ services:
       NG_ALLOWED_HOSTS: ${NG_ALLOWED_HOSTS}
       OTEL_SERVICE_NAME: pos-frontend
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       OTEL_RESOURCE_ATTRIBUTES: "service.name=pos-frontend,service.namespace=durion-g\
         roup,deployment.environment=pre-production"
     depends_on:
@@ -1005,9 +1286,15 @@ networks:
 
 # Docker Volumes for Observability Data Persistence
 volumes:
+  kafka-data:
+    driver: local
   prometheus-data:
     driver: local
   grafana-data:
+    driver: local
+  loki-data:
+    driver: local
+  promtail-positions:
     driver: local
   postgres-data:
     driver: local

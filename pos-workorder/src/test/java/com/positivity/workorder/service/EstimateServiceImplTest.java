@@ -8,8 +8,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
-import com.positivity.workorder.internal.client.LocationClient;
-import com.positivity.workorder.internal.client.PeopleLocationClient;
+import com.positivity.workorder.internal.service.LocationReferenceService;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
@@ -28,6 +27,7 @@ import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.EstimateSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.service.EstimateServiceImpl;
+import com.positivity.workorder.internal.service.PeopleAvailabilityLocalService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -78,10 +78,10 @@ class EstimateServiceImplTest {
     private TaxClient taxClient;
 
     @Mock
-    private LocationClient locationClient;
+    private LocationReferenceService locationReferenceService;
 
     @Mock
-    private PeopleLocationClient peopleLocationClient;
+    private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
     @Mock
     private ObjectMapper objectMapper;
@@ -223,7 +223,7 @@ class EstimateServiceImplTest {
         when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.of(draft));
         when(estimateItemRepository.findByEstimate_IdAndDeletedFalse(ESTIMATE_ID))
                 .thenReturn(List.of(item));
-        when(locationClient.resolveTaxAddress(locationId)).thenReturn(resolved);
+        when(locationReferenceService.resolveTaxAddress(locationId)).thenReturn(resolved);
         when(taxClient.calculateTax(any(TaxCalculationRequest.class)))
                 .thenReturn(TaxCalculationResponse.builder()
                         .subtotal(new BigDecimal("50.00"))
@@ -252,7 +252,7 @@ class EstimateServiceImplTest {
                 .customerId(LOCAL_CUSTOMER_ID)
                 .vehicleId(LOCAL_VEHICLE_ID)
                 .build();
-        when(peopleLocationClient.resolveCurrentUserPrimaryLocation()).thenReturn(java.util.Optional.empty());
+        when(peopleAvailabilityLocalService.resolveCurrentUserPrimaryLocation()).thenReturn(java.util.Optional.empty());
 
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class, () -> estimateService.createEstimate(request, "testuser"));

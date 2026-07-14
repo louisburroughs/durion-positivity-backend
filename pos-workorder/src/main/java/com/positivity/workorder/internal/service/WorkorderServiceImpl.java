@@ -2,9 +2,6 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
-import com.positivity.workorder.internal.client.CustomerValidationClient;
-import com.positivity.workorder.internal.client.PeopleLocationClient;
-import com.positivity.workorder.internal.client.ShopmgrOperationalContextClient;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
@@ -16,6 +13,7 @@ import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
@@ -26,8 +24,10 @@ import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 import com.positivity.workorder.internal.event.WorkCompletedEvent;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
+import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
@@ -48,6 +48,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -71,13 +72,15 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final EstimateItemRepository estimateItemRepository;
     private final WorkorderServiceRepository workorderServiceRepository;
     private final WorkorderPartRepository workorderPartRepository;
-    private final CustomerValidationClient customerValidationClient;
+    private final ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
+    private final WorkorderFactPublisher workorderFactPublisher;
     private final WorkorderStateMachine stateMachine;
+    private final WorkorderLaborEntryRepository workorderLaborEntryRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
     private final AuditEventRepository auditEventRepository;
     private final IdempotencyService idempotencyService;
     private final PromotionValidationService promotionValidationService;
-    private final ShopmgrOperationalContextClient shopmgrClient;
-    private final PeopleLocationClient peopleLocationClient;
+    private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
     @Override
     public List<Workorder> getAllWorkorders() {
@@ -117,7 +120,9 @@ public class WorkorderServiceImpl implements WorkorderService {
         UUID estimateLocationId = estimate != null ? estimate.getLocationId() : null;
         UUID resolvedLocationId = estimateLocationId != null
                 ? estimateLocationId
-                : peopleLocationClient.resolveCurrentUserPrimaryLocation().orElse(null);
+                : peopleAvailabilityLocalService
+                        .resolveCurrentUserPrimaryLocation()
+                        .orElse(null);
 
         Workorder workorder = Workorder.builder()
                 .estimate(estimate)
@@ -270,6 +275,7 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         // Save the workorder first to get the persisted entity
         Workorder savedWorkorder = workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(savedWorkorder.getId());
 
         // CAP:004 Story #27 - Copy estimate items to workorder items if promoting from
         // estimate
@@ -378,6 +384,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         // Persist all part items
         if (!partItems.isEmpty()) {
             workorderPartRepository.saveAll(partItems);
+            workorderFactPublisher.markChanged(workorder.getId());
             log.info("Persisted {} part items for workorder {}", partItems.size(), workorder.getId());
             partItems.forEach(item -> log.debug(
                     "Created workorder part item with ID {}: from estimate item {}",
@@ -398,8 +405,16 @@ public class WorkorderServiceImpl implements WorkorderService {
         workorderRepository.deleteById(id);
     }
 
+    /**
+     * Owner-computed requirements verdict from the ext_customer_party replica (ADR-0044 §6,
+     * #891). Fail-closed like the retired CustomerValidationClient: an unknown customer (no
+     * replica row yet) is treated as requirements not met.
+     */
     private boolean checkCustomerRequirements(UUID customerId) {
-        return customerValidationClient.checkRequirementsMet(customerId);
+        return extCustomerPartyReplicaRepository
+                .findById(customerId)
+                .map(com.positivity.workorder.internal.entity.ExtCustomerPartyReplica::isRequirementsMet)
+                .orElse(false);
     }
 
     private boolean isCustomerApproved(Workorder workorder) {
@@ -447,7 +462,9 @@ public class WorkorderServiceImpl implements WorkorderService {
         workorder.setApprovalNotes(notes);
 
         log.info("Workorder {} approved by customer {} with signature capture", workorderId, customerId);
-        return workorderRepository.save(workorder);
+        Workorder saved = workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(saved.getId());
+        return saved;
     }
 
     @Override
@@ -526,6 +543,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         if (status != part.getStatus()) {
             part.setStatus(status);
             workorderPartRepository.save(part);
+            workorderFactPublisher.markChanged(workorderId);
             log.info("Part {} on workorder {} marked COMPLETED by {}", partId, workorderId, actorId);
         }
         return WorkorderItemCompletionResponse.builder()
@@ -572,6 +590,8 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .orElseThrow(
                         () -> new IllegalArgumentException("Workorder not found after completion: " + workorderId));
 
+        publishJobTimeFacts(workorder);
+
         // Build the final billable scope
         Map<String, Object> finalBillableScope = buildFinalBillableScope(workorder);
 
@@ -598,6 +618,33 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         log.info("WorkCompleted event created with eventId={} for workorderId={}", eventId, workorderId);
         return event;
+    }
+
+    /**
+     * One {@code workorder.job_time.recorded.v1} fact per finalized labor entry (ADR-0044 §6,
+     * #875): pos-people replaces its synchronous job-time-totals lookup with a replica fed by
+     * these facts. Published inside the completion transaction; the Kafka relay writes them to
+     * the outbox BEFORE_COMMIT, so facts exist iff the completion committed. Re-completions
+     * re-emit; consumers upsert by laborEntryId.
+     */
+    private void publishJobTimeFacts(Workorder workorder) {
+        for (WorkorderLaborEntry entry :
+                workorderLaborEntryRepository.findByWorkorder_IdOrderByStartTimeDesc(workorder.getId())) {
+            if (entry.getEndTime() == null || entry.getHoursWorked() == null || entry.getTechnicianId() == null) {
+                continue;
+            }
+            int minutes = entry.getHoursWorked()
+                    .multiply(java.math.BigDecimal.valueOf(60))
+                    .setScale(0, java.math.RoundingMode.HALF_UP)
+                    .intValue();
+            applicationEventPublisher.publishEvent(new com.positivity.domainevents.workorder.JobTimeRecordedV1(
+                    entry.getId(),
+                    workorder.getId(),
+                    entry.getTechnicianId(),
+                    workorder.getShopId(),
+                    entry.getEndTime().atOffset(java.time.ZoneOffset.UTC).toInstant(),
+                    minutes));
+        }
     }
 
     @Override
@@ -663,6 +710,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         // Transition to AWAITING_APPROVAL (re-approval required)
         workorder.setStatus(WorkorderStatus.AWAITING_APPROVAL);
         workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(workorder.getId());
 
         // Create audit event for traceability
         createApprovalInvalidationAudit(workorder, oldStatus, event);
@@ -742,6 +790,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         workorder.setResourceId(payload.getResourceId());
         workorder.setMechanicIds(serializeMechanicIds(payload.getMechanicIds()));
         workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(workorder.getId());
 
         String details = buildAuditDetails(
                 oldLocationId,
@@ -775,7 +824,21 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .findById(workorderId)
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
         log.debug("Fetching operational context for existing workorder {}", workorder.getId());
-        return shopmgrClient.getOperationalContext(workorderId);
+        // Served from the workorder's own assignment state (#898): the retired shopmgr proxy
+        // hit a nonexistent path and shopmgr's context view was stub data, so local state is
+        // the only real source — the same fields the override endpoint persists.
+        return OperationalContextResponse.builder()
+                .version(workorder.getOperationalContextVersion())
+                .locationId(workorder.getLocationId())
+                .bayId(workorder.getResourceId() != null ? workorder.getResourceId().toString() : null)
+                .assignedMechanics(parseMechanicIds(workorder.getMechanicIds()))
+                .assignedResources(
+                        workorder.getResourceId() == null
+                                ? Collections.emptyList()
+                                : List.of(workorder.getResourceId()))
+                .constraints(Collections.emptyList())
+                .locked(workorder.getWorkStartedAt() != null)
+                .build();
     }
 
     @Override
@@ -795,6 +858,7 @@ public class WorkorderServiceImpl implements WorkorderService {
                 assignedResources != null && !assignedResources.isEmpty() ? assignedResources.get(0) : null);
         workorder.setMechanicIds(serializeMechanicIds(override.getAssignedMechanics()));
         Workorder saved = workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(saved.getId());
 
         return OperationalContextResponse.builder()
                 .version(saved.getOperationalContextVersion())
@@ -834,6 +898,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         workorder.setOperationalContextVersion(version);
         workorder.setWorkStartedAt(startedAt);
         Workorder saved = workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(saved.getId());
 
         Instant transitionedAt = stateMachine.getTransitionHistory(workorderId).stream()
                 .filter(transition -> transition.getToStatus() == WorkorderStatus.WORK_IN_PROGRESS)
@@ -869,14 +934,20 @@ public class WorkorderServiceImpl implements WorkorderService {
         if (mechanicIds == null || mechanicIds.isBlank() || "[]".equals(mechanicIds)) {
             return Collections.emptyList();
         }
-        return java.util.Arrays.stream(
-                        mechanicIds.replace("[", "").replace("]", "").split(","))
-                .map(String::trim)
-                .filter(value -> !value.isBlank())
-                .map(value -> value.replace("\"", ""))
-                .filter(value -> !value.isBlank())
-                .map(UUID::fromString)
-                .toList();
+        try {
+            return java.util.Arrays.stream(
+                            mechanicIds.replace("[", "").replace("]", "").split(","))
+                    .map(String::trim)
+                    .filter(value -> !value.isBlank())
+                    .map(value -> value.replace("\"", ""))
+                    .filter(value -> !value.isBlank())
+                    .map(UUID::fromString)
+                    .toList();
+        } catch (IllegalArgumentException e) {
+            // Malformed persisted assignment data must not turn a read endpoint into a 500.
+            log.warn("Ignoring malformed mechanicIds value: {}", mechanicIds, e);
+            return Collections.emptyList();
+        }
     }
 
     private String buildAuditDetails(

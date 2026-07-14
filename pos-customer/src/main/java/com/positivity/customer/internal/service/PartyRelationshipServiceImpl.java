@@ -1,6 +1,5 @@
 package com.positivity.customer.internal.service;
 
-import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
 import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
 import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
@@ -55,8 +54,9 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
     private final PartyRelationshipRepository partyRelationshipRepository;
     private final CommercialPartyRepository partyRepository;
     private final PersonPartyRepository personRepository;
-    private final PeopleClient peopleClient;
+    private final PersonDirectoryService personDirectoryService;
     private final Clock clock;
+    private final CustomerFactPublisher customerFactPublisher;
 
     /**
      * Creates a new party relationship between a commercial account and an
@@ -143,6 +143,9 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
             relationship = partyRelationshipRepository.save(relationship);
         }
 
+        // The person's commercial-account linkage changed — re-emit their identity fact (#889).
+        customerFactPublisher.personIdentityChanged(relationship.getToPerson().getPersonId());
+
         log.info(
                 "Created party relationship {} for party {} and person {}",
                 relationship.getPartyRelationshipId(),
@@ -179,8 +182,8 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
 
         log.debug("Getting contacts for commercial account: partyId={}, roles={}, status={}", partyId, roles, status);
 
-                // Validate party exists in the unified party model (commercial + person).
-                if (!partyRepository.existsById(partyId) && !personRepository.existsById(partyId)) {
+        // Validate party exists in the unified party model (commercial + person).
+        if (!partyRepository.existsById(partyId) && !personRepository.existsById(partyId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Party not found");
         }
 
@@ -201,8 +204,8 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
         }
 
         // Names from pos-people (source of truth, ADR-0015 I2), batched by canonical id.
-        Map<UUID, PeopleClient.PersonIdentity> identities =
-                peopleClient.fetchPersonIdentitiesQuietly(relationships.stream()
+        Map<UUID, PersonDirectoryService.PersonIdentity> identities =
+                personDirectoryService.fetchPersonIdentitiesQuietly(relationships.stream()
                         .map(rel -> rel.getToPerson().getPersonId())
                         .filter(Objects::nonNull)
                         .collect(Collectors.toSet()));
@@ -211,7 +214,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
         List<GetCommercialAccountContactsResponse.ContactWithRole> contacts = relationships.stream()
                 .map(rel -> {
                     PersonParty person = rel.getToPerson();
-                    PeopleClient.PersonIdentity identity =
+                    PersonDirectoryService.PersonIdentity identity =
                             person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
 
                     // Email/phone/name from pos-people (sole source of truth, ADR-0015 I2; issue #684).
@@ -266,6 +269,7 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
         relationship.deactivate(today);
         relationship.setUpdatedBy(userId);
         partyRelationshipRepository.save(relationship);
+        customerFactPublisher.personIdentityChanged(relationship.getToPerson().getPersonId());
 
         log.info(
                 "Deactivated relationship {} for party {} and person {}",

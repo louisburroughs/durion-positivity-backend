@@ -1,6 +1,7 @@
 package com.positivity.bulkloader.internal.controller;
 
 import com.positivity.bulkloader.service.TusUploadService;
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
 @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -72,10 +74,14 @@ public class TusUploadController {
 
     @PostMapping("/bulk-jobs/{jobId}/tus")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @EmitEvent(id = "BULK_LOADER_TUS_UPLOAD_CREATE", apiVersion = "1")
     @Operation(
             summary = "Create a resumable upload",
             description = "Creates a new TUS upload scoped to a bulk load job. "
-                    + "Returns a Location header with the upload URL for subsequent HEAD and PATCH requests.")
+                    + "Returns a Location header with the absolute upload URL for subsequent HEAD and PATCH "
+                    + "requests. The URL is reconstructed from the X-Forwarded-Proto/Host/Port/Prefix headers "
+                    + "supplied by the API gateway / reverse-proxy chain, so it reflects the public address "
+                    + "(including any proxy path prefix) rather than this service's internal one.")
     @ApiResponse(responseCode = "201", description = "Upload created")
     @ApiResponse(responseCode = "412", description = "Unsupported TUS version")
     @ApiResponse(responseCode = "413", description = "Upload-Length exceeds server maximum")
@@ -83,8 +89,7 @@ public class TusUploadController {
             @PathVariable @NonNull UUID jobId,
             @RequestHeader(value = TUS_RESUMABLE, required = false) @Nullable String tusResumable,
             @RequestHeader("Upload-Length") long uploadLength,
-            @RequestHeader(value = "Upload-Metadata", required = false) @Nullable String uploadMetadata,
-            HttpServletRequest request) {
+            @RequestHeader(value = "Upload-Metadata", required = false) @Nullable String uploadMetadata) {
 
         ResponseEntity<Void> versionError = rejectIfUnsupportedVersion(tusResumable);
         if (versionError != null) return versionError;
@@ -99,8 +104,17 @@ public class TusUploadController {
         TusUploadService.Created created =
                 tusUploadService.createUpload(jobId, fileName, uploadLength, resolveOperatorId());
 
-        String location = resolveBaseUrl(request) + "/v1/tus/" + created.id();
-        return ResponseEntity.created(URI.create(location))
+        // Absolute URL, as in the tus spec's own examples: relative Location references break
+        // tus clients whose endpoint is a bare path, and stale copies of them resolve against
+        // the page URL instead of the API (see issue #833). ForwardedHeaderFilter
+        // (server.forward-headers-strategy: framework) has already rebuilt this request from the
+        // X-Forwarded-Proto/Host/Port/Prefix headers set by the gateway/proxy chain, so the
+        // base below is the public address (e.g. https://host/bulk-loader), not the internal
+        // one with the gateway prefix stripped.
+        URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
+                .path("/v1/tus/{uploadId}")
+                .build(created.id());
+        return ResponseEntity.created(location)
                 .header(TUS_RESUMABLE, TUS_VERSION)
                 .header(UPLOAD_OFFSET, "0")
                 .header("Upload-Expires", formatRfc1123(created.expiresAt()))
@@ -134,6 +148,7 @@ public class TusUploadController {
 
     @PatchMapping("/tus/{uploadId}")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @EmitEvent(id = "BULK_LOADER_TUS_UPLOAD_CHUNK_APPEND", apiVersion = "1")
     @Operation(
             summary = "Upload a chunk",
             description = "Appends a byte range to an in-progress TUS upload. "
@@ -171,6 +186,7 @@ public class TusUploadController {
 
     @DeleteMapping("/tus/{uploadId}")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @EmitEvent(id = "BULK_LOADER_TUS_UPLOAD_CANCEL", apiVersion = "1")
     @Operation(summary = "Cancel an upload", description = "Permanently deletes a TUS upload and its temporary file.")
     @ApiResponse(responseCode = "204", description = "Upload deleted")
     @ApiResponse(responseCode = "404", description = "Upload not found")
@@ -209,12 +225,6 @@ public class TusUploadController {
             }
         }
         return "upload.bin";
-    }
-
-    private String resolveBaseUrl(HttpServletRequest request) {
-        String url = request.getRequestURL().toString();
-        int idx = url.indexOf("/v1/");
-        return idx >= 0 ? url.substring(0, idx) : "";
     }
 
     private String formatRfc1123(Instant instant) {

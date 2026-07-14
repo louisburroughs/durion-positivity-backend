@@ -8,9 +8,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.shopmanager.internal.client.CrmCustomerClient;
-import com.positivity.shopmanager.internal.client.CrmVehicleClient;
-import com.positivity.shopmanager.internal.client.HrAvailabilityClient;
 import com.positivity.shopmanager.internal.dto.RescheduleAppointmentRequest;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.RescheduleHistory;
@@ -25,6 +22,8 @@ import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestR
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
+import com.positivity.shopmanager.internal.service.CrmSnapshotService;
+import com.positivity.shopmanager.internal.service.StaffingScheduleService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -58,13 +57,10 @@ class AppointmentsServiceImplRescheduleTest {
     private AppointmentLoadService appointmentLoadService;
 
     @Mock
-    private CrmCustomerClient crmCustomerClient;
+    private CrmSnapshotService crmSnapshotService;
 
     @Mock
-    private CrmVehicleClient crmVehicleClient;
-
-    @Mock
-    private HrAvailabilityClient hrAvailabilityClient;
+    private StaffingScheduleService staffingScheduleService;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -89,9 +85,8 @@ class AppointmentsServiceImplRescheduleTest {
                 appointmentServiceRequestRepository,
                 new ObjectMapper(),
                 appointmentLoadService,
-                crmCustomerClient,
-                crmVehicleClient,
-                hrAvailabilityClient,
+                crmSnapshotService,
+                staffingScheduleService,
                 eventPublisher,
                 shopRepository,
                 sourceEligibilityService,

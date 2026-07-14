@@ -38,6 +38,9 @@ class WorkorderItemCompletionTest {
     @Mock
     private WorkorderPartRepository workorderPartRepository;
 
+    @org.mockito.Mock
+    private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
+
     @InjectMocks
     private WorkorderServiceImpl service;
 

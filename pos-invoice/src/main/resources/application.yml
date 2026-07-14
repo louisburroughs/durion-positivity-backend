@@ -1,6 +1,12 @@
 spring:
   application:
     name: invoice
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
   jpa:
     hibernate:
       ddl-auto: validate
@@ -74,6 +80,32 @@ billing:
 
 # Event service configuration
 pos:
+  invoice:
+    kafka:
+      # Domain-event publishing (ADR-0044, #842). Off until the broker is provisioned;
+      # flip POS_INVOICE_KAFKA_ENABLED per environment.
+      enabled: ${POS_INVOICE_KAFKA_ENABLED:false}
+      # Employment replica feed (ADR-0044 §6, #877)
+      people-events-topic: ${POS_INVOICE_PEOPLE_EVENTS_TOPIC:people.events.v1}
+      people-events-consumer-group: ${POS_INVOICE_PEOPLE_EVENTS_CONSUMER_GROUP:pos-invoice-people-events}
+      # Customer-party replica feed + reconciliation (ADR-0044 §6, #891)
+      customer-events-topic: ${POS_INVOICE_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
+      customer-events-consumer-group: ${POS_INVOICE_CUSTOMER_EVENTS_CONSUMER_GROUP:pos-invoice-customer-events}
+      customer-manifest-topic: ${POS_INVOICE_CUSTOMER_MANIFEST_TOPIC:customer.manifest.v1}
+      customer-manifest-consumer-group: ${POS_INVOICE_CUSTOMER_MANIFEST_CONSUMER_GROUP:pos-invoice-customer-manifests}
+      customer-commands-topic: ${POS_INVOICE_CUSTOMER_COMMANDS_TOPIC:customer.commands.v1}
+      # Location replica feed + reconciliation (ADR-0044 §6, #892)
+      location-events-topic: ${POS_INVOICE_LOCATION_EVENTS_TOPIC:location.events.v1}
+      location-events-consumer-group: ${POS_INVOICE_LOCATION_EVENTS_CONSUMER_GROUP:pos-invoice-location-events}
+      location-manifest-topic: ${POS_INVOICE_LOCATION_MANIFEST_TOPIC:location.manifest.v1}
+      location-manifest-consumer-group: ${POS_INVOICE_LOCATION_MANIFEST_CONSUMER_GROUP:pos-invoice-location-manifests}
+      location-commands-topic: ${POS_INVOICE_LOCATION_COMMANDS_TOPIC:location.commands.v1}
+      # Workorder replica feed + reconciliation (ADR-0044 §6, #897)
+      workorder-events-topic: ${POS_INVOICE_WORKORDER_EVENTS_TOPIC:workorder.events.v1}
+      workorder-events-consumer-group: ${POS_INVOICE_WORKORDER_EVENTS_CONSUMER_GROUP:pos-invoice-workorder-events}
+      workorder-manifest-topic: ${POS_INVOICE_WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
+      workorder-manifest-consumer-group: ${POS_INVOICE_WORKORDER_MANIFEST_CONSUMER_GROUP:pos-invoice-workorder-manifests}
+      workorder-commands-topic: ${POS_INVOICE_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
   events:
     api-secret: ${POS_EVENTS_API_SECRET:}
 

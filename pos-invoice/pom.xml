@@ -30,6 +30,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Prometheus scrape endpoint: /actuator/prometheus (ADR observability) -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
         <!-- Spring Boot Logging (includes SLF4J + Logback) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -50,6 +56,15 @@
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-security-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-domain-events</artifactId>
             <version>${project.version}</version>
         </dependency>
         <!-- pos-shared-dtos for UUID v7 generator -->

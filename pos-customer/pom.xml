@@ -50,6 +50,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Prometheus scrape endpoint: /actuator/prometheus (ADR observability) -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.kafka</groupId>
@@ -182,6 +188,12 @@
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-shared-dtos</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Cross-module domain event contracts (ADR-0044) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-domain-events</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

@@ -3,8 +3,8 @@ package com.positivity.customer.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import com.positivity.customer.internal.client.PeopleClient;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
+import com.positivity.customer.internal.service.PersonDirectoryService;
 import com.positivity.customer.internal.service.PersonLinkReconciliationServiceImpl;
 import com.positivity.customer.service.PersonLinkReconciliationService.PersonLinkReport;
 import java.util.List;
@@ -23,7 +23,7 @@ class PersonLinkReconciliationServiceImplTest {
     private PersonPartyRepository personPartyRepository;
 
     @Mock
-    private PeopleClient peopleClient;
+    private PersonDirectoryService personDirectoryService;
 
     @InjectMocks
     private PersonLinkReconciliationServiceImpl service;
@@ -37,10 +37,14 @@ class PersonLinkReconciliationServiceImplTest {
         UUID a = id("a1");
         UUID b = id("b2");
         when(personPartyRepository.findDistinctPersonIds()).thenReturn(List.of(a, b));
-        when(peopleClient.fetchPersonIdentities(List.of(a, b)))
+        when(personDirectoryService.fetchPersonIdentities(List.of(a, b)))
                 .thenReturn(Map.of(
-                        a, new PeopleClient.PersonIdentity(a, "Greg", "Whitfield", "g@x.com", java.util.List.of()),
-                        b, new PeopleClient.PersonIdentity(b, "Teresa", "Mullen", "t@x.com", java.util.List.of())));
+                        a,
+                                new PersonDirectoryService.PersonIdentity(
+                                        a, "Greg", "Whitfield", "g@x.com", java.util.List.of()),
+                        b,
+                                new PersonDirectoryService.PersonIdentity(
+                                        b, "Teresa", "Mullen", "t@x.com", java.util.List.of())));
 
         PersonLinkReport report = service.reconcile();
 
@@ -55,10 +59,11 @@ class PersonLinkReconciliationServiceImplTest {
         UUID linked = id("a1");
         UUID orphan = id("c3");
         when(personPartyRepository.findDistinctPersonIds()).thenReturn(List.of(linked, orphan));
-        when(peopleClient.fetchPersonIdentities(List.of(linked, orphan)))
+        when(personDirectoryService.fetchPersonIdentities(List.of(linked, orphan)))
                 .thenReturn(Map.of(
                         linked,
-                        new PeopleClient.PersonIdentity(linked, "Greg", "Whitfield", "g@x.com", java.util.List.of())));
+                        new PersonDirectoryService.PersonIdentity(
+                                linked, "Greg", "Whitfield", "g@x.com", java.util.List.of())));
 
         PersonLinkReport report = service.reconcile();
 
@@ -71,7 +76,7 @@ class PersonLinkReconciliationServiceImplTest {
     @Test
     void reconcile_noLinks_reportsHealthy() {
         when(personPartyRepository.findDistinctPersonIds()).thenReturn(List.of());
-        when(peopleClient.fetchPersonIdentities(List.of())).thenReturn(Map.of());
+        when(personDirectoryService.fetchPersonIdentities(List.of())).thenReturn(Map.of());
 
         PersonLinkReport report = service.reconcile();
 
@@ -84,7 +89,7 @@ class PersonLinkReconciliationServiceImplTest {
     void reconcile_posPeopleUnreachable_reportsDegradedWithoutThrowing() {
         UUID a = id("a1");
         when(personPartyRepository.findDistinctPersonIds()).thenReturn(List.of(a));
-        when(peopleClient.fetchPersonIdentities(List.of(a)))
+        when(personDirectoryService.fetchPersonIdentities(List.of(a)))
                 .thenThrow(new IllegalStateException("No instances available for people"));
 
         PersonLinkReport report = service.reconcile();

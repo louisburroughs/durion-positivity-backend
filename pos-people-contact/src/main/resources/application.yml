@@ -1,0 +1,80 @@
+spring:
+  application:
+    name: people-contact
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    out-of-order: ${SPRING_FLYWAY_OUT_OF_ORDER:false}
+
+server:
+  port: 0
+  tomcat:
+    max-http-header-size: 65536
+
+management:
+  server:
+    port: 0
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:}
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+logging:
+  level:
+    root: INFO
+    org:
+      springframework: INFO
+    com:
+      positivity:
+        peoplecontact: INFO
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+
+  default-produces-media-type: application/json
+pos:
+  security-service:
+    service-id: ${POS_SECURITY_SERVICE_SERVICE_ID:security-service}
+  people-contact:
+    kafka:
+      # ADR-0044 domain-event flow (people-contact.events.v1 facts via the transactional outbox,
+      # people-contact.commands.v1 replay/bootstrap commands, people-contact.manifest.v1
+      # reconciliation).
+      enabled: ${POS_PEOPLE_CONTACT_KAFKA_ENABLED:false}
+      events-topic: ${POS_PEOPLE_CONTACT_EVENTS_TOPIC:people-contact.events.v1}
+      commands-topic: ${POS_PEOPLE_CONTACT_COMMANDS_TOPIC:people-contact.commands.v1}
+      commands-consumer-group: ${POS_PEOPLE_CONTACT_COMMANDS_CONSUMER_GROUP:pos-people-contact-commands}
+    manifest:
+      topic: ${POS_PEOPLE_CONTACT_MANIFEST_TOPIC:people-contact.manifest.v1}

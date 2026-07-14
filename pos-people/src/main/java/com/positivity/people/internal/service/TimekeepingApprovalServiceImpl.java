@@ -5,12 +5,12 @@ import com.positivity.people.internal.dto.TimePeriodApprovalDto;
 import com.positivity.people.internal.dto.TimePeriodDecisionResponse;
 import com.positivity.people.internal.dto.TimePeriodDto;
 import com.positivity.people.internal.dto.TimekeepingEntryDto;
-import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.TimePeriod;
 import com.positivity.people.internal.entity.TimekeepingEntry;
 import com.positivity.people.internal.enums.ApprovalStatus;
 import com.positivity.people.internal.repository.EmployeeRepository;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimePeriodRepository;
 import com.positivity.people.internal.repository.TimekeepingEntryRepository;
 import com.positivity.people.service.TimekeepingApprovalService;
@@ -32,7 +32,7 @@ public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalServic
 
     private final TimekeepingEntryRepository timekeepingEntryRepository;
     private final TimePeriodRepository timePeriodRepository;
-    private final PersonRepository personRepository;
+    private final ExtPersonReplicaRepository extPersonReplicaRepository;
     private final EmployeeRepository employeeRepository;
 
     @Override
@@ -42,16 +42,16 @@ public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalServic
         if (employeeIds.isEmpty()) {
             return List.of();
         }
-        List<Person> persons = personRepository.findAllById(employeeIds);
+        List<ExtPersonReplica> persons = extPersonReplicaRepository.findAllById(employeeIds);
         java.util.Map<UUID, String> employeeNumbers = new java.util.HashMap<>();
         employeeRepository
                 .findByPersonIdIn(employeeIds)
                 .forEach(e -> employeeNumbers.put(e.getPersonId(), e.getEmployeeNumber()));
         return persons.stream()
                 .map(p -> ApprovalPersonDto.builder()
-                        .personId(p.getId())
+                        .personId(p.getPersonId())
                         .displayName(buildDisplayName(p))
-                        .employeeNumber(employeeNumbers.get(p.getId()))
+                        .employeeNumber(employeeNumbers.get(p.getPersonId()))
                         .build())
                 .toList();
     }
@@ -195,14 +195,14 @@ public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalServic
                 .build();
     }
 
-    private String buildDisplayName(Person p) {
+    private String buildDisplayName(ExtPersonReplica p) {
         if (p.getPreferredName() != null && !p.getPreferredName().isBlank()) {
             return p.getPreferredName() + " " + p.getLastName();
         }
         if (p.getFirstName() != null) {
             return p.getFirstName() + " " + p.getLastName();
         }
-        return p.getId().toString();
+        return p.getPersonId().toString();
     }
 
     private Instant toInstant(LocalDate date) {

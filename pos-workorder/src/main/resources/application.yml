@@ -1,6 +1,9 @@
 spring:
   application:
     name: workorder
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   datasource:
     url: ${SPRING_DATASOURCE_URL:}
     username: ${SPRING_DATASOURCE_USERNAME:}
@@ -79,16 +82,12 @@ pos:
     base-url: ${POS_VEHICLE_BASE_URL:http://pos-vehicle:8088}
   tax:
     base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
-  location:
-    base-url: ${POS_LOCATION_BASE_URL:http://pos-location:8080}
   invoice:
     service-id: ${POS_INVOICE_SERVICE_ID:invoice}
   inventory:
     service-id: ${POS_INVENTORY_SERVICE_ID:inventory}
   people:
     service-id: ${POS_PEOPLE_SERVICE_ID:people}
-  shopmgr:
-    service-id: ${POS_SHOPMGR_SERVICE_ID:shop-manager}
   documents:
     service-id: ${POS_DOCUMENTS_SERVICE_ID:documents}
 
@@ -96,5 +95,29 @@ workorder:
   kafka:
     enabled: ${WORKORDER_KAFKA_ENABLED:false}
     events-topic: ${WORKORDER_KAFKA_EVENTS_TOPIC:workorder.events.v1}
+    # People replicas (ADR-0044 §6, #877)
+    people-contact-events-topic: ${WORKORDER_PC_EVENTS_TOPIC:people-contact.events.v1}
+    people-contact-events-consumer-group: ${WORKORDER_PC_EVENTS_CONSUMER_GROUP:pos-workorder-people-contact-events}
+    people-events-topic: ${WORKORDER_PEOPLE_EVENTS_TOPIC:people.events.v1}
+    people-events-consumer-group: ${WORKORDER_PEOPLE_EVENTS_CONSUMER_GROUP:pos-workorder-people-events}
+    # Customer-party replica feed + reconciliation (ADR-0044 §6, #891)
+    customer-events-topic: ${WORKORDER_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
+    customer-events-consumer-group: ${WORKORDER_CUSTOMER_EVENTS_CONSUMER_GROUP:pos-workorder-customer-events}
+    customer-manifest-topic: ${WORKORDER_CUSTOMER_MANIFEST_TOPIC:customer.manifest.v1}
+    customer-manifest-consumer-group: ${WORKORDER_CUSTOMER_MANIFEST_CONSUMER_GROUP:pos-workorder-customer-manifests}
+    customer-commands-topic: ${WORKORDER_CUSTOMER_COMMANDS_TOPIC:customer.commands.v1}
+    # Location replica feed + reconciliation (ADR-0044 §6, #892)
+    location-events-topic: ${WORKORDER_LOCATION_EVENTS_TOPIC:location.events.v1}
+    location-events-consumer-group: ${WORKORDER_LOCATION_EVENTS_CONSUMER_GROUP:pos-workorder-location-events}
+    location-manifest-topic: ${WORKORDER_LOCATION_MANIFEST_TOPIC:location.manifest.v1}
+    location-manifest-consumer-group: ${WORKORDER_LOCATION_MANIFEST_CONSUMER_GROUP:pos-workorder-location-manifests}
+    location-commands-topic: ${WORKORDER_LOCATION_COMMANDS_TOPIC:location.commands.v1}
     commands-topic: ${WORKORDER_KAFKA_COMMANDS_TOPIC:workorder.commands.v1}
     consumer-group: ${WORKORDER_KAFKA_CONSUMER_GROUP:${spring.application.name}-commands}
+  # Reconciliation manifests (ADR-0044, one summary per closed window of the fact topic)
+  manifest:
+    topic: ${WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
+    window: ${WORKORDER_MANIFEST_WINDOW:PT1H}
+    grace: ${WORKORDER_MANIFEST_GRACE:PT5M}
+    poll-interval-ms: ${WORKORDER_MANIFEST_POLL_INTERVAL_MS:300000}
+    send-timeout-ms: ${WORKORDER_MANIFEST_SEND_TIMEOUT_MS:10000}

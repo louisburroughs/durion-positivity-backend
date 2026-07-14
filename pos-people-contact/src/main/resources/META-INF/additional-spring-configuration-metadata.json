@@ -1,0 +1,76 @@
+{
+  "properties": [
+    {
+      "name": "pos.people-contact.matching.threshold",
+      "type": "java.lang.Integer",
+      "description": "Minimum matching score threshold for person resolution.",
+      "defaultValue": 30
+    },
+    {
+      "name": "pos.security-service.service-id",
+      "type": "java.lang.String",
+      "description": "Eureka service-id for the pos-security-service.",
+      "defaultValue": "security-service"
+    },
+    {
+      "name": "pos.people-contact.kafka.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable the ADR-0044 domain-event flow (outbox drain, command listener, manifests).",
+      "defaultValue": false
+    },
+    {
+      "name": "pos.people-contact.kafka.events-topic",
+      "type": "java.lang.String",
+      "description": "Fact topic for people-contact identity events.",
+      "defaultValue": "people-contact.events.v1"
+    },
+    {
+      "name": "pos.people-contact.kafka.commands-topic",
+      "type": "java.lang.String",
+      "description": "Command topic consumed by this module (outbox replay).",
+      "defaultValue": "people-contact.commands.v1"
+    },
+    {
+      "name": "pos.people-contact.kafka.commands-consumer-group",
+      "type": "java.lang.String",
+      "description": "Consumer group for the command listener.",
+      "defaultValue": "pos-people-contact-commands"
+    },
+    {
+      "name": "pos.people-contact.manifest.topic",
+      "type": "java.lang.String",
+      "description": "Reconciliation manifest topic.",
+      "defaultValue": "people-contact.manifest.v1"
+    },
+    {
+      "name": "pos.people-contact.manifest.window",
+      "type": "java.lang.String",
+      "description": "Reconciliation window length (ISO-8601 duration).",
+      "defaultValue": "PT1H"
+    },
+    {
+      "name": "pos.people-contact.manifest.grace",
+      "type": "java.lang.String",
+      "description": "Delay after window close before the manifest is published.",
+      "defaultValue": "PT5M"
+    },
+    {
+      "name": "pos.people-contact.outbox.poll-interval-ms",
+      "type": "java.lang.Long",
+      "description": "Outbox drain poll interval in milliseconds.",
+      "defaultValue": 1000
+    },
+    {
+      "name": "pos.people-contact.outbox.send-timeout-ms",
+      "type": "java.lang.Long",
+      "description": "Kafka send timeout for outbox publishes in milliseconds.",
+      "defaultValue": 10000
+    },
+    {
+      "name": "pos.people-contact.outbox.replay.max-lookback",
+      "type": "java.lang.String",
+      "description": "Maximum lookback for outbox replay commands (ISO-8601 duration).",
+      "defaultValue": "P30D"
+    }
+  ]
+}

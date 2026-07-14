@@ -1,6 +1,6 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.client.StorageLocationValidationClient;
+import com.positivity.inventory.internal.service.StorageLocationValidationService;
 import com.positivity.inventory.internal.dto.DeactivateLocationResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
@@ -28,19 +28,22 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
     private static final String LOCATION_TRANSFER_REASON = "LOCATION_DEACTIVATION_TRANSFER";
 
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
-    private final StorageLocationValidationClient storageLocationValidationClient;
+    private final StorageLocationValidationService storageLocationValidationService;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final MeterRegistry meterRegistry;
     private final Clock clock;
+    private final InventoryFactPublisher inventoryFactPublisher;
 
     public InventoryLocationServiceImpl(
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
-            StorageLocationValidationClient storageLocationValidationClient,
+            StorageLocationValidationService storageLocationValidationService,
             ApplicationEventPublisher applicationEventPublisher,
             MeterRegistry meterRegistry,
+            InventoryFactPublisher inventoryFactPublisher,
             Clock clock) {
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
-        this.storageLocationValidationClient = storageLocationValidationClient;
+        this.inventoryFactPublisher = inventoryFactPublisher;
+        this.storageLocationValidationService = storageLocationValidationService;
         this.applicationEventPublisher = applicationEventPublisher;
         this.meterRegistry = meterRegistry;
         this.clock = clock;
@@ -53,7 +56,7 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
             throw new IllegalArgumentException("locationId is required");
         }
 
-        StorageLocationValidationClient.StorageLocationValidation sourceValidation = validateSourceLocation(locationId);
+        StorageLocationValidationService.StorageLocationValidation sourceValidation = validateSourceLocation(locationId);
         List<InventoryLedgerEntryRepository.LocationOnHand> onHandRows =
                 inventoryLedgerEntryRepository.findPositiveOnHandByLocation(
                         locationId, InventoryLedgerEventType.onHandAffectingTypes());
@@ -61,7 +64,7 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
 
         UUID resolvedDestinationLocationId = destinationLocationId;
         if (hasStock) {
-            StorageLocationValidationClient.StorageLocationValidation destinationValidation =
+            StorageLocationValidationService.StorageLocationValidation destinationValidation =
                     validateDestinationLocation(locationId, sourceValidation, destinationLocationId);
             resolvedDestinationLocationId = destinationValidation.getStorageLocationId();
         }
@@ -86,9 +89,9 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
         return response;
     }
 
-    private StorageLocationValidationClient.StorageLocationValidation validateSourceLocation(UUID locationId) {
-        StorageLocationValidationClient.StorageLocationValidation sourceValidation =
-                storageLocationValidationClient.getStorageLocationValidation(locationId.toString());
+    private StorageLocationValidationService.StorageLocationValidation validateSourceLocation(UUID locationId) {
+        StorageLocationValidationService.StorageLocationValidation sourceValidation =
+                storageLocationValidationService.getStorageLocationValidation(locationId.toString());
         if (!sourceValidation.isExists()) {
             throw new LocationNotFoundException(locationId);
         }
@@ -98,9 +101,9 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
         return sourceValidation;
     }
 
-    private StorageLocationValidationClient.StorageLocationValidation validateDestinationLocation(
+    private StorageLocationValidationService.StorageLocationValidation validateDestinationLocation(
             UUID sourceLocationId,
-            StorageLocationValidationClient.StorageLocationValidation sourceValidation,
+            StorageLocationValidationService.StorageLocationValidation sourceValidation,
             UUID destinationLocationId) {
         if (destinationLocationId == null) {
             throw new IllegalArgumentException("destinationLocationId is required when source has stock");
@@ -109,8 +112,8 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
             throw new IllegalArgumentException("destinationLocationId must be different from locationId");
         }
 
-        StorageLocationValidationClient.StorageLocationValidation destinationValidation =
-                storageLocationValidationClient.getStorageLocationValidation(destinationLocationId.toString());
+        StorageLocationValidationService.StorageLocationValidation destinationValidation =
+                storageLocationValidationService.getStorageLocationValidation(destinationLocationId.toString());
         if (!destinationValidation.isExists()) {
             throw new LocationNotFoundException(destinationLocationId);
         }
@@ -183,6 +186,7 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
 
         if (!transferEntries.isEmpty()) {
             inventoryLedgerEntryRepository.saveAll(transferEntries);
+            inventoryFactPublisher.markEntries(transferEntries);
         }
         return movedItems;
     }

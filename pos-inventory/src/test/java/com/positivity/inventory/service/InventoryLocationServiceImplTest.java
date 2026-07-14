@@ -2,7 +2,7 @@ package com.positivity.inventory.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.positivity.inventory.internal.client.StorageLocationValidationClient;
+import com.positivity.inventory.internal.service.StorageLocationValidationService;
 import com.positivity.inventory.internal.dto.DeactivateLocationResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.client.RestClient;
 
 /**
  * Verifies current deactivation response contract for inventory locations.
@@ -40,14 +39,15 @@ class InventoryLocationServiceImplTest {
         UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         List<InventoryLedgerEntry> persistedEntries = new ArrayList<>();
         List<Object> publishedEvents = new ArrayList<>();
-        Map<String, StorageLocationValidationClient.StorageLocationValidation> validations = new HashMap<>();
+        Map<String, StorageLocationValidationService.StorageLocationValidation> validations = new HashMap<>();
         validations.put(sourceLocationId.toString(), validation(sourceLocationId, siteId, true, true));
 
         InventoryLocationServiceImpl service = new InventoryLocationServiceImpl(
                 stubLedgerRepository(List.of(), Map.of(), persistedEntries),
-                new StubStorageLocationValidationClient(validations),
+                new StubStorageLocationValidationService(validations),
                 eventPublisher(publishedEvents),
                 new SimpleMeterRegistry(),
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 TEST_CLOCK);
 
         DeactivateLocationResponse response = service.deactivateLocation(sourceLocationId, destinationLocationId);
@@ -71,7 +71,7 @@ class InventoryLocationServiceImplTest {
             UUID destinationLocationId = UUID.fromString("00000000-0000-0000-0000-000000000002");
             UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             List<InventoryLedgerEntry> persistedEntries = new ArrayList<>();
-            Map<String, StorageLocationValidationClient.StorageLocationValidation> validations = new HashMap<>();
+            Map<String, StorageLocationValidationService.StorageLocationValidation> validations = new HashMap<>();
             validations.put(sourceLocationId.toString(), validation(sourceLocationId, siteId, true, true));
             validations.put(destinationLocationId.toString(), validation(destinationLocationId, siteId, true, true));
             InventoryLocationServiceImpl service = new InventoryLocationServiceImpl(
@@ -79,9 +79,10 @@ class InventoryLocationServiceImplTest {
                             List.of(onHand("SKU-001", 5L)),
                             Map.of(stockKey("SKU-001", destinationLocationId), 3),
                             persistedEntries),
-                    new StubStorageLocationValidationClient(validations),
+                    new StubStorageLocationValidationService(validations),
                     eventPublisher(new ArrayList<>()),
                     new SimpleMeterRegistry(),
+                    org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                     TEST_CLOCK);
 
             DeactivateLocationResponse response = service.deactivateLocation(sourceLocationId, destinationLocationId);
@@ -175,10 +176,10 @@ class InventoryLocationServiceImplTest {
         return null;
     }
 
-    private StorageLocationValidationClient.StorageLocationValidation validation(
+    private StorageLocationValidationService.StorageLocationValidation validation(
             UUID locationId, UUID siteId, boolean exists, boolean active) {
-        StorageLocationValidationClient.StorageLocationValidation validation =
-                new StorageLocationValidationClient.StorageLocationValidation();
+        StorageLocationValidationService.StorageLocationValidation validation =
+                new StorageLocationValidationService.StorageLocationValidation();
         validation.setStorageLocationId(locationId);
         validation.setSiteId(siteId);
         validation.setExists(exists);
@@ -186,11 +187,11 @@ class InventoryLocationServiceImplTest {
         return validation;
     }
 
-    private static final class StubStorageLocationValidationClient extends StorageLocationValidationClient {
+    private static final class StubStorageLocationValidationService extends StorageLocationValidationService {
         private final Map<String, StorageLocationValidation> validationsById;
 
-        private StubStorageLocationValidationClient(Map<String, StorageLocationValidation> validationsById) {
-            super(RestClient.builder(), "http://localhost:8080");
+        private StubStorageLocationValidationService(Map<String, StorageLocationValidation> validationsById) {
+            super(null);
             this.validationsById = validationsById;
         }
 

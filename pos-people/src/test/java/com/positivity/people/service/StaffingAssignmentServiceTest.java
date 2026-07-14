@@ -4,17 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import com.positivity.people.internal.client.LocationReferenceClient;
+import com.positivity.people.internal.service.LocationReferenceService;
 import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
-import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
-import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.service.StaffingAssignmentServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
@@ -46,13 +46,16 @@ class StaffingAssignmentServiceTest {
     private EmployeeLocationAssignmentRepository repository;
 
     @Mock
-    private PersonRepository personRepository;
+    private ExtPersonReplicaRepository extPersonReplicaRepository;
+
+    @Mock
+    private com.positivity.people.internal.config.PeopleEventPublisher peopleEventPublisher;
 
     @Mock
     private EmployeeRepository employeeRepository;
 
     @Mock
-    private LocationReferenceClient locationReferenceClient;
+    private LocationReferenceService locationReferenceService;
 
     private StaffingAssignmentServiceImpl service;
 
@@ -61,16 +64,25 @@ class StaffingAssignmentServiceTest {
     @BeforeEach
     void setUp() {
         service = new StaffingAssignmentServiceImpl(
-                repository, personRepository, employeeRepository, locationReferenceClient, FIXED_CLOCK);
+                repository,
+                extPersonReplicaRepository,
+                peopleEventPublisher,
+                employeeRepository,
+                locationReferenceService,
+                FIXED_CLOCK);
 
         employee = Employee.builder()
                 .personId(PERSON_ID)
                 .status(EmployeeStatus.ACTIVE)
                 .build();
-        when(personRepository.findById(PERSON_ID))
-                .thenReturn(Optional.of(Person.builder().id(PERSON_ID).build()));
+        when(extPersonReplicaRepository.findById(PERSON_ID))
+                .thenReturn(Optional.of(ExtPersonReplica.builder()
+                        .personId(PERSON_ID)
+                        .aggregateVersion(0)
+                        .updatedAt(java.time.Instant.now())
+                        .build()));
         when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee));
-        when(locationReferenceClient.isLocationActive(LOCATION_ID)).thenReturn(true);
+        when(locationReferenceService.isLocationActive(LOCATION_ID)).thenReturn(true);
         when(repository.existsOverlapping(any(), any(), any(), any(), any())).thenReturn(false);
         when(repository.save(any(EmployeeLocationAssignment.class))).thenAnswer(inv -> inv.getArgument(0));
     }

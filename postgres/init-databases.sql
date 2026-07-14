@@ -14,6 +14,7 @@ CREATE DATABASE pos_location_db;
 CREATE DATABASE pos_mcp;
 CREATE DATABASE pos_order_db;
 CREATE DATABASE pos_people_db;
+CREATE DATABASE pos_people_contact_db;
 CREATE DATABASE pos_price_db;
 CREATE DATABASE pos_security_db;
 CREATE DATABASE pos_shop_manager_db;
