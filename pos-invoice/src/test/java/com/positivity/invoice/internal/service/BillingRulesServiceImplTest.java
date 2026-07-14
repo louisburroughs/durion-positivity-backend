@@ -35,6 +35,9 @@ class BillingRulesServiceImplTest {
     @Mock
     private BillingRulesRepository billingRulesRepository;
 
+    @Mock
+    private com.positivity.invoice.internal.config.InvoiceEventPublisher invoiceEventPublisher;
+
     @InjectMocks
     private BillingRulesServiceImpl billingRulesService;
 

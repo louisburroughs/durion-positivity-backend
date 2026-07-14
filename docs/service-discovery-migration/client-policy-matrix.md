@@ -5,6 +5,12 @@ branch: cap/641-service-discovery-migration
 status: draft
 ---
 
+> **Superseded for domain→domain calls (ADR-0044, 2026-07-14).** Every domain→domain row in
+> this matrix is historical: ADR-0044 retired synchronous domain-to-domain REST in favor of
+> events, commands, and replicas, and the `pos-archunit` `DomainWallsTest` now fails the build
+> on any new domain→domain client (#902). Only the utility-module rows (gateway, security,
+> documents, image, tax, price, event-receiver) remain current policy.
+
 ## Scope
 
 This matrix classifies every RestClient consumer listed for Wave 0.

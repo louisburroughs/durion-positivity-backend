@@ -26,14 +26,11 @@ import org.junit.jupiter.api.Test;
  * config keys, {@code lb://} URIs) because the targets live in string literals and {@code @Value}
  * defaults rather than in the type graph.
  *
- * <p><strong>Report-only during migration:</strong> violations are printed, not failed, until the
- * ADR-0044 Phase 5 flip. Set {@code -Darchunit.domainWalls.enforce=true} to fail on violations.
- * The utility whitelist below is the single source of truth; changing it requires amending
- * ADR-0044.
+ * <p><strong>Build-failing since Phase 5.6 (#902):</strong> the ADR-0044 migration is complete
+ * and any new synchronous domain→domain client fails the build. The utility whitelist below is
+ * the single source of truth; changing it requires amending ADR-0044.
  */
 class DomainWallsTest {
-
-    private static final String ENFORCE_PROPERTY = "archunit.domainWalls.enforce";
 
     /** ADR-0044 §1 utility modules (plus this repo's module-name aliases for them). */
     private static final Set<String> UTILITY_MODULES = Set.of(
@@ -97,11 +94,8 @@ class DomainWallsTest {
         report.append("  total violating client sources: ").append(total);
         System.out.println(report);
 
-        if (Boolean.getBoolean(ENFORCE_PROPERTY)) {
-            Assertions.assertTrue(
-                    violations.isEmpty(),
-                    "ADR-0044: internal.client sources may only target utility modules\n" + report);
-        }
+        Assertions.assertTrue(
+                violations.isEmpty(), "ADR-0044: internal.client sources may only target utility modules\n" + report);
     }
 
     /** internal/client sources plus internal/config client wiring (base URLs often live there). */
