@@ -2,7 +2,8 @@ package com.positivity.location.internal.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.location.internal.client.LocationInventoryInquiryClient;
+import com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica;
+import com.positivity.location.internal.repository.ExtStorageLocationOnHandReplicaRepository;
 import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
@@ -52,19 +53,19 @@ public class StorageLocationServiceImpl implements StorageLocationService {
     private final LocationRepository locationRepository;
     private final LocationFactPublisher locationFactPublisher;
     private final StorageLocationInventoryTransferService storageLocationInventoryTransferService;
-    private final LocationInventoryInquiryClient locationInventoryInquiryClient;
+    private final ExtStorageLocationOnHandReplicaRepository extStorageLocationOnHandReplicaRepository;
 
     public StorageLocationServiceImpl(
             StorageLocationRepository storageLocationRepository,
             LocationRepository locationRepository,
             LocationFactPublisher locationFactPublisher,
             StorageLocationInventoryTransferService storageLocationInventoryTransferService,
-            LocationInventoryInquiryClient locationInventoryInquiryClient) {
+            ExtStorageLocationOnHandReplicaRepository extStorageLocationOnHandReplicaRepository) {
         this.storageLocationRepository = storageLocationRepository;
         this.locationRepository = locationRepository;
         this.locationFactPublisher = locationFactPublisher;
         this.storageLocationInventoryTransferService = storageLocationInventoryTransferService;
-        this.locationInventoryInquiryClient = locationInventoryInquiryClient;
+        this.extStorageLocationOnHandReplicaRepository = extStorageLocationOnHandReplicaRepository;
     }
 
     /**
@@ -262,7 +263,7 @@ public class StorageLocationServiceImpl implements StorageLocationService {
                 .findByIdAndSiteId(storageLocationId, siteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, STORAGE_LOCATION_NOT_FOUND));
 
-        if (locationInventoryInquiryClient.getOnHandQuantity(storageLocationId) > 0) {
+        if (replicaOnHandQuantity(storageLocationId) > 0) {
             transferInventory(siteId, existing, destinationStorageLocationId);
         }
 
@@ -270,6 +271,18 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         StorageLocationEntity saved = storageLocationRepository.saveAndFlush(existing);
         locationFactPublisher.storageLocationChanged(saved);
         return toResponse(saved);
+    }
+
+    /**
+     * On-hand at a storage location from the ext_storage_location_on_hand replica (ADR-0044 §6,
+     * #899; replaces the retired LocationInventoryInquiryClient). A location the feed has never
+     * reported carries no known stock, matching the owner ledger's empty state.
+     */
+    private int replicaOnHandQuantity(UUID storageLocationId) {
+        return extStorageLocationOnHandReplicaRepository
+                .findById(storageLocationId)
+                .map(ExtStorageLocationOnHandReplica::getOnHandQuantity)
+                .orElse(0);
     }
 
     private String normalizeRequired(String value, String fieldName) {
@@ -386,7 +399,7 @@ public class StorageLocationServiceImpl implements StorageLocationService {
             return;
         }
         if (requested == StorageLocationStatus.INACTIVE
-                && locationInventoryInquiryClient.getOnHandQuantity(storageLocationId) > 0) {
+                && replicaOnHandQuantity(storageLocationId) > 0) {
             UUID destinationStorageLocationId = patch.getDestinationStorageLocationId();
             if (destinationStorageLocationId != null && destinationStorageLocationId.equals(storageLocationId)) {
                 throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, INVALID_DESTINATION);

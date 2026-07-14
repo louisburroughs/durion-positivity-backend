@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.location.internal.client.LocationInventoryInquiryClient;
+import com.positivity.location.internal.repository.ExtStorageLocationOnHandReplicaRepository;
 import com.positivity.location.internal.dto.StorageLocationTopologyResponse;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.StorageLocationEntity;
@@ -45,7 +45,7 @@ class StorageLocationTopologyServiceTest {
     private StorageLocationInventoryTransferService storageLocationInventoryTransferService;
 
     @Mock
-    private LocationInventoryInquiryClient locationInventoryInquiryClient;
+    private ExtStorageLocationOnHandReplicaRepository extStorageLocationOnHandReplicaRepository;
 
     @InjectMocks
     private StorageLocationServiceImpl storageLocationService;

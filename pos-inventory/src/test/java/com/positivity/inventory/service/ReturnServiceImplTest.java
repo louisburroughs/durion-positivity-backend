@@ -81,11 +81,19 @@ class ReturnServiceImplTest {
     }
 
     private ReturnServiceImpl service() {
-        return new ReturnServiceImpl(inventoryReturnRepository, inventoryLedgerEntryRepository, clock);
+        return new ReturnServiceImpl(
+                inventoryReturnRepository,
+                inventoryLedgerEntryRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
+                clock);
     }
 
     private ReturnServiceImpl serviceWithLedgerRepository() {
-        return new ReturnServiceImpl(inventoryReturnRepository, inventoryLedgerEntryRepository, clock);
+        return new ReturnServiceImpl(
+                inventoryReturnRepository,
+                inventoryLedgerEntryRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
+                clock);
     }
 
     // ─── RS1: returnItemsToStock — valid request → ReturnResponse fields ─────────

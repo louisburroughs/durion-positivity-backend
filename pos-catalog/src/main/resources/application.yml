@@ -1,6 +1,12 @@
 spring:
   application:
     name: catalog
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
   datasource:
     url: ${SPRING_DATASOURCE_URL:}
     username: ${SPRING_DATASOURCE_USERNAME:}
@@ -41,9 +47,16 @@ pos:
     service-id: price
     base-path: /v1/price
     default-customer-tier-id: ${POS_PRICE_DEFAULT_CUSTOMER_TIER_ID:00000000-0000-0000-0000-000000000001}
-  inventory:
-    service-id: inventory
-    base-path: /v1/inventory
+  catalog:
+    kafka:
+      # Inventory availability/lead-time replica feed + reconciliation (ADR-0044 §6, #899).
+      # Off until the broker is provisioned; flip POS_CATALOG_KAFKA_ENABLED per environment.
+      enabled: ${POS_CATALOG_KAFKA_ENABLED:false}
+      inventory-events-topic: ${POS_CATALOG_INVENTORY_EVENTS_TOPIC:inventory.events.v1}
+      inventory-events-consumer-group: ${POS_CATALOG_INVENTORY_EVENTS_CONSUMER_GROUP:pos-catalog-inventory-events}
+      inventory-manifest-topic: ${POS_CATALOG_INVENTORY_MANIFEST_TOPIC:inventory.manifest.v1}
+      inventory-manifest-consumer-group: ${POS_CATALOG_INVENTORY_MANIFEST_CONSUMER_GROUP:pos-catalog-inventory-manifests}
+      inventory-commands-topic: ${POS_CATALOG_INVENTORY_COMMANDS_TOPIC:inventory.commands.v1}
 
 logging:
   level:

@@ -62,6 +62,7 @@ class ConsumptionServiceImplTest {
                 inventoryLedgerEntryRepository,
                 reservationRepository,
                 allocationRepository,
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 FIXED_CLOCK);
     }
 

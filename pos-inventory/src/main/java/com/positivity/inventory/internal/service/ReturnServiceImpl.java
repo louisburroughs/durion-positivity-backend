@@ -36,6 +36,7 @@ public class ReturnServiceImpl implements ReturnService {
 
     private final InventoryReturnRepository inventoryReturnRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final InventoryFactPublisher inventoryFactPublisher;
     private final Clock clock;
 
     @Override
@@ -112,6 +113,7 @@ public class ReturnServiceImpl implements ReturnService {
         }
 
         List<InventoryLedgerEntry> savedLedgerEntries = inventoryLedgerEntryRepository.saveAll(ledgerEntries);
+        inventoryFactPublisher.markEntries(savedLedgerEntries);
         List<UUID> ledgerEntryIds = savedLedgerEntries.stream()
                 .map(InventoryLedgerEntry::getLedgerEntryId)
                 .filter(Objects::nonNull)

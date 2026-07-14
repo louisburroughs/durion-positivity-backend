@@ -32,14 +32,17 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
     private final ApplicationEventPublisher applicationEventPublisher;
     private final MeterRegistry meterRegistry;
     private final Clock clock;
+    private final InventoryFactPublisher inventoryFactPublisher;
 
     public InventoryLocationServiceImpl(
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
             StorageLocationValidationService storageLocationValidationService,
             ApplicationEventPublisher applicationEventPublisher,
             MeterRegistry meterRegistry,
+            InventoryFactPublisher inventoryFactPublisher,
             Clock clock) {
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
+        this.inventoryFactPublisher = inventoryFactPublisher;
         this.storageLocationValidationService = storageLocationValidationService;
         this.applicationEventPublisher = applicationEventPublisher;
         this.meterRegistry = meterRegistry;
@@ -183,6 +186,7 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
 
         if (!transferEntries.isEmpty()) {
             inventoryLedgerEntryRepository.saveAll(transferEntries);
+            inventoryFactPublisher.markEntries(transferEntries);
         }
         return movedItems;
     }

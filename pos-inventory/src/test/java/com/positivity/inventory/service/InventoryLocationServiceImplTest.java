@@ -47,6 +47,7 @@ class InventoryLocationServiceImplTest {
                 new StubStorageLocationValidationService(validations),
                 eventPublisher(publishedEvents),
                 new SimpleMeterRegistry(),
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 TEST_CLOCK);
 
         DeactivateLocationResponse response = service.deactivateLocation(sourceLocationId, destinationLocationId);
@@ -81,6 +82,7 @@ class InventoryLocationServiceImplTest {
                     new StubStorageLocationValidationService(validations),
                     eventPublisher(new ArrayList<>()),
                     new SimpleMeterRegistry(),
+                    org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                     TEST_CLOCK);
 
             DeactivateLocationResponse response = service.deactivateLocation(sourceLocationId, destinationLocationId);

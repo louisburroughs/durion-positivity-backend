@@ -25,78 +25,25 @@ import org.springframework.web.client.RestClient;
 
 class CatalogClientBuilderTest {
 
-    private static final String INVENTORY_BASE_URL = "http://inventory";
     private static final String PRICE_BASE_URL = "http://price";
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withUserConfiguration(TestClientConfiguration.class, BuilderProbeConfiguration.class);
 
     @Test
-    void inventoryAndPricingClientsUseLoadBalancedBuilderWithDirectServiceBaseUrls() {
+    void pricingClientUsesLoadBalancedBuilderWithDirectServiceBaseUrl() {
         contextRunner.run(context -> {
             RestClient.Builder plainBuilder = context.getBean("restClientBuilder", RestClient.Builder.class);
             RestClient.Builder loadBalancedBuilder =
                     context.getBean("loadBalancedRestClientBuilder", RestClient.Builder.class);
 
-            context.getBean(InventoryClientImpl.class);
             context.getBean(PricingClientImpl.class);
 
-            verify(loadBalancedBuilder, times(1)).baseUrl(INVENTORY_BASE_URL);
             verify(loadBalancedBuilder, times(1)).baseUrl(PRICE_BASE_URL);
-            verify(loadBalancedBuilder, times(2)).build();
-            verify(plainBuilder, never()).baseUrl(INVENTORY_BASE_URL);
+            verify(loadBalancedBuilder, times(1)).build();
             verify(plainBuilder, never()).baseUrl(PRICE_BASE_URL);
             verify(plainBuilder, never()).build();
         });
-    }
-
-    @Test
-    void inventoryClientUsesDirectServiceAvailabilityQueryPath() {
-        RestClient.Builder builder = RestClient.builder();
-        MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
-        InventoryClientImpl client = new InventoryClientImpl(builder, "inventory", "/v1/inventory");
-        UUID locationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
-
-        mockServer
-                .expect(requestTo(INVENTORY_BASE_URL
-                        + "/v1/inventory/availability/by-sku?productSku=SKU-123&locationId=" + locationId))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess(
-                        "{" + "\"onHandQuantity\":12,"
-                                + "\"allocatedQuantity\":4,"
-                                + "\"availableToPromiseQuantity\":8,"
-                                + "\"unitOfMeasure\":\"EA\""
-                                + "}",
-                        MediaType.APPLICATION_JSON));
-
-        assertThat(client.fetchAvailability("SKU-123", locationId)).isPresent();
-        mockServer.verify();
-    }
-
-    @Test
-    void inventoryClientUsesDirectServiceLeadTimePath() {
-        RestClient.Builder builder = RestClient.builder();
-        MockRestServiceServer mockServer = MockRestServiceServer.bindTo(builder).build();
-        InventoryClientImpl client = new InventoryClientImpl(builder, "inventory", "/v1/inventory");
-        UUID productId = UUID.fromString("22222222-2222-2222-2222-222222222222");
-        UUID locationId = UUID.fromString("33333333-3333-3333-3333-333333333333");
-
-        mockServer
-                .expect(requestTo(INVENTORY_BASE_URL + "/v1/inventory/availability/lead-time?productId=" + productId
-                        + "&locationId=" + locationId))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess(
-                        "{" + "\"minDays\":1,"
-                                + "\"maxDays\":3,"
-                                + "\"displayText\":\"1-3 days\","
-                                + "\"source\":\"INVENTORY\","
-                                + "\"confidence\":\"HIGH\","
-                                + "\"asOf\":\"2026-05-05T12:00:00Z\""
-                                + "}",
-                        MediaType.APPLICATION_JSON));
-
-        assertThat(client.fetchLeadTime(productId, locationId)).isPresent();
-        mockServer.verify();
     }
 
     @Test
@@ -128,12 +75,6 @@ class CatalogClientBuilderTest {
     static class TestClientConfiguration {
 
         @Bean
-        InventoryClientImpl inventoryClientImpl(
-                @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder loadBalancedRestClientBuilder) {
-            return new InventoryClientImpl(loadBalancedRestClientBuilder, "inventory", "/v1/inventory");
-        }
-
-        @Bean
         PricingClientImpl pricingClientImpl(
                 @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder loadBalancedRestClientBuilder) {
             return new PricingClientImpl(loadBalancedRestClientBuilder, "price", "/v1/price");
@@ -146,12 +87,12 @@ class CatalogClientBuilderTest {
         @Bean("restClientBuilder")
         @Primary
         RestClient.Builder restClientBuilder() {
-            return mockBuilder(INVENTORY_BASE_URL, PRICE_BASE_URL);
+            return mockBuilder(PRICE_BASE_URL);
         }
 
         @Bean("loadBalancedRestClientBuilder")
         RestClient.Builder loadBalancedRestClientBuilder() {
-            return mockBuilder(INVENTORY_BASE_URL, PRICE_BASE_URL);
+            return mockBuilder(PRICE_BASE_URL);
         }
 
         private RestClient.Builder mockBuilder(String... baseUrls) {

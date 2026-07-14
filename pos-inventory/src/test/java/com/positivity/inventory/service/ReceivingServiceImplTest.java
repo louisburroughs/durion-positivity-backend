@@ -84,6 +84,9 @@ class ReceivingServiceImplTest {
     @Mock
     private WorkorderValidationService workorderValidationService;
 
+    @org.mockito.Mock
+    private com.positivity.inventory.internal.service.InventoryFactPublisher inventoryFactPublisher;
+
     @InjectMocks
     private ReceivingServiceImpl receivingService;
 

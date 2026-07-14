@@ -63,6 +63,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final ReceivingSessionRepository receivingSessionRepository;
     private final InventoryVarianceRepository inventoryVarianceRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final InventoryFactPublisher inventoryFactPublisher;
     private final SourceDocumentStubClient sourceDocumentStubClient;
     private final SiteDefaultsService siteDefaultsService;
     private final WorkorderValidationService workorderValidationService;
@@ -247,6 +248,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .build();
 
         InventoryLedgerEntry savedReceiptEntry = inventoryLedgerEntryRepository.save(receiptEntry);
+        inventoryFactPublisher.markEntry(savedReceiptEntry);
         int issueQuantityAfter = calculateQuantityAfter(line.getProductId(), crossDockLocationId, -quantityDelta);
 
         InventoryLedgerEntry issueEntry = InventoryLedgerEntry.builder()
@@ -262,6 +264,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .build();
 
         InventoryLedgerEntry savedIssueEntry = inventoryLedgerEntryRepository.save(issueEntry);
+        inventoryFactPublisher.markEntry(savedIssueEntry);
 
         line.setWorkorderId(workorderId);
         line.setWorkorderLineId(request.getWorkorderLineId());
@@ -334,6 +337,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .build();
 
         inventoryLedgerEntryRepository.save(entry);
+        inventoryFactPublisher.markEntry(entry);
     }
 
     private int toWholeLedgerQuantity(BigDecimal quantity, String fieldName) {
