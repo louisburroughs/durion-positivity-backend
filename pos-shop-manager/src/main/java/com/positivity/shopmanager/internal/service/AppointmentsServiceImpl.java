@@ -16,8 +16,10 @@ import com.positivity.shopmanager.internal.dto.ScheduleViewResponse;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.AppointmentAudit;
 import com.positivity.shopmanager.internal.entity.AppointmentServiceRequest;
+import com.positivity.shopmanager.internal.entity.ExtPersonReplica;
 import com.positivity.shopmanager.internal.entity.RescheduleHistory;
 import com.positivity.shopmanager.internal.entity.Shop;
+import com.positivity.shopmanager.internal.entity.Technician;
 import com.positivity.shopmanager.internal.enums.AppointmentAction;
 import com.positivity.shopmanager.internal.enums.AppointmentSourceType;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
@@ -36,6 +38,7 @@ import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchExce
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.service.AppointmentLoadService;
@@ -59,6 +62,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -90,6 +94,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private final ApplicationEventPublisher eventPublisher;
     private final ShopRepository shopRepository;
     private final SourceEligibilityService sourceEligibilityService;
+    private final ExtPersonReplicaRepository extPersonReplicaRepository;
     private final Clock clock;
 
     /**
@@ -741,13 +746,24 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             Shop shop,
             Map<String, List<ResourceLaneKey>> technicianLanesByResourceId,
             Map<ResourceLaneKey, String> resourceNames) {
+        // #885: one replica read for the whole schedule view, not one per technician.
+        List<UUID> personIds = shop.getTechnicians().stream()
+                .filter(t -> t != null && t.getId() != null && t.getPersonId() != null)
+                .map(Technician::getPersonId)
+                .toList();
+        Map<UUID, ExtPersonReplica> replicasByPersonId = personIds.isEmpty()
+                ? Map.of()
+                : extPersonReplicaRepository.findAllById(personIds).stream()
+                        .collect(Collectors.toMap(ExtPersonReplica::getPersonId, r -> r));
         for (var technician : shop.getTechnicians()) {
             if (technician != null && technician.getId() != null) {
                 List<ResourceLaneKey> technicianLanes =
                         technicianLanesByResourceId.get(technician.getId().toString());
                 if (technicianLanes != null) {
-                    String technicianName =
-                            resolveTechnicianDisplayName(technician.getId().toString(), technician.getPersonId());
+                    String technicianName = resolveTechnicianDisplayName(
+                            technician.getId().toString(),
+                            technician.getPersonId(),
+                            replicasByPersonId.get(technician.getPersonId()));
                     for (ResourceLaneKey laneKey : technicianLanes) {
                         resourceNames.put(laneKey, technicianName);
                     }
@@ -756,11 +772,19 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         }
     }
 
-    private String resolveTechnicianDisplayName(String technicianId, Long personId) {
+    private String resolveTechnicianDisplayName(String technicianId, UUID personId, ExtPersonReplica replica) {
         if (personId == null) {
             return technicianId;
         }
-        return "Technician " + personId;
+        // #885: person names come from the local people-contact replica; fall back to a
+        // placeholder while the replica catches up.
+        if (replica == null) {
+            return "Technician " + personId;
+        }
+        String name = ((replica.getFirstName() == null ? "" : replica.getFirstName() + " ")
+                        + (replica.getLastName() == null ? "" : replica.getLastName()))
+                .trim();
+        return name.isBlank() ? "Technician " + personId : name;
     }
 
     private ScheduleViewResponse.ScheduleEventView toScheduleEvent(Appointment appointment) {

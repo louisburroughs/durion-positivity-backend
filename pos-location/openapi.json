@@ -801,9 +801,9 @@
             "description": "Mailing address if different from physical"
           },
           "responsiblePersonId": {
-            "type": "integer",
-            "format": "int64",
-            "description": "ID of the person responsible for this location (from pos-people service)"
+            "type": "string",
+            "format": "uuid",
+            "description": "People-contact person identifier of the responsible person"
           }
         }
       },
@@ -834,9 +834,9 @@
         "description": "Person data transfer object",
         "properties": {
           "id": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Person ID"
+            "type": "string",
+            "format": "uuid",
+            "description": "People-contact person identifier"
           },
           "firstName": {
             "type": "string",
@@ -862,10 +862,6 @@
               "type": "string"
             },
             "description": "List of phone numbers"
-          },
-          "username": {
-            "type": "string",
-            "description": "Username"
           }
         }
       }

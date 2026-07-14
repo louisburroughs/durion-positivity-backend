@@ -3,6 +3,7 @@ package com.positivity.shopmanager.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,6 +21,7 @@ import com.positivity.shopmanager.internal.exception.AppointmentValidationExcept
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
@@ -113,6 +115,7 @@ class AppointmentsServiceImplStory11Test {
                 eventPublisher,
                 shopRepository,
                 sourceEligibilityService,
+                mock(ExtPersonReplicaRepository.class),
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
     }
 

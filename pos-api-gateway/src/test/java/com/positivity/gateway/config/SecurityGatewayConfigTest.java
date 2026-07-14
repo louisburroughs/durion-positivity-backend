@@ -1142,9 +1142,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 19")
-    void catalogVersionIsNineteen() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(19);
+    @DisplayName("CATALOG_VERSION is 20")
+    void catalogVersionIsTwenty() {
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(20);
     }
 
     @Test
@@ -1190,8 +1190,11 @@ class SecurityGatewayConfigTest {
         // catalog v19 (#823/#874): people-contact authorities appended (bits 351-359)
         assertThat(GatewayPermissionCatalog.authorityForBit(351)).isEqualTo("PERM_people-contact:person:view");
         assertThat(GatewayPermissionCatalog.authorityForBit(359)).isEqualTo("PERM_people-contact:userLink:write");
+        // catalog v20 (#885/#888): compliance report + technician identity authorities (bits 360-361)
+        assertThat(GatewayPermissionCatalog.authorityForBit(360)).isEqualTo("PERM_people:compliance:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(361)).isEqualTo("PERM_shop:technician:view");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(360)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(362)).isNull();
     }
 
     @Test

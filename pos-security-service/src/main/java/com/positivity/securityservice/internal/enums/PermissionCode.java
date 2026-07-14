@@ -466,13 +466,18 @@ public enum PermissionCode {
     PEOPLE_CONTACT__ROLE__ASSIGN(356, "people-contact:role:assign"),
     PEOPLE_CONTACT__ROLE__REVOKE(357, "people-contact:role:revoke"),
     PEOPLE_CONTACT__USER_LINK__VIEW(358, "people-contact:userLink:view"),
-    PEOPLE_CONTACT__USER_LINK__WRITE(359, "people-contact:userLink:write");
+    PEOPLE_CONTACT__USER_LINK__WRITE(359, "people-contact:userLink:write"),
+    // ── People (new) ───────────────────────────────────────────────────────────
+    PEOPLE__COMPLIANCE__VIEW(360, "people:compliance:view"),
+
+    // ── Shop (new) ─────────────────────────────────────────────────────────────
+    SHOP__TECHNICIAN__VIEW(361, "shop:technician:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 19;
+    public static final int CATALOG_VERSION = 20;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

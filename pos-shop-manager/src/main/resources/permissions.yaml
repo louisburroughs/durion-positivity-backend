@@ -18,6 +18,8 @@ permissions:
     description: "Edit service bays"
   - name: "shop:bay:assign"
     description: "Assign work to bays"
+  - name: "shop:technician:view"
+    description: "View technician identity details"
   - name: "shop:schedule:view"
     description: "View shop schedules"
   - name: "shop:schedule:edit"

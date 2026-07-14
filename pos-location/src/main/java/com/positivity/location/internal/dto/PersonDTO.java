@@ -4,14 +4,18 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
+import java.util.UUID;
 import lombok.Data;
 
 @Data
 @Schema(description = "Person reference associated with a location")
 public class PersonDTO {
 
-    @Schema(description = "Unique identifier of the person", example = "1001", requiredMode = NOT_REQUIRED)
-    private Long id;
+    @Schema(
+            description = "People-contact person identifier",
+            example = "01960011-0000-7000-8000-000000000001",
+            requiredMode = NOT_REQUIRED)
+    private UUID id;
 
     @Schema(description = "First name of the person", example = "Jane", requiredMode = NOT_REQUIRED)
     private String firstName;
@@ -36,7 +40,4 @@ public class PersonDTO {
             example = "[\"+1-217-555-0100\"]",
             requiredMode = NOT_REQUIRED)
     private List<String> phoneNumbers;
-
-    @Schema(description = "Login username of the person", example = "jdoe", requiredMode = NOT_REQUIRED)
-    private String username;
 }

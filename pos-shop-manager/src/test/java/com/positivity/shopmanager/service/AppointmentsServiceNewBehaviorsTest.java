@@ -29,6 +29,7 @@ import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
@@ -106,6 +107,7 @@ class AppointmentsServiceNewBehaviorsTest {
                 applicationEventPublisher,
                 shopRepository,
                 sourceEligibilityService,
+                mock(ExtPersonReplicaRepository.class),
                 Clock.fixed(Instant.parse("2025-06-01T10:00:00Z"), ZoneOffset.UTC));
 
         appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");

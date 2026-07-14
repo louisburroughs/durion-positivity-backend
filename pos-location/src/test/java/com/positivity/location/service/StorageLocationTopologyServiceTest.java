@@ -5,12 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.location.internal.repository.ExtStorageLocationOnHandReplicaRepository;
 import com.positivity.location.internal.dto.StorageLocationTopologyResponse;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
+import com.positivity.location.internal.repository.ExtStorageLocationOnHandReplicaRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.StorageLocationRepository;
 import com.positivity.location.internal.service.StorageLocationServiceImpl;

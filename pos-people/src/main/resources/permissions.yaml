@@ -4,6 +4,8 @@ version: "1.0"
 permissions:
   - name: "people:availability:view"
     description: "View availability"
+  - name: "people:compliance:view"
+    description: "View identity-compliance reports (active users linked to inactive persons)"
   - name: "people:employee:create"
     description: "Create employee records"
   - name: "people:employee:deactivate"

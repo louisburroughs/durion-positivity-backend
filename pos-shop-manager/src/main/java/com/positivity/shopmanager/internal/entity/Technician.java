@@ -35,8 +35,8 @@ public class Technician {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
-    // Reference to Person in pos-people
-    private Long personId;
+    // People-contact person UUID (#885); names resolve via the ext_people_contact_person replica
+    private UUID personId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shop_id")

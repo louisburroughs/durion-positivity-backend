@@ -1498,10 +1498,10 @@ components:
           description: Whether the location is active
           example: true
         responsiblePersonId:
-          type: integer
-          format: int64
-          description: Identifier of the person responsible for the location
-          example: 1001
+          type: string
+          format: uuid
+          description: People-contact person identifier of the person responsible for the location
+          example: 01960011-0000-7000-8000-000000000001
         timezone:
           type: string
           description: IANA timezone identifier for the location
@@ -1628,10 +1628,10 @@ components:
           description: Whether the location is active
           example: true
         responsiblePersonId:
-          type: integer
-          format: int64
-          description: Identifier of the person responsible for the location
-          example: 1001
+          type: string
+          format: uuid
+          description: People-contact person identifier of the person responsible for the location
+          example: 01960011-0000-7000-8000-000000000001
         type:
           $ref: '#/components/schemas/LocationTypeDTO'
       required:
@@ -2663,10 +2663,10 @@ components:
       description: Person reference associated with a location
       properties:
         id:
-          type: integer
-          format: int64
-          description: Unique identifier of the person
-          example: 1001
+          type: string
+          format: uuid
+          description: People-contact person identifier
+          example: 01960011-0000-7000-8000-000000000001
         firstName:
           type: string
           description: First name of the person
@@ -2690,10 +2690,6 @@ components:
           - +1-217-555-0100
           items:
             type: string
-        username:
-          type: string
-          description: Login username of the person
-          example: jdoe
     LocationDescendantResponseDTO:
       type: object
       description: Flat projection of a descendant location within a hierarchy traversal

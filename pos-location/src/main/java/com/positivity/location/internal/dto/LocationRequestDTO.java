@@ -64,10 +64,10 @@ public class LocationRequestDTO {
     private Boolean active;
 
     @Schema(
-            description = "Identifier of the person responsible for the location",
-            example = "1001",
+            description = "People-contact person identifier of the person responsible for the location",
+            example = "01960011-0000-7000-8000-000000000001",
             requiredMode = NOT_REQUIRED)
-    private Long responsiblePersonId;
+    private UUID responsiblePersonId;
 
     @Schema(
             description = "IANA timezone identifier for the location",

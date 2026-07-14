@@ -12,10 +12,13 @@ import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationResponseDTO;
 import com.positivity.location.internal.dto.LocationTypeDTO;
 import com.positivity.location.internal.dto.OperatingHoursRequest;
+import com.positivity.location.internal.dto.PersonDTO;
+import com.positivity.location.internal.entity.ExtPersonReplica;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.LocationParent;
 import com.positivity.location.internal.entity.LocationType;
 import com.positivity.location.internal.entity.ParentType;
+import com.positivity.location.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.location.internal.repository.LocationParentRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.LocationTypeRepository;
@@ -68,6 +71,9 @@ class LocationServiceTest {
 
     @Mock
     private com.positivity.location.internal.service.LocationFactPublisher locationFactPublisher;
+
+    @Mock
+    private ExtPersonReplicaRepository extPersonReplicaRepository;
 
     @InjectMocks
     private LocationServiceImpl locationService;
@@ -657,18 +663,68 @@ class LocationServiceTest {
     }
 
     @Test
-    void getResponsiblePerson_legacyLongId_returnsNull() {
+    void getResponsiblePerson_noResponsiblePerson_returnsNull() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Location location = Location.builder().id(locationId).active(true).build();
+
+        when(locationRepository.findById(locationId)).thenReturn(Optional.of(location));
+
+        assertThat(locationService.getResponsiblePerson(locationId)).isNull();
+    }
+
+    @Test
+    void getResponsiblePerson_replicaHit_mapsIdentityAndContacts() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID personId = UUID.fromString("01960011-0000-7000-8000-000000000001");
         Location location = Location.builder()
                 .id(locationId)
-                .responsiblePersonId(99L)
+                .responsiblePersonId(personId)
+                .active(true)
+                .build();
+        ExtPersonReplica replica = ExtPersonReplica.builder()
+                .personId(personId)
+                .firstName("Jane")
+                .lastName("Doe")
+                .primaryEmail("jane.doe@example.com")
+                .contactPoints("[{\"contactType\":\"EMAIL\",\"value\":\"jane.doe@example.com\",\"primary\":true},"
+                        + "{\"contactType\":\"EMAIL\",\"value\":\"jane.d@example.com\",\"primary\":false},"
+                        + "{\"contactType\":\"PHONE_MOBILE\",\"value\":\"+1-217-555-0100\",\"primary\":false}]")
+                .aggregateVersion(1L)
+                .updatedAt(Instant.parse("2026-02-01T00:00:00Z"))
+                .build();
+
+        when(locationRepository.findById(locationId)).thenReturn(Optional.of(location));
+        when(extPersonReplicaRepository.findById(personId)).thenReturn(Optional.of(replica));
+
+        PersonDTO person = locationService.getResponsiblePerson(locationId);
+
+        assertThat(person).isNotNull();
+        assertThat(person.getId()).isEqualTo(personId);
+        assertThat(person.getFirstName()).isEqualTo("Jane");
+        assertThat(person.getLastName()).isEqualTo("Doe");
+        assertThat(person.getPrimaryEmail()).isEqualTo("jane.doe@example.com");
+        assertThat(person.getSecondaryEmail()).isEqualTo("jane.d@example.com");
+        assertThat(person.getPhoneNumbers()).containsExactly("+1-217-555-0100");
+    }
+
+    @Test
+    void getResponsiblePerson_replicaMiss_returnsIdOnly() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID personId = UUID.fromString("01960011-0000-7000-8000-000000000002");
+        Location location = Location.builder()
+                .id(locationId)
+                .responsiblePersonId(personId)
                 .active(true)
                 .build();
 
         when(locationRepository.findById(locationId)).thenReturn(Optional.of(location));
+        when(extPersonReplicaRepository.findById(personId)).thenReturn(Optional.empty());
 
-        // Legacy Long ids predate UUIDv7 person ids and cannot resolve a person (#877).
-        assertThat(locationService.getResponsiblePerson(locationId)).isNull();
+        PersonDTO person = locationService.getResponsiblePerson(locationId);
+
+        assertThat(person).isNotNull();
+        assertThat(person.getId()).isEqualTo(personId);
+        assertThat(person.getFirstName()).isNull();
     }
 
     private static LocationRequestDTO validRequest(String name, String code) {
