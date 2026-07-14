@@ -110,14 +110,14 @@ class WorkorderPickedItemsControllerTest {
     }
 
     // -------------------------------------------------------------------------
-    // AC-3: POST /picked-items:consume → 200 with consume response
+    // AC-3: POST /picked-items:consume → 202 with pending consume response (#901)
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC-3: POST /picked-items:consume returns 200 with ConsumePickedItemsResponse")
-    void consumePickedItems_whenServiceReturnsResponse_returns200() throws Exception {
-        // Issue CAP-218: happy path — items consumed, returns totals and per-item
-        // results
+    @DisplayName("AC-3: POST /picked-items:consume returns 202 with PENDING ConsumePickedItemsResponse")
+    void consumePickedItems_whenServiceQueuesCommand_returns202() throws Exception {
+        // #901: consumption is queued on inventory.commands.v1; totals stay 0 and per-item
+        // status is PENDING until the inventory.consumption.recorded fact updates the replicas
         var item = ConsumePickedItemsRequest.ConsumeItem.builder()
                 .pickTaskId(PICK_TASK_ID)
                 .quantityToConsume(3)
@@ -127,11 +127,11 @@ class WorkorderPickedItemsControllerTest {
         var result = ConsumePickedItemsResponse.ConsumedItemResult.builder()
                 .pickTaskId(PICK_TASK_ID)
                 .quantityConsumed(3)
-                .status(ConsumeItemStatus.SUCCESS)
+                .status(ConsumeItemStatus.PENDING)
                 .build();
         var response = ConsumePickedItemsResponse.builder()
                 .workorderId(WORKORDER_ID)
-                .totalItemsConsumed(3)
+                .totalItemsConsumed(0)
                 .results(List.of(result))
                 .build();
         when(workorderPickFacadeService.consumePickedItems(eq(WORKORDER_ID), any()))
@@ -142,8 +142,8 @@ class WorkorderPickedItemsControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.workorderId").value(WORKORDER_ID.toString()))
-                .andExpect(jsonPath("$.totalItemsConsumed").value(3))
-                .andExpect(jsonPath("$.results[0].status").value("SUCCESS"));
+                .andExpect(jsonPath("$.totalItemsConsumed").value(0))
+                .andExpect(jsonPath("$.results[0].status").value("PENDING"));
     }
 
     // -------------------------------------------------------------------------

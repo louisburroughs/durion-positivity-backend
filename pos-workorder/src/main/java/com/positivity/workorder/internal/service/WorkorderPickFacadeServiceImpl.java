@@ -180,7 +180,13 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
                 })
                 .toList();
 
-        publisher().requestItemsConsume(workorderId, pickList.getPickListId(), lines);
+        try {
+            publisher().requestItemsConsume(workorderId, pickList.getPickListId(), lines);
+        } catch (IllegalStateException e) {
+            // Broker nack/timeout mirrors the old synchronous failure mode: 503, retryable.
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE, "Unable to queue consumption for workorder " + workorderId, e);
+        }
 
         List<ConsumePickedItemsResponse.ConsumedItemResult> results = request.getItems().stream()
                 .map(item -> ConsumePickedItemsResponse.ConsumedItemResult.builder()

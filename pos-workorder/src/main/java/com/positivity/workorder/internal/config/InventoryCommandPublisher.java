@@ -71,10 +71,13 @@ public class InventoryCommandPublisher {
      */
     public void requestItemsConsume(
             @NonNull UUID workorderId, @Nullable UUID pickListId, @NonNull List<ConsumeLine> items) {
+        // Sort by pickTaskId so the key is independent of the client's line ordering: a retry
+        // with the same lines in a different order must collapse to the same command id.
         StringBuilder key = new StringBuilder(workorderId.toString());
-        for (ConsumeLine item : items) {
-            key.append('|').append(item.pickTaskId()).append(':').append(item.quantity());
-        }
+        items.stream()
+                .sorted(java.util.Comparator.comparing(ConsumeLine::pickTaskId))
+                .forEach(item ->
+                        key.append('|').append(item.pickTaskId()).append(':').append(item.quantity()));
         UUID commandId = deterministicCommandId(CONSUME_COMMAND_TYPE, key.toString());
         ConsumePayload payload = new ConsumePayload(workorderId, pickListId, items);
         send(CONSUME_COMMAND_TYPE, commandId, workorderId.toString(), payload);
