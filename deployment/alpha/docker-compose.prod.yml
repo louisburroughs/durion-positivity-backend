@@ -151,6 +151,14 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  pos-people-contact:
+    image: ${ECR_REGISTRY}/durion/pos-people-contact:${BACKEND_TAG}
+    restart: unless-stopped
+    logging: *logging
+    # #838 flag flip — uncomment in the second deploy, after the broker is verified healthy:
+    # environment:
+    #   POS_PEOPLE_CONTACT_KAFKA_ENABLED: "true"
+
   pos-price:
     image: ${ECR_REGISTRY}/durion/pos-price:${BACKEND_TAG}
     restart: unless-stopped
