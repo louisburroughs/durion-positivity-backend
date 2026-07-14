@@ -27,8 +27,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Requests invoice generation for completed workorders (ADR-0044 §4, #900 Phase 5.4).
@@ -45,9 +47,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
-
-    /** Response status while generation is in flight (ADR-0044 R4 pending state). */
-    public static final String STATUS_PENDING = "PENDING";
 
     private final WorkorderRepository workorderRepository;
     private final WorkorderServiceRepository workorderServiceRepository;
@@ -71,7 +70,10 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
 
         InvoiceCommandPublisher publisher = invoiceCommandPublisher.getIfAvailable();
         if (publisher == null) {
-            throw new IllegalStateException(
+            // 503, not IllegalStateException: GlobalExceptionHandler maps IllegalStateException
+            // to 409, but an absent event feed is a service-availability condition.
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
                     "Invoice generation is asynchronous (ADR-0044 #900) and requires the Kafka event feed;"
                             + " enable workorder.kafka.enabled");
         }
@@ -84,8 +86,17 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
                 .idempotencyKey(idempotencyKey)
                 .lineItems(buildLineItems(workorder.getId()))
                 .build();
-        publisher.requestInvoiceGeneration(
-                request, idempotencyKey != null && !idempotencyKey.isBlank() ? idempotencyKey : workorderId.toString());
+        try {
+            publisher.requestInvoiceGeneration(
+                    request,
+                    idempotencyKey != null && !idempotencyKey.isBlank() ? idempotencyKey : workorderId.toString());
+        } catch (IllegalStateException e) {
+            // Broker nack/timeout mirrors the old synchronous failure mode: 503, retryable.
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Unable to queue invoice generation for workorder " + workorderId,
+                    e);
+        }
 
         return InvoiceGenerationResponse.builder()
                 .workorderId(workorder.getId())

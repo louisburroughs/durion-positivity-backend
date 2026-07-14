@@ -14,7 +14,6 @@ import com.positivity.workorder.internal.dto.WorkorderItemCompletionResponse;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
 import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
-import com.positivity.workorder.internal.service.WorkorderInvoiceServiceImpl;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
 import com.positivity.workorder.service.WorkorderInvoiceService;
 import com.positivity.workorder.service.WorkorderService;
@@ -298,7 +297,7 @@ public class WorkorderController {
                     String idempotencyKey) {
 
         InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, idempotencyKey);
-        return WorkorderInvoiceServiceImpl.STATUS_PENDING.equals(response.getStatus())
+        return WorkorderInvoiceService.STATUS_PENDING.equals(response.getStatus())
                 ? ResponseEntity.accepted().body(response)
                 : ResponseEntity.ok(response);
     }

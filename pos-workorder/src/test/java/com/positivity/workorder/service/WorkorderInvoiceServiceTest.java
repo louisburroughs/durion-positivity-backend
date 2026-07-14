@@ -36,6 +36,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Unit tests for the async {@link WorkorderInvoiceServiceImpl} (ADR-0044 #900 Phase 5.4):
@@ -105,7 +107,7 @@ class WorkorderInvoiceServiceTest {
 
         InvoiceGenerationResponse response = service.generateInvoice(WORKORDER_ID, "key-1");
 
-        assertThat(response.getStatus()).isEqualTo(WorkorderInvoiceServiceImpl.STATUS_PENDING);
+        assertThat(response.getStatus()).isEqualTo(WorkorderInvoiceService.STATUS_PENDING);
         assertThat(response.getInvoiceId()).isNull();
         assertThat(response.getWorkorderId()).isEqualTo(WORKORDER_ID);
         ArgumentCaptor<InvoiceCreationRequest> requestCaptor = ArgumentCaptor.forClass(InvoiceCreationRequest.class);
@@ -168,7 +170,7 @@ class WorkorderInvoiceServiceTest {
         InvoiceGenerationResponse response = service.generateInvoice(WORKORDER_ID, null);
 
         assertThat(response.getInvoiceId()).isEqualTo(INVOICE_ID);
-        assertThat(response.getStatus()).isEqualTo(WorkorderInvoiceServiceImpl.STATUS_PENDING);
+        assertThat(response.getStatus()).isEqualTo(WorkorderInvoiceService.STATUS_PENDING);
     }
 
     @Test
@@ -198,7 +200,10 @@ class WorkorderInvoiceServiceTest {
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(completedWorkorder()));
 
         assertThatThrownBy(() -> service.generateInvoice(WORKORDER_ID, null))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(
+                        e -> org.assertj.core.api.Assertions.assertThat(((ResponseStatusException) e).getStatusCode())
+                                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE))
                 .hasMessageContaining("workorder.kafka.enabled");
     }
 
