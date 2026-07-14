@@ -1,21 +1,30 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.domainevents.inventory.ConsumptionRecordedV1;
 import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
 import com.positivity.domainevents.inventory.LeadTimeUpdatedV1;
+import com.positivity.domainevents.inventory.PickListUpdatedV1;
+import com.positivity.domainevents.inventory.PickTaskUpdatedV1;
 import com.positivity.domainevents.inventory.StorageLocationOnHandUpdatedV1;
 import com.positivity.inventory.internal.config.OutboxEventWriter;
-import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LeadTimeView;
 import com.positivity.inventory.internal.dto.LocationInventoryInquiryResponse;
+import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.entity.PickListEntity;
+import com.positivity.inventory.internal.entity.PickTaskEntity;
+import com.positivity.inventory.internal.repository.PickListRepository;
+import com.positivity.inventory.internal.repository.PickTaskRepository;
 import com.positivity.inventory.service.InventoryAvailabilityService;
 import com.positivity.inventory.service.InventoryLeadTimeService;
 import com.positivity.inventory.service.LocationInventoryInquiryService;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +59,8 @@ public class InventoryFactPublisher {
     private final InventoryAvailabilityService inventoryAvailabilityService;
     private final LocationInventoryInquiryService locationInventoryInquiryService;
     private final InventoryLeadTimeService inventoryLeadTimeService;
+    private final PickListRepository pickListRepository;
+    private final PickTaskRepository pickTaskRepository;
     private final Clock clock;
 
     // Same property ManifestPublisher scans event_outbox by, so an override can never
@@ -97,6 +108,36 @@ public class InventoryFactPublisher {
             return;
         }
         pending.leadTimeProductIds.add(productId);
+    }
+
+    /** Mark a pick-list state change; a snapshot fact is emitted at beforeCommit (#901). */
+    public void markPickListChanged(@NonNull UUID pickListId) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.pickListIds.add(pickListId);
+    }
+
+    /** Mark a pick-task state change; a snapshot fact is emitted at beforeCommit (#901). */
+    public void markPickTaskChanged(@NonNull UUID pickTaskId) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.pickTaskIds.add(pickTaskId);
+    }
+
+    /**
+     * Record a consumption occurrence fact (#901). Unlike the snapshot facts this payload is
+     * queued as-is: a consumption is an event, not state, and is never re-emitted.
+     */
+    public void recordConsumption(@NonNull ConsumptionRecordedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.consumptions.add(fact);
     }
 
     private @Nullable Pending pending() {
@@ -165,6 +206,60 @@ public class InventoryFactPublisher {
                 log.warn("Skipping storage-location on-hand fact for {}: {}", storageLocationId, e.getMessage());
             }
         }
+        for (UUID pickListId : pending.pickListIds) {
+            try {
+                PickListEntity pickList =
+                        pickListRepository.findById(pickListId).orElse(null);
+                if (pickList == null) {
+                    continue;
+                }
+                publish(
+                        writer,
+                        PickListUpdatedV1.EVENT_TYPE,
+                        pickListId,
+                        new PickListUpdatedV1(
+                                pickListId,
+                                pickList.getWorkorderId(),
+                                pickList.getStatus().name(),
+                                pickList.getPriority(),
+                                pickList.getDueAt(),
+                                pickList.getCreatedAt()));
+            } catch (Exception e) {
+                log.warn("Skipping pick-list fact for {}: {}", pickListId, e.getMessage());
+            }
+        }
+        for (UUID pickTaskId : pending.pickTaskIds) {
+            try {
+                PickTaskEntity task = pickTaskRepository.findById(pickTaskId).orElse(null);
+                if (task == null) {
+                    continue;
+                }
+                PickListEntity owning = task.getPickList();
+                publish(
+                        writer,
+                        PickTaskUpdatedV1.EVENT_TYPE,
+                        pickTaskId,
+                        new PickTaskUpdatedV1(
+                                pickTaskId,
+                                owning == null ? null : owning.getPickListId(),
+                                owning == null ? null : owning.getWorkorderId(),
+                                task.getProductId(),
+                                task.getSuggestedLocationId(),
+                                task.getQuantityRequired(),
+                                task.getQuantityPicked(),
+                                task.getStatus().name(),
+                                task.getSortOrder()));
+            } catch (Exception e) {
+                log.warn("Skipping pick-task fact for {}: {}", pickTaskId, e.getMessage());
+            }
+        }
+        for (ConsumptionRecordedV1 consumption : pending.consumptions) {
+            try {
+                publish(writer, ConsumptionRecordedV1.EVENT_TYPE, consumption.consumptionId(), consumption);
+            } catch (Exception e) {
+                log.warn("Skipping consumption fact for {}: {}", consumption.consumptionId(), e.getMessage());
+            }
+        }
         for (UUID productId : pending.leadTimeProductIds) {
             try {
                 LeadTimeView view = inventoryLeadTimeService.queryLeadTime(productId, null, null);
@@ -199,11 +294,15 @@ public class InventoryFactPublisher {
         return UUID.nameUUIDFromBytes(raw.getBytes(StandardCharsets.UTF_8));
     }
 
-    private record AvailabilityKey(@NonNull String stockItemId, @Nullable UUID locationId) {}
+    private record AvailabilityKey(
+            @NonNull String stockItemId, @Nullable UUID locationId) {}
 
     private static final class Pending {
         private final Set<AvailabilityKey> availabilityKeys = new LinkedHashSet<>();
         private final Set<UUID> storageLocationIds = new LinkedHashSet<>();
         private final Set<UUID> leadTimeProductIds = new LinkedHashSet<>();
+        private final Set<UUID> pickListIds = new LinkedHashSet<>();
+        private final Set<UUID> pickTaskIds = new LinkedHashSet<>();
+        private final List<ConsumptionRecordedV1> consumptions = new ArrayList<>();
     }
 }

@@ -190,13 +190,13 @@ class WorkorderPickFacadeControllerTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC-6: POST :confirm returns 200 with updated WorkorderPickTaskResponse")
-    void confirmPickLine_whenServiceReturnsResponse_returns200() throws Exception {
-        // Issue CAP-218: happy path — pick line confirmed, returns updated task state
+    @DisplayName("AC-6: POST :confirm returns 202 with PENDING WorkorderPickTaskResponse (#901 async)")
+    void confirmPickLine_whenServiceReturnsResponse_returns202() throws Exception {
+        // #901: confirmation is queued on inventory.commands.v1; response is the pending view
         var request = ConfirmPickLineRequest.builder().quantityPicked(2).build();
         var response = WorkorderPickTaskResponse.builder()
                 .pickTaskId(PICK_TASK_ID)
-                .status("IN_PROGRESS")
+                .status("PENDING")
                 .requiredQty(3)
                 .pickedQty(2)
                 .remainingQty(1)
@@ -208,8 +208,8 @@ class WorkorderPickFacadeControllerTest {
         mockMvc.perform(post(CONFIRM_LINE_URL, WORKORDER_ID, PICK_TASK_ID, PICK_LINE_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.pickedQty").value(2));
     }
 

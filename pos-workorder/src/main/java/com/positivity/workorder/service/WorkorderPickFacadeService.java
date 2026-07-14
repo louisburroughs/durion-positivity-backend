@@ -15,6 +15,9 @@ import org.jspecify.annotations.NonNull;
 
 public interface WorkorderPickFacadeService {
 
+    /** Response status while an asynchronous pick command is in flight (ADR-0044 R4, #901). */
+    String STATUS_PENDING = "PENDING";
+
     @NonNull
     WorkorderPickListResponse getPickListForWorkorder(@NonNull UUID workorderId);
 

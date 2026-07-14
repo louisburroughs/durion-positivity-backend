@@ -17,9 +17,6 @@ import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LocationInventoryInquiryResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.service.InventoryFactPublisher;
-import com.positivity.inventory.service.InventoryAvailabilityService;
-import com.positivity.inventory.service.InventoryLeadTimeService;
-import com.positivity.inventory.service.LocationInventoryInquiryService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -50,6 +47,10 @@ class InventoryFactPublisherTest {
     private final InventoryAvailabilityService availabilityService = mock(InventoryAvailabilityService.class);
     private final LocationInventoryInquiryService inquiryService = mock(LocationInventoryInquiryService.class);
     private final InventoryLeadTimeService leadTimeService = mock(InventoryLeadTimeService.class);
+    private final com.positivity.inventory.internal.repository.PickListRepository pickListRepository =
+            mock(com.positivity.inventory.internal.repository.PickListRepository.class);
+    private final com.positivity.inventory.internal.repository.PickTaskRepository pickTaskRepository =
+            mock(com.positivity.inventory.internal.repository.PickTaskRepository.class);
 
     private InventoryFactPublisher publisher;
 
@@ -57,7 +58,13 @@ class InventoryFactPublisherTest {
     void setUp() {
         when(writerProvider.getIfAvailable()).thenReturn(writer);
         publisher = new InventoryFactPublisher(
-                writerProvider, availabilityService, inquiryService, leadTimeService, TEST_CLOCK);
+                writerProvider,
+                availabilityService,
+                inquiryService,
+                leadTimeService,
+                pickListRepository,
+                pickTaskRepository,
+                TEST_CLOCK);
         ReflectionTestUtils.setField(publisher, "eventsTopic", "inventory.events.v1");
         TransactionSynchronizationManager.initSynchronization();
     }
@@ -71,8 +78,7 @@ class InventoryFactPublisherTest {
     }
 
     private void fireBeforeCommit() {
-        for (TransactionSynchronization synchronization :
-                TransactionSynchronizationManager.getSynchronizations()) {
+        for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
             synchronization.beforeCommit(false);
         }
     }
@@ -106,8 +112,7 @@ class InventoryFactPublisherTest {
         fireBeforeCommit();
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<DomainEventEnvelope<Object>> captor =
-                ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        ArgumentCaptor<DomainEventEnvelope<Object>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
         verify(writer, times(2)).publish(eq("inventory.events.v1"), captor.capture());
         List<DomainEventEnvelope<Object>> envelopes = captor.getAllValues();
         assertThat(envelopes.get(0).eventType()).isEqualTo(InventoryAvailabilityUpdatedV1.EVENT_TYPE);

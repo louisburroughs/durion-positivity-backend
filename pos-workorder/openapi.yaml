@@ -700,7 +700,7 @@ paths:
       tags:
       - Workorder Picked Items
       summary: Consume picked items into workorder
-      description: Consume the picked items for a workorder so parts usage is recorded against the job
+      description: 'Queues asynchronous consumption of picked items (ADR-0044 #901): the response is 202 with per-item status PENDING; the inventory.consumption.recorded fact updates the pick replicas and subsequent picked-items reads observe the consumed quantities.'
       operationId: consumePickedItems
       parameters:
       - name: workorderId
@@ -717,8 +717,8 @@ paths:
               $ref: '#/components/schemas/ConsumePickedItemsRequest'
         required: true
       responses:
-        '200':
-          description: Picked items consumed successfully
+        '202':
+          description: Consumption queued; poll the picked items for consumed quantities (status PENDING).
           content:
             application/json:
               schema:
@@ -809,7 +809,7 @@ paths:
       tags:
       - Workorder Pick Facade
       summary: Complete pick task
-      description: Complete a workorder pick task after all of its pick lines are confirmed
+      description: 'Queues asynchronous completion of a workorder pick task (ADR-0044 #901). Returns 202 with status PENDING while the command is in flight; an already-complete task is returned as-is with 200.'
       operationId: completePickTask
       parameters:
       - name: workorderId
@@ -833,8 +833,14 @@ paths:
             schema:
               $ref: '#/components/schemas/CompletePickTaskRequest'
       responses:
+        '202':
+          description: Completion queued; poll the pick tasks for the applied state (status PENDING).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderPickTaskResponse'
         '200':
-          description: Pick task completed successfully
+          description: Task already complete; current state returned.
           content:
             application/json:
               schema:
@@ -861,7 +867,7 @@ paths:
       tags:
       - Workorder Pick Facade
       summary: Confirm pick line quantity
-      description: Confirm the picked quantity for a workorder pick line after scan resolution
+      description: 'Queues asynchronous pick confirmation (ADR-0044 #901): the response is 202 with status PENDING; the inventory.pick-task.updated fact updates the pick replica and subsequent reads observe the confirmed quantity.'
       operationId: confirmPickLine
       parameters:
       - name: workorderId
@@ -892,8 +898,8 @@ paths:
               $ref: '#/components/schemas/ConfirmPickLineRequest'
         required: true
       responses:
-        '200':
-          description: Pick line confirmed successfully
+        '202':
+          description: Confirmation queued; poll the pick tasks for the applied quantity (status PENDING).
           content:
             application/json:
               schema:
@@ -4799,6 +4805,7 @@ components:
           type: string
           description: Outcome status for the item
           enum:
+          - PENDING
           - SUCCESS
           - PARTIAL
           - FAILED
