@@ -26,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -245,7 +246,15 @@ public class PersonServiceImpl implements PersonService {
         // #881: contact points have no FK to person — remove them in the same transaction so
         // the person.deleted fact and the authority's own tables cannot drift apart.
         personContactPointRepository.deleteByPersonId(id);
-        personRepository.deleteById(id);
+        try {
+            personRepository.deleteById(id);
+            // Force the DELETE to execute here so a link created concurrently (between the
+            // exists pre-check above and this statement) still surfaces as the 409, not as a
+            // DataIntegrityViolationException-turned-500 at commit time.
+            personRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new PersonHasLinkedUsersException(id);
+        }
         eventPublisher.publishPersonDeleted(id);
     }
 
