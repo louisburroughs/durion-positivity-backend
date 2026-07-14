@@ -57,6 +57,46 @@ run_periodic_docker_prune() {
   return 0
 }
 
+# postgres/init-databases.sql only runs on fresh volume initialization, so databases
+# added after the alpha volume was first created never come into existence. Reconcile:
+# parse the CREATE DATABASE lines and create any database that is missing. Names are
+# constrained to [A-Za-z0-9_]+ by the sed pattern, so interpolation into SQL is safe.
+reconcile_databases() {
+  local init_sql="${BACKEND_DIR}/postgres/init-databases.sql"
+  if [[ ! -f "${init_sql}" ]]; then
+    echo "Warning: ${init_sql} not found; skipping database reconciliation." >&2
+    return 0
+  fi
+
+  echo "Ensuring postgres is up for database reconciliation"
+  docker compose "${COMPOSE_ARGS[@]}" up -d postgres
+
+  local attempt
+  for attempt in $(seq 1 60); do
+    if docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+        sh -c 'pg_isready -q -U "${POSTGRES_USER}"'; then
+      break
+    fi
+    if [[ "${attempt}" -eq 60 ]]; then
+      echo "postgres did not become ready within 60s; aborting before database reconciliation." >&2
+      return 1
+    fi
+    sleep 1
+  done
+
+  local db exists
+  while read -r db; do
+    [[ -n "${db}" ]] || continue
+    exists="$(docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+      sh -c 'psql -U "${POSTGRES_USER}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '"'"''"${db}"''"'"'"')"
+    if [[ "${exists}" != "1" ]]; then
+      echo "Creating missing database: ${db}"
+      docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+        sh -c 'psql -U "${POSTGRES_USER}" -d postgres -c "CREATE DATABASE '"${db}"';"'
+    fi
+  done < <(sed -nE 's/^CREATE DATABASE ([A-Za-z0-9_]+);$/\1/p' "${init_sql}")
+}
+
 OBSERVABILITY_SERVICES=(
   jaeger
   prometheus
@@ -203,6 +243,8 @@ docker compose "${COMPOSE_ARGS[@]}" run --rm --no-deps kafka-topic-init
 
 echo "Starting Kafka exporter"
 docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate kafka-exporter
+
+reconcile_databases
 
 echo "Pulling backend services: ${BACKEND_SERVICES[*]}"
 docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${BACKEND_SERVICES[@]}"
