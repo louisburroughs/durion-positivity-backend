@@ -74,6 +74,7 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final WorkorderServiceRepository workorderServiceRepository;
     private final WorkorderPartRepository workorderPartRepository;
     private final ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
+    private final WorkorderFactPublisher workorderFactPublisher;
     private final WorkorderStateMachine stateMachine;
     private final WorkorderLaborEntryRepository workorderLaborEntryRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
@@ -276,6 +277,7 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         // Save the workorder first to get the persisted entity
         Workorder savedWorkorder = workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(savedWorkorder.getId());
 
         // CAP:004 Story #27 - Copy estimate items to workorder items if promoting from
         // estimate
@@ -384,6 +386,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         // Persist all part items
         if (!partItems.isEmpty()) {
             workorderPartRepository.saveAll(partItems);
+            workorderFactPublisher.markChanged(workorder.getId());
             log.info("Persisted {} part items for workorder {}", partItems.size(), workorder.getId());
             partItems.forEach(item -> log.debug(
                     "Created workorder part item with ID {}: from estimate item {}",
@@ -461,7 +464,9 @@ public class WorkorderServiceImpl implements WorkorderService {
         workorder.setApprovalNotes(notes);
 
         log.info("Workorder {} approved by customer {} with signature capture", workorderId, customerId);
-        return workorderRepository.save(workorder);
+        Workorder saved = workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(saved.getId());
+        return saved;
     }
 
     @Override
@@ -540,6 +545,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         if (status != part.getStatus()) {
             part.setStatus(status);
             workorderPartRepository.save(part);
+            workorderFactPublisher.markChanged(workorderId);
             log.info("Part {} on workorder {} marked COMPLETED by {}", partId, workorderId, actorId);
         }
         return WorkorderItemCompletionResponse.builder()
@@ -706,6 +712,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         // Transition to AWAITING_APPROVAL (re-approval required)
         workorder.setStatus(WorkorderStatus.AWAITING_APPROVAL);
         workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(workorder.getId());
 
         // Create audit event for traceability
         createApprovalInvalidationAudit(workorder, oldStatus, event);
@@ -785,6 +792,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         workorder.setResourceId(payload.getResourceId());
         workorder.setMechanicIds(serializeMechanicIds(payload.getMechanicIds()));
         workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(workorder.getId());
 
         String details = buildAuditDetails(
                 oldLocationId,
@@ -838,6 +846,7 @@ public class WorkorderServiceImpl implements WorkorderService {
                 assignedResources != null && !assignedResources.isEmpty() ? assignedResources.get(0) : null);
         workorder.setMechanicIds(serializeMechanicIds(override.getAssignedMechanics()));
         Workorder saved = workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(saved.getId());
 
         return OperationalContextResponse.builder()
                 .version(saved.getOperationalContextVersion())
@@ -877,6 +886,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         workorder.setOperationalContextVersion(version);
         workorder.setWorkStartedAt(startedAt);
         Workorder saved = workorderRepository.save(workorder);
+        workorderFactPublisher.markChanged(saved.getId());
 
         Instant transitionedAt = stateMachine.getTransitionHistory(workorderId).stream()
                 .filter(transition -> transition.getToStatus() == WorkorderStatus.WORK_IN_PROGRESS)

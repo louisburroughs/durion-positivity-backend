@@ -2,7 +2,7 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.service.SiteDefaultsService;
 import com.positivity.inventory.internal.client.SourceDocumentStubClient;
-import com.positivity.inventory.internal.client.WorkorderValidationClient;
+import com.positivity.inventory.internal.service.WorkorderValidationService;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
@@ -65,7 +65,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final SourceDocumentStubClient sourceDocumentStubClient;
     private final SiteDefaultsService siteDefaultsService;
-    private final WorkorderValidationClient workorderValidationClient;
+    private final WorkorderValidationService workorderValidationService;
 
     @Value("${pos.inventory.receiving.source-document-service:}")
     private String configuredSourceDocumentService;
@@ -206,8 +206,8 @@ public class ReceivingServiceImpl implements ReceivingService {
                         () -> new ReceivingSessionNotFoundException("Receiving line not found in session: " + lineId));
 
         String workorderId = request.getWorkorderId();
-        WorkorderValidationClient.WorkorderLineValidation workorderValidation =
-                workorderValidationClient.getWorkorderLineValidation(workorderId, request.getWorkorderLineId());
+        WorkorderValidationService.WorkorderLineValidation workorderValidation =
+                workorderValidationService.getWorkorderLineValidation(workorderId, request.getWorkorderLineId());
         if (isClosedWorkorderStatus(workorderValidation.status())) {
             throw new WorkorderClosedException("Cannot issue parts to a closed workorder: " + workorderId);
         }

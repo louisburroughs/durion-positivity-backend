@@ -87,6 +87,9 @@ class WorkorderAssignmentServiceTest {
     @Mock
     private PromotionValidationService promotionValidationService;
 
+    @org.mockito.Mock
+    private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
+
     @InjectMocks
     private WorkorderServiceImpl workorderService;
 

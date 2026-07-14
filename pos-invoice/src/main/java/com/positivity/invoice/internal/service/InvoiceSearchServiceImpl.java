@@ -1,6 +1,6 @@
 package com.positivity.invoice.internal.service;
 
-import com.positivity.invoice.internal.client.WorkorderReferenceClient;
+
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
@@ -40,7 +40,7 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
 
     private final InvoiceRepository invoiceRepository;
     private final CustomerReferenceService customerReferenceService;
-    private final WorkorderReferenceClient workorderReferenceClient;
+    private final WorkorderReferenceService workorderReferenceService;
 
     @Override
     public @NonNull Page<InvoiceSearchResult> search(@NonNull String q, @NonNull Pageable pageable) {
@@ -52,7 +52,7 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
 
         // Resolve the query against customer names and workorder numbers in sibling services.
         List<String> nameMatchPartyIds = customerReferenceService.searchIdsByName(q, 10);
-        List<UUID> numberMatchWorkorderIds = workorderReferenceClient.searchIdsByNumber(q, 10);
+        List<UUID> numberMatchWorkorderIds = workorderReferenceService.searchIdsByNumber(q, 10);
 
         List<String> customerIds = nameMatchPartyIds.isEmpty() ? List.of(NO_PARTY_SENTINEL) : nameMatchPartyIds;
         List<UUID> workorderIds =
@@ -74,7 +74,7 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
                 .toList();
 
         Map<String, String> customerNames = customerReferenceService.resolveNames(pagePartyIds);
-        Map<UUID, String> workorderNumbers = workorderReferenceClient.resolveNumbers(pageWorkorderIds);
+        Map<UUID, String> workorderNumbers = workorderReferenceService.resolveNumbers(pageWorkorderIds);
 
         return page.map(invoice -> InvoiceSearchResult.builder()
                 .invoiceId(invoice.getId())

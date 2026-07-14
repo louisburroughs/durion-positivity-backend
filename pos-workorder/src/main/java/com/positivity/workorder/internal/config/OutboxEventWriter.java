@@ -60,10 +60,14 @@ public class OutboxEventWriter {
     }
 
     private String serializeEnvelope(String eventType, Object payload) {
+        Instant occurredAt = Instant.now(clock);
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("eventId", UUIDv7Generator.generate().toString());
         envelope.put("eventType", eventType);
-        envelope.put("occurredAtUtc", Instant.now(clock));
+        envelope.put("occurredAtUtc", occurredAt);
+        // Emission-timestamp LWW hint for replica stale guards (ADR-0044 §6, #897) — additive,
+        // legacy consumers of this envelope ignore it.
+        envelope.put("aggregateVersion", occurredAt.toEpochMilli());
         envelope.put("sourceService", SOURCE_SERVICE);
         envelope.put("payload", payload);
 

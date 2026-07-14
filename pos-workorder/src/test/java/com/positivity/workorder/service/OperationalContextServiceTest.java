@@ -79,6 +79,9 @@ class OperationalContextServiceTest {
     @Mock
     private ShopmgrOperationalContextClient shopmgrClient;
 
+    @org.mockito.Mock
+    private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
+
     @InjectMocks
     private WorkorderServiceImpl workorderService;
 

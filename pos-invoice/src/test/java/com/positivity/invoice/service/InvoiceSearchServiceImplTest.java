@@ -8,7 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.invoice.internal.client.WorkorderReferenceClient;
+import com.positivity.invoice.internal.service.WorkorderReferenceService;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
@@ -53,7 +53,7 @@ class InvoiceSearchServiceImplTest {
     private CustomerReferenceService customerReferenceClient;
 
     @Mock
-    private WorkorderReferenceClient workorderReferenceClient;
+    private WorkorderReferenceService workorderReferenceService;
 
     @InjectMocks
     private InvoiceSearchServiceImpl invoiceSearchService;
@@ -76,11 +76,11 @@ class InvoiceSearchServiceImplTest {
         Invoice invoice = buildInvoice();
 
         when(customerReferenceClient.searchIdsByName(eq("Acme"), anyInt())).thenReturn(List.of(PARTY_ID));
-        when(workorderReferenceClient.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
+        when(workorderReferenceService.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
         when(invoiceRepository.searchByQuery(any(), any(), any(), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(invoice)));
         when(customerReferenceClient.resolveNames(any())).thenReturn(Map.of(PARTY_ID, "Acme Towing LLC"));
-        when(workorderReferenceClient.resolveNumbers(any())).thenReturn(Map.of(WORKORDER_ID, "WO-2026-1001"));
+        when(workorderReferenceService.resolveNumbers(any())).thenReturn(Map.of(WORKORDER_ID, "WO-2026-1001"));
 
         Page<InvoiceSearchResult> result = invoiceSearchService.search("Acme", pageable);
 
@@ -99,10 +99,10 @@ class InvoiceSearchServiceImplTest {
         Pageable pageable = PageRequest.of(0, 25);
 
         when(customerReferenceClient.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
-        when(workorderReferenceClient.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
+        when(workorderReferenceService.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
         when(invoiceRepository.searchByQuery(any(), any(), any(), eq(pageable))).thenReturn(new PageImpl<>(List.of()));
         when(customerReferenceClient.resolveNames(any())).thenReturn(Map.of());
-        when(workorderReferenceClient.resolveNumbers(any())).thenReturn(Map.of());
+        when(workorderReferenceService.resolveNumbers(any())).thenReturn(Map.of());
 
         invoiceSearchService.search("INV-2026", pageable);
 
@@ -124,7 +124,7 @@ class InvoiceSearchServiceImplTest {
 
         assertThat(result.getContent()).isEmpty();
         verify(customerReferenceClient, org.mockito.Mockito.never()).searchIdsByName(anyString(), anyInt());
-        verify(workorderReferenceClient, org.mockito.Mockito.never()).searchIdsByNumber(anyString(), anyInt());
+        verify(workorderReferenceService, org.mockito.Mockito.never()).searchIdsByNumber(anyString(), anyInt());
         verify(invoiceRepository, org.mockito.Mockito.never()).searchByQuery(any(), any(), any(), any());
     }
 
@@ -136,11 +136,11 @@ class InvoiceSearchServiceImplTest {
         invoice.setWorkorderId(null);
 
         when(customerReferenceClient.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
-        when(workorderReferenceClient.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
+        when(workorderReferenceService.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
         when(invoiceRepository.searchByQuery(any(), any(), any(), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(invoice)));
         when(customerReferenceClient.resolveNames(any())).thenReturn(Map.of());
-        when(workorderReferenceClient.resolveNumbers(any())).thenReturn(Map.of());
+        when(workorderReferenceService.resolveNumbers(any())).thenReturn(Map.of());
 
         InvoiceSearchResult row =
                 invoiceSearchService.search("INV", pageable).getContent().get(0);
@@ -153,10 +153,10 @@ class InvoiceSearchServiceImplTest {
     void search_escapesLikeWildcardsInQuery() {
         Pageable pageable = PageRequest.of(0, 25);
         when(customerReferenceClient.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
-        when(workorderReferenceClient.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
+        when(workorderReferenceService.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
         when(invoiceRepository.searchByQuery(any(), any(), any(), eq(pageable))).thenReturn(new PageImpl<>(List.of()));
         when(customerReferenceClient.resolveNames(any())).thenReturn(Map.of());
-        when(workorderReferenceClient.resolveNumbers(any())).thenReturn(Map.of());
+        when(workorderReferenceService.resolveNumbers(any())).thenReturn(Map.of());
 
         invoiceSearchService.search("50%_x", pageable);
 
@@ -169,12 +169,12 @@ class InvoiceSearchServiceImplTest {
         Invoice invoice = buildInvoice();
 
         when(customerReferenceClient.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
-        when(workorderReferenceClient.searchIdsByNumber(eq("WO-2026-1001"), anyInt()))
+        when(workorderReferenceService.searchIdsByNumber(eq("WO-2026-1001"), anyInt()))
                 .thenReturn(List.of(WORKORDER_ID));
         when(invoiceRepository.searchByQuery(any(), any(), any(), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(invoice)));
         when(customerReferenceClient.resolveNames(any())).thenReturn(Map.of(PARTY_ID, "Acme Towing LLC"));
-        when(workorderReferenceClient.resolveNumbers(any())).thenReturn(Map.of(WORKORDER_ID, "WO-2026-1001"));
+        when(workorderReferenceService.resolveNumbers(any())).thenReturn(Map.of(WORKORDER_ID, "WO-2026-1001"));
 
         invoiceSearchService.search("WO-2026-1001", pageable);
 

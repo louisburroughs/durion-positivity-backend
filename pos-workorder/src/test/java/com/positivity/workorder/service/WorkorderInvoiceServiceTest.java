@@ -65,6 +65,9 @@ class WorkorderInvoiceServiceTest {
     @Mock
     private InvoiceClient invoiceClient;
 
+    @org.mockito.Mock
+    private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
+
     @InjectMocks
     private WorkorderInvoiceServiceImpl workorderInvoiceService;
 

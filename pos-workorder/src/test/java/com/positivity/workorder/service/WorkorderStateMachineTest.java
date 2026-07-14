@@ -65,6 +65,9 @@ class WorkorderStateMachineTest {
     @Mock
     private ObjectMapper objectMapper;
 
+    @org.mockito.Mock
+    private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
+
     @InjectMocks
     private WorkorderStateMachine stateMachine;
 

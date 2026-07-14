@@ -113,6 +113,9 @@ class WorkorderCompletionTest {
     @Mock
     private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
+    @Mock
+    private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
+
     @InjectMocks
     private WorkorderStateMachine stateMachine;
 
@@ -168,6 +171,8 @@ class WorkorderCompletionTest {
                 workorderServiceRepository,
                 workorderPartRepository,
                 extCustomerPartyReplicaRepository,
+                org.mockito.Mockito.mock(
+                        com.positivity.workorder.internal.service.WorkorderFactPublisher.class),
                 stateMachine,
                 workorderLaborEntryRepository,
                 applicationEventPublisher,
