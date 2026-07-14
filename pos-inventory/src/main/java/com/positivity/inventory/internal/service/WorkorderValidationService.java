@@ -34,9 +34,8 @@ public class WorkorderValidationService {
 
         ExtWorkorderReplica workorder = extWorkorderReplicaRepository
                 .findById(workorderUuid)
-                .orElseThrow(() -> new IllegalStateException(
-                        "No workorder replica row for workorderId " + workorderId
-                                + " — verify the workorder.events.v1 feed is consumed"));
+                .orElseThrow(() -> new IllegalStateException("No workorder replica row for workorderId " + workorderId
+                        + " — verify the workorder.events.v1 feed is consumed"));
         if (workorder.getStatus() == null || workorder.getStatus().isBlank()) {
             throw new IllegalStateException("Workorder replica has no status for workorderId " + workorderId);
         }

@@ -11,7 +11,6 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.positivity.inventory.internal.service.StorageLocationValidationService;
 import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
 import com.positivity.inventory.internal.dto.ValidationResult;
 import com.positivity.inventory.internal.enums.OverrideReasonCode;
@@ -24,6 +23,7 @@ import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.security.PutawayPermissions;
 import com.positivity.inventory.internal.service.PutawayValidationServiceImpl;
+import com.positivity.inventory.internal.service.StorageLocationValidationService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.util.Arrays;
 import java.util.Map;

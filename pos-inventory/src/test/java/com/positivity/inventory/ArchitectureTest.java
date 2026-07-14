@@ -154,7 +154,7 @@ public class ArchitectureTest {
             .because("internal package cycles make the implementation harder to maintain and evolve");
 
     @ArchTest
-    static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
+    static final ArchRule entities_should_use_uuidv7_id_or_generator = classes()
             .that()
             .resideInAnyPackage("..internal.entity..", "..internal.model..")
             .and()

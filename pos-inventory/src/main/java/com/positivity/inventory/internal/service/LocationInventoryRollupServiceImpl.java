@@ -1,12 +1,11 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.service.StorageLocationTopologyService;
-import com.positivity.inventory.internal.service.StorageLocationTopologyService.LocationDescendant;
 import com.positivity.inventory.internal.dto.rollup.LocationInventoryRollupResponse;
 import com.positivity.inventory.internal.dto.rollup.RollupQuantities;
 import com.positivity.inventory.internal.dto.rollup.SiteInventoryRollupResponse;
 import com.positivity.inventory.internal.dto.rollup.SiteRollupSummary;
 import com.positivity.inventory.internal.exception.RollupExpansionTooLargeException;
+import com.positivity.inventory.internal.service.StorageLocationTopologyService.LocationDescendant;
 import com.positivity.inventory.service.LocationInventoryRollupService;
 import com.positivity.inventory.service.SiteInventoryRollupService;
 import java.util.ArrayList;
