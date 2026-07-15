@@ -1,7 +1,9 @@
 package com.positivity.accounting.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,6 +54,9 @@ class VendorBillServiceGLPostingTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private VendorDirectoryService vendorDirectoryService;
+
     @InjectMocks
     private VendorBillServiceImpl vendorBillService;
 
@@ -91,6 +96,30 @@ class VendorBillServiceGLPostingTest {
                                 .isInventoryItem(false)
                                 .build()))
                 .build();
+    }
+
+    @Test
+    @DisplayName("Should record vendor in directory when bill is created")
+    void shouldRecordVendorInDirectory() {
+        when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
+        when(billRepository.save(any(VendorBill.class))).thenReturn(createSavedBill());
+
+        vendorBillService.handleGoodsReceivedEvent(testEvent);
+
+        verify(vendorDirectoryService).recordVendor(testVendorId, "Test Vendor Inc");
+    }
+
+    @Test
+    @DisplayName("Should not fail bill creation when vendor directory sync fails")
+    void shouldNotFailBillCreationWhenDirectorySyncFails() {
+        when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
+        when(billRepository.save(any(VendorBill.class))).thenReturn(createSavedBill());
+        doThrow(new RuntimeException("duplicate key"))
+                .when(vendorDirectoryService)
+                .recordVendor(any(), any());
+
+        assertThatCode(() -> vendorBillService.handleGoodsReceivedEvent(testEvent))
+                .doesNotThrowAnyException();
     }
 
     @Test
