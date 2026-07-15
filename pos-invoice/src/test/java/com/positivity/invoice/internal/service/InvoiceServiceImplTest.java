@@ -7,9 +7,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.invoice.internal.service.LocationReferenceService;
 import com.positivity.invoice.internal.client.TaxServiceClient;
-import com.positivity.invoice.internal.service.WorkorderReferenceService;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;

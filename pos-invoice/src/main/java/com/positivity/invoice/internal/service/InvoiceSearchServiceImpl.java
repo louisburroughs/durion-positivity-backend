@@ -1,6 +1,5 @@
 package com.positivity.invoice.internal.service;
 
-
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.repository.InvoiceRepository;

@@ -36,9 +36,8 @@ public class LocationReferenceService {
     public TaxAddress resolveTaxAddress(@NonNull UUID locationId) {
         ExtLocationReplica location = extLocationReplicaRepository
                 .findById(locationId)
-                .orElseThrow(() -> new IllegalStateException(
-                        "No location replica row for locationId " + locationId
-                                + " — verify the location.events.v1 feed is consumed"));
+                .orElseThrow(() -> new IllegalStateException("No location replica row for locationId " + locationId
+                        + " — verify the location.events.v1 feed is consumed"));
 
         String country = trimToNull(location.getCountry());
         String postalCode = trimToNull(location.getPostalCode());

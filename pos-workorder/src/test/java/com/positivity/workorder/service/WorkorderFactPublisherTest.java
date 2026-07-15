@@ -61,8 +61,7 @@ class WorkorderFactPublisherTest {
     }
 
     private void fireBeforeCommit() {
-        for (TransactionSynchronization synchronization :
-                TransactionSynchronizationManager.getSynchronizations()) {
+        for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
             synchronization.beforeCommit(false);
         }
     }

@@ -1,9 +1,8 @@
 package com.positivity.domainevents.inventory;
 
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-
-import java.util.UUID;
 
 /**
  * Fact: the ledger-derived availability of one stock item at one location changed

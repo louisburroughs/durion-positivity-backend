@@ -580,7 +580,6 @@ class DashboardServiceTest {
         assertThat(response.getDataQualityWarning()).isFalse();
     }
 
-
     private Workorder buildWorkorder(UUID id, String mechanicId, UUID resourceId) {
         return Workorder.builder()
                 .id(id)
