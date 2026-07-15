@@ -407,6 +407,17 @@ public final class DownstreamPermissionCatalog {
         // ── New batch (bits 350–350) ──────────────────────────────────────────
         "PERM_workorder:events:replay", // 350
 
+        // ── People Contact (bits 351–359, ADR-0044 Phase 3 split #874) ────────
+        "PERM_people-contact:person:view", // 351
+        "PERM_people-contact:person:create", // 352
+        "PERM_people-contact:person:edit", // 353
+        "PERM_people-contact:person:delete", // 354
+        "PERM_people-contact:role:view", // 355
+        "PERM_people-contact:role:assign", // 356
+        "PERM_people-contact:role:revoke", // 357
+        "PERM_people-contact:userLink:view", // 358
+        "PERM_people-contact:userLink:write", // 359
+
         // ── New batch (bits 360–361) ──────────────────────────────────────────
         "PERM_people:compliance:view", // 360
         "PERM_shop:technician:view" // 361
