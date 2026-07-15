@@ -120,8 +120,17 @@ public class VendorBillServiceImpl implements VendorBillService {
         // Step 4: Save bill
         VendorBill savedBill = billRepository.save(bill);
 
-        // Keep the AP vendor directory (name typeahead) in sync (Issue #816)
-        vendorDirectoryService.recordVendor(event.getVendorId(), event.getVendorName());
+        // Keep the AP vendor directory (name typeahead) in sync (Issue #816).
+        // Best-effort: runs in its own transaction, and a failure (e.g. a
+        // concurrent insert of the same vendor) must never fail bill creation.
+        try {
+            vendorDirectoryService.recordVendor(event.getVendorId(), event.getVendorName());
+        } catch (RuntimeException e) {
+            log.warn(
+                    "Vendor directory sync failed, continuing bill creation | vendorId={} | error={}",
+                    event.getVendorId(),
+                    e.getMessage());
+        }
 
         // Step 5: Save line items for three-way matching
         int lineNumber = 1;

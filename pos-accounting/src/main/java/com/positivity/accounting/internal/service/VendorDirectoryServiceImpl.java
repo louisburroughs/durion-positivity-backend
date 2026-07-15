@@ -14,6 +14,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -50,8 +51,13 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
         return vendorRepository.findById(vendorId).map(VendorDirectoryServiceImpl::toResponse);
     }
 
+    // REQUIRES_NEW isolates the upsert from the caller's transaction: a
+    // concurrent insert of the same vendorId can still fail this write with a
+    // duplicate-key violation, but only this transaction rolls back — the
+    // upstream bill/payment flow is unaffected (callers treat directory sync
+    // as best-effort and the concurrent writer already stored the same data).
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordVendor(@NonNull UUID vendorId, @Nullable String vendorName) {
         if (vendorName == null || vendorName.isBlank()) {
             return;

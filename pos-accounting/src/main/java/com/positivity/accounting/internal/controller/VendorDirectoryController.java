@@ -5,6 +5,7 @@ import com.positivity.accounting.service.VendorDirectoryService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -71,7 +72,7 @@ public class VendorDirectoryController {
     @ApiResponse(
             responseCode = "200",
             description = "Matching vendors returned",
-            content = @Content(schema = @Schema(implementation = VendorResponse.class)))
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = VendorResponse.class))))
     public ResponseEntity<List<VendorResponse>> searchVendors(
             @Parameter(description = "Name search term (case-insensitive contains)", example = "acme")
                     @Nullable

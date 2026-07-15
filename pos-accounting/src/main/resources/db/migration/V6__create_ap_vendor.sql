@@ -15,7 +15,10 @@ CREATE TABLE ap_vendor (
     CONSTRAINT ap_vendor_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'INACTIVE'::character varying])::text[])))
 );
 
-CREATE INDEX idx_ap_vendor_name ON ap_vendor USING btree (lower(name));
+-- Plain btree on name: supports ORDER BY name and matches the JPA entity's
+-- declared index (contains-style typeahead matching can't use a btree either
+-- way; a trigram index can be added later if search volume warrants it).
+CREATE INDEX idx_ap_vendor_name ON ap_vendor USING btree (name);
 
 -- Backfill from existing vendor bills (most recent name per vendor wins).
 INSERT INTO ap_vendor (vendor_id, name, status, created_at, updated_at)

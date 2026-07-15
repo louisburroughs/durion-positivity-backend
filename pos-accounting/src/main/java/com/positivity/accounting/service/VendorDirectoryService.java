@@ -54,6 +54,8 @@ public interface VendorDirectoryService {
      * <p>
      * Inserts a new directory entry, or refreshes the stored name when it has
      * changed. A null/blank name is ignored so call sites don't need to guard.
+     * Runs in its own transaction; callers should treat it as best-effort and
+     * not let a failure abort the surrounding business flow.
      *
      * @param vendorId   vendor UUID from the upstream event
      * @param vendorName vendor display name from the upstream event (may be
