@@ -22,4 +22,5 @@ CREATE DATABASE pos_vehicle_fitment_db;
 CREATE DATABASE pos_vehicle_inventory_db;
 CREATE DATABASE pos_vehicle_reference_carapi_db;
 CREATE DATABASE pos_vehicle_reference_nhtsa_db;
+CREATE DATABASE pos_warranty_db;
 CREATE DATABASE pos_workorder_db;

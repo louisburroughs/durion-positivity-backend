@@ -151,6 +151,12 @@ spring:
                 - Path=/vehicle-inventory/**
               filters:
                 - StripPrefix=1
+            - id: warranty
+              uri: lb://WARRANTY
+              predicates:
+                - Path=/warranty/**
+              filters:
+                - StripPrefix=1
 
 management:
   endpoints:
@@ -238,6 +244,8 @@ springdoc:
         url: /vehicle-fitment/v3/api-docs
       - name: Vehicle Inventory
         url: /vehicle-inventory/v3/api-docs
+      - name: Warranty
+        url: /warranty/v3/api-docs
       - name: Workorder
         url: /workorder/v3/api-docs
 
