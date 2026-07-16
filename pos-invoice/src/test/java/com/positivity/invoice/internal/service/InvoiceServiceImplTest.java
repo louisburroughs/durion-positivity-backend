@@ -292,6 +292,49 @@ class InvoiceServiceImplTest {
     }
 
     @Test
+    void applyAdjustment_warrantyWithExternalReference_persistsReferenceAndCreditsTotal() {
+        AdjustmentRequest request = new AdjustmentRequest();
+        request.setType(InvoiceAdjustmentType.WARRANTY);
+        request.setAmount(BigDecimal.valueOf(10));
+        request.setReason("Warranty credit for failed part");
+        request.setAuthorizedBy("manager1");
+        request.setExternalReference("  WC-2026-000042  ");
+
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+        when(invoiceRepository.save(any())).thenReturn(draftInvoice);
+
+        InvoiceDetailsResponse result = invoiceService.applyAdjustment(invoiceId, request);
+
+        // Persisted on the adjustment entity, trimmed.
+        assertThat(draftInvoice.getAdjustmentEntries()).hasSize(1);
+        assertThat(draftInvoice.getAdjustmentEntries().get(0).getExternalReference())
+                .isEqualTo("WC-2026-000042");
+        // Echoed on the response entry.
+        assertThat(result.getAdjustmentEntries()).hasSize(1);
+        assertThat(result.getAdjustmentEntries().get(0).getExternalReference()).isEqualTo("WC-2026-000042");
+        // A WARRANTY adjustment is a credit: subtotal 100, no tax → total 90.
+        assertThat(draftInvoice.getTotal()).isEqualByComparingTo("90");
+    }
+
+    @Test
+    void applyAdjustment_blankExternalReference_normalizesToNull() {
+        AdjustmentRequest request = new AdjustmentRequest();
+        request.setType(InvoiceAdjustmentType.DISCOUNT);
+        request.setAmount(BigDecimal.valueOf(10));
+        request.setReason("Customer loyalty discount");
+        request.setAuthorizedBy("manager1");
+        request.setExternalReference("   ");
+
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+        when(invoiceRepository.save(any())).thenReturn(draftInvoice);
+
+        invoiceService.applyAdjustment(invoiceId, request);
+
+        assertThat(draftInvoice.getAdjustmentEntries().get(0).getExternalReference())
+                .isNull();
+    }
+
+    @Test
     void applyAdjustment_discountOnInvoiceWithLineItems_calculatesTaxFromLineItemsOnly() {
         // Regression: a discount must not be folded into the tax request as a negative-priced
         // line (pos-tax @Positive would reject it). Tax is computed from the positive line

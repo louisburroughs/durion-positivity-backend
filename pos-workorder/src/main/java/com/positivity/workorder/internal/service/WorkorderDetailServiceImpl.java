@@ -192,7 +192,8 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                 .quantity(part.getQuantity())
                 .quantityIssued(part.getQuantityIssued())
                 .quantityConsumed(part.getQuantityConsumed())
-                .quantityReturned(part.getQuantityReturned());
+                .quantityReturned(part.getQuantityReturned())
+                .photoEvidenceUrl(part.getPhotoEvidenceUrl());
 
         if (includeFinancials) {
             BigDecimal partCost = (part.getQuantity() != null && part.getUnitPrice() != null)

@@ -69,7 +69,7 @@ public class InvoiceController {
     @EmitEvent(id = "INVOICE_ADJUSTMENT_APPLY", apiVersion = "1")
     @Operation(
             summary = "Apply invoice adjustment",
-            description = "Apply discount, fee, or correction to a draft invoice")
+            description = "Apply discount, fee, correction, or warranty credit to a draft invoice")
     @ApiResponse(responseCode = "200", description = "Adjustment applied")
     @SecurityRequirement(
             name = "bearerAuth",

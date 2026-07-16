@@ -64,21 +64,29 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
 
     /**
      * Free-text workorder search matching the workorder number (contains), a resolved
-     * customer id (from a name search), or the workorder id directly.
+     * customer id (from a name search), or the workorder id directly, optionally
+     * restricted to an exact customer and/or vehicle.
      *
      * @param q           free-text term matched against workorderNumber (case-insensitive contains)
      * @param customerIds customer ids resolved from a name search (must be non-empty for JPQL IN)
      * @param idQuery     the query parsed as a UUID, or {@code null} if not a UUID
+     * @param customerId  exact customer filter, or {@code null} for no restriction
+     * @param vehicleId   exact vehicle filter, or {@code null} for no restriction
      * @param pageable    pagination configuration
      * @return page of matching workorders
      */
-    @Query("SELECT w FROM Workorder w WHERE LOWER(w.workorderNumber) LIKE LOWER(CONCAT('%', :q, '%')) "
+    @Query("SELECT w FROM Workorder w WHERE (:q = '' "
+            + "OR LOWER(w.workorderNumber) LIKE LOWER(CONCAT('%', :q, '%')) "
             + "OR w.customerId IN :customerIds "
-            + "OR (:idQuery IS NOT NULL AND w.id = :idQuery)")
+            + "OR (:idQuery IS NOT NULL AND w.id = :idQuery)) "
+            + "AND (:customerId IS NULL OR w.customerId = :customerId) "
+            + "AND (:vehicleId IS NULL OR w.vehicleId = :vehicleId)")
     Page<Workorder> searchByQuery(
             @Param("q") String q,
             @Param("customerIds") Collection<UUID> customerIds,
             @Param("idQuery") UUID idQuery,
+            @Param("customerId") UUID customerId,
+            @Param("vehicleId") UUID vehicleId,
             Pageable pageable);
 
     /**

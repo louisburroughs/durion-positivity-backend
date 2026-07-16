@@ -76,3 +76,19 @@ pos:
     api-secret: ${POS_EVENTS_API_SECRET:}
   security:
     base-url: ${POS_SECURITY_BASE_URL:http://pos-security-service:8080}
+  # Outbound sibling-service clients (PRD §9.4): Eureka service ids + base paths.
+  vehicle-inventory:
+    service-id: vehicle-inventory
+    base-path: /v1/vehicle-registry
+  invoice:
+    service-id: invoice
+    base-path: /v1/invoices
+  workorder:
+    service-id: workorder
+    base-path: /v1/workorders
+  catalog:
+    service-id: catalog
+    base-path: /v1/products
+  customer:
+    service-id: customer
+    base-path: /v1/crm

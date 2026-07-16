@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.invoice.internal.dto.InvoiceLineSearchResult;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.service.InvoiceSearchService;
@@ -99,6 +100,38 @@ class InvoiceSearchControllerTest {
         mockMvc.perform(get("/v1/invoices/search")).andExpect(status().isOk());
 
         verify(invoiceSearchService).search(eq(""), any());
+    }
+
+    @Test
+    void searchInvoiceLines_delegatesPartyIdAndSerializesList() throws Exception {
+        UUID partyId = UUID.fromString("33333333-0000-0000-0000-000000000001");
+        UUID itemId = UUID.fromString("44444444-0000-0000-0000-000000000001");
+        InvoiceLineSearchResult line = InvoiceLineSearchResult.builder()
+                .invoiceId(INVOICE_ID)
+                .invoiceNumber("INV-2026-1001")
+                .invoiceItemId(itemId)
+                .description("Front brake pads")
+                .quantity(new BigDecimal("2"))
+                .unitPrice(new BigDecimal("64.99"))
+                .amount(new BigDecimal("129.98"))
+                .itemType("PART")
+                .invoiceStatus("POSTED")
+                .invoiceCreatedAt(Instant.parse("2026-01-15T09:30:00Z"))
+                .build();
+        when(invoiceSearchService.searchLinesByParty(partyId)).thenReturn(List.of(line));
+
+        mockMvc.perform(get("/v1/invoices/items/search").param("partyId", partyId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].invoiceId").value(INVOICE_ID.toString()))
+                .andExpect(jsonPath("$[0].invoiceItemId").value(itemId.toString()))
+                .andExpect(jsonPath("$[0].description").value("Front brake pads"))
+                .andExpect(jsonPath("$[0].itemType").value("PART"))
+                .andExpect(jsonPath("$[0].invoiceStatus").value("POSTED"));
+    }
+
+    @Test
+    void searchInvoiceLines_missingPartyId_isRejected() throws Exception {
+        mockMvc.perform(get("/v1/invoices/items/search")).andExpect(status().is4xxClientError());
     }
 
     @Test

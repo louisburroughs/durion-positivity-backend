@@ -58,6 +58,10 @@ public class RefundRecord {
     @Column(name = "gateway_reference", length = 256)
     private String gatewayReference;
 
+    /** Optional correlation id to an external record (e.g. a warranty claim settlement). */
+    @Column(name = "external_reference", length = 64)
+    private String externalReference;
+
     @Column(name = "requested_by", nullable = false, length = 128)
     private String requestedBy;
 

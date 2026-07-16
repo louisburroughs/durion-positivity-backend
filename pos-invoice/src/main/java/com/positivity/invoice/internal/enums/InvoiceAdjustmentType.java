@@ -6,5 +6,7 @@ package com.positivity.invoice.internal.enums;
 public enum InvoiceAdjustmentType {
     DISCOUNT,
     FEE,
-    CORRECTION
+    CORRECTION,
+    /** Warranty credit applied against the invoice (correlated to a warranty claim via externalReference). */
+    WARRANTY
 }

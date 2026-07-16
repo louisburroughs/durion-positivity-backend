@@ -112,7 +112,8 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             @NonNull UUID paymentIntentId,
             @NonNull BigDecimal amount,
             @NonNull RefundReason reason,
-            @Nullable String notes) {
+            @Nullable String notes,
+            @Nullable String externalReference) {
         requireAuthority(REFUND_PAYMENT);
         PaymentIntent paymentIntent = paymentIntentRepository
                 .findById(paymentIntentId)
@@ -159,6 +160,7 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         refundRecord.setAmount(amount);
         refundRecord.setReason(reason);
         refundRecord.setNotes(notes);
+        refundRecord.setExternalReference(normalizeExternalReference(externalReference));
         refundRecord.setRequestedBy(requestedBy);
         refundRecord.setRequestedAt(Instant.now(clock));
         refundRecord.setStatus(result.isSuccessful() ? RefundStatus.COMPLETED : RefundStatus.FAILED);
@@ -181,7 +183,17 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         resultDto.setNotes(saved.getNotes());
         resultDto.setStatus(saved.getStatus());
         resultDto.setGatewayReference(saved.getGatewayReference());
+        resultDto.setExternalReference(saved.getExternalReference());
         resultDto.setCompletedAt(saved.getCompletedAt());
         return resultDto;
+    }
+
+    /** Trim the optional external reference and collapse a blank value to {@code null}. */
+    @Nullable
+    private static String normalizeExternalReference(@Nullable String externalReference) {
+        if (externalReference == null || externalReference.isBlank()) {
+            return null;
+        }
+        return externalReference.trim();
     }
 }

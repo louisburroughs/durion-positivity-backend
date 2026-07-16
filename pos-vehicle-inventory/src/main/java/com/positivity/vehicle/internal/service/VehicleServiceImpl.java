@@ -159,6 +159,7 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     private VehicleResponse mapToResponse(VehicleRecord vehicle) {
+        VehicleRecord.OdometerReading odometer = vehicle.getOdometer();
         return VehicleResponse.builder()
                 .vehicleId(vehicle.getVehicleId())
                 .accountId(vehicle.getAccountId())
@@ -172,6 +173,12 @@ public class VehicleServiceImpl implements VehicleService {
                 .make(vehicle.getMake())
                 .model(vehicle.getModel())
                 .trim(vehicle.getTrim())
+                .odometerValue(
+                        odometer == null || odometer.getValue() == null ? null : Math.toIntExact(odometer.getValue()))
+                .odometerUnit(
+                        odometer == null || odometer.getUnit() == null
+                                ? null
+                                : odometer.getUnit().name())
                 .isActive(vehicle.getIsActive())
                 .createdAt(vehicle.getCreatedAt())
                 .updatedAt(vehicle.getUpdatedAt())

@@ -141,6 +141,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         adjustment.setAmount(request.getAmount().setScale(4, RoundingMode.HALF_UP));
         adjustment.setReason(request.getReason().trim());
         adjustment.setAuthorizedBy(request.getAuthorizedBy().trim());
+        adjustment.setExternalReference(normalizeExternalReference(request.getExternalReference()));
 
         invoice.addAdjustment(adjustment);
         recalculateTotals(invoice);
@@ -295,10 +296,20 @@ public class InvoiceServiceImpl implements InvoiceService {
     private BigDecimal toSignedAdjustmentAmount(@NonNull InvoiceAdjustment adjustment) {
         BigDecimal amount = safeMoney(adjustment.getAmount(), BigDecimal.ZERO);
         return switch (adjustment.getType()) {
-            case DISCOUNT -> amount.abs().negate();
+            // A warranty credit reduces what the customer owes, exactly like a discount.
+            case DISCOUNT, WARRANTY -> amount.abs().negate();
             case FEE -> amount.abs();
             case CORRECTION -> amount;
         };
+    }
+
+    /** Trim the optional external reference and collapse a blank value to {@code null}. */
+    @Nullable
+    private static String normalizeExternalReference(@Nullable String externalReference) {
+        if (externalReference == null || externalReference.isBlank()) {
+            return null;
+        }
+        return externalReference.trim();
     }
 
     @NonNull
@@ -430,6 +441,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setAmount(adjustment.getAmount());
         response.setReason(adjustment.getReason());
         response.setAuthorizedBy(adjustment.getAuthorizedBy());
+        response.setExternalReference(adjustment.getExternalReference());
         response.setCreatedAt(adjustment.getCreatedAt());
         return response;
     }

@@ -126,16 +126,19 @@ class PaymentReversalControllerTest {
         saved.setAmount(BigDecimal.valueOf(100.00));
         saved.setReason(RefundReason.CUSTOMER_RETURN);
         saved.setStatus(RefundStatus.COMPLETED);
+        saved.setExternalReference("WC-2026-000042");
         saved.setCompletedAt(Instant.parse("2026-01-15T14:30:22Z"));
 
-        when(paymentReversalService.refundPayment(any(), any(), any(), any(), any()))
+        when(paymentReversalService.refundPayment(any(), any(), any(), any(), any(), any()))
                 .thenReturn(saved);
 
         mockMvc.perform(post("/v1/invoices/{invoiceId}/payments/{paymentId}/refunds", INVOICE_ID, PAYMENT_INTENT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"amount\":100.00,\"reason\":\"CUSTOMER_RETURN\"}"))
+                        .content("{\"amount\":100.00,\"reason\":\"CUSTOMER_RETURN\","
+                                + "\"externalReference\":\"WC-2026-000042\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.refundId").value("00000000-0000-7000-8000-000000000005"));
+                .andExpect(jsonPath("$.refundId").value("00000000-0000-7000-8000-000000000005"))
+                .andExpect(jsonPath("$.externalReference").value("WC-2026-000042"));
     }
 
     /**
@@ -146,7 +149,7 @@ class PaymentReversalControllerTest {
     void refundPayment_windowExpired_returns422() throws Exception {
         doThrow(new PaymentWindowExpiredException("refund window of 180 days has expired"))
                 .when(paymentReversalService)
-                .refundPayment(any(), any(), any(), any(), any());
+                .refundPayment(any(), any(), any(), any(), any(), any());
 
         mockMvc.perform(post("/v1/invoices/{invoiceId}/payments/{paymentId}/refunds", INVOICE_ID, PAYMENT_INTENT_ID)
                         .contentType(MediaType.APPLICATION_JSON)

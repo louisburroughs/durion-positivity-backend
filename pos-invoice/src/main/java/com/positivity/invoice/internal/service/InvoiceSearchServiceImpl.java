@@ -1,7 +1,10 @@
 package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.dto.InvoiceLineSearchResult;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.InvoiceItem;
+import com.positivity.invoice.internal.repository.InvoiceItemRepository;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.service.InvoiceSearchService;
 import java.util.List;
@@ -38,6 +41,7 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
     private static final UUID NO_WORKORDER_SENTINEL = new UUID(0L, 0L);
 
     private final InvoiceRepository invoiceRepository;
+    private final InvoiceItemRepository invoiceItemRepository;
     private final CustomerReferenceService customerReferenceService;
     private final WorkorderReferenceService workorderReferenceService;
 
@@ -86,6 +90,33 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
                 .total(invoice.getTotal())
                 .createdAt(invoice.getCreatedAt())
                 .build());
+    }
+
+    @Override
+    public @NonNull List<InvoiceLineSearchResult> searchLinesByParty(@NonNull UUID partyId) {
+        // Invoices store the party id as a string column; UUID party ids are persisted in
+        // canonical lowercase form (UUID.toString()).
+        return invoiceItemRepository.findByInvoicePartyId(partyId.toString()).stream()
+                .map(InvoiceSearchServiceImpl::toLineResult)
+                .toList();
+    }
+
+    private static @NonNull InvoiceLineSearchResult toLineResult(@NonNull InvoiceItem item) {
+        Invoice invoice = item.getInvoice();
+        return InvoiceLineSearchResult.builder()
+                .invoiceId(invoice.getId())
+                .invoiceNumber(invoice.getInvoiceNumber())
+                .invoiceItemId(item.getId())
+                .description(item.getDescription())
+                .quantity(item.getQuantity())
+                .unitPrice(item.getUnitPrice())
+                .amount(item.getLineTotal())
+                .workorderItemId(item.getWorkorderItemId())
+                .itemType(item.getType())
+                .invoiceStatus(
+                        invoice.getStatus() == null ? null : invoice.getStatus().name())
+                .invoiceCreatedAt(invoice.getCreatedAt())
+                .build();
     }
 
     /**

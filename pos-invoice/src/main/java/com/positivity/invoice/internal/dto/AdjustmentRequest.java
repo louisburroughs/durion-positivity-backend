@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -36,6 +37,13 @@ public class AdjustmentRequest {
             example = "jdoe",
             requiredMode = REQUIRED)
     private String authorizedBy;
+
+    @Size(max = 64)
+    @Schema(
+            description = "Optional correlation id to an external record (e.g. a warranty claim code)",
+            example = "WC-2026-000042",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private String externalReference;
 
     @Nullable
     public InvoiceAdjustmentType getType() {
@@ -71,5 +79,14 @@ public class AdjustmentRequest {
 
     public void setAuthorizedBy(@NonNull String authorizedBy) {
         this.authorizedBy = authorizedBy;
+    }
+
+    @Nullable
+    public String getExternalReference() {
+        return externalReference;
+    }
+
+    public void setExternalReference(@Nullable String externalReference) {
+        this.externalReference = externalReference;
     }
 }
