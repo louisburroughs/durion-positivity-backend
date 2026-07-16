@@ -43,6 +43,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * Vendor-reimbursement child state machine (PRD §3.7): NOT_SUBMITTED → SUBMITTED → APPROVED |
@@ -124,6 +125,11 @@ class ReimbursementServiceImplTest {
         when(reimbursementRepository.save(any(VendorReimbursement.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
+    private void stubSaveAndFlushEcho() {
+        when(reimbursementRepository.saveAndFlush(any(VendorReimbursement.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+    }
+
     @Nested
     class Submit {
 
@@ -132,7 +138,7 @@ class ReimbursementServiceImplTest {
             when(claimRepository.findById(CLAIM_ID)).thenReturn(Optional.of(claim(ClaimStatus.APPROVED)));
             when(providerRepository.findById(PROVIDER_ID)).thenReturn(Optional.of(provider(ProviderType.MANUFACTURER)));
             when(reimbursementRepository.findByClaimId(CLAIM_ID)).thenReturn(List.of());
-            stubSaveEcho();
+            stubSaveAndFlushEcho();
             when(outboxEventWriterProvider.getIfAvailable()).thenReturn(outboxEventWriter);
 
             ReimbursementResponse response = service.submit(
@@ -161,7 +167,7 @@ class ReimbursementServiceImplTest {
             when(providerRepository.findById(PROVIDER_ID)).thenReturn(Optional.of(provider(ProviderType.MANUFACTURER)));
             when(reimbursementRepository.findByClaimId(CLAIM_ID))
                     .thenReturn(List.of(reimbursement(ReimbursementStatus.NOT_SUBMITTED)));
-            stubSaveEcho();
+            stubSaveAndFlushEcho();
             when(outboxEventWriterProvider.getIfAvailable()).thenReturn(null);
 
             ReimbursementResponse response =
@@ -232,6 +238,22 @@ class ReimbursementServiceImplTest {
             assertThatThrownBy(
                             () -> service.submit(CLAIM_ID, new ReimbursementSubmitRequest(BigDecimal.ONE, null, null)))
                     .isInstanceOf(WarrantyNotFoundException.class);
+        }
+
+        @Test
+        void concurrentSubmitLosingTheUniqueConstraintRaceIs409AndPublishesNothing() {
+            when(claimRepository.findById(CLAIM_ID)).thenReturn(Optional.of(claim(ClaimStatus.APPROVED)));
+            when(providerRepository.findById(PROVIDER_ID)).thenReturn(Optional.of(provider(ProviderType.MANUFACTURER)));
+            when(reimbursementRepository.findByClaimId(CLAIM_ID)).thenReturn(List.of());
+            when(reimbursementRepository.saveAndFlush(any(VendorReimbursement.class)))
+                    .thenThrow(new DataIntegrityViolationException("vendor_reimbursement_claim_key"));
+
+            assertThatThrownBy(
+                            () -> service.submit(CLAIM_ID, new ReimbursementSubmitRequest(BigDecimal.ONE, null, null)))
+                    .isInstanceOf(IllegalClaimStateException.class)
+                    .satisfies(ex -> assertThat(((IllegalClaimStateException) ex).getCode())
+                            .isEqualTo(ReimbursementServiceImpl.ALREADY_SUBMITTED_CODE));
+            verify(outboxEventWriter, never()).publish(any(), any());
         }
     }
 
@@ -309,16 +331,25 @@ class ReimbursementServiceImplTest {
         }
 
         @Test
-        void writtenOffFromSubmittedEmitsNoResolvedEvent() {
+        void writtenOffFromSubmittedEmitsResolvedEventSoAccountingStopsExpectingTheCredit() {
             stubClaimAndExisting(ReimbursementStatus.SUBMITTED);
             stubSaveEcho();
+            when(outboxEventWriterProvider.getIfAvailable()).thenReturn(outboxEventWriter);
+            when(providerRepository.findById(PROVIDER_ID)).thenReturn(Optional.of(provider(ProviderType.MANUFACTURER)));
 
             ReimbursementResponse response = service.update(
                     CLAIM_ID, new ReimbursementUpdateRequest(ReimbursementStatus.WRITTEN_OFF, null, null, null));
 
             assertThat(response.status()).isEqualTo(ReimbursementStatus.WRITTEN_OFF);
             assertThat(response.resolvedAt()).isEqualTo(NOW);
-            verify(outboxEventWriter, never()).publish(any(), any());
+
+            ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.captor();
+            verify(outboxEventWriter).publish(eq("warranty.events.v1"), captor.capture());
+            WarrantyReimbursementResolvedV1 payload =
+                    (WarrantyReimbursementResolvedV1) captor.getValue().payload();
+            assertThat(payload.status()).isEqualTo("WRITTEN_OFF");
+            assertThat(payload.amountApproved()).isNull();
+            assertThat(payload.creditReference()).isNull();
         }
 
         @Test

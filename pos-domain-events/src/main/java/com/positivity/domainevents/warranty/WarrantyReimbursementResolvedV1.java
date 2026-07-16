@@ -12,9 +12,10 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Published by pos-warranty on {@code warranty.events.v1} with
  * {@code eventType = "warranty.reimbursement.resolved"} when the provider approves (fully or
- * partially), denies, or credits a previously submitted reimbursement. {@code status} is the
- * owner {@code ReimbursementStatus} name; {@code amountApproved} and {@code creditReference}
- * are null when the resolution carries no approved amount / credit (e.g. a denial).
+ * partially), denies, or credits a previously submitted reimbursement, or when the back office
+ * writes it off (so consumers stop expecting the credit). {@code status} is the owner
+ * {@code ReimbursementStatus} name; {@code amountApproved} and {@code creditReference}
+ * are null when the resolution carries no approved amount / credit (e.g. a denial or write-off).
  *
  * @param claimId warranty claim identifier (also the envelope aggregateId)
  * @param claimCode human-readable claim code, e.g. {@code WC-2026-000123}

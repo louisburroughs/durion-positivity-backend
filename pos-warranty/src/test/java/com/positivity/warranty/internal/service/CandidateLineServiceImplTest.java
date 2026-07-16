@@ -144,7 +144,7 @@ class CandidateLineServiceImplTest {
     void productFilter_matchesPartsByIdAndInvoiceLinesByCatalogTokens() {
         when(catalogClient.getProduct(PRODUCT_ID))
                 .thenReturn(Optional.of(new CatalogClient.ProductInfo(
-                        PRODUCT_ID, "TIRE-1", "SuperTire", null, null, null, "Tires", null, null)));
+                        PRODUCT_ID, "TIRE-1", "SuperTire", null, null, null, null, "Tires", null, null)));
         when(invoiceClient.searchInvoiceLines(CUSTOMER_ID))
                 .thenReturn(List.of(invoiceLine("SuperTire 225/45R17"), invoiceLine("Oil change")));
         when(workorderClient.searchWorkorders(CUSTOMER_ID, null)).thenReturn(List.of(workorderSummary()));

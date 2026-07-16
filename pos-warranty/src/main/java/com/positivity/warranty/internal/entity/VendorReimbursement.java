@@ -37,7 +37,6 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "vendor_reimbursement",
         indexes = {
-            @Index(name = "idx_vreimb_claim", columnList = "claim_id"),
             @Index(name = "idx_vreimb_status", columnList = "status"),
             @Index(name = "idx_vreimb_provider", columnList = "provider_id")
         })
@@ -50,7 +49,8 @@ public class VendorReimbursement {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "claim_id", nullable = false)
+    /** Unique per claim (at most one vendor reimbursement, PRD §3.7). */
+    @Column(name = "claim_id", nullable = false, unique = true)
     private UUID claimId;
 
     @Column(name = "provider_id", nullable = false)

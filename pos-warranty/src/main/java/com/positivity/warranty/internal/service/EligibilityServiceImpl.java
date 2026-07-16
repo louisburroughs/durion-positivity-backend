@@ -109,10 +109,15 @@ public class EligibilityServiceImpl implements EligibilityService {
             }
         }
 
-        // Select coverage onto the claim only when a single policy wins (PRD §6 / contract).
+        // Select coverage onto the claim only when a single policy wins (PRD §6 / contract);
+        // otherwise clear any coverage a previous evaluation selected so a re-run after intake
+        // edits (e.g. claimType change) never leaves stale policy/provider pointers behind.
         if (policy != null && singleWinner) {
             claim.setPolicyId(policy.getId());
             claim.setProviderId(policy.getProviderId());
+        } else {
+            claim.setPolicyId(null);
+            claim.setProviderId(null);
         }
 
         // --- Per-line proration (PRD §6 table) -----------------------------------------------
@@ -134,6 +139,12 @@ public class EligibilityServiceImpl implements EligibilityService {
                 if (amount != null) {
                     totalRequested = totalRequested.add(amount);
                 }
+            } else {
+                // No governing policy this run: clear proration a previous evaluation persisted
+                // so stale amounts never survive a re-run that finds no coverage.
+                line.setProrationPct(null);
+                line.setProrationInputs(null);
+                line.setAmountRequested(null);
             }
             Map<String, Object> lineEntry = new LinkedHashMap<>();
             lineEntry.put("claimLineId", line.getId() != null ? line.getId().toString() : null);
@@ -256,9 +267,7 @@ public class EligibilityServiceImpl implements EligibilityService {
 
     /**
      * ALL always matches; scoped policies match when any claim line resolves to the policy's
-     * scope. CATEGORY policies cannot be matched today — pos-catalog exposes only a free-text
-     * category name, not a category id — so they never match automatically (staff can still
-     * select them by hand).
+     * scope (product id, manufacturer id, or pos-catalog category id).
      */
     private static boolean matchesAppliesTo(WarrantyPolicy policy, ProductFacts facts) {
         return switch (policy.getAppliesToType()) {
@@ -268,7 +277,9 @@ public class EligibilityServiceImpl implements EligibilityService {
             case MANUFACTURER ->
                 policy.getAppliesToManufacturerId() != null
                         && facts.manufacturerIds().contains(policy.getAppliesToManufacturerId());
-            case CATEGORY -> false;
+            case CATEGORY ->
+                policy.getAppliesToCategoryId() != null
+                        && facts.categoryIds().contains(policy.getAppliesToCategoryId());
             case ALL -> true;
         };
     }
@@ -283,10 +294,11 @@ public class EligibilityServiceImpl implements EligibilityService {
         };
     }
 
-    /** Product facts (manufacturer ids) resolved from pos-catalog for lines carrying a product id. */
+    /** Product facts (manufacturer + category ids) resolved from pos-catalog for lines carrying a product id. */
     private ProductFacts resolveProductFacts(WarrantyClaim claim) {
         Set<UUID> productIds = new HashSet<>();
         Set<UUID> manufacturerIds = new HashSet<>();
+        Set<UUID> categoryIds = new HashSet<>();
         boolean incomplete = false;
         Map<UUID, Optional<CatalogClient.ProductInfo>> cache = new HashMap<>();
         for (WarrantyClaimLine line : claim.getLines()) {
@@ -301,11 +313,14 @@ public class EligibilityServiceImpl implements EligibilityService {
                 if (product.get().manufacturerId() != null) {
                     manufacturerIds.add(product.get().manufacturerId());
                 }
+                if (product.get().categoryId() != null) {
+                    categoryIds.add(product.get().categoryId());
+                }
             } else {
                 incomplete = true;
             }
         }
-        return new ProductFacts(productIds, manufacturerIds, incomplete);
+        return new ProductFacts(productIds, manufacturerIds, categoryIds, incomplete);
     }
 
     // -----------------------------------------------------------------------------------------
@@ -355,5 +370,6 @@ public class EligibilityServiceImpl implements EligibilityService {
     }
 
     /** Facts resolved from claim lines; {@code incomplete} = at least one catalog lookup failed. */
-    private record ProductFacts(Set<UUID> productIds, Set<UUID> manufacturerIds, boolean incomplete) {}
+    private record ProductFacts(
+            Set<UUID> productIds, Set<UUID> manufacturerIds, Set<UUID> categoryIds, boolean incomplete) {}
 }

@@ -21,7 +21,11 @@ import org.springframework.web.client.RestClientResponseException;
 /**
  * RestClient implementation of {@link InvoiceClient}.
  *
- * <p>All pos-invoice endpoints used here demand authority {@code invoice:manage}.
+ * <p>Reads and adjustment writes demand authority {@code invoice:manage}. The refund endpoint
+ * additionally enforces {@code REFUND_PAYMENT} in the pos-invoice service layer plus
+ * {@code SUPERVISOR_OVERRIDE} for payments outside pos-invoice's 180-day refund window —
+ * warranty refunds routinely reverse payments captured years earlier, and the warranty flow's
+ * own approval gate (claim must be APPROVED before settlement) is the compensating control.
  */
 @Slf4j
 @Component
@@ -29,6 +33,8 @@ public class InvoiceClientImpl implements InvoiceClient {
 
     private static final String SERVICE_USER = "pos-warranty-service";
     private static final String AUTHORITIES = "invoice:manage";
+    private static final String REFUND_AUTHORITIES = "invoice:manage,REFUND_PAYMENT,SUPERVISOR_OVERRIDE";
+    private static final String REFUND_STATUS_COMPLETED = "COMPLETED";
     private static final String ADJUSTMENT_TYPE_WARRANTY = "WARRANTY";
     private static final String REFUND_REASON_OTHER = "OTHER";
 
@@ -171,7 +177,7 @@ public class InvoiceClientImpl implements InvoiceClient {
                     .post()
                     .uri(basePath + "/{invoiceId}/payments/{paymentId}/refunds", invoiceId, paymentId)
                     .header("X-User", SERVICE_USER)
-                    .header("X-Authorities", AUTHORITIES)
+                    .header("X-Authorities", REFUND_AUTHORITIES)
                     .body(body)
                     .retrieve()
                     .body(RefundResponseWire.class);
@@ -184,6 +190,13 @@ public class InvoiceClientImpl implements InvoiceClient {
         if (response == null || response.refundId() == null) {
             log.warn("Refund created on invoice {} but response exposed no refundId", invoiceId);
             return Optional.empty();
+        }
+        // pos-invoice persists the RefundRecord and returns 201 even when the payment gateway
+        // declines (status FAILED) — a refundId alone does not mean the customer was paid.
+        if (!REFUND_STATUS_COMPLETED.equals(response.status())) {
+            throw new WarrantyIntegrationException("Refund " + response.refundId() + " on invoice " + invoiceId
+                    + " payment " + paymentId + " returned status " + response.status()
+                    + "; customer was not refunded");
         }
         return Optional.of(response.refundId());
     }

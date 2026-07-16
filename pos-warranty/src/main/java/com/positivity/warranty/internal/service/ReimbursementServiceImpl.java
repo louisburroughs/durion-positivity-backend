@@ -34,6 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -71,12 +72,17 @@ public class ReimbursementServiceImpl implements ReimbursementService {
             ReimbursementStatus.CREDIT_RECEIVED,
             ReimbursementStatus.WRITTEN_OFF);
 
-    /** Vendor resolutions that emit {@code warranty.reimbursement.resolved} (PRD §9.3). */
+    /**
+     * Resolutions that emit {@code warranty.reimbursement.resolved} (PRD §3.7/§9.3) — includes
+     * WRITTEN_OFF so pos-accounting stops expecting the vendor credit a submitted/approved
+     * reimbursement promised.
+     */
     private static final Set<ReimbursementStatus> RESOLUTION_STATES = EnumSet.of(
             ReimbursementStatus.APPROVED,
             ReimbursementStatus.PARTIALLY_APPROVED,
             ReimbursementStatus.DENIED,
-            ReimbursementStatus.CREDIT_RECEIVED);
+            ReimbursementStatus.CREDIT_RECEIVED,
+            ReimbursementStatus.WRITTEN_OFF);
 
     /**
      * Child state machine (PRD §3.7): NOT_SUBMITTED → SUBMITTED → APPROVED | PARTIALLY_APPROVED
@@ -167,7 +173,17 @@ public class ReimbursementServiceImpl implements ReimbursementService {
         }
         reimbursement.setSubmittedAt(now);
         reimbursement.setSubmittedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM));
-        VendorReimbursement saved = reimbursementRepository.save(reimbursement);
+        VendorReimbursement saved;
+        try {
+            // Flush inside the try so the UNIQUE(claim_id) constraint fires here: a concurrent
+            // submit that lost the check-then-insert race gets the same 409 as a sequential retry.
+            saved = reimbursementRepository.saveAndFlush(reimbursement);
+        } catch (DataIntegrityViolationException ex) {
+            throw new IllegalClaimStateException(
+                    ALREADY_SUBMITTED_CODE,
+                    "Reimbursement for claim " + claim.getClaimCode() + " was already submitted concurrently",
+                    nextActionFor(ReimbursementStatus.SUBMITTED));
+        }
 
         publishSubmitted(claim, provider, saved, now);
         return ReimbursementResponse.from(saved);

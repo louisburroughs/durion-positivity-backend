@@ -1185,6 +1185,9 @@ services:
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
+      # Domain events (ADR-0044) — opt-in until the tier-1 flip; mirrors pos-invoice.
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      POS_WARRANTY_KAFKA_ENABLED: ${POS_WARRANTY_KAFKA_ENABLED:-false}
     depends_on:
       eureka-server:
         condition: service_healthy

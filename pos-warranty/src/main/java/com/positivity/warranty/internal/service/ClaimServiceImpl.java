@@ -19,6 +19,7 @@ import com.positivity.warranty.internal.entity.WarrantyClaimLine;
 import com.positivity.warranty.internal.enums.ClaimDecision;
 import com.positivity.warranty.internal.enums.ClaimStatus;
 import com.positivity.warranty.internal.enums.EligibilityResult;
+import com.positivity.warranty.internal.enums.LineDisposition;
 import com.positivity.warranty.internal.enums.PartReturnStatus;
 import com.positivity.warranty.internal.enums.ReimbursementStatus;
 import com.positivity.warranty.internal.exception.IllegalClaimStateException;
@@ -31,10 +32,13 @@ import com.positivity.warranty.internal.repository.VendorReimbursementRepository
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
 import com.positivity.warranty.internal.repository.WarrantyPolicyRepository;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -68,6 +72,15 @@ public class ClaimServiceImpl implements ClaimService {
     private static final Set<PartReturnStatus> TERMINAL_PART_RETURN =
             EnumSet.of(PartReturnStatus.RECEIVED_BY_VENDOR, PartReturnStatus.SCRAPPED, PartReturnStatus.CLOSED);
 
+    /**
+     * States in which the eligibility suggestion may be recomputed. Once a human decision has
+     * been made (APPROVED/DENIED/SETTLED) the persisted proration inputs and coverage selection
+     * are frozen audit evidence (PRD §6) — a DENIED claim regains recompute via appeal →
+     * IN_REVIEW.
+     */
+    private static final Set<ClaimStatus> ELIGIBILITY_RECOMPUTABLE =
+            EnumSet.of(ClaimStatus.DRAFT, ClaimStatus.SUBMITTED, ClaimStatus.IN_REVIEW, ClaimStatus.INFO_NEEDED);
+
     private final WarrantyClaimRepository claimRepository;
     private final WarrantyPolicyRepository policyRepository;
     private final ClaimStatusHistoryRepository statusHistoryRepository;
@@ -78,6 +91,7 @@ public class ClaimServiceImpl implements ClaimService {
     private final ClaimCodeService claimCodeService;
     private final EligibilityService eligibilityService;
     private final VehicleInventoryClient vehicleInventoryClient;
+    private final Clock clock;
 
     // ------------------------------------------------------------------ intake
 
@@ -271,7 +285,7 @@ public class ClaimServiceImpl implements ClaimService {
     @Transactional
     public ClaimResponse evaluateEligibility(@NonNull UUID id) {
         WarrantyClaim claim = load(id);
-        if (ClaimStateMachine.isTerminal(claim.getStatus())) {
+        if (!ELIGIBILITY_RECOMPUTABLE.contains(claim.getStatus())) {
             throw ClaimStateMachine.illegalTransition(claim.getStatus(), "re-run eligibility");
         }
         eligibilityService.evaluate(claim.getId());
@@ -309,13 +323,14 @@ public class ClaimServiceImpl implements ClaimService {
             throw new IllegalArgumentException("This decision contradicts the computed suggestion ("
                     + claim.getEligibilityResult() + "); an override reason is required");
         }
+        boolean lineOverride = applyLineDecisions(claim, request);
 
         transition(claim, target, reason);
         claim.setDecision(toClaimDecision(request.decision()));
         claim.setDecisionReason(reason);
         claim.setDecidedBy(currentActor());
-        claim.setDecidedAt(Instant.now());
-        claim.setOverrodeSuggestion(overrode);
+        claim.setDecidedAt(Instant.now(clock));
+        claim.setOverrodeSuggestion(overrode || lineOverride);
         return toDetail(claimRepository.save(claim));
     }
 
@@ -337,6 +352,7 @@ public class ClaimServiceImpl implements ClaimService {
         // then enforce the child-lifecycle gate (PRD §5).
         ClaimStateMachine.assertTransition(claim.getStatus(), ClaimStatus.CLOSED);
         enforceChildrenTerminal(id);
+        enforceRequiredPartReturnExists(claim);
         transition(claim, ClaimStatus.CLOSED, trimToNull(request.reason()));
         return toDetail(claimRepository.save(claim));
     }
@@ -440,6 +456,98 @@ public class ClaimServiceImpl implements ClaimService {
                             + " NOT_APPLICABLE, DENIED) and every part return to a terminal status"
                             + " (RECEIVED_BY_VENDOR, SCRAPPED, CLOSED), then close the claim");
         }
+    }
+
+    /**
+     * When the governing policy mandates returning the defective part (PRD §3.8
+     * {@code requiresPartReturn}), an approved-and-settled claim cannot close until at least one
+     * part return exists — {@link #enforceChildrenTerminal} then drives it to a terminal status.
+     * DENIED→CLOSED claims skip this (nothing was covered, no RMA owed).
+     */
+    private void enforceRequiredPartReturnExists(@NonNull WarrantyClaim claim) {
+        if (claim.getStatus() != ClaimStatus.SETTLED || claim.getPolicyId() == null) {
+            return;
+        }
+        policyRepository.findById(claim.getPolicyId()).ifPresent(policy -> {
+            if (Boolean.TRUE.equals(policy.getRequiresPartReturn())
+                    && partReturnRepository.findByClaimId(claim.getId()).isEmpty()) {
+                throw new IllegalClaimStateException(
+                        CLOSE_BLOCKED_CODE,
+                        "Claim cannot be closed: policy '" + policy.getName()
+                                + "' requires the defective part to be returned and no part return exists",
+                        "Open the RMA via POST /v1/warranty/claims/{id}/part-returns and drive it to a"
+                                + " terminal status (RECEIVED_BY_VENDOR, SCRAPPED, CLOSED), then close the claim");
+            }
+        });
+    }
+
+    /**
+     * Per-line adjudication (PRD §3.5, §6): on APPROVE/DENY, applies the request's explicit line
+     * decisions and defaults the rest (APPROVE → APPROVED at the computed {@code amountRequested},
+     * DENY → DENIED). An {@code amountApproved} differing from the computed amount requires an
+     * {@code overrideReason}, audited as a claim note.
+     *
+     * @return whether any line's approved amount overrode the computed amount
+     */
+    private boolean applyLineDecisions(@NonNull WarrantyClaim claim, @NonNull ClaimDecisionRequest request) {
+        List<ClaimDecisionRequest.LineDecision> decisions =
+                request.lineDecisions() == null ? List.of() : request.lineDecisions();
+        boolean adjudicating = request.decision() == ClaimDecisionRequest.Action.APPROVE
+                || request.decision() == ClaimDecisionRequest.Action.DENY;
+        if (!adjudicating) {
+            if (!decisions.isEmpty()) {
+                throw new IllegalArgumentException("lineDecisions are only accepted with APPROVE or DENY");
+            }
+            return false;
+        }
+
+        Map<UUID, ClaimDecisionRequest.LineDecision> byLineId = new LinkedHashMap<>();
+        for (ClaimDecisionRequest.LineDecision decision : decisions) {
+            if (byLineId.put(decision.lineId(), decision) != null) {
+                throw new IllegalArgumentException(
+                        "Duplicate line decision for claim line '" + decision.lineId() + "'");
+            }
+        }
+
+        boolean approve = request.decision() == ClaimDecisionRequest.Action.APPROVE;
+        LineDisposition defaultDisposition = approve ? LineDisposition.APPROVED : LineDisposition.DENIED;
+        boolean anyOverride = false;
+        for (WarrantyClaimLine line : claim.getLines()) {
+            ClaimDecisionRequest.LineDecision decision = byLineId.remove(line.getId());
+            if (decision == null) {
+                line.setLineDisposition(defaultDisposition);
+                line.setAmountApproved(approve ? line.getAmountRequested() : null);
+                continue;
+            }
+            BigDecimal computed = line.getAmountRequested();
+            BigDecimal amountApproved =
+                    decision.amountApproved() != null ? decision.amountApproved() : (approve ? computed : null);
+            boolean overridesComputed = decision.amountApproved() != null
+                    && (computed == null || decision.amountApproved().compareTo(computed) != 0);
+            String overrideReason = trimToNull(decision.overrideReason());
+            if (overridesComputed && overrideReason == null) {
+                throw new IllegalArgumentException("Claim line '" + line.getId() + "': amountApproved "
+                        + decision.amountApproved() + " overrides the computed amountRequested " + computed
+                        + "; an override reason is required");
+            }
+            line.setAmountApproved(amountApproved);
+            line.setLineDisposition(
+                    decision.lineDisposition() != null ? decision.lineDisposition() : defaultDisposition);
+            if (overridesComputed) {
+                anyOverride = true;
+                noteRepository.save(ClaimNote.builder()
+                        .claimId(claim.getId())
+                        .note("line " + line.getId() + " amount override: " + overrideReason + " (computed " + computed
+                                + ", approved " + decision.amountApproved() + ")")
+                        .build());
+            }
+        }
+        if (!byLineId.isEmpty()) {
+            throw new WarrantyNotFoundException(
+                    LINE_NOT_FOUND_CODE,
+                    "Claim line(s) " + byLineId.keySet() + " were not found on claim '" + claim.getId() + "'");
+        }
+        return anyOverride;
     }
 
     private boolean contradictsSuggestion(@NonNull WarrantyClaim claim, ClaimDecisionRequest.@NonNull Action action) {

@@ -213,11 +213,14 @@ CREATE TABLE vendor_reimbursement (
     created_by character varying(255),
     updated_by character varying(255),
     CONSTRAINT vendor_reimbursement_pkey PRIMARY KEY (id),
+    -- At most one reimbursement per claim (PRD §3.7); backs the check-then-insert in
+    -- ReimbursementServiceImpl.submit against concurrent submits. The unique index this
+    -- creates also serves the by-claim lookups (no separate plain index needed).
+    CONSTRAINT vendor_reimbursement_claim_key UNIQUE (claim_id),
     CONSTRAINT fk_vreimb_claim FOREIGN KEY (claim_id) REFERENCES warranty_claim (id),
     CONSTRAINT fk_vreimb_provider FOREIGN KEY (provider_id) REFERENCES warranty_provider (id)
 );
 
-CREATE INDEX idx_vreimb_claim ON vendor_reimbursement (claim_id);
 CREATE INDEX idx_vreimb_status ON vendor_reimbursement (status);
 CREATE INDEX idx_vreimb_provider ON vendor_reimbursement (provider_id);
 

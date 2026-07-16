@@ -100,6 +100,11 @@
         </dependency>
         <dependency>
             <groupId>com.positivity</groupId>
+            <artifactId>pos-warranty</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.positivity</groupId>
             <artifactId>pos-shop-manager</artifactId>
             <version>${project.version}</version>
         </dependency>

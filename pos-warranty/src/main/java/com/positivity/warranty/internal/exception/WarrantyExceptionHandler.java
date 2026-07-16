@@ -4,6 +4,7 @@ import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
@@ -29,6 +30,12 @@ public class WarrantyExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(WarrantyExceptionHandler.class);
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
 
+    private final Clock clock;
+
+    public WarrantyExceptionHandler(Clock clock) {
+        this.clock = clock;
+    }
+
     @ExceptionHandler(WarrantyNotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(WarrantyNotFoundException ex, HttpServletRequest request) {
         return build(HttpStatus.NOT_FOUND, ex.getCode(), ex.getMessage(), request);
@@ -45,7 +52,7 @@ public class WarrantyExceptionHandler {
                         ex.getCode(),
                         ex.getMessage(),
                         HttpStatus.CONFLICT.value(),
-                        Instant.now().toString(),
+                        Instant.now(clock).toString(),
                         correlationId,
                         null,
                         ex.getNextAction(),
@@ -87,7 +94,7 @@ public class WarrantyExceptionHandler {
                         "VALIDATION_ERROR",
                         "Request validation failed",
                         HttpStatus.BAD_REQUEST.value(),
-                        Instant.now().toString(),
+                        Instant.now(clock).toString(),
                         correlationId,
                         fieldErrors),
                 headers,
@@ -148,7 +155,9 @@ public class WarrantyExceptionHandler {
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(
-                ApiError.of(code, message, status.value(), Instant.now().toString(), correlationId), headers, status);
+                ApiError.of(code, message, status.value(), Instant.now(clock).toString(), correlationId),
+                headers,
+                status);
     }
 
     private String resolveCorrelationId(HttpServletRequest request) {

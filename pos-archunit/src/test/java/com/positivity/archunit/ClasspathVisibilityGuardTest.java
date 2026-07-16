@@ -58,6 +58,7 @@ class ClasspathVisibilityGuardTest {
             Map.entry("pos-vehicle-inventory", "com.positivity.vehicle"),
             Map.entry("pos-vehicle-reference-carapi", "com.positivity.vehiclereferencecarapi"),
             Map.entry("pos-vehicle-reference-nhtsa", "com.positivity.nhtsa"),
+            Map.entry("pos-warranty", "com.positivity.warranty"),
             Map.entry("pos-workorder", "com.positivity.workorder")));
 
     private static JavaClasses allClasses;

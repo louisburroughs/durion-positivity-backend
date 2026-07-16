@@ -47,6 +47,7 @@ class EligibilityServiceImplTest {
     private static final UUID LINE_ID = UUID.fromString("018f0000-0000-7000-8000-000000000002");
     private static final UUID PRODUCT_ID = UUID.fromString("018f0000-0000-7000-8000-000000000003");
     private static final UUID MANUFACTURER_ID = UUID.fromString("018f0000-0000-7000-8000-000000000004");
+    private static final UUID CATEGORY_ID = UUID.fromString("018f0000-0000-7000-8000-000000000007");
     private static final UUID PROVIDER_ID = UUID.fromString("018f0000-0000-7000-8000-000000000005");
     private static final UUID CUSTOMER_ID = UUID.fromString("018f0000-0000-7000-8000-000000000006");
     private static final LocalDate SALE_DATE = LocalDate.of(2026, 1, 10);
@@ -127,7 +128,16 @@ class EligibilityServiceImplTest {
 
     private static CatalogClient.ProductInfo product() {
         return new CatalogClient.ProductInfo(
-                PRODUCT_ID, "TIRE-1", "SuperTire 225", MANUFACTURER_ID, "Michelin", "Michelin", "Tires", null, null);
+                PRODUCT_ID,
+                "TIRE-1",
+                "SuperTire 225",
+                MANUFACTURER_ID,
+                "Michelin",
+                "Michelin",
+                CATEGORY_ID,
+                "Tires",
+                null,
+                null);
     }
 
     private void stubClaim(WarrantyClaim claim) {
@@ -260,6 +270,104 @@ class EligibilityServiceImplTest {
         assertThat(claim.getPolicyId()).isNull();
         assertThat(evaluation.suggestedOutcome()).containsEntry("policyId", null);
         assertThat(evaluation.suggestedOutcome()).containsEntry("settlementType", null);
+    }
+
+    @Test
+    void rerunWithoutMatchingPolicy_clearsPreviouslySelectedCoverageAndProration() {
+        WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
+        stubClaim(claim);
+        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(policyRepository.findEffectiveOn(SALE_DATE))
+                .thenReturn(List.of(manufacturerTreadPolicy()))
+                .thenReturn(List.of()); // second run: nothing matches (e.g. claimType corrected)
+
+        service.evaluate(CLAIM_ID);
+        assertThat(claim.getPolicyId()).isNotNull();
+        assertThat(claim.getLines().get(0).getProrationPct()).isNotNull();
+
+        EligibilityEvaluation rerun = service.evaluate(CLAIM_ID);
+
+        assertThat(rerun.result()).isEqualTo(EligibilityResult.INELIGIBLE);
+        assertThat(claim.getPolicyId()).isNull();
+        assertThat(claim.getProviderId()).isNull();
+        WarrantyClaimLine line = claim.getLines().get(0);
+        assertThat(line.getProrationPct()).isNull();
+        assertThat(line.getProrationInputs()).isNull();
+        assertThat(line.getAmountRequested()).isNull();
+        assertThat(rerun.suggestedOutcome())
+                .containsEntry("eligible", false)
+                .containsEntry("policyId", null)
+                .containsEntry("providerId", null);
+    }
+
+    @Test
+    void categoryPolicy_matchesByCatalogCategoryIdAndBeatsAll() {
+        WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
+        WarrantyPolicy categoryPolicy = WarrantyPolicy.builder()
+                .id(UUID.fromString("018f0000-0000-7000-8000-000000000050"))
+                .providerId(PROVIDER_ID)
+                .name("All tires")
+                .coverageType(CoverageType.MANUFACTURER_DEFECT)
+                .appliesToType(AppliesToType.CATEGORY)
+                .appliesToCategoryId(CATEGORY_ID)
+                .effectiveFrom(LocalDate.of(2025, 1, 1))
+                .prorationMethod(ProrationMethod.NONE)
+                .build();
+        WarrantyPolicy broad =
+                allFreeReplacementPolicy("Catch-all", UUID.fromString("018f0000-0000-7000-8000-000000000051"));
+        stubClaim(claim);
+        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(broad, categoryPolicy));
+
+        service.evaluate(CLAIM_ID);
+
+        assertThat(claim.getPolicyId()).isEqualTo(categoryPolicy.getId());
+    }
+
+    @Test
+    void categoryPolicy_losesToManufacturerScopedPolicy() {
+        WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
+        WarrantyPolicy categoryPolicy = WarrantyPolicy.builder()
+                .id(UUID.fromString("018f0000-0000-7000-8000-000000000052"))
+                .providerId(PROVIDER_ID)
+                .name("All tires")
+                .coverageType(CoverageType.MANUFACTURER_DEFECT)
+                .appliesToType(AppliesToType.CATEGORY)
+                .appliesToCategoryId(CATEGORY_ID)
+                .effectiveFrom(LocalDate.of(2025, 1, 1))
+                .prorationMethod(ProrationMethod.NONE)
+                .build();
+        WarrantyPolicy manufacturer = manufacturerTreadPolicy();
+        stubClaim(claim);
+        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(categoryPolicy, manufacturer));
+
+        service.evaluate(CLAIM_ID);
+
+        assertThat(claim.getPolicyId()).isEqualTo(manufacturer.getId());
+    }
+
+    @Test
+    void categoryPolicy_forDifferentCategoryDoesNotMatch() {
+        WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
+        WarrantyPolicy otherCategory = WarrantyPolicy.builder()
+                .id(UUID.fromString("018f0000-0000-7000-8000-000000000053"))
+                .providerId(PROVIDER_ID)
+                .name("Batteries only")
+                .coverageType(CoverageType.MANUFACTURER_DEFECT)
+                .appliesToType(AppliesToType.CATEGORY)
+                .appliesToCategoryId(UUID.fromString("018f0000-0000-7000-8000-0000000000aa"))
+                .effectiveFrom(LocalDate.of(2025, 1, 1))
+                .prorationMethod(ProrationMethod.NONE)
+                .build();
+        stubClaim(claim);
+        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(otherCategory));
+
+        EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
+
+        assertThat(evaluation.result()).isEqualTo(EligibilityResult.INELIGIBLE);
+        assertThat(claim.getPolicyId()).isNull();
     }
 
     @Test

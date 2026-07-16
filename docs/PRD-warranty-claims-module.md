@@ -381,13 +381,13 @@ and linked from the claim (`replacementWorkorderId`), keeping the dependency one
 
 1. ✅ This spec: owning service (`pos-warranty`), claim-code schema (§4), claim state machine
    (§5), reimbursement workflow (§3.7).
-2. ☐ `permissions.yaml` (§9.1) + gateway perm-bits catalog sync.
-3. ☐ Update RAG docs and remove OPEN notes:
+2. ✅ `permissions.yaml` (§9.1) + gateway perm-bits catalog sync. — implemented on branch `claude/warranty-claims-multi-agent-egmrea`
+3. ✅ Update RAG docs and remove OPEN notes:
    `pos-mcp-server/src/main/resources/rag/glossary-identifiers.md` (Claim code → `WC-yyyy-nnnnnn`)
    and `pos-mcp-server/src/main/resources/rag/cross-domain-playbooks.md` (warranty/claim playbook
-   → flows in §7/§9); mark `pos-mcp-server/docs/BACKLOG.md` BL-1 resolved.
-4. ☐ Scaffold module, entities + Flyway baseline, state machine + eligibility service, claim
-   APIs, settlements (invoice integration), reimbursement + part-return APIs, events/outbox.
+   → flows in §7/§9); mark `pos-mcp-server/docs/BACKLOG.md` BL-1 resolved. — implemented on branch `claude/warranty-claims-multi-agent-egmrea`
+4. ✅ Scaffold module, entities + Flyway baseline, state machine + eligibility service, claim
+   APIs, settlements (invoice integration), reimbursement + part-return APIs, events/outbox. — implemented on branch `claude/warranty-claims-multi-agent-egmrea`
 
 ## 12. Open questions / defaulted decisions (flagged, not blocking)
 

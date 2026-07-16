@@ -53,7 +53,9 @@ public interface InvoiceClient {
      *
      * @param externalReference warranty claim correlation reference (max 64 chars)
      * @return the created refund id, or empty if the response did not expose it
-     * @throws WarrantyIntegrationException on HTTP error or transport failure
+     * @throws WarrantyIntegrationException on HTTP error, transport failure, or when
+     *     pos-invoice reports a non-COMPLETED refund status (gateway declined — the
+     *     customer was not refunded)
      */
     @NonNull
     Optional<UUID> createRefund(

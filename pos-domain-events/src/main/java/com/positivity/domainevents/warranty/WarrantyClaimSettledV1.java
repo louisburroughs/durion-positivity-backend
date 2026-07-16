@@ -19,7 +19,7 @@ import org.jspecify.annotations.Nullable;
  * @param claimId warranty claim identifier (also the envelope aggregateId)
  * @param claimCode human-readable claim code, e.g. {@code WC-2026-000123}
  * @param customerId owning customer party
- * @param locationId location the claim was settled at
+ * @param locationId location the claim was settled at (null when the claim carries no location)
  * @param settlementId claim settlement record identifier
  * @param settlementType owner {@code SettlementType} name, e.g. {@code REPAIR}
  * @param coveredAmount amount covered by the warranty
@@ -33,7 +33,7 @@ public record WarrantyClaimSettledV1(
         @NonNull UUID claimId,
         @NonNull String claimCode,
         @NonNull UUID customerId,
-        @NonNull UUID locationId,
+        @Nullable UUID locationId,
         @NonNull UUID settlementId,
         @NonNull String settlementType,
         @NonNull BigDecimal coveredAmount,

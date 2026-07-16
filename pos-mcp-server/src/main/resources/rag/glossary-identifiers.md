@@ -52,9 +52,9 @@ Journal entries have no human-facing number (UUID `journalEntryId` + integer `li
 _Verified: `pos-accounting` `GLAccountCreateRequest` (`@Pattern "^\\d{4}(-\\d{3})?$"`), `GLAccount`/`JournalEntry`; `pos-customer` `AbstractParty.customerNumber`._
 
 ## Claim code
-A claim code would identify a warranty/claim record. **A repo-wide search found no warranty-claim or RMA workflow in any service.** "Warranty" exists only as a descriptive product attribute in the catalog (`ProductEntity.warranty` / `manufacturerWarranty`, e.g. "1 year limited warranty") — not a claim process. The only `claim` permission is `inventory:putaway:claim` (claiming a putaway task, unrelated). There is therefore no claim-code format, claim state machine, or reimbursement workflow. The assistant must not describe one.
+A claim code is the human-facing identifier of a warranty claim, owned by `pos-warranty` (distinct from the claim's UUIDv7 `id`, which remains the primary key). Format: `WC-{yyyy}-{seq}` where the sequence is zero-padded to 6 digits and resets each calendar year (e.g. `WC-2026-000123`). The `claimCode` is unique and is the business/search key — claim lookups and cross-service references (e.g. invoice adjustments/refunds carry it as `externalReference`) use the claim code, while APIs address the claim by UUID. Use lexical retrieval for exact-code recall.
 
-> OPEN (product decision, not a code gap): whether a warranty-claim capability is intended/roadmapped is a product question — no owning service exists in code today. Tracked: `docs/BACKLOG.md` BL-1.
+_Verified: `pos-warranty` `ClaimCodeServiceImpl` (`String.format("WC-%d-%06d", year, seq)`), `ClaimCodeSequence` (per-year counter), `WarrantyClaim.claimCode` (unique) + `WarrantyClaimRepository` claim-code lookup._
 
 ## Appointment
 An appointment is a scheduled service visit linking a customer, a vehicle, a time slot, and one or more shop resources such as a bay or mobile unit. It can move through statuses including scheduled, checked in, work in progress, waiting for parts, quality check, ready for pickup, completed, cancelled, invoiced, and reopened.

@@ -25,6 +25,7 @@ public interface CatalogClient {
             UUID manufacturerId,
             String manufacturerName,
             String manufacturerBrand,
+            UUID categoryId,
             String category,
             String warranty,
             String manufacturerWarranty) {}

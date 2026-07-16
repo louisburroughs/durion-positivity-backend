@@ -203,10 +203,13 @@ public class ClaimController {
         return ResponseEntity.ok(claimService.submit(id));
     }
 
-    @Operation(summary = "Re-run eligibility", description = "Recompute the eligibility suggestion on demand")
+    @Operation(
+            summary = "Re-run eligibility",
+            description = "Recompute the eligibility suggestion on demand"
+                    + " (DRAFT, SUBMITTED, IN_REVIEW, or INFO_NEEDED only)")
     @ApiResponse(responseCode = "200", description = "Eligibility recomputed.")
     @ApiResponse(responseCode = "404", description = "Claim not found.")
-    @ApiResponse(responseCode = "409", description = "Claim is terminal.")
+    @ApiResponse(responseCode = "409", description = "Claim already decided or terminal.")
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_VIEW + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_UPDATE", apiVersion = "1")
     @PostMapping("/{id}/eligibility")
@@ -218,7 +221,9 @@ public class ClaimController {
     @Operation(
             summary = "Decide claim",
             description = "APPROVE/DENY/REQUEST_INFO (implicitly begins review on a SUBMITTED claim);"
-                    + " APPEAL reopens a DENIED claim. Deny, appeal, and suggestion overrides require a reason")
+                    + " APPEAL reopens a DENIED claim. Deny, appeal, and suggestion overrides require a reason."
+                    + " Optional lineDecisions record per-line approved amounts/dispositions; amounts that"
+                    + " differ from the computed request require an audited override reason")
     @ApiResponse(responseCode = "200", description = "Decision applied.")
     @ApiResponse(responseCode = "400", description = "Missing required reason.")
     @ApiResponse(responseCode = "404", description = "Claim not found.")

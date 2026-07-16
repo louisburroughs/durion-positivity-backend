@@ -55,7 +55,8 @@ public class CatalogClientImpl implements CatalogClient {
                     response.manufacturerId(),
                     response.manufacturerName(),
                     response.manufacturerBrand(),
-                    response.category(),
+                    response.category() != null ? response.category().id() : null,
+                    response.category() != null ? response.category().name() : null,
                     response.warranty(),
                     response.manufacturerWarranty()));
         } catch (RestClientResponseException ex) {
@@ -86,7 +87,10 @@ public class CatalogClientImpl implements CatalogClient {
             UUID manufacturerId,
             String manufacturerName,
             String manufacturerBrand,
-            String category,
+            CategoryWire category,
             String warranty,
             String manufacturerWarranty) {}
+
+    /** Mirrors pos-catalog's CategoryDto ({@code {id, name}}). */
+    private record CategoryWire(UUID id, String name) {}
 }
