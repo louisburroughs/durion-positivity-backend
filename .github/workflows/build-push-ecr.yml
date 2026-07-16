@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          ALL_SERVICES_JSON='["pos-accounting","pos-api-gateway","pos-bulk-loader","pos-catalog","pos-customer","pos-documents","pos-event-receiver","pos-image","pos-inventory","pos-invoice","pos-location","pos-mcp-server","pos-people","pos-people-contact","pos-price","pos-security-service","pos-service-discovery","pos-shop-manager","pos-tax","pos-vehicle-inventory","pos-workorder"]'
+          ALL_SERVICES_JSON='["pos-accounting","pos-api-gateway","pos-bulk-loader","pos-catalog","pos-customer","pos-documents","pos-event-receiver","pos-image","pos-inventory","pos-invoice","pos-location","pos-mcp-server","pos-people","pos-people-contact","pos-price","pos-security-service","pos-service-discovery","pos-shop-manager","pos-tax","pos-vehicle-inventory","pos-warranty","pos-workorder"]'
           FORCE_FULL_REBUILD=false
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
@@ -274,7 +274,7 @@ jobs:
           SHORT_SHA="${GITHUB_SHA::7}"
           IMAGE_TAG="sha-${SHORT_SHA}"
           SERVICE_COUNT="$(jq 'length' <<< '${{ needs.detect-services.outputs.services }}')"
-          FULL_SERVICE_COUNT=17
+          FULL_SERVICE_COUNT=22
 
           echo "## Backend Images Published" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"

@@ -189,6 +189,11 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  pos-warranty:
+    image: ${ECR_REGISTRY}/durion/pos-warranty:${BACKEND_TAG}
+    restart: unless-stopped
+    logging: *logging
+
   pos-workorder:
     image: ${ECR_REGISTRY}/durion/pos-workorder:${BACKEND_TAG}
     restart: unless-stopped

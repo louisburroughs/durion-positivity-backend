@@ -135,6 +135,7 @@ BACKEND_SERVICES=(
   pos-shop-manager
   pos-tax
   pos-vehicle-inventory
+  pos-warranty
   pos-workorder
 )
 

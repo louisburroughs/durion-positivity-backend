@@ -1107,7 +1107,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 90s
+      # 90s was too tight on alpha: a whole-stack --force-recreate starts ~20 JVMs at
+      # once and this service crossed the 90s + 12x10s window, got marked unhealthy,
+      # and failed pos-customer's service_healthy dependency wait — then went healthy
+      # seconds later. Startup probes are free when the service is fast, so be generous.
+      start_period: 300s
 
   # pos-vehicle-reference-carapi:
   #   build:
@@ -1201,7 +1205,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 90s
+      # Same generous window as pos-vehicle-inventory — a whole-stack recreate on
+      # alpha can push JVM startup well past 90s.
+      start_period: 300s
 
   pos-workorder:
     build:
