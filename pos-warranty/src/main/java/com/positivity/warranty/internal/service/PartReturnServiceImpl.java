@@ -86,6 +86,7 @@ public class PartReturnServiceImpl implements PartReturnService {
 
     private final WarrantyClaimRepository claimRepository;
     private final PartReturnRepository partReturnRepository;
+    private final ClaimSnapshotPublisher claimSnapshotPublisher;
     private final Clock clock;
     private final EntityManager entityManager;
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
@@ -127,6 +128,7 @@ public class PartReturnServiceImpl implements PartReturnService {
         PartReturn saved = partReturnRepository.save(partReturn);
 
         publishRequested(claim, line, saved);
+        claimSnapshotPublisher.publish(claimId);
         return PartReturnResponse.from(saved);
     }
 
@@ -191,6 +193,7 @@ public class PartReturnServiceImpl implements PartReturnService {
         if (enteredShipped) {
             publishShipped(saved);
         }
+        claimSnapshotPublisher.publish(saved.getClaimId());
         return PartReturnResponse.from(saved);
     }
 

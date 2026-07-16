@@ -72,6 +72,9 @@ class PartReturnServiceImplTest {
     @Mock
     private OutboxEventWriter outboxEventWriter;
 
+    @Mock
+    private ClaimSnapshotPublisher claimSnapshotPublisher;
+
     private PartReturnServiceImpl service;
 
     @BeforeEach
@@ -79,6 +82,7 @@ class PartReturnServiceImplTest {
         service = new PartReturnServiceImpl(
                 claimRepository,
                 partReturnRepository,
+                claimSnapshotPublisher,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 entityManager,
                 outboxEventWriterProvider);
@@ -146,6 +150,7 @@ class PartReturnServiceImplTest {
             assertThat(payload.productEntityId()).isEqualTo(PRODUCT_ID);
             assertThat(payload.serialNumber()).isEqualTo("DOT-XYZ");
             assertThat(payload.disposition()).isEqualTo("RETURN_TO_VENDOR");
+            verify(claimSnapshotPublisher).publish(CLAIM_ID);
         }
 
         @Test

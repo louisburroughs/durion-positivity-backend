@@ -64,6 +64,7 @@ Operational steps:
 5. Settlement makes the customer whole first. Settlement types: REPLACEMENT_WORKORDER (a replacement workorder is created through the normal estimate/workorder flow and linked from the claim via `replacementWorkorderId` — `pos-warranty` never writes to `pos-workorder`), INVOICE_CREDIT / PRORATED_CREDIT / REFUND (invoice adjustment or refund created in `pos-invoice`, carrying the claim code as `externalReference`), GOODWILL, or NO_ACTION. Settlement moves the claim to SETTLED and emits `warranty.claim.settled` (consumed by accounting/reporting).
 6. Back-office follow-up: vendor/provider reimbursement (`warranty.reimbursement.submitted` and `warranty.reimbursement.resolved`, consumed by `pos-accounting` for expected-credit matching) and defective-part return RMA (`warranty.part-return.requested` and `warranty.part-return.shipped`, consumed by `pos-inventory` for quarantine/hold).
 7. Close: SETTLED to CLOSED once reimbursement and part-return follow-ups are resolved.
+8. Read replicas: `warranty.claim.snapshot` carries the full claim aggregate for replica builders, emitted on every claim mutation (ADR-0044 R3), so other modules can mirror claims without calling `pos-warranty`.
 
 Permissions are `warranty:*`: claim actions are `warranty:claim:create/view/submit/decide/settle/cancel/close`; supporting resources use view/manage pairs — `warranty:policy:*`, `warranty:provider:*`, `warranty:registration:*`, `warranty:reimbursement:*`, `warranty:part-return:*`.
 

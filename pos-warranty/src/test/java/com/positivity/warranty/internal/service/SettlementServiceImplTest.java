@@ -97,6 +97,9 @@ class SettlementServiceImplTest {
     @Mock
     private OutboxEventWriter outboxEventWriter;
 
+    @Mock
+    private ClaimSnapshotPublisher claimSnapshotPublisher;
+
     private SettlementServiceImpl service;
 
     @BeforeEach
@@ -108,6 +111,7 @@ class SettlementServiceImplTest {
                 noteRepository,
                 invoiceClient,
                 workorderClient,
+                claimSnapshotPublisher,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 entityManager,
                 outboxEventWriterProvider);
@@ -148,6 +152,20 @@ class SettlementServiceImplTest {
         ArgumentCaptor<ClaimSettlement> captor = ArgumentCaptor.forClass(ClaimSettlement.class);
         verify(settlementRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
         return captor.getValue();
+    }
+
+    @Nested
+    class Snapshot {
+
+        @Test
+        void successfulSettlementPublishesClaimSnapshot() {
+            stubClaim(ClaimStatus.APPROVED);
+            stubSaveEcho();
+
+            service.create(CLAIM_ID, request(SettlementType.NO_ACTION));
+
+            verify(claimSnapshotPublisher).publish(CLAIM_ID);
+        }
     }
 
     @Nested

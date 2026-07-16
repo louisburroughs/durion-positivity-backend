@@ -348,6 +348,7 @@ Search preset: `WARRANTY_CLAIM_SEARCH`, `WARRANTY_CANDIDATE_LINE_SEARCH`.
 | `warranty.reimbursement.submitted` | `pos-accounting` | Expected vendor credit (`apVendorId`, amount, `vendorClaimReference`) |
 | `warranty.reimbursement.resolved` | `pos-accounting` | Approved/denied/credit-received — matching against vendor activity |
 | `warranty.part-return.requested` / `.shipped` | `pos-inventory` (follow-up) | Defective-unit quarantine/hold |
+| `warranty.claim.snapshot` | replica builders (ADR-0044 R3) | Full claim aggregate for replica builders, emitted on every claim mutation |
 
 ### 9.4 Synchronous calls (all `@LoadBalanced RestClient`, `internal/client/`)
 

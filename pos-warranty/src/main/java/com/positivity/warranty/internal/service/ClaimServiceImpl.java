@@ -91,6 +91,7 @@ public class ClaimServiceImpl implements ClaimService {
     private final ClaimCodeService claimCodeService;
     private final EligibilityService eligibilityService;
     private final VehicleInventoryClient vehicleInventoryClient;
+    private final ClaimSnapshotPublisher claimSnapshotPublisher;
     private final Clock clock;
 
     // ------------------------------------------------------------------ intake
@@ -135,6 +136,7 @@ public class ClaimServiceImpl implements ClaimService {
 
         WarrantyClaim saved = claimRepository.save(claim);
         recordHistory(saved.getId(), null, ClaimStatus.DRAFT, "claim created");
+        claimSnapshotPublisher.publish(saved.getId());
         return toDetail(saved);
     }
 
@@ -193,7 +195,9 @@ public class ClaimServiceImpl implements ClaimService {
         if (request.photoEvidenceUrls() != null) {
             claim.setPhotoEvidenceUrls(List.copyOf(request.photoEvidenceUrls()));
         }
-        return toDetail(claimRepository.save(claim));
+        WarrantyClaim saved = claimRepository.save(claim);
+        claimSnapshotPublisher.publish(id);
+        return toDetail(saved);
     }
 
     @Override
@@ -202,7 +206,9 @@ public class ClaimServiceImpl implements ClaimService {
     public ClaimResponse addLine(@NonNull UUID id, @NonNull ClaimLineRequest request) {
         WarrantyClaim claim = loadEditable(id);
         claim.addLine(toLineEntity(request));
-        return toDetail(claimRepository.save(claim));
+        WarrantyClaim saved = claimRepository.save(claim);
+        claimSnapshotPublisher.publish(id);
+        return toDetail(saved);
     }
 
     @Override
@@ -216,7 +222,9 @@ public class ClaimServiceImpl implements ClaimService {
                 .orElseThrow(() -> new WarrantyNotFoundException(
                         LINE_NOT_FOUND_CODE, "Claim line '" + lineId + "' was not found on claim '" + id + "'"));
         claim.removeLine(line);
-        return toDetail(claimRepository.save(claim));
+        WarrantyClaim saved = claimRepository.save(claim);
+        claimSnapshotPublisher.publish(id);
+        return toDetail(saved);
     }
 
     @Override
@@ -231,7 +239,9 @@ public class ClaimServiceImpl implements ClaimService {
             photos.add(url);
         }
         claim.setPhotoEvidenceUrls(photos);
-        return toDetail(claimRepository.save(claim));
+        WarrantyClaim saved = claimRepository.save(claim);
+        claimSnapshotPublisher.publish(id);
+        return toDetail(saved);
     }
 
     @Override
@@ -247,7 +257,9 @@ public class ClaimServiceImpl implements ClaimService {
                     PHOTO_NOT_FOUND_CODE, "Photo URL is not attached to claim '" + id + "'");
         }
         claim.setPhotoEvidenceUrls(photos);
-        return toDetail(claimRepository.save(claim));
+        WarrantyClaim saved = claimRepository.save(claim);
+        claimSnapshotPublisher.publish(id);
+        return toDetail(saved);
     }
 
     // ------------------------------------------------------------------ lifecycle
@@ -277,7 +289,9 @@ public class ClaimServiceImpl implements ClaimService {
         enforcePhotoEvidence(claim);
 
         transition(claim, to, from == ClaimStatus.INFO_NEEDED ? "info provided" : "claim submitted");
-        return toDetail(claimRepository.save(claim));
+        WarrantyClaim saved = claimRepository.save(claim);
+        claimSnapshotPublisher.publish(id);
+        return toDetail(saved);
     }
 
     @Override
@@ -289,6 +303,7 @@ public class ClaimServiceImpl implements ClaimService {
             throw ClaimStateMachine.illegalTransition(claim.getStatus(), "re-run eligibility");
         }
         eligibilityService.evaluate(claim.getId());
+        claimSnapshotPublisher.publish(id);
         return toDetail(load(id));
     }
 
@@ -331,7 +346,9 @@ public class ClaimServiceImpl implements ClaimService {
         claim.setDecidedBy(currentActor());
         claim.setDecidedAt(Instant.now(clock));
         claim.setOverrodeSuggestion(overrode || lineOverride);
-        return toDetail(claimRepository.save(claim));
+        WarrantyClaim saved = claimRepository.save(claim);
+        claimSnapshotPublisher.publish(id);
+        return toDetail(saved);
     }
 
     @Override
@@ -340,7 +357,9 @@ public class ClaimServiceImpl implements ClaimService {
     public ClaimResponse cancel(@NonNull UUID id, @NonNull ClaimActionRequest request) {
         WarrantyClaim claim = load(id);
         transition(claim, ClaimStatus.CANCELLED, trimToNull(request.reason()));
-        return toDetail(claimRepository.save(claim));
+        WarrantyClaim saved = claimRepository.save(claim);
+        claimSnapshotPublisher.publish(id);
+        return toDetail(saved);
     }
 
     @Override
@@ -354,7 +373,9 @@ public class ClaimServiceImpl implements ClaimService {
         enforceChildrenTerminal(id);
         enforceRequiredPartReturnExists(claim);
         transition(claim, ClaimStatus.CLOSED, trimToNull(request.reason()));
-        return toDetail(claimRepository.save(claim));
+        WarrantyClaim saved = claimRepository.save(claim);
+        claimSnapshotPublisher.publish(id);
+        return toDetail(saved);
     }
 
     @Override
@@ -420,7 +441,9 @@ public class ClaimServiceImpl implements ClaimService {
         claim.setDecidedBy(null);
         claim.setDecidedAt(null);
         claim.setOverrodeSuggestion(false);
-        return toDetail(claimRepository.save(claim));
+        WarrantyClaim saved = claimRepository.save(claim);
+        claimSnapshotPublisher.publish(claim.getId());
+        return toDetail(saved);
     }
 
     /** Intake enforces at least one photo before submission when the winning policy demands it (PRD §3.2). */

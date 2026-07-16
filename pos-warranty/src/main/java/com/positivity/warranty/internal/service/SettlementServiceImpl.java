@@ -68,6 +68,7 @@ public class SettlementServiceImpl implements SettlementService {
     private final ClaimNoteRepository noteRepository;
     private final InvoiceClient invoiceClient;
     private final WorkorderClient workorderClient;
+    private final ClaimSnapshotPublisher claimSnapshotPublisher;
     private final Clock clock;
     private final EntityManager entityManager;
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
@@ -106,6 +107,7 @@ public class SettlementServiceImpl implements SettlementService {
         recordNote(claimId, request);
         settleClaimIfFirst(claim, saved);
         publishSettled(claim, saved);
+        claimSnapshotPublisher.publish(claimId);
         return SettlementResponse.from(saved, claim.getStatus());
     }
 

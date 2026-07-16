@@ -114,6 +114,7 @@ public class ReimbursementServiceImpl implements ReimbursementService {
     private final WarrantyClaimRepository claimRepository;
     private final WarrantyProviderRepository providerRepository;
     private final VendorReimbursementRepository reimbursementRepository;
+    private final ClaimSnapshotPublisher claimSnapshotPublisher;
     private final Clock clock;
     private final EntityManager entityManager;
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
@@ -186,6 +187,7 @@ public class ReimbursementServiceImpl implements ReimbursementService {
         }
 
         publishSubmitted(claim, provider, saved, now);
+        claimSnapshotPublisher.publish(claimId);
         return ReimbursementResponse.from(saved);
     }
 
@@ -238,6 +240,7 @@ public class ReimbursementServiceImpl implements ReimbursementService {
         if (RESOLUTION_STATES.contains(target)) {
             publishResolved(claim, saved, now);
         }
+        claimSnapshotPublisher.publish(claimId);
         return ReimbursementResponse.from(saved);
     }
 

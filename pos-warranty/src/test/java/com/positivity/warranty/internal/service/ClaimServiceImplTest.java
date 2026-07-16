@@ -103,6 +103,9 @@ class ClaimServiceImplTest {
     @Mock
     private VehicleInventoryClient vehicleInventoryClient;
 
+    @Mock
+    private ClaimSnapshotPublisher claimSnapshotPublisher;
+
     private ClaimServiceImpl service;
 
     @BeforeEach
@@ -118,6 +121,7 @@ class ClaimServiceImplTest {
                 claimCodeService,
                 eligibilityService,
                 vehicleInventoryClient,
+                claimSnapshotPublisher,
                 Clock.fixed(Instant.parse("2026-07-15T12:00:00Z"), ZoneOffset.UTC));
     }
 
@@ -217,6 +221,7 @@ class ClaimServiceImplTest {
             verify(statusHistoryRepository).save(history.capture());
             assertThat(history.getValue().getFromStatus()).isNull();
             assertThat(history.getValue().getToStatus()).isEqualTo(ClaimStatus.DRAFT);
+            verify(claimSnapshotPublisher).publish(any());
         }
 
         @Test
@@ -272,6 +277,7 @@ class ClaimServiceImplTest {
 
             assertThat(response.originUnverified()).isFalse();
             assertThat(response.failureDescription()).isEqualTo("updated description");
+            verify(claimSnapshotPublisher).publish(CLAIM_ID);
         }
 
         @Test

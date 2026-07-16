@@ -77,6 +77,9 @@ class ReimbursementServiceImplTest {
     @Mock
     private OutboxEventWriter outboxEventWriter;
 
+    @Mock
+    private ClaimSnapshotPublisher claimSnapshotPublisher;
+
     private ReimbursementServiceImpl service;
 
     @BeforeEach
@@ -85,6 +88,7 @@ class ReimbursementServiceImplTest {
                 claimRepository,
                 providerRepository,
                 reimbursementRepository,
+                claimSnapshotPublisher,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 entityManager,
                 outboxEventWriterProvider);
@@ -159,6 +163,7 @@ class ReimbursementServiceImplTest {
             assertThat(payload.apVendorId()).isEqualTo(AP_VENDOR_ID);
             assertThat(payload.claimCode()).isEqualTo("WC-2026-000123");
             assertThat(payload.amountRequested()).isEqualByComparingTo("120.0000");
+            verify(claimSnapshotPublisher).publish(CLAIM_ID);
         }
 
         @Test

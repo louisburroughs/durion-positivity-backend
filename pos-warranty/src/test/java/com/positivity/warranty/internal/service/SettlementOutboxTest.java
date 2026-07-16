@@ -79,6 +79,9 @@ class SettlementOutboxTest {
     @Mock
     private OutboxEventWriter outboxEventWriter;
 
+    @Mock
+    private ClaimSnapshotPublisher claimSnapshotPublisher;
+
     private SettlementServiceImpl service;
 
     @BeforeEach
@@ -90,6 +93,7 @@ class SettlementOutboxTest {
                 noteRepository,
                 invoiceClient,
                 workorderClient,
+                claimSnapshotPublisher,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 entityManager,
                 outboxEventWriterProvider);
