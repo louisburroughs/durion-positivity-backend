@@ -20,11 +20,12 @@ import org.jspecify.annotations.Nullable;
 public interface InvoiceClient {
 
     /**
-     * Search invoice line items by customer party id
-     * ({@code GET /v1/invoices/items/search?partyId=}).
+     * Search invoice line items by customer party id, optionally narrowed by a SKU /
+     * description term applied server-side
+     * ({@code GET /v1/invoices/items/search?partyId=&q=}).
      */
     @NonNull
-    List<InvoiceLine> searchInvoiceLines(@NonNull UUID partyId);
+    List<InvoiceLine> searchInvoiceLines(@NonNull UUID partyId, @Nullable String sku);
 
     /**
      * Fetch an invoice with its line items ({@code GET /v1/invoices/{invoiceId}}).

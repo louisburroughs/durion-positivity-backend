@@ -382,6 +382,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
                     ar.setAmount(adj.getAmount());
                     ar.setReason(adj.getReason());
                     ar.setAuthorizedBy(adj.getAuthorizedBy());
+                    ar.setExternalReference(adj.getExternalReference());
                     ar.setCreatedAt(adj.getCreatedAt());
                     return ar;
                 })

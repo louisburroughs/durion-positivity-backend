@@ -21,6 +21,7 @@ import com.positivity.warranty.internal.repository.VendorReimbursementRepository
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
 import com.positivity.warranty.internal.repository.WarrantyProviderRepository;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.EnumMap;
@@ -164,6 +165,7 @@ public class ReimbursementServiceImpl implements ReimbursementService {
                     nextActionFor(reimbursement.getStatus()));
         }
 
+        bumpClaimAggregateVersion(claim);
         Instant now = Instant.now(clock);
         reimbursement.setProviderId(claim.getProviderId());
         reimbursement.setStatus(ReimbursementStatus.SUBMITTED);
@@ -218,6 +220,7 @@ public class ReimbursementServiceImpl implements ReimbursementService {
             throw new IllegalArgumentException("amountApproved is required when status is " + target);
         }
 
+        bumpClaimAggregateVersion(claim);
         Instant now = Instant.now(clock);
         reimbursement.setStatus(target);
         if (request.amountApproved() != null) {
@@ -268,6 +271,18 @@ public class ReimbursementServiceImpl implements ReimbursementService {
                 .findById(claimId)
                 .orElseThrow(() ->
                         new WarrantyNotFoundException(CLAIM_NOT_FOUND_CODE, "Warranty claim not found: " + claimId));
+    }
+
+    /**
+     * A reimbursement mutation changes the claim aggregate's snapshot content without dirtying
+     * the claim row, so force a claim {@code @Version} increment: the
+     * {@code warranty.claim.snapshot} envelope's {@code aggregateVersion} must be strictly
+     * monotonic across every aggregate mutation (consumers dedupe/order by it). Pessimistic
+     * force-increment bumps the version immediately (visible to the snapshot flush) and
+     * serializes concurrent child mutations against claim-header changes.
+     */
+    private void bumpClaimAggregateVersion(@NonNull WarrantyClaim claim) {
+        entityManager.lock(claim, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
     }
 
     /** Human next step for the 409 {@code nextAction} field (PRD §5). */

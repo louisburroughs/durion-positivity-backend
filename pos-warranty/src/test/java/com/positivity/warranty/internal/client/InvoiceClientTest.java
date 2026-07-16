@@ -60,7 +60,7 @@ class InvoiceClientTest {
                                 + "\"description\":\"Alternator\",\"amount\":199.99}]",
                         MediaType.APPLICATION_JSON));
 
-        var lines = client.searchInvoiceLines(PARTY_ID);
+        var lines = client.searchInvoiceLines(PARTY_ID, null);
 
         assertThat(lines).hasSize(1);
         assertThat(lines.getFirst().invoiceId()).isEqualTo(INVOICE_ID);
@@ -72,7 +72,7 @@ class InvoiceClientTest {
     void searchInvoiceLinesDegradesToEmptyListOnHttpError() {
         server.expect(requestTo(BASE + "/items/search?partyId=" + PARTY_ID)).andRespond(withServerError());
 
-        assertThat(client.searchInvoiceLines(PARTY_ID)).isEmpty();
+        assertThat(client.searchInvoiceLines(PARTY_ID, null)).isEmpty();
         server.verify();
     }
 
@@ -81,7 +81,7 @@ class InvoiceClientTest {
         server.expect(requestTo(BASE + "/items/search?partyId=" + PARTY_ID))
                 .andRespond(withException(new IOException("connection refused")));
 
-        assertThat(client.searchInvoiceLines(PARTY_ID)).isEmpty();
+        assertThat(client.searchInvoiceLines(PARTY_ID, null)).isEmpty();
         server.verify();
     }
 

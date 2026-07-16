@@ -9,7 +9,9 @@ import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.InvoiceAdjustment;
 import com.positivity.invoice.internal.entity.InvoiceItem;
+import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
@@ -361,6 +363,36 @@ class InvoiceFinalizationServiceTest {
         assertThat(response.getItems()).isNotNull();
         assertThat(response.getItems()).hasSize(1);
         assertThat(response.getItems().get(0).getDescription()).isEqualTo("Oil Change");
+    }
+
+    /**
+     * The finalize-path response mapper must carry {@code externalReference} on adjustment
+     * entries (warranty settlements correlate adjustments to claims via it), matching the
+     * plain-GET mapper in {@code InvoiceServiceImpl.toAdjustmentResponse} — the two mappers
+     * previously diverged, dropping the claim correlation from finalize/revert responses.
+     */
+    @Test
+    void finalize_responseCarriesExternalReferenceOnAdjustmentEntries() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        Invoice draft = draftInvoice(workorderId, new BigDecimal("99.00"));
+        draft.setId(invoiceId);
+        InvoiceAdjustment adjustment = new InvoiceAdjustment();
+        adjustment.setType(InvoiceAdjustmentType.WARRANTY);
+        adjustment.setAmount(new BigDecimal("-84.21"));
+        adjustment.setReason("Warranty claim WC-2026-000042 INVOICE_CREDIT settlement");
+        adjustment.setAuthorizedBy("advisor-001");
+        adjustment.setExternalReference("018f0000-0000-7000-8000-00000000abcd");
+        draft.addAdjustment(adjustment);
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        InvoiceDetailsResponse response = service.completeInvoice(invoiceId, shopManagerRequest());
+
+        assertThat(response.getAdjustmentEntries()).hasSize(1);
+        assertThat(response.getAdjustmentEntries().get(0).getExternalReference())
+                .isEqualTo("018f0000-0000-7000-8000-00000000abcd");
+        assertThat(response.getAdjustmentEntries().get(0).getType()).isEqualTo(InvoiceAdjustmentType.WARRANTY);
     }
 
     /**

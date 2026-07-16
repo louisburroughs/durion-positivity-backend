@@ -3,6 +3,7 @@ package com.positivity.warranty.internal.service;
 import com.positivity.warranty.internal.dto.ProrationOutcome;
 import com.positivity.warranty.internal.entity.WarrantyClaimLine;
 import com.positivity.warranty.internal.entity.WarrantyPolicy;
+import com.positivity.warranty.internal.enums.LineSourceType;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -64,11 +65,35 @@ public class ProrationService {
 
         BigDecimal unitPrice = line.getOriginalUnitPrice();
         BigDecimal quantity = line.getQuantity() != null ? line.getQuantity() : BigDecimal.ONE;
+
+        // Labor terms (PRD §3.2, §6): WORKORDER_SERVICE lines carry labor hours as quantity and
+        // the hourly rate as unitPrice. A policy that does not cover labor yields a definite
+        // zero credit; caps clamp hours/rate before the credit is computed. All applied terms
+        // are frozen into the inputs map (PRD §6 "all inputs frozen").
+        boolean laborNotCovered = false;
+        if (line.getSourceType() == LineSourceType.WORKORDER_SERVICE) {
+            boolean covered = Boolean.TRUE.equals(policy.getLaborCovered());
+            inputs.put("laborCovered", covered);
+            if (!covered) {
+                laborNotCovered = true;
+            } else {
+                if (policy.getLaborHoursCap() != null) {
+                    inputs.put("laborHoursCap", policy.getLaborHoursCap());
+                    quantity = quantity.min(policy.getLaborHoursCap());
+                }
+                if (policy.getLaborRateCap() != null && unitPrice != null) {
+                    inputs.put("laborRateCap", policy.getLaborRateCap());
+                    unitPrice = unitPrice.min(policy.getLaborRateCap());
+                }
+            }
+        }
         inputs.put("originalUnitPrice", unitPrice);
         inputs.put("quantity", quantity);
 
         BigDecimal amount = null;
-        if (unitPrice == null) {
+        if (laborNotCovered) {
+            amount = BigDecimal.ZERO.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+        } else if (unitPrice == null) {
             missing.add("originalUnitPrice");
         } else if (pct != null) {
             BigDecimal original = unitPrice.multiply(quantity);

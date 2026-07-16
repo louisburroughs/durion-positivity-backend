@@ -1,0 +1,3021 @@
+openapi: 3.1.0
+info:
+  title: Warranty API
+  description: API for warranty policies, claims, settlements, reimbursements, and part returns in the POS system
+  contact:
+    name: Durion Support Services
+    email: platform@durionpos.org
+  version: '1.0'
+servers:
+- url: http://localhost:8097
+  description: Generated server url
+tags:
+- name: Warranty Claims
+  description: Claim intake, adjudication, and lifecycle
+- name: Warranty Providers
+  description: Who pays — manufacturers, program administrators, the dealer itself
+- name: Warranty Part Returns
+  description: Defective-part RMA lifecycle and worklist
+- name: Warranty Registrations
+  description: Sold/instantiated coverage — road-hazard add-ons and extended plans
+- name: Warranty Settlements
+  description: Execute settlements on approved warranty claims
+- name: Warranty Reimbursements
+  description: Vendor reimbursement lifecycle and worklist
+- name: Warranty Policies
+  description: Structured coverage terms — one row per distinct program
+paths:
+  /v1/warranty/registrations/{id}:
+    get:
+      tags:
+      - Warranty Registrations
+      summary: Get registration
+      description: Retrieve a warranty registration by id
+      operationId: getRegistration
+      parameters:
+      - name: id
+        in: path
+        description: Registration UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Registration returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationResponse'
+        '404':
+          description: Registration not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:registration:view
+    put:
+      tags:
+      - Warranty Registrations
+      summary: Update registration
+      description: Full update of an existing warranty registration
+      operationId: updateRegistration
+      parameters:
+      - name: id
+        in: path
+        description: Registration UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationRequest'
+        required: true
+      responses:
+        '200':
+          description: Registration updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationResponse'
+        '404':
+          description: Registration or referenced policy not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:registration:manage
+  /v1/warranty/providers/{id}:
+    get:
+      tags:
+      - Warranty Providers
+      summary: Get provider
+      description: Retrieve a warranty provider by id
+      operationId: getProvider
+      parameters:
+      - name: id
+        in: path
+        description: Provider UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Provider returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResponse'
+        '404':
+          description: Provider not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:provider:view
+    put:
+      tags:
+      - Warranty Providers
+      summary: Update provider
+      description: Full update of an existing warranty provider
+      operationId: updateProvider
+      parameters:
+      - name: id
+        in: path
+        description: Provider UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderRequest'
+        required: true
+      responses:
+        '200':
+          description: Provider updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResponse'
+        '404':
+          description: Provider not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:provider:manage
+  /v1/warranty/policies/{id}:
+    get:
+      tags:
+      - Warranty Policies
+      summary: Get policy
+      description: Retrieve a warranty policy by id
+      operationId: getPolicy
+      parameters:
+      - name: id
+        in: path
+        description: Policy UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Policy returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '404':
+          description: Policy not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:policy:view
+    put:
+      tags:
+      - Warranty Policies
+      summary: Update policy
+      description: Full update of an existing warranty policy
+      operationId: updatePolicy
+      parameters:
+      - name: id
+        in: path
+        description: Policy UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyRequest'
+        required: true
+      responses:
+        '200':
+          description: Policy updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '404':
+          description: Policy or referenced provider not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:policy:manage
+  /v1/warranty/part-returns/{id}:
+    put:
+      tags:
+      - Warranty Part Returns
+      summary: Update part return (RMA)
+      description: Advances the RMA (AWAITING_PART -> ON_HOLD -> SHIPPED -> RECEIVED_BY_VENDOR, or SCRAPPED/CLOSED per disposition) and/or updates RMA details
+      operationId: updatePartReturn
+      parameters:
+      - name: id
+        in: path
+        description: Part return id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartReturnUpdateRequest'
+        required: true
+      responses:
+        '200':
+          description: Part return updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartReturnResponse'
+        '404':
+          description: Part return not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartReturnResponse'
+        '409':
+          description: Illegal part-return transition.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartReturnResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:part-return:manage
+  /v1/warranty/claims/{id}:
+    get:
+      tags:
+      - Warranty Claims
+      summary: Get claim
+      description: Full detail incl. lines, settlements, reimbursements, part returns, history, notes
+      operationId: getClaim
+      parameters:
+      - name: id
+        in: path
+        description: Claim UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Claim returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '404':
+          description: Claim not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:view
+    put:
+      tags:
+      - Warranty Claims
+      summary: Update claim
+      description: Edit intake fields while DRAFT or INFO_NEEDED
+      operationId: updateClaim
+      parameters:
+      - name: id
+        in: path
+        description: Claim UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimUpdateRequest'
+        required: true
+      responses:
+        '200':
+          description: Claim updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '404':
+          description: Claim not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '409':
+          description: Claim is not editable in its current status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:create
+  /v1/warranty/claims/{id}/reimbursement:
+    put:
+      tags:
+      - Warranty Reimbursements
+      summary: Update vendor reimbursement
+      description: Records a vendor decision (APPROVED/PARTIALLY_APPROVED/DENIED), credit receipt, or write-off; only legal child-lifecycle transitions are accepted
+      operationId: updateReimbursement
+      parameters:
+      - name: id
+        in: path
+        description: Claim id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReimbursementUpdateRequest'
+        required: true
+      responses:
+        '200':
+          description: Reimbursement updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReimbursementResponse'
+        '404':
+          description: Claim or reimbursement not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReimbursementResponse'
+        '409':
+          description: Illegal reimbursement transition.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReimbursementResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:reimbursement:manage
+  /v1/warranty/registrations:
+    get:
+      tags:
+      - Warranty Registrations
+      summary: Search registrations
+      description: Optionally filter by customer, vehicle, and status
+      operationId: searchRegistrations
+      parameters:
+      - name: customerId
+        in: query
+        description: Filter by customer id
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: vehicleId
+        in: query
+        description: Filter by vehicle id
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - EXPIRED
+          - CANCELLED
+          - EXHAUSTED
+      responses:
+        '200':
+          description: Registrations returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RegistrationResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:registration:view
+    post:
+      tags:
+      - Warranty Registrations
+      summary: Create registration
+      description: Record sold/instantiated coverage
+      operationId: createRegistration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationRequest'
+        required: true
+      responses:
+        '201':
+          description: Registration created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationResponse'
+        '404':
+          description: Referenced policy not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:registration:manage
+  /v1/warranty/providers:
+    get:
+      tags:
+      - Warranty Providers
+      summary: List providers
+      description: Optionally filter by status and/or provider type
+      operationId: listProviders
+      parameters:
+      - name: status
+        in: query
+        description: Filter by lifecycle status (ACTIVE/INACTIVE)
+        required: false
+        schema:
+          type: string
+      - name: providerType
+        in: query
+        description: Filter by provider type
+        required: false
+        schema:
+          type: string
+          enum:
+          - MANUFACTURER
+          - DISTRIBUTOR_PROGRAM
+          - THIRD_PARTY_ADMIN
+          - DEALER
+      responses:
+        '200':
+          description: Providers returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProviderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:provider:view
+    post:
+      tags:
+      - Warranty Providers
+      summary: Create provider
+      description: Create a new warranty provider
+      operationId: createProvider
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderRequest'
+        required: true
+      responses:
+        '201':
+          description: Provider created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:provider:manage
+  /v1/warranty/policies:
+    get:
+      tags:
+      - Warranty Policies
+      summary: List policies
+      description: Optionally filter by provider and/or coverage type
+      operationId: listPolicies
+      parameters:
+      - name: providerId
+        in: query
+        description: Filter by owning provider id
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: coverageType
+        in: query
+        description: Filter by coverage type
+        required: false
+        schema:
+          type: string
+          enum:
+          - MANUFACTURER_DEFECT
+          - DEALER_WORKMANSHIP
+          - ROAD_HAZARD
+          - EXTENDED_PLAN
+      responses:
+        '200':
+          description: Policies returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PolicyResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:policy:view
+    post:
+      tags:
+      - Warranty Policies
+      summary: Create policy
+      description: Create a new warranty policy
+      operationId: createPolicy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyRequest'
+        required: true
+      responses:
+        '201':
+          description: Policy created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '404':
+          description: Referenced provider not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:policy:manage
+  /v1/warranty/claims:
+    get:
+      tags:
+      - Warranty Claims
+      summary: Search claims
+      description: Paged claim summaries; filter by customer, vehicle, status, claim code, location
+      operationId: searchClaims
+      parameters:
+      - name: customerId
+        in: query
+        description: Filter by customer id
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: vehicleId
+        in: query
+        description: Filter by vehicle id
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        description: Filter by claim status
+        required: false
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - SUBMITTED
+          - IN_REVIEW
+          - INFO_NEEDED
+          - APPROVED
+          - DENIED
+          - SETTLED
+          - CLOSED
+          - CANCELLED
+      - name: claimCode
+        in: query
+        description: Exact claim code, e.g. WC-2026-000123
+        required: false
+        schema:
+          type: string
+      - name: locationId
+        in: query
+        description: Filter by location id
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
+      responses:
+        '200':
+          description: Claims returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageClaimSummaryResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:view
+    post:
+      tags:
+      - Warranty Claims
+      summary: Create draft claim
+      description: Creates a DRAFT claim; snapshots VIN/odometer
+      operationId: createClaim
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimCreateRequest'
+        required: true
+      responses:
+        '201':
+          description: Claim created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:create
+  /v1/warranty/claims/{id}/submit:
+    post:
+      tags:
+      - Warranty Claims
+      summary: Submit claim
+      description: 'Intake complete: runs eligibility, then DRAFT→SUBMITTED (or INFO_NEEDED→IN_REVIEW)'
+      operationId: submitClaim
+      parameters:
+      - name: id
+        in: path
+        description: Claim UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Claim submitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '400':
+          description: Intake incomplete (no lines, missing required photos).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '404':
+          description: Claim not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '409':
+          description: Illegal transition; nextAction lists legal moves.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:submit
+  /v1/warranty/claims/{id}/settlements:
+    post:
+      tags:
+      - Warranty Settlements
+      summary: Execute a settlement
+      description: 'Executes one settlement on an APPROVED (or already SETTLED) claim: creates an invoice adjustment/refund via pos-invoice for credit/refund types, links a validated replacement workorder, or records NO_ACTION. The first successful settlement moves the claim to SETTLED.'
+      operationId: createSettlement
+      parameters:
+      - name: id
+        in: path
+        description: Claim id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementCreateRequest'
+        required: true
+      responses:
+        '201':
+          description: Settlement executed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementResponse'
+        '404':
+          description: Claim not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementResponse'
+        '409':
+          description: Claim is not in a settleable state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementResponse'
+        '422':
+          description: Referenced replacement workorder could not be resolved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementResponse'
+        '502':
+          description: pos-invoice write failed; settlement recorded as FAILED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:settle
+  /v1/warranty/claims/{id}/reimbursement/submit:
+    post:
+      tags:
+      - Warranty Reimbursements
+      summary: Submit vendor reimbursement
+      description: Creates/updates the claim's single reimbursement NOT_SUBMITTED -> SUBMITTED; claim must be APPROVED or SETTLED and provider must not be dealer-funded
+      operationId: submitReimbursement
+      parameters:
+      - name: id
+        in: path
+        description: Claim id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReimbursementSubmitRequest'
+        required: true
+      responses:
+        '200':
+          description: Reimbursement submitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReimbursementResponse'
+        '404':
+          description: Claim or provider not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReimbursementResponse'
+        '409':
+          description: Claim state or reimbursement state does not allow submission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReimbursementResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:reimbursement:manage
+  /v1/warranty/claims/{id}/photos:
+    post:
+      tags:
+      - Warranty Claims
+      summary: Add photo
+      description: Attach a photo-evidence URL while DRAFT or INFO_NEEDED
+      operationId: addPhoto
+      parameters:
+      - name: id
+        in: path
+        description: Claim UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimPhotoRequest'
+        required: true
+      responses:
+        '200':
+          description: Photo attached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '404':
+          description: Claim not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '409':
+          description: Claim is not editable in its current status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:create
+    delete:
+      tags:
+      - Warranty Claims
+      summary: Remove photo
+      description: Detach a photo-evidence URL while DRAFT or INFO_NEEDED
+      operationId: removePhoto
+      parameters:
+      - name: id
+        in: path
+        description: Claim UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: url
+        in: query
+        description: Photo URL to detach
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      responses:
+        '200':
+          description: Photo detached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '404':
+          description: Claim or photo not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '409':
+          description: Claim is not editable in its current status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:create
+  /v1/warranty/claims/{id}/part-returns:
+    post:
+      tags:
+      - Warranty Part Returns
+      summary: Create part return (RMA)
+      description: Opens the RMA lifecycle for one claim line (at most one per line); starts AWAITING_PART
+      operationId: createPartReturn
+      parameters:
+      - name: id
+        in: path
+        description: Claim id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartReturnCreateRequest'
+        required: true
+      responses:
+        '201':
+          description: Part return created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartReturnResponse'
+        '404':
+          description: Claim or claim line not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartReturnResponse'
+        '409':
+          description: Line already has a part return, or claim is terminal.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartReturnResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:part-return:manage
+  /v1/warranty/claims/{id}/notes:
+    post:
+      tags:
+      - Warranty Claims
+      summary: Add note
+      description: Append a free-form staff note (any status)
+      operationId: addNote
+      parameters:
+      - name: id
+        in: path
+        description: Claim UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimNoteRequest'
+        required: true
+      responses:
+        '201':
+          description: Note appended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '404':
+          description: Claim not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:create
+  /v1/warranty/claims/{id}/lines:
+    post:
+      tags:
+      - Warranty Claims
+      summary: Add claim line
+      description: Add a failed part/service line while DRAFT or INFO_NEEDED
+      operationId: addLine
+      parameters:
+      - name: id
+        in: path
+        description: Claim UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimLineRequest'
+        required: true
+      responses:
+        '200':
+          description: Line added.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '404':
+          description: Claim not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '409':
+          description: Claim is not editable in its current status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:create
+  /v1/warranty/claims/{id}/eligibility:
+    post:
+      tags:
+      - Warranty Claims
+      summary: Re-run eligibility
+      description: Recompute the eligibility suggestion on demand (DRAFT, SUBMITTED, IN_REVIEW, or INFO_NEEDED only)
+      operationId: evaluateEligibility
+      parameters:
+      - name: id
+        in: path
+        description: Claim UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Eligibility recomputed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '404':
+          description: Claim not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '409':
+          description: Claim already decided or terminal.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:view
+  /v1/warranty/claims/{id}/decision:
+    post:
+      tags:
+      - Warranty Claims
+      summary: Decide claim
+      description: APPROVE/DENY/REQUEST_INFO (implicitly begins review on a SUBMITTED claim); APPEAL reopens a DENIED claim. Deny, appeal, and suggestion overrides require a reason. Optional lineDecisions record per-line approved amounts/dispositions; amounts that differ from the computed request require an audited override reason
+      operationId: decideClaim
+      parameters:
+      - name: id
+        in: path
+        description: Claim UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimDecisionRequest'
+        required: true
+      responses:
+        '200':
+          description: Decision applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '400':
+          description: Missing required reason.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '404':
+          description: Claim not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '409':
+          description: Illegal transition; nextAction lists legal moves.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:decide
+  /v1/warranty/claims/{id}/close:
+    post:
+      tags:
+      - Warranty Claims
+      summary: Close claim
+      description: Close from SETTLED or DENIED once every reimbursement and part return is terminal
+      operationId: closeClaim
+      parameters:
+      - name: id
+        in: path
+        description: Claim UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimActionRequest'
+      responses:
+        '200':
+          description: Claim closed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '404':
+          description: Claim not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '409':
+          description: Illegal transition or open child records; see nextAction.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:close
+  /v1/warranty/claims/{id}/cancel:
+    post:
+      tags:
+      - Warranty Claims
+      summary: Cancel claim
+      description: Cancel from DRAFT, SUBMITTED, or INFO_NEEDED
+      operationId: cancelClaim
+      parameters:
+      - name: id
+        in: path
+        description: Claim UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimActionRequest'
+      responses:
+        '200':
+          description: Claim cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '404':
+          description: Claim not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '409':
+          description: Illegal transition; nextAction lists legal moves.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:cancel
+  /v1/warranty/reimbursements:
+    get:
+      tags:
+      - Warranty Reimbursements
+      summary: Reimbursement worklist
+      description: Back-office worklist of vendor reimbursements, filterable by status and provider
+      operationId: listReimbursements
+      parameters:
+      - name: status
+        in: query
+        description: Filter by reimbursement status
+        required: false
+        schema:
+          type: string
+          enum:
+          - NOT_SUBMITTED
+          - SUBMITTED
+          - APPROVED
+          - PARTIALLY_APPROVED
+          - DENIED
+          - CREDIT_RECEIVED
+          - WRITTEN_OFF
+          - NOT_APPLICABLE
+      - name: providerId
+        in: query
+        description: Filter by warranty provider id
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Reimbursements returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReimbursementResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:reimbursement:view
+  /v1/warranty/policies/applicable:
+    get:
+      tags:
+      - Warranty Policies
+      summary: Find applicable policies
+      description: Policies in effect on the sale date whose appliesTo scope matches any provided key, ordered most-specific-first (PRODUCT > MANUFACTURER > CATEGORY > ALL)
+      operationId: findApplicablePolicies
+      parameters:
+      - name: productEntityId
+        in: query
+        description: pos-catalog productEntityId of the product sold
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: manufacturerId
+        in: query
+        description: pos-catalog manufacturerId of the product sold
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: categoryId
+        in: query
+        description: pos-catalog category id of the product sold
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: saleDate
+        in: query
+        description: Original sale date (ISO-8601)
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: coverageType
+        in: query
+        description: Restrict to one coverage type
+        required: false
+        schema:
+          type: string
+          enum:
+          - MANUFACTURER_DEFECT
+          - DEALER_WORKMANSHIP
+          - ROAD_HAZARD
+          - EXTENDED_PLAN
+      responses:
+        '200':
+          description: Matching policies returned, most specific first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PolicyResponse'
+        '400':
+          description: Missing or invalid parameters.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PolicyResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:policy:view
+  /v1/warranty/part-returns:
+    get:
+      tags:
+      - Warranty Part Returns
+      summary: Part-return worklist
+      description: Hold-shelf / shipping worklist of part returns, filterable by status
+      operationId: listPartReturns
+      parameters:
+      - name: status
+        in: query
+        description: Filter by part-return status
+        required: false
+        schema:
+          type: string
+          enum:
+          - AWAITING_PART
+          - ON_HOLD
+          - SHIPPED
+          - RECEIVED_BY_VENDOR
+          - SCRAPPED
+          - CLOSED
+      responses:
+        '200':
+          description: Part returns returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartReturnResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:part-return:view
+  /v1/warranty/claims/candidate-lines:
+    get:
+      tags:
+      - Warranty Claims
+      summary: Search candidate origin lines
+      description: Cross-service search of invoices and workorders for origin-line matching (PRD §7 step 2)
+      operationId: searchCandidateLines
+      parameters:
+      - name: customerId
+        in: query
+        description: Customer id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: vehicleId
+        in: query
+        description: Narrow by vehicle id
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: sku
+        in: query
+        description: Narrow by SKU
+        required: false
+        schema:
+          type: string
+      - name: productEntityId
+        in: query
+        description: Narrow by catalog product id
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Candidate lines returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CandidateLine'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:view
+  /v1/warranty/claims/{id}/lines/{lineId}:
+    delete:
+      tags:
+      - Warranty Claims
+      summary: Remove claim line
+      description: Remove a claim line while DRAFT or INFO_NEEDED
+      operationId: removeLine
+      parameters:
+      - name: id
+        in: path
+        description: Claim UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: lineId
+        in: path
+        description: Claim line UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Line removed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '404':
+          description: Claim or line not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '409':
+          description: Claim is not editable in its current status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:create
+components:
+  schemas:
+    RegistrationRequest:
+      type: object
+      description: Warranty registration create/update request — sold/instantiated coverage
+      properties:
+        policyId:
+          type: string
+          format: uuid
+          description: Governing warranty policy id
+        customerId:
+          type: string
+          format: uuid
+          description: pos-customer customer id
+        vehicleId:
+          type: string
+          format: uuid
+          description: pos-vehicle-inventory vehicle id, when vehicle-bound
+        sourceInvoiceId:
+          type: string
+          format: uuid
+          description: Originating pos-invoice invoice id
+        sourceInvoiceLineId:
+          type: string
+          format: uuid
+          description: Originating pos-invoice invoice line id
+        contractNumber:
+          type: string
+          description: Provider contract number
+          example: RH-2026-88412
+          maxLength: 100
+          minLength: 0
+        purchaseDate:
+          type: string
+          format: date
+          description: Date the coverage was purchased
+        expiresAt:
+          type: string
+          format: date
+          description: Coverage end date, when bounded
+        status:
+          type: string
+          description: Lifecycle status; defaults to ACTIVE on create
+          enum:
+          - ACTIVE
+          - EXPIRED
+          - CANCELLED
+          - EXHAUSTED
+      required:
+      - customerId
+      - policyId
+      - purchaseDate
+    RegistrationResponse:
+      type: object
+      description: Warranty registration — sold/instantiated coverage
+      properties:
+        id:
+          type: string
+          format: uuid
+        policyId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        vehicleId:
+          type: string
+          format: uuid
+        sourceInvoiceId:
+          type: string
+          format: uuid
+        sourceInvoiceLineId:
+          type: string
+          format: uuid
+        contractNumber:
+          type: string
+        purchaseDate:
+          type: string
+          format: date
+        expiresAt:
+          type: string
+          format: date
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - EXPIRED
+          - CANCELLED
+          - EXHAUSTED
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+    ProviderRequest:
+      type: object
+      description: Warranty provider create/update request
+      properties:
+        name:
+          type: string
+          description: Provider display name
+          example: Michelin North America
+          maxLength: 255
+          minLength: 0
+        providerType:
+          type: string
+          description: Who funds the program
+          enum:
+          - MANUFACTURER
+          - DISTRIBUTOR_PROGRAM
+          - THIRD_PARTY_ADMIN
+          - DEALER
+        status:
+          type: string
+          description: Lifecycle status; defaults to ACTIVE on create
+          example: ACTIVE
+          pattern: ACTIVE|INACTIVE
+        apVendorId:
+          type: string
+          format: uuid
+          description: Optional pos-accounting ap_vendor.vendorId for credit matching
+        manufacturerId:
+          type: string
+          format: uuid
+          description: Optional pos-catalog ProductEntity.manufacturerId for policy lookup
+        claimSubmissionMethod:
+          type: string
+          description: How claims are submitted to this provider
+          example: Portal
+          maxLength: 255
+          minLength: 0
+        portalUrl:
+          type: string
+          maxLength: 1024
+          minLength: 0
+        contactName:
+          type: string
+          maxLength: 255
+          minLength: 0
+        contactPhone:
+          type: string
+          maxLength: 50
+          minLength: 0
+        contactEmail:
+          type: string
+          format: email
+          maxLength: 255
+          minLength: 0
+      required:
+      - name
+      - providerType
+    ProviderResponse:
+      type: object
+      description: Warranty provider
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+        providerType:
+          type: string
+          enum:
+          - MANUFACTURER
+          - DISTRIBUTOR_PROGRAM
+          - THIRD_PARTY_ADMIN
+          - DEALER
+        apVendorId:
+          type: string
+          format: uuid
+        manufacturerId:
+          type: string
+          format: uuid
+        claimSubmissionMethod:
+          type: string
+        portalUrl:
+          type: string
+        contactName:
+          type: string
+        contactPhone:
+          type: string
+        contactEmail:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+    PolicyRequest:
+      type: object
+      description: Warranty policy create/update request — structured coverage terms
+      properties:
+        providerId:
+          type: string
+          format: uuid
+          description: Owning warranty provider id
+        name:
+          type: string
+          description: Program name
+          example: Michelin passenger replacement — workmanship & materials
+          maxLength: 255
+          minLength: 0
+        coverageType:
+          type: string
+          description: Claim type this policy covers
+          enum:
+          - MANUFACTURER_DEFECT
+          - DEALER_WORKMANSHIP
+          - ROAD_HAZARD
+          - EXTENDED_PLAN
+        appliesToType:
+          type: string
+          description: Matching scope of the appliesTo terms
+          enum:
+          - PRODUCT_LIST
+          - CATEGORY
+          - MANUFACTURER
+          - ALL
+        appliesToProductEntityIds:
+          type: array
+          description: Explicit pos-catalog productEntityIds; required when appliesToType=PRODUCT_LIST
+          items:
+            type: string
+            format: uuid
+        appliesToCategoryId:
+          type: string
+          format: uuid
+          description: pos-catalog category id; required when appliesToType=CATEGORY
+        appliesToManufacturerId:
+          type: string
+          format: uuid
+          description: pos-catalog manufacturerId; required when appliesToType=MANUFACTURER
+        effectiveFrom:
+          type: string
+          format: date
+          description: Policy must be in effect on the original sale date
+        effectiveTo:
+          type: string
+          format: date
+        durationMonths:
+          type: integer
+          format: int32
+          description: Time limit in months from sale date; null = unlimited
+        mileageLimit:
+          type: integer
+          format: int32
+          description: Miles from sale odometer; null = n/a
+        treadPullPointThirtySeconds:
+          type: integer
+          format: int32
+          description: 'Tires: coverage ends at this remaining depth, in 32nds of an inch'
+          example: 2
+          maximum: 32
+          minimum: 0
+        laborCovered:
+          type: boolean
+          description: Whether the provider reimburses install labor; defaults to false
+        laborHoursCap:
+          type: number
+          description: Max labor hours reimbursed
+          minimum: 0
+        laborRateCap:
+          type: number
+          description: Max labor rate reimbursed
+          minimum: 0
+        prorationMethod:
+          type: string
+          description: How the credit fraction is computed
+          enum:
+          - NONE
+          - TREAD_DEPTH
+          - MILEAGE
+          - TIME
+        requiresPartReturn:
+          type: boolean
+          description: Provider demands the defective part back (drives RMA); defaults to false
+        requiresPhotoEvidence:
+          type: boolean
+          description: Intake enforces at least one photo before submission; defaults to false
+        transferable:
+          type: boolean
+          description: Coverage survives vehicle/owner change; defaults to false
+        termsText:
+          type: string
+          description: Human-readable fine print
+        documentUrls:
+          type: array
+          description: Links to the provider's policy documents
+          items:
+            type: string
+            minLength: 1
+      required:
+      - appliesToType
+      - coverageType
+      - effectiveFrom
+      - name
+      - prorationMethod
+      - providerId
+    PolicyResponse:
+      type: object
+      description: Warranty policy — structured coverage terms
+      properties:
+        id:
+          type: string
+          format: uuid
+        providerId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        coverageType:
+          type: string
+          enum:
+          - MANUFACTURER_DEFECT
+          - DEALER_WORKMANSHIP
+          - ROAD_HAZARD
+          - EXTENDED_PLAN
+        appliesToType:
+          type: string
+          enum:
+          - PRODUCT_LIST
+          - CATEGORY
+          - MANUFACTURER
+          - ALL
+        appliesToProductEntityIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        appliesToCategoryId:
+          type: string
+          format: uuid
+        appliesToManufacturerId:
+          type: string
+          format: uuid
+        effectiveFrom:
+          type: string
+          format: date
+        effectiveTo:
+          type: string
+          format: date
+        durationMonths:
+          type: integer
+          format: int32
+        mileageLimit:
+          type: integer
+          format: int32
+        treadPullPointThirtySeconds:
+          type: integer
+          format: int32
+        laborCovered:
+          type: boolean
+        laborHoursCap:
+          type: number
+        laborRateCap:
+          type: number
+        prorationMethod:
+          type: string
+          enum:
+          - NONE
+          - TREAD_DEPTH
+          - MILEAGE
+          - TIME
+        requiresPartReturn:
+          type: boolean
+        requiresPhotoEvidence:
+          type: boolean
+        transferable:
+          type: boolean
+        termsText:
+          type: string
+        documentUrls:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+    PartReturnUpdateRequest:
+      type: object
+      description: Part return (RMA) lifecycle update; all fields optional
+      properties:
+        status:
+          type: string
+          description: Target status; omit for a detail-only update
+          enum:
+          - AWAITING_PART
+          - ON_HOLD
+          - SHIPPED
+          - RECEIVED_BY_VENDOR
+          - SCRAPPED
+          - CLOSED
+        disposition:
+          type: string
+          description: Revised disposition for the defective part
+          enum:
+          - HOLD_FOR_INSPECTION
+          - RETURN_TO_VENDOR
+          - SCRAP_AUTHORIZED
+          - CUSTOMER_RETAINED
+        carrier:
+          type: string
+          description: Shipping carrier
+          maxLength: 100
+          minLength: 0
+        trackingNumber:
+          type: string
+          description: Carrier tracking number
+          maxLength: 100
+          minLength: 0
+        shippedAt:
+          type: string
+          format: date-time
+          description: When the part shipped; defaults to now when entering SHIPPED
+        rmaNumber:
+          type: string
+          description: Vendor-issued RMA number
+          maxLength: 100
+          minLength: 0
+        holdLocationNote:
+          type: string
+          description: Where the part sits on the physical hold shelf
+          maxLength: 10000
+          minLength: 0
+    PartReturnResponse:
+      type: object
+      description: Part return (RMA) — defective-part return lifecycle for a claim line
+      properties:
+        id:
+          type: string
+          format: uuid
+        claimId:
+          type: string
+          format: uuid
+        claimLineId:
+          type: string
+          format: uuid
+        rmaNumber:
+          type: string
+        disposition:
+          type: string
+          enum:
+          - HOLD_FOR_INSPECTION
+          - RETURN_TO_VENDOR
+          - SCRAP_AUTHORIZED
+          - CUSTOMER_RETAINED
+        status:
+          type: string
+          enum:
+          - AWAITING_PART
+          - ON_HOLD
+          - SHIPPED
+          - RECEIVED_BY_VENDOR
+          - SCRAPPED
+          - CLOSED
+        carrier:
+          type: string
+        trackingNumber:
+          type: string
+        shippedAt:
+          type: string
+          format: date-time
+        holdLocationNote:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ClaimUpdateRequest:
+      type: object
+      description: Update a warranty claim while DRAFT or INFO_NEEDED
+      properties:
+        claimType:
+          type: string
+          description: Claim type; unchanged when null
+          enum:
+          - MANUFACTURER_DEFECT
+          - DEALER_WORKMANSHIP
+          - ROAD_HAZARD
+          - EXTENDED_PLAN
+        locationId:
+          type: string
+          format: uuid
+          description: Location where the claim is handled
+        originWorkorderId:
+          type: string
+          format: uuid
+          description: Originating workorder, when the sale was located
+        originInvoiceId:
+          type: string
+          format: uuid
+          description: Originating invoice, when the sale was located
+        originSaleDate:
+          type: string
+          format: date
+          description: Original sale date (manual entry allowed for walk-ins)
+        registrationId:
+          type: string
+          format: uuid
+          description: Registration id for registration-bound coverage
+        failureDescription:
+          type: string
+          description: What failed and how
+          maxLength: 10000
+          minLength: 0
+        failureDate:
+          type: string
+          format: date
+          description: Date the failure occurred or was noticed
+        photoEvidenceUrls:
+          type: array
+          description: Full replacement of photo evidence URLs; unchanged when null
+          items:
+            type: string
+            maxLength: 2048
+            minLength: 0
+    ClaimLineResponse:
+      type: object
+      description: Warranty claim line
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceType:
+          type: string
+          enum:
+          - INVOICE_LINE
+          - WORKORDER_PART
+          - WORKORDER_SERVICE
+          - MANUAL
+        sourceId:
+          type: string
+          format: uuid
+        sourceLineId:
+          type: string
+          format: uuid
+        productEntityId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        description:
+          type: string
+        serialNumber:
+          type: string
+        dotNumber:
+          type: string
+        quantity:
+          type: number
+        originalUnitPrice:
+          type: number
+        originalTreadDepth:
+          type: integer
+          format: int32
+          description: Original tread depth in 32nds of an inch
+        measuredTreadDepth:
+          type: integer
+          format: int32
+          description: Measured remaining tread depth in 32nds of an inch
+        prorationPct:
+          type: number
+          description: Computed credit fraction in [0, 1]
+        prorationInputs:
+          type: object
+          description: Every number that fed the proration computation
+        amountRequested:
+          type: number
+        amountApproved:
+          type: number
+        lineDisposition:
+          type: string
+          enum:
+          - PENDING
+          - APPROVED
+          - PARTIALLY_APPROVED
+          - DENIED
+          - WITHDRAWN
+    ClaimResponse:
+      type: object
+      description: Full warranty claim detail
+      properties:
+        id:
+          type: string
+          format: uuid
+        claimCode:
+          type: string
+        claimType:
+          type: string
+          enum:
+          - MANUFACTURER_DEFECT
+          - DEALER_WORKMANSHIP
+          - ROAD_HAZARD
+          - EXTENDED_PLAN
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - SUBMITTED
+          - IN_REVIEW
+          - INFO_NEEDED
+          - APPROVED
+          - DENIED
+          - SETTLED
+          - CLOSED
+          - CANCELLED
+        locationId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        vehicleId:
+          type: string
+          format: uuid
+        vin:
+          type: string
+          description: VIN snapshot frozen at intake
+        odometerAtClaim:
+          type: integer
+          format: int64
+          description: Odometer snapshot frozen at intake
+        odometerUnit:
+          type: string
+        originWorkorderId:
+          type: string
+          format: uuid
+        originInvoiceId:
+          type: string
+          format: uuid
+        originSaleDate:
+          type: string
+          format: date
+        originUnverified:
+          type: boolean
+        providerId:
+          type: string
+          format: uuid
+        policyId:
+          type: string
+          format: uuid
+        registrationId:
+          type: string
+          format: uuid
+        failureDescription:
+          type: string
+        failureDate:
+          type: string
+          format: date
+        photoEvidenceUrls:
+          type: array
+          items:
+            type: string
+        eligibilityResult:
+          type: string
+          enum:
+          - ELIGIBLE
+          - INELIGIBLE
+          - INDETERMINATE
+        eligibilityReasons:
+          type: array
+          items:
+            type: object
+        suggestedOutcome:
+          type: object
+        decision:
+          type: string
+          enum:
+          - APPROVE
+          - DENY
+          - REQUEST_INFO
+        decisionReason:
+          type: string
+        decidedBy:
+          type: string
+        decidedAt:
+          type: string
+          format: date-time
+        overrodeSuggestion:
+          type: boolean
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClaimLineResponse'
+        settlements:
+          type: array
+          items:
+            $ref: '#/components/schemas/SettlementView'
+        reimbursements:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReimbursementView'
+        partReturns:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartReturnView'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusHistoryView'
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/NoteView'
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+    NoteView:
+      type: object
+      description: Staff note
+      properties:
+        id:
+          type: string
+          format: uuid
+        note:
+          type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    PartReturnView:
+      type: object
+      description: Defective-part return (RMA)
+      properties:
+        id:
+          type: string
+          format: uuid
+        claimLineId:
+          type: string
+          format: uuid
+        rmaNumber:
+          type: string
+        disposition:
+          type: string
+          enum:
+          - HOLD_FOR_INSPECTION
+          - RETURN_TO_VENDOR
+          - SCRAP_AUTHORIZED
+          - CUSTOMER_RETAINED
+        status:
+          type: string
+          enum:
+          - AWAITING_PART
+          - ON_HOLD
+          - SHIPPED
+          - RECEIVED_BY_VENDOR
+          - SCRAPPED
+          - CLOSED
+        carrier:
+          type: string
+        trackingNumber:
+          type: string
+        shippedAt:
+          type: string
+          format: date-time
+        holdLocationNote:
+          type: string
+    ReimbursementView:
+      type: object
+      description: Vendor reimbursement
+      properties:
+        id:
+          type: string
+          format: uuid
+        providerId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - NOT_SUBMITTED
+          - SUBMITTED
+          - APPROVED
+          - PARTIALLY_APPROVED
+          - DENIED
+          - CREDIT_RECEIVED
+          - WRITTEN_OFF
+          - NOT_APPLICABLE
+        amountRequested:
+          type: number
+        amountApproved:
+          type: number
+        vendorClaimReference:
+          type: string
+        submittedAt:
+          type: string
+          format: date-time
+        submittedBy:
+          type: string
+        resolvedAt:
+          type: string
+          format: date-time
+        creditReference:
+          type: string
+        creditReceivedAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+    SettlementView:
+      type: object
+      description: Claim settlement
+      properties:
+        id:
+          type: string
+          format: uuid
+        settlementType:
+          type: string
+          enum:
+          - REPLACEMENT_WORKORDER
+          - INVOICE_CREDIT
+          - REFUND
+          - PRORATED_CREDIT
+          - GOODWILL
+          - NO_ACTION
+        status:
+          type: string
+          enum:
+          - PENDING
+          - COMPLETED
+          - FAILED
+        replacementWorkorderId:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+        invoiceAdjustmentId:
+          type: string
+          format: uuid
+        refundRecordId:
+          type: string
+          format: uuid
+        coveredAmount:
+          type: number
+        customerAmount:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+    StatusHistoryView:
+      type: object
+      description: Claim status transition
+      properties:
+        id:
+          type: string
+          format: uuid
+        fromStatus:
+          type: string
+          enum:
+          - DRAFT
+          - SUBMITTED
+          - IN_REVIEW
+          - INFO_NEEDED
+          - APPROVED
+          - DENIED
+          - SETTLED
+          - CLOSED
+          - CANCELLED
+        toStatus:
+          type: string
+          enum:
+          - DRAFT
+          - SUBMITTED
+          - IN_REVIEW
+          - INFO_NEEDED
+          - APPROVED
+          - DENIED
+          - SETTLED
+          - CLOSED
+          - CANCELLED
+        actor:
+          type: string
+        reason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ReimbursementUpdateRequest:
+      type: object
+      description: Vendor reimbursement lifecycle update (vendor decision / credit / write-off)
+      properties:
+        status:
+          type: string
+          description: Target status
+          enum:
+          - APPROVED
+          - PARTIALLY_APPROVED
+          - DENIED
+          - CREDIT_RECEIVED
+          - WRITTEN_OFF
+        amountApproved:
+          type: number
+          description: Amount the vendor approved (required for APPROVED / PARTIALLY_APPROVED)
+        creditReference:
+          type: string
+          description: Vendor credit/payment reference (typically with CREDIT_RECEIVED)
+          maxLength: 100
+          minLength: 0
+        notes:
+          type: string
+          description: Back-office notes
+          maxLength: 10000
+          minLength: 0
+      required:
+      - status
+    ReimbursementResponse:
+      type: object
+      description: Vendor reimbursement — back-office money lifecycle for a claim
+      properties:
+        id:
+          type: string
+          format: uuid
+        claimId:
+          type: string
+          format: uuid
+        providerId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - NOT_SUBMITTED
+          - SUBMITTED
+          - APPROVED
+          - PARTIALLY_APPROVED
+          - DENIED
+          - CREDIT_RECEIVED
+          - WRITTEN_OFF
+          - NOT_APPLICABLE
+        amountRequested:
+          type: number
+        amountApproved:
+          type: number
+        vendorClaimReference:
+          type: string
+        submittedAt:
+          type: string
+          format: date-time
+        submittedBy:
+          type: string
+        resolvedAt:
+          type: string
+          format: date-time
+        creditReference:
+          type: string
+        creditReceivedAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ClaimCreateRequest:
+      type: object
+      description: Create a DRAFT warranty claim
+      properties:
+        claimType:
+          type: string
+          description: Claim type
+          enum:
+          - MANUFACTURER_DEFECT
+          - DEALER_WORKMANSHIP
+          - ROAD_HAZARD
+          - EXTENDED_PLAN
+          example: MANUFACTURER_DEFECT
+        customerId:
+          type: string
+          format: uuid
+          description: pos-customer customer id
+        vehicleId:
+          type: string
+          format: uuid
+          description: pos-vehicle-inventory vehicle id; VIN + odometer are snapshotted from it
+        locationId:
+          type: string
+          format: uuid
+          description: Location where the claim is taken
+        originWorkorderId:
+          type: string
+          format: uuid
+          description: Originating workorder, when the sale was located
+        originInvoiceId:
+          type: string
+          format: uuid
+          description: Originating invoice, when the sale was located
+        originSaleDate:
+          type: string
+          format: date
+          description: Original sale date (manual entry allowed for walk-ins)
+        registrationId:
+          type: string
+          format: uuid
+          description: Registration id for registration-bound coverage, when already known
+        failureDescription:
+          type: string
+          description: What failed and how
+          maxLength: 10000
+          minLength: 0
+        failureDate:
+          type: string
+          format: date
+          description: Date the failure occurred or was noticed
+        photoEvidenceUrls:
+          type: array
+          description: Photo evidence URLs (URL-reference pattern)
+          items:
+            type: string
+            maxLength: 2048
+            minLength: 0
+        lines:
+          type: array
+          description: Initial claim lines (may also be added later while DRAFT/INFO_NEEDED)
+          items:
+            $ref: '#/components/schemas/ClaimLineRequest'
+      required:
+      - claimType
+      - customerId
+      - vehicleId
+    ClaimLineRequest:
+      type: object
+      description: Warranty claim line — one failed part or service, with source provenance and snapshots
+      properties:
+        sourceType:
+          type: string
+          description: Provenance of the line
+          enum:
+          - INVOICE_LINE
+          - WORKORDER_PART
+          - WORKORDER_SERVICE
+          - MANUAL
+          example: INVOICE_LINE
+        sourceId:
+          type: string
+          format: uuid
+          description: Originating invoice or workorder id (null for MANUAL lines)
+        sourceLineId:
+          type: string
+          format: uuid
+          description: Originating invoice/workorder line id (null for MANUAL lines)
+        productEntityId:
+          type: string
+          format: uuid
+          description: pos-catalog product id, when known
+        sku:
+          type: string
+          description: Catalog SKU snapshot
+          maxLength: 100
+          minLength: 0
+        description:
+          type: string
+          description: Line description snapshot
+          maxLength: 512
+          minLength: 0
+        serialNumber:
+          type: string
+          description: Serial number of the failed unit
+          maxLength: 100
+          minLength: 0
+        dotNumber:
+          type: string
+          description: Tire DOT number
+          example: DOT Y9RJ FPUU 2325
+          maxLength: 20
+          minLength: 0
+        quantity:
+          type: number
+          description: Quantity claimed; defaults to 1
+          minimum: 0
+        originalUnitPrice:
+          type: number
+          description: Original unit price snapshot
+          minimum: 0
+        originalTreadDepth:
+          type: integer
+          format: int32
+          description: Original tread depth in 32nds of an inch
+          example: 12
+          minimum: 0
+        measuredTreadDepth:
+          type: integer
+          format: int32
+          description: Measured remaining tread depth in 32nds of an inch
+          example: 6
+          minimum: 0
+      required:
+      - sourceType
+    SettlementCreateRequest:
+      type: object
+      description: Execute a settlement on an approved warranty claim
+      properties:
+        settlementType:
+          type: string
+          description: How the customer is made whole
+          enum:
+          - REPLACEMENT_WORKORDER
+          - INVOICE_CREDIT
+          - REFUND
+          - PRORATED_CREDIT
+          - GOODWILL
+          - NO_ACTION
+        coveredAmount:
+          type: number
+          description: Amount coverage pays
+        customerAmount:
+          type: number
+          description: Amount the customer still owes (proration remainder, upcharge, fees)
+        replacementWorkorderId:
+          type: string
+          format: uuid
+          description: Replacement workorder link (REPLACEMENT_WORKORDER only)
+        invoiceId:
+          type: string
+          format: uuid
+          description: Invoice to credit/refund against (credit and refund types)
+        paymentId:
+          type: string
+          format: uuid
+          description: Captured payment to refund (REFUND only)
+        notes:
+          type: string
+          description: Staff notes recorded on the claim
+          maxLength: 10000
+          minLength: 0
+      required:
+      - coveredAmount
+      - customerAmount
+      - settlementType
+    SettlementResponse:
+      type: object
+      description: Claim settlement — how the customer was made whole
+      properties:
+        id:
+          type: string
+          format: uuid
+        claimId:
+          type: string
+          format: uuid
+        settlementType:
+          type: string
+          enum:
+          - REPLACEMENT_WORKORDER
+          - INVOICE_CREDIT
+          - REFUND
+          - PRORATED_CREDIT
+          - GOODWILL
+          - NO_ACTION
+        status:
+          type: string
+          enum:
+          - PENDING
+          - COMPLETED
+          - FAILED
+        replacementWorkorderId:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+        invoiceAdjustmentId:
+          type: string
+          format: uuid
+        refundRecordId:
+          type: string
+          format: uuid
+        coveredAmount:
+          type: number
+        customerAmount:
+          type: number
+        claimStatus:
+          type: string
+          description: Claim status after this settlement executed
+          enum:
+          - DRAFT
+          - SUBMITTED
+          - IN_REVIEW
+          - INFO_NEEDED
+          - APPROVED
+          - DENIED
+          - SETTLED
+          - CLOSED
+          - CANCELLED
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ReimbursementSubmitRequest:
+      type: object
+      description: Vendor reimbursement submission (NOT_SUBMITTED -> SUBMITTED)
+      properties:
+        amountRequested:
+          type: number
+          description: Amount requested from the vendor
+        vendorClaimReference:
+          type: string
+          description: The vendor's own claim reference number, if already assigned
+          maxLength: 100
+          minLength: 0
+        notes:
+          type: string
+          description: Back-office notes
+          maxLength: 10000
+          minLength: 0
+      required:
+      - amountRequested
+    ClaimPhotoRequest:
+      type: object
+      description: Photo evidence URL to attach to a warranty claim
+      properties:
+        url:
+          type: string
+          description: Photo URL
+          example: https://media.example.com/claims/wc-2026-000123/tire-1.jpg
+          maxLength: 2048
+          minLength: 0
+      required:
+      - url
+    PartReturnCreateRequest:
+      type: object
+      description: Create a part return (RMA) for a claim line; starts AWAITING_PART
+      properties:
+        claimLineId:
+          type: string
+          format: uuid
+          description: Claim line whose failed part is being returned/held
+        disposition:
+          type: string
+          description: What happens to the defective part
+          enum:
+          - HOLD_FOR_INSPECTION
+          - RETURN_TO_VENDOR
+          - SCRAP_AUTHORIZED
+          - CUSTOMER_RETAINED
+        rmaNumber:
+          type: string
+          description: Vendor-issued RMA number, if already assigned
+          maxLength: 100
+          minLength: 0
+        holdLocationNote:
+          type: string
+          description: Where the part sits on the physical hold shelf
+          maxLength: 10000
+          minLength: 0
+      required:
+      - claimLineId
+      - disposition
+    ClaimNoteRequest:
+      type: object
+      description: Staff note to append to a warranty claim
+      properties:
+        note:
+          type: string
+          description: Note text
+          maxLength: 10000
+          minLength: 0
+      required:
+      - note
+    ClaimDecisionRequest:
+      type: object
+      description: Approve/deny/request-info/appeal a warranty claim
+      properties:
+        decision:
+          type: string
+          description: Decision action
+          enum:
+          - APPROVE
+          - DENY
+          - REQUEST_INFO
+          - APPEAL
+        reason:
+          type: string
+          description: Reason — required for DENY, APPEAL, and any decision that contradicts the computed suggestion
+          maxLength: 10000
+          minLength: 0
+        lineDecisions:
+          type: array
+          description: Per-line adjudication (APPROVE/DENY only); omitted lines get defaults
+          items:
+            $ref: '#/components/schemas/LineDecision'
+      required:
+      - decision
+    LineDecision:
+      type: object
+      description: Per-line approved amount and disposition
+      properties:
+        lineId:
+          type: string
+          format: uuid
+          description: Claim line UUID
+        amountApproved:
+          type: number
+          description: Approved amount; defaults to the computed amountRequested on APPROVE
+        lineDisposition:
+          type: string
+          description: Line disposition; defaults to APPROVED on APPROVE, DENIED on DENY
+          enum:
+          - PENDING
+          - APPROVED
+          - PARTIALLY_APPROVED
+          - DENIED
+          - WITHDRAWN
+        overrideReason:
+          type: string
+          description: Required when amountApproved differs from the computed amountRequested; audited as a claim note
+          maxLength: 10000
+          minLength: 0
+      required:
+      - lineId
+    ClaimActionRequest:
+      type: object
+      description: Optional reason for a claim lifecycle action
+      properties:
+        reason:
+          type: string
+          description: Reason recorded in the claim status history
+          maxLength: 10000
+          minLength: 0
+    Pageable:
+      type: object
+      properties:
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        size:
+          type: integer
+          format: int32
+          minimum: 1
+        sort:
+          type: array
+          items:
+            type: string
+    ClaimSummaryResponse:
+      type: object
+      description: Warranty claim summary (search result row)
+      properties:
+        id:
+          type: string
+          format: uuid
+        claimCode:
+          type: string
+        claimType:
+          type: string
+          enum:
+          - MANUFACTURER_DEFECT
+          - DEALER_WORKMANSHIP
+          - ROAD_HAZARD
+          - EXTENDED_PLAN
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - SUBMITTED
+          - IN_REVIEW
+          - INFO_NEEDED
+          - APPROVED
+          - DENIED
+          - SETTLED
+          - CLOSED
+          - CANCELLED
+        customerId:
+          type: string
+          format: uuid
+        vehicleId:
+          type: string
+          format: uuid
+        vin:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        failureDate:
+          type: string
+          format: date
+        eligibilityResult:
+          type: string
+          enum:
+          - ELIGIBLE
+          - INELIGIBLE
+          - INDETERMINATE
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PageClaimSummaryResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClaimSummaryResponse'
+        number:
+          type: integer
+          format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+    PageableObject:
+      type: object
+      properties:
+        offset:
+          type: integer
+          format: int64
+        paged:
+          type: boolean
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        unpaged:
+          type: boolean
+    SortObject:
+      type: object
+      properties:
+        empty:
+          type: boolean
+        sorted:
+          type: boolean
+        unsorted:
+          type: boolean
+    CandidateLine:
+      type: object
+      properties:
+        sourceType:
+          type: string
+          enum:
+          - INVOICE_LINE
+          - WORKORDER_PART
+          - WORKORDER_SERVICE
+          - MANUAL
+        sourceId:
+          type: string
+          format: uuid
+        sourceLineId:
+          type: string
+          format: uuid
+        sourceReference:
+          type: string
+        productEntityId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        description:
+          type: string
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        lineTotal:
+          type: number
+        sourceCreatedAt:
+          type: string
+          format: date-time
+        photoEvidenceUrl:
+          type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

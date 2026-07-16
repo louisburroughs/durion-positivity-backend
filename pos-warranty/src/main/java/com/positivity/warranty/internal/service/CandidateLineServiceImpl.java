@@ -46,7 +46,7 @@ public class CandidateLineServiceImpl implements CandidateLineService {
         Set<String> textTokens = textTokens(sku, product);
 
         List<CandidateLine> results = new ArrayList<>();
-        results.addAll(invoiceCandidates(customerId, filtered, textTokens));
+        results.addAll(invoiceCandidates(customerId, sku, filtered, textTokens));
         results.addAll(workorderCandidates(customerId, vehicleId, filtered, productEntityId, textTokens, product));
         return results;
     }
@@ -55,10 +55,13 @@ public class CandidateLineServiceImpl implements CandidateLineService {
     // pos-invoice
     // -----------------------------------------------------------------------------------------
 
-    private List<CandidateLine> invoiceCandidates(UUID customerId, boolean filtered, Set<String> textTokens) {
+    private List<CandidateLine> invoiceCandidates(
+            UUID customerId, @Nullable String sku, boolean filtered, Set<String> textTokens) {
         List<CandidateLine> results = new ArrayList<>();
         try {
-            for (InvoiceClient.InvoiceLine line : invoiceClient.searchInvoiceLines(customerId)) {
+            // The SKU narrows the result server-side (PRD §9.4 party+SKU); the token match below
+            // stays as a secondary filter for catalog-name tokens.
+            for (InvoiceClient.InvoiceLine line : invoiceClient.searchInvoiceLines(customerId, sku)) {
                 if (filtered && !matchesText(line.description(), textTokens)) {
                     continue;
                 }

@@ -20,6 +20,7 @@ import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
 import com.positivity.warranty.internal.repository.PartReturnRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.EnumMap;
@@ -33,6 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -117,6 +119,7 @@ public class PartReturnServiceImpl implements PartReturnService {
                     "Update the existing part return via PUT /v1/warranty/part-returns/" + existing.getId() + ".");
         });
 
+        bumpClaimAggregateVersion(claim);
         PartReturn partReturn = PartReturn.builder()
                 .claimId(claimId)
                 .claimLineId(request.claimLineId())
@@ -125,7 +128,18 @@ public class PartReturnServiceImpl implements PartReturnService {
                 .rmaNumber(request.rmaNumber())
                 .holdLocationNote(request.holdLocationNote())
                 .build();
-        PartReturn saved = partReturnRepository.save(partReturn);
+        PartReturn saved;
+        try {
+            // Flush inside the try so the UNIQUE(claim_line_id) constraint fires here: a
+            // concurrent create that lost the check-then-insert race gets the same 409 as a
+            // sequential retry (mirrors ReimbursementServiceImpl.submit).
+            saved = partReturnRepository.saveAndFlush(partReturn);
+        } catch (DataIntegrityViolationException ex) {
+            throw new IllegalClaimStateException(
+                    ALREADY_EXISTS_CODE,
+                    "Claim line " + request.claimLineId() + " already has a part return (at most one per line)",
+                    "Update the existing part return via PUT /v1/warranty/part-returns/{id}.");
+        }
 
         publishRequested(claim, line, saved);
         claimSnapshotPublisher.publish(claimId);
@@ -188,6 +202,7 @@ public class PartReturnServiceImpl implements PartReturnService {
             // Correcting the recorded ship time on an already-shipped return.
             partReturn.setShippedAt(request.shippedAt());
         }
+        bumpClaimAggregateVersion(loadClaim(partReturn.getClaimId()));
         PartReturn saved = partReturnRepository.save(partReturn);
 
         if (enteredShipped) {
@@ -232,6 +247,18 @@ public class PartReturnServiceImpl implements PartReturnService {
                 .findById(claimId)
                 .orElseThrow(() ->
                         new WarrantyNotFoundException(CLAIM_NOT_FOUND_CODE, "Warranty claim not found: " + claimId));
+    }
+
+    /**
+     * A part-return mutation changes the claim aggregate's snapshot content without dirtying
+     * the claim row, so force a claim {@code @Version} increment: the
+     * {@code warranty.claim.snapshot} envelope's {@code aggregateVersion} must be strictly
+     * monotonic across every aggregate mutation (consumers dedupe/order by it). Pessimistic
+     * force-increment bumps the version immediately (visible to the snapshot flush) and
+     * serializes concurrent child mutations against claim-header changes.
+     */
+    private void bumpClaimAggregateVersion(@NonNull WarrantyClaim claim) {
+        entityManager.lock(claim, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
     }
 
     private void publishRequested(WarrantyClaim claim, WarrantyClaimLine line, PartReturn partReturn) {

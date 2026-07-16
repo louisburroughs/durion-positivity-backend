@@ -51,11 +51,18 @@ public class InvoiceClientImpl implements InvoiceClient {
     }
 
     @Override
-    public @NonNull List<InvoiceLine> searchInvoiceLines(@NonNull UUID partyId) {
+    public @NonNull List<InvoiceLine> searchInvoiceLines(@NonNull UUID partyId, @Nullable String sku) {
         try {
             List<InvoiceLine> lines = restClient
                     .get()
-                    .uri(basePath + "/items/search?partyId={partyId}", partyId)
+                    .uri(uriBuilder -> {
+                        var builder =
+                                uriBuilder.path(basePath + "/items/search").queryParam("partyId", partyId);
+                        if (sku != null && !sku.isBlank()) {
+                            builder = builder.queryParam("q", sku.trim());
+                        }
+                        return builder.build();
+                    })
                     .header("X-User", SERVICE_USER)
                     .header("X-Authorities", AUTHORITIES)
                     .retrieve()
@@ -147,12 +154,16 @@ public class InvoiceClientImpl implements InvoiceClient {
             log.warn("Adjustment applied on invoice {} but response exposed no adjustment entries", invoiceId);
             return Optional.empty();
         }
-        // Prefer the entry carrying our externalReference; fall back to the newest
-        // WARRANTY entry (the one this call just created on a success response).
+        // Prefer the NEWEST entry carrying our externalReference (entries are returned in
+        // insertion order, and a claim may legitimately settle more than once — the entry this
+        // call just created is the newest match); fall back to the newest WARRANTY entry.
         Optional<UUID> byReference = response.adjustmentEntries().stream()
+                .filter(entry -> ADJUSTMENT_TYPE_WARRANTY.equals(entry.type()))
                 .filter(entry -> externalReference != null && externalReference.equals(entry.externalReference()))
+                .max(Comparator.comparing(
+                        AdjustmentEntryWire::createdAt, Comparator.nullsFirst(Comparator.naturalOrder())))
                 .map(AdjustmentEntryWire::id)
-                .findFirst();
+                .filter(Objects::nonNull);
         if (byReference.isPresent()) {
             return byReference;
         }

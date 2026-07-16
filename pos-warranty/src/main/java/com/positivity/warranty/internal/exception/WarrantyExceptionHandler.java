@@ -2,6 +2,7 @@ package com.positivity.warranty.internal.exception;
 
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Clock;
@@ -13,6 +14,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -142,6 +144,16 @@ public class WarrantyExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
         return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "You do not have permission to perform this action", request);
+    }
+
+    /**
+     * Concurrent writes to the same versioned aggregate (every mutating claim flow is
+     * load-modify-save on an {@code @Version}-ed entity) are expected, retryable conflicts —
+     * 409, never the 500 catch-all (mirrors pos-catalog {@code CatalogExceptionHandler}).
+     */
+    @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockException.class})
+    public ResponseEntity<ApiError> handleOptimisticLockConflict(Exception ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "CONFLICT", "Resource was updated concurrently. Please retry.", request);
     }
 
     @ExceptionHandler(Exception.class)

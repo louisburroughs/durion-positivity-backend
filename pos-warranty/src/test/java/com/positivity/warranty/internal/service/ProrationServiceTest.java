@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.positivity.warranty.internal.dto.ProrationOutcome;
 import com.positivity.warranty.internal.entity.WarrantyClaimLine;
 import com.positivity.warranty.internal.entity.WarrantyPolicy;
+import com.positivity.warranty.internal.enums.LineSourceType;
 import com.positivity.warranty.internal.enums.ProrationMethod;
 import java.math.BigDecimal;
 import java.util.List;
@@ -243,5 +244,61 @@ class ProrationServiceTest {
 
         assertThat(outcome.amountRequested()).isEqualByComparingTo("59.99");
         assertThat(outcome.inputs()).containsEntry("quantity", BigDecimal.ONE);
+    }
+
+    // --- Labor terms (PRD §3.2/§6) -----------------------------------------------------------
+
+    private static WarrantyClaimLine laborLine(String rate, String hours) {
+        return WarrantyClaimLine.builder()
+                .sourceType(LineSourceType.WORKORDER_SERVICE)
+                .originalUnitPrice(new BigDecimal(rate))
+                .quantity(new BigDecimal(hours))
+                .build();
+    }
+
+    @Test
+    void laborLine_notCovered_yieldsZeroCredit() {
+        WarrantyPolicy policy = WarrantyPolicy.builder()
+                .prorationMethod(ProrationMethod.NONE)
+                .laborCovered(false)
+                .build();
+
+        ProrationOutcome outcome = service.prorate(policy, laborLine("120.00", "2"), null, null);
+
+        assertThat(outcome.amountRequested()).isEqualByComparingTo("0");
+        assertThat(outcome.inputs()).containsEntry("laborCovered", false);
+    }
+
+    @Test
+    void laborLine_coveredWithCaps_clampsHoursAndRate() {
+        WarrantyPolicy policy = WarrantyPolicy.builder()
+                .prorationMethod(ProrationMethod.NONE)
+                .laborCovered(true)
+                .laborHoursCap(new BigDecimal("1.50"))
+                .laborRateCap(new BigDecimal("100.00"))
+                .build();
+
+        ProrationOutcome outcome = service.prorate(policy, laborLine("120.00", "2"), null, null);
+
+        // min(2, 1.5) hours x min(120, 100) rate = 150
+        assertThat(outcome.amountRequested()).isEqualByComparingTo("150.00");
+        assertThat(outcome.inputs())
+                .containsEntry("laborCovered", true)
+                .containsEntry("laborHoursCap", new BigDecimal("1.50"))
+                .containsEntry("laborRateCap", new BigDecimal("100.00"));
+    }
+
+    @Test
+    void partLine_ignoresLaborTerms() {
+        WarrantyPolicy policy = WarrantyPolicy.builder()
+                .prorationMethod(ProrationMethod.NONE)
+                .laborCovered(false)
+                .laborRateCap(new BigDecimal("1.00"))
+                .build();
+
+        ProrationOutcome outcome = service.prorate(policy, line("100.00", "2"), null, null);
+
+        assertThat(outcome.amountRequested()).isEqualByComparingTo("200.00");
+        assertThat(outcome.inputs()).doesNotContainKey("laborCovered");
     }
 }

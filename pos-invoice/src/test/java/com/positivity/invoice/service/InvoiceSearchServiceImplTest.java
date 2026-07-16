@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -189,9 +190,10 @@ class InvoiceSearchServiceImplTest {
         item.setWorkorderItemId(workorderItemId);
         item.setType("PART");
 
-        when(invoiceItemRepository.findByInvoicePartyId(partyUuid.toString())).thenReturn(List.of(item));
+        when(invoiceItemRepository.findByInvoicePartyId(eq(partyUuid.toString()), isNull(), any(Pageable.class)))
+                .thenReturn(List.of(item));
 
-        List<InvoiceLineSearchResult> results = invoiceSearchService.searchLinesByParty(partyUuid);
+        List<InvoiceLineSearchResult> results = invoiceSearchService.searchLinesByParty(partyUuid, null);
 
         assertThat(results).hasSize(1);
         InvoiceLineSearchResult row = results.get(0);
@@ -211,9 +213,10 @@ class InvoiceSearchServiceImplTest {
     @Test
     void searchLinesByParty_noInvoices_returnsEmptyList() {
         UUID partyUuid = UUID.fromString("33333333-0000-0000-0000-000000000002");
-        when(invoiceItemRepository.findByInvoicePartyId(partyUuid.toString())).thenReturn(List.of());
+        when(invoiceItemRepository.findByInvoicePartyId(eq(partyUuid.toString()), isNull(), any(Pageable.class)))
+                .thenReturn(List.of());
 
-        assertThat(invoiceSearchService.searchLinesByParty(partyUuid)).isEmpty();
+        assertThat(invoiceSearchService.searchLinesByParty(partyUuid, null)).isEmpty();
     }
 
     @Test

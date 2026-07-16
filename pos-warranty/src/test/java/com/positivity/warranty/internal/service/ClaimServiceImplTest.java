@@ -415,6 +415,8 @@ class ClaimServiceImplTest {
             assertThat(history.getValue().getToStatus()).isEqualTo(ClaimStatus.SUBMITTED);
             assertThat(history.getValue().getReason()).isEqualTo("claim submitted");
             assertThat(history.getValue().getActor()).isNotBlank();
+            // ADR-0044 R3 / PRD §9.3: every committed claim mutation emits the full snapshot.
+            verify(claimSnapshotPublisher).publish(CLAIM_ID);
         }
 
         @Test
@@ -439,6 +441,8 @@ class ClaimServiceImplTest {
                     .satisfies(ex -> assertThat(((IllegalClaimStateException) ex).getNextAction())
                             .contains("SETTLED"));
             verify(eligibilityService, never()).evaluate(any());
+            // Refused mutation must not emit a snapshot — snapshot iff commit (ADR-0044 R3).
+            verify(claimSnapshotPublisher, never()).publish(any());
         }
 
         @Test
@@ -471,6 +475,7 @@ class ClaimServiceImplTest {
             verify(eligibilityService).evaluate(CLAIM_ID);
             verify(statusHistoryRepository, never()).save(any());
             verify(claimRepository, never()).save(any());
+            verify(claimSnapshotPublisher, never()).publish(any());
         }
 
         @Test
@@ -527,6 +532,8 @@ class ClaimServiceImplTest {
             assertThat(response.decidedBy()).isNotBlank();
             assertThat(response.decidedAt()).isNotNull();
             assertThat(response.overrodeSuggestion()).isFalse();
+            // ADR-0044 R3 / PRD §9.3: every committed claim mutation emits the full snapshot.
+            verify(claimSnapshotPublisher).publish(CLAIM_ID);
         }
 
         @Test
@@ -846,6 +853,7 @@ class ClaimServiceImplTest {
             ArgumentCaptor<ClaimStatusHistory> history = ArgumentCaptor.captor();
             verify(statusHistoryRepository).save(history.capture());
             assertThat(history.getValue().getReason()).isEqualTo("customer withdrew");
+            verify(claimSnapshotPublisher).publish(CLAIM_ID);
         }
 
         @Test
@@ -856,6 +864,7 @@ class ClaimServiceImplTest {
                     .isInstanceOf(IllegalClaimStateException.class)
                     .satisfies(ex -> assertThat(((IllegalClaimStateException) ex).getNextAction())
                             .contains("SETTLED"));
+            verify(claimSnapshotPublisher, never()).publish(any());
         }
     }
 
@@ -885,6 +894,7 @@ class ClaimServiceImplTest {
             ClaimResponse response = service.close(CLAIM_ID, new ClaimActionRequest(null));
 
             assertThat(response.status()).isEqualTo(ClaimStatus.CLOSED);
+            verify(claimSnapshotPublisher).publish(CLAIM_ID);
         }
 
         @Test
@@ -901,6 +911,7 @@ class ClaimServiceImplTest {
 
             assertThat(service.close(CLAIM_ID, new ClaimActionRequest(null)).status())
                     .isEqualTo(ClaimStatus.CLOSED);
+            verify(claimSnapshotPublisher).publish(CLAIM_ID);
         }
 
         @Test
@@ -918,6 +929,7 @@ class ClaimServiceImplTest {
                         assertThat(e.getNextAction()).contains("CREDIT_RECEIVED");
                     });
             verify(claimRepository, never()).save(any());
+            verify(claimSnapshotPublisher, never()).publish(any());
         }
 
         @Test
@@ -932,6 +944,7 @@ class ClaimServiceImplTest {
                     .isInstanceOf(IllegalClaimStateException.class)
                     .satisfies(ex -> assertThat(((IllegalClaimStateException) ex).getCode())
                             .isEqualTo(ClaimServiceImpl.CLOSE_BLOCKED_CODE));
+            verify(claimSnapshotPublisher, never()).publish(any());
         }
 
         @Test
@@ -957,6 +970,7 @@ class ClaimServiceImplTest {
                         assertThat(e.getNextAction()).contains("part-returns");
                     });
             verify(claimRepository, never()).save(any());
+            verify(claimSnapshotPublisher, never()).publish(any());
         }
 
         @Test
@@ -978,6 +992,7 @@ class ClaimServiceImplTest {
 
             assertThat(service.close(CLAIM_ID, new ClaimActionRequest(null)).status())
                     .isEqualTo(ClaimStatus.CLOSED);
+            verify(claimSnapshotPublisher).publish(CLAIM_ID);
         }
 
         @Test
@@ -990,6 +1005,7 @@ class ClaimServiceImplTest {
             assertThat(service.close(CLAIM_ID, new ClaimActionRequest("denied and done"))
                             .status())
                     .isEqualTo(ClaimStatus.CLOSED);
+            verify(claimSnapshotPublisher).publish(CLAIM_ID);
         }
 
         @Test
@@ -1003,6 +1019,7 @@ class ClaimServiceImplTest {
                             .contains("DENIED"));
             verify(reimbursementRepository, never()).findByClaimId(any());
             verify(partReturnRepository, never()).findByClaimId(any());
+            verify(claimSnapshotPublisher, never()).publish(any());
         }
     }
 

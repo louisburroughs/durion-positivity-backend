@@ -80,7 +80,11 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
             + "OR w.customerId IN :customerIds "
             + "OR (:idQuery IS NOT NULL AND w.id = :idQuery)) "
             + "AND (:customerId IS NULL OR w.customerId = :customerId) "
-            + "AND (:vehicleId IS NULL OR w.vehicleId = :vehicleId)")
+            + "AND (:vehicleId IS NULL OR w.vehicleId = :vehicleId) "
+            // Deterministic default order (newest first) so pagination is stable — without it
+            // Postgres returns plan-dependent order and page-1-only consumers silently drop
+            // rows. A caller-supplied Pageable sort is appended after this.
+            + "ORDER BY w.createdAt DESC")
     Page<Workorder> searchByQuery(
             @Param("q") String q,
             @Param("customerIds") Collection<UUID> customerIds,

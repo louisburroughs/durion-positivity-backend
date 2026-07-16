@@ -25,6 +25,7 @@ import com.positivity.warranty.internal.repository.ClaimSettlementRepository;
 import com.positivity.warranty.internal.repository.ClaimStatusHistoryRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.EnumSet;
@@ -36,7 +37,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -73,11 +77,27 @@ public class SettlementServiceImpl implements SettlementService {
     private final EntityManager entityManager;
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
 
+    /**
+     * Self-reference (lazy to break the construction cycle, pos-invoice
+     * {@code InvoiceServiceImpl} pattern) so {@link #persistPendingSettlement} runs through the
+     * Spring proxy in a {@code REQUIRES_NEW} transaction.
+     */
+    private SettlementServiceImpl self;
+
+    @Autowired
+    public void setSelf(@Lazy SettlementServiceImpl self) {
+        this.self = self;
+    }
+
     @Override
     @NonNull
     @Transactional(noRollbackFor = WarrantyIntegrationException.class)
     public SettlementResponse create(@NonNull UUID claimId, @NonNull SettlementCreateRequest request) {
         WarrantyClaim claim = loadClaim(claimId);
+        // Serialize concurrent settlements of the same claim BEFORE any money moves: two clerks
+        // settling an APPROVED claim at once must queue here, not collide on the claim's
+        // optimistic @Version at commit — after the pos-invoice write has already happened.
+        entityManager.lock(claim, LockModeType.PESSIMISTIC_WRITE);
         if (!SETTLEABLE_CLAIM_STATES.contains(claim.getStatus())) {
             throw new IllegalClaimStateException(
                     CLAIM_STATE_CODE,
@@ -139,15 +159,18 @@ public class SettlementServiceImpl implements SettlementService {
         UUID invoiceId =
                 require(request.invoiceId(), "invoiceId is required for " + request.settlementType() + " settlements");
         settlement.setInvoiceId(invoiceId);
-        // Persist PENDING first so the FAILED outcome survives the rethrow (noRollbackFor).
-        settlementRepository.save(settlement);
+        // Persist PENDING in its own committed transaction BEFORE money moves, so a durable
+        // trace of the attempted invoice write survives even if this transaction later rolls
+        // back for a non-integration failure. The settlement id doubles as the idempotency
+        // key (externalReference) pos-invoice dedupes on.
+        self.persistPendingSettlement(settlement);
         try {
             Optional<UUID> adjustmentId = invoiceClient.createAdjustment(
                     invoiceId,
                     request.coveredAmount(),
                     "Warranty claim " + claim.getClaimCode() + " " + request.settlementType() + " settlement",
                     currentActor(),
-                    claim.getClaimCode());
+                    settlement.getId().toString());
             settlement.setInvoiceAdjustmentId(adjustmentId.orElse(null));
             settlement.setStatus(SettlementStatus.COMPLETED);
         } catch (WarrantyIntegrationException ex) {
@@ -163,10 +186,15 @@ public class SettlementServiceImpl implements SettlementService {
         UUID invoiceId = require(request.invoiceId(), "invoiceId is required for REFUND settlements");
         UUID paymentId = require(request.paymentId(), "paymentId is required for REFUND settlements");
         settlement.setInvoiceId(invoiceId);
-        settlementRepository.save(settlement);
+        // Durable PENDING trace + per-settlement idempotency key — see executeInvoiceAdjustment.
+        self.persistPendingSettlement(settlement);
         try {
             Optional<UUID> refundId = invoiceClient.createRefund(
-                    invoiceId, paymentId, request.coveredAmount(), request.notes(), claim.getClaimCode());
+                    invoiceId,
+                    paymentId,
+                    request.coveredAmount(),
+                    request.notes(),
+                    settlement.getId().toString());
             settlement.setRefundRecordId(refundId.orElse(null));
             settlement.setStatus(SettlementStatus.COMPLETED);
         } catch (WarrantyIntegrationException ex) {
@@ -175,9 +203,22 @@ public class SettlementServiceImpl implements SettlementService {
         }
     }
 
+    /**
+     * Persists the PENDING settlement row in its own committed transaction so the attempted
+     * money write is durably traceable regardless of what the calling transaction does next.
+     * Public only so the call goes through the Spring proxy ({@code REQUIRES_NEW}).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ClaimSettlement persistPendingSettlement(@NonNull ClaimSettlement settlement) {
+        return settlementRepository.saveAndFlush(settlement);
+    }
+
     private void markFailed(@NonNull ClaimSettlement settlement, @NonNull WarrantyIntegrationException cause) {
         settlement.setStatus(SettlementStatus.FAILED);
         settlementRepository.save(settlement);
+        // The FAILED row is a committed aggregate mutation (noRollbackFor) — emit the claim
+        // snapshot alongside it so ADR-0044 R3 replicas never drift (snapshot iff commit).
+        claimSnapshotPublisher.publish(settlement.getClaimId());
         log.warn(
                 "Settlement {} for claim {} FAILED: {}",
                 settlement.getSettlementType(),

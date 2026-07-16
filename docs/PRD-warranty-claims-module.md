@@ -274,7 +274,10 @@ and reason are audited.
 
 ## 8. API surface (v1)
 
-Gateway: `X-API-Version: 1`, external path `/warranty/...` → `lb://WARRANTY /v1/warranty/...`.
+Gateway: `X-API-Version: 1`, external path `/warranty/warranty/...` → `lb://WARRANTY /v1/warranty/...`
+(the first `/warranty` segment routes to the service and is stripped; the version header is
+rewritten into the path — same doubled-segment convention as `pos-inventory`. Pre-versioned form:
+`/warranty/v1/warranty/...`).
 Thin controllers, `@PreAuthorize` per endpoint, `@EmitEvent` on all state-changing endpoints.
 
 | Endpoint | Purpose | Permission |

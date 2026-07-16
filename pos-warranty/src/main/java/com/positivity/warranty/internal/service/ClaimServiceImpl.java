@@ -100,6 +100,12 @@ public class ClaimServiceImpl implements ClaimService {
     @NonNull
     @Transactional
     public ClaimResponse create(@NonNull ClaimCreateRequest request) {
+        // Vehicle snapshot (PRD §3.4): VIN + odometer read from pos-vehicle-inventory and frozen.
+        // The read client degrades to empty on outage; the claim is still created (walk-in
+        // resilience) and the snapshot stays null. Fetched BEFORE the claim code is allocated
+        // so the per-year claim_code_sequence row lock is never held across the remote call.
+        var vehicleSnapshot = vehicleInventoryClient.getVehicle(request.vehicleId());
+
         WarrantyClaim claim = WarrantyClaim.builder()
                 .claimCode(claimCodeService.nextClaimCode())
                 .claimType(request.claimType())
@@ -118,10 +124,7 @@ public class ClaimServiceImpl implements ClaimService {
                         request.photoEvidenceUrls() == null ? null : List.copyOf(request.photoEvidenceUrls()))
                 .build();
 
-        // Vehicle snapshot (PRD §3.4): VIN + odometer read from pos-vehicle-inventory and frozen.
-        // The read client degrades to empty on outage; the claim is still created (walk-in
-        // resilience) and the snapshot stays null.
-        vehicleInventoryClient.getVehicle(request.vehicleId()).ifPresent(snapshot -> {
+        vehicleSnapshot.ifPresent(snapshot -> {
             claim.setVin(snapshot.vin());
             claim.setOdometerAtClaim(
                     snapshot.odometerValue() == null
@@ -167,7 +170,9 @@ public class ClaimServiceImpl implements ClaimService {
                     .map(ClaimServiceImpl::toSummary)
                     .map(List::of)
                     .orElse(List.of());
-            return new PageImpl<>(match, pageable, match.size());
+
+            // Claim codes are unique, so any page past the first is empty by definition.
+            return new PageImpl<>(pageable.getOffset() == 0 ? match : List.of(), pageable, match.size());
         }
         return claimRepository
                 .search(customerId, vehicleId, status, locationId, pageable)
@@ -695,7 +700,7 @@ public class ClaimServiceImpl implements ClaimService {
                                 p.getShippedAt(),
                                 p.getHoldLocationNote()))
                         .toList(),
-                statusHistoryRepository.findByClaimIdOrderByCreatedAtAsc(claimId).stream()
+                statusHistoryRepository.findByClaimIdOrderByCreatedAtAscIdAsc(claimId).stream()
                         .map(h -> new ClaimResponse.StatusHistoryView(
                                 h.getId(),
                                 h.getFromStatus(),

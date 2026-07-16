@@ -582,7 +582,7 @@ paths:
       tags:
       - Invoice
       summary: Apply invoice adjustment
-      description: Apply discount, fee, or correction to a draft invoice
+      description: Apply discount, fee, correction, or warranty credit to a draft invoice
       operationId: applyAdjustment
       parameters:
       - name: invoiceId
@@ -796,6 +796,52 @@ paths:
         - invoice:manage
       x-required-permissions:
       - invoice:manage
+  /v1/invoices/items/search:
+    get:
+      tags:
+      - Invoice Search
+      summary: Search invoice line items by customer party
+      description: Returns invoice line items belonging to the given customer party, optionally narrowed by a SKU/description term, flattened with the owning invoice's number, status, and creation time. Newest invoice first, bounded to the newest 200 lines. Built for warranty-claim correlation.
+      operationId: searchInvoiceLines
+      parameters:
+      - name: partyId
+        in: query
+        description: Customer party identifier owning the invoices (required)
+        required: true
+        schema:
+          type: string
+      - name: q
+        in: query
+        description: SKU / description term narrowing the lines (optional)
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: List of matching invoice line items returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvoiceLineSearchResult'
+        '400':
+          description: Missing or malformed partyId.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the invoice:manage authority.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - invoice:manage
+      x-required-permissions:
+      - invoice:manage
 components:
   schemas:
     BillingRulesDTO:
@@ -889,6 +935,11 @@ components:
           format: uuid
           description: Shop location where the sale is made; used to resolve the tax jurisdiction address.
           example: 01960003-0000-7000-8000-000000000001
+        customerId:
+          type: string
+          format: uuid
+          description: Customer party owning the workorder; stored on the invoice for party-scoped lookups (e.g. warranty origin-line search).
+          example: 550e8400-e29b-41d4-a716-446655440003
         idempotencyKey:
           type: string
           description: Idempotency key to prevent duplicate invoice creation.
@@ -1013,6 +1064,7 @@ components:
           - DISCOUNT
           - FEE
           - CORRECTION
+          - WARRANTY
           example: DISCOUNT
         amount:
           type: number
@@ -1026,6 +1078,10 @@ components:
           type: string
           description: Identifier of the actor who authorized the adjustment
           example: jdoe
+        externalReference:
+          type: string
+          description: Optional correlation id to an external record (e.g. a warranty claim code)
+          example: WC-2026-000042
         createdAt:
           type: string
           format: date-time
@@ -1392,6 +1448,12 @@ components:
           type: string
           description: Optional free-text notes explaining the refund
           example: Returned damaged part
+        externalReference:
+          type: string
+          description: Optional correlation id to an external record (e.g. a warranty claim settlement)
+          example: WC-2026-000042
+          maxLength: 64
+          minLength: 0
       required:
       - amount
       - reason
@@ -1448,6 +1510,10 @@ components:
           type: string
           description: Gateway reference identifier for the refund
           example: re_3NXyZ2eZvKYlo2Ca
+        externalReference:
+          type: string
+          description: Optional correlation id to an external record (e.g. a warranty claim settlement)
+          example: WC-2026-000042
         completedAt:
           type: string
           format: date-time
@@ -1507,6 +1573,7 @@ components:
           - DISCOUNT
           - FEE
           - CORRECTION
+          - WARRANTY
           example: DISCOUNT
         amount:
           type: number
@@ -1523,6 +1590,12 @@ components:
           description: Identifier of the actor who authorized the adjustment
           example: jdoe
           minLength: 1
+        externalReference:
+          type: string
+          description: Optional correlation id to an external record (e.g. a warranty claim code)
+          example: WC-2026-000042
+          maxLength: 64
+          minLength: 0
       required:
       - amount
       - authorizedBy
@@ -1706,12 +1779,12 @@ components:
     PageInvoiceSearchResult:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -1762,6 +1835,60 @@ components:
           type: boolean
         unsorted:
           type: boolean
+    InvoiceLineSearchResult:
+      type: object
+      description: Invoice line item with owning-invoice context, matched by customer party
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+          description: Identifier of the owning invoice
+          example: 550e8400-e29b-41d4-a716-446655440000
+        invoiceNumber:
+          type: string
+          description: Human invoice number
+          example: INV-2026-1001
+        invoiceItemId:
+          type: string
+          format: uuid
+          description: Identifier of the invoice line item
+          example: 01960003-0000-7000-8000-000000000010
+        description:
+          type: string
+          description: Line item description
+          example: Front brake pads
+        quantity:
+          type: number
+          description: Quantity sold
+          example: 2.0
+        unitPrice:
+          type: number
+          description: Unit price
+          example: 64.99
+        amount:
+          type: number
+          description: Line total amount
+          example: 129.98
+        workorderItemId:
+          type: string
+          format: uuid
+          description: Originating workorder item identifier, when known
+        itemType:
+          type: string
+          description: Line item type (e.g. PART, LABOR)
+          example: PART
+        invoiceStatus:
+          type: string
+          description: Current status of the owning invoice
+          example: POSTED
+        invoiceCreatedAt:
+          type: string
+          format: date-time
+          description: Creation timestamp of the owning invoice
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - invoiceId
+      - invoiceItemId
   securitySchemes:
     bearerAuth:
       type: http

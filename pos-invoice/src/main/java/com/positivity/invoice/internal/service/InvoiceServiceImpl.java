@@ -136,12 +136,28 @@ public class InvoiceServiceImpl implements InvoiceService {
         validateDraftState(invoice);
         validateAdjustmentRequest(request);
 
+        // Idempotent replay guard: a caller retrying after a transport timeout (its POST may
+        // have committed here already) supplies the same externalReference — return the
+        // existing adjustment instead of double-crediting (PaymentIntent.idempotencyKey
+        // pattern; warranty settlements pass their settlement id).
+        String externalReference = normalizeExternalReference(request.getExternalReference());
+        if (externalReference != null) {
+            boolean alreadyApplied = invoice.getAdjustmentEntries().stream()
+                    .anyMatch(existing -> Objects.equals(existing.getType(), request.getType())
+                            && externalReference.equals(existing.getExternalReference()));
+            if (alreadyApplied) {
+                InvoiceDetailsResponse existing = toDetailsResponse(invoice);
+                existing.setWorkorderNumber(resolveWorkorderNumber(invoice.getWorkorderId()));
+                return existing;
+            }
+        }
+
         InvoiceAdjustment adjustment = new InvoiceAdjustment();
         adjustment.setType(Objects.requireNonNull(request.getType(), "adjustment type is required"));
         adjustment.setAmount(request.getAmount().setScale(4, RoundingMode.HALF_UP));
         adjustment.setReason(request.getReason().trim());
         adjustment.setAuthorizedBy(request.getAuthorizedBy().trim());
-        adjustment.setExternalReference(normalizeExternalReference(request.getExternalReference()));
+        adjustment.setExternalReference(externalReference);
 
         invoice.addAdjustment(adjustment);
         recalculateTotals(invoice);
@@ -160,6 +176,10 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setEstimateId(request.getEstimateId());
         invoice.setApprovalId(request.getApprovalId());
         invoice.setLocationId(request.getLocationId());
+        // Canonical lowercase form (UUID.toString()) — party-scoped lookups
+        // (InvoiceSearchServiceImpl.searchLinesByParty) match on the string column.
+        invoice.setPartyId(
+                request.getCustomerId() == null ? null : request.getCustomerId().toString());
         invoice.setStatus(InvoiceStatus.DRAFT);
         invoice.setAdjustments(BigDecimal.ZERO);
         invoice.setAdjustmentsAmount(BigDecimal.ZERO);

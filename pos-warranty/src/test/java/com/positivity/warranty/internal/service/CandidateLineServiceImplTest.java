@@ -2,6 +2,7 @@ package com.positivity.warranty.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.positivity.warranty.internal.client.CatalogClient;
@@ -98,7 +99,8 @@ class CandidateLineServiceImplTest {
 
     @Test
     void combinesInvoiceAndWorkorderSources_whenUnfiltered() {
-        when(invoiceClient.searchInvoiceLines(CUSTOMER_ID)).thenReturn(List.of(invoiceLine("SuperTire 225/45R17")));
+        when(invoiceClient.searchInvoiceLines(eq(CUSTOMER_ID), any()))
+                .thenReturn(List.of(invoiceLine("SuperTire 225/45R17")));
         when(workorderClient.searchWorkorders(CUSTOMER_ID, VEHICLE_ID)).thenReturn(List.of(workorderSummary()));
         when(workorderClient.getWorkorderDetail(WORKORDER_ID))
                 .thenReturn(Optional.of(workorderDetail(PRODUCT_ID, "SuperTire 225/45R17")));
@@ -145,7 +147,7 @@ class CandidateLineServiceImplTest {
         when(catalogClient.getProduct(PRODUCT_ID))
                 .thenReturn(Optional.of(new CatalogClient.ProductInfo(
                         PRODUCT_ID, "TIRE-1", "SuperTire", null, null, null, null, "Tires", null, null)));
-        when(invoiceClient.searchInvoiceLines(CUSTOMER_ID))
+        when(invoiceClient.searchInvoiceLines(eq(CUSTOMER_ID), any()))
                 .thenReturn(List.of(invoiceLine("SuperTire 225/45R17"), invoiceLine("Oil change")));
         when(workorderClient.searchWorkorders(CUSTOMER_ID, null)).thenReturn(List.of(workorderSummary()));
         when(workorderClient.getWorkorderDetail(WORKORDER_ID))
@@ -168,7 +170,7 @@ class CandidateLineServiceImplTest {
 
     @Test
     void skuFilter_matchesDescriptionsCaseInsensitively() {
-        when(invoiceClient.searchInvoiceLines(CUSTOMER_ID))
+        when(invoiceClient.searchInvoiceLines(eq(CUSTOMER_ID), any()))
                 .thenReturn(List.of(invoiceLine("Tire WX-100 all season"), invoiceLine("Wiper blades")));
         when(workorderClient.searchWorkorders(CUSTOMER_ID, null)).thenReturn(List.of());
 
@@ -180,7 +182,8 @@ class CandidateLineServiceImplTest {
 
     @Test
     void degradesToPartialResults_whenWorkorderServiceIsDown() {
-        when(invoiceClient.searchInvoiceLines(CUSTOMER_ID)).thenReturn(List.of(invoiceLine("SuperTire 225/45R17")));
+        when(invoiceClient.searchInvoiceLines(eq(CUSTOMER_ID), any()))
+                .thenReturn(List.of(invoiceLine("SuperTire 225/45R17")));
         when(workorderClient.searchWorkorders(CUSTOMER_ID, VEHICLE_ID))
                 .thenThrow(new IllegalStateException("workorder service down"));
 
@@ -192,7 +195,8 @@ class CandidateLineServiceImplTest {
 
     @Test
     void degradesToPartialResults_whenInvoiceServiceIsDown() {
-        when(invoiceClient.searchInvoiceLines(CUSTOMER_ID)).thenThrow(new IllegalStateException("invoice down"));
+        when(invoiceClient.searchInvoiceLines(eq(CUSTOMER_ID), any()))
+                .thenThrow(new IllegalStateException("invoice down"));
         when(workorderClient.searchWorkorders(CUSTOMER_ID, null)).thenReturn(List.of(workorderSummary()));
         when(workorderClient.getWorkorderDetail(any(UUID.class)))
                 .thenReturn(Optional.of(workorderDetail(PRODUCT_ID, "SuperTire")));

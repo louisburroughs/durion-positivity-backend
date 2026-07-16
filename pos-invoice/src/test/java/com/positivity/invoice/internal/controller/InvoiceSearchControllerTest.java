@@ -118,7 +118,7 @@ class InvoiceSearchControllerTest {
                 .invoiceStatus("POSTED")
                 .invoiceCreatedAt(Instant.parse("2026-01-15T09:30:00Z"))
                 .build();
-        when(invoiceSearchService.searchLinesByParty(partyId)).thenReturn(List.of(line));
+        when(invoiceSearchService.searchLinesByParty(partyId, null)).thenReturn(List.of(line));
 
         mockMvc.perform(get("/v1/invoices/items/search").param("partyId", partyId.toString()))
                 .andExpect(status().isOk())

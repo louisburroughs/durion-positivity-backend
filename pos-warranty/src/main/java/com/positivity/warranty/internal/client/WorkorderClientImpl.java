@@ -46,7 +46,12 @@ public class WorkorderClientImpl implements WorkorderClient {
             SearchPageWire page = restClient
                     .get()
                     .uri(uriBuilder -> {
-                        var builder = uriBuilder.path(basePath + "/search").queryParam("size", SEARCH_PAGE_SIZE);
+                        // Explicit newest-first sort so the single fetched page is deterministic
+                        // even if the remote default ordering changes.
+                        var builder = uriBuilder
+                                .path(basePath + "/search")
+                                .queryParam("size", SEARCH_PAGE_SIZE)
+                                .queryParam("sort", "createdAt,desc");
                         if (customerId != null) {
                             builder = builder.queryParam("customerId", customerId);
                         }
@@ -61,6 +66,15 @@ public class WorkorderClientImpl implements WorkorderClient {
                     .body(SearchPageWire.class);
             if (page == null || page.content() == null) {
                 return List.of();
+            }
+            if (page.totalElements() != null && page.totalElements() > SEARCH_PAGE_SIZE) {
+                log.warn(
+                        "Workorder candidate search truncated for customerId={} vehicleId={}:"
+                                + " {} matches, only newest {} fetched",
+                        customerId,
+                        vehicleId,
+                        page.totalElements(),
+                        SEARCH_PAGE_SIZE);
             }
             return page.content().stream()
                     .map(row -> new WorkorderSummary(
@@ -147,7 +161,7 @@ public class WorkorderClientImpl implements WorkorderClient {
     // Wire shapes (mirror the pos-workorder API contract; unknown properties ignored)
     // -----------------------------------------------------------------------
 
-    private record SearchPageWire(List<SearchRowWire> content) {}
+    private record SearchPageWire(List<SearchRowWire> content, Long totalElements) {}
 
     private record SearchRowWire(
             UUID workorderId,

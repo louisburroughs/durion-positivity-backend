@@ -387,6 +387,48 @@ class EligibilityServiceImplTest {
     }
 
     @Test
+    void catalogDown_withMoreSpecificScopedPolicyAndAllFallback_isIndeterminateNotSilentDowngrade() {
+        WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
+        stubClaim(claim);
+        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.empty());
+        // With catalog facts missing the manufacturer policy cannot be evaluated; the ALL
+        // fallback must NOT silently win — the winner may be the wrong policy.
+        when(policyRepository.findEffectiveOn(SALE_DATE))
+                .thenReturn(List.of(
+                        manufacturerTreadPolicy(),
+                        allFreeReplacementPolicy(
+                                "Catch-all", UUID.fromString("018f0000-0000-7000-8000-000000000012"))));
+
+        EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
+
+        assertThat(evaluation.result()).isEqualTo(EligibilityResult.INDETERMINATE);
+        assertThat(claim.getPolicyId()).isNull();
+        assertThat(claim.getProviderId()).isNull();
+        assertThat(evaluation.reasons())
+                .anySatisfy(reason ->
+                        assertThat(reason).containsEntry("term", "policyMatch").containsEntry("indeterminate", true));
+    }
+
+    @Test
+    void durationBoundary_dayAfterExpiryIsIneligible_expiryDateItselfPasses() {
+        // 24-month policy sold on SALE_DATE: coverage runs through SALE_DATE + 24 months
+        // inclusive; ChronoUnit truncation must not grant a partial-month grace window.
+        WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
+        claim.setFailureDate(SALE_DATE.plusMonths(24).plusDays(1));
+        stubClaim(claim);
+        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(manufacturerTreadPolicy()));
+
+        assertThat(service.evaluate(CLAIM_ID).result()).isEqualTo(EligibilityResult.INELIGIBLE);
+
+        claim.setFailureDate(SALE_DATE.plusMonths(24));
+        EligibilityEvaluation onExpiry = service.evaluate(CLAIM_ID);
+        assertThat(onExpiry.reasons())
+                .anySatisfy(reason ->
+                        assertThat(reason).containsEntry("term", "duration").containsEntry("pass", true));
+    }
+
+    @Test
     void unverifiedOrigin_isIndeterminateEvenWhenTermsPass() {
         WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
         claim.setOriginUnverified(true);
@@ -505,11 +547,19 @@ class EligibilityServiceImplTest {
 
         EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
 
+        // A tie means no policy governs: nothing is selected, no terms adjudicated, no line
+        // amounts frozen — the claim routes to human review as INDETERMINATE.
         assertThat(claim.getPolicyId()).isNull();
         assertThat(claim.getProviderId()).isNull();
-        // the suggestion still names the top-sorted candidate
-        assertThat(evaluation.suggestedOutcome())
-                .containsEntry("policyId", first.getId().toString());
+        assertThat(evaluation.result()).isEqualTo(EligibilityResult.INDETERMINATE);
+        assertThat(claim.getLines().get(0).getAmountRequested()).isNull();
+        assertThat(claim.getLines().get(0).getProrationPct()).isNull();
+        assertThat(evaluation.suggestedOutcome()).containsEntry("policyId", null);
+        assertThat(evaluation.reasons()).anySatisfy(reason -> {
+            assertThat(reason).containsEntry("term", "policyMatch");
+            assertThat(reason.get("pass")).isNull();
+            assertThat(String.valueOf(reason.get("actual"))).contains("Plan A").contains("Plan B");
+        });
     }
 
     @Test

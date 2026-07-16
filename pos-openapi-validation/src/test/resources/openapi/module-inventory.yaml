@@ -25,6 +25,8 @@ modules:
     mode: STRICT
   pos-vehicle-inventory:
     mode: STRICT
+  pos-warranty:
+    mode: STRICT
   pos-event-receiver:
     mode: STRICT
   pos-vehicle-fitment:

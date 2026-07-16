@@ -79,9 +79,10 @@ public class InvoiceSearchController {
 
     @Operation(
             summary = "Search invoice line items by customer party",
-            description = "Returns every invoice line item belonging to the given customer party, "
-                    + "flattened with the owning invoice's number, status, and creation time. "
-                    + "Newest invoice first. Built for warranty-claim correlation.")
+            description = "Returns invoice line items belonging to the given customer party, "
+                    + "optionally narrowed by a SKU/description term, flattened with the owning "
+                    + "invoice's number, status, and creation time. Newest invoice first, bounded "
+                    + "to the newest 200 lines. Built for warranty-claim correlation.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "List of matching invoice line items returned."),
         @ApiResponse(
@@ -98,8 +99,12 @@ public class InvoiceSearchController {
     @EmitEvent(id = "INVOICE_ITEM_SEARCH", apiVersion = "1")
     public List<InvoiceLineSearchResult> searchInvoiceLines(
             @Parameter(description = "Customer party identifier owning the invoices (required)") @RequestParam @NonNull
-                    UUID partyId) {
-        return invoiceSearchService.searchLinesByParty(partyId);
+                    UUID partyId,
+            @Parameter(description = "SKU / description term narrowing the lines (optional)")
+                    @RequestParam(required = false)
+                    @Nullable
+                    String q) {
+        return invoiceSearchService.searchLinesByParty(partyId, q);
     }
 
     /** Clamp the requested page size to {@link #MAX_PAGE_SIZE}, preserving page index and sort. */

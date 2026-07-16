@@ -43,7 +43,7 @@ class WorkorderClientTest {
     @Test
     void searchWorkordersMapsPageContentAndPassesFilters() {
         server.expect(requestToUriTemplate(
-                        "http://workorder/v1/workorders/search?size=50&customerId={c}&vehicleId={v}",
+                        "http://workorder/v1/workorders/search?size=50&sort=createdAt,desc&customerId={c}&vehicleId={v}",
                         CUSTOMER_ID,
                         VEHICLE_ID))
                 .andExpect(method(HttpMethod.GET))
@@ -67,7 +67,9 @@ class WorkorderClientTest {
 
     @Test
     void searchWorkordersOmitsNullFilters() {
-        server.expect(requestToUriTemplate("http://workorder/v1/workorders/search?size=50&customerId={c}", CUSTOMER_ID))
+        server.expect(requestToUriTemplate(
+                        "http://workorder/v1/workorders/search?size=50&sort=createdAt,desc&customerId={c}",
+                        CUSTOMER_ID))
                 .andExpect(queryParam("customerId", CUSTOMER_ID.toString()))
                 .andRespond(withSuccess("{\"content\":[]}", MediaType.APPLICATION_JSON));
 
@@ -77,7 +79,9 @@ class WorkorderClientTest {
 
     @Test
     void searchWorkordersDegradesToEmptyListOnHttpError() {
-        server.expect(requestToUriTemplate("http://workorder/v1/workorders/search?size=50&customerId={c}", CUSTOMER_ID))
+        server.expect(requestToUriTemplate(
+                        "http://workorder/v1/workorders/search?size=50&sort=createdAt,desc&customerId={c}",
+                        CUSTOMER_ID))
                 .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
 
         assertThat(client.searchWorkorders(CUSTOMER_ID, null)).isEmpty();

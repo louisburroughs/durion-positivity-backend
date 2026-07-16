@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -66,6 +67,7 @@ class SettlementServiceImplTest {
     private static final UUID PAYMENT_ID = UUID.fromString("018f0000-0000-7000-8000-000000000306");
     private static final UUID ADJUSTMENT_ID = UUID.fromString("018f0000-0000-7000-8000-000000000307");
     private static final UUID REFUND_ID = UUID.fromString("018f0000-0000-7000-8000-000000000308");
+    private static final UUID SETTLEMENT_ID = UUID.fromString("018f0000-0000-7000-8000-000000000309");
     private static final Instant NOW = Instant.parse("2026-07-15T12:00:00Z");
     private static final BigDecimal COVERED = new BigDecimal("80.0000");
     private static final BigDecimal CUSTOMER = new BigDecimal("20.0000");
@@ -115,6 +117,8 @@ class SettlementServiceImplTest {
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 entityManager,
                 outboxEventWriterProvider);
+        // Unit scope: route the REQUIRES_NEW pending persist back into the same instance.
+        service.setSelf(service);
     }
 
     private static WarrantyClaim claim(ClaimStatus status) {
@@ -145,7 +149,17 @@ class SettlementServiceImplTest {
     }
 
     private void stubSaveEcho() {
-        when(settlementRepository.save(any(ClaimSettlement.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(settlementRepository.save(any(ClaimSettlement.class))).thenAnswer(inv -> inv.getArgument(0));
+        // persistPendingSettlement (REQUIRES_NEW) uses saveAndFlush and assigns the id.
+        lenient()
+                .when(settlementRepository.saveAndFlush(any(ClaimSettlement.class)))
+                .thenAnswer(inv -> {
+                    ClaimSettlement settlement = inv.getArgument(0);
+                    if (settlement.getId() == null) {
+                        settlement.setId(SETTLEMENT_ID);
+                    }
+                    return settlement;
+                });
     }
 
     private ClaimSettlement lastSavedSettlement() {
@@ -241,11 +255,17 @@ class SettlementServiceImplTest {
     class InvoiceAdjustmentTypes {
 
         @Test
-        void invoiceCreditCreatesAdjustmentWithClaimCodeReference() {
+        void invoiceCreditCreatesAdjustmentWithSettlementIdReference() {
             stubClaim(ClaimStatus.APPROVED);
             stubSaveEcho();
+            // The settlement's own id is the idempotency key (externalReference), not the
+            // claim code — a claim can legitimately settle more than once.
             when(invoiceClient.createAdjustment(
-                            eq(INVOICE_ID), eq(COVERED), contains("WC-2026-000042"), any(), eq("WC-2026-000042")))
+                            eq(INVOICE_ID),
+                            eq(COVERED),
+                            contains("WC-2026-000042"),
+                            any(),
+                            eq(SETTLEMENT_ID.toString())))
                     .thenReturn(Optional.of(ADJUSTMENT_ID));
             when(outboxEventWriterProvider.getIfAvailable()).thenReturn(null);
 
@@ -310,7 +330,8 @@ class SettlementServiceImplTest {
         void refundCreatesRefundRecordViaInvoiceService() {
             stubClaim(ClaimStatus.APPROVED);
             stubSaveEcho();
-            when(invoiceClient.createRefund(eq(INVOICE_ID), eq(PAYMENT_ID), eq(COVERED), any(), eq("WC-2026-000042")))
+            when(invoiceClient.createRefund(
+                            eq(INVOICE_ID), eq(PAYMENT_ID), eq(COVERED), any(), eq(SETTLEMENT_ID.toString())))
                     .thenReturn(Optional.of(REFUND_ID));
             when(outboxEventWriterProvider.getIfAvailable()).thenReturn(null);
 
@@ -443,7 +464,8 @@ class SettlementServiceImplTest {
 
             service.create(CLAIM_ID, request(SettlementType.NO_ACTION));
 
-            verifyNoInteractions(outboxEventWriter, entityManager);
+            verifyNoInteractions(outboxEventWriter);
+            verify(entityManager, never()).flush();
         }
     }
 }

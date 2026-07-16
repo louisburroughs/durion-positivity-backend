@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,6 +43,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * Part-return (RMA) child state machine (PRD §3.8): AWAITING_PART → ON_HOLD → SHIPPED →
@@ -86,6 +88,9 @@ class PartReturnServiceImplTest {
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 entityManager,
                 outboxEventWriterProvider);
+        // Every mutation force-increments the claim @Version for snapshot monotonicity, which
+        // needs the claim loaded; individual tests override this default where relevant.
+        lenient().when(claimRepository.findById(CLAIM_ID)).thenReturn(Optional.of(claimWithLine(ClaimStatus.SETTLED)));
     }
 
     private static WarrantyClaim claimWithLine(ClaimStatus status) {
@@ -118,7 +123,8 @@ class PartReturnServiceImplTest {
     }
 
     private void stubSaveEcho() {
-        when(partReturnRepository.save(any(PartReturn.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(partReturnRepository.save(any(PartReturn.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(partReturnRepository.saveAndFlush(any(PartReturn.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Nested
@@ -151,6 +157,21 @@ class PartReturnServiceImplTest {
             assertThat(payload.serialNumber()).isEqualTo("DOT-XYZ");
             assertThat(payload.disposition()).isEqualTo("RETURN_TO_VENDOR");
             verify(claimSnapshotPublisher).publish(CLAIM_ID);
+        }
+
+        @Test
+        void concurrentDuplicateInsertGetsSame409AsSequentialRetry() {
+            when(claimRepository.findById(CLAIM_ID)).thenReturn(Optional.of(claimWithLine(ClaimStatus.APPROVED)));
+            when(partReturnRepository.findByClaimLineId(LINE_ID)).thenReturn(Optional.empty());
+            when(partReturnRepository.saveAndFlush(any(PartReturn.class)))
+                    .thenThrow(new DataIntegrityViolationException("part_return_claim_line_key"));
+
+            assertThatThrownBy(() -> service.create(
+                            CLAIM_ID,
+                            new PartReturnCreateRequest(LINE_ID, PartReturnDisposition.RETURN_TO_VENDOR, null, null)))
+                    .isInstanceOf(IllegalClaimStateException.class)
+                    .satisfies(ex -> assertThat(((IllegalClaimStateException) ex).getCode())
+                            .isEqualTo(PartReturnServiceImpl.ALREADY_EXISTS_CODE));
         }
 
         @Test

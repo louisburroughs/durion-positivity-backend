@@ -13,7 +13,9 @@ import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -92,11 +94,21 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
                 .build());
     }
 
+    /**
+     * Hard server-side bound on the line search: newest lines survive truncation (the query
+     * orders by invoice creation time descending), keeping a high-history fleet party from
+     * join-fetching its entire billing history into the heap per call.
+     */
+    static final int MAX_LINE_RESULTS = 200;
+
     @Override
-    public @NonNull List<InvoiceLineSearchResult> searchLinesByParty(@NonNull UUID partyId) {
+    public @NonNull List<InvoiceLineSearchResult> searchLinesByParty(@NonNull UUID partyId, @Nullable String q) {
         // Invoices store the party id as a string column; UUID party ids are persisted in
         // canonical lowercase form (UUID.toString()).
-        return invoiceItemRepository.findByInvoicePartyId(partyId.toString()).stream()
+        String descriptionFilter = StringUtils.hasText(q) ? escapeLike(q.trim()) : null;
+        return invoiceItemRepository
+                .findByInvoicePartyId(partyId.toString(), descriptionFilter, PageRequest.of(0, MAX_LINE_RESULTS))
+                .stream()
                 .map(InvoiceSearchServiceImpl::toLineResult)
                 .toList();
     }
