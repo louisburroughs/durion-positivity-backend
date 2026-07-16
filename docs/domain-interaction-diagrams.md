@@ -79,56 +79,56 @@ flowchart LR
   class STRIPE,CARAPI,NHTSA,ETAX,EXA,OLLAMA external
 
   %% Implemented synchronous API edges (including ADR-0044 scoped warranty exception)
-  INVOC -->|API| TAX
-  INVOC -->|API| DOC
-  WO -->|API| TAX
-  WO -->|API| DOC
-  CAT -->|API| PRICE
-  PPLC -->|API| SEC
+  INVOC -->|API C1| TAX
+  INVOC -->|API C1| DOC
+  WO -->|API C1| TAX
+  WO -->|API C1| DOC
+  CAT -->|API C2| PRICE
+  PPLC -->|API C3| SEC
 
-  WAR -->|API v1 scoped exception| INVOC
-  WAR -->|API v1 scoped exception| WO
-  WAR -->|API v1 scoped exception| CAT
-  WAR -->|API v1 scoped exception| CUS
-  WAR -->|API v1 scoped exception| VEHINV
+  WAR -->|API C4 scoped v1| INVOC
+  WAR -->|API C4 scoped v1| WO
+  WAR -->|API C4 scoped v1| CAT
+  WAR -->|API C4 scoped v1| CUS
+  WAR -->|API C4 scoped v1| VEHINV
 
   %% Implemented event connectors (representative, code-evidenced)
-  WO ==>|workorder.events.v1| CUS
-  WO ==>|workorder.events.v1| PPL
+  WO ==>|workorder.events.v1 C5| CUS
+  WO ==>|workorder.events.v1 C5| PPL
 
-  PPLC ==>|people-contact.events.v1| PPL
-  PPLC ==>|people-contact.events.v1| SHOP
-  PPLC ==>|people-contact.events.v1| WO
+  PPLC ==>|people-contact.events.v1 C5| PPL
+  PPLC ==>|people-contact.events.v1 C5| SHOP
+  PPLC ==>|people-contact.events.v1 C5| WO
 
-  PPL ==>|people.events.v1| SHOP
-  PPL ==>|people.events.v1| WO
+  PPL ==>|people.events.v1 C5| SHOP
+  PPL ==>|people.events.v1 C5| WO
 
-  CUS ==>|customer.events.v1| SHOP
-  CUS ==>|customer.events.v1| WO
+  CUS ==>|customer.events.v1 C5| SHOP
+  CUS ==>|customer.events.v1 C5| WO
 
-  LOC ==>|location.events.v1| PPL
-  LOC ==>|location.events.v1| WO
+  LOC ==>|location.events.v1 C5| PPL
+  LOC ==>|location.events.v1 C5| WO
 
-  INV ==>|inventory.events.v1| CAT
-  INV ==>|inventory.events.v1| WO
+  INV ==>|inventory.events.v1 C5| CAT
+  INV ==>|inventory.events.v1 C5| WO
 
-  VEHINV ==>|vehicle.events.v1| SHOP
+  VEHINV ==>|vehicle.events.v1 C5| SHOP
 
   %% Planned / in-progress edges from ADR-0044 and coupling assessment
-  INVOC -.->|Planned: replace remaining customer lookup via events [S1]| CUS
-  INVOC -.->|Planned: replace remaining location lookup via events [S2]| LOC
-  WO -.->|Planned: remove remaining shop-manager sync context call [S3]| SHOP
-  LOC -.->|Planned: complete location event mirrors for all consumers [S4]| INV
-  ACC -.->|Planned: command/result event loops with invoice/workorder [S5]| INVOC
-  ACC -.->|Planned: command/result event loops with invoice/workorder [S5]| WO
+  INVOC -.->|Planned: replace remaining customer lookup via events S1| CUS
+  INVOC -.->|Planned: replace remaining location lookup via events S2| LOC
+  WO -.->|Planned: remove remaining shop-manager sync context call S3| SHOP
+  LOC -.->|Planned: complete location event mirrors for all consumers S4| INV
+  ACC -.->|Planned: command/result event loops with invoice/workorder S5| INVOC
+  ACC -.->|Planned: command/result event loops with invoice/workorder S5| WO
 
   %% External provider context
-  ACC -->|API| STRIPE
-  VCAR -->|API| CARAPI
-  VNHT -->|API| NHTSA
-  TAX -->|API| ETAX
-  MCP -->|API| EXA
-  MCP -->|API| OLLAMA
+  ACC -->|API C6| STRIPE
+  VCAR -->|API C6| CARAPI
+  VNHT -->|API C6| NHTSA
+  TAX -->|API C6| ETAX
+  MCP -->|API C6| EXA
+  MCP -->|API C6| OLLAMA
 
   NOTE1["DomainWallsTest enforces: no sync domain-to-domain calls except scoped pos-warranty v1 exception"]
   NOTE2["pos-event-receiver pipeline remains audit-only; domain data transport is Kafka domain topics"]
@@ -188,61 +188,61 @@ flowchart LR
   class STRIPE,CARAPI,NHTSA,ETAX external
 
   %% Policy-intended event mesh
-  CUS ==>|customer.events.v1| INVOC
-  CUS ==>|customer.events.v1| WO
-  CUS ==>|customer.events.v1| SHOP
+  CUS ==>|customer.events.v1 T1| INVOC
+  CUS ==>|customer.events.v1 T1| WO
+  CUS ==>|customer.events.v1 T1| SHOP
 
-  LOC ==>|location.events.v1| INV
-  LOC ==>|location.events.v1| PPL
-  LOC ==>|location.events.v1| INVOC
-  LOC ==>|location.events.v1| WO
+  LOC ==>|location.events.v1 T1| INV
+  LOC ==>|location.events.v1 T1| PPL
+  LOC ==>|location.events.v1 T1| INVOC
+  LOC ==>|location.events.v1 T1| WO
 
-  PPLC ==>|people-contact.events.v1| PPL
-  PPLC ==>|people-contact.events.v1| SHOP
-  PPLC ==>|people-contact.events.v1| WO
+  PPLC ==>|people-contact.events.v1 T1| PPL
+  PPLC ==>|people-contact.events.v1 T1| SHOP
+  PPLC ==>|people-contact.events.v1 T1| WO
 
-  PPL ==>|people.events.v1| SHOP
-  PPL ==>|people.events.v1| WO
+  PPL ==>|people.events.v1 T1| SHOP
+  PPL ==>|people.events.v1 T1| WO
 
-  WO ==>|workorder.events.v1| CUS
-  WO ==>|workorder.events.v1| PPL
-  WO ==>|workorder.events.v1| ACC
+  WO ==>|workorder.events.v1 T1| CUS
+  WO ==>|workorder.events.v1 T1| PPL
+  WO ==>|workorder.events.v1 T1| ACC
 
-  INV ==>|inventory.events.v1| CAT
-  INV ==>|inventory.events.v1| WO
+  INV ==>|inventory.events.v1 T1| CAT
+  INV ==>|inventory.events.v1 T1| WO
 
-  INVOC ==>|invoice.events.v1| ACC
-  INVOC ==>|invoice.events.v1| WO
+  INVOC ==>|invoice.events.v1 T1| ACC
+  INVOC ==>|invoice.events.v1 T1| WO
 
-  VEHINV ==>|vehicle.events.v1| CUS
-  VEHINV ==>|vehicle.events.v1| SHOP
-  VEHINV ==>|vehicle.events.v1| WO
+  VEHINV ==>|vehicle.events.v1 T1| CUS
+  VEHINV ==>|vehicle.events.v1 T1| SHOP
+  VEHINV ==>|vehicle.events.v1 T1| WO
 
   %% Command channels for cross-domain writes
-  ACC ==>|invoice.commands.v1| INVOC
-  ACC ==>|workorder.commands.v1| WO
-  WO ==>|inventory.commands.v1| INV
-  PPLC ==>|security linkage commands/events| SEC
+  ACC ==>|invoice.commands.v1 T2| INVOC
+  ACC ==>|workorder.commands.v1 T2| WO
+  WO ==>|inventory.commands.v1 T2| INV
+  PPLC ==>|security linkage commands/events T2| SEC
 
   %% Utility sync calls remain allowed
-  INVOC -->|API| TAX
-  INVOC -->|API| DOC
-  WO -->|API| TAX
-  WO -->|API| DOC
-  CAT -->|API| PRICE
+  INVOC -->|API T3| TAX
+  INVOC -->|API T3| DOC
+  WO -->|API T3| TAX
+  WO -->|API T3| DOC
+  CAT -->|API T3| PRICE
 
   %% Planned dotted edges (remaining migration intent)
-  WAR -.->|Planned v2: retire scoped sync exception [S6]| INVOC
-  WAR -.->|Planned v2: retire scoped sync exception [S6]| WO
-  WAR -.->|Planned v2: retire scoped sync exception [S6]| CUS
-  WAR -.->|Planned v2: retire scoped sync exception [S6]| CAT
-  WAR -.->|Planned v2: retire scoped sync exception [S6]| VEHINV
+  WAR -.->|Planned v2: retire scoped sync exception S6| INVOC
+  WAR -.->|Planned v2: retire scoped sync exception S6| WO
+  WAR -.->|Planned v2: retire scoped sync exception S6| CUS
+  WAR -.->|Planned v2: retire scoped sync exception S6| CAT
+  WAR -.->|Planned v2: retire scoped sync exception S6| VEHINV
 
   %% External providers
-  ACC -->|API| STRIPE
-  TAX -->|API| ETAX
-  VEHINV -->|API| CARAPI
-  VEHINV -->|API| NHTSA
+  ACC -->|API T4| STRIPE
+  TAX -->|API T4| ETAX
+  VEHINV -->|API T4| CARAPI
+  VEHINV -->|API T4| NHTSA
 
   BLOCK["Policy: Domain-to-domain synchronous REST is forbidden (ADR-0044), except scoped pos-warranty v1 exception"]
   class BLOCK warn
@@ -255,7 +255,7 @@ flowchart LR
 - Event edges shown as implemented are based on listener/publisher/topic references in source classes and configuration defaults.
 - Planned dotted edges represent ADR/assessment intent and in-flight migration targets; they are intentionally shown separately from implemented solid connectors.
 
-## Planned Edge Source Map
+## Edge Source Map (All Connector Types)
 
 - [S1] Invoice customer lookup replacement: current sync dependency and planned retirement via `customer.events.v1`.
   - Call graph edge: [issue-823-event-only-domain-walls-assessment.md#L46](module-coupling/issue-823-event-only-domain-walls-assessment.md#L46)
@@ -275,3 +275,26 @@ flowchart LR
 - [S6] Warranty scoped sync exception is temporary and targeted for event-fed migration in v2.
   - Scoped exception and v2 evolution note: [ADR-0044 amendment §2026-07-16](https://github.com/louisburroughs/durion/blob/master/docs/adr/0044-platform-event-only-domain-walls.adr.md#2026-07-16--scoped-exception-pos-warranty-v1-synchronous-clients)
   - Warranty v2 migration target language: [ADR-0044 evolution note](https://github.com/louisburroughs/durion/blob/master/docs/adr/0044-platform-event-only-domain-walls.adr.md#L237-L238)
+
+- [C1] Current utility sync calls from invoice/workorder to tax/documents.
+  - Call graph edges: [issue-823-event-only-domain-walls-assessment.md#L50-L51](module-coupling/issue-823-event-only-domain-walls-assessment.md#L50-L51), [issue-823-event-only-domain-walls-assessment.md#L69-L70](module-coupling/issue-823-event-only-domain-walls-assessment.md#L69-L70)
+- [C2] Current catalog pricing sync call.
+  - Call graph edge: [issue-823-event-only-domain-walls-assessment.md#L41](module-coupling/issue-823-event-only-domain-walls-assessment.md#L41)
+- [C3] Current people-contact to security linkage sync call category.
+  - Utility allowlist (security-service): [0044-platform-event-only-domain-walls.adr.md#L44-L45](https://github.com/louisburroughs/durion/blob/master/docs/adr/0044-platform-event-only-domain-walls.adr.md#L44-L45)
+- [C4] Current warranty scoped synchronous exception edges (v1).
+  - Amendment scope: [0044-platform-event-only-domain-walls.adr.md#L223-L227](https://github.com/louisburroughs/durion/blob/master/docs/adr/0044-platform-event-only-domain-walls.adr.md#L223-L227)
+- [C5] Current event connector set in Diagram 1 (code-evidenced representative set).
+  - Existing async messaging baseline and precedent: [issue-823-event-only-domain-walls-assessment.md#L83-L91](module-coupling/issue-823-event-only-domain-walls-assessment.md#L83-L91)
+  - Event-only direction and replicas rule: [0044-platform-event-only-domain-walls.adr.md#L65-L73](https://github.com/louisburroughs/durion/blob/master/docs/adr/0044-platform-event-only-domain-walls.adr.md#L65-L73)
+- [C6] Current external provider API connectors.
+  - Assessment exclusions for external API callers: [issue-823-event-only-domain-walls-assessment.md#L77-L81](module-coupling/issue-823-event-only-domain-walls-assessment.md#L77-L81)
+
+- [T1] Target policy-state event mesh (facts on `{domain}.events.v1`).
+  - Decision and rules: [0044-platform-event-only-domain-walls.adr.md#L32-L36](https://github.com/louisburroughs/durion/blob/master/docs/adr/0044-platform-event-only-domain-walls.adr.md#L32-L36), [0044-platform-event-only-domain-walls.adr.md#L65-L78](https://github.com/louisburroughs/durion/blob/master/docs/adr/0044-platform-event-only-domain-walls.adr.md#L65-L78)
+- [T2] Target policy-state command channels (`{domain}.commands.v1`).
+  - Write-via-command rule and topic convention: [0044-platform-event-only-domain-walls.adr.md#L70-L72](https://github.com/louisburroughs/durion/blob/master/docs/adr/0044-platform-event-only-domain-walls.adr.md#L70-L72), [0044-platform-event-only-domain-walls.adr.md#L104-L105](https://github.com/louisburroughs/durion/blob/master/docs/adr/0044-platform-event-only-domain-walls.adr.md#L104-L105)
+- [T3] Target policy-state utility sync calls remain allowed.
+  - Utility allowlist and R2: [0044-platform-event-only-domain-walls.adr.md#L44-L45](https://github.com/louisburroughs/durion/blob/master/docs/adr/0044-platform-event-only-domain-walls.adr.md#L44-L45), [0044-platform-event-only-domain-walls.adr.md#L60-L64](https://github.com/louisburroughs/durion/blob/master/docs/adr/0044-platform-event-only-domain-walls.adr.md#L60-L64)
+- [T4] Target policy-state external provider API connectors.
+  - Utility/external API posture context: [issue-823-event-only-domain-walls-assessment.md#L77-L81](module-coupling/issue-823-event-only-domain-walls-assessment.md#L77-L81)
