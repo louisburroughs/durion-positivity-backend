@@ -9,6 +9,7 @@ This directory contains project-wide documentation for the durion-positivity-bac
 | [ARCHITECTURE_GUIDE.md](ARCHITECTURE_GUIDE.md) | Docker, ports, service communication, observability, PostgreSQL setup |
 | [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) | OpenAPI, POM consolidation, version management, pos-events library |
 | [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md) | Operations, monitoring, RBAC framework, permission registration |
+| [domain-interaction-diagrams.md](domain-interaction-diagrams.md) | Mermaid diagrams for backend domain interactions (implemented vs policy target; API vs event ACL connectors) |
 | [profile-reconciliation-plan.md](profile-reconciliation-plan.md) | Canonical backend profile reconciliation plan (`openapi`, `dev`, `alpha`, `prod`) |
 
 ## Module-Specific Documentation
