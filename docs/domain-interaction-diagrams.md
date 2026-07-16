@@ -115,12 +115,12 @@ flowchart LR
   VEHINV ==>|vehicle.events.v1| SHOP
 
   %% Planned / in-progress edges from ADR-0044 and coupling assessment
-  INVOC -.->|Planned: replace remaining customer lookup via events| CUS
-  INVOC -.->|Planned: replace remaining location lookup via events| LOC
-  WO -.->|Planned: remove remaining shop-manager sync context call| SHOP
-  LOC -.->|Planned: complete location event mirrors for all consumers| INV
-  ACC -.->|Planned: command/result event loops with invoice/workorder| INVOC
-  ACC -.->|Planned: command/result event loops with invoice/workorder| WO
+  INVOC -.->|Planned: replace remaining customer lookup via events [S1]| CUS
+  INVOC -.->|Planned: replace remaining location lookup via events [S2]| LOC
+  WO -.->|Planned: remove remaining shop-manager sync context call [S3]| SHOP
+  LOC -.->|Planned: complete location event mirrors for all consumers [S4]| INV
+  ACC -.->|Planned: command/result event loops with invoice/workorder [S5]| INVOC
+  ACC -.->|Planned: command/result event loops with invoice/workorder [S5]| WO
 
   %% External provider context
   ACC -->|API| STRIPE
@@ -232,11 +232,11 @@ flowchart LR
   CAT -->|API| PRICE
 
   %% Planned dotted edges (remaining migration intent)
-  WAR -.->|Planned v2: retire scoped sync exception| INVOC
-  WAR -.->|Planned v2: retire scoped sync exception| WO
-  WAR -.->|Planned v2: retire scoped sync exception| CUS
-  WAR -.->|Planned v2: retire scoped sync exception| CAT
-  WAR -.->|Planned v2: retire scoped sync exception| VEHINV
+  WAR -.->|Planned v2: retire scoped sync exception [S6]| INVOC
+  WAR -.->|Planned v2: retire scoped sync exception [S6]| WO
+  WAR -.->|Planned v2: retire scoped sync exception [S6]| CUS
+  WAR -.->|Planned v2: retire scoped sync exception [S6]| CAT
+  WAR -.->|Planned v2: retire scoped sync exception [S6]| VEHINV
 
   %% External providers
   ACC -->|API| STRIPE
@@ -254,3 +254,24 @@ flowchart LR
 - `pos-agent-framework` exists as a repo directory but is not currently declared in parent `pom.xml` modules.
 - Event edges shown as implemented are based on listener/publisher/topic references in source classes and configuration defaults.
 - Planned dotted edges represent ADR/assessment intent and in-flight migration targets; they are intentionally shown separately from implemented solid connectors.
+
+## Planned Edge Source Map
+
+- [S1] Invoice customer lookup replacement: current sync dependency and planned retirement via `customer.events.v1`.
+  - Call graph edge: [issue-823-event-only-domain-walls-assessment.md#L46](module-coupling/issue-823-event-only-domain-walls-assessment.md#L46)
+  - Phase 4 retirement plan: [issue-823-event-only-domain-walls-assessment.md#L181-L182](module-coupling/issue-823-event-only-domain-walls-assessment.md#L181-L182)
+- [S2] Invoice location lookup replacement: current sync dependency and planned retirement via `location.events.v1`.
+  - Call graph edge: [issue-823-event-only-domain-walls-assessment.md#L47](module-coupling/issue-823-event-only-domain-walls-assessment.md#L47)
+  - Phase 4 retirement plan: [issue-823-event-only-domain-walls-assessment.md#L183-L185](module-coupling/issue-823-event-only-domain-walls-assessment.md#L183-L185)
+- [S3] Workorder shop-manager context call removal in remaining migration phase.
+  - Call graph edge: [issue-823-event-only-domain-walls-assessment.md#L68](module-coupling/issue-823-event-only-domain-walls-assessment.md#L68)
+  - Phase 5 remaining edges: [issue-823-event-only-domain-walls-assessment.md#L187-L190](module-coupling/issue-823-event-only-domain-walls-assessment.md#L187-L190)
+- [S4] Location event mirrors completion for inventory and other consumers.
+  - Current inventory/location sync edges: [issue-823-event-only-domain-walls-assessment.md#L44](module-coupling/issue-823-event-only-domain-walls-assessment.md#L44)
+  - Phase 4 location decoupling: [issue-823-event-only-domain-walls-assessment.md#L183-L185](module-coupling/issue-823-event-only-domain-walls-assessment.md#L183-L185)
+- [S5] Accounting command/result event loop migration with invoice and workorder.
+  - Current write/read couplings: [issue-823-event-only-domain-walls-assessment.md#L38-L39](module-coupling/issue-823-event-only-domain-walls-assessment.md#L38-L39)
+  - Phase 1 command/result plan: [issue-823-event-only-domain-walls-assessment.md#L159-L160](module-coupling/issue-823-event-only-domain-walls-assessment.md#L159-L160)
+- [S6] Warranty scoped sync exception is temporary and targeted for event-fed migration in v2.
+  - Scoped exception and v2 evolution note: [ADR-0044 amendment §2026-07-16](https://github.com/louisburroughs/durion/blob/master/docs/adr/0044-platform-event-only-domain-walls.adr.md#2026-07-16--scoped-exception-pos-warranty-v1-synchronous-clients)
+  - Warranty v2 migration target language: [ADR-0044 evolution note](https://github.com/louisburroughs/durion/blob/master/docs/adr/0044-platform-event-only-domain-walls.adr.md#L237-L238)
