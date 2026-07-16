@@ -114,15 +114,33 @@ KAFKA_SERVICES=(
   kafka-exporter
 )
 
-BACKEND_SERVICES=(
+# Backend services start in dependency tiers (each tier gated on --wait) so a
+# whole-stack recreate never launches ~20 JVMs at once — the resulting CPU
+# starvation is what pushed startups past their healthcheck windows (#29527988342).
+
+# Tier 1: platform core — everything else needs Eureka; security-service needs
+# the event receiver at boot.
+CORE_SERVICES=(
   eureka-server
-  pos-accounting
+  pos-event-receiver
+)
+
+# Tier 2: security + routing edge.
+PLATFORM_SERVICES=(
   pos-api-gateway
+  pos-security-service
+)
+
+# Tier 3: domain services, started in batches of DOMAIN_BATCH_SIZE.
+# pos-vehicle-inventory is listed first so it lands in the same-or-earlier batch
+# as pos-customer, which depends_on it (condition: service_started).
+DOMAIN_SERVICES=(
+  pos-vehicle-inventory
+  pos-accounting
   pos-bulk-loader
   pos-catalog
   pos-customer
   pos-documents
-  pos-event-receiver
   pos-image
   pos-inventory
   pos-invoice
@@ -131,11 +149,21 @@ BACKEND_SERVICES=(
   pos-people
   pos-people-contact
   pos-price
-  pos-security-service
   pos-shop-manager
   pos-tax
-  pos-vehicle-inventory
+  pos-warranty
   pos-workorder
+)
+
+DOMAIN_BATCH_SIZE=6
+# Upper bound per tier/batch: worst-case healthcheck window (300s start_period
+# + 12x10s retries) plus slack.
+WAIT_TIMEOUT=480
+
+BACKEND_SERVICES=(
+  "${CORE_SERVICES[@]}"
+  "${PLATFORM_SERVICES[@]}"
+  "${DOMAIN_SERVICES[@]}"
 )
 
 if grep -q '^BACKEND_TAG=' "${ENV_FILE}"; then
@@ -249,8 +277,22 @@ reconcile_databases
 echo "Pulling backend services: ${BACKEND_SERVICES[*]}"
 docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${BACKEND_SERVICES[@]}"
 
-echo "Starting backend services: ${BACKEND_SERVICES[*]}"
-docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate "${BACKEND_SERVICES[@]}"
+# --wait blocks until every named service is healthy and fails the deploy if one
+# goes unhealthy — a real gate instead of exiting 0 with half the stack down.
+echo "Starting core services: ${CORE_SERVICES[*]}"
+docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate \
+  --wait --wait-timeout "${WAIT_TIMEOUT}" "${CORE_SERVICES[@]}"
+
+echo "Starting platform services: ${PLATFORM_SERVICES[*]}"
+docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate \
+  --wait --wait-timeout "${WAIT_TIMEOUT}" "${PLATFORM_SERVICES[@]}"
+
+for ((i = 0; i < ${#DOMAIN_SERVICES[@]}; i += DOMAIN_BATCH_SIZE)); do
+  BATCH=("${DOMAIN_SERVICES[@]:i:DOMAIN_BATCH_SIZE}")
+  echo "Starting domain services (batch $((i / DOMAIN_BATCH_SIZE + 1))): ${BATCH[*]}"
+  docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate \
+    --wait --wait-timeout "${WAIT_TIMEOUT}" "${BATCH[@]}"
+done
 
 docker compose "${COMPOSE_ARGS[@]}" ps
 run_periodic_docker_prune
