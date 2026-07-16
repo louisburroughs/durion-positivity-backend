@@ -502,8 +502,11 @@ services:
         condition: service_healthy
       pos-security-service:
         condition: service_healthy
+      # service_started, not service_healthy: customer calls vehicle-inventory over
+      # HTTP at request time (via Eureka), not at boot. A hard health dependency
+      # turns a slow vehicle-inventory startup into a failed deploy (run 29527988342).
       pos-vehicle-inventory:
-        condition: service_healthy
+        condition: service_started
     logging: *logging
     networks:
       - pos-network
