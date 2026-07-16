@@ -36,7 +36,7 @@ class PermissionCodeTest {
     private static final int EXPECTED_CATALOG_VERSION = 21;
 
     // -------------------------------------------------------------------------
-    // AC-1: Catalog size — 350 entries
+    // AC-1: Catalog size — 379 entries
     // -------------------------------------------------------------------------
 
     @Test

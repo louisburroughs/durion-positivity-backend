@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Read-only client for pos-workorder. Warranty never writes to pos-workorder
@@ -22,7 +23,7 @@ public interface WorkorderClient {
      * may be null; passing both narrows the result.
      */
     @NonNull
-    List<WorkorderSummary> searchWorkorders(UUID customerId, UUID vehicleId);
+    List<WorkorderSummary> searchWorkorders(@Nullable UUID customerId, @Nullable UUID vehicleId);
 
     /**
      * Fetch full workorder detail with service and part lines

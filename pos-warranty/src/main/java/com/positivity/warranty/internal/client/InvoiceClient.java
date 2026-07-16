@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Client for pos-invoice: invoice-line search, invoice lookup, and settlement
@@ -45,7 +46,7 @@ public interface InvoiceClient {
             @NonNull BigDecimal amount,
             @NonNull String reason,
             @NonNull String authorizedBy,
-            String externalReference);
+            @Nullable String externalReference);
 
     /**
      * Refund a captured payment on an invoice, reason {@code OTHER}
@@ -62,8 +63,8 @@ public interface InvoiceClient {
             @NonNull UUID invoiceId,
             @NonNull UUID paymentId,
             @NonNull BigDecimal amount,
-            String notes,
-            String externalReference);
+            @Nullable String notes,
+            @Nullable String externalReference);
 
     /** Mirrors pos-invoice {@code InvoiceLineSearchResult}. */
     record InvoiceLine(

@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -125,7 +126,7 @@ public class InvoiceClientImpl implements InvoiceClient {
             @NonNull BigDecimal amount,
             @NonNull String reason,
             @NonNull String authorizedBy,
-            String externalReference) {
+            @Nullable String externalReference) {
         AdjustmentRequestWire body =
                 new AdjustmentRequestWire(ADJUSTMENT_TYPE_WARRANTY, amount, reason, authorizedBy, externalReference);
         InvoiceDetailsWire response;
@@ -168,8 +169,8 @@ public class InvoiceClientImpl implements InvoiceClient {
             @NonNull UUID invoiceId,
             @NonNull UUID paymentId,
             @NonNull BigDecimal amount,
-            String notes,
-            String externalReference) {
+            @Nullable String notes,
+            @Nullable String externalReference) {
         RefundRequestWire body = new RefundRequestWire(amount, REFUND_REASON_OTHER, notes, externalReference);
         RefundResponseWire response;
         try {
