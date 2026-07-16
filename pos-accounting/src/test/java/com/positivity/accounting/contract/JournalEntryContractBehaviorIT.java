@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -61,6 +62,9 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private DefaultGLMappingRepository defaultGLMappingRepository;
 
+    @Autowired
+    private StatementLineMappingRepository statementLineMappingRepository;
+
     private static final String API_V1_JOURNAL_ENTRIES = "/v1/accounting/journal-entries";
     private static final String API_V1_GL_ACCOUNTS = "/v1/accounting/gl-accounts";
 
@@ -73,6 +77,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
         // Clean up before each test
         journalEntryRepository.deleteAll();
         defaultGLMappingRepository.deleteAll();
+        statementLineMappingRepository.deleteAll();
         glAccountRepository.deleteAll();
 
         // Create test GL accounts
@@ -88,6 +93,7 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
     void tearDown() {
         journalEntryRepository.deleteAll();
         defaultGLMappingRepository.deleteAll();
+        statementLineMappingRepository.deleteAll();
         glAccountRepository.deleteAll();
     }
 

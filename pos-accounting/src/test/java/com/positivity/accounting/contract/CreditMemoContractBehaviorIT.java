@@ -20,6 +20,7 @@ import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import com.positivity.accounting.internal.service.InvoiceBalanceCalculator;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -67,6 +68,9 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private JournalEntryLineRepository journalEntryLineRepository;
 
+    @Autowired
+    private StatementLineMappingRepository statementLineMappingRepository;
+
     @MockitoBean
     private InvoiceBalanceCalculator invoiceBalanceCalculator;
 
@@ -81,6 +85,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         journalEntryLineRepository.deleteAll();
         journalEntryRepository.deleteAll();
         creditMemoRepository.deleteAll();
+        statementLineMappingRepository.deleteAll();
         glAccountRepository.deleteAll();
 
         // Default replica state (ADR-0044 #842): a FINALIZED $110 invoice with a $110
@@ -110,6 +115,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         journalEntryLineRepository.deleteAll();
         journalEntryRepository.deleteAll();
         creditMemoRepository.deleteAll();
+        statementLineMappingRepository.deleteAll();
         glAccountRepository.deleteAll();
     }
 

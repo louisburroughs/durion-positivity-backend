@@ -25,11 +25,13 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Provider behavioral contract test (CAP-316): proves the Labor &amp; Overhead report amounts trace to
  * posted GL data for a seeded location/period, and that subtotals roll up from the contributing leaf.
  */
+@Transactional
 @DisplayName("Labor & Overhead Report ContractBehaviorIT")
 class LaborOverheadReportContractBehaviorIT extends BaseContractIntegrationTest {
 
@@ -86,8 +88,8 @@ class LaborOverheadReportContractBehaviorIT extends BaseContractIntegrationTest 
     @Test
     @DisplayName("Only POSTED entries contribute: DRAFT and REVERSED on the same account/period are excluded")
     void excludesNonPostedEntries() throws Exception {
-        // Distinct location: the contract IT shares one H2 instance across tests with no per-test
-        // reset, and line-code mappings are global, so each test scopes its postings by location.
+        // Distinct location: line-code mappings are global, so each test scopes its postings by
+        // location to stay independent of seeded or sibling-test data.
         String location = "LOC-IT-316-NONPOSTED";
         GLAccount account = seedAccount("6010-IT2", "Retread Plant Hourly Wages (IT2)");
         seedMapping("1.1.1", account);
