@@ -965,6 +965,18 @@ components:
           type: string
           description: Vehicle trim.
           example: XL
+        odometerValue:
+          type: integer
+          format: int32
+          description: Last recorded odometer reading value.
+          example: 45210
+        odometerUnit:
+          type: string
+          description: Unit of the odometer reading (MILES or KILOMETERS).
+          enum:
+          - MILES
+          - KILOMETERS
+          example: MILES
         isActive:
           type: boolean
           description: Whether vehicle is active.

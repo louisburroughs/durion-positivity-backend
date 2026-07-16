@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -71,7 +72,7 @@ public class PaymentReversalController {
             @PathVariable @NonNull UUID paymentId,
             @Valid @RequestBody @NonNull RefundPaymentRequest request) {
         var saved = paymentReversalService.refundPayment(
-                invoiceId, paymentId, request.amount(), request.reason(), request.notes());
+                invoiceId, paymentId, request.amount(), request.reason(), request.notes(), request.externalReference());
 
         RefundPaymentResponse response = new RefundPaymentResponse();
         response.setRefundId(saved.getRefundId());
@@ -82,6 +83,7 @@ public class PaymentReversalController {
         response.setNotes(saved.getNotes());
         response.setStatus(saved.getStatus());
         response.setGatewayReference(saved.getGatewayReference());
+        response.setExternalReference(saved.getExternalReference());
         response.setCompletedAt(saved.getCompletedAt());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -123,5 +125,12 @@ public class PaymentReversalController {
                     description = "Optional free-text notes explaining the refund",
                     example = "Returned damaged part",
                     requiredMode = NOT_REQUIRED)
-            String notes) {}
+            String notes,
+
+            @Size(max = 64)
+            @Schema(
+                    description = "Optional correlation id to an external record (e.g. a warranty claim settlement)",
+                    example = "WC-2026-000042",
+                    requiredMode = NOT_REQUIRED)
+            String externalReference) {}
 }

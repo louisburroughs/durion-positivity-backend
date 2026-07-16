@@ -34,7 +34,8 @@ public class WorkorderSearchServiceImpl implements WorkorderSearchService {
     private final VehicleReferenceService vehicleReferenceService;
 
     @Override
-    public @NonNull Page<WorkorderSearchResult> search(@NonNull String q, @NonNull Pageable pageable) {
+    public @NonNull Page<WorkorderSearchResult> search(
+            @NonNull String q, @Nullable UUID customerId, @Nullable UUID vehicleId, @NonNull Pageable pageable) {
         // Resolve customer ids whose display name matches the query.
         List<UUID> nameMatchIds = customerReferenceService.searchIdsByName(q, 10).stream()
                 .map(CustomerReferenceService.CustomerRef::customerId)
@@ -46,7 +47,8 @@ public class WorkorderSearchServiceImpl implements WorkorderSearchService {
         // Treat the query as a workorder id when it parses as a UUID.
         UUID idQuery = parseUuidOrNull(q);
 
-        Page<Workorder> page = workorderRepository.searchByQuery(q, customerIds, idQuery, pageable);
+        Page<Workorder> page =
+                workorderRepository.searchByQuery(q, customerIds, idQuery, customerId, vehicleId, pageable);
 
         // Enrich each row with the resolved customer display name and vehicle label/VIN.
         List<UUID> pageCustomerIds = page.getContent().stream()

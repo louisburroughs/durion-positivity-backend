@@ -1,0 +1,94 @@
+spring:
+  application:
+    name: warranty
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+server:
+  port: 0
+  tomcat:
+    max-http-header-size: 65536
+
+management:
+  server:
+    port: 0
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:}
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+logging:
+  level:
+    root: INFO
+    org:
+      springframework: INFO
+    com:
+      positivity:
+        warranty: INFO
+
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+  default-produces-media-type: application/json
+
+pos:
+  warranty:
+    kafka:
+      # Domain-event publishing (ADR-0044, PRD §9.3). Off until the broker is provisioned;
+      # flip POS_WARRANTY_KAFKA_ENABLED per environment.
+      enabled: ${POS_WARRANTY_KAFKA_ENABLED:false}
+  events:
+    base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}
+    api-secret: ${POS_EVENTS_API_SECRET:}
+  security:
+    base-url: ${POS_SECURITY_BASE_URL:http://pos-security-service:8080}
+  # Outbound sibling-service clients (PRD §9.4): Eureka service ids + base paths.
+  vehicle-inventory:
+    service-id: vehicle-inventory
+    base-path: /v1/vehicle-registry
+  invoice:
+    service-id: invoice
+    base-path: /v1/invoices
+  workorder:
+    service-id: workorder
+    base-path: /v1/workorders
+  catalog:
+    service-id: catalog
+    base-path: /v1/products
+  customer:
+    service-id: customer
+    base-path: /v1/crm

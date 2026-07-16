@@ -2,7 +2,8 @@
 
 - Status: **Accepted** (2026-07-08 — issue [#823](https://github.com/louisburroughs/durion-positivity-backend/issues/823));
   **enforcement live since 2026-07-14** — the Phase 5.6 flip (#902) made the `pos-archunit`
-  `DomainWallsTest` build-failing with an empty violation list
+  `DomainWallsTest` build-failing with an empty violation list;
+  **amended 2026-07-16** (scoped pos-warranty v1 exception — see §Amendments)
 - Date: 2026-07-08
 - Supersedes: the domain-to-domain portions of the service-discovery client policy
   (`docs/service-discovery-migration/client-policy-matrix.md`) and the javadoc-only
@@ -196,6 +197,24 @@ becomes tier-1 operational surface (lag, DLQ, partition management); one fronten
 point of failure, not designed as a broker); keeping sync reads with caching (does not remove the
 runtime dependency or the model leak); synchronous write exceptions (would leave the strongest
 coupling — accounting↔invoice/workorder — in place indefinitely).
+
+## Amendments
+
+### 2026-07-16 — Scoped exception: pos-warranty v1 synchronous clients
+
+`pos-warranty` (new domain module) is granted a scoped exception to R1 for its v1: synchronous
+`@LoadBalanced RestClient` calls from `com.positivity.warranty.internal.client` to
+`pos-invoice`, `pos-workorder`, `pos-catalog`, `pos-customer`, and `pos-vehicle-inventory` are
+permitted, per `docs/PRD-warranty-claims-module.md` §9.4 (approved 2026-07-15). Rationale:
+candidate-line origin search across invoices/workorders and settlement execution against
+pos-invoice are inherently synchronous counter flows.
+
+- **Enforcement.** The exception is encoded in `DomainWallsTest` as a per-consumer exception map
+  (`pos-warranty` → exactly those five targets). The utility whitelist is **unchanged**; any other
+  module adding a synchronous domain client, and pos-warranty targeting any other domain module,
+  still fails the build. Widening the map requires a further amendment to this ADR.
+- **Evolution.** Migration to event-fed read-only replicas (R3) remains the target pattern for
+  these reads, as the PRD itself names; it MUST accompany any warranty v2.
 
 ## Changes required in other ADRs
 

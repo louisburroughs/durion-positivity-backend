@@ -119,8 +119,9 @@ public class InventoryEventsListener {
     private void applyLeadTimeUpdated(JsonNode envelope) {
         LeadTimeUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), LeadTimeUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
-        ExtProductLeadTimeReplica existing =
-                extProductLeadTimeReplicaRepository.findById(payload.productId()).orElse(null);
+        ExtProductLeadTimeReplica existing = extProductLeadTimeReplicaRepository
+                .findById(payload.productId())
+                .orElse(null);
         if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
             return;
         }

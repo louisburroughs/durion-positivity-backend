@@ -274,7 +274,10 @@ and reason are audited.
 
 ## 8. API surface (v1)
 
-Gateway: `X-API-Version: 1`, external path `/warranty/...` → `lb://WARRANTY /v1/warranty/...`.
+Gateway: `X-API-Version: 1`, external path `/warranty/warranty/...` → `lb://WARRANTY /v1/warranty/...`
+(the first `/warranty` segment routes to the service and is stripped; the version header is
+rewritten into the path — same doubled-segment convention as `pos-inventory`. Pre-versioned form:
+`/warranty/v1/warranty/...`).
 Thin controllers, `@PreAuthorize` per endpoint, `@EmitEvent` on all state-changing endpoints.
 
 | Endpoint | Purpose | Permission |
@@ -348,6 +351,7 @@ Search preset: `WARRANTY_CLAIM_SEARCH`, `WARRANTY_CANDIDATE_LINE_SEARCH`.
 | `warranty.reimbursement.submitted` | `pos-accounting` | Expected vendor credit (`apVendorId`, amount, `vendorClaimReference`) |
 | `warranty.reimbursement.resolved` | `pos-accounting` | Approved/denied/credit-received — matching against vendor activity |
 | `warranty.part-return.requested` / `.shipped` | `pos-inventory` (follow-up) | Defective-unit quarantine/hold |
+| `warranty.claim.snapshot` | replica builders (ADR-0044 R3) | Full claim aggregate for replica builders, emitted on every claim mutation |
 
 ### 9.4 Synchronous calls (all `@LoadBalanced RestClient`, `internal/client/`)
 
@@ -381,13 +385,13 @@ and linked from the claim (`replacementWorkorderId`), keeping the dependency one
 
 1. ✅ This spec: owning service (`pos-warranty`), claim-code schema (§4), claim state machine
    (§5), reimbursement workflow (§3.7).
-2. ☐ `permissions.yaml` (§9.1) + gateway perm-bits catalog sync.
-3. ☐ Update RAG docs and remove OPEN notes:
+2. ✅ `permissions.yaml` (§9.1) + gateway perm-bits catalog sync. — implemented on branch `claude/warranty-claims-multi-agent-egmrea`
+3. ✅ Update RAG docs and remove OPEN notes:
    `pos-mcp-server/src/main/resources/rag/glossary-identifiers.md` (Claim code → `WC-yyyy-nnnnnn`)
    and `pos-mcp-server/src/main/resources/rag/cross-domain-playbooks.md` (warranty/claim playbook
-   → flows in §7/§9); mark `pos-mcp-server/docs/BACKLOG.md` BL-1 resolved.
-4. ☐ Scaffold module, entities + Flyway baseline, state machine + eligibility service, claim
-   APIs, settlements (invoice integration), reimbursement + part-return APIs, events/outbox.
+   → flows in §7/§9); mark `pos-mcp-server/docs/BACKLOG.md` BL-1 resolved. — implemented on branch `claude/warranty-claims-multi-agent-egmrea`
+4. ✅ Scaffold module, entities + Flyway baseline, state machine + eligibility service, claim
+   APIs, settlements (invoice integration), reimbursement + part-return APIs, events/outbox. — implemented on branch `claude/warranty-claims-multi-agent-egmrea`
 
 ## 12. Open questions / defaulted decisions (flagged, not blocking)
 

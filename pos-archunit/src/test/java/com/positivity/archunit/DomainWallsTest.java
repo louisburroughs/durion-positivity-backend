@@ -28,7 +28,8 @@ import org.junit.jupiter.api.Test;
  *
  * <p><strong>Build-failing since Phase 5.6 (#902):</strong> the ADR-0044 migration is complete
  * and any new synchronous domain→domain client fails the build. The utility whitelist below is
- * the single source of truth; changing it requires amending ADR-0044.
+ * the single source of truth; changing it — or adding a scoped per-module exception — requires
+ * amending ADR-0044.
  */
 class DomainWallsTest {
 
@@ -47,6 +48,20 @@ class DomainWallsTest {
             "pos-domain-events",
             "pos-document-helper");
 
+    /**
+     * Scoped per-consumer exceptions to ADR-0044 R1: origin module → the exact set of domain
+     * modules its {@code internal.client} sources may target synchronously. NOT a widening of the
+     * utility whitelist — every entry requires an ADR-0044 amendment, and any other module (or any
+     * other target) still fails.
+     *
+     * <p>pos-warranty: ADR-0044 amendment 2026-07-16 + {@code docs/PRD-warranty-claims-module.md}
+     * §9.4 — warranty v1 candidate-line origin search and settlement execution are synchronous
+     * counter flows; migration to event-fed replicas is the planned v2 path.
+     */
+    private static final Map<String, Set<String>> SCOPED_MODULE_EXCEPTIONS = Map.of(
+            "pos-warranty",
+            Set.of("pos-invoice", "pos-workorder", "pos-catalog", "pos-customer", "pos-vehicle-inventory"));
+
     /** Startup-infra classes exempt per ADR-0044 R2 (registration calls, best-effort at boot). */
     private static final Pattern EXEMPT_FILES =
             Pattern.compile(".*(EventTypeInitializer|PermissionRegistration|PermissionInitializer|PermissionRegistry"
@@ -64,6 +79,7 @@ class DomainWallsTest {
         try (Stream<Path> modules = Files.list(repoRoot)) {
             for (Path module : modules.filter(DomainWallsTest::isPosModule).toList()) {
                 String originModule = module.getFileName().toString();
+                Set<String> scopedExceptions = SCOPED_MODULE_EXCEPTIONS.getOrDefault(originModule, Set.of());
                 for (Path source : clientSources(module)) {
                     if (EXEMPT_FILES.matcher(source.toString()).matches()) {
                         continue;
@@ -71,6 +87,7 @@ class DomainWallsTest {
                     Set<String> targets = referencedServices(source);
                     targets.removeIf(target -> target.equals(originModule)
                             || UTILITY_MODULES.contains(target)
+                            || scopedExceptions.contains(target)
                             || !isPosModule(repoRoot.resolve(target)));
                     if (!targets.isEmpty()) {
                         violations

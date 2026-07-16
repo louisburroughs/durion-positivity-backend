@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
@@ -38,7 +39,8 @@ public class WorkorderSearchController {
 
     @Operation(
             summary = "Search workorders",
-            description = "Paginated free-text search for workorders matching customer name or workorder id.")
+            description = "Paginated free-text search for workorders matching customer name or workorder id, "
+                    + "optionally filtered by exact customer and/or vehicle.")
     @ApiResponse(responseCode = "200", description = "Page of workorder search results returned.")
     @GetMapping("/search")
     @PreAuthorize("hasAuthority('workorder:workorder:view')")
@@ -48,9 +50,17 @@ public class WorkorderSearchController {
                     @RequestParam(required = false)
                     @Nullable
                     String q,
+            @Parameter(description = "Exact customer id filter, combinable with q (optional)")
+                    @RequestParam(required = false)
+                    @Nullable
+                    UUID customerId,
+            @Parameter(description = "Exact vehicle id filter, combinable with q (optional)")
+                    @RequestParam(required = false)
+                    @Nullable
+                    UUID vehicleId,
             @Parameter(schema = @Schema(implementation = Pageable.class)) @PageableDefault(size = 25)
                     Pageable pageable) {
-        return workorderSearchService.search(q == null ? "" : q.trim(), pageable);
+        return workorderSearchService.search(q == null ? "" : q.trim(), customerId, vehicleId, pageable);
     }
 
     @Operation(

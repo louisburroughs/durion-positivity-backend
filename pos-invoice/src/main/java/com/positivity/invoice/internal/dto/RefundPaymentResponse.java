@@ -59,6 +59,12 @@ public class RefundPaymentResponse {
     private String gatewayReference;
 
     @Schema(
+            description = "Optional correlation id to an external record (e.g. a warranty claim settlement)",
+            example = "WC-2026-000042",
+            requiredMode = NOT_REQUIRED)
+    private String externalReference;
+
+    @Schema(
             description = "Timestamp when the refund completed",
             example = "2026-01-17T10:15:00Z",
             requiredMode = NOT_REQUIRED)

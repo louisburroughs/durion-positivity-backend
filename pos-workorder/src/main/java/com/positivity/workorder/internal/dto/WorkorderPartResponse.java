@@ -74,4 +74,11 @@ public class WorkorderPartResponse {
     @Schema(description = "Line total from estimate", example = "130.00", requiredMode = NOT_REQUIRED)
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private BigDecimal lineTotal;
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(
+            description = "URL of photo evidence attached to the part line",
+            example = "https://cdn.example.com/evidence/part-550e8400.jpg",
+            requiredMode = NOT_REQUIRED)
+    private String photoEvidenceUrl;
 }

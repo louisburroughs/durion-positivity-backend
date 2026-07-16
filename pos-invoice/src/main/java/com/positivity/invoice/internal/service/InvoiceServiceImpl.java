@@ -1,7 +1,6 @@
 package com.positivity.invoice.internal.service;
 
 import com.positivity.invoice.internal.client.TaxServiceClient;
-
 import com.positivity.invoice.internal.config.InvoiceEventPublisher;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
@@ -137,11 +136,28 @@ public class InvoiceServiceImpl implements InvoiceService {
         validateDraftState(invoice);
         validateAdjustmentRequest(request);
 
+        // Idempotent replay guard: a caller retrying after a transport timeout (its POST may
+        // have committed here already) supplies the same externalReference — return the
+        // existing adjustment instead of double-crediting (PaymentIntent.idempotencyKey
+        // pattern; warranty settlements pass their settlement id).
+        String externalReference = normalizeExternalReference(request.getExternalReference());
+        if (externalReference != null) {
+            boolean alreadyApplied = invoice.getAdjustmentEntries().stream()
+                    .anyMatch(existing -> Objects.equals(existing.getType(), request.getType())
+                            && externalReference.equals(existing.getExternalReference()));
+            if (alreadyApplied) {
+                InvoiceDetailsResponse existing = toDetailsResponse(invoice);
+                existing.setWorkorderNumber(resolveWorkorderNumber(invoice.getWorkorderId()));
+                return existing;
+            }
+        }
+
         InvoiceAdjustment adjustment = new InvoiceAdjustment();
         adjustment.setType(Objects.requireNonNull(request.getType(), "adjustment type is required"));
         adjustment.setAmount(request.getAmount().setScale(4, RoundingMode.HALF_UP));
         adjustment.setReason(request.getReason().trim());
         adjustment.setAuthorizedBy(request.getAuthorizedBy().trim());
+        adjustment.setExternalReference(externalReference);
 
         invoice.addAdjustment(adjustment);
         recalculateTotals(invoice);
@@ -160,6 +176,10 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setEstimateId(request.getEstimateId());
         invoice.setApprovalId(request.getApprovalId());
         invoice.setLocationId(request.getLocationId());
+        // Canonical lowercase form (UUID.toString()) — party-scoped lookups
+        // (InvoiceSearchServiceImpl.searchLinesByParty) match on the string column.
+        invoice.setPartyId(
+                request.getCustomerId() == null ? null : request.getCustomerId().toString());
         invoice.setStatus(InvoiceStatus.DRAFT);
         invoice.setAdjustments(BigDecimal.ZERO);
         invoice.setAdjustmentsAmount(BigDecimal.ZERO);
@@ -296,10 +316,20 @@ public class InvoiceServiceImpl implements InvoiceService {
     private BigDecimal toSignedAdjustmentAmount(@NonNull InvoiceAdjustment adjustment) {
         BigDecimal amount = safeMoney(adjustment.getAmount(), BigDecimal.ZERO);
         return switch (adjustment.getType()) {
-            case DISCOUNT -> amount.abs().negate();
+            // A warranty credit reduces what the customer owes, exactly like a discount.
+            case DISCOUNT, WARRANTY -> amount.abs().negate();
             case FEE -> amount.abs();
             case CORRECTION -> amount;
         };
+    }
+
+    /** Trim the optional external reference and collapse a blank value to {@code null}. */
+    @Nullable
+    private static String normalizeExternalReference(@Nullable String externalReference) {
+        if (externalReference == null || externalReference.isBlank()) {
+            return null;
+        }
+        return externalReference.trim();
     }
 
     @NonNull
@@ -431,6 +461,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setAmount(adjustment.getAmount());
         response.setReason(adjustment.getReason());
         response.setAuthorizedBy(adjustment.getAuthorizedBy());
+        response.setExternalReference(adjustment.getExternalReference());
         response.setCreatedAt(adjustment.getCreatedAt());
         return response;
     }

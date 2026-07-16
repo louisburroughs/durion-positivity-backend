@@ -18,5 +18,6 @@ public interface PaymentReversalService {
             @NonNull UUID paymentIntentId,
             @NonNull BigDecimal amount,
             @NonNull RefundReason reason,
-            @Nullable String notes);
+            @Nullable String notes,
+            @Nullable String externalReference);
 }

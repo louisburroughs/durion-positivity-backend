@@ -17,5 +17,6 @@ public class RefundPaymentResult {
     private String notes;
     private RefundStatus status;
     private String gatewayReference;
+    private String externalReference;
     private Instant completedAt;
 }

@@ -1,0 +1,45 @@
+{
+  "properties": [
+    {
+      "name": "pos.events.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the pos-events/event-receiver API.",
+      "defaultValue": "http://pos-event-receiver:8080"
+    },
+    {
+      "name": "pos.events.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret used to authenticate event type registration requests."
+    },
+    {
+      "name": "pos.security.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL for permission registration against pos-security-service.",
+      "defaultValue": "http://pos-security-service:8080"
+    },
+    {
+      "name": "pos.security.permission-registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable startup permission registration with pos-security-service.",
+      "defaultValue": true
+    },
+    {
+      "name": "pos.warranty.kafka.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable domain-event publishing via the transactional outbox to Kafka (ADR-0044).",
+      "defaultValue": false
+    },
+    {
+      "name": "pos.warranty.outbox.poll-interval-ms",
+      "type": "java.lang.Long",
+      "description": "Delay between outbox drain polls in milliseconds.",
+      "defaultValue": 1000
+    },
+    {
+      "name": "pos.warranty.outbox.send-timeout-ms",
+      "type": "java.lang.Long",
+      "description": "Timeout for a single blocking Kafka send from the outbox drain, in milliseconds.",
+      "defaultValue": 10000
+    }
+  ]
+}

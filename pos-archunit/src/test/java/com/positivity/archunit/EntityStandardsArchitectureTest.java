@@ -38,7 +38,8 @@ class EntityStandardsArchitectureTest {
         "com.positivity.invoice.internal.entity..",
         "com.positivity.order.internal.entity..",
         "com.positivity.people.internal.entity..",
-        "com.positivity.peoplecontact.internal.entity.."
+        "com.positivity.peoplecontact.internal.entity..",
+        "com.positivity.warranty.internal.entity.."
     };
 
     private static final String ENTITY_ANNOTATION = "jakarta.persistence.Entity";

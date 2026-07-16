@@ -1,6 +1,7 @@
 package com.positivity.invoice.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.invoice.internal.dto.InvoiceLineSearchResult;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.service.InvoiceSearchService;
 import com.positivity.shared.error.ApiError;
@@ -11,7 +12,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -71,6 +75,36 @@ public class InvoiceSearchController {
                     @PageableDefault(size = 25, sort = "createdAt", direction = Sort.Direction.DESC)
                     Pageable pageable) {
         return invoiceSearchService.search(q == null ? "" : q.trim(), capPageSize(pageable));
+    }
+
+    @Operation(
+            summary = "Search invoice line items by customer party",
+            description = "Returns invoice line items belonging to the given customer party, "
+                    + "optionally narrowed by a SKU/description term, flattened with the owning "
+                    + "invoice's number, status, and creation time. Newest invoice first, bounded "
+                    + "to the newest 200 lines. Built for warranty-claim correlation.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "List of matching invoice line items returned."),
+        @ApiResponse(
+                responseCode = "400",
+                description = "Missing or malformed partyId.",
+                content = @Content(schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Caller lacks the invoice:manage authority.",
+                content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    @GetMapping("/items/search")
+    @PreAuthorize("hasAuthority('invoice:manage')")
+    @EmitEvent(id = "INVOICE_ITEM_SEARCH", apiVersion = "1")
+    public List<InvoiceLineSearchResult> searchInvoiceLines(
+            @Parameter(description = "Customer party identifier owning the invoices (required)") @RequestParam @NonNull
+                    UUID partyId,
+            @Parameter(description = "SKU / description term narrowing the lines (optional)")
+                    @RequestParam(required = false)
+                    @Nullable
+                    String q) {
+        return invoiceSearchService.searchLinesByParty(partyId, q);
     }
 
     /** Clamp the requested page size to {@link #MAX_PAGE_SIZE}, preserving page index and sort. */

@@ -505,6 +505,8 @@ paths:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1billing~1rules~1{partyId}
   /v1/invoices:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices
+  /v1/invoices/items/search:
+    $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1items~1search
   /v1/invoices/search:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1search
   /v1/invoices/{invoiceId}:
@@ -979,6 +981,58 @@ paths:
     $ref: ../../pos-vehicle-inventory/openapi.yaml#/paths/~1v1~1vehicles~1search
   /v1/vehicles/{vehicleId}/preferences:
     $ref: ../../pos-vehicle-inventory/openapi.yaml#/paths/~1v1~1vehicles~1{vehicleId}~1preferences
+  /v1/warranty/claims:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims
+  /v1/warranty/claims/candidate-lines:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1candidate-lines
+  /v1/warranty/claims/{id}:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1{id}
+  /v1/warranty/claims/{id}/cancel:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1{id}~1cancel
+  /v1/warranty/claims/{id}/close:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1{id}~1close
+  /v1/warranty/claims/{id}/decision:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1{id}~1decision
+  /v1/warranty/claims/{id}/eligibility:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1{id}~1eligibility
+  /v1/warranty/claims/{id}/lines:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1{id}~1lines
+  /v1/warranty/claims/{id}/lines/{lineId}:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1{id}~1lines~1{lineId}
+  /v1/warranty/claims/{id}/notes:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1{id}~1notes
+  /v1/warranty/claims/{id}/part-returns:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1{id}~1part-returns
+  /v1/warranty/claims/{id}/photos:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1{id}~1photos
+  /v1/warranty/claims/{id}/reimbursement:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1{id}~1reimbursement
+  /v1/warranty/claims/{id}/reimbursement/submit:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1{id}~1reimbursement~1submit
+  /v1/warranty/claims/{id}/settlements:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1{id}~1settlements
+  /v1/warranty/claims/{id}/submit:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1claims~1{id}~1submit
+  /v1/warranty/part-returns:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1part-returns
+  /v1/warranty/part-returns/{id}:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1part-returns~1{id}
+  /v1/warranty/policies:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1policies
+  /v1/warranty/policies/applicable:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1policies~1applicable
+  /v1/warranty/policies/{id}:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1policies~1{id}
+  /v1/warranty/providers:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1providers
+  /v1/warranty/providers/{id}:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1providers~1{id}
+  /v1/warranty/registrations:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1registrations
+  /v1/warranty/registrations/{id}:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1registrations~1{id}
+  /v1/warranty/reimbursements:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1reimbursements
   /v1/workexec:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workexec
   /v1/workexec/approvalConfigurations:
@@ -1194,6 +1248,8 @@ tags:
   description: Operations served by pos-vehicle-fitment
 - name: pos-vehicle-inventory
   description: Operations served by pos-vehicle-inventory
+- name: pos-warranty
+  description: Operations served by pos-warranty
 - name: pos-workorder
   description: Operations served by pos-workorder
 x-aggregated-modules:
@@ -1219,4 +1275,5 @@ x-aggregated-modules:
 - pos-tax
 - pos-vehicle-fitment
 - pos-vehicle-inventory
+- pos-warranty
 - pos-workorder

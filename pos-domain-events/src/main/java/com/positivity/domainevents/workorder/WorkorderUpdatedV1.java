@@ -48,7 +48,9 @@ public record WorkorderUpdatedV1(
      * @param quantity snapshotted quantity
      */
     public record PartLine(
-            @NonNull UUID workorderLineId, @Nullable UUID productEntityId, @Nullable BigDecimal quantity) {}
+            @NonNull UUID workorderLineId,
+            @Nullable UUID productEntityId,
+            @Nullable BigDecimal quantity) {}
 
     public WorkorderUpdatedV1 {
         if (workorderId == null) {

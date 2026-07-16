@@ -1,8 +1,10 @@
 package com.positivity.invoice.internal.service;
 
-
+import com.positivity.invoice.internal.dto.InvoiceLineSearchResult;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.InvoiceItem;
+import com.positivity.invoice.internal.repository.InvoiceItemRepository;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.service.InvoiceSearchService;
 import java.util.List;
@@ -11,7 +13,9 @@ import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -39,6 +43,7 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
     private static final UUID NO_WORKORDER_SENTINEL = new UUID(0L, 0L);
 
     private final InvoiceRepository invoiceRepository;
+    private final InvoiceItemRepository invoiceItemRepository;
     private final CustomerReferenceService customerReferenceService;
     private final WorkorderReferenceService workorderReferenceService;
 
@@ -87,6 +92,43 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
                 .total(invoice.getTotal())
                 .createdAt(invoice.getCreatedAt())
                 .build());
+    }
+
+    /**
+     * Hard server-side bound on the line search: newest lines survive truncation (the query
+     * orders by invoice creation time descending), keeping a high-history fleet party from
+     * join-fetching its entire billing history into the heap per call.
+     */
+    static final int MAX_LINE_RESULTS = 200;
+
+    @Override
+    public @NonNull List<InvoiceLineSearchResult> searchLinesByParty(@NonNull UUID partyId, @Nullable String q) {
+        // Invoices store the party id as a string column; UUID party ids are persisted in
+        // canonical lowercase form (UUID.toString()).
+        String descriptionFilter = StringUtils.hasText(q) ? escapeLike(q.trim()) : null;
+        return invoiceItemRepository
+                .findByInvoicePartyId(partyId.toString(), descriptionFilter, PageRequest.of(0, MAX_LINE_RESULTS))
+                .stream()
+                .map(InvoiceSearchServiceImpl::toLineResult)
+                .toList();
+    }
+
+    private static @NonNull InvoiceLineSearchResult toLineResult(@NonNull InvoiceItem item) {
+        Invoice invoice = item.getInvoice();
+        return InvoiceLineSearchResult.builder()
+                .invoiceId(invoice.getId())
+                .invoiceNumber(invoice.getInvoiceNumber())
+                .invoiceItemId(item.getId())
+                .description(item.getDescription())
+                .quantity(item.getQuantity())
+                .unitPrice(item.getUnitPrice())
+                .amount(item.getLineTotal())
+                .workorderItemId(item.getWorkorderItemId())
+                .itemType(item.getType())
+                .invoiceStatus(
+                        invoice.getStatus() == null ? null : invoice.getStatus().name())
+                .invoiceCreatedAt(invoice.getCreatedAt())
+                .build();
     }
 
     /**

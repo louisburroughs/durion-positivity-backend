@@ -218,7 +218,12 @@ class PaymentReversalServiceImplTest {
         when(refundRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         assertThatCode(() -> paymentReversalServiceImpl.refundPayment(
-                        INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(50), RefundReason.CUSTOMER_RETURN, null))
+                        INVOICE_ID,
+                        PAYMENT_INTENT_ID,
+                        BigDecimal.valueOf(50),
+                        RefundReason.CUSTOMER_RETURN,
+                        null,
+                        null))
                 .doesNotThrowAnyException();
 
         verify(refundRecordRepository).save(any());
@@ -247,7 +252,12 @@ class PaymentReversalServiceImplTest {
         SecurityContextHolder.setContext(new SecurityContextImpl(auth));
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
-                        INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(50), RefundReason.CUSTOMER_RETURN, null))
+                        INVOICE_ID,
+                        PAYMENT_INTENT_ID,
+                        BigDecimal.valueOf(50),
+                        RefundReason.CUSTOMER_RETURN,
+                        null,
+                        null))
                 .isInstanceOf(AccessDeniedException.class);
 
         verifyNoInteractions(paymentIntentRepository, refundRecordRepository, paymentGatewayPort);
@@ -277,11 +287,18 @@ class PaymentReversalServiceImplTest {
         when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
 
         paymentReversalServiceImpl.refundPayment(
-                INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(500_00, 2), RefundReason.CUSTOMER_RETURN, null);
+                INVOICE_ID,
+                PAYMENT_INTENT_ID,
+                BigDecimal.valueOf(500_00, 2),
+                RefundReason.CUSTOMER_RETURN,
+                null,
+                "  WC-2026-000042  ");
 
         verify(refundRecordRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(RefundStatus.COMPLETED);
         assertThat(captor.getValue().getAmount()).isEqualByComparingTo("500.00");
+        // The optional external reference is trimmed and persisted on the refund record.
+        assertThat(captor.getValue().getExternalReference()).isEqualTo("WC-2026-000042");
         verify(paymentGatewayPort).refund(any(GatewayRefundRequest.class));
     }
 
@@ -306,7 +323,7 @@ class PaymentReversalServiceImplTest {
 
         // 200 ≤ (500 - 100 = 400 remaining) — should succeed
         paymentReversalServiceImpl.refundPayment(
-                INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(200_00, 2), RefundReason.OVERCHARGE, null);
+                INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(200_00, 2), RefundReason.OVERCHARGE, null, null);
 
         verify(refundRecordRepository).save(any(RefundRecord.class));
     }
@@ -328,6 +345,7 @@ class PaymentReversalServiceImplTest {
                         PAYMENT_INTENT_ID,
                         BigDecimal.valueOf(600_00, 2), // exceeds capturedAmount=500
                         RefundReason.SERVICE_ERROR,
+                        null,
                         null))
                 .isInstanceOf(InsufficientRefundableAmountException.class);
 
@@ -347,7 +365,12 @@ class PaymentReversalServiceImplTest {
         when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID)).thenReturn(List.of());
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
-                        INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(100_00, 2), RefundReason.GOODWILL, null))
+                        INVOICE_ID,
+                        PAYMENT_INTENT_ID,
+                        BigDecimal.valueOf(100_00, 2),
+                        RefundReason.GOODWILL,
+                        null,
+                        null))
                 .isInstanceOf(PaymentWindowExpiredException.class);
 
         verify(paymentGatewayPort, never()).refund(any());
@@ -367,6 +390,7 @@ class PaymentReversalServiceImplTest {
                         PAYMENT_INTENT_ID,
                         BigDecimal.valueOf(100_00, 2),
                         RefundReason.CHARGEBACK_AVOIDANCE,
+                        null,
                         null))
                 .isInstanceOf(InvalidPaymentStateException.class);
 
@@ -443,7 +467,12 @@ class PaymentReversalServiceImplTest {
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
-                        INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(100_00, 2), RefundReason.GOODWILL, null))
+                        INVOICE_ID,
+                        PAYMENT_INTENT_ID,
+                        BigDecimal.valueOf(100_00, 2),
+                        RefundReason.GOODWILL,
+                        null,
+                        null))
                 .isInstanceOf(PaymentIntentNotFoundException.class);
 
         verifyNoInteractions(refundRecordRepository, paymentGatewayPort);
@@ -464,6 +493,7 @@ class PaymentReversalServiceImplTest {
                         PAYMENT_INTENT_ID,
                         BigDecimal.valueOf(100_00, 2),
                         RefundReason.OVERCHARGE,
+                        null,
                         null))
                 .isInstanceOf(PaymentIntentNotFoundException.class);
 
@@ -487,7 +517,7 @@ class PaymentReversalServiceImplTest {
         when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
 
         paymentReversalServiceImpl.refundPayment(
-                INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(100_00, 2), RefundReason.CUSTOMER_RETURN, null);
+                INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(100_00, 2), RefundReason.CUSTOMER_RETURN, null, null);
 
         ArgumentCaptor<RefundRecord> captor = ArgumentCaptor.forClass(RefundRecord.class);
         verify(refundRecordRepository).save(captor.capture());

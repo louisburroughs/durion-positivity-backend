@@ -112,7 +112,8 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             @NonNull UUID paymentIntentId,
             @NonNull BigDecimal amount,
             @NonNull RefundReason reason,
-            @Nullable String notes) {
+            @Nullable String notes,
+            @Nullable String externalReference) {
         requireAuthority(REFUND_PAYMENT);
         PaymentIntent paymentIntent = paymentIntentRepository
                 .findById(paymentIntentId)
@@ -129,6 +130,20 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         }
 
         List<RefundRecord> existingRefunds = refundRecordRepository.findByPaymentIntent_Id(paymentIntentId);
+
+        // Idempotent replay guard: a caller retrying after a transport timeout (its refund may
+        // have committed here already) supplies the same externalReference — return the
+        // existing non-FAILED refund instead of paying the customer twice (warranty settlements
+        // pass their settlement id).
+        String normalizedReference = normalizeExternalReference(externalReference);
+        if (normalizedReference != null) {
+            for (RefundRecord existing : existingRefunds) {
+                if (existing.getStatus() != RefundStatus.FAILED
+                        && normalizedReference.equals(existing.getExternalReference())) {
+                    return toResult(existing);
+                }
+            }
+        }
 
         Instant capturedAt = paymentIntent.getCreatedAt();
         if (capturedAt != null) {
@@ -159,6 +174,7 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         refundRecord.setAmount(amount);
         refundRecord.setReason(reason);
         refundRecord.setNotes(notes);
+        refundRecord.setExternalReference(normalizedReference);
         refundRecord.setRequestedBy(requestedBy);
         refundRecord.setRequestedAt(Instant.now(clock));
         refundRecord.setStatus(result.isSuccessful() ? RefundStatus.COMPLETED : RefundStatus.FAILED);
@@ -168,6 +184,11 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         }
 
         RefundRecord saved = refundRecordRepository.save(refundRecord);
+        return toResult(saved);
+    }
+
+    @NonNull
+    private static RefundPaymentResult toResult(@NonNull RefundRecord saved) {
         RefundPaymentResult resultDto = new RefundPaymentResult();
         resultDto.setRefundId(saved.getId());
         resultDto.setInvoiceId(
@@ -181,7 +202,17 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         resultDto.setNotes(saved.getNotes());
         resultDto.setStatus(saved.getStatus());
         resultDto.setGatewayReference(saved.getGatewayReference());
+        resultDto.setExternalReference(saved.getExternalReference());
         resultDto.setCompletedAt(saved.getCompletedAt());
         return resultDto;
+    }
+
+    /** Trim the optional external reference and collapse a blank value to {@code null}. */
+    @Nullable
+    private static String normalizeExternalReference(@Nullable String externalReference) {
+        if (externalReference == null || externalReference.isBlank()) {
+            return null;
+        }
+        return externalReference.trim();
     }
 }

@@ -46,6 +46,11 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    public static final EventTypeRegistration INVOICE_ITEM_SEARCH = EventTypeRegistration.search(
+                    "INVOICE_ITEM_SEARCH", "Search invoice line items by customer party for warranty correlation")
+            .apiVersion("1")
+            .build();
+
     public static final EventTypeRegistration INVOICE_ADJUSTMENT_APPLY = EventTypeRegistration.write(
                     "INVOICE_ADJUSTMENT_APPLY", "Apply adjustment to draft invoice")
             .apiVersion("1")
@@ -139,6 +144,7 @@ public final class EventTypes {
                 INVOICE_CREATE,
                 INVOICE_GET,
                 INVOICE_SEARCH,
+                INVOICE_ITEM_SEARCH,
                 INVOICE_ADJUSTMENT_APPLY,
                 INVOICE_FINALIZATION_REQUESTED,
                 INVOICE_FINALIZED,
