@@ -295,16 +295,18 @@ jobs:
           ./mvnw -pl pos-events test -DskipITs -T 1C -B -q
 
       - name: Run integration tests
-        # verify re-runs surefire, so pos-archunit needs the same reactor treatment as in
-        # the unit-tests job (#909); scope surefire and failsafe to its own tests.
+        # pos-archunit has no failsafe ITs, and running `verify` on the -am reactor
+        # takes the upstream modules through package, where spring-boot:repackage
+        # swaps their jars for fat jars whose classes hide under BOOT-INF/classes —
+        # ArchUnit then sees nothing and ClasspathVisibilityGuardTest fails (#909).
+        # Stop at the test phase so siblings resolve to target/classes, exactly as
+        # in the unit-tests job.
         run: |
           if [[ "${{ matrix.module }}" == "pos-archunit" ]]; then
-            ./mvnw -pl pos-archunit -am -DskipTests=false verify \
+            ./mvnw -pl pos-archunit -am -DskipTests=false test \
               -Dtest='com/positivity/archunit/*' \
               -Dsurefire.failIfNoSpecifiedTests=false \
-              -Dit.test='com/positivity/archunit/*' \
-              -Dfailsafe.failIfNoSpecifiedTests=false \
-              -T 1C -B -q -o
+              -DskipITs -T 1C -B -q -o
           else
             ./mvnw -pl ${{ matrix.module }} -DskipTests=false verify -T 1C -B -q -o
           fi
