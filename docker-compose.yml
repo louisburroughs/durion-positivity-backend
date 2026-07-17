@@ -116,6 +116,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+      start_period: 60s
     logging: *logging
     networks:
       - pos-network
@@ -209,6 +210,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 60s
     logging: *logging
     networks:
       - pos-network
@@ -244,6 +246,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+      start_period: 60s
     logging: *logging
     networks:
       - pos-network
@@ -320,6 +323,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 60s
     logging: *logging
     networks:
       - pos-network
@@ -366,6 +370,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20 # Give it enough time to start
+      start_period: 300s
 
   pos-accounting:
     build:
@@ -407,6 +412,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-bulk-loader:
     build:
@@ -442,6 +448,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-catalog:
     build:
@@ -478,6 +485,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-customer:
     build:
@@ -518,6 +526,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   # NOTE: pos-event-receiver does NOT require pos-security-service.
   # Security is enforced via:
@@ -554,6 +563,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-image:
     build:
@@ -586,6 +596,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   # pos-inquiry:
   #   build:
@@ -649,6 +660,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-invoice:
     build:
@@ -684,6 +696,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   # Internal-only tax calculation service. Never routed through the gateway (ADR-0014);
   # reached directly over pos-network by pos-invoice at http://pos-tax:8091/v1/tax.
@@ -715,7 +728,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 90s
+      start_period: 300s
 
   # Internal-only PDF rendering service. Never routed through the gateway; reached
   # directly over pos-network (e.g. by pos-invoice at http://pos-documents:8092/v1/documents).
@@ -743,7 +756,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 90s
+      start_period: 300s
 
   pos-location:
     build:
@@ -779,6 +792,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-mcp-server:
     build:
@@ -835,6 +849,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   # pos-order:
   #   build:
@@ -900,6 +915,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-people-contact:
     build:
@@ -937,7 +953,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 90s
+      start_period: 300s
 
   pos-price:
     build:
@@ -968,6 +984,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-security-service:
     build:
@@ -1012,6 +1029,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-shop-manager:
     build:
@@ -1049,6 +1067,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   # pos-vehicle-fitment:
   #   build:
@@ -1251,6 +1270,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-api-gateway:
     build:
@@ -1272,6 +1292,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
     logging: *logging
     networks:
       pos-network:
@@ -1311,6 +1332,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
     logging: *logging
     networks:
       - pos-network
