@@ -82,6 +82,7 @@ class PolicyServiceImplTest {
                 Boolean.TRUE,
                 Boolean.TRUE,
                 null,
+                null,
                 "fine print",
                 List.of("https://docs.example.com/policy.pdf"));
     }
@@ -173,6 +174,7 @@ class PolicyServiceImplTest {
                     null,
                     null,
                     null,
+                    null,
                     null);
 
             PolicyResponse response = service.create(request);
@@ -181,6 +183,7 @@ class PolicyServiceImplTest {
             assertThat(response.requiresPartReturn()).isFalse();
             assertThat(response.requiresPhotoEvidence()).isFalse();
             assertThat(response.transferable()).isFalse();
+            assertThat(response.autoRegister()).isFalse();
         }
 
         @Test

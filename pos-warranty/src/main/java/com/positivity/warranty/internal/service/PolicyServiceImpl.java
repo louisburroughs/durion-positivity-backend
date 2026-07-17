@@ -191,6 +191,7 @@ public class PolicyServiceImpl implements PolicyService {
         policy.setRequiresPhotoEvidence(
                 request.requiresPhotoEvidence() != null ? request.requiresPhotoEvidence() : Boolean.FALSE);
         policy.setTransferable(request.transferable() != null ? request.transferable() : Boolean.FALSE);
+        policy.setAutoRegister(request.autoRegister() != null ? request.autoRegister() : Boolean.FALSE);
         policy.setTermsText(request.termsText());
         policy.setDocumentUrls(request.documentUrls());
     }
@@ -218,6 +219,7 @@ public class PolicyServiceImpl implements PolicyService {
                 policy.getRequiresPartReturn(),
                 policy.getRequiresPhotoEvidence(),
                 policy.getTransferable(),
+                policy.getAutoRegister(),
                 policy.getTermsText(),
                 policy.getDocumentUrls(),
                 policy.getCreatedAt(),

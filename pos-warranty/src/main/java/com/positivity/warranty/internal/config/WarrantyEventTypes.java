@@ -62,6 +62,10 @@ public final class WarrantyEventTypes {
                 EventTypeRegistration.search(
                                 "WARRANTY_CANDIDATE_LINE_SEARCH",
                                 "Search invoices and workorders for claim origin candidate lines")
+                        .build(),
+                EventTypeRegistration.search(
+                                "WARRANTY_SETTLEMENT_RECONCILIATION",
+                                "Reconcile FAILED settlements against pos-invoice (double-pay worklist)")
                         .build());
     }
 }

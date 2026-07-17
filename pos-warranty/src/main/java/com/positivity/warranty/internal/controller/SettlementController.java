@@ -2,8 +2,10 @@ package com.positivity.warranty.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.warranty.internal.dto.SettlementCreateRequest;
+import com.positivity.warranty.internal.dto.SettlementReconciliationRow;
 import com.positivity.warranty.internal.dto.SettlementResponse;
 import com.positivity.warranty.internal.security.WarrantyPermissions;
+import com.positivity.warranty.internal.service.SettlementReconciliationService;
 import com.positivity.warranty.internal.service.SettlementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -12,12 +14,14 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -39,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SettlementController {
 
     private final SettlementService settlementService;
+    private final SettlementReconciliationService settlementReconciliationService;
 
     @Operation(
             summary = "Execute a settlement",
@@ -57,5 +62,20 @@ public class SettlementController {
             @Parameter(description = "Claim id") @PathVariable("id") UUID claimId,
             @Valid @NotNull @RequestBody SettlementCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(settlementService.create(claimId, request));
+    }
+
+    @Operation(
+            summary = "Reconcile FAILED settlements against pos-invoice",
+            description = "Read-only worklist (issue #922): every FAILED adjustment/refund settlement checked"
+                    + " against pos-invoice by its externalReference (the settlement id). Rows with"
+                    + " committedOnInvoice=true are the double-pay risk — pos-invoice committed the money write"
+                    + " even though warranty recorded the settlement as FAILED. Rows with checkStatus=UNKNOWN"
+                    + " could not be verified (pos-invoice unreachable) and should be re-checked.")
+    @ApiResponse(responseCode = "200", description = "Reconciliation worklist.")
+    @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_SETTLE + "')")
+    @EmitEvent(id = "WARRANTY_SETTLEMENT_RECONCILIATION", apiVersion = "1")
+    @GetMapping("/settlements/reconciliation")
+    public ResponseEntity<List<SettlementReconciliationRow>> reconcileSettlements() {
+        return ResponseEntity.ok(settlementReconciliationService.reconcileFailedSettlements());
     }
 }

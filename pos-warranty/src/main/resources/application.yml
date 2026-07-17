@@ -68,9 +68,13 @@ springdoc:
 pos:
   warranty:
     kafka:
-      # Domain-event publishing (ADR-0044, PRD §9.3). Off until the broker is provisioned;
-      # flip POS_WARRANTY_KAFKA_ENABLED per environment.
+      # Domain-event publishing (ADR-0044, PRD §9.3) and the workorder-events consumer
+      # (issue #925). Off until the broker is provisioned; flip POS_WARRANTY_KAFKA_ENABLED
+      # per environment.
       enabled: ${POS_WARRANTY_KAFKA_ENABLED:false}
+      # Sale-driven auto-registration feed (issue #925)
+      workorder-events-topic: ${POS_WARRANTY_WORKORDER_EVENTS_TOPIC:workorder.events.v1}
+      workorder-events-consumer-group: ${POS_WARRANTY_WORKORDER_EVENTS_CONSUMER_GROUP:pos-warranty-workorder-events}
   events:
     base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}
     api-secret: ${POS_EVENTS_API_SECRET:}

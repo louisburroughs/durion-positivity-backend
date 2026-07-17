@@ -23,4 +23,12 @@ public interface WarrantyRegistrationRepository extends JpaRepository<WarrantyRe
 
     @NonNull
     List<WarrantyRegistration> findByPolicyId(@NonNull UUID policyId);
+
+    /**
+     * Auto-registration dedupe (issue #925): one registration per (policy, source invoice).
+     * Kafka partitions by aggregate, so the same workorder is processed serially and a
+     * check-then-insert is race-safe enough; deliberately no unique index so manual
+     * re-registration flows stay possible.
+     */
+    boolean existsByPolicyIdAndSourceInvoiceId(@NonNull UUID policyId, @NonNull UUID sourceInvoiceId);
 }
