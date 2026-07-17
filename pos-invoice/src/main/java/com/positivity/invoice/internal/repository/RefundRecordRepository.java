@@ -9,4 +9,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface RefundRecordRepository extends JpaRepository<RefundRecord, UUID> {
 
     List<RefundRecord> findByPaymentIntent_Id(@NonNull UUID paymentIntentId);
+
+    List<RefundRecord> findByInvoice_Id(@NonNull UUID invoiceId);
+
+    List<RefundRecord> findByPartyIdAndPaymentIntentIsNull(@NonNull String partyId);
 }

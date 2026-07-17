@@ -18,6 +18,7 @@ import com.positivity.invoice.internal.enums.RefundStatus;
 import com.positivity.invoice.internal.enums.VoidReason;
 import com.positivity.invoice.internal.exception.InsufficientRefundableAmountException;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.PaymentGatewayException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
 import com.positivity.invoice.internal.exception.PaymentWindowExpiredException;
@@ -25,8 +26,10 @@ import com.positivity.invoice.internal.payment.GatewayPaymentResult;
 import com.positivity.invoice.internal.payment.GatewayRefundRequest;
 import com.positivity.invoice.internal.payment.GatewayVoidRequest;
 import com.positivity.invoice.internal.payment.PaymentGatewayPort;
+import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.internal.repository.RefundRecordRepository;
+import com.positivity.invoice.service.RefundPaymentResult;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -98,6 +101,9 @@ class PaymentReversalServiceImplTest {
 
     @Mock
     private RefundRecordRepository refundRecordRepository;
+
+    @Mock
+    private InvoiceRepository invoiceRepository;
 
     @Mock
     private PaymentGatewayPort paymentGatewayPort;
@@ -527,6 +533,189 @@ class PaymentReversalServiceImplTest {
     }
 
     // -------------------------------------------------------------------------
+    // Issue #926 — standalone refunds (no captured PaymentIntent)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Invoice-anchored standalone refund: no gateway leg, record saved COMPLETED with the
+     * invoice's party id, no PaymentIntent, and completedAt stamped from the clock.
+     */
+    @Test
+    void refundInvoiceStandalone_success_savesCompletedRecordWithoutGateway() {
+        withAuthorities("ISSUE_MANUAL_REFUND");
+        Invoice invoice = invoiceWithTotal(BigDecimal.valueOf(500_00, 2));
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+        when(refundRecordRepository.findByInvoice_Id(INVOICE_ID)).thenReturn(List.of());
+        when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        paymentReversalServiceImpl.refundInvoiceStandalone(
+                INVOICE_ID, BigDecimal.valueOf(120_00, 2), RefundReason.OTHER, "walk-in claim", " WC-2026-000042 ");
+
+        ArgumentCaptor<RefundRecord> captor = ArgumentCaptor.forClass(RefundRecord.class);
+        verify(refundRecordRepository).save(captor.capture());
+        RefundRecord saved = captor.getValue();
+        assertThat(saved.getPaymentIntent()).isNull();
+        assertThat(saved.getInvoice()).isSameAs(invoice);
+        assertThat(saved.getPartyId()).isEqualTo("party-0001");
+        assertThat(saved.getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(saved.getGatewayReference()).isNull();
+        assertThat(saved.getExternalReference()).isEqualTo("WC-2026-000042");
+        assertThat(saved.getCompletedAt()).isEqualTo(CLOCK_INSTANT);
+        verifyNoInteractions(paymentGatewayPort);
+    }
+
+    /** Standalone refunds require the finance-only ISSUE_MANUAL_REFUND authority. */
+    @Test
+    void refundInvoiceStandalone_missingPermission_throwsAccessDeniedException() {
+        withAuthorities("REFUND_PAYMENT"); // captured-payment authority is not enough
+
+        assertThatThrownBy(() -> paymentReversalServiceImpl.refundInvoiceStandalone(
+                        INVOICE_ID, BigDecimal.valueOf(50), RefundReason.OTHER, null, null))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verifyNoInteractions(invoiceRepository, refundRecordRepository, paymentGatewayPort);
+    }
+
+    @Test
+    void refundInvoiceStandalone_invoiceNotFound_throwsInvoiceNotFoundException() {
+        withAuthorities("ISSUE_MANUAL_REFUND");
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> paymentReversalServiceImpl.refundInvoiceStandalone(
+                        INVOICE_ID, BigDecimal.valueOf(50), RefundReason.OTHER, null, null))
+                .isInstanceOf(InvoiceNotFoundException.class);
+
+        verifyNoInteractions(refundRecordRepository, paymentGatewayPort);
+    }
+
+    /**
+     * Cumulative refunds on the invoice (payment-anchored and standalone alike) are capped at
+     * the invoice total: total=500, prior refund 450 → requesting 100 exceeds the remaining 50.
+     */
+    @Test
+    void refundInvoiceStandalone_exceedsInvoiceTotal_throwsInsufficientRefundableAmountException() {
+        withAuthorities("ISSUE_MANUAL_REFUND");
+        Invoice invoice = invoiceWithTotal(BigDecimal.valueOf(500_00, 2));
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+
+        RefundRecord prior = new RefundRecord();
+        prior.setAmount(BigDecimal.valueOf(450_00, 2));
+        prior.setStatus(RefundStatus.COMPLETED);
+        when(refundRecordRepository.findByInvoice_Id(INVOICE_ID)).thenReturn(List.of(prior));
+
+        assertThatThrownBy(() -> paymentReversalServiceImpl.refundInvoiceStandalone(
+                        INVOICE_ID, BigDecimal.valueOf(100_00, 2), RefundReason.OTHER, null, null))
+                .isInstanceOf(InsufficientRefundableAmountException.class);
+
+        verify(refundRecordRepository, never()).save(any());
+    }
+
+    /**
+     * Idempotent replay guard: retrying with the same externalReference returns the existing
+     * non-FAILED standalone record instead of recording a second refund.
+     */
+    @Test
+    void refundInvoiceStandalone_replaySameExternalReference_returnsExistingRecord() {
+        withAuthorities("ISSUE_MANUAL_REFUND");
+        Invoice invoice = invoiceWithTotal(BigDecimal.valueOf(500_00, 2));
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+
+        RefundRecord existing = new RefundRecord();
+        existing.setId(UUID.fromString("00000000-0000-7000-8000-000000000042"));
+        existing.setInvoice(invoice);
+        existing.setAmount(BigDecimal.valueOf(120_00, 2));
+        existing.setStatus(RefundStatus.COMPLETED);
+        existing.setExternalReference("WC-2026-000042");
+        when(refundRecordRepository.findByInvoice_Id(INVOICE_ID)).thenReturn(List.of(existing));
+
+        RefundPaymentResult result = paymentReversalServiceImpl.refundInvoiceStandalone(
+                INVOICE_ID, BigDecimal.valueOf(120_00, 2), RefundReason.OTHER, null, "WC-2026-000042");
+
+        assertThat(result.getRefundId()).isEqualTo(existing.getId());
+        verify(refundRecordRepository, never()).save(any());
+    }
+
+    /** Party-anchored standalone refund: no invoice in the system, anchored to the party id. */
+    @Test
+    void refundPartyStandalone_success_savesCompletedRecordAnchoredToParty() {
+        withAuthorities("ISSUE_MANUAL_REFUND");
+        when(refundRecordRepository.findByPartyIdAndPaymentIntentIsNull("party-0009"))
+                .thenReturn(List.of());
+        when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        paymentReversalServiceImpl.refundPartyStandalone(
+                " party-0009 ", BigDecimal.valueOf(75_00, 2), RefundReason.OTHER, null, "WC-2026-000043");
+
+        ArgumentCaptor<RefundRecord> captor = ArgumentCaptor.forClass(RefundRecord.class);
+        verify(refundRecordRepository).save(captor.capture());
+        RefundRecord saved = captor.getValue();
+        assertThat(saved.getPaymentIntent()).isNull();
+        assertThat(saved.getInvoice()).isNull();
+        assertThat(saved.getPartyId()).isEqualTo("party-0009");
+        assertThat(saved.getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        verifyNoInteractions(paymentGatewayPort);
+    }
+
+    @Test
+    void refundPartyStandalone_blankPartyId_throwsIllegalArgumentException() {
+        withAuthorities("ISSUE_MANUAL_REFUND");
+
+        assertThatThrownBy(() -> paymentReversalServiceImpl.refundPartyStandalone(
+                        "   ", BigDecimal.valueOf(50), RefundReason.OTHER, null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verifyNoInteractions(refundRecordRepository, paymentGatewayPort);
+    }
+
+    /**
+     * The party-anchored replay guard must ignore invoice-anchored standalone refunds even
+     * though they carry the same partyId (stamped from the invoice) — a party-endpoint retry
+     * must never replay a record with a different anchor shape.
+     */
+    @Test
+    void refundPartyStandalone_invoiceAnchoredRecordSameReference_isNotReplayed() {
+        withAuthorities("ISSUE_MANUAL_REFUND");
+
+        RefundRecord invoiceAnchored = new RefundRecord();
+        invoiceAnchored.setId(UUID.fromString("00000000-0000-7000-8000-000000000044"));
+        invoiceAnchored.setInvoice(invoice(INVOICE_ID));
+        invoiceAnchored.setPartyId("party-0009");
+        invoiceAnchored.setAmount(BigDecimal.valueOf(75_00, 2));
+        invoiceAnchored.setStatus(RefundStatus.COMPLETED);
+        invoiceAnchored.setExternalReference("WC-2026-000043");
+        when(refundRecordRepository.findByPartyIdAndPaymentIntentIsNull("party-0009"))
+                .thenReturn(List.of(invoiceAnchored));
+        when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RefundPaymentResult result = paymentReversalServiceImpl.refundPartyStandalone(
+                "party-0009", BigDecimal.valueOf(75_00, 2), RefundReason.OTHER, null, "WC-2026-000043");
+
+        assertThat(result.getRefundId()).isNotEqualTo(invoiceAnchored.getId());
+        assertThat(result.getInvoiceId()).isNull();
+        verify(refundRecordRepository).save(any(RefundRecord.class));
+    }
+
+    @Test
+    void refundPartyStandalone_replaySameExternalReference_returnsExistingRecord() {
+        withAuthorities("ISSUE_MANUAL_REFUND");
+
+        RefundRecord existing = new RefundRecord();
+        existing.setId(UUID.fromString("00000000-0000-7000-8000-000000000043"));
+        existing.setPartyId("party-0009");
+        existing.setAmount(BigDecimal.valueOf(75_00, 2));
+        existing.setStatus(RefundStatus.COMPLETED);
+        existing.setExternalReference("WC-2026-000043");
+        when(refundRecordRepository.findByPartyIdAndPaymentIntentIsNull("party-0009"))
+                .thenReturn(List.of(existing));
+
+        RefundPaymentResult result = paymentReversalServiceImpl.refundPartyStandalone(
+                "party-0009", BigDecimal.valueOf(75_00, 2), RefundReason.OTHER, null, "WC-2026-000043");
+
+        assertThat(result.getRefundId()).isEqualTo(existing.getId());
+        verify(refundRecordRepository, never()).save(any());
+    }
+
+    // -------------------------------------------------------------------------
     // PaymentGatewayException — direct constructor coverage
     // -------------------------------------------------------------------------
 
@@ -592,6 +781,14 @@ class PaymentReversalServiceImplTest {
     private Invoice invoice(UUID id) {
         Invoice invoice = new Invoice();
         invoice.setId(id);
+        return invoice;
+    }
+
+    /** Builds an invoice fixture for standalone-refund tests (total + party anchor). */
+    private Invoice invoiceWithTotal(BigDecimal total) {
+        Invoice invoice = invoice(INVOICE_ID);
+        invoice.setTotal(total);
+        invoice.setPartyId("party-0001");
         return invoice;
     }
 

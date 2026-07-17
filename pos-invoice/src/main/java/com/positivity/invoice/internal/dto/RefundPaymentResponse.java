@@ -23,18 +23,24 @@ public class RefundPaymentResponse {
             requiredMode = REQUIRED)
     private UUID refundId;
 
-    @NotNull
     @Schema(
-            description = "Identifier of the invoice being refunded",
+            description = "Identifier of the invoice being refunded; absent for party-anchored standalone refunds",
             example = "01960003-0000-7000-8000-000000000040",
-            requiredMode = REQUIRED)
+            requiredMode = NOT_REQUIRED)
     private UUID invoiceId;
 
     @Schema(
-            description = "Identifier of the originating payment intent",
+            description = "Identifier of the originating payment intent; absent for standalone refunds",
             example = "01960003-0000-7000-8000-000000000020",
             requiredMode = NOT_REQUIRED)
     private UUID paymentIntentId;
+
+    @Schema(
+            description = "Customer party associated with the refund — the anchor for standalone refunds,"
+                    + " derived from the invoice for invoice- and payment-anchored refunds",
+            example = "party-000123",
+            requiredMode = NOT_REQUIRED)
+    private String partyId;
 
     @Schema(description = "Refunded amount", example = "50.00", requiredMode = NOT_REQUIRED)
     private BigDecimal amount;
