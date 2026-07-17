@@ -1300,5 +1300,3 @@ volumes:
     driver: local
   ollama-data:
     driver: local
-  kafka-data:
-    driver: local
