@@ -30,8 +30,8 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnProperty(prefix = "pos.warranty.kafka", name = "enabled", havingValue = "true")
 public class WorkorderEventsListener {
 
-    /** Distinct from other consumers of the same owner domain in this database. */
-    static final String OWNER = "warranty-workorder-events";
+    /** Producing domain, per the repo-wide processed_events convention (manifest scans key on it). */
+    static final String OWNER = "workorder";
 
     private final Clock clock;
     private final ObjectMapper objectMapper;
