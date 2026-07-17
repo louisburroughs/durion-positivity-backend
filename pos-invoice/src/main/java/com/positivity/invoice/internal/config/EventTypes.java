@@ -112,6 +112,20 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    // ==================== ISSUE #926 — STANDALONE REFUND EVENTS ====================
+
+    public static final EventTypeRegistration INVOICE_STANDALONE_REFUND = EventTypeRegistration.write(
+                    "INVOICE_STANDALONE_REFUND",
+                    "Record a standalone refund for an invoice whose original payment is not in the system")
+            .apiVersion("1")
+            .build();
+
+    public static final EventTypeRegistration INVOICE_PARTY_STANDALONE_REFUND = EventTypeRegistration.write(
+                    "INVOICE_PARTY_STANDALONE_REFUND",
+                    "Record a standalone refund anchored to a customer party with no invoice in the system")
+            .apiVersion("1")
+            .build();
+
     // ==================== STORY #7 — RECEIPT EVENTS ====================
 
     public static final EventTypeRegistration INVOICE_RECEIPT_GENERATE = EventTypeRegistration.write(
@@ -155,6 +169,8 @@ public final class EventTypes {
                 INVOICE_PAYMENT_CAPTURE,
                 INVOICE_PAYMENT_VOID,
                 INVOICE_PAYMENT_REFUND,
+                INVOICE_STANDALONE_REFUND,
+                INVOICE_PARTY_STANDALONE_REFUND,
                 INVOICE_RECEIPT_GENERATE,
                 INVOICE_RECEIPT_REPRINT,
                 INVOICE_RECEIPT_PRINT_DELIVERY,

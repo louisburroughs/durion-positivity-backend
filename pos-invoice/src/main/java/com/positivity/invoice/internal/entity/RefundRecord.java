@@ -33,13 +33,23 @@ public class RefundRecord {
     @Column(name = "id", columnDefinition = "UUID", nullable = false, updatable = false)
     private UUID id;
 
-    @ManyToOne(optional = false)
-    @JoinColumn(name = "payment_intent_id", nullable = false)
+    /** Null for standalone refunds — the original payment is not in the system (#926). */
+    @ManyToOne
+    @JoinColumn(name = "payment_intent_id")
     private PaymentIntent paymentIntent;
 
-    @ManyToOne(optional = false)
-    @JoinColumn(name = "invoice_id", nullable = false)
+    /** Null for party-anchored standalone refunds with no invoice in the system (#926). */
+    @ManyToOne
+    @JoinColumn(name = "invoice_id")
     private Invoice invoice;
+
+    /**
+     * Customer party anchor for standalone refunds. Set from the invoice for invoice-anchored
+     * standalone refunds, or supplied directly when no invoice exists. At least one of
+     * paymentIntent, invoice, or partyId is always present (DB check constraint).
+     */
+    @Column(name = "party_id", length = 64)
+    private String partyId;
 
     @Column(name = "amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal amount;

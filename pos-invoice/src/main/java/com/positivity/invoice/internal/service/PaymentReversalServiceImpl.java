@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.entity.RefundRecord;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
@@ -8,6 +9,7 @@ import com.positivity.invoice.internal.enums.RefundStatus;
 import com.positivity.invoice.internal.enums.VoidReason;
 import com.positivity.invoice.internal.exception.InsufficientRefundableAmountException;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.PaymentGatewayException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
 import com.positivity.invoice.internal.exception.PaymentWindowExpiredException;
@@ -15,6 +17,7 @@ import com.positivity.invoice.internal.payment.GatewayPaymentResult;
 import com.positivity.invoice.internal.payment.GatewayRefundRequest;
 import com.positivity.invoice.internal.payment.GatewayVoidRequest;
 import com.positivity.invoice.internal.payment.PaymentGatewayPort;
+import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.internal.repository.RefundRecordRepository;
 import com.positivity.invoice.service.PaymentReversalService;
@@ -38,22 +41,26 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
 
     private static final String VOID_PAYMENT = "VOID_PAYMENT";
     private static final String REFUND_PAYMENT = "REFUND_PAYMENT";
+    private static final String ISSUE_MANUAL_REFUND = "ISSUE_MANUAL_REFUND";
     private static final String SUPERVISOR_OVERRIDE = "SUPERVISOR_OVERRIDE";
     private static final long VOID_WINDOW_HOURS = 24L;
     private static final long REFUND_WINDOW_DAYS = 180L;
 
     private final PaymentIntentRepository paymentIntentRepository;
     private final RefundRecordRepository refundRecordRepository;
+    private final InvoiceRepository invoiceRepository;
     private final PaymentGatewayPort paymentGatewayPort;
     private final Clock clock;
 
     public PaymentReversalServiceImpl(
             @NonNull PaymentIntentRepository paymentIntentRepository,
             @NonNull RefundRecordRepository refundRecordRepository,
+            @NonNull InvoiceRepository invoiceRepository,
             @NonNull PaymentGatewayPort paymentGatewayPort,
             @NonNull Clock clock) {
         this.paymentIntentRepository = paymentIntentRepository;
         this.refundRecordRepository = refundRecordRepository;
+        this.invoiceRepository = invoiceRepository;
         this.paymentGatewayPort = paymentGatewayPort;
         this.clock = clock;
     }
@@ -171,6 +178,7 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         RefundRecord refundRecord = new RefundRecord();
         refundRecord.setPaymentIntent(paymentIntent);
         refundRecord.setInvoice(paymentIntent.getInvoice());
+        refundRecord.setPartyId(paymentIntent.getInvoice().getPartyId());
         refundRecord.setAmount(amount);
         refundRecord.setReason(reason);
         refundRecord.setNotes(notes);
@@ -187,6 +195,110 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         return toResult(saved);
     }
 
+    @Override
+    @NonNull
+    public RefundPaymentResult refundInvoiceStandalone(
+            @NonNull UUID invoiceId,
+            @NonNull BigDecimal amount,
+            @NonNull RefundReason reason,
+            @Nullable String notes,
+            @Nullable String externalReference) {
+        requireAuthority(ISSUE_MANUAL_REFUND);
+        Invoice invoice =
+                invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
+
+        List<RefundRecord> existingRefunds = refundRecordRepository.findByInvoice_Id(invoiceId);
+        String normalizedReference = normalizeExternalReference(externalReference);
+        RefundRecord replayed = findStandaloneReplay(existingRefunds, normalizedReference);
+        if (replayed != null) {
+            return toResult(replayed);
+        }
+
+        // Without a captured amount to bound against, cap cumulative refunds (payment-anchored
+        // and standalone alike) at the invoice total so an invoice can never over-refund.
+        BigDecimal alreadyRefunded = existingRefunds.stream()
+                .filter(refund -> refund.getStatus() != RefundStatus.FAILED)
+                .map(RefundRecord::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal refundable = invoice.getTotal().subtract(alreadyRefunded);
+        if (amount.compareTo(refundable) > 0) {
+            throw new InsufficientRefundableAmountException(
+                    "Insufficient refundable amount: " + refundable + " < " + amount);
+        }
+
+        return saveStandaloneRefund(invoice, invoice.getPartyId(), amount, reason, notes, normalizedReference);
+    }
+
+    @Override
+    @NonNull
+    public RefundPaymentResult refundPartyStandalone(
+            @NonNull String partyId,
+            @NonNull BigDecimal amount,
+            @NonNull RefundReason reason,
+            @Nullable String notes,
+            @Nullable String externalReference) {
+        requireAuthority(ISSUE_MANUAL_REFUND);
+        if (partyId.isBlank()) {
+            throw new IllegalArgumentException("partyId must not be blank");
+        }
+
+        String normalizedReference = normalizeExternalReference(externalReference);
+        RefundRecord replayed = findStandaloneReplay(
+                refundRecordRepository.findByPartyIdAndPaymentIntentIsNull(partyId.trim()), normalizedReference);
+        if (replayed != null) {
+            return toResult(replayed);
+        }
+
+        return saveStandaloneRefund(null, partyId.trim(), amount, reason, notes, normalizedReference);
+    }
+
+    /**
+     * Idempotent replay guard for standalone refunds, mirroring {@link #refundPayment}: a retry
+     * carrying the same externalReference returns the existing non-FAILED standalone record
+     * instead of paying the customer twice.
+     */
+    @Nullable
+    private static RefundRecord findStandaloneReplay(
+            @NonNull List<RefundRecord> candidates, @Nullable String normalizedReference) {
+        if (normalizedReference == null) {
+            return null;
+        }
+        return candidates.stream()
+                .filter(existing -> existing.getPaymentIntent() == null)
+                .filter(existing -> existing.getStatus() != RefundStatus.FAILED)
+                .filter(existing -> normalizedReference.equals(existing.getExternalReference()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Persists a standalone refund. There is no PaymentIntent and therefore no gateway leg —
+     * the disbursement itself happens out of band (till, check, vendor payment) — so the record
+     * completes immediately and exists to carry the refund liability.
+     */
+    @NonNull
+    private RefundPaymentResult saveStandaloneRefund(
+            @Nullable Invoice invoice,
+            @Nullable String partyId,
+            @NonNull BigDecimal amount,
+            @NonNull RefundReason reason,
+            @Nullable String notes,
+            @Nullable String normalizedReference) {
+        Instant now = Instant.now(clock);
+        RefundRecord refundRecord = new RefundRecord();
+        refundRecord.setInvoice(invoice);
+        refundRecord.setPartyId(partyId);
+        refundRecord.setAmount(amount);
+        refundRecord.setReason(reason);
+        refundRecord.setNotes(notes);
+        refundRecord.setExternalReference(normalizedReference);
+        refundRecord.setRequestedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        refundRecord.setRequestedAt(now);
+        refundRecord.setStatus(RefundStatus.COMPLETED);
+        refundRecord.setCompletedAt(now);
+        return toResult(refundRecordRepository.save(refundRecord));
+    }
+
     @NonNull
     private static RefundPaymentResult toResult(@NonNull RefundRecord saved) {
         RefundPaymentResult resultDto = new RefundPaymentResult();
@@ -197,6 +309,7 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
                 saved.getPaymentIntent() == null
                         ? null
                         : saved.getPaymentIntent().getId());
+        resultDto.setPartyId(saved.getPartyId());
         resultDto.setAmount(saved.getAmount());
         resultDto.setReason(saved.getReason());
         resultDto.setNotes(saved.getNotes());
