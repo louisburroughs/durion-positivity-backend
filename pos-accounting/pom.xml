@@ -78,10 +78,12 @@
             <version>${opentelemetry.version}</version>
         </dependency>
 
-        <!-- Kafka producer/consumer support -->
+        <!-- Kafka producer/consumer support. Spring Boot 4 moved KafkaAutoConfiguration out of
+             spring-boot-autoconfigure into spring-boot-kafka, so the bare spring-kafka dependency
+             no longer yields an auto-configured KafkaTemplate/listener container factory. -->
         <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka</artifactId>
         </dependency>
 
         <!-- Spring Retry -->
