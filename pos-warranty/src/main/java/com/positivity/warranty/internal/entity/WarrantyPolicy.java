@@ -126,6 +126,15 @@ public class WarrantyPolicy {
     @Column(name = "transferable", nullable = false)
     private Boolean transferable = false;
 
+    /**
+     * Opt-in for sale-driven auto-registration (issue #925): when true and
+     * {@code appliesToType == PRODUCT_LIST}, an invoiced workorder selling a listed product
+     * auto-creates a {@code WarrantyRegistration} for this policy.
+     */
+    @Builder.Default
+    @Column(name = "auto_register", nullable = false)
+    private Boolean autoRegister = false;
+
     @Column(name = "terms_text", columnDefinition = "text")
     private String termsText;
 

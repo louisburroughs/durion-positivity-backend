@@ -83,6 +83,11 @@ public record PolicyRequest(
         @Schema(description = "Coverage survives vehicle/owner change; defaults to false")
         Boolean transferable,
 
+        @Schema(
+                description = "Auto-create a registration when a listed product is sold"
+                        + " (invoiced workorder); only effective with appliesToType=PRODUCT_LIST; defaults to false")
+        Boolean autoRegister,
+
         @Schema(description = "Human-readable fine print") String termsText,
 
         @Schema(description = "Links to the provider's policy documents")

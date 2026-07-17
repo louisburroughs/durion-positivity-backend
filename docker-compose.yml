@@ -375,6 +375,9 @@ services:
       - "9001:8080"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      # On by default since the warranty rollout (#927): consumes warranty.events.v1
+      # into warranty_reimbursement_expectation (plus the customer/invoice replicas).
+      POS_ACCOUNTING_KAFKA_ENABLED: ${POS_ACCOUNTING_KAFKA_ENABLED:-true}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_accounting_db
@@ -622,10 +625,12 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      # ADR-0044 #892: location replica feed from location.events.v1
+      # ADR-0044 #892: location replica feed from location.events.v1.
+      # On by default since the warranty rollout (#927): also consumes
+      # warranty.events.v1 into warranty_part_return_hold.
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       MANAGEMENT_HEALTH_KAFKA_ENABLED: ${MANAGEMENT_HEALTH_KAFKA_ENABLED:-false}
-      POS_INVENTORY_KAFKA_ENABLED: ${POS_INVENTORY_KAFKA_ENABLED:-false}
+      POS_INVENTORY_KAFKA_ENABLED: ${POS_INVENTORY_KAFKA_ENABLED:-true}
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
@@ -1192,9 +1197,11 @@ services:
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
-      # Domain events (ADR-0044) — opt-in until the tier-1 flip; mirrors pos-invoice.
+      # Domain events (ADR-0044) — on by default since the warranty rollout (#927):
+      # pos-accounting (reimbursement expectations) and pos-inventory (part-return
+      # holds) consume warranty.events.v1.
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
-      POS_WARRANTY_KAFKA_ENABLED: ${POS_WARRANTY_KAFKA_ENABLED:-false}
+      POS_WARRANTY_KAFKA_ENABLED: ${POS_WARRANTY_KAFKA_ENABLED:-true}
     depends_on:
       eureka-server:
         condition: service_healthy

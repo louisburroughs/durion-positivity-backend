@@ -95,6 +95,7 @@ public class WorkorderEventsListener {
                 .workorderId(payload.workorderId())
                 .workorderNumber(payload.workorderNumber())
                 .status(payload.status())
+                .customerId(payload.customerId())
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());

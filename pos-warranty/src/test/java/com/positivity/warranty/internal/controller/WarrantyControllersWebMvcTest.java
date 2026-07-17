@@ -43,6 +43,7 @@ import com.positivity.warranty.internal.service.PolicyService;
 import com.positivity.warranty.internal.service.ProviderService;
 import com.positivity.warranty.internal.service.RegistrationService;
 import com.positivity.warranty.internal.service.ReimbursementService;
+import com.positivity.warranty.internal.service.SettlementReconciliationService;
 import com.positivity.warranty.internal.service.SettlementService;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -150,6 +151,9 @@ class WarrantyControllersWebMvcTest {
 
     @MockitoBean
     private SettlementService settlementService;
+
+    @MockitoBean
+    private SettlementReconciliationService settlementReconciliationService;
 
     // ------------------------------------------------------------------ helpers
 
@@ -320,6 +324,7 @@ class WarrantyControllersWebMvcTest {
                             null,
                             true,
                             true,
+                            false,
                             false,
                             null,
                             null,

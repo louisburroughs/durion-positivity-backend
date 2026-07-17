@@ -3,6 +3,7 @@ package com.positivity.invoice.service;
 import com.positivity.invoice.internal.enums.RefundReason;
 import com.positivity.invoice.internal.enums.VoidReason;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -45,4 +46,15 @@ public interface PaymentReversalService {
             @NonNull RefundReason reason,
             @Nullable String notes,
             @Nullable String externalReference);
+
+    /**
+     * All refund records anchored to the invoice — payment-intent refunds whose intent belongs
+     * to the invoice and standalone invoice-anchored refunds alike — ordered by requestedAt.
+     * Serves pos-warranty settlement reconciliation (#922).
+     *
+     * @throws com.positivity.invoice.internal.exception.InvoiceNotFoundException if the
+     *         invoice does not exist
+     */
+    @NonNull
+    List<RefundPaymentResult> listRefundsForInvoice(@NonNull UUID invoiceId);
 }

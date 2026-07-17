@@ -40,7 +40,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_wreg_customer", columnList = "customer_id"),
             @Index(name = "idx_wreg_vehicle", columnList = "vehicle_id"),
             @Index(name = "idx_wreg_policy", columnList = "policy_id"),
-            @Index(name = "idx_wreg_status", columnList = "status")
+            @Index(name = "idx_wreg_status", columnList = "status"),
+            @Index(name = "idx_wreg_source_invoice", columnList = "source_invoice_id")
         })
 @EntityListeners(AuditingEntityListener.class)
 public class WarrantyRegistration {

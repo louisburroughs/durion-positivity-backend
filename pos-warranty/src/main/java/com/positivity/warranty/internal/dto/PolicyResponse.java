@@ -33,6 +33,7 @@ public record PolicyResponse(
         Boolean requiresPartReturn,
         Boolean requiresPhotoEvidence,
         Boolean transferable,
+        Boolean autoRegister,
         String termsText,
         List<String> documentUrls,
         Instant createdAt,

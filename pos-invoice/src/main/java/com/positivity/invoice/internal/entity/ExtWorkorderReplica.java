@@ -42,6 +42,14 @@ public class ExtWorkorderReplica {
     @Column(name = "status", length = 64)
     private String status;
 
+    /**
+     * Owning customer party from the workorder fact (#921). Source for the scheduled
+     * {@code invoices.customer_id} backfill patching pre-#920 invoices; null until a fact
+     * carrying the customer arrives for this workorder.
+     */
+    @Column(name = "customer_id")
+    private UUID customerId;
+
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 

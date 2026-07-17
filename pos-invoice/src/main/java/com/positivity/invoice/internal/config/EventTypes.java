@@ -112,6 +112,12 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    /** #922: warranty settlement reconciliation reads every refund anchored to an invoice. */
+    public static final EventTypeRegistration INVOICE_REFUND_LIST = EventTypeRegistration.fastRead(
+                    "INVOICE_REFUND_LIST", "List all refund records anchored to an invoice")
+            .apiVersion("1")
+            .build();
+
     // ==================== ISSUE #926 — STANDALONE REFUND EVENTS ====================
 
     public static final EventTypeRegistration INVOICE_STANDALONE_REFUND = EventTypeRegistration.write(
@@ -169,6 +175,7 @@ public final class EventTypes {
                 INVOICE_PAYMENT_CAPTURE,
                 INVOICE_PAYMENT_VOID,
                 INVOICE_PAYMENT_REFUND,
+                INVOICE_REFUND_LIST,
                 INVOICE_STANDALONE_REFUND,
                 INVOICE_PARTY_STANDALONE_REFUND,
                 INVOICE_RECEIPT_GENERATE,

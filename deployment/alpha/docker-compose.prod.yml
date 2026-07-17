@@ -86,9 +86,10 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-accounting:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # #838 flag flip — uncomment in the second deploy, after the broker is verified healthy:
-    # environment:
-    #   POS_ACCOUNTING_KAFKA_ENABLED: "true"
+    # Warranty events rollout (#927): consumes warranty.events.v1 into
+    # warranty_reimbursement_expectation (also enables the #838 customer/invoice replicas).
+    environment:
+      POS_ACCOUNTING_KAFKA_ENABLED: "true"
 
   pos-api-gateway:
     image: ${ECR_REGISTRY}/durion/pos-api-gateway:${BACKEND_TAG}
@@ -127,6 +128,10 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-inventory:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    # Warranty events rollout (#927): consumes warranty.events.v1 into
+    # warranty_part_return_hold (also enables the location/workorder replica feeds).
+    environment:
+      POS_INVENTORY_KAFKA_ENABLED: "true"
 
   pos-invoice:
     image: ${ECR_REGISTRY}/durion/pos-invoice:${BACKEND_TAG}
@@ -193,6 +198,10 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-warranty:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    # Warranty events rollout (#927): publish warranty.events.v1 for the
+    # pos-accounting / pos-inventory consumers.
+    environment:
+      POS_WARRANTY_KAFKA_ENABLED: "true"
 
   pos-workorder:
     image: ${ECR_REGISTRY}/durion/pos-workorder:${BACKEND_TAG}

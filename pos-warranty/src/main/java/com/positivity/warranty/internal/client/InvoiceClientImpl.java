@@ -128,6 +128,72 @@ public class InvoiceClientImpl implements InvoiceClient {
     }
 
     @Override
+    public @NonNull Optional<List<AdjustmentEntry>> getInvoiceAdjustments(@NonNull UUID invoiceId) {
+        InvoiceDetailsWire response;
+        try {
+            response = restClient
+                    .get()
+                    .uri(basePath + "/{invoiceId}", invoiceId)
+                    .header("X-User", SERVICE_USER)
+                    .header("X-Authorities", AUTHORITIES)
+                    .retrieve()
+                    .body(InvoiceDetailsWire.class);
+        } catch (RestClientResponseException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                // Missing invoice is an authoritative answer: nothing is committed on it.
+                log.debug("Invoice {} not found while reading adjustments", invoiceId);
+                return Optional.of(List.of());
+            }
+            log.warn(
+                    "Adjustment read failed for invoiceId={}: HTTP {}",
+                    invoiceId,
+                    ex.getStatusCode().value());
+            return Optional.empty();
+        } catch (RestClientException ex) {
+            log.warn("pos-invoice unreachable for adjustment read invoiceId={}: {}", invoiceId, ex.getMessage());
+            return Optional.empty();
+        }
+        if (response == null) {
+            return Optional.empty();
+        }
+        List<AdjustmentEntry> entries = response.adjustmentEntries() == null
+                ? List.of()
+                : response.adjustmentEntries().stream()
+                        .map(entry -> new AdjustmentEntry(
+                                entry.id(), entry.type(), entry.amount(), entry.externalReference(), entry.createdAt()))
+                        .toList();
+        return Optional.of(entries);
+    }
+
+    @Override
+    public @NonNull Optional<List<RefundEntry>> getInvoiceRefunds(@NonNull UUID invoiceId) {
+        try {
+            List<RefundEntry> refunds = restClient
+                    .get()
+                    .uri(basePath + "/{invoiceId}/refunds", invoiceId)
+                    .header("X-User", SERVICE_USER)
+                    .header("X-Authorities", AUTHORITIES)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<RefundEntry>>() {});
+            return Optional.of(refunds != null ? refunds : List.of());
+        } catch (RestClientResponseException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                // Missing invoice is an authoritative answer: no refund exists on it.
+                log.debug("Invoice {} not found while reading refunds", invoiceId);
+                return Optional.of(List.of());
+            }
+            log.warn(
+                    "Refund read failed for invoiceId={}: HTTP {}",
+                    invoiceId,
+                    ex.getStatusCode().value());
+            return Optional.empty();
+        } catch (RestClientException ex) {
+            log.warn("pos-invoice unreachable for refund read invoiceId={}: {}", invoiceId, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    @Override
     public @NonNull Optional<UUID> createAdjustment(
             @NonNull UUID invoiceId,
             @NonNull BigDecimal amount,

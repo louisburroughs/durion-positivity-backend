@@ -42,6 +42,18 @@
       "description": "Shared secret used to authenticate event type registration requests."
     },
     {
+      "name": "pos.invoice.party-backfill.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable the scheduled job that backfills invoices.customer_id for pre-#920 invoices from the ext_workorder replica (#921).",
+      "defaultValue": true
+    },
+    {
+      "name": "pos.invoice.party-backfill.interval-ms",
+      "type": "java.lang.Long",
+      "description": "Fixed delay in milliseconds between party-id backfill runs; the first run happens immediately at startup.",
+      "defaultValue": 3600000
+    },
+    {
       "name": "pos.security.base-url",
       "type": "java.lang.String",
       "description": "Base URL for permission registration against pos-security-service.",

@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.repository;
 
 import com.positivity.warranty.internal.entity.WarrantyPolicy;
+import com.positivity.warranty.internal.enums.AppliesToType;
 import com.positivity.warranty.internal.enums.CoverageType;
 import java.time.LocalDate;
 import java.util.List;
@@ -27,4 +28,11 @@ public interface WarrantyPolicyRepository extends JpaRepository<WarrantyPolicy, 
     @Query("select p from WarrantyPolicy p where p.effectiveFrom <= :saleDate"
             + " and (p.effectiveTo is null or p.effectiveTo >= :saleDate)")
     List<WarrantyPolicy> findEffectiveOn(@Param("saleDate") @NonNull LocalDate saleDate);
+
+    /**
+     * Auto-registration candidates (issue #925). Product membership (jsonb list containment
+     * is not portable) and the effectivity window are filtered in the service layer.
+     */
+    @NonNull
+    List<WarrantyPolicy> findByAutoRegisterTrueAndAppliesToType(@NonNull AppliesToType appliesToType);
 }

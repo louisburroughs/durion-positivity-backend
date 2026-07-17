@@ -3,14 +3,17 @@ package com.positivity.invoice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.InvoiceAdjustment;
 import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
@@ -314,6 +317,84 @@ class InvoiceServiceImplTest {
         assertThat(result.getAdjustmentEntries().get(0).getExternalReference()).isEqualTo("WC-2026-000042");
         // A WARRANTY adjustment is a credit: subtotal 100, no tax → total 90.
         assertThat(draftInvoice.getTotal()).isEqualByComparingTo("90");
+    }
+
+    /**
+     * #922: replaying the same (type, externalReference) — a caller retrying after a transport
+     * timeout — must return the existing adjustment's details WITHOUT adding a second entry,
+     * re-crediting the total, saving, or re-publishing the invoice-updated event.
+     */
+    @Test
+    void applyAdjustment_replaySameTypeAndExternalReference_returnsExistingWithoutDoubleCredit() {
+        InvoiceAdjustment existing = new InvoiceAdjustment();
+        existing.setType(InvoiceAdjustmentType.WARRANTY);
+        existing.setAmount(BigDecimal.valueOf(10));
+        existing.setReason("Warranty credit for failed part");
+        existing.setAuthorizedBy("manager1");
+        existing.setExternalReference("WC-2026-000042");
+        existing.setCreatedAt(Instant.parse("2024-01-01T00:00:00Z"));
+        draftInvoice.addAdjustment(existing);
+        BigDecimal totalBeforeReplay = draftInvoice.getTotal();
+
+        AdjustmentRequest replay = new AdjustmentRequest();
+        replay.setType(InvoiceAdjustmentType.WARRANTY);
+        // A different amount on the retry must NOT matter: the reference pins the original.
+        replay.setAmount(BigDecimal.valueOf(25));
+        replay.setReason("Warranty credit for failed part (retry)");
+        replay.setAuthorizedBy("manager1");
+        replay.setExternalReference("  WC-2026-000042  ");
+
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+
+        InvoiceDetailsResponse result = invoiceService.applyAdjustment(invoiceId, replay);
+
+        // Existing adjustment echoed back, unchanged.
+        assertThat(result.getAdjustmentEntries()).hasSize(1);
+        assertThat(result.getAdjustmentEntries().get(0).getExternalReference()).isEqualTo("WC-2026-000042");
+        assertThat(result.getAdjustmentEntries().get(0).getAmount()).isEqualByComparingTo("10");
+        // No second entry, no re-credit, no save, no event.
+        assertThat(draftInvoice.getAdjustmentEntries()).hasSize(1);
+        assertThat(draftInvoice.getTotal()).isEqualByComparingTo(totalBeforeReplay);
+        verify(invoiceRepository, never()).save(any());
+        verifyNoInteractions(invoiceEventPublisher);
+    }
+
+    /**
+     * #922: the dedupe key is the (type, externalReference) PAIR — the same reference with a
+     * different adjustment type is a new adjustment, not a replay.
+     */
+    @Test
+    void applyAdjustment_sameReferenceDifferentType_isNotTreatedAsReplay() {
+        InvoiceAdjustment existing = new InvoiceAdjustment();
+        existing.setType(InvoiceAdjustmentType.WARRANTY);
+        existing.setAmount(BigDecimal.valueOf(10));
+        existing.setReason("Warranty credit for failed part");
+        existing.setAuthorizedBy("manager1");
+        existing.setExternalReference("WC-2026-000042");
+        existing.setCreatedAt(Instant.parse("2024-01-01T00:00:00Z"));
+        draftInvoice.addAdjustment(existing);
+
+        AdjustmentRequest request = new AdjustmentRequest();
+        request.setType(InvoiceAdjustmentType.FEE);
+        request.setAmount(BigDecimal.valueOf(5));
+        request.setReason("Restocking fee");
+        request.setAuthorizedBy("manager1");
+        request.setExternalReference("WC-2026-000042");
+
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+        // Simulate JPA auditing: stamp createdAt on the new entry (toDetailsResponse sorts by it).
+        when(invoiceRepository.save(any())).thenAnswer(inv -> {
+            Invoice saved = inv.getArgument(0);
+            saved.getAdjustmentEntries().stream()
+                    .filter(entry -> entry.getCreatedAt() == null)
+                    .forEach(entry -> entry.setCreatedAt(Instant.parse("2024-01-02T00:00:00Z")));
+            return saved;
+        });
+
+        invoiceService.applyAdjustment(invoiceId, request);
+
+        assertThat(draftInvoice.getAdjustmentEntries()).hasSize(2);
+        verify(invoiceRepository).save(any());
     }
 
     @Test

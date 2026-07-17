@@ -124,6 +124,9 @@ pos:
       workorder-manifest-topic: ${POS_INVENTORY_WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
       workorder-manifest-consumer-group: ${POS_INVENTORY_WORKORDER_MANIFEST_CONSUMER_GROUP:pos-inventory-workorder-manifests}
       workorder-commands-topic: ${POS_INVENTORY_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
+      # Warranty part-return quarantine/hold tracking feed (#927)
+      warranty-events-topic: ${POS_INVENTORY_WARRANTY_EVENTS_TOPIC:warranty.events.v1}
+      warranty-events-consumer-group: ${POS_INVENTORY_WARRANTY_EVENTS_CONSUMER_GROUP:pos-inventory-warranty-events}
       # Own fact publishing (ADR-0044 §6, #899): availability / storage-location on-hand /
       # lead-time facts via the transactional outbox, with manifests and replay commands.
       events-topic: ${POS_INVENTORY_EVENTS_TOPIC:inventory.events.v1}
