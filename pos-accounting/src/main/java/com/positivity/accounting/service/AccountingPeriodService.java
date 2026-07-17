@@ -64,8 +64,11 @@ public interface AccountingPeriodService {
     /**
      * Ensure a period row exists for the month containing the given date,
      * auto-provisioning an OPEN row if absent (zero-admin behavior for
-     * posting flows; concurrency-safe via unique period_code plus
-     * duplicate-key re-read). Never changes the status of an existing row.
+     * posting flows). Concurrency-safe: the provisioning insert runs in its
+     * own transaction, so when two callers race on the unique period_code
+     * constraint only that inner insert transaction rolls back — the loser's
+     * own transaction survives and returns the winner's row via re-read.
+     * Never changes the status of an existing row.
      *
      * @param date Date whose month period must exist
      * @return the existing or newly provisioned period

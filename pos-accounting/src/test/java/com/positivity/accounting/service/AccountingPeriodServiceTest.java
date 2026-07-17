@@ -14,6 +14,7 @@ import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundExce
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.service.AccountingPeriodProvisioner;
 import com.positivity.accounting.internal.service.AccountingPeriodServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
@@ -52,6 +53,9 @@ class AccountingPeriodServiceTest {
 
     @Mock
     private AccountingPeriodRepository periodRepository;
+
+    @Mock
+    private AccountingPeriodProvisioner periodProvisioner;
 
     @Mock
     private JournalEntryRepository journalEntryRepository;
@@ -299,13 +303,14 @@ class AccountingPeriodServiceTest {
     @Test
     @DisplayName("ensurePeriodExists - duplicate-key race falls back to re-read")
     void ensurePeriodExists_duplicateKeyRace_reReads() {
-        // Arrange: first read misses, insert collides with a concurrent writer,
-        // re-read finds the winner's row.
+        // Arrange: first read misses, the REQUIRES_NEW provisioning insert
+        // collides with a concurrent writer, re-read finds the winner's row.
+        // Real-constraint coverage lives in AccountingPeriodProvisionRaceTest.
         AccountingPeriod winner = period("2024-01", AccountingPeriodStatus.OPEN);
         when(periodRepository.findByPeriodCode("2024-01"))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(winner));
-        when(periodRepository.saveAndFlush(any(AccountingPeriod.class)))
+        when(periodProvisioner.provision("2024-01", LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 31)))
                 .thenThrow(new DataIntegrityViolationException("uq_accounting_period_code"));
 
         // Act
@@ -329,7 +334,7 @@ class AccountingPeriodServiceTest {
 
         // Assert: status of an existing row is never changed by provisioning
         assertThat(result.getStatus()).isEqualTo(AccountingPeriodStatus.CLOSED);
-        verify(periodRepository, never()).saveAndFlush(any());
+        verify(periodProvisioner, never()).provision(any(), any(), any());
     }
 
     // ===== LIFECYCLE INPUT VALIDATION TESTS =====
@@ -344,7 +349,7 @@ class AccountingPeriodServiceTest {
         assertThatThrownBy(() -> service.closePeriod("2024-02"))
                 .isInstanceOf(AccountingPeriodNotFoundException.class)
                 .hasMessageContaining("2024-02");
-        verify(periodRepository, never()).saveAndFlush(any());
+        verify(periodProvisioner, never()).provision(any(), any(), any());
         verify(periodRepository, never()).save(any());
     }
 

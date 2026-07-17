@@ -56,6 +56,7 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
 
     private final Clock clock;
     private final AccountingPeriodRepository periodRepository;
+    private final AccountingPeriodProvisioner periodProvisioner;
     private final JournalEntryRepository journalEntryRepository;
     private final AccountingAuditLogRepository auditLogRepository;
 
@@ -196,15 +197,20 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
 
     /**
      * Find the period row for the month, provisioning an OPEN row when absent.
-     * Concurrency-safe: the unique period_code constraint plus duplicate-key
-     * catch-and-re-read resolves the auto-provision race.
+     *
+     * Concurrency-safe: the insert runs in its own {@code REQUIRES_NEW}
+     * transaction ({@link AccountingPeriodProvisioner}), so a duplicate-key
+     * collision with a concurrent provisioner aborts only that inner
+     * transaction. This (outer) transaction stays committable, which keeps the
+     * catch-and-re-read below valid: the race loser returns the winner's row
+     * instead of failing with an {@code UnexpectedRollbackException}.
      */
     private AccountingPeriod findOrProvision(YearMonth yearMonth) {
         String periodCode = yearMonth.toString();
         return periodRepository.findByPeriodCode(periodCode).orElseGet(() -> {
-            AccountingPeriod period = newOpenPeriod(yearMonth);
             try {
-                AccountingPeriod saved = periodRepository.saveAndFlush(period);
+                AccountingPeriod saved =
+                        periodProvisioner.provision(periodCode, yearMonth.atDay(1), yearMonth.atEndOfMonth());
                 log.info("Auto-provisioned OPEN accounting period {}", periodCode);
                 return saved;
             } catch (DataIntegrityViolationException e) {
@@ -226,15 +232,6 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
                     yearMonth.toString(), "Period " + yearMonth + " does not exist and its month has not started");
         }
         return findOrProvision(yearMonth);
-    }
-
-    private AccountingPeriod newOpenPeriod(YearMonth yearMonth) {
-        AccountingPeriod period = new AccountingPeriod();
-        period.setPeriodCode(yearMonth.toString());
-        period.setStartDate(yearMonth.atDay(1));
-        period.setEndDate(yearMonth.atEndOfMonth());
-        period.setStatus(AccountingPeriodStatus.OPEN);
-        return period;
     }
 
     private List<UUID> findDraftEntryIdsInside(AccountingPeriod period) {

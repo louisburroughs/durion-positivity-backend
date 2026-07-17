@@ -31,6 +31,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.transaction.AfterTransaction;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -79,6 +80,15 @@ class AccountingPeriodLifecycleTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @AfterTransaction
+    void deleteProvisionedPeriods() {
+        // Auto-provisioned period rows commit in their own REQUIRES_NEW
+        // transaction (AccountingPeriodProvisioner) and therefore survive the
+        // test-transaction rollback; remove them so every test starts from an
+        // empty accounting_period table.
+        periodRepository.deleteAll();
     }
 
     private JournalEntry saveJournalEntry(YearMonth month, int dayOfMonth, JournalEntryStatus status) {

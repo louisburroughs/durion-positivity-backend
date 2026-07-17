@@ -9,6 +9,8 @@
 -- 1) Per-line CHECK: amounts are unsigned debit/credit columns (see
 --    JournalEntryLine.debitAmount/creditAmount, both NOT NULL default 0). A line
 --    posts either a debit or a credit, never both. Legacy zero/zero rows stay legal.
+--    Added NOT VALID: enforced for new and updated rows only, so pre-existing
+--    dirty rows in an already-populated schema cannot brick this migration.
 --
 -- 2) Deferred CONSTRAINT TRIGGER on journal_entry_line (INSERT/UPDATE/DELETE):
 --    when the parent entry is POSTED, abs(sum(debit) - sum(credit)) must be
@@ -22,13 +24,22 @@
 -- Both triggers are DEFERRABLE INITIALLY DEFERRED so multi-statement rebalancing
 -- within one transaction is checked once, at commit.
 
+-- NOT VALID: the CHECK guards go-forward writes (new/updated rows) without
+-- validating legacy rows at apply time — a dirty alpha/prod row would otherwise
+-- fail the ALTER and abort the whole migration. A follow-up
+-- `ALTER TABLE journal_entry_line VALIDATE CONSTRAINT
+-- chk_journal_entry_line_debit_xor_credit;` should run after a data audit.
+-- That validation is deliberately NOT part of this migration: Postgres
+-- transactional DDL would roll the entire migration back on dirty data,
+-- defeating the purpose of the go-forward guard.
 ALTER TABLE journal_entry_line
     ADD CONSTRAINT chk_journal_entry_line_debit_xor_credit
     CHECK (
         debit_amount >= 0
         AND credit_amount >= 0
         AND NOT (debit_amount > 0 AND credit_amount > 0)
-    );
+    )
+    NOT VALID;
 
 -- Shared assertion: raise if the given entry is POSTED and its lines do not balance
 -- within the 0.0001 tolerance used by the service layer.
