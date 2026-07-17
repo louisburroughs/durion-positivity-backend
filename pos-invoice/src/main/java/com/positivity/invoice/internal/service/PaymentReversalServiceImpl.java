@@ -258,6 +258,18 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         return saveStandaloneRefund(null, partyId.trim(), amount, reason, notes, normalizedReference);
     }
 
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public List<RefundPaymentResult> listRefundsForInvoice(@NonNull UUID invoiceId) {
+        if (!invoiceRepository.existsById(invoiceId)) {
+            throw new InvoiceNotFoundException(invoiceId);
+        }
+        return refundRecordRepository.findAllAnchoredToInvoice(invoiceId).stream()
+                .map(PaymentReversalServiceImpl::toResult)
+                .toList();
+    }
+
     /**
      * Idempotent replay guard for standalone refunds, mirroring {@link #refundPayment}: a retry
      * carrying the same externalReference returns the existing non-FAILED standalone record
@@ -322,6 +334,7 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         resultDto.setStatus(saved.getStatus());
         resultDto.setGatewayReference(saved.getGatewayReference());
         resultDto.setExternalReference(saved.getExternalReference());
+        resultDto.setRequestedAt(saved.getRequestedAt());
         resultDto.setCompletedAt(saved.getCompletedAt());
         return resultDto;
     }

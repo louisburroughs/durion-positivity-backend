@@ -4,10 +4,12 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.invoice.internal.dto.InvoiceRefundResponse;
 import com.positivity.invoice.internal.dto.RefundPaymentResponse;
 import com.positivity.invoice.internal.enums.RefundReason;
 import com.positivity.invoice.internal.enums.VoidReason;
 import com.positivity.invoice.service.PaymentReversalService;
+import com.positivity.invoice.service.RefundPaymentResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -17,11 +19,13 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -87,6 +91,37 @@ public class PaymentReversalController {
         response.setCompletedAt(saved.getCompletedAt());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{invoiceId}/refunds")
+    @PreAuthorize("hasAuthority('invoice:manage')")
+    @EmitEvent(id = "INVOICE_REFUND_LIST", apiVersion = "1")
+    @Operation(
+            summary = "List refunds for an invoice",
+            description = "Return every refund record anchored to the invoice — payment-intent refunds whose"
+                    + " intent belongs to the invoice and standalone invoice-anchored refunds alike —"
+                    + " for warranty settlement reconciliation")
+    @ApiResponse(responseCode = "200", description = "Refund records returned")
+    @ApiResponse(responseCode = "404", description = "Invoice not found")
+    public List<InvoiceRefundResponse> listRefunds(@PathVariable @NonNull UUID invoiceId) {
+        return paymentReversalService.listRefundsForInvoice(invoiceId).stream()
+                .map(PaymentReversalController::toRefundListEntry)
+                .toList();
+    }
+
+    @NonNull
+    private static InvoiceRefundResponse toRefundListEntry(@NonNull RefundPaymentResult result) {
+        InvoiceRefundResponse entry = new InvoiceRefundResponse();
+        entry.setId(result.getRefundId());
+        entry.setPaymentIntentId(result.getPaymentIntentId());
+        entry.setAmount(result.getAmount());
+        entry.setStatus(result.getStatus());
+        entry.setReason(result.getReason());
+        entry.setExternalReference(result.getExternalReference());
+        entry.setGatewayReference(result.getGatewayReference());
+        entry.setRequestedAt(result.getRequestedAt());
+        entry.setCompletedAt(result.getCompletedAt());
+        return entry;
     }
 
     @Schema(description = "Request to void an authorized payment before capture")

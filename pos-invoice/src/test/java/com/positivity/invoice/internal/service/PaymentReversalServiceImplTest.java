@@ -533,6 +533,135 @@ class PaymentReversalServiceImplTest {
     }
 
     // -------------------------------------------------------------------------
+    // Issue #922 — refundPayment replay dedupe on externalReference
+    // -------------------------------------------------------------------------
+
+    /**
+     * #922: a retry carrying the same externalReference must return the existing non-FAILED
+     * refund's result WITHOUT calling the payment gateway again and without saving a second
+     * RefundRecord — the customer must never be paid twice.
+     */
+    @Test
+    void refundPayment_replaySameExternalReference_returnsExistingWithoutGatewayOrSave() {
+        PaymentIntent pi = capturedPaymentIntent();
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+
+        RefundRecord existing = new RefundRecord();
+        existing.setId(UUID.fromString("00000000-0000-7000-8000-000000000042"));
+        existing.setPaymentIntent(pi);
+        existing.setInvoice(pi.getInvoice());
+        existing.setAmount(BigDecimal.valueOf(120_00, 2));
+        existing.setStatus(RefundStatus.COMPLETED);
+        existing.setExternalReference("WC-2026-000042");
+        when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID)).thenReturn(List.of(existing));
+
+        RefundPaymentResult result = paymentReversalServiceImpl.refundPayment(
+                INVOICE_ID,
+                PAYMENT_INTENT_ID,
+                BigDecimal.valueOf(120_00, 2),
+                RefundReason.CUSTOMER_RETURN,
+                null,
+                "  WC-2026-000042  ");
+
+        assertThat(result.getRefundId()).isEqualTo(existing.getId());
+        assertThat(result.getAmount()).isEqualByComparingTo("120.00");
+        verifyNoInteractions(paymentGatewayPort);
+        verify(refundRecordRepository, never()).save(any());
+    }
+
+    /**
+     * #922: a FAILED refund with the same externalReference must NOT dedupe — the retry
+     * proceeds through the gateway and records a new RefundRecord (FAILED references stay
+     * retryable; the V12 partial unique index excludes FAILED rows for the same reason).
+     */
+    @Test
+    void refundPayment_failedRefundSameExternalReference_retryProceedsThroughGateway() {
+        PaymentIntent pi = capturedPaymentIntent();
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+
+        RefundRecord failed = new RefundRecord();
+        failed.setId(UUID.fromString("00000000-0000-7000-8000-000000000043"));
+        failed.setPaymentIntent(pi);
+        failed.setAmount(BigDecimal.valueOf(120_00, 2));
+        failed.setStatus(RefundStatus.FAILED);
+        failed.setExternalReference("WC-2026-000042");
+        when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID)).thenReturn(List.of(failed));
+
+        GatewayPaymentResult successResult = successResult();
+        when(paymentGatewayPort.refund(any(GatewayRefundRequest.class))).thenReturn(successResult);
+        when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RefundPaymentResult result = paymentReversalServiceImpl.refundPayment(
+                INVOICE_ID,
+                PAYMENT_INTENT_ID,
+                BigDecimal.valueOf(120_00, 2),
+                RefundReason.CUSTOMER_RETURN,
+                null,
+                "WC-2026-000042");
+
+        assertThat(result.getRefundId()).isNotEqualTo(failed.getId());
+        assertThat(result.getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        verify(paymentGatewayPort).refund(any(GatewayRefundRequest.class));
+        verify(refundRecordRepository).save(any(RefundRecord.class));
+    }
+
+    // -------------------------------------------------------------------------
+    // Issue #922 — listRefundsForInvoice (warranty settlement reconciliation)
+    // -------------------------------------------------------------------------
+
+    /** All refunds anchored to the invoice are mapped, including requestedAt. */
+    @Test
+    void listRefundsForInvoice_mapsAllAnchoredRecords() {
+        when(invoiceRepository.existsById(INVOICE_ID)).thenReturn(true);
+
+        RefundRecord paymentAnchored = new RefundRecord();
+        paymentAnchored.setId(UUID.fromString("00000000-0000-7000-8000-000000000051"));
+        paymentAnchored.setPaymentIntent(capturedPaymentIntent());
+        paymentAnchored.setInvoice(invoice(INVOICE_ID));
+        paymentAnchored.setAmount(BigDecimal.valueOf(100_00, 2));
+        paymentAnchored.setStatus(RefundStatus.COMPLETED);
+        paymentAnchored.setReason(RefundReason.CUSTOMER_RETURN);
+        paymentAnchored.setGatewayReference("gw-txn-xyz");
+        paymentAnchored.setRequestedAt(Instant.parse("2026-01-10T09:00:00Z"));
+        paymentAnchored.setCompletedAt(Instant.parse("2026-01-10T09:00:05Z"));
+
+        RefundRecord standalone = new RefundRecord();
+        standalone.setId(UUID.fromString("00000000-0000-7000-8000-000000000052"));
+        standalone.setInvoice(invoice(INVOICE_ID));
+        standalone.setAmount(BigDecimal.valueOf(50_00, 2));
+        standalone.setStatus(RefundStatus.COMPLETED);
+        standalone.setReason(RefundReason.OTHER);
+        standalone.setExternalReference("WC-2026-000042");
+        standalone.setRequestedAt(Instant.parse("2026-01-12T10:00:00Z"));
+        standalone.setCompletedAt(Instant.parse("2026-01-12T10:00:00Z"));
+
+        when(refundRecordRepository.findAllAnchoredToInvoice(INVOICE_ID))
+                .thenReturn(List.of(paymentAnchored, standalone));
+
+        List<RefundPaymentResult> results = paymentReversalServiceImpl.listRefundsForInvoice(INVOICE_ID);
+
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0).getRefundId()).isEqualTo(paymentAnchored.getId());
+        assertThat(results.get(0).getPaymentIntentId()).isEqualTo(PAYMENT_INTENT_ID);
+        assertThat(results.get(0).getGatewayReference()).isEqualTo("gw-txn-xyz");
+        assertThat(results.get(0).getRequestedAt()).isEqualTo(Instant.parse("2026-01-10T09:00:00Z"));
+        assertThat(results.get(1).getRefundId()).isEqualTo(standalone.getId());
+        assertThat(results.get(1).getPaymentIntentId()).isNull();
+        assertThat(results.get(1).getExternalReference()).isEqualTo("WC-2026-000042");
+        verifyNoInteractions(paymentGatewayPort);
+    }
+
+    @Test
+    void listRefundsForInvoice_unknownInvoice_throwsInvoiceNotFoundException() {
+        when(invoiceRepository.existsById(INVOICE_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> paymentReversalServiceImpl.listRefundsForInvoice(INVOICE_ID))
+                .isInstanceOf(InvoiceNotFoundException.class);
+
+        verifyNoInteractions(refundRecordRepository, paymentGatewayPort);
+    }
+
+    // -------------------------------------------------------------------------
     // Issue #926 — standalone refunds (no captured PaymentIntent)
     // -------------------------------------------------------------------------
 

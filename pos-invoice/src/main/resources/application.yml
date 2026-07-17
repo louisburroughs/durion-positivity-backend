@@ -109,6 +109,10 @@ pos:
       # Own command intake + reconciliation manifests (ADR-0044 §4, #900)
       commands-topic: ${POS_INVOICE_COMMANDS_TOPIC:invoice.commands.v1}
       commands-consumer-group: ${POS_INVOICE_COMMANDS_CONSUMER_GROUP:pos-invoice-commands}
+    party-backfill:
+      # Patch pre-#920 invoices' customer_id from the ext_workorder replica (#921).
+      enabled: ${POS_INVOICE_PARTY_BACKFILL_ENABLED:true}
+      interval-ms: ${POS_INVOICE_PARTY_BACKFILL_INTERVAL_MS:3600000}
     manifest:
       topic: ${POS_INVOICE_MANIFEST_TOPIC:invoice.manifest.v1}
       window: ${POS_INVOICE_MANIFEST_WINDOW:PT1H}
