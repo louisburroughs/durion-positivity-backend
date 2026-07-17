@@ -11,6 +11,7 @@ import com.positivity.accounting.internal.dto.GLAccountResponse;
 import com.positivity.accounting.internal.dto.GLAccountUpdateRequest;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.GLAccountStatus;
 import com.positivity.accounting.internal.exception.AccountNotInactiveException;
@@ -57,6 +58,8 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
                 .accountCode("1000")
                 .accountName("Cash")
                 .accountType(AccountType.ASSET)
+                .accountSubtype(AccountSubtype.BANK_CASH)
+                .reconcilable(true)
                 .description("Primary cash account")
                 .build();
 
@@ -69,9 +72,38 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
         assertThat(response.getAccountCode()).isEqualTo("1000");
         assertThat(response.getAccountName()).isEqualTo("Cash");
         assertThat(response.getAccountType()).isEqualTo(AccountType.ASSET);
+        assertThat(response.getAccountSubtype()).isEqualTo(AccountSubtype.BANK_CASH);
+        assertThat(response.isReconcilable()).isTrue();
         assertThat(response.getDescription()).isEqualTo("Primary cash account");
         assertThat(response.getActivationDate()).isNotNull();
         assertThat(response.getStatus()).isEqualTo(GLAccountStatus.ACTIVE);
+
+        // And the metadata survives a fresh read
+        GLAccountResponse retrieved = glAccountService.getGLAccount(response.getGlAccountId());
+        assertThat(retrieved.getAccountSubtype()).isEqualTo(AccountSubtype.BANK_CASH);
+        assertThat(retrieved.isReconcilable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Create GL account - accountSubtype defaults to null and reconcilable to false")
+    void testCreateGLAccount_MetadataDefaults() {
+        // Given - request without accountSubtype/reconcilable
+        GLAccountCreateRequest request = GLAccountCreateRequest.builder()
+                .accountCode("1010")
+                .accountName("Petty Cash")
+                .accountType(AccountType.ASSET)
+                .build();
+
+        // When
+        GLAccountResponse response = glAccountService.createGLAccount(request);
+
+        // Then
+        assertThat(response.getAccountSubtype()).isNull();
+        assertThat(response.isReconcilable()).isFalse();
+
+        GLAccountResponse retrieved = glAccountService.getGLAccount(response.getGlAccountId());
+        assertThat(retrieved.getAccountSubtype()).isNull();
+        assertThat(retrieved.isReconcilable()).isFalse();
     }
 
     @Test
@@ -154,6 +186,37 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
         assertThat(updated.getDescription()).isEqualTo("Updated description");
         assertThat(updated.getAccountCode()).isEqualTo("4000"); // immutable
         assertThat(updated.getAccountType()).isEqualTo(AccountType.ASSET); // immutable
+    }
+
+    @Test
+    @DisplayName("Update GL account - accountSubtype and reconcilable round-trip")
+    void testUpdateGLAccount_MetadataRoundTrip() {
+        // Given - account created without metadata
+        GLAccountResponse created = glAccountService.createGLAccount(GLAccountCreateRequest.builder()
+                .accountCode("4100")
+                .accountName("Undeposited Funds")
+                .accountType(AccountType.ASSET)
+                .build());
+        assertThat(created.getAccountSubtype()).isNull();
+        assertThat(created.isReconcilable()).isFalse();
+
+        // When - metadata-only update
+        GLAccountUpdateRequest updateRequest = GLAccountUpdateRequest.builder()
+                .accountSubtype(AccountSubtype.UNDEPOSITED_FUNDS)
+                .reconcilable(true)
+                .build();
+        GLAccountResponse updated = glAccountService.updateGLAccount(created.getGlAccountId(), updateRequest);
+
+        // Then - metadata applied, other fields untouched
+        assertThat(updated.getAccountSubtype()).isEqualTo(AccountSubtype.UNDEPOSITED_FUNDS);
+        assertThat(updated.isReconcilable()).isTrue();
+        assertThat(updated.getAccountName()).isEqualTo("Undeposited Funds");
+        assertThat(updated.getAccountCode()).isEqualTo("4100");
+
+        // And visible on subsequent GET
+        GLAccountResponse retrieved = glAccountService.getGLAccount(created.getGlAccountId());
+        assertThat(retrieved.getAccountSubtype()).isEqualTo(AccountSubtype.UNDEPOSITED_FUNDS);
+        assertThat(retrieved.isReconcilable()).isTrue();
     }
 
     @Test

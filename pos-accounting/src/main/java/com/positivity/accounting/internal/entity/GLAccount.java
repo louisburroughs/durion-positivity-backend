@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
+import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.time.TimeSource;
@@ -88,6 +89,22 @@ public class GLAccount implements Persistable<UUID> {
     @Enumerated(EnumType.STRING)
     @Column(name = "account_type", length = 20, nullable = false)
     private AccountType accountType;
+
+    /**
+     * Optional refinement of {@link #accountType}; nullable so existing
+     * accounts are unaffected. Drives report grouping and posting-config
+     * plausibility validation.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_subtype", length = 30)
+    private AccountSubtype accountSubtype;
+
+    /**
+     * Whether journal entry lines on this account participate in
+     * reconciliation (e.g. settlement/bank reconciliation). Defaults to false.
+     */
+    @Column(name = "reconcilable", nullable = false)
+    private boolean reconcilable = false;
 
     @Column(name = "description", length = 500)
     private String description;

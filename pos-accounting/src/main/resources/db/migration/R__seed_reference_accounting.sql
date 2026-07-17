@@ -4,18 +4,88 @@ SET TIME ZONE 'UTC';
 
 
 -- GL accounts
-INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, created_at, created_by, modified_at, modified_by)
-VALUES ('b8798348-d3be-9582-7a6d-883ae3e64e66'::uuid, '4000', 'Service Revenue', 'REVENUE', NOW(), 'seed-generator', NOW(), 'seed-generator')
+-- Story H1 (Issue #934): working small-business COA with account_subtype /
+-- reconcilable metadata. Pure upserts keyed on account_code so re-runs
+-- backfill metadata on existing rows without changing their ids.
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-000000001000'::uuid, '1000', 'Cash', 'ASSET', 'BANK_CASH', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
 ON CONFLICT (account_code) DO UPDATE SET
     account_name = EXCLUDED.account_name,
     account_type = EXCLUDED.account_type,
+    account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable,
     modified_at = NOW(),
     modified_by = 'seed-generator';
-INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, created_at, created_by, modified_at, modified_by)
-VALUES ('0f12890f-383d-b449-b555-bd4b37bf1f44'::uuid, '1200', 'Accounts Receivable', 'ASSET', NOW(), 'seed-generator', NOW(), 'seed-generator')
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-000000001090'::uuid, '1090', 'Undeposited Funds', 'ASSET', 'UNDEPOSITED_FUNDS', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
 ON CONFLICT (account_code) DO UPDATE SET
     account_name = EXCLUDED.account_name,
     account_type = EXCLUDED.account_type,
+    account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable,
+    modified_at = NOW(),
+    modified_by = 'seed-generator';
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
+VALUES ('0f12890f-383d-b449-b555-bd4b37bf1f44'::uuid, '1200', 'Accounts Receivable', 'ASSET', 'RECEIVABLE', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (account_code) DO UPDATE SET
+    account_name = EXCLUDED.account_name,
+    account_type = EXCLUDED.account_type,
+    account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable,
+    modified_at = NOW(),
+    modified_by = 'seed-generator';
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-000000002000'::uuid, '2000', 'Accounts Payable', 'LIABILITY', 'PAYABLE', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (account_code) DO UPDATE SET
+    account_name = EXCLUDED.account_name,
+    account_type = EXCLUDED.account_type,
+    account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable,
+    modified_at = NOW(),
+    modified_by = 'seed-generator';
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-000000002200'::uuid, '2200', 'Sales Tax Payable', 'LIABILITY', 'TAX_PAYABLE', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (account_code) DO UPDATE SET
+    account_name = EXCLUDED.account_name,
+    account_type = EXCLUDED.account_type,
+    account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable,
+    modified_at = NOW(),
+    modified_by = 'seed-generator';
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-000000002300'::uuid, '2300', 'Customer Credit Liability', 'LIABILITY', 'CURRENT_LIABILITY', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (account_code) DO UPDATE SET
+    account_name = EXCLUDED.account_name,
+    account_type = EXCLUDED.account_type,
+    account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable,
+    modified_at = NOW(),
+    modified_by = 'seed-generator';
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
+VALUES ('b8798348-d3be-9582-7a6d-883ae3e64e66'::uuid, '4000', 'Service Revenue', 'REVENUE', 'SALES', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (account_code) DO UPDATE SET
+    account_name = EXCLUDED.account_name,
+    account_type = EXCLUDED.account_type,
+    account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable,
+    modified_at = NOW(),
+    modified_by = 'seed-generator';
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-000000005000'::uuid, '5000', 'Cost of Goods Sold', 'EXPENSE', 'COST_OF_SALES', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (account_code) DO UPDATE SET
+    account_name = EXCLUDED.account_name,
+    account_type = EXCLUDED.account_type,
+    account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable,
+    modified_at = NOW(),
+    modified_by = 'seed-generator';
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-000000006000'::uuid, '6000', 'Payment Processor Fees', 'EXPENSE', 'OPERATING_EXPENSE', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (account_code) DO UPDATE SET
+    account_name = EXCLUDED.account_name,
+    account_type = EXCLUDED.account_type,
+    account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable,
     modified_at = NOW(),
     modified_by = 'seed-generator';
 

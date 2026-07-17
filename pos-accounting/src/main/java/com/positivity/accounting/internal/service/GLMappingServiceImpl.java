@@ -32,6 +32,7 @@ public class GLMappingServiceImpl implements GLMappingService {
 
     private final GLMappingRepository glMappingRepository;
     private final GLAccountRepository glAccountRepository;
+    private final GLMappingSubtypeValidator subtypeValidator;
 
     @Override
     public @NonNull GLMappingCreateResponse createMapping(@NonNull GLMappingCreateRequest request) {
@@ -49,6 +50,10 @@ public class GLMappingServiceImpl implements GLMappingService {
         if (glAccount.getActivationDate() == null) {
             throw new IllegalArgumentException("GL account " + glAccount.getAccountCode() + " is not active");
         }
+
+        // Non-blocking plausibility check (Story H1): warn when a
+        // cash-receipt/settlement code maps to an implausible account subtype.
+        subtypeValidator.checkCashReceiptSubtype(request.getExternalCode(), glAccount);
 
         // Check for overlapping mappings
         UUID excludeId = new UUID(0L, 0L); // No existing mapping to exclude

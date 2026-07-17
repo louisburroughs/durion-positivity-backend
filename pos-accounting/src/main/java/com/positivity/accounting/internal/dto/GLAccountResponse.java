@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.GLAccountStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -42,6 +43,20 @@ public class GLAccountResponse {
 
     @Schema(description = "Account classification", example = "ASSET", requiredMode = NOT_REQUIRED)
     private AccountType accountType;
+
+    @Schema(
+            description = "Optional subtype refining accountType for report grouping and posting-config "
+                    + "plausibility checks. Null when no refinement applies.",
+            example = "UNDEPOSITED_FUNDS",
+            requiredMode = NOT_REQUIRED)
+    private AccountSubtype accountSubtype;
+
+    @Schema(
+            description = "Whether journal entry lines on this account participate in reconciliation "
+                    + "(e.g. settlement/bank reconciliation).",
+            example = "false",
+            requiredMode = REQUIRED)
+    private boolean reconcilable;
 
     @Schema(
             description = "GL account description",
