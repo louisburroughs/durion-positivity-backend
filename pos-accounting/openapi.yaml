@@ -1038,7 +1038,7 @@ paths:
       tags:
       - Accounting Periods
       summary: Reopen a closed accounting period
-      description: 'Reopens a CLOSED accounting period (CLOSED → OPEN) so postings are accepted again. Use this tool only when late adjustments must be posted into an already-closed month; use closeAccountingPeriod to close it again afterwards. Preconditions: a period row must exist for the code and be CLOSED. Required input: a non-blank justification (max 500 characters) which is recorded on the period and in the audit trail with the acting user. Emits ACCOUNTING_PERIOD_REOPEN. Returns 409 PERIOD_ALREADY_OPEN if the period is not closed, and 400 if the justification is missing or blank.'
+      description: 'Reopens a CLOSED accounting period (CLOSED → OPEN), resetting its lifecycle status to OPEN. Use this tool only when late adjustments must be posted into an already-closed month; use closeAccountingPeriod to close it again afterwards. Preconditions: a period row must exist for the code and be CLOSED. Required input: a non-blank justification (max 500 characters) which is recorded on the period and in the audit trail with the acting user. Emits ACCOUNTING_PERIOD_REOPEN. Returns 409 PERIOD_ALREADY_OPEN if the period is not closed, and 400 if the justification is missing or blank.'
       operationId: reopenAccountingPeriod
       parameters:
       - name: periodCode
@@ -1095,7 +1095,7 @@ paths:
       tags:
       - Accounting Periods
       summary: Close an accounting period
-      description: 'Closes an OPEN accounting period (OPEN → CLOSED) so no further postings are accepted into it. Use this tool during month-end close after all journal entries for the month are posted; use reopenAccountingPeriod to reverse the transition. Preconditions: the period must not already be CLOSED, and no DRAFT journal entries may be dated inside the period. A valid YYYY-MM period with no row whose month has already started is auto-provisioned and then closed. The close is audit-logged with the acting user and emits ACCOUNTING_PERIOD_CLOSE. Returns 409 PERIOD_ALREADY_CLOSED if the period is already closed, and 422 PERIOD_HAS_DRAFT_ENTRIES listing the blocking draft journal entry IDs in fieldErrors — post or delete those entries before retrying.'
+      description: 'Closes an OPEN accounting period (OPEN → CLOSED), recording its lifecycle status as CLOSED. Use this tool during month-end close after all journal entries for the month are posted; use reopenAccountingPeriod to reverse the transition. Note: journal-entry posting paths do not yet reject postings dated into a CLOSED period; that enforcement (error code PERIOD_CLOSED) arrives with the period-enforcement story (parity-B2). Preconditions: the period must not already be CLOSED, and no DRAFT journal entries may be dated inside the period. A valid YYYY-MM period with no row whose month has already started is auto-provisioned and then closed. The close is audit-logged with the acting user and emits ACCOUNTING_PERIOD_CLOSE. Returns 409 PERIOD_ALREADY_CLOSED if the period is already closed, and 422 PERIOD_HAS_DRAFT_ENTRIES listing the blocking draft journal entry IDs in fieldErrors — post or delete those entries before retrying.'
       operationId: closeAccountingPeriod
       parameters:
       - name: periodCode

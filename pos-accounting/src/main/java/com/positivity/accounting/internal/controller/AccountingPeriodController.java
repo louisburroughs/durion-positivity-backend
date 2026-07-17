@@ -88,9 +88,12 @@ public class AccountingPeriodController {
     @Operation(
             summary = "Close an accounting period",
             operationId = "closeAccountingPeriod",
-            description = "Closes an OPEN accounting period (OPEN → CLOSED) so no further postings are accepted"
-                    + " into it. Use this tool during month-end close after all journal entries for the month"
+            description = "Closes an OPEN accounting period (OPEN → CLOSED), recording its lifecycle status as"
+                    + " CLOSED. Use this tool during month-end close after all journal entries for the month"
                     + " are posted; use reopenAccountingPeriod to reverse the transition."
+                    + " Note: journal-entry posting paths do not yet reject postings dated into a CLOSED period;"
+                    + " that enforcement (error code PERIOD_CLOSED) arrives with the period-enforcement story"
+                    + " (parity-B2)."
                     + " Preconditions: the period must not already be CLOSED, and no DRAFT journal entries may"
                     + " be dated inside the period. A valid YYYY-MM period with no row whose month has already"
                     + " started is auto-provisioned and then closed."
@@ -142,7 +145,8 @@ public class AccountingPeriodController {
     @Operation(
             summary = "Reopen a closed accounting period",
             operationId = "reopenAccountingPeriod",
-            description = "Reopens a CLOSED accounting period (CLOSED → OPEN) so postings are accepted again."
+            description = "Reopens a CLOSED accounting period (CLOSED → OPEN), resetting its lifecycle status"
+                    + " to OPEN."
                     + " Use this tool only when late adjustments must be posted into an already-closed month;"
                     + " use closeAccountingPeriod to close it again afterwards."
                     + " Preconditions: a period row must exist for the code and be CLOSED."
