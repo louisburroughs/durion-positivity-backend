@@ -84,17 +84,23 @@ reconcile_databases() {
     sleep 1
   done
 
-  local db exists
-  while read -r db; do
+  # Read the full list before the loop: `docker compose exec` attaches the container
+  # to the loop's stdin and drains it, so a `while read` fed by process substitution
+  # silently stops after the first database. The execs also get </dev/null so they
+  # can never consume anything meant for the shell.
+  local dbs db exists
+  mapfile -t dbs < <(sed -nE 's/^CREATE DATABASE ([A-Za-z0-9_]+);$/\1/p' "${init_sql}")
+  echo "Reconciling ${#dbs[@]} databases from init-databases.sql"
+  for db in "${dbs[@]}"; do
     [[ -n "${db}" ]] || continue
     exists="$(docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
-      sh -c 'psql -U "${POSTGRES_USER}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '"'"''"${db}"''"'"'"')"
+      sh -c 'psql -U "${POSTGRES_USER}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '"'"''"${db}"''"'"'"' </dev/null)"
     if [[ "${exists}" != "1" ]]; then
       echo "Creating missing database: ${db}"
       docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
-        sh -c 'psql -U "${POSTGRES_USER}" -d postgres -c "CREATE DATABASE '"${db}"';"'
+        sh -c 'psql -U "${POSTGRES_USER}" -d postgres -c "CREATE DATABASE '"${db}"';"' </dev/null
     fi
-  done < <(sed -nE 's/^CREATE DATABASE ([A-Za-z0-9_]+);$/\1/p' "${init_sql}")
+  done
 }
 
 OBSERVABILITY_SERVICES=(
