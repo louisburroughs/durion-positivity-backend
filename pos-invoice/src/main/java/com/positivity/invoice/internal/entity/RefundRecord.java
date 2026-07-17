@@ -44,9 +44,10 @@ public class RefundRecord {
     private Invoice invoice;
 
     /**
-     * Customer party anchor for standalone refunds. Set from the invoice for invoice-anchored
-     * standalone refunds, or supplied directly when no invoice exists. At least one of
-     * paymentIntent, invoice, or partyId is always present (DB check constraint).
+     * Customer party associated with the refund. Set from the invoice when one is present
+     * (payment-anchored and invoice-anchored refunds), or supplied directly for party-anchored
+     * standalone refunds where it is the sole anchor. At least one of paymentIntent, invoice,
+     * or partyId is always present (DB check constraint).
      */
     @Column(name = "party_id", length = 64)
     private String partyId;

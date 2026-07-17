@@ -242,9 +242,15 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             throw new IllegalArgumentException("partyId must not be blank");
         }
 
+        // Restrict replay candidates to purely party-anchored records: the lookup also returns
+        // invoice-anchored standalone refunds (partyId is stamped from the invoice), and a
+        // party-endpoint retry must not replay a record carrying a different anchor shape.
         String normalizedReference = normalizeExternalReference(externalReference);
-        RefundRecord replayed = findStandaloneReplay(
-                refundRecordRepository.findByPartyIdAndPaymentIntentIsNull(partyId.trim()), normalizedReference);
+        List<RefundRecord> candidates =
+                refundRecordRepository.findByPartyIdAndPaymentIntentIsNull(partyId.trim()).stream()
+                        .filter(existing -> existing.getInvoice() == null)
+                        .toList();
+        RefundRecord replayed = findStandaloneReplay(candidates, normalizedReference);
         if (replayed != null) {
             return toResult(replayed);
         }

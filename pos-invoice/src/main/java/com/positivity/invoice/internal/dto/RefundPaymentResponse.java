@@ -36,7 +36,8 @@ public class RefundPaymentResponse {
     private UUID paymentIntentId;
 
     @Schema(
-            description = "Customer party the refund is anchored to (standalone refunds)",
+            description = "Customer party associated with the refund — the anchor for standalone refunds,"
+                    + " derived from the invoice for invoice- and payment-anchored refunds",
             example = "party-000123",
             requiredMode = NOT_REQUIRED)
     private String partyId;

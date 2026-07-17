@@ -667,6 +667,34 @@ class PaymentReversalServiceImplTest {
         verifyNoInteractions(refundRecordRepository, paymentGatewayPort);
     }
 
+    /**
+     * The party-anchored replay guard must ignore invoice-anchored standalone refunds even
+     * though they carry the same partyId (stamped from the invoice) — a party-endpoint retry
+     * must never replay a record with a different anchor shape.
+     */
+    @Test
+    void refundPartyStandalone_invoiceAnchoredRecordSameReference_isNotReplayed() {
+        withAuthorities("ISSUE_MANUAL_REFUND");
+
+        RefundRecord invoiceAnchored = new RefundRecord();
+        invoiceAnchored.setId(UUID.fromString("00000000-0000-7000-8000-000000000044"));
+        invoiceAnchored.setInvoice(invoice(INVOICE_ID));
+        invoiceAnchored.setPartyId("party-0009");
+        invoiceAnchored.setAmount(BigDecimal.valueOf(75_00, 2));
+        invoiceAnchored.setStatus(RefundStatus.COMPLETED);
+        invoiceAnchored.setExternalReference("WC-2026-000043");
+        when(refundRecordRepository.findByPartyIdAndPaymentIntentIsNull("party-0009"))
+                .thenReturn(List.of(invoiceAnchored));
+        when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RefundPaymentResult result = paymentReversalServiceImpl.refundPartyStandalone(
+                "party-0009", BigDecimal.valueOf(75_00, 2), RefundReason.OTHER, null, "WC-2026-000043");
+
+        assertThat(result.getRefundId()).isNotEqualTo(invoiceAnchored.getId());
+        assertThat(result.getInvoiceId()).isNull();
+        verify(refundRecordRepository).save(any(RefundRecord.class));
+    }
+
     @Test
     void refundPartyStandalone_replaySameExternalReference_returnsExistingRecord() {
         withAuthorities("ISSUE_MANUAL_REFUND");
