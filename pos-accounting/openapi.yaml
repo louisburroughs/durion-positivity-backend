@@ -32,10 +32,14 @@ tags:
   description: Manage journal entries including posting and reversal.
 - name: GL Accounts
   description: Manage chart of accounts including lifecycle actions.
+- name: Vendor Directory API
+  description: Vendor search and lookup endpoints for name-to-vendorId resolution (typeahead support)
 - name: Location Cost Reporting
   description: Read-only location Labor & Overhead Cost Report (CAP-316)
 - name: AP Payments
   description: Accounts Payable vendor payment operations
+- name: Accounting Periods
+  description: 'Accounting period lifecycle: list periods, close a period, reopen a closed period.'
 - name: Financial Reporting
   description: Income Statement and Balance Sheet generation with drilldown
 - name: Vendor Bill API
@@ -776,9 +780,7 @@ paths:
           exclusiveMinimum: 0
       - name: sort
         in: query
-        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported
-          fields: createdAt, modifiedAt, updatedAt, name, eventType, description, createdBy,
-          modifiedBy, postingRuleSetId. Direction defaults to desc.'
+        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported fields: createdAt, modifiedAt, updatedAt, name, eventType. Direction defaults to desc.'
         required: true
         schema:
           type: string
@@ -1031,6 +1033,120 @@ paths:
         - accounting:posting-category:deactivate
       x-required-permissions:
       - accounting:posting-category:deactivate
+  /v1/accounting/periods/{periodCode}/reopen:
+    post:
+      tags:
+      - Accounting Periods
+      summary: Reopen a closed accounting period
+      description: 'Reopens a CLOSED accounting period (CLOSED → OPEN) so postings are accepted again. Use this tool only when late adjustments must be posted into an already-closed month; use closeAccountingPeriod to close it again afterwards. Preconditions: a period row must exist for the code and be CLOSED. Required input: a non-blank justification (max 500 characters) which is recorded on the period and in the audit trail with the acting user. Emits ACCOUNTING_PERIOD_REOPEN. Returns 409 PERIOD_ALREADY_OPEN if the period is not closed, and 400 if the justification is missing or blank.'
+      operationId: reopenAccountingPeriod
+      parameters:
+      - name: periodCode
+        in: path
+        description: Period code in YYYY-MM format
+        required: true
+        schema:
+          type: string
+        example: 2026-06
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountingPeriodReopenRequest'
+        required: true
+      responses:
+        '200':
+          description: Period reopened; the updated period is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingPeriodResponse'
+        '400':
+          description: periodCode is not a valid YYYY-MM period code, or justification is missing or blank
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:period:reopen permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: No period row exists for the code (PERIOD_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Period is already open (PERIOD_ALREADY_OPEN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:period:reopen
+      x-required-permissions:
+      - accounting:period:reopen
+  /v1/accounting/periods/{periodCode}/close:
+    post:
+      tags:
+      - Accounting Periods
+      summary: Close an accounting period
+      description: 'Closes an OPEN accounting period (OPEN → CLOSED) so no further postings are accepted into it. Use this tool during month-end close after all journal entries for the month are posted; use reopenAccountingPeriod to reverse the transition. Preconditions: the period must not already be CLOSED, and no DRAFT journal entries may be dated inside the period. A valid YYYY-MM period with no row whose month has already started is auto-provisioned and then closed. The close is audit-logged with the acting user and emits ACCOUNTING_PERIOD_CLOSE. Returns 409 PERIOD_ALREADY_CLOSED if the period is already closed, and 422 PERIOD_HAS_DRAFT_ENTRIES listing the blocking draft journal entry IDs in fieldErrors — post or delete those entries before retrying.'
+      operationId: closeAccountingPeriod
+      parameters:
+      - name: periodCode
+        in: path
+        description: Period code in YYYY-MM format
+        required: true
+        schema:
+          type: string
+        example: 2026-06
+      responses:
+        '200':
+          description: Period closed; the updated period is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingPeriodResponse'
+        '400':
+          description: periodCode is not a valid YYYY-MM period code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:period:close permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Period not found and its month has not started (PERIOD_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Period is already closed (PERIOD_ALREADY_CLOSED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: DRAFT journal entries are dated inside the period (PERIOD_HAS_DRAFT_ENTRIES); fieldErrors lists the blocking draftJournalEntryIds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:period:close
+      x-required-permissions:
+      - accounting:period:close
   /v1/accounting/payments/{paymentId}/void:
     post:
       tags:
@@ -1334,9 +1450,7 @@ paths:
           exclusiveMinimum: 0
       - name: sort
         in: query
-        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported
-          fields: createdAt, modifiedAt, updatedAt, transactionDate, postedAt, status,
-          entryType, description, createdBy, journalEntryId. Direction defaults to desc.'
+        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported fields: createdAt, modifiedAt, updatedAt, transactionDate, postedAt, status, entryType, description, createdBy, journalEntryId. Direction defaults to desc.'
         required: true
         schema:
           type: string
@@ -1493,6 +1607,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InvoiceGenerationResponse'
+        '202':
+          description: Regeneration command accepted (ADR-0044 async path); invoice arrives via invoice.events.v1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceGenerationResponse'
         '404':
           description: Workorder not found
           content:
@@ -1544,10 +1664,7 @@ paths:
           exclusiveMinimum: 0
       - name: sort
         in: query
-        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported
-          fields: accountCode, accountName, accountType, description, activationDate,
-          deactivationDate, createdAt, modifiedAt, updatedAt, glAccountId. Direction
-          defaults to asc.'
+        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported fields: accountCode, accountName, accountType, description, activationDate, deactivationDate, createdAt, modifiedAt, updatedAt, glAccountId. Direction defaults to asc.'
         required: true
         schema:
           type: string
@@ -2349,6 +2466,78 @@ paths:
         - accounting:ap:pay
       x-required-permissions:
       - accounting:ap:pay
+  /v1/accounting/vendors:
+    get:
+      tags:
+      - Vendor Directory API
+      summary: Search vendors by name
+      description: Case-insensitive name-contains search over the AP vendor directory, ordered by name. Omit the name parameter to list all vendors (up to the limit).
+      operationId: searchVendors
+      parameters:
+      - name: name
+        in: query
+        description: Name search term (case-insensitive contains)
+        required: false
+        schema:
+          type: string
+        example: acme
+      - name: limit
+        in: query
+        description: Maximum results to return (server caps at 100)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+        example: 20
+      responses:
+        '200':
+          description: Matching vendors returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VendorResponse'
+      security:
+      - bearerAuth:
+        - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
+  /v1/accounting/vendors/{vendorId}:
+    get:
+      tags:
+      - Vendor Directory API
+      summary: Get vendor by id
+      description: Resolves a single vendor by its identifier, e.g. to display a name for a deep-linked id
+      operationId: getVendorById
+      parameters:
+      - name: vendorId
+        in: path
+        description: Vendor identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440001
+      responses:
+        '200':
+          description: Vendor found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorResponse'
+        '404':
+          description: Vendor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorResponse'
+      security:
+      - bearerAuth:
+        - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/vendor-bills/{billId}:
     get:
       tags:
@@ -2919,6 +3108,33 @@ paths:
         - accounting:mapping-key:view
       x-required-permissions:
       - accounting:mapping-key:view
+  /v1/accounting/periods:
+    get:
+      tags:
+      - Accounting Periods
+      summary: List accounting periods
+      description: Lists all known accounting periods, most recent first (descending period code). Use this tool to review period statuses before closing or reopening a period. Periods are auto-provisioned on first posting, so months never posted into may be absent; an absent month counts as OPEN for posting purposes. No preconditions and no side effects; nothing is created by this call.
+      operationId: listAccountingPeriods
+      responses:
+        '200':
+          description: Accounting periods listed, most recent first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountingPeriodResponse'
+        '403':
+          description: Caller lacks the accounting:period:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:period:view
+      x-required-permissions:
+      - accounting:period:view
   /v1/accounting/journal-entries/{journalEntryId}/traceability:
     get:
       tags:
@@ -4355,6 +4571,27 @@ components:
           example: Primary receivables account
           maxLength: 500
           minLength: 0
+        accountSubtype:
+          type: string
+          description: Updated account subtype refining the immutable accountType for report grouping and posting-config plausibility checks. Left unchanged when omitted.
+          enum:
+          - RECEIVABLE
+          - PAYABLE
+          - BANK_CASH
+          - UNDEPOSITED_FUNDS
+          - TAX_PAYABLE
+          - CURRENT_ASSET
+          - FIXED_ASSET
+          - CURRENT_LIABILITY
+          - SALES
+          - COST_OF_SALES
+          - OPERATING_EXPENSE
+          - OTHER
+          example: BANK_CASH
+        reconcilable:
+          type: boolean
+          description: Whether journal entry lines on this account participate in reconciliation (e.g. settlement/bank reconciliation). Left unchanged when omitted.
+          example: true
     GLAccountResponse:
       type: object
       description: GL account response with computed status
@@ -4382,6 +4619,27 @@ components:
           - REVENUE
           - EXPENSE
           example: ASSET
+        accountSubtype:
+          type: string
+          description: Optional subtype refining accountType for report grouping and posting-config plausibility checks. Null when no refinement applies.
+          enum:
+          - RECEIVABLE
+          - PAYABLE
+          - BANK_CASH
+          - UNDEPOSITED_FUNDS
+          - TAX_PAYABLE
+          - CURRENT_ASSET
+          - FIXED_ASSET
+          - CURRENT_LIABILITY
+          - SALES
+          - COST_OF_SALES
+          - OPERATING_EXPENSE
+          - OTHER
+          example: UNDEPOSITED_FUNDS
+        reconcilable:
+          type: boolean
+          description: Whether journal entry lines on this account participate in reconciliation (e.g. settlement/bank reconciliation).
+          example: false
         description:
           type: string
           description: GL account description
@@ -4434,6 +4692,7 @@ components:
           example: 6
       required:
       - glAccountId
+      - reconcilable
     DefaultGLMappingRequest:
       type: object
       description: Request to create or update a default GL account mapping
@@ -4953,6 +5212,128 @@ components:
       required:
       - categoryName
       - createdBy
+    AccountingPeriodReopenRequest:
+      type: object
+      description: Request payload for reopening a closed accounting period
+      properties:
+        justification:
+          type: string
+          description: Mandatory reason for reopening the period; recorded on the period and in the audit trail
+          example: Late vendor bill for June must be posted before restatement
+          maxLength: 500
+          minLength: 0
+      required:
+      - justification
+    AccountingPeriodResponse:
+      type: object
+      description: Accounting period response payload
+      properties:
+        periodId:
+          type: string
+          format: uuid
+          description: Period UUID
+          example: 01936e5e-7890-7a3d-8b6e-4d5678901234
+        periodCode:
+          type: string
+          description: Period code (YYYY-MM)
+          example: 2026-07
+        startDate:
+          type: string
+          format: date
+          description: First day of the period
+          example: 2026-07-01
+        endDate:
+          type: string
+          format: date
+          description: Last day of the period (inclusive)
+          example: 2026-07-31
+        status:
+          type: string
+          description: Lifecycle status
+          enum:
+          - OPEN
+          - CLOSED
+          example: OPEN
+        closedAt:
+          type: string
+          format: date-time
+          description: When the period was closed (null while OPEN)
+        closedBy:
+          type: string
+          description: Actor who closed the period
+        reopenedAt:
+          type: string
+          format: date-time
+          description: When the period was last reopened
+        reopenedBy:
+          type: string
+          description: Actor who last reopened the period
+        reopenJustification:
+          type: string
+          description: Justification recorded for the last reopen
+    ApiError:
+      type: object
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code
+          example: 404
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+        correlationId:
+          type: string
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          items:
+            $ref: '#/components/schemas/FieldError'
+        referenceId:
+          type: string
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+        nextAction:
+          type: string
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+        supportAction:
+          type: string
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
+      required:
+      - field
+      - message
     PaymentApplicationReversalRequest:
       type: object
       description: Request payload for reversing a payment application
@@ -5385,6 +5766,28 @@ components:
           - REVENUE
           - EXPENSE
           example: REVENUE
+        accountSubtype:
+          type: string
+          description: Optional subtype refining accountType for report grouping and posting-config plausibility checks (e.g. UNDEPOSITED_FUNDS for the cash-receipt clearing account). Null when no refinement applies.
+          enum:
+          - RECEIVABLE
+          - PAYABLE
+          - BANK_CASH
+          - UNDEPOSITED_FUNDS
+          - TAX_PAYABLE
+          - CURRENT_ASSET
+          - FIXED_ASSET
+          - CURRENT_LIABILITY
+          - SALES
+          - COST_OF_SALES
+          - OPERATING_EXPENSE
+          - OTHER
+          example: UNDEPOSITED_FUNDS
+        reconcilable:
+          type: boolean
+          default: false
+          description: Whether journal entry lines on this account participate in reconciliation (e.g. settlement/bank reconciliation). Defaults to false when omitted.
+          example: false
         description:
           type: string
           description: Optional description of the account
@@ -6292,6 +6695,33 @@ components:
           format: int32
           description: Allocation sequence number
           example: 1
+    VendorResponse:
+      type: object
+      description: AP vendor directory entry (name to vendorId resolution)
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+          description: Stable vendor identifier
+          example: 01960003-0000-7000-8000-000000000001
+        name:
+          type: string
+          description: Vendor display name
+          example: Acme Auto Parts
+        vendorNumber:
+          type: string
+          description: Human-readable vendor number, when assigned
+          example: V-1042
+        status:
+          type: string
+          description: Vendor status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          example: ACTIVE
+      required:
+      - name
+      - vendorId
     VendorBillMatchCandidateResponse:
       type: object
       description: Vendor bill match candidate presented for manual selection during ambiguous matching
