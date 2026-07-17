@@ -2,12 +2,18 @@ package com.positivity.accounting.internal.config;
 
 import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
+import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
+import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
+import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
+import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -74,6 +80,43 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleDuplicateAccountCode(
             DuplicateAccountCodeException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "DUPLICATE_ACCOUNT_CODE", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(AccountingPeriodNotFoundException.class)
+    public ResponseEntity<ApiError> handlePeriodNotFound(
+            AccountingPeriodNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "PERIOD_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(AccountingPeriodStateException.class)
+    public ResponseEntity<ApiError> handlePeriodStateConflict(
+            AccountingPeriodStateException ex, HttpServletRequest request) {
+        String code = ex.getCurrentStatus() == AccountingPeriodStatus.CLOSED
+                ? "PERIOD_ALREADY_CLOSED"
+                : "PERIOD_ALREADY_OPEN";
+        return build(HttpStatus.CONFLICT, code, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(PeriodCloseBlockedException.class)
+    public ResponseEntity<ApiError> handlePeriodCloseBlocked(
+            PeriodCloseBlockedException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        List<ApiError.FieldError> fieldErrors = ex.getDraftJournalEntryIds().stream()
+                .map(UUID::toString)
+                .map(id -> new ApiError.FieldError("draftJournalEntryIds", id))
+                .toList();
+        return new ResponseEntity<>(
+                ApiError.withFieldErrors(
+                        "PERIOD_HAS_DRAFT_ENTRIES",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        fieldErrors),
+                headers,
+                HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     @ExceptionHandler(ResponseStatusException.class)

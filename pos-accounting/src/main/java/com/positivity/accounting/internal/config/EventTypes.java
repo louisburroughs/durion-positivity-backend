@@ -20,8 +20,11 @@ public final class EventTypes {
      * ACCOUNTING_STATUS_SYNC_PROCESS and ACCOUNTING_STATUS_VIEW, in addition to
      * CAP-053 Vendor Bill workflow + GL Mapping, +3 from PRD missing endpoints:
      * ACCOUNTING_REPORT_EXPORT_REQUEST, ACCOUNTING_REPORT_EXPORT_STATUS,
-     * ACCOUNTING_REPORT_EXPORT_LIST, and +2 from the vendor directory
-     * (Issue #816): ACCOUNTING_VENDOR_SEARCH, ACCOUNTING_VENDOR_GET).
+     * ACCOUNTING_REPORT_EXPORT_LIST, +2 from the vendor directory
+     * (Issue #816): ACCOUNTING_VENDOR_SEARCH, ACCOUNTING_VENDOR_GET, and +3
+     * from accounting period lifecycle (Story B1, Issue #937):
+     * ACCOUNTING_PERIOD_LIST, ACCOUNTING_PERIOD_CLOSE,
+     * ACCOUNTING_PERIOD_REOPEN).
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -197,6 +200,17 @@ public final class EventTypes {
                                 "ACCOUNTING_VENDOR_SEARCH", "Search AP vendor directory by name (typeahead)")
                         .build(),
                 EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_GET", "Get AP vendor directory entry by ID")
+                        .build(),
+
+                // AccountingPeriodController — 3 events (Story B1, Issue #937)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_PERIOD_LIST", "List accounting periods with lifecycle status")
+                        .build(),
+                EventTypeRegistration.approval("ACCOUNTING_PERIOD_CLOSE", "Close an accounting period (OPEN to CLOSED)")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_PERIOD_REOPEN",
+                                "Reopen a closed accounting period with mandatory justification")
                         .build());
     }
 }
