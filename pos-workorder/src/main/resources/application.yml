@@ -82,10 +82,6 @@ pos:
     base-url: ${POS_VEHICLE_BASE_URL:http://pos-vehicle:8088}
   tax:
     base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
-  invoice:
-    service-id: ${POS_INVOICE_SERVICE_ID:invoice}
-  inventory:
-    service-id: ${POS_INVENTORY_SERVICE_ID:inventory}
   people:
     service-id: ${POS_PEOPLE_SERVICE_ID:people}
   documents:
@@ -112,6 +108,19 @@ workorder:
     location-manifest-topic: ${WORKORDER_LOCATION_MANIFEST_TOPIC:location.manifest.v1}
     location-manifest-consumer-group: ${WORKORDER_LOCATION_MANIFEST_CONSUMER_GROUP:pos-workorder-location-manifests}
     location-commands-topic: ${WORKORDER_LOCATION_COMMANDS_TOPIC:location.commands.v1}
+    # Pick replica feed + async pick commands (ADR-0044 §4/§6, #901)
+    inventory-events-topic: ${WORKORDER_INVENTORY_EVENTS_TOPIC:inventory.events.v1}
+    inventory-events-consumer-group: ${WORKORDER_INVENTORY_EVENTS_CONSUMER_GROUP:pos-workorder-inventory-events}
+    inventory-manifest-topic: ${WORKORDER_INVENTORY_MANIFEST_TOPIC:inventory.manifest.v1}
+    inventory-manifest-consumer-group: ${WORKORDER_INVENTORY_MANIFEST_CONSUMER_GROUP:pos-workorder-inventory-manifests}
+    inventory-commands-topic: ${WORKORDER_INVENTORY_COMMANDS_TOPIC:inventory.commands.v1}
+    # Invoice replica feed + async generation commands (ADR-0044 §4/§6, #900)
+    invoice-events-topic: ${WORKORDER_INVOICE_EVENTS_TOPIC:invoice.events.v1}
+    invoice-events-consumer-group: ${WORKORDER_INVOICE_EVENTS_CONSUMER_GROUP:pos-workorder-invoice-events}
+    invoice-manifest-topic: ${WORKORDER_INVOICE_MANIFEST_TOPIC:invoice.manifest.v1}
+    invoice-manifest-consumer-group: ${WORKORDER_INVOICE_MANIFEST_CONSUMER_GROUP:pos-workorder-invoice-manifests}
+    invoice-commands-topic: ${WORKORDER_INVOICE_COMMANDS_TOPIC:invoice.commands.v1}
+    command-send-timeout-ms: ${WORKORDER_COMMAND_SEND_TIMEOUT_MS:10000}
     commands-topic: ${WORKORDER_KAFKA_COMMANDS_TOPIC:workorder.commands.v1}
     consumer-group: ${WORKORDER_KAFKA_CONSUMER_GROUP:${spring.application.name}-commands}
   # Reconciliation manifests (ADR-0044, one summary per closed window of the fact topic)

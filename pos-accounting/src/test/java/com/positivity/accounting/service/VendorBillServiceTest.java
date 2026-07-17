@@ -65,6 +65,9 @@ class VendorBillServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private VendorDirectoryService vendorDirectoryService;
+
     @InjectMocks
     private VendorBillServiceImpl vendorBillService;
 

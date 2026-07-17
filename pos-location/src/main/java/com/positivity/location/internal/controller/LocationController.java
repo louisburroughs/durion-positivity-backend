@@ -243,6 +243,7 @@ public class LocationController {
             description = "Retrieve the person responsible for a given location.")
     @ApiResponse(responseCode = "200", description = "Responsible person found and returned.")
     @ApiResponse(responseCode = "404", description = "Responsible person not found.")
+    @EmitEvent(id = "LOCATION_RESPONSIBLE_PERSON_GET", apiVersion = "1")
     @PreAuthorize("hasAuthority('location:read')")
     @SecurityRequirement(
             name = "bearerAuth",

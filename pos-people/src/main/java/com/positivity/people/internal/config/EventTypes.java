@@ -109,6 +109,12 @@ public final class EventTypes {
                 EventTypeRegistration.search(
                                 "PEOPLE_TIME_APPROVED_EXPORT_READ",
                                 "Read approved time rows for accounting export orchestration")
+                        .build(),
+
+                // PeopleComplianceController - 1 event (#888)
+                EventTypeRegistration.search(
+                                "REPORT_INACTIVE_PERSON_ACTIVE_USER_GENERATED",
+                                "Generate identity-compliance report of active users linked to inactive persons")
                         .build());
     }
 }

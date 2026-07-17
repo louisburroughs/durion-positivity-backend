@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.config.InvoiceEventPublisher;
 import com.positivity.invoice.internal.dto.BillingRulesDTO;
 import com.positivity.invoice.internal.entity.BillingRules;
 import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
@@ -27,6 +28,7 @@ public class BillingRulesServiceImpl implements BillingRulesService {
     private static final String SYSTEM_USER = "system";
 
     private final BillingRulesRepository repository;
+    private final InvoiceEventPublisher invoiceEventPublisher;
 
     // Default values from configuration
     @Value("${billing.defaults.purchase-order-required:false}")
@@ -41,8 +43,10 @@ public class BillingRulesServiceImpl implements BillingRulesService {
     @Value("${billing.defaults.invoice-grouping-strategy:PER_WORKORDER}")
     private String defaultInvoiceGroupingStrategy;
 
-    public BillingRulesServiceImpl(@NonNull BillingRulesRepository repository) {
+    public BillingRulesServiceImpl(
+            @NonNull BillingRulesRepository repository, @NonNull InvoiceEventPublisher invoiceEventPublisher) {
         this.repository = repository;
+        this.invoiceEventPublisher = invoiceEventPublisher;
     }
 
     @Override
@@ -78,6 +82,7 @@ public class BillingRulesServiceImpl implements BillingRulesService {
         billingRules.setUpdatedBy(updatedBy);
 
         BillingRules saved = repository.save(billingRules);
+        invoiceEventPublisher.publishBillingRulesUpdated(saved);
         return toDTO(saved);
     }
 
@@ -104,6 +109,7 @@ public class BillingRulesServiceImpl implements BillingRulesService {
         billingRules.setUpdatedBy(SYSTEM_USER);
 
         BillingRules saved = repository.save(billingRules);
+        invoiceEventPublisher.publishBillingRulesUpdated(saved);
         return toDTO(saved);
     }
 

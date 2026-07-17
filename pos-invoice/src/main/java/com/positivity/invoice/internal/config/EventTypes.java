@@ -46,6 +46,11 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    public static final EventTypeRegistration INVOICE_ITEM_SEARCH = EventTypeRegistration.search(
+                    "INVOICE_ITEM_SEARCH", "Search invoice line items by customer party for warranty correlation")
+            .apiVersion("1")
+            .build();
+
     public static final EventTypeRegistration INVOICE_ADJUSTMENT_APPLY = EventTypeRegistration.write(
                     "INVOICE_ADJUSTMENT_APPLY", "Apply adjustment to draft invoice")
             .apiVersion("1")
@@ -107,6 +112,26 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    /** #922: warranty settlement reconciliation reads every refund anchored to an invoice. */
+    public static final EventTypeRegistration INVOICE_REFUND_LIST = EventTypeRegistration.fastRead(
+                    "INVOICE_REFUND_LIST", "List all refund records anchored to an invoice")
+            .apiVersion("1")
+            .build();
+
+    // ==================== ISSUE #926 — STANDALONE REFUND EVENTS ====================
+
+    public static final EventTypeRegistration INVOICE_STANDALONE_REFUND = EventTypeRegistration.write(
+                    "INVOICE_STANDALONE_REFUND",
+                    "Record a standalone refund for an invoice whose original payment is not in the system")
+            .apiVersion("1")
+            .build();
+
+    public static final EventTypeRegistration INVOICE_PARTY_STANDALONE_REFUND = EventTypeRegistration.write(
+                    "INVOICE_PARTY_STANDALONE_REFUND",
+                    "Record a standalone refund anchored to a customer party with no invoice in the system")
+            .apiVersion("1")
+            .build();
+
     // ==================== STORY #7 — RECEIPT EVENTS ====================
 
     public static final EventTypeRegistration INVOICE_RECEIPT_GENERATE = EventTypeRegistration.write(
@@ -139,6 +164,7 @@ public final class EventTypes {
                 INVOICE_CREATE,
                 INVOICE_GET,
                 INVOICE_SEARCH,
+                INVOICE_ITEM_SEARCH,
                 INVOICE_ADJUSTMENT_APPLY,
                 INVOICE_FINALIZATION_REQUESTED,
                 INVOICE_FINALIZED,
@@ -149,6 +175,9 @@ public final class EventTypes {
                 INVOICE_PAYMENT_CAPTURE,
                 INVOICE_PAYMENT_VOID,
                 INVOICE_PAYMENT_REFUND,
+                INVOICE_REFUND_LIST,
+                INVOICE_STANDALONE_REFUND,
+                INVOICE_PARTY_STANDALONE_REFUND,
                 INVOICE_RECEIPT_GENERATE,
                 INVOICE_RECEIPT_REPRINT,
                 INVOICE_RECEIPT_PRINT_DELIVERY,

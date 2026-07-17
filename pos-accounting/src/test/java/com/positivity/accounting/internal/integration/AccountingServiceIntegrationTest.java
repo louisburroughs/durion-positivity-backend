@@ -14,6 +14,7 @@ import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
+import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -43,6 +44,9 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private GLAccountRepository glAccountRepository;
 
+    @Autowired
+    private StatementLineMappingRepository statementLineMappingRepository;
+
     private static final UUID ORG_ID = UUID.fromString("00000000-0000-4000-a000-000000000010");
     private static final String BASE_URL = "/v1/accounting";
 
@@ -54,6 +58,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        statementLineMappingRepository.deleteAll();
         glAccountRepository.deleteAll();
     }
 

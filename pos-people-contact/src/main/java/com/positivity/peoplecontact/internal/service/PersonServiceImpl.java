@@ -4,9 +4,11 @@ import com.positivity.peoplecontact.internal.dto.Person;
 import com.positivity.peoplecontact.internal.dto.ResolvePersonRequest;
 import com.positivity.peoplecontact.internal.dto.ResolvePersonResponse;
 import com.positivity.peoplecontact.internal.entity.PersonContactPoint;
+import com.positivity.peoplecontact.internal.exception.PersonHasLinkedUsersException;
 import com.positivity.peoplecontact.internal.repository.PersonContactPointRepository;
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
 import com.positivity.peoplecontact.internal.repository.PersonSpecifications;
+import com.positivity.peoplecontact.internal.repository.UserPersonLinkRepository;
 import com.positivity.peoplecontact.service.PersonService;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -24,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +46,8 @@ public class PersonServiceImpl implements PersonService {
     private final PersonRepository personRepository;
 
     private final PersonContactPointRepository personContactPointRepository;
+
+    private final UserPersonLinkRepository userPersonLinkRepository;
 
     private final PeopleContactEventPublisher eventPublisher;
 
@@ -233,7 +238,23 @@ public class PersonServiceImpl implements PersonService {
     @Override
     @Transactional
     public void deletePerson(@NonNull UUID id) {
-        personRepository.deleteById(id);
+        // #881: fail fast with 409 instead of letting the user_person_links FK violation
+        // escape as a 500; the caller must unlink users first.
+        if (userPersonLinkRepository.existsByPerson_Id(id)) {
+            throw new PersonHasLinkedUsersException(id);
+        }
+        // #881: contact points have no FK to person — remove them in the same transaction so
+        // the person.deleted fact and the authority's own tables cannot drift apart.
+        personContactPointRepository.deleteByPersonId(id);
+        try {
+            personRepository.deleteById(id);
+            // Force the DELETE to execute here so a link created concurrently (between the
+            // exists pre-check above and this statement) still surfaces as the 409, not as a
+            // DataIntegrityViolationException-turned-500 at commit time.
+            personRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new PersonHasLinkedUsersException(id);
+        }
         eventPublisher.publishPersonDeleted(id);
     }
 

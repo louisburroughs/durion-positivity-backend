@@ -52,22 +52,27 @@ Hand-offs:
 
 The assistant should answer: What was ordered? What was received? What remains open? Which receipt created the on-hand increase? What AP item or vendor invoice is waiting? Where does the mismatch occur?
 
-## Playbook: warranty or claim
-Warranty and claim flows connect customer, vehicle, workorder, invoice, inventory, and accounting. The bundle verifies account/claim codes as identifiers to include in the glossary, but it does not provide a complete claim-service rule source. Any rule about claim eligibility, manufacturer approval, reimbursement timing, or claim-code format must therefore be marked for verification.
+## Playbook: warranty claim
+Warranty claims are owned by `pos-warranty` and connect customer, vehicle, workorder, invoice, inventory, and accounting. A claim is identified by its claim code `WC-{yyyy}-{seq}` (see the glossary) and moves through the states DRAFT, SUBMITTED, IN_REVIEW, INFO_NEEDED, APPROVED, DENIED, SETTLED, CLOSED, CANCELLED. The design is customer-first: the customer is made whole at settlement; vendor reimbursement and defective-part return are back-office child lifecycles that follow.
 
-Typical hand-offs:
+Operational steps:
 
-1. Customer/vehicle context identifies owner, service history, VIN, unit, or account.
-2. Workorder context identifies the performed service, parts, labor, dates, and technician notes.
-3. Invoice context identifies billed amounts and whether the customer, fleet, warranty provider, or manufacturer is responsible.
-4. Inventory context may identify part SKU, lot, serial, or return disposition.
-5. Accounting context identifies receivable, adjustment, credit, or reimbursement treatment.
+1. Intake creates a DRAFT claim: customer is validated against `pos-customer`, vehicle context (VIN, odometer) is snapshotted from `pos-vehicle-inventory`, and product/manufacturer context comes from `pos-catalog`.
+2. Origin search: the candidate-lines lookup searches `pos-invoice` invoice lines and `pos-workorder` parts/service lines by customer, vehicle, and SKU to link the claim to the original sale or service.
+3. Submit runs the eligibility evaluation and moves DRAFT to SUBMITTED (or INFO_NEEDED to IN_REVIEW). The eligibility result is a suggestion only and can be re-run on demand; it never auto-decides.
+4. Decision is human adjudication: IN_REVIEW to APPROVED or DENIED. An appeal is modeled as DENIED back to IN_REVIEW with a mandatory reason.
+5. Settlement makes the customer whole first. Settlement types: REPLACEMENT_WORKORDER (a replacement workorder is created through the normal estimate/workorder flow and linked from the claim via `replacementWorkorderId` — `pos-warranty` never writes to `pos-workorder`), INVOICE_CREDIT / PRORATED_CREDIT / REFUND (invoice adjustment or refund created in `pos-invoice`, carrying the settlement id as `externalReference` for idempotent correlation), GOODWILL, or NO_ACTION. Settlement moves the claim to SETTLED and emits `warranty.claim.settled` (published for accounting/reporting; no consumer of this event is implemented yet — the assistant must not describe a `warranty.claim.settled` consumer as live).
+6. Back-office follow-up: vendor/provider reimbursement (`warranty.reimbursement.submitted` and `warranty.reimbursement.resolved`, consumed live by `pos-accounting` into its `warranty_reimbursement_expectation` table for expected-credit matching — status `EXPECTED` on submission, then the terminal `ReimbursementStatus` such as `APPROVED`, `DENIED`, or `WRITTEN_OFF` on resolution) and defective-part return RMA (`warranty.part-return.requested` and `warranty.part-return.shipped`, consumed live by `pos-inventory` into its `warranty_part_return_hold` table — status `REQUESTED` then `SHIPPED` with carrier/tracking; the physical quarantine shelf remains a manual process, the table is the tracking record). Both consumers are live per issue #927 (PRD §9.3).
+7. Close: SETTLED to CLOSED once reimbursement and part-return follow-ups are resolved.
+8. Read replicas: `warranty.claim.snapshot` carries the full claim aggregate for replica builders, emitted on every claim mutation (ADR-0044 R3), so other modules can mirror claims without calling `pos-warranty`. No snapshot consumer is implemented yet — the assistant must not describe a `warranty.claim.snapshot` replica as live.
 
-> **VERIFIED:** A repo-wide search found **no warranty/claim/RMA workflow in any service.** "Warranty" exists only as a catalog product attribute (`ProductEntity.warranty`); inventory owns *returns* (`inventory:return:*`) and invoice owns payments/refunds — neither is a warranty claim. There is no claim-code schema, approval state machine, or reimbursement workflow. The assistant must NOT describe a warranty/claim flow as if it exists.
->
-> OPEN (product decision, not a code gap): whether a warranty/claim capability is intended is a product question — escalate to product; it cannot be sourced from code. Tracked: `docs/BACKLOG.md` BL-1.
+Permissions are `warranty:*`: claim actions are `warranty:claim:create/view/submit/decide/settle/cancel/close`; supporting resources use view/manage pairs — `warranty:policy:*`, `warranty:provider:*`, `warranty:registration:*`, `warranty:reimbursement:*`, `warranty:part-return:*`.
+
+Blocking questions the assistant should answer: Is there a linked origin line (invoice or workorder)? What did eligibility suggest and why? Has a human decided the claim? Which settlement type was used, and does the invoice adjustment/refund reference the settlement id? Is vendor reimbursement submitted/resolved? Is the part return requested/shipped? Can the claim be closed?
+
+_Verified: `pos-warranty` `ClaimController` (intake, candidate-lines, submit, eligibility re-run, decide), `SettlementController`/`SettlementServiceImpl` (`warranty.claim.settled`), `ReimbursementServiceImpl` (`warranty.reimbursement.*`), `PartReturnServiceImpl` (`warranty.part-return.*`), `ClaimStatus`/`SettlementType` enums, `InvoiceClientImpl` (`externalReference` = settlement id), `WarrantyPermissionRegistration`, `pos-accounting` `WarrantyEventsListener` (`warranty_reimbursement_expectation`, group `pos-accounting-warranty-events`), `pos-inventory` `WarrantyEventsListener` (`warranty_part_return_hold`, group `pos-inventory-warranty-events`). No consumer exists for `warranty.claim.settled` or `warranty.claim.snapshot`. PRD: `docs/PRD-warranty-claims-module.md`._
 
 ## Interpreting blocked cross-domain requests
-When a user asks why a workflow is blocked, the assistant should identify the current entity and then test dependencies in order. For a workorder-to-invoice issue, check approval, workorder status, parts/labor completeness, change-request approval, and invoice generation/finalization. For PO-to-reconciliation, check PO lines, receipt lines, quantity/cost match, vendor invoice, and AP state. For warranty/claim, check whether the claim source is verified before stating a business rule.
+When a user asks why a workflow is blocked, the assistant should identify the current entity and then test dependencies in order. For a workorder-to-invoice issue, check approval, workorder status, parts/labor completeness, change-request approval, and invoice generation/finalization. For PO-to-reconciliation, check PO lines, receipt lines, quantity/cost match, vendor invoice, and AP state. For a warranty claim, check claim state, linked origin line, eligibility result, human decision, settlement completion, and open reimbursement/part-return follow-ups.
 
 The assistant should not invent API calls or tool names. It should describe the capability, required identifiers, and permission context unless an operation has been verified against an OpenAPI source.

@@ -1,10 +1,9 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.service.StorageLocationTopologyService;
-import com.positivity.inventory.internal.service.StorageLocationTopologyService.StorageLocationNode;
 import com.positivity.inventory.internal.dto.rollup.RollupQuantities;
 import com.positivity.inventory.internal.dto.rollup.SiteInventoryRollupResponse;
 import com.positivity.inventory.internal.dto.rollup.StorageLocationRollupNode;
+import com.positivity.inventory.internal.service.StorageLocationTopologyService.StorageLocationNode;
 import com.positivity.inventory.service.SiteInventoryRollupService;
 import java.util.ArrayList;
 import java.util.Comparator;

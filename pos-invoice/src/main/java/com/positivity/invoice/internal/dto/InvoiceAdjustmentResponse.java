@@ -37,6 +37,12 @@ public class InvoiceAdjustmentResponse {
     private String authorizedBy;
 
     @Schema(
+            description = "Optional correlation id to an external record (e.g. a warranty claim code)",
+            example = "WC-2026-000042",
+            requiredMode = NOT_REQUIRED)
+    private String externalReference;
+
+    @Schema(
             description = "Timestamp when the adjustment was created",
             example = "2026-01-15T09:30:00Z",
             requiredMode = NOT_REQUIRED)
@@ -85,6 +91,15 @@ public class InvoiceAdjustmentResponse {
 
     public void setAuthorizedBy(@Nullable String authorizedBy) {
         this.authorizedBy = authorizedBy;
+    }
+
+    @Nullable
+    public String getExternalReference() {
+        return externalReference;
+    }
+
+    public void setExternalReference(@Nullable String externalReference) {
+        this.externalReference = externalReference;
     }
 
     @Nullable

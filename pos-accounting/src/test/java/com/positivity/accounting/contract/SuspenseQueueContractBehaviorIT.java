@@ -20,6 +20,7 @@ import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
+import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -71,6 +72,9 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private JournalEntryLineRepository journalEntryLineRepository;
 
+    @Autowired
+    private StatementLineMappingRepository statementLineMappingRepository;
+
     private static final String API_V1 = "/v1/accounting/events";
 
     @BeforeEach
@@ -80,6 +84,7 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
         journalEntryLineRepository.deleteAll();
         journalEntryRepository.deleteAll();
         defaultGLMappingRepository.deleteAll();
+        statementLineMappingRepository.deleteAll();
         glAccountRepository.deleteAll();
 
         createDefaultMappingForSuccessfulReprocessing();

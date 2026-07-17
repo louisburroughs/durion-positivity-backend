@@ -372,7 +372,14 @@ fi
 
 if [[ "$AGGREGATE_OPENAPI" == true ]]; then
   echo "Generating aggregate OpenAPI..."
-  if ! generate_aggregate_openapi "$AGGREGATE_OUTPUT" "${MODULES[@]}"; then
+  # The aggregate must always index every module's spec, even when this run
+  # only regenerated a subset — otherwise a single-module run drops all other
+  # modules from the gateway's aggregated API index.
+  mapfile -t AGGREGATE_MODULES < <(discover_modules)
+  if [[ ${#AGGREGATE_MODULES[@]} -eq 0 ]]; then
+    AGGREGATE_MODULES=("${MODULES[@]}")
+  fi
+  if ! generate_aggregate_openapi "$AGGREGATE_OUTPUT" "${AGGREGATE_MODULES[@]}"; then
     echo "ERROR: Failed to generate aggregate OpenAPI file." >&2
     exit 1
   fi

@@ -3,51 +3,56 @@ package com.positivity.workorder.internal.service;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
-import com.positivity.workorder.internal.client.InvoiceClient;
+import com.positivity.workorder.internal.config.InvoiceCommandPublisher;
+import com.positivity.workorder.internal.entity.ExtInvoiceReplica;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.InvalidWorkorderStateException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.repository.ExtInvoiceReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
-import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderInvoiceService;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.NoTransactionException;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.interceptor.TransactionAspectSupport;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Service for generating invoice drafts from completed workorders.
+ * Requests invoice generation for completed workorders (ADR-0044 §4, #900 Phase 5.4).
+ *
+ * <p>Generation is asynchronous: this service publishes an {@code invoice.generation-requested}
+ * command carrying the billable line items and returns a {@code PENDING} response; pos-invoice
+ * creates the invoice and its {@code invoice.invoice.updated} fact links
+ * {@code workorder.invoiceId} through the {@code ext_invoice} replica
+ * ({@link InvoiceEventsListener}). Already-invoiced workorders answer from the replica.
+ * Client retries with the same {@code Idempotency-Key} collapse to one deterministic command id,
+ * so pos-invoice creates exactly one invoice per key.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
 
-    private static final String IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE = "workorder.invoice.generate";
-
     private final WorkorderRepository workorderRepository;
-    private final WorkorderFactPublisher workorderFactPublisher;
     private final WorkorderServiceRepository workorderServiceRepository;
     private final WorkorderPartRepository workorderPartRepository;
-    private final IdempotencyService idempotencyService;
-    private final InvoiceClient invoiceClient;
+    private final ExtInvoiceReplicaRepository extInvoiceReplicaRepository;
+    private final ObjectProvider<InvoiceCommandPublisher> invoiceCommandPublisher;
 
     // Statuses excluded from billable totals (aligned with WorkorderStateMachine)
     private static final Set<WorkorderItemStatus> EXCLUDED_BILLABLE_TOTAL_STATUSES =
@@ -59,28 +64,47 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
         Workorder workorder = loadCompletedWorkorder(workorderId);
 
         if (workorder.getInvoiceId() != null) {
-            return buildExistingLinkedInvoiceResponse(workorderId, workorder);
+            log.info("Invoice already generated for workorder {} as invoice {}", workorderId, workorder.getInvoiceId());
+            return buildExistingResponse(workorder, workorder.getInvoiceId());
         }
 
-        Optional<InvoiceGenerationResponse> idempotentReplay = findIdempotentReplayResponse(workorder, idempotencyKey);
-        if (idempotentReplay.isPresent()) {
-            return idempotentReplay.get();
+        InvoiceCommandPublisher publisher = invoiceCommandPublisher.getIfAvailable();
+        if (publisher == null) {
+            // 503, not IllegalStateException: GlobalExceptionHandler maps IllegalStateException
+            // to 409, but an absent event feed is a service-availability condition.
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Invoice generation is asynchronous (ADR-0044 #900) and requires the Kafka event feed;"
+                            + " enable workorder.kafka.enabled");
         }
 
-        InvoiceGenerationResponse response = createInvoiceForWorkorder(workorder, idempotencyKey);
-        UUID invoiceId = requireInvoiceId(response, workorderId);
-        backfillTraceability(response, workorder);
-
-        Optional<InvoiceGenerationResponse> raceConditionResponse =
-                registerIdempotencyKeyHandlingRace(workorder, idempotencyKey, invoiceId);
-        if (raceConditionResponse.isPresent()) {
-            return raceConditionResponse.get();
+        InvoiceCreationRequest request = InvoiceCreationRequest.builder()
+                .workorderId(workorder.getId())
+                .estimateId(workorder.getEstimateId())
+                .approvalId(workorder.getApprovalId())
+                .locationId(workorder.getLocationId())
+                .customerId(workorder.getCustomerId())
+                .idempotencyKey(idempotencyKey)
+                .lineItems(buildLineItems(workorder.getId()))
+                .build();
+        try {
+            publisher.requestInvoiceGeneration(
+                    request,
+                    idempotencyKey != null && !idempotencyKey.isBlank() ? idempotencyKey : workorderId.toString());
+        } catch (IllegalStateException e) {
+            // Broker nack/timeout mirrors the old synchronous failure mode: 503, retryable.
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Unable to queue invoice generation for workorder " + workorderId,
+                    e);
         }
 
-        workorder.setInvoiceId(invoiceId);
-        workorderRepository.save(workorder);
-        workorderFactPublisher.markChanged(workorder.getId());
-        return response;
+        return InvoiceGenerationResponse.builder()
+                .workorderId(workorder.getId())
+                .estimateId(workorder.getEstimateId())
+                .approvalId(workorder.getApprovalId())
+                .status(STATUS_PENDING)
+                .build();
     }
 
     @NonNull
@@ -96,147 +120,24 @@ public class WorkorderInvoiceServiceImpl implements WorkorderInvoiceService {
     }
 
     @NonNull
-    private InvoiceGenerationResponse buildExistingLinkedInvoiceResponse(
-            @NonNull UUID workorderId, @NonNull Workorder workorder) {
-        log.info("Invoice already generated for workorder {} as invoice {}", workorderId, workorder.getInvoiceId());
-        return buildExistingResponse(workorder, workorder.getInvoiceId());
-    }
-
-    @NonNull
-    private Optional<InvoiceGenerationResponse> findIdempotentReplayResponse(
-            @NonNull Workorder workorder, @Nullable String idempotencyKey) {
-        if (!hasIdempotencyKey(idempotencyKey)) {
-            return Optional.empty();
-        }
-
-        Optional<UUID> existingInvoiceId = idempotencyService.getExistingInvoiceId(
-                IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE, idempotencyKey);
-        if (existingInvoiceId.isEmpty()) {
-            return Optional.empty();
-        }
-
-        UUID invoiceId = existingInvoiceId.get();
-        if (workorder.getInvoiceId() == null) {
-            workorder.setInvoiceId(invoiceId);
-            workorderRepository.save(workorder);
-            workorderFactPublisher.markChanged(workorder.getId());
-        }
-
-        log.info(
-                "Idempotent invoice generation replay for key {} and workorder {}, returning invoice {}",
-                idempotencyKey,
-                workorder.getId(),
-                invoiceId);
-        return Optional.of(buildExistingResponse(workorder, invoiceId));
-    }
-
-    @NonNull
-    private InvoiceGenerationResponse createInvoiceForWorkorder(
-            @NonNull Workorder workorder, @Nullable String idempotencyKey) {
-        InvoiceCreationRequest request = InvoiceCreationRequest.builder()
+    private InvoiceGenerationResponse buildExistingResponse(@NonNull Workorder workorder, @NonNull UUID invoiceId) {
+        ExtInvoiceReplica replica =
+                extInvoiceReplicaRepository.findById(invoiceId).orElse(null);
+        InvoiceGenerationResponse.InvoiceGenerationResponseBuilder response = InvoiceGenerationResponse.builder()
+                .invoiceId(invoiceId)
                 .workorderId(workorder.getId())
                 .estimateId(workorder.getEstimateId())
-                .approvalId(workorder.getApprovalId())
-                .locationId(workorder.getLocationId())
-                .idempotencyKey(idempotencyKey)
-                .lineItems(buildLineItems(workorder.getId()))
+                .approvalId(workorder.getApprovalId());
+        if (replica == null) {
+            // Linked before the replica row arrived (or replay pending) — the id is authoritative.
+            return response.status(STATUS_PENDING).build();
+        }
+        return response.status(replica.getStatus())
+                .subtotal(replica.getSubtotal())
+                .taxAmount(replica.getTax())
+                .totalAmount(replica.getTotal())
+                .createdAt(replica.getInvoiceCreatedAt())
                 .build();
-        return invoiceClient.createInvoice(request);
-    }
-
-    @NonNull
-    private UUID requireInvoiceId(@NonNull InvoiceGenerationResponse response, @NonNull UUID workorderId) {
-        if (response.getInvoiceId() == null) {
-            throw new IllegalStateException(
-                    "Invoice service returned response without invoiceId for workorder " + workorderId);
-        }
-        return response.getInvoiceId();
-    }
-
-    private void backfillTraceability(@NonNull InvoiceGenerationResponse response, @NonNull Workorder workorder) {
-        if (response.getWorkorderId() == null) {
-            response.setWorkorderId(workorder.getId());
-        }
-        if (response.getEstimateId() == null) {
-            response.setEstimateId(workorder.getEstimateId());
-        }
-        if (response.getApprovalId() == null) {
-            response.setApprovalId(workorder.getApprovalId());
-        }
-    }
-
-    @NonNull
-    private Optional<InvoiceGenerationResponse> registerIdempotencyKeyHandlingRace(
-            @NonNull Workorder workorder, @Nullable String idempotencyKey, @NonNull UUID invoiceId) {
-        if (!hasIdempotencyKey(idempotencyKey)) {
-            return Optional.empty();
-        }
-
-        try {
-            idempotencyService.registerInvoiceKey(
-                    IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE, idempotencyKey, invoiceId);
-            flushCurrentTransaction();
-            return Optional.empty();
-        } catch (DataIntegrityViolationException e) {
-            rollbackCurrentTransaction();
-            return Optional.of(handleIdempotencyRace(workorder, idempotencyKey, e));
-        }
-    }
-
-    @NonNull
-    private InvoiceGenerationResponse handleIdempotencyRace(
-            @NonNull Workorder workorder, @NonNull String idempotencyKey, @NonNull DataIntegrityViolationException e) {
-        Optional<UUID> existingInvoiceId = idempotencyService.getExistingInvoiceId(
-                IDEMPOTENCY_OPERATION_WORKORDER_INVOICE_GENERATE, idempotencyKey);
-        if (existingInvoiceId.isPresent()) {
-            log.warn(
-                    "Race condition detected: idempotency key {} already registered for invoice {}, returning existing invoice",
-                    idempotencyKey,
-                    existingInvoiceId.get());
-            return buildExistingResponse(workorder, existingInvoiceId.get());
-        }
-
-        log.error("Race condition detected but no existing invoice found for idempotency key {}", idempotencyKey);
-        throw new IllegalStateException(
-                "Idempotency key collision but no existing invoice found: " + idempotencyKey, e);
-    }
-
-    private void flushCurrentTransaction() {
-        try {
-            TransactionAspectSupport.currentTransactionStatus().flush();
-        } catch (NoTransactionException e) {
-            log.debug("Flush skipped: no active transaction");
-        }
-    }
-
-    private void rollbackCurrentTransaction() {
-        try {
-            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-        } catch (NoTransactionException ex) {
-            log.debug("Rollback skipped: no active transaction");
-        }
-    }
-
-    private boolean hasIdempotencyKey(@Nullable String idempotencyKey) {
-        return idempotencyKey != null && !idempotencyKey.isBlank();
-    }
-
-    @NonNull
-    private InvoiceGenerationResponse buildExistingResponse(@NonNull Workorder workorder, @NonNull UUID invoiceId) {
-        InvoiceGenerationResponse invoiceDetails = invoiceClient.getInvoice(invoiceId);
-
-        // Ensure workorder links are populated (invoice service might not return them)
-        if (invoiceDetails.getWorkorderId() == null) {
-            invoiceDetails.setWorkorderId(workorder.getId());
-        }
-        if (invoiceDetails.getEstimateId() == null) {
-            invoiceDetails.setEstimateId(workorder.getEstimateId());
-        }
-        if (invoiceDetails.getApprovalId() == null) {
-            invoiceDetails.setApprovalId(workorder.getApprovalId());
-        }
-
-        return invoiceDetails;
     }
 
     @NonNull

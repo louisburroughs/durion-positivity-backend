@@ -1,6 +1,5 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.service.StorageLocationValidationService;
 import com.positivity.inventory.internal.dto.DeactivateLocationResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
@@ -56,7 +55,8 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
             throw new IllegalArgumentException("locationId is required");
         }
 
-        StorageLocationValidationService.StorageLocationValidation sourceValidation = validateSourceLocation(locationId);
+        StorageLocationValidationService.StorageLocationValidation sourceValidation =
+                validateSourceLocation(locationId);
         List<InventoryLedgerEntryRepository.LocationOnHand> onHandRows =
                 inventoryLedgerEntryRepository.findPositiveOnHandByLocation(
                         locationId, InventoryLedgerEventType.onHandAffectingTypes());

@@ -12,14 +12,14 @@ servers:
 tags:
 - name: Appointments API
   description: Operations for creating and loading appointments in shop management
-- name: Shop API
-  description: Endpoints for shop management, technicians, and services
 - name: Appointment Assignments
   description: Create and list technician and resource assignments for an appointment
 - name: Shop Audit
   description: Shop schedule and assignment audit trail.
 - name: Schedule API
   description: Read-only schedule view operations for shop management UI
+- name: Technician API
+  description: Technician identity lookups for a shop location
 - name: Conflict Override API
   description: Operations for appointment conflict override decisions
 paths:
@@ -342,87 +342,45 @@ paths:
   /v1/shop-manager/{locationId}/technicians/{personId}/person:
     get:
       tags:
-      - Shop API
-      summary: Get technician's person details
-      description: Retrieve the person details for a technician by technician ID.
+      - Technician API
+      summary: Get technician person details
+      description: Resolves the person identity (names, contact details) of a technician working at the given shop location from the local people-contact replica. Identity fields can trail the people-contact authority by the event-propagation delay.
       operationId: getTechnicianPerson
       parameters:
       - name: locationId
         in: path
-        description: ID of the shop
+        description: Shop location ID
         required: true
         schema:
           type: string
           format: uuid
-        example: 123e4567-e89b-12d3-a456-426614174000
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       - name: personId
         in: path
-        description: ID of the technician
+        description: People-contact person ID
         required: true
         schema:
           type: string
           format: uuid
-        example: 123e4567-e89b-12d3-a456-426614174001
+        example: 01960011-0000-7000-8000-000000000001
       responses:
         '200':
-          description: Person details returned successfully.
+          description: Technician person details returned.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PersonDTO'
         '404':
-          description: Technician or person not found.
+          description: No technician links this person to this location.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PersonDTO'
       security:
       - bearerAuth:
-        - shop:location:view
+        - shop:technician:view
       x-required-permissions:
-      - shop:location:view
-  /v1/shop-manager/{locationId}/services/{serviceId}/details:
-    get:
-      tags:
-      - Shop API
-      summary: Get shop service details
-      description: Retrieve the details of a shop service by service ID.
-      operationId: getShopServiceDetails
-      parameters:
-      - name: locationId
-        in: path
-        description: ID of the shop
-        required: true
-        schema:
-          type: string
-          format: uuid
-        example: 1
-      - name: serviceId
-        in: path
-        description: ID of the service
-        required: true
-        schema:
-          type: string
-          format: uuid
-        example: 1
-      responses:
-        '200':
-          description: Service details returned successfully.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ServiceEntityDTO'
-        '404':
-          description: Service not found.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ServiceEntityDTO'
-      security:
-      - bearerAuth:
-        - shop:location:view
-      x-required-permissions:
-      - shop:location:view
+      - shop:technician:view
   /v1/schedules/view:
     get:
       tags:
@@ -1149,61 +1107,36 @@ components:
       - retentionYears
     PersonDTO:
       type: object
-      description: Person details resolved from the people system
+      description: Person details for a technician
       properties:
         id:
-          type: integer
-          format: int64
-          description: Internal person identifier
-          example: 1001
+          type: string
+          format: uuid
+          description: People-contact person identifier
+          example: 01960011-0000-7000-8000-000000000001
         firstName:
           type: string
-          description: Person first name
+          description: First name of the person
           example: Jane
         lastName:
           type: string
-          description: Person last name
+          description: Last name of the person
           example: Doe
         primaryEmail:
           type: string
-          description: Primary email address
+          description: Primary email address of the person
           example: jane.doe@example.com
         secondaryEmail:
           type: string
-          description: Secondary email address
-          example: jane.alt@example.com
+          description: Secondary email address of the person
+          example: jane.d@example.com
         phoneNumbers:
           type: array
-          description: Associated phone numbers
+          description: Phone numbers associated with the person
           example:
-          - +1-555-0100
+          - +1-217-555-0100
           items:
             type: string
-        username:
-          type: string
-          description: Login username
-          example: jdoe
-      required:
-      - id
-    ServiceEntityDTO:
-      type: object
-      description: Service catalog entry resolved from pos-catalog
-      properties:
-        id:
-          type: integer
-          format: int64
-          description: Internal service identifier
-          example: 501
-        name:
-          type: string
-          description: Service display name
-          example: Oil Change
-        description:
-          type: string
-          description: Service description
-          example: Standard oil and filter replacement
-      required:
-      - id
     ConflictDetails:
       type: object
       description: Details about a conflict associated with a schedule event

@@ -147,8 +147,8 @@ public class Location {
     @JoinColumn(name = "location_type_id")
     private LocationType type;
 
-    // Reference to Person (responsible) by ID from pos-people
-    private Long responsiblePersonId;
+    // People-contact person UUID (#885); names resolve via the ext_people_contact_person replica
+    private UUID responsiblePersonId;
 
     @Builder.Default
     // Bi-directional parent-child relationship

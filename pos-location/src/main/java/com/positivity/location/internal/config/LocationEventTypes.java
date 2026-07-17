@@ -123,6 +123,11 @@ public final class LocationEventTypes {
                     "LOCATION_BULK_INGEST", "Bulk ingest locations")
             .build();
 
+    // Issue: #885
+    public static final EventTypeRegistration LOCATION_RESPONSIBLE_PERSON_GET = EventTypeRegistration.fastRead(
+                    "LOCATION_RESPONSIBLE_PERSON_GET", "Get the person responsible for a location")
+            .build();
+
     /**
      * Returns all event types for registration with the event service.
      *
@@ -138,6 +143,7 @@ public final class LocationEventTypes {
                 LOCATION_PARENT_ADD,
                 LOCATION_ROSTER_GET,
                 LOCATION_DESCENDANTS_GET,
+                LOCATION_RESPONSIBLE_PERSON_GET,
                 // Bay events
                 LOCATION_BAY_CREATE,
                 LOCATION_BAY_UPDATE,

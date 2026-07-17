@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -65,6 +66,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private DefaultGLMappingRepository defaultGLMappingRepository;
 
+    @Autowired
+    private StatementLineMappingRepository statementLineMappingRepository;
+
     private static final String API_V1 = "/v1/accounting";
 
     // Gateway header values — mirrors what pos-api-gateway injects after JWT
@@ -106,6 +110,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         journalEntryLineRepository.deleteAll();
         journalEntryRepository.deleteAll();
         defaultGLMappingRepository.deleteAll();
+        statementLineMappingRepository.deleteAll();
         glAccountRepository.deleteAll();
     }
 

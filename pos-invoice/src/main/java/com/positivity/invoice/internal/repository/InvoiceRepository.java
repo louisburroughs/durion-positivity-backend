@@ -10,6 +10,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -47,4 +48,25 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
             @Param("customerIds") @NonNull Collection<String> customerIds,
             @Param("workorderIds") @NonNull Collection<UUID> workorderIds,
             @NonNull Pageable pageable);
+
+    /**
+     * Backfills {@code invoices.customer_id} for pre-#920 invoices (NULL party) from the
+     * event-fed {@code ext_workorder} replica (#921). Stores the canonical lowercase UUID
+     * string so party-scoped lookups ({@code findByInvoicePartyId}) match; the
+     * {@code LOWER(CAST(...))} form renders lowercase on both Postgres and H2. Idempotent —
+     * a patched row no longer satisfies {@code customer_id IS NULL} — and cheap when there
+     * is nothing to do.
+     *
+     * @return number of invoices patched in this run
+     */
+    @Modifying(clearAutomatically = true)
+    @Query(
+            value = "UPDATE invoices inv SET customer_id = ("
+                    + "SELECT LOWER(CAST(w.customer_id AS VARCHAR(64))) FROM ext_workorder w "
+                    + "WHERE w.workorder_id = inv.workorder_id AND w.customer_id IS NOT NULL) "
+                    + "WHERE inv.customer_id IS NULL "
+                    + "AND EXISTS (SELECT 1 FROM ext_workorder w2 "
+                    + "WHERE w2.workorder_id = inv.workorder_id AND w2.customer_id IS NOT NULL)",
+            nativeQuery = true)
+    int backfillPartyIdFromWorkorderReplica();
 }

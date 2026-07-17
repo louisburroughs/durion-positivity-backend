@@ -9,7 +9,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.inventory.internal.service.StorageLocationValidationService;
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
@@ -27,6 +26,7 @@ import com.positivity.inventory.internal.repository.AllocationRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.inventory.internal.service.ReservationServiceImpl;
+import com.positivity.inventory.internal.service.StorageLocationValidationService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

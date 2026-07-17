@@ -8,8 +8,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.inventory.internal.service.StorageLocationTopologyService;
-import com.positivity.inventory.internal.service.StorageLocationTopologyService.LocationDescendant;
 import com.positivity.inventory.internal.dto.rollup.LocationInventoryRollupResponse;
 import com.positivity.inventory.internal.dto.rollup.RollupQuantities;
 import com.positivity.inventory.internal.dto.rollup.SiteInventoryRollupResponse;
@@ -17,6 +15,8 @@ import com.positivity.inventory.internal.dto.rollup.StorageLocationRollupNode;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.RollupExpansionTooLargeException;
 import com.positivity.inventory.internal.service.LocationInventoryRollupServiceImpl;
+import com.positivity.inventory.internal.service.StorageLocationTopologyService;
+import com.positivity.inventory.internal.service.StorageLocationTopologyService.LocationDescendant;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.IntStream;

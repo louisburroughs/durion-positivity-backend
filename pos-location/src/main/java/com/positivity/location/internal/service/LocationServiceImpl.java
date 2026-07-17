@@ -1,6 +1,8 @@
 package com.positivity.location.internal.service;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.positivity.location.internal.dto.HolidayClosureRequest;
@@ -13,10 +15,12 @@ import com.positivity.location.internal.dto.LocationTypeDTO;
 import com.positivity.location.internal.dto.LocationValidationResponseDTO;
 import com.positivity.location.internal.dto.OperatingHoursRequest;
 import com.positivity.location.internal.dto.PersonDTO;
+import com.positivity.location.internal.entity.ExtPersonReplica;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.LocationParent;
 import com.positivity.location.internal.entity.LocationType;
 import com.positivity.location.internal.entity.ParentType;
+import com.positivity.location.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.location.internal.repository.LocationParentRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.LocationTypeRepository;
@@ -65,6 +69,7 @@ public class LocationServiceImpl implements LocationService {
     private final LocationParentRepository locationParentRepository;
     private final LocationTypeRepository locationTypeRepository;
     private final LocationFactPublisher locationFactPublisher;
+    private final ExtPersonReplicaRepository extPersonReplicaRepository;
 
     // Issue CAP-136 #78: lightweight process-level guard used with repository
     // checks.
@@ -420,21 +425,65 @@ public class LocationServiceImpl implements LocationService {
         return findChildren(parentId, parentType);
     }
 
+    @Transactional(readOnly = true)
     public PersonDTO getResponsiblePerson(UUID locationId) {
         Location location = locationRepository
                 .findById(locationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        if (location.getResponsiblePersonId() == null) return null;
-        // Legacy: responsible_person_id is a Long that predates UUIDv7 person ids, so it can
-        // never address a real person — the retired sync lookup failed for every non-null id.
-        // Returns null until the column is migrated to the UUID person id and this reads a
-        // people-contact replica (follow-up filed with #877).
-        log.warn(
-                "Legacy Long responsiblePersonId={} on location {} cannot resolve a person",
-                location.getResponsiblePersonId(),
-                locationId);
-        return null;
+        UUID personId = location.getResponsiblePersonId();
+        if (personId == null) return null;
+        return extPersonReplicaRepository
+                .findById(personId)
+                .map(this::toPersonDto)
+                .orElseGet(() -> {
+                    // The reference is real; the replica row is missing (feed lag or not yet
+                    // bootstrapped), so answer with the id and let names arrive with the feed.
+                    log.debug(
+                            "No people-contact replica row for responsible person {} on location {}",
+                            personId,
+                            locationId);
+                    PersonDTO dto = new PersonDTO();
+                    dto.setId(personId);
+                    return dto;
+                });
     }
+
+    private PersonDTO toPersonDto(ExtPersonReplica replica) {
+        PersonDTO dto = new PersonDTO();
+        dto.setId(replica.getPersonId());
+        dto.setFirstName(replica.getFirstName());
+        dto.setLastName(replica.getLastName());
+        dto.setPrimaryEmail(replica.getPrimaryEmail());
+        List<ContactPoint> contactPoints = parseContactPoints(replica.getContactPoints());
+        dto.setSecondaryEmail(contactPoints.stream()
+                .filter(cp -> "EMAIL".equals(cp.contactType()) && cp.value() != null)
+                .map(ContactPoint::value)
+                .filter(value -> !value.equals(replica.getPrimaryEmail()))
+                .findFirst()
+                .orElse(null));
+        dto.setPhoneNumbers(contactPoints.stream()
+                .filter(cp -> cp.contactType() != null && cp.contactType().startsWith("PHONE"))
+                .map(ContactPoint::value)
+                .filter(value -> value != null && !value.isBlank())
+                .toList());
+        return dto;
+    }
+
+    private List<ContactPoint> parseContactPoints(String contactPointsJson) {
+        if (contactPointsJson == null || contactPointsJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            return JSON_MAPPER.readValue(contactPointsJson, new TypeReference<List<ContactPoint>>() {});
+        } catch (JsonProcessingException e) {
+            log.warn("Unreadable contact_points snapshot in ext_people_contact_person", e);
+            return List.of();
+        }
+    }
+
+    /** Local mirror of {@code PersonUpdatedV1.ContactPointV1} as persisted in the replica. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record ContactPoint(String contactType, String value, boolean primary) {}
 
     private boolean isDescendant(UUID ancestorId, UUID targetDescendantId) {
         return locationParentRepository.isDescendant(ancestorId, targetDescendantId);

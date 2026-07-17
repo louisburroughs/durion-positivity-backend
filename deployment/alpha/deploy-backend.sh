@@ -57,6 +57,52 @@ run_periodic_docker_prune() {
   return 0
 }
 
+# postgres/init-databases.sql only runs on fresh volume initialization, so databases
+# added after the alpha volume was first created never come into existence. Reconcile:
+# parse the CREATE DATABASE lines and create any database that is missing. Names are
+# constrained to [A-Za-z0-9_]+ by the sed pattern, so interpolation into SQL is safe.
+reconcile_databases() {
+  local init_sql="${BACKEND_DIR}/postgres/init-databases.sql"
+  if [[ ! -f "${init_sql}" ]]; then
+    echo "Warning: ${init_sql} not found; skipping database reconciliation." >&2
+    return 0
+  fi
+
+  echo "Ensuring postgres is up for database reconciliation"
+  docker compose "${COMPOSE_ARGS[@]}" up -d postgres
+
+  local attempt
+  for attempt in $(seq 1 60); do
+    if docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+        sh -c 'pg_isready -q -U "${POSTGRES_USER}"'; then
+      break
+    fi
+    if [[ "${attempt}" -eq 60 ]]; then
+      echo "postgres did not become ready within 60s; aborting before database reconciliation." >&2
+      return 1
+    fi
+    sleep 1
+  done
+
+  # Read the full list before the loop: `docker compose exec` attaches the container
+  # to the loop's stdin and drains it, so a `while read` fed by process substitution
+  # silently stops after the first database. The execs also get </dev/null so they
+  # can never consume anything meant for the shell.
+  local dbs db exists
+  mapfile -t dbs < <(sed -nE 's/^CREATE DATABASE ([A-Za-z0-9_]+);$/\1/p' "${init_sql}")
+  echo "Reconciling ${#dbs[@]} databases from init-databases.sql"
+  for db in "${dbs[@]}"; do
+    [[ -n "${db}" ]] || continue
+    exists="$(docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+      sh -c 'psql -U "${POSTGRES_USER}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '"'"''"${db}"''"'"'"' </dev/null)"
+    if [[ "${exists}" != "1" ]]; then
+      echo "Creating missing database: ${db}"
+      docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+        sh -c 'psql -U "${POSTGRES_USER}" -d postgres -c "CREATE DATABASE '"${db}"';"' </dev/null
+    fi
+  done
+}
+
 OBSERVABILITY_SERVICES=(
   jaeger
   prometheus
@@ -74,27 +120,56 @@ KAFKA_SERVICES=(
   kafka-exporter
 )
 
-BACKEND_SERVICES=(
+# Backend services start in dependency tiers (each tier gated on --wait) so a
+# whole-stack recreate never launches ~20 JVMs at once — the resulting CPU
+# starvation is what pushed startups past their healthcheck windows (#29527988342).
+
+# Tier 1: platform core — everything else needs Eureka; security-service needs
+# the event receiver at boot.
+CORE_SERVICES=(
   eureka-server
-  pos-accounting
+  pos-event-receiver
+)
+
+# Tier 2: security + routing edge.
+PLATFORM_SERVICES=(
   pos-api-gateway
+  pos-security-service
+)
+
+# Tier 3: domain services, started in batches of DOMAIN_BATCH_SIZE.
+# pos-vehicle-inventory is listed first so it lands in the same-or-earlier batch
+# as pos-customer, which depends_on it (condition: service_started).
+DOMAIN_SERVICES=(
+  pos-vehicle-inventory
+  pos-accounting
   pos-bulk-loader
   pos-catalog
   pos-customer
   pos-documents
-  pos-event-receiver
   pos-image
   pos-inventory
   pos-invoice
   pos-location
   pos-mcp-server
   pos-people
+  pos-people-contact
   pos-price
-  pos-security-service
   pos-shop-manager
   pos-tax
-  pos-vehicle-inventory
+  pos-warranty
   pos-workorder
+)
+
+DOMAIN_BATCH_SIZE=6
+# Upper bound per tier/batch: worst-case healthcheck window (300s start_period
+# + 12x10s retries) plus slack.
+WAIT_TIMEOUT=480
+
+BACKEND_SERVICES=(
+  "${CORE_SERVICES[@]}"
+  "${PLATFORM_SERVICES[@]}"
+  "${DOMAIN_SERVICES[@]}"
 )
 
 if grep -q '^BACKEND_TAG=' "${ENV_FILE}"; then
@@ -203,11 +278,27 @@ docker compose "${COMPOSE_ARGS[@]}" run --rm --no-deps kafka-topic-init
 echo "Starting Kafka exporter"
 docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate kafka-exporter
 
+reconcile_databases
+
 echo "Pulling backend services: ${BACKEND_SERVICES[*]}"
 docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${BACKEND_SERVICES[@]}"
 
-echo "Starting backend services: ${BACKEND_SERVICES[*]}"
-docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate "${BACKEND_SERVICES[@]}"
+# --wait blocks until every named service is healthy and fails the deploy if one
+# goes unhealthy — a real gate instead of exiting 0 with half the stack down.
+echo "Starting core services: ${CORE_SERVICES[*]}"
+docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate \
+  --wait --wait-timeout "${WAIT_TIMEOUT}" "${CORE_SERVICES[@]}"
+
+echo "Starting platform services: ${PLATFORM_SERVICES[*]}"
+docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate \
+  --wait --wait-timeout "${WAIT_TIMEOUT}" "${PLATFORM_SERVICES[@]}"
+
+for ((i = 0; i < ${#DOMAIN_SERVICES[@]}; i += DOMAIN_BATCH_SIZE)); do
+  BATCH=("${DOMAIN_SERVICES[@]:i:DOMAIN_BATCH_SIZE}")
+  echo "Starting domain services (batch $((i / DOMAIN_BATCH_SIZE + 1))): ${BATCH[*]}"
+  docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate \
+    --wait --wait-timeout "${WAIT_TIMEOUT}" "${BATCH[@]}"
+done
 
 docker compose "${COMPOSE_ARGS[@]}" ps
 run_periodic_docker_prune

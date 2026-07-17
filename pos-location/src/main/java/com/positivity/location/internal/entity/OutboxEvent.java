@@ -3,6 +3,7 @@ package com.positivity.location.internal.entity;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -12,12 +13,15 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Transactional-outbox row (ADR-0044 §4, issue #890): a serialized Kafka event written in the
  * same transaction as the business state change and drained by {@code OutboxPublisher}.
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -39,6 +43,7 @@ public class OutboxEvent {
     @Column(nullable = false, columnDefinition = "text")
     private String payload;
 
+    @CreatedDate
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

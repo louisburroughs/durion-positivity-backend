@@ -117,6 +117,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+      start_period: 60s
     logging: *logging
     networks:
       - pos-network
@@ -212,6 +213,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 60s
     logging: *logging
     networks:
       - pos-network
@@ -247,6 +249,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+      start_period: 60s
     logging: *logging
     networks:
       - pos-network
@@ -285,6 +288,10 @@ services:
           ["workorder.manifest.v1.dlq"]=2592000000
           ["customer.events.v1"]=604800000
           ["customer.events.v1.dlq"]=2592000000
+          ["people-contact.events.v1"]=604800000
+          ["people-contact.commands.v1"]=604800000
+          ["people-contact.manifest.v1"]=259200000
+          ["people-contact.events.v1.dlq"]=2592000000
           ["invoice.events.v1"]=604800000
           ["invoice.events.v1.dlq"]=2592000000
           ["payment.cleared.v1"]=604800000
@@ -319,6 +326,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 60s
     logging: *logging
     networks:
       - pos-network
@@ -366,6 +374,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20 # Give it enough time to start
+      start_period: 300s
 
   pos-accounting:
     build:
@@ -375,6 +384,9 @@ services:
       - "9001:8080"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      # On by default since the warranty rollout (#927): consumes warranty.events.v1
+      # into warranty_reimbursement_expectation (plus the customer/invoice replicas).
+      POS_ACCOUNTING_KAFKA_ENABLED: ${POS_ACCOUNTING_KAFKA_ENABLED:-true}
       SPRING_PROFILES_ACTIVE: accelerated
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
@@ -405,6 +417,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-bulk-loader:
     build:
@@ -441,6 +454,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-catalog:
     build:
@@ -478,6 +492,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-customer:
     build:
@@ -506,8 +521,11 @@ services:
         condition: service_healthy
       pos-security-service:
         condition: service_healthy
+      # service_started, not service_healthy: customer calls vehicle-inventory over
+      # HTTP at request time (via Eureka), not at boot. A hard health dependency
+      # turns a slow vehicle-inventory startup into a failed deploy (run 29527988342).
       pos-vehicle-inventory:
-        condition: service_healthy
+        condition: service_started
     logging: *logging
     networks:
       - pos-network
@@ -516,6 +534,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   # NOTE: pos-event-receiver does NOT require pos-security-service.
   # Security is enforced via:
@@ -553,6 +572,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-image:
     build:
@@ -586,6 +606,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   # pos-inquiry:
   #   build:
@@ -626,10 +647,12 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      # ADR-0044 #892: location replica feed from location.events.v1
+      # ADR-0044 #892: location replica feed from location.events.v1.
+      # On by default since the warranty rollout (#927): also consumes
+      # warranty.events.v1 into warranty_part_return_hold.
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       MANAGEMENT_HEALTH_KAFKA_ENABLED: ${MANAGEMENT_HEALTH_KAFKA_ENABLED:-false}
-      POS_INVENTORY_KAFKA_ENABLED: ${POS_INVENTORY_KAFKA_ENABLED:-false}
+      POS_INVENTORY_KAFKA_ENABLED: ${POS_INVENTORY_KAFKA_ENABLED:-true}
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
@@ -648,6 +671,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-invoice:
     build:
@@ -684,6 +708,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   # Internal-only tax calculation service. Never routed through the gateway (ADR-0014);
   # reached directly over pos-network by pos-invoice at http://pos-tax:8091/v1/tax.
@@ -715,7 +740,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 90s
+      start_period: 300s
 
   # Internal-only PDF rendering service. Never routed through the gateway; reached
   # directly over pos-network (e.g. by pos-invoice at http://pos-documents:8092/v1/documents).
@@ -743,7 +768,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 90s
+      start_period: 300s
 
   pos-location:
     build:
@@ -780,6 +805,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-mcp-server:
     build:
@@ -836,6 +862,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   # pos-order:
   #   build:
@@ -903,6 +930,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-people-contact:
     build:
@@ -940,7 +968,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 90s
+      start_period: 300s
 
   pos-price:
     build:
@@ -972,6 +1000,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-security-service:
     build:
@@ -1016,6 +1045,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-shop-manager:
     build:
@@ -1054,6 +1084,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   # pos-vehicle-fitment:
   #   build:
@@ -1121,7 +1152,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 90s
+      # 90s was too tight on alpha: a whole-stack --force-recreate starts ~20 JVMs at
+      # once and this service crossed the 90s + 12x10s window, got marked unhealthy,
+      # and failed pos-customer's service_healthy dependency wait — then went healthy
+      # seconds later. Startup probes are free when the service is fast, so be generous.
+      start_period: 300s
 
   # pos-vehicle-reference-carapi:
   #   build:
@@ -1181,6 +1216,46 @@ services:
   #     timeout: 3s
   #     retries: 20
 
+  pos-warranty:
+    build:
+      context: ./pos-warranty
+      dockerfile: Dockerfile
+    ports:
+      - "8093:8080"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_warranty_db
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
+      SERVER_PORT: 8080
+      MANAGEMENT_SERVER_PORT: 8080
+      # Domain events (ADR-0044) — on by default since the warranty rollout (#927):
+      # pos-accounting (reimbursement expectations) and pos-inventory (part-return
+      # holds) consume warranty.events.v1.
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      POS_WARRANTY_KAFKA_ENABLED: ${POS_WARRANTY_KAFKA_ENABLED:-true}
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      pos-security-service:
+        condition: service_healthy
+    logging: *logging
+    networks:
+      - pos-network
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      # Same generous window as pos-vehicle-inventory — a whole-stack recreate on
+      # alpha can push JVM startup well past 90s.
+      start_period: 300s
+
   pos-workorder:
     build:
       context: ./pos-workorder
@@ -1214,6 +1289,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
 
   pos-api-gateway:
     build:
@@ -1236,6 +1312,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
     logging: *logging
     networks:
       pos-network:
@@ -1275,6 +1352,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 300s
     logging: *logging
     networks:
       - pos-network

@@ -44,6 +44,13 @@ public class InvoiceCreationRequest {
     private UUID locationId;
 
     @Schema(
+            description = "Customer party owning the workorder; stored on the invoice for "
+                    + "party-scoped lookups (e.g. warranty origin-line search).",
+            example = "550e8400-e29b-41d4-a716-446655440003",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private UUID customerId;
+
+    @Schema(
             description = "Idempotency key to prevent duplicate invoice creation.",
             example = "inv-create-wo-1234",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)

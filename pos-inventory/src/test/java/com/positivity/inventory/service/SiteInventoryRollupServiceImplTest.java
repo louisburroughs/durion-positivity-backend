@@ -6,8 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
-import com.positivity.inventory.internal.service.StorageLocationTopologyService;
-import com.positivity.inventory.internal.service.StorageLocationTopologyService.StorageLocationNode;
 import com.positivity.inventory.internal.dto.rollup.SiteInventoryRollupResponse;
 import com.positivity.inventory.internal.dto.rollup.StorageLocationRollupNode;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
@@ -16,6 +14,8 @@ import com.positivity.inventory.internal.exception.LocationServiceUnavailableExc
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.service.SiteInventoryQuantityLoader;
 import com.positivity.inventory.internal.service.SiteInventoryRollupServiceImpl;
+import com.positivity.inventory.internal.service.StorageLocationTopologyService;
+import com.positivity.inventory.internal.service.StorageLocationTopologyService.StorageLocationNode;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -53,7 +53,8 @@ class SiteInventoryRollupServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new SiteInventoryRollupServiceImpl(topologyService, new SiteInventoryQuantityLoader(ledgerRepository));
+        service =
+                new SiteInventoryRollupServiceImpl(topologyService, new SiteInventoryQuantityLoader(ledgerRepository));
     }
 
     private static List<StorageLocationNode> threeLevelTopology() {

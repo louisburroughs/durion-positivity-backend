@@ -12,10 +12,13 @@ public class RefundPaymentResult {
     private UUID refundId;
     private UUID invoiceId;
     private UUID paymentIntentId;
+    private String partyId;
     private BigDecimal amount;
     private RefundReason reason;
     private String notes;
     private RefundStatus status;
     private String gatewayReference;
+    private String externalReference;
+    private Instant requestedAt;
     private Instant completedAt;
 }

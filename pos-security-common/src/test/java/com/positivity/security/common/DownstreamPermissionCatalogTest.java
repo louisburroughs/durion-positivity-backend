@@ -50,6 +50,48 @@ class DownstreamPermissionCatalogTest {
     }
 
     @Test
+    void authorityForBit_peopleContactBlock_matchesGatewayCatalogAssignments() {
+        // Bits 351-359 were assigned to pos-people-contact in the gateway catalog
+        // (ADR-0044 Phase 3 split #874) but were missing here, shifting every
+        // later bit and causing 403s for people-contact endpoints.
+        assertThat(DownstreamPermissionCatalog.authorityForBit(351)).isEqualTo("PERM_people-contact:person:view");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(352)).isEqualTo("PERM_people-contact:person:create");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(353)).isEqualTo("PERM_people-contact:person:edit");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(354)).isEqualTo("PERM_people-contact:person:delete");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(355)).isEqualTo("PERM_people-contact:role:view");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(356)).isEqualTo("PERM_people-contact:role:assign");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(357)).isEqualTo("PERM_people-contact:role:revoke");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(358)).isEqualTo("PERM_people-contact:userLink:view");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(359)).isEqualTo("PERM_people-contact:userLink:write");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(360)).isEqualTo("PERM_people:compliance:view");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(361)).isEqualTo("PERM_shop:technician:view");
+    }
+
+    @Test
+    void authorityForBit_warrantyBlock_matchesGatewayCatalogAssignments() {
+        // Bits 362-378 were assigned to pos-warranty in the gateway catalog and
+        // PermissionCode (catalog version 21); a missing mirror here would fail every
+        // perm-bits-authenticated request platform-wide (version mismatch → fail closed).
+        assertThat(DownstreamPermissionCatalog.authorityForBit(362)).isEqualTo("PERM_warranty:provider:view");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(363)).isEqualTo("PERM_warranty:provider:manage");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(364)).isEqualTo("PERM_warranty:policy:view");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(365)).isEqualTo("PERM_warranty:policy:manage");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(366)).isEqualTo("PERM_warranty:registration:view");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(367)).isEqualTo("PERM_warranty:registration:manage");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(368)).isEqualTo("PERM_warranty:claim:view");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(369)).isEqualTo("PERM_warranty:claim:create");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(370)).isEqualTo("PERM_warranty:claim:submit");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(371)).isEqualTo("PERM_warranty:claim:decide");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(372)).isEqualTo("PERM_warranty:claim:settle");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(373)).isEqualTo("PERM_warranty:claim:cancel");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(374)).isEqualTo("PERM_warranty:claim:close");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(375)).isEqualTo("PERM_warranty:reimbursement:view");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(376)).isEqualTo("PERM_warranty:reimbursement:manage");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(377)).isEqualTo("PERM_warranty:part-return:view");
+        assertThat(DownstreamPermissionCatalog.authorityForBit(378)).isEqualTo("PERM_warranty:part-return:manage");
+    }
+
+    @Test
     void catalogVersion_isPositive() {
         assertThat(DownstreamPermissionCatalog.CATALOG_VERSION).isGreaterThan(0);
     }

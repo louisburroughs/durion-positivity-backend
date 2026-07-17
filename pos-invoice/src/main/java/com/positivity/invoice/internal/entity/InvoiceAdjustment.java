@@ -49,6 +49,10 @@ public class InvoiceAdjustment {
     @Column(name = "authorized_by", nullable = false, length = 64)
     private String authorizedBy;
 
+    /** Optional correlation id to an external record (e.g. a warranty claim code). */
+    @Column(name = "external_reference", length = 64)
+    private String externalReference;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

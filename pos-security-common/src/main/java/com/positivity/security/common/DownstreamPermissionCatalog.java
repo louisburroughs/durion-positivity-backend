@@ -23,7 +23,7 @@ public final class DownstreamPermissionCatalog {
      * {@code PermissionCode.CATALOG_VERSION}.
      * Updated automatically by {@code scripts/generate-permissions.py --sync}.
      */
-    public static final int CATALOG_VERSION = 18;
+    public static final int CATALOG_VERSION = 21;
 
     /**
      * Index-to-authority mapping. Entry at position N is the {@code PERM_*}-prefixed
@@ -405,7 +405,41 @@ public final class DownstreamPermissionCatalog {
         "PERM_inventory:location:sync", // 349
 
         // ── New batch (bits 350–350) ──────────────────────────────────────────
-        "PERM_workorder:events:replay" // 350
+        "PERM_workorder:events:replay", // 350
+
+        // ── People Contact (bits 351–359, ADR-0044 Phase 3 split #874) ────────
+        "PERM_people-contact:person:view", // 351
+        "PERM_people-contact:person:create", // 352
+        "PERM_people-contact:person:edit", // 353
+        "PERM_people-contact:person:delete", // 354
+        "PERM_people-contact:role:view", // 355
+        "PERM_people-contact:role:assign", // 356
+        "PERM_people-contact:role:revoke", // 357
+        "PERM_people-contact:userLink:view", // 358
+        "PERM_people-contact:userLink:write", // 359
+
+        // ── New batch (bits 360–361) ──────────────────────────────────────────
+        "PERM_people:compliance:view", // 360
+        "PERM_shop:technician:view", // 361
+
+        // ── Warranty claims module (bits 362–378) ─────────────────────────────
+        "PERM_warranty:provider:view", // 362
+        "PERM_warranty:provider:manage", // 363
+        "PERM_warranty:policy:view", // 364
+        "PERM_warranty:policy:manage", // 365
+        "PERM_warranty:registration:view", // 366
+        "PERM_warranty:registration:manage", // 367
+        "PERM_warranty:claim:view", // 368
+        "PERM_warranty:claim:create", // 369
+        "PERM_warranty:claim:submit", // 370
+        "PERM_warranty:claim:decide", // 371
+        "PERM_warranty:claim:settle", // 372
+        "PERM_warranty:claim:cancel", // 373
+        "PERM_warranty:claim:close", // 374
+        "PERM_warranty:reimbursement:view", // 375
+        "PERM_warranty:reimbursement:manage", // 376
+        "PERM_warranty:part-return:view", // 377
+        "PERM_warranty:part-return:manage" // 378
     };
 
     public static String authorityForBit(int bitIndex) {

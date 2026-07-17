@@ -158,10 +158,12 @@ public class WorkorderPickFacadeController {
     @EmitEvent(id = "WORKORDER_PICK_FACADE_CONFIRM_LINE", apiVersion = "1")
     @Operation(
             summary = "Confirm pick line quantity",
-            description = "Confirm the picked quantity for a workorder pick line after scan resolution")
+            description = "Queues asynchronous pick confirmation (ADR-0044 #901): the response is 202 with "
+                    + "status PENDING; the inventory.pick-task.updated fact updates the pick replica and "
+                    + "subsequent reads observe the confirmed quantity.")
     @ApiResponse(
-            responseCode = "200",
-            description = "Pick line confirmed successfully",
+            responseCode = "202",
+            description = "Confirmation queued; poll the pick tasks for the applied quantity (status PENDING).",
             content = @Content(schema = @Schema(implementation = WorkorderPickTaskResponse.class)))
     @ApiResponse(
             responseCode = "400",
@@ -201,7 +203,7 @@ public class WorkorderPickFacadeController {
 
         WorkorderPickTaskResponse response =
                 workorderPickFacadeService.confirmPickLine(workorderId, pickTaskId, pickLineId, request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.accepted().body(response);
     }
 
     @PostMapping("/pick-tasks/{pickTaskId}:complete")
@@ -212,10 +214,16 @@ public class WorkorderPickFacadeController {
     @EmitEvent(id = "WORKORDER_PICK_FACADE_COMPLETE_TASK", apiVersion = "1")
     @Operation(
             summary = "Complete pick task",
-            description = "Complete a workorder pick task after all of its pick lines are confirmed")
+            description = "Queues asynchronous completion of a workorder pick task (ADR-0044 #901). Returns "
+                    + "202 with status PENDING while the command is in flight; an already-complete task is "
+                    + "returned as-is with 200.")
+    @ApiResponse(
+            responseCode = "202",
+            description = "Completion queued; poll the pick tasks for the applied state (status PENDING).",
+            content = @Content(schema = @Schema(implementation = WorkorderPickTaskResponse.class)))
     @ApiResponse(
             responseCode = "200",
-            description = "Pick task completed successfully",
+            description = "Task already complete; current state returned.",
             content = @Content(schema = @Schema(implementation = WorkorderPickTaskResponse.class)))
     @ApiResponse(
             responseCode = "403",
@@ -244,6 +252,8 @@ public class WorkorderPickFacadeController {
 
         WorkorderPickTaskResponse response = workorderPickFacadeService.completePickTask(
                 workorderId, pickTaskId, request != null ? request : new CompletePickTaskRequest());
-        return ResponseEntity.ok(response);
+        return WorkorderPickFacadeService.STATUS_PENDING.equals(response.getStatus())
+                ? ResponseEntity.accepted().body(response)
+                : ResponseEntity.ok(response);
     }
 }

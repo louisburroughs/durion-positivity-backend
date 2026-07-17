@@ -466,13 +466,37 @@ public enum PermissionCode {
     PEOPLE_CONTACT__ROLE__ASSIGN(356, "people-contact:role:assign"),
     PEOPLE_CONTACT__ROLE__REVOKE(357, "people-contact:role:revoke"),
     PEOPLE_CONTACT__USER_LINK__VIEW(358, "people-contact:userLink:view"),
-    PEOPLE_CONTACT__USER_LINK__WRITE(359, "people-contact:userLink:write");
+    PEOPLE_CONTACT__USER_LINK__WRITE(359, "people-contact:userLink:write"),
+    // ── People (new) ───────────────────────────────────────────────────────────
+    PEOPLE__COMPLIANCE__VIEW(360, "people:compliance:view"),
+
+    // ── Shop (new) ─────────────────────────────────────────────────────────────
+    SHOP__TECHNICIAN__VIEW(361, "shop:technician:view"),
+
+    // ── Warranty (new) ─────────────────────────────────────────────────────────
+    WARRANTY__PROVIDER__VIEW(362, "warranty:provider:view"),
+    WARRANTY__PROVIDER__MANAGE(363, "warranty:provider:manage"),
+    WARRANTY__POLICY__VIEW(364, "warranty:policy:view"),
+    WARRANTY__POLICY__MANAGE(365, "warranty:policy:manage"),
+    WARRANTY__REGISTRATION__VIEW(366, "warranty:registration:view"),
+    WARRANTY__REGISTRATION__MANAGE(367, "warranty:registration:manage"),
+    WARRANTY__CLAIM__VIEW(368, "warranty:claim:view"),
+    WARRANTY__CLAIM__CREATE(369, "warranty:claim:create"),
+    WARRANTY__CLAIM__SUBMIT(370, "warranty:claim:submit"),
+    WARRANTY__CLAIM__DECIDE(371, "warranty:claim:decide"),
+    WARRANTY__CLAIM__SETTLE(372, "warranty:claim:settle"),
+    WARRANTY__CLAIM__CANCEL(373, "warranty:claim:cancel"),
+    WARRANTY__CLAIM__CLOSE(374, "warranty:claim:close"),
+    WARRANTY__REIMBURSEMENT__VIEW(375, "warranty:reimbursement:view"),
+    WARRANTY__REIMBURSEMENT__MANAGE(376, "warranty:reimbursement:manage"),
+    WARRANTY__PART_RETURN__VIEW(377, "warranty:part-return:view"),
+    WARRANTY__PART_RETURN__MANAGE(378, "warranty:part-return:manage");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 19;
+    public static final int CATALOG_VERSION = 21;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

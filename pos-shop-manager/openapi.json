@@ -444,10 +444,10 @@
             "description": "Shop location ID",
             "required": true,
             "schema": {
-              "type": "integer",
-              "format": "int64"
+              "type": "string",
+              "format": "uuid"
             },
-            "example": 1
+            "example": "018e1c9f-6b5a-7890-abcd-1234567890ab"
           },
           {
             "name": "personId",
@@ -455,10 +455,10 @@
             "description": "Technician person ID",
             "required": true,
             "schema": {
-              "type": "integer",
-              "format": "int64"
+              "type": "string",
+              "format": "uuid"
             },
-            "example": 1
+            "example": "01960011-0000-7000-8000-000000000001"
           }
         ],
         "responses": {
@@ -758,9 +758,9 @@
         "description": "Person details for a technician",
         "properties": {
           "id": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Person ID"
+            "type": "string",
+            "format": "uuid",
+            "description": "People-contact person identifier"
           },
           "firstName": {
             "type": "string",
@@ -786,10 +786,6 @@
               "type": "string"
             },
             "description": "List of phone numbers"
-          },
-          "username": {
-            "type": "string",
-            "description": "Username"
           }
         }
       },

@@ -16,11 +16,12 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 50 event types (includes +2 from CAP-251 #5:
+     * Total: 54 event types (includes +2 from CAP-251 #5:
      * ACCOUNTING_STATUS_SYNC_PROCESS and ACCOUNTING_STATUS_VIEW, in addition to
-     * CAP-053 Vendor Bill workflow + GL Mapping, and +3 from PRD missing endpoints:
+     * CAP-053 Vendor Bill workflow + GL Mapping, +3 from PRD missing endpoints:
      * ACCOUNTING_REPORT_EXPORT_REQUEST, ACCOUNTING_REPORT_EXPORT_STATUS,
-     * ACCOUNTING_REPORT_EXPORT_LIST).
+     * ACCOUNTING_REPORT_EXPORT_LIST, and +2 from the vendor directory
+     * (Issue #816): ACCOUNTING_VENDOR_SEARCH, ACCOUNTING_VENDOR_GET).
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -189,6 +190,13 @@ public final class EventTypes {
 
                 // TimekeepingExportController — 1 event (Wave 4 SDK migration)
                 EventTypeRegistration.write("ACCOUNTING_EXPORT_REQUEST", "Request timekeeping export job")
+                        .build(),
+
+                // VendorDirectoryController — 2 events (Issue #816)
+                EventTypeRegistration.search(
+                                "ACCOUNTING_VENDOR_SEARCH", "Search AP vendor directory by name (typeahead)")
+                        .build(),
+                EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_GET", "Get AP vendor directory entry by ID")
                         .build());
     }
 }

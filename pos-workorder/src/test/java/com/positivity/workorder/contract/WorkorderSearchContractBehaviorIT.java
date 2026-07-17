@@ -51,10 +51,38 @@ class WorkorderSearchContractBehaviorIT extends BaseContractIntegrationTest {
                 .ifValidationFails();
     }
 
+    @Test
+    @DisplayName("Contract: customerId/vehicleId filters restrict search results")
+    void shouldFilterByCustomerIdAndVehicleId() {
+        UUID customerA = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        UUID vehicleA = UUID.fromString("00000000-0000-0000-0000-0000000000ab");
+        UUID customerB = UUID.fromString("00000000-0000-0000-0000-0000000000ba");
+        UUID vehicleB = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+        UUID matching = seedWorkorder(customerA, vehicleA);
+        seedWorkorder(customerB, vehicleB);
+
+        givenWithGatewayAuth()
+                .when()
+                .get("/v1/workorders/search?customerId={c}&vehicleId={v}", customerA.toString(), vehicleA.toString())
+                .then()
+                .statusCode(200)
+                .contentType(startsWith("application/json"))
+                .body("content.size()", equalTo(1))
+                .body("content[0].workorderId", equalTo(matching.toString()))
+                .log()
+                .ifValidationFails();
+    }
+
     private UUID seedWorkorder() {
+        return seedWorkorder(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000001"));
+    }
+
+    private UUID seedWorkorder(UUID customerId, UUID vehicleId) {
         Workorder workorder = Workorder.builder()
-                .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .customerId(customerId)
+                .vehicleId(vehicleId)
                 .shopId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .status(WorkorderStatus.DRAFT)
                 .build();

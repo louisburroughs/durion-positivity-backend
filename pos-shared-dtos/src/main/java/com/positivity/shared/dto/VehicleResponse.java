@@ -76,6 +76,16 @@ public class VehicleResponse {
     @Schema(description = "Vehicle trim.", example = "XL", requiredMode = NOT_REQUIRED)
     private String trim;
 
+    @Schema(description = "Last recorded odometer reading value.", example = "45210", requiredMode = NOT_REQUIRED)
+    private Integer odometerValue;
+
+    @Schema(
+            description = "Unit of the odometer reading (MILES or KILOMETERS).",
+            example = "MILES",
+            allowableValues = {"MILES", "KILOMETERS"},
+            requiredMode = NOT_REQUIRED)
+    private String odometerUnit;
+
     @Schema(description = "Whether vehicle is active.", example = "true", requiredMode = REQUIRED)
     @NotNull
     private Boolean isActive;

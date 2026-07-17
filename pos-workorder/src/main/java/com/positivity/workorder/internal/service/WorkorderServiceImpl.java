@@ -24,9 +24,9 @@ import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 import com.positivity.workorder.internal.event.WorkCompletedEvent;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
-import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -830,7 +830,10 @@ public class WorkorderServiceImpl implements WorkorderService {
         return OperationalContextResponse.builder()
                 .version(workorder.getOperationalContextVersion())
                 .locationId(workorder.getLocationId())
-                .bayId(workorder.getResourceId() != null ? workorder.getResourceId().toString() : null)
+                .bayId(
+                        workorder.getResourceId() != null
+                                ? workorder.getResourceId().toString()
+                                : null)
                 .assignedMechanics(parseMechanicIds(workorder.getMechanicIds()))
                 .assignedResources(
                         workorder.getResourceId() == null

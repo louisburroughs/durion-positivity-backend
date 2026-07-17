@@ -87,6 +87,12 @@ pos:
       inventory-manifest-topic: ${POS_LOCATION_INVENTORY_MANIFEST_TOPIC:inventory.manifest.v1}
       inventory-manifest-consumer-group: ${POS_LOCATION_INVENTORY_MANIFEST_CONSUMER_GROUP:pos-location-inventory-manifests}
       inventory-commands-topic: ${POS_LOCATION_INVENTORY_COMMANDS_TOPIC:inventory.commands.v1}
+      # Person identity replica feed + reconciliation (ADR-0044 §6, #885)
+      people-contact-events-topic: ${POS_LOCATION_PC_EVENTS_TOPIC:people-contact.events.v1}
+      people-contact-events-consumer-group: ${POS_LOCATION_PC_EVENTS_CONSUMER_GROUP:pos-location-people-contact-events}
+      people-contact-manifest-topic: ${POS_LOCATION_PC_MANIFEST_TOPIC:people-contact.manifest.v1}
+      people-contact-manifest-consumer-group: ${POS_LOCATION_PC_MANIFEST_CONSUMER_GROUP:pos-location-people-contact-manifests}
+      people-contact-commands-topic: ${POS_LOCATION_PC_COMMANDS_TOPIC:people-contact.commands.v1}
     manifest:
       topic: ${POS_LOCATION_MANIFEST_TOPIC:location.manifest.v1}
       window: ${POS_LOCATION_MANIFEST_WINDOW:PT1H}

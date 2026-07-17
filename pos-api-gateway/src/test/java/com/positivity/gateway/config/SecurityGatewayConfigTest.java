@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 19")
-    void catalogVersionIsNineteen() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(19);
+    @DisplayName("CATALOG_VERSION is 21")
+    void catalogVersionIsTwenty() {
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(21);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 350")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 378")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1190,8 +1190,16 @@ class SecurityGatewayConfigTest {
         // catalog v19 (#823/#874): people-contact authorities appended (bits 351-359)
         assertThat(GatewayPermissionCatalog.authorityForBit(351)).isEqualTo("PERM_people-contact:person:view");
         assertThat(GatewayPermissionCatalog.authorityForBit(359)).isEqualTo("PERM_people-contact:userLink:write");
+        // catalog v20 (#885/#888): compliance report + technician identity authorities (bits 360-361)
+        assertThat(GatewayPermissionCatalog.authorityForBit(360)).isEqualTo("PERM_people:compliance:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(361)).isEqualTo("PERM_shop:technician:view");
+        // catalog v21 (#786/#920): warranty authorities appended (bits 362-378)
+        assertThat(GatewayPermissionCatalog.authorityForBit(362)).isEqualTo("PERM_warranty:provider:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(368)).isEqualTo("PERM_warranty:claim:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(372)).isEqualTo("PERM_warranty:claim:settle");
+        assertThat(GatewayPermissionCatalog.authorityForBit(378)).isEqualTo("PERM_warranty:part-return:manage");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(360)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(379)).isNull();
     }
 
     @Test

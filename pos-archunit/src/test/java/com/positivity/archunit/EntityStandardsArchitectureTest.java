@@ -28,15 +28,18 @@ import java.util.UUID;
 @AnalyzeClasses(packages = "com.positivity", importOptions = ImportOption.DoNotIncludeTests.class)
 class EntityStandardsArchitectureTest {
 
-    private static final String[] ENFORCED_ENTITY_PACKAGES = {
+    // Every package listed here must contain at least one @Entity visible to the importer —
+    // ClasspathVisibilityGuardTest enforces this so the rules below can never pass vacuously (#909).
+    // pos-documents has no JPA entities, so it is intentionally absent.
+    static final String[] ENFORCED_ENTITY_PACKAGES = {
         "com.positivity.location.internal.entity..",
-        "com.positivity.documents.internal.entity..",
         "com.positivity.inventory.internal.entity..",
         "com.positivity.accounting.internal.entity..",
         "com.positivity.invoice.internal.entity..",
         "com.positivity.order.internal.entity..",
         "com.positivity.people.internal.entity..",
-        "com.positivity.peoplecontact.internal.entity.."
+        "com.positivity.peoplecontact.internal.entity..",
+        "com.positivity.warranty.internal.entity.."
     };
 
     private static final String ENTITY_ANNOTATION = "jakarta.persistence.Entity";

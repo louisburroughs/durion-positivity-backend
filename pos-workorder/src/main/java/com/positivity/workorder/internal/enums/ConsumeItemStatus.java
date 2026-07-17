@@ -8,6 +8,12 @@ package com.positivity.workorder.internal.enums;
  */
 public enum ConsumeItemStatus {
 
+    /**
+     * The consume command was queued (ADR-0044 #901): the result arrives asynchronously via the
+     * {@code inventory.consumption.recorded} fact into the pick replicas.
+     */
+    PENDING,
+
     /** All requested quantity was successfully consumed. */
     SUCCESS,
 

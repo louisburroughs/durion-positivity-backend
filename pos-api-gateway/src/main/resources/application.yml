@@ -8,6 +8,15 @@ spring:
     gateway:
       server:
         webflux:
+          # CVE-2025-41235 hardening (SCG 2025.x): X-Forwarded-*/Forwarded headers are stripped
+          # and never appended unless the peer's remote address matches this regex — leaving it
+          # unset makes downstream absolute-URL reconstruction (bulk-loader TUS Location,
+          # #833/#834) fall back to internal container addresses. Trust loopback (dev/local) and
+          # RFC1918 ranges (compose networks, host nginx, frontend SSR proxy on alpha). Spoofed
+          # X-Forwarded-* from these ranges affects only URL reconstruction and client-IP
+          # logging: identity always comes from the JWT, and inbound identity headers are
+          # stripped independently (auth.strip-inbound-identity-headers).
+          trusted-proxies: '127\.0\.0\.1|::1|0:0:0:0:0:0:0:1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}'
           discovery:
             locator:
               # Discovery locator disabled - only explicitly configured routes are exposed
@@ -142,6 +151,12 @@ spring:
                 - Path=/vehicle-inventory/**
               filters:
                 - StripPrefix=1
+            - id: warranty
+              uri: lb://WARRANTY
+              predicates:
+                - Path=/warranty/**
+              filters:
+                - StripPrefix=1
 
 management:
   endpoints:
@@ -229,6 +244,8 @@ springdoc:
         url: /vehicle-fitment/v3/api-docs
       - name: Vehicle Inventory
         url: /vehicle-inventory/v3/api-docs
+      - name: Warranty
+        url: /warranty/v3/api-docs
       - name: Workorder
         url: /workorder/v3/api-docs
 

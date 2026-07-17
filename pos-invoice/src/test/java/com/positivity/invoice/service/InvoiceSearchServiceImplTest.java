@@ -5,16 +5,20 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.invoice.internal.service.WorkorderReferenceService;
+import com.positivity.invoice.internal.dto.InvoiceLineSearchResult;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.invoice.internal.repository.InvoiceItemRepository;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.service.CustomerReferenceService;
 import com.positivity.invoice.internal.service.InvoiceSearchServiceImpl;
+import com.positivity.invoice.internal.service.WorkorderReferenceService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
@@ -48,6 +52,9 @@ class InvoiceSearchServiceImplTest {
 
     @Mock
     private InvoiceRepository invoiceRepository;
+
+    @Mock
+    private InvoiceItemRepository invoiceItemRepository;
 
     @Mock
     private CustomerReferenceService customerReferenceClient;
@@ -161,6 +168,55 @@ class InvoiceSearchServiceImplTest {
         invoiceSearchService.search("50%_x", pageable);
 
         verify(invoiceRepository).searchByQuery(eq("50\\%\\_x"), any(), any(), eq(pageable));
+    }
+
+    @Test
+    void searchLinesByParty_flattensItemWithOwningInvoiceFields() {
+        UUID partyUuid = UUID.fromString("33333333-0000-0000-0000-000000000001");
+        UUID itemId = UUID.fromString("44444444-0000-0000-0000-000000000001");
+        UUID workorderItemId = UUID.fromString("55555555-0000-0000-0000-000000000001");
+
+        Invoice invoice = buildInvoice();
+        invoice.setPartyId(partyUuid.toString());
+        invoice.setStatus(InvoiceStatus.POSTED);
+
+        InvoiceItem item = new InvoiceItem();
+        item.setId(itemId);
+        item.setInvoice(invoice);
+        item.setDescription("Front brake pads");
+        item.setQuantity(new BigDecimal("2.0000"));
+        item.setUnitPrice(new BigDecimal("64.9900"));
+        item.setLineTotal(new BigDecimal("129.9800"));
+        item.setWorkorderItemId(workorderItemId);
+        item.setType("PART");
+
+        when(invoiceItemRepository.findByInvoicePartyId(eq(partyUuid.toString()), isNull(), any(Pageable.class)))
+                .thenReturn(List.of(item));
+
+        List<InvoiceLineSearchResult> results = invoiceSearchService.searchLinesByParty(partyUuid, null);
+
+        assertThat(results).hasSize(1);
+        InvoiceLineSearchResult row = results.get(0);
+        assertThat(row.getInvoiceId()).isEqualTo(INVOICE_ID);
+        assertThat(row.getInvoiceNumber()).isEqualTo("INV-2026-1001");
+        assertThat(row.getInvoiceItemId()).isEqualTo(itemId);
+        assertThat(row.getDescription()).isEqualTo("Front brake pads");
+        assertThat(row.getQuantity()).isEqualByComparingTo("2");
+        assertThat(row.getUnitPrice()).isEqualByComparingTo("64.99");
+        assertThat(row.getAmount()).isEqualByComparingTo("129.98");
+        assertThat(row.getWorkorderItemId()).isEqualTo(workorderItemId);
+        assertThat(row.getItemType()).isEqualTo("PART");
+        assertThat(row.getInvoiceStatus()).isEqualTo("POSTED");
+        assertThat(row.getInvoiceCreatedAt()).isEqualTo(Instant.parse("2026-01-15T09:30:00Z"));
+    }
+
+    @Test
+    void searchLinesByParty_noInvoices_returnsEmptyList() {
+        UUID partyUuid = UUID.fromString("33333333-0000-0000-0000-000000000002");
+        when(invoiceItemRepository.findByInvoicePartyId(eq(partyUuid.toString()), isNull(), any(Pageable.class)))
+                .thenReturn(List.of());
+
+        assertThat(invoiceSearchService.searchLinesByParty(partyUuid, null)).isEmpty();
     }
 
     @Test

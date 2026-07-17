@@ -380,6 +380,25 @@ opt-in per module (e.g. `WORKORDER_KAFKA_ENABLED=true`, `pos.customer.kafka.enab
 `POS_INVOICE_KAFKA_ENABLED=true`, `pos.accounting.kafka.enabled=true`) until
 the Phase 0.4 tier-1 flip.
 
+### Warranty events rollout (#927)
+
+The warranty fact feed (`warranty.events.v1`) and its two consumers are live. Required flags per
+environment (already defaulted `true` in the root `docker-compose.yml` and set in
+`deployment/alpha/docker-compose.prod.yml`; export explicitly anywhere else):
+
+- `POS_WARRANTY_KAFKA_ENABLED=true` — pos-warranty publishes all six `warranty.*` facts.
+- `POS_ACCOUNTING_KAFKA_ENABLED=true` — pos-accounting materializes
+  `warranty.reimbursement.submitted/.resolved` into `warranty_reimbursement_expectation`
+  (consumer group `pos-accounting-warranty-events`).
+- `POS_INVENTORY_KAFKA_ENABLED=true` — pos-inventory materializes
+  `warranty.part-return.requested/.shipped` into `warranty_part_return_hold`
+  (consumer group `pos-inventory-warranty-events`).
+
+Note the module flags are module-wide: enabling them also turns on those modules' other
+listeners/publishers (accounting customer/invoice replicas, inventory location/workorder replicas
+and outbox). `warranty.claim.settled` / `warranty.claim.snapshot` have no consumer yet — both
+consumers record their eventIds and skip them.
+
 ### Transactional outbox (producers)
 
 Producers write events to their `event_outbox` table in the business transaction; a scheduled

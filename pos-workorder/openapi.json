@@ -737,7 +737,7 @@
           "Substitute Link API"
         ],
         "summary": "Suggest workorder substitutes",
-        "description": "Suggest substitute parts for a workorder based on the parts currently required",
+        "description": "Suggest substitute parts for a workorder. Provide a request body with partId to scope suggestions to that part's active substitute links. Without a part scope this currently returns an empty list; workorder-wide suggestions are not yet implemented.",
         "operationId": "suggestSubstitutes",
         "parameters": [
           {
@@ -750,6 +750,15 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestSubstitutesRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Substitute suggestions returned",
@@ -1142,7 +1151,7 @@
           "Workorder Picked Items"
         ],
         "summary": "Consume picked items into workorder",
-        "description": "Consume the picked items for a workorder so parts usage is recorded against the job",
+        "description": "Queues asynchronous consumption of picked items (ADR-0044 #901): the response is 202 with per-item status PENDING; the inventory.consumption.recorded fact updates the pick replicas and subsequent picked-items reads observe the consumed quantities.",
         "operationId": "consumePickedItems",
         "parameters": [
           {
@@ -1167,8 +1176,8 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "Picked items consumed successfully",
+          "202": {
+            "description": "Consumption queued; poll the picked items for consumed quantities (status PENDING).",
             "content": {
               "application/json": {
                 "schema": {
@@ -1320,7 +1329,7 @@
           "Workorder Pick Facade"
         ],
         "summary": "Complete pick task",
-        "description": "Complete a workorder pick task after all of its pick lines are confirmed",
+        "description": "Queues asynchronous completion of a workorder pick task (ADR-0044 #901). Returns 202 with status PENDING while the command is in flight; an already-complete task is returned as-is with 200.",
         "operationId": "completePickTask",
         "parameters": [
           {
@@ -1355,8 +1364,18 @@
           }
         },
         "responses": {
+          "202": {
+            "description": "Completion queued; poll the pick tasks for the applied state (status PENDING).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkorderPickTaskResponse"
+                }
+              }
+            }
+          },
           "200": {
-            "description": "Pick task completed successfully",
+            "description": "Task already complete; current state returned.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1404,7 +1423,7 @@
           "Workorder Pick Facade"
         ],
         "summary": "Confirm pick line quantity",
-        "description": "Confirm the picked quantity for a workorder pick line after scan resolution",
+        "description": "Queues asynchronous pick confirmation (ADR-0044 #901): the response is 202 with status PENDING; the inventory.pick-task.updated fact updates the pick replica and subsequent reads observe the confirmed quantity.",
         "operationId": "confirmPickLine",
         "parameters": [
           {
@@ -1449,8 +1468,8 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "Pick line confirmed successfully",
+          "202": {
+            "description": "Confirmation queued; poll the pick tasks for the applied quantity (status PENDING).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2328,8 +2347,8 @@
         "tags": [
           "Work Order API"
         ],
-        "summary": "Generate invoice draft from completed workorder",
-        "description": "Generate an invoice draft from a completed workorder with optional idempotency key.",
+        "summary": "Request invoice generation from a completed workorder",
+        "description": "Queues asynchronous invoice generation (ADR-0044 #900): the response is 202 with status PENDING and the invoiceId appears on the workorder once the invoice.events.v1 fact links it. Re-sending the same Idempotency-Key collapses to one generation. When the workorder is already invoiced, the linked invoice is returned with 200.",
         "operationId": "generateInvoice",
         "parameters": [
           {
@@ -2354,8 +2373,18 @@
           }
         ],
         "responses": {
+          "202": {
+            "description": "Generation queued; poll the workorder for the linked invoiceId (status PENDING).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceGenerationResponse"
+                }
+              }
+            }
+          },
           "200": {
-            "description": "Invoice generated successfully or existing invoice returned for idempotent replay.",
+            "description": "Existing linked invoice returned for idempotent replay.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5291,12 +5320,9 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "additionalProperties": {},
-                  "contains": {},
                   "items": {
                     "$ref": "#/components/schemas/WorkorderPickedItemResponse"
-                  },
-                  "unevaluatedItems": {}
+                  }
                 }
               }
             }
@@ -5415,12 +5441,9 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "additionalProperties": {},
-                  "contains": {},
                   "items": {
                     "$ref": "#/components/schemas/WorkorderPickTaskResponse"
-                  },
-                  "unevaluatedItems": {}
+                  }
                 }
               }
             }
@@ -5981,8 +6004,7 @@
               "application/pdf": {
                 "schema": {
                   "type": "string",
-                  "format": "binary",
-                  "additionalProperties": {}
+                  "format": "binary"
                 }
               }
             }
@@ -7177,6 +7199,18 @@
           "technicianId"
         ]
       },
+      "SuggestSubstitutesRequest": {
+        "type": "object",
+        "description": "Request to scope workorder substitute suggestions to a specific part",
+        "properties": {
+          "partId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifier of the part (product) on the workorder to suggest substitutes for; omit for workorder-wide suggestions",
+            "example": "01960003-0000-7000-8000-000000000001"
+          }
+        }
+      },
       "SubstituteLinkResponse": {
         "type": "object",
         "description": "A substitute-part link associating a product with an approved substitute",
@@ -7542,6 +7576,7 @@
             "type": "string",
             "description": "Outcome status for the item",
             "enum": [
+              "PENDING",
               "SUCCESS",
               "PARTIAL",
               "FAILED"

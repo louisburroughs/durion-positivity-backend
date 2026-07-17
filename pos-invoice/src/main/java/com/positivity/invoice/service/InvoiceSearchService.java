@@ -1,7 +1,11 @@
 package com.positivity.invoice.service;
 
+import com.positivity.invoice.internal.dto.InvoiceLineSearchResult;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
+import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -23,4 +27,17 @@ public interface InvoiceSearchService {
      */
     @NonNull
     Page<InvoiceSearchResult> search(@NonNull String q, @NonNull Pageable pageable);
+
+    /**
+     * Invoice line items belonging to a customer party, flattened with their owning
+     * invoice's identifying fields and ordered by invoice creation time descending, optionally
+     * narrowed by a SKU/description term and bounded server-side. Built for sibling services
+     * (warranty claims) correlating a claimed part/service to the original sale line.
+     *
+     * @param partyId the customer party id
+     * @param q       optional case-insensitive term matched against the line description
+     * @return matching invoice line items (empty when the party has no invoices)
+     */
+    @NonNull
+    List<InvoiceLineSearchResult> searchLinesByParty(@NonNull UUID partyId, @Nullable String q);
 }

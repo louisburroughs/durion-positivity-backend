@@ -1,8 +1,8 @@
 package com.positivity.catalog.internal.service;
 
+import com.positivity.catalog.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
-import com.positivity.catalog.internal.repository.ProcessedEventRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
@@ -124,7 +124,8 @@ public class InventoryManifestListener {
     }
 
     /** Command envelope for the owner's {@code inventory.commands.v1} listener. */
-    record ReplayCommand(@NonNull String commandType, @NonNull Payload payload) {
+    record ReplayCommand(
+            @NonNull String commandType, @NonNull Payload payload) {
         record Payload(@Nullable String since, @Nullable String until) {}
     }
 }

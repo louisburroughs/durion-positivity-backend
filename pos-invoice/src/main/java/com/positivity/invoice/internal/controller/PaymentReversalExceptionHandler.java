@@ -2,6 +2,7 @@ package com.positivity.invoice.internal.controller;
 
 import com.positivity.invoice.internal.exception.InsufficientRefundableAmountException;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.PaymentGatewayException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
 import com.positivity.invoice.internal.exception.PaymentWindowExpiredException;
@@ -16,7 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = PaymentReversalController.class)
+@RestControllerAdvice(assignableTypes = {PaymentReversalController.class, StandaloneRefundController.class})
 @RequiredArgsConstructor
 public class PaymentReversalExceptionHandler {
 
@@ -25,6 +26,19 @@ public class PaymentReversalExceptionHandler {
 
     @ExceptionHandler(PaymentIntentNotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(PaymentIntentNotFoundException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "NOT_FOUND",
+                        ex.getMessage(),
+                        HttpStatus.NOT_FOUND.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    @ExceptionHandler(InvoiceNotFoundException.class)
+    public ResponseEntity<ApiError> handleInvoiceNotFound(InvoiceNotFoundException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .header(X_CORRELATION_ID, correlationId)

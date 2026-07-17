@@ -6,6 +6,7 @@ import com.positivity.workorder.internal.dto.pick.UpdateSubstituteLinkRequest;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 public interface SubstituteLinkService {
     SubstituteLinkResponse createLink(@NonNull CreateSubstituteLinkRequest request);
@@ -16,5 +17,11 @@ public interface SubstituteLinkService {
 
     List<SubstituteLinkResponse> listLinks(@NonNull UUID productId);
 
-    List<SubstituteLinkResponse> suggestSubstitutes(@NonNull UUID workorderId);
+    /**
+     * Suggest substitute parts for a workorder. When {@code partId} is provided, suggestions are
+     * scoped to active substitute links for that part. When null, this currently returns an empty
+     * list — workorder-wide suggestions require line-item lookup via WorkorderService and are not
+     * yet implemented (see issue #45).
+     */
+    List<SubstituteLinkResponse> suggestSubstitutes(@NonNull UUID workorderId, @Nullable UUID partId);
 }

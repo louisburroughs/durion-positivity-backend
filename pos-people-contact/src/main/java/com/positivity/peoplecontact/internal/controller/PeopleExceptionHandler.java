@@ -2,6 +2,7 @@ package com.positivity.peoplecontact.internal.controller;
 
 import com.positivity.peoplecontact.internal.client.SecurityServiceException;
 import com.positivity.peoplecontact.internal.exception.NotFoundException;
+import com.positivity.peoplecontact.internal.exception.PersonHasLinkedUsersException;
 import com.positivity.peoplecontact.internal.exception.PersonNotFoundException;
 import com.positivity.peoplecontact.internal.exception.SemanticValidationException;
 import com.positivity.peoplecontact.internal.exception.UserAlreadyLinkedException;
@@ -48,6 +49,14 @@ public class PeopleExceptionHandler {
     public ProblemDetail handleLinkNotFound(UserPersonLinkNotFoundException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
+        return problem;
+    }
+
+    @ExceptionHandler(PersonHasLinkedUsersException.class)
+    public ProblemDetail handlePersonHasLinkedUsers(PersonHasLinkedUsersException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
+        problem.setProperty("nextAction", PersonHasLinkedUsersException.NEXT_ACTION);
         return problem;
     }
 
