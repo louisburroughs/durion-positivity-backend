@@ -30,6 +30,14 @@ public class JournalEntryResponse {
     @Schema(description = "Journal entry UUID", example = "01936e5e-7890-7a3d-8b6e-4d5678901234")
     private UUID journalEntryId;
 
+    @Schema(
+            description = "Human-readable posted-entry number in the format JE-{YYYYMM}-{seq}, "
+                    + "sequential within the entry's transaction month and assigned at posting time. "
+                    + "Null for DRAFT and PENDING entries and for entries posted before numbering existed.",
+            example = "JE-202607-1",
+            nullable = true)
+    private String entryNumber;
+
     @Schema(description = "Journal entry status", example = "DRAFT")
     private JournalEntryStatus status;
 

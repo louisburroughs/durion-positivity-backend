@@ -21,6 +21,7 @@ public final class JournalEntryMapper {
     public static JournalEntryResponse toResponse(@NonNull JournalEntry entity) {
         JournalEntryResponse response = new JournalEntryResponse();
         response.setJournalEntryId(entity.getJournalEntryId());
+        response.setEntryNumber(entity.getEntryNumber());
         response.setStatus(entity.getStatus());
         response.setTransactionDate(entity.getTransactionDate());
         response.setDescription(entity.getDescription());

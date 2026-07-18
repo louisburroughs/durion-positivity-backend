@@ -104,6 +104,7 @@ public abstract class BaseIntegrationTest {
             "accounting:period:view",
             "accounting:period:close",
             "accounting:period:reopen",
+            "accounting:period:hard_lock",
             "accounting:financial-reporting:view",
             "reporting:view:financial-statements",
             "accounting:posting-category:view",

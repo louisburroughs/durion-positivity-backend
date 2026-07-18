@@ -20,11 +20,13 @@ import com.positivity.accounting.service.GLMappingResolver;
 import com.positivity.accounting.service.PostingRuleEvaluator;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -77,6 +79,22 @@ import tools.jackson.databind.ObjectMapper;
  *   ]
  * }
  * </pre>
+ *
+ * E1 additions (issue #945): a line may optionally carry
+ * {@code "factorPercent"} (decimal 0–100, up to 4 decimal places) and
+ * {@code "splitGroup"} (string marker). Lines sharing a splitGroup within one
+ * condition split their shared amountField proportionally; shares are rounded
+ * HALF_UP to 2 decimal places and the rounding residual is placed on the line
+ * with the largest absolute raw share (first in rule order on ties), so the
+ * group always sums exactly to the source amount.
+ *
+ * E2 additions (issue #946): {@code "condition"} strings are parsed by
+ * {@link PredicateParser} — a strict whitelist grammar over
+ * {@code eventType} / {@code payload.<path>} clauses with
+ * {@code == != > >= < <=} and {@code &&} conjunction. Catch-all forms
+ * (absent/blank/{@code "*"}) and pre-E2 {@code eventType == '<value>'}
+ * predicates behave exactly as before. Full schema:
+ * durion {@code domains/accounting/.business-rules/POSTING_RULES_SCHEMA.md}.
  */
 @Slf4j
 @Service
@@ -93,6 +111,11 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
     private final ObjectMapper objectMapper;
 
     private static final BigDecimal BALANCE_TOLERANCE = new BigDecimal("0.0001");
+
+    /** Currency scale used when rounding proportional split shares (E1). */
+    private static final int SPLIT_AMOUNT_SCALE = 2;
+
+    private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
 
     @Override
     @NonNull
@@ -424,61 +447,10 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                     continue;
                 }
 
-                List<MappingEvaluation.ResolvedLine> resolvedLines = new ArrayList<>();
-                boolean allLinesResolved = true;
+                List<MappingEvaluation.ResolvedLine> resolvedLines =
+                        resolveConditionLines(conditionExpr, linesNode, event, dimensions);
 
-                for (JsonNode lineNode : linesNode) {
-                    String side = lineNode.has("side") ? lineNode.get("side").asString() : "DEBIT";
-                    String amountField = lineNode.has("amountField")
-                            ? lineNode.get("amountField").asString()
-                            : null;
-                    String description = lineNode.has("description")
-                            ? lineNode.get("description").asString()
-                            : null;
-
-                    BigDecimal amount = resolveAmount(amountField, event);
-
-                    // Resolve GL account: try postingCategoryId+mappingKeyId first,
-                    // then fall back to direct glAccountId reference
-                    UUID glAccountId = null;
-
-                    if (lineNode.has("postingCategoryId") && lineNode.has("mappingKeyId")) {
-                        UUID postingCategoryId = UUID.fromString(
-                                lineNode.get("postingCategoryId").asString());
-                        UUID mappingKeyId =
-                                UUID.fromString(lineNode.get("mappingKeyId").asString());
-
-                        try {
-                            glAccountId = glMappingResolver.resolveGLAccount(
-                                    postingCategoryId, mappingKeyId, event.getTransactionDate(), dimensions);
-                        } catch (IllegalArgumentException e) {
-                            log.warn(
-                                    "GL mapping resolution failed for category={} key={}: {}",
-                                    postingCategoryId,
-                                    mappingKeyId,
-                                    e.getMessage());
-                            allLinesResolved = false;
-                            break;
-                        }
-                    } else if (lineNode.has("glAccountId")) {
-                        // Direct GL account reference (simpler rules without mapping tables)
-                        glAccountId =
-                                UUID.fromString(lineNode.get("glAccountId").asString());
-                    }
-
-                    if (glAccountId == null) {
-                        log.warn("Could not resolve GL account for line in condition '{}'", conditionExpr);
-                        allLinesResolved = false;
-                        break;
-                    }
-
-                    BigDecimal debit = "DEBIT".equalsIgnoreCase(side) ? amount : BigDecimal.ZERO;
-                    BigDecimal credit = "CREDIT".equalsIgnoreCase(side) ? amount : BigDecimal.ZERO;
-
-                    resolvedLines.add(new MappingEvaluation.ResolvedLine(glAccountId, debit, credit, description));
-                }
-
-                if (allLinesResolved && !resolvedLines.isEmpty()) {
+                if (resolvedLines != null && !resolvedLines.isEmpty()) {
                     eval.setSuccess(true);
                     eval.setMappingType("exact");
                     eval.setMappingKey(conditionExpr != null ? conditionExpr : event.getEventType());
@@ -491,6 +463,13 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             eval.setSuccess(false);
             return eval;
 
+        } catch (IllegalStateException e) {
+            // Invalid split-group configuration in a published rules
+            // definition (should be impossible for versions published after
+            // E1's publish-time validation). Propagate so evaluateEvent maps
+            // it to an explicit INTERNAL_ERROR failure instead of silently
+            // "rebalancing" the group via residual distribution.
+            throw e;
         } catch (Exception e) {
             log.error(
                     "Failed to parse rulesDefinition JSON for version {}: {}",
@@ -502,41 +481,276 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
     }
 
     /**
-     * Checks whether an event matches a simple condition expression.
+     * Resolves all lines of a matched condition into journal-entry line
+     * definitions, honoring E1 proportional split groups.
+     *
+     * <p>Pass 1 parses each line and resolves its GL account (posting
+     * category + mapping key first, direct {@code glAccountId} fallback —
+     * unchanged from pre-E1 behavior). Pass 2 computes line amounts:
+     * non-split lines resolve their {@code amountField} directly (no
+     * rounding, exactly as before); split-group lines share one resolved
+     * amount that is distributed by {@code factorPercent} with deterministic
+     * residual placement (see {@link #distributeSplitGroup}).
+     *
+     * @return resolved lines in rule order, or {@code null} when any line's
+     *         GL account could not be resolved (condition treated as
+     *         unresolvable, matching pre-E1 behavior)
+     * @throws IllegalStateException when a split group in the published rules
+     *                               violates the E1 invariants (mapped to an
+     *                               INTERNAL_ERROR posting failure upstream)
+     */
+    @Nullable
+    private List<MappingEvaluation.ResolvedLine> resolveConditionLines(
+            String conditionExpr, JsonNode linesNode, AccountingEvent event, Map<String, String> dimensions) {
+        List<RuleLineSpec> specs = new ArrayList<>();
+
+        for (JsonNode lineNode : linesNode) {
+            String side = lineNode.has("side") ? lineNode.get("side").asString() : "DEBIT";
+            String amountField =
+                    lineNode.has("amountField") ? lineNode.get("amountField").asString() : null;
+            String description =
+                    lineNode.has("description") ? lineNode.get("description").asString() : null;
+            BigDecimal factorPercent = parseFactorPercent(lineNode);
+            String splitGroup = parseSplitGroup(lineNode);
+
+            // Resolve GL account: try postingCategoryId+mappingKeyId first,
+            // then fall back to direct glAccountId reference
+            UUID glAccountId = null;
+
+            if (lineNode.has("postingCategoryId") && lineNode.has("mappingKeyId")) {
+                UUID postingCategoryId =
+                        UUID.fromString(lineNode.get("postingCategoryId").asString());
+                UUID mappingKeyId = UUID.fromString(lineNode.get("mappingKeyId").asString());
+
+                try {
+                    glAccountId = glMappingResolver.resolveGLAccount(
+                            postingCategoryId, mappingKeyId, event.getTransactionDate(), dimensions);
+                } catch (IllegalArgumentException e) {
+                    log.warn(
+                            "GL mapping resolution failed for category={} key={}: {}",
+                            postingCategoryId,
+                            mappingKeyId,
+                            e.getMessage());
+                    return null;
+                }
+            } else if (lineNode.has("glAccountId")) {
+                // Direct GL account reference (simpler rules without mapping tables)
+                glAccountId = UUID.fromString(lineNode.get("glAccountId").asString());
+            }
+
+            if (glAccountId == null) {
+                log.warn("Could not resolve GL account for line in condition '{}'", conditionExpr);
+                return null;
+            }
+
+            specs.add(new RuleLineSpec(glAccountId, side, amountField, description, factorPercent, splitGroup));
+        }
+
+        BigDecimal[] amounts = computeLineAmounts(specs, event);
+
+        List<MappingEvaluation.ResolvedLine> resolvedLines = new ArrayList<>();
+        for (int i = 0; i < specs.size(); i++) {
+            RuleLineSpec spec = specs.get(i);
+            BigDecimal debit = "DEBIT".equalsIgnoreCase(spec.side()) ? amounts[i] : BigDecimal.ZERO;
+            BigDecimal credit = "CREDIT".equalsIgnoreCase(spec.side()) ? amounts[i] : BigDecimal.ZERO;
+            resolvedLines.add(
+                    new MappingEvaluation.ResolvedLine(spec.glAccountId(), debit, credit, spec.description()));
+        }
+        return resolvedLines;
+    }
+
+    /**
+     * Computes the amount for every line of a matched condition.
+     * Non-split lines resolve their own {@code amountField} (pre-E1
+     * behavior, no rounding applied). Split-group lines are distributed per
+     * group in first-appearance order.
+     */
+    private BigDecimal[] computeLineAmounts(List<RuleLineSpec> specs, AccountingEvent event) {
+        BigDecimal[] amounts = new BigDecimal[specs.size()];
+        Map<String, List<Integer>> groups = new LinkedHashMap<>();
+
+        for (int i = 0; i < specs.size(); i++) {
+            RuleLineSpec spec = specs.get(i);
+            if (spec.splitGroup() != null) {
+                groups.computeIfAbsent(spec.splitGroup(), group -> new ArrayList<>())
+                        .add(i);
+            } else if (spec.factorPercent() != null) {
+                throw new IllegalStateException(
+                        "Published rules line declares factorPercent without splitGroup (line index " + i + ")");
+            } else {
+                amounts[i] = resolveAmount(spec.amountField(), event);
+            }
+        }
+
+        for (Map.Entry<String, List<Integer>> entry : groups.entrySet()) {
+            distributeSplitGroup(entry.getKey(), entry.getValue(), specs, amounts, event);
+        }
+        return amounts;
+    }
+
+    /**
+     * Distributes one split group's shared amount across its member lines
+     * (story E1, issue #945; Odoo {@code _distribute_delta_amount_smoothly}
+     * reference).
+     *
+     * <p>Algorithm:
+     * <ol>
+     * <li>Resolve the group's shared {@code amountField} once.</li>
+     * <li>Raw share per line = amount x factorPercent / 100, computed
+     * exactly (the division by 100 is a decimal point shift).</li>
+     * <li>Round each raw share HALF_UP to currency scale (2 decimal
+     * places).</li>
+     * <li>Residual = shared amount - sum of rounded shares (may be positive
+     * or negative, and larger than one cent for extreme factor sets). The
+     * whole residual is added to the line with the largest absolute raw
+     * share; on a tie the first such line in rule order wins
+     * (deterministic).</li>
+     * </ol>
+     * The group's line amounts therefore always sum exactly to the resolved
+     * shared amount.
+     *
+     * <p>Invariants (enforced at publish time by
+     * {@code PostingRuleDefinitionValidator}) are re-checked defensively
+     * here; a violation in already-published rules fails the evaluation
+     * explicitly rather than distorting amounts.
+     */
+    private void distributeSplitGroup(
+            String groupName,
+            List<Integer> memberIndexes,
+            List<RuleLineSpec> specs,
+            BigDecimal[] amounts,
+            AccountingEvent event) {
+        String amountField = null;
+        String side = null;
+        BigDecimal factorSum = BigDecimal.ZERO;
+
+        for (int index : memberIndexes) {
+            RuleLineSpec spec = specs.get(index);
+            if (spec.factorPercent() == null) {
+                throw new IllegalStateException("Published rules line in split group '" + groupName
+                        + "' is missing factorPercent (line index " + index + ")");
+            }
+            if (amountField == null) {
+                amountField = spec.amountField();
+                side = spec.side();
+            } else if (!amountField.equals(spec.amountField())) {
+                throw new IllegalStateException(
+                        "Published rules split group '" + groupName + "' mixes different amountField values");
+            }
+            if (!side.equalsIgnoreCase(spec.side())) {
+                throw new IllegalStateException(
+                        "Published rules split group '" + groupName + "' mixes DEBIT and CREDIT lines");
+            }
+            factorSum = factorSum.add(spec.factorPercent());
+        }
+
+        if (amountField == null || amountField.isBlank()) {
+            throw new IllegalStateException("Published rules split group '" + groupName + "' has no amountField");
+        }
+        if (factorSum.compareTo(ONE_HUNDRED) != 0) {
+            throw new IllegalStateException("Published rules split group '" + groupName
+                    + "' factorPercent values sum to "
+                    + factorSum.stripTrailingZeros().toPlainString()
+                    + " instead of 100");
+        }
+
+        BigDecimal sharedAmount = resolveAmount(amountField, event);
+
+        BigDecimal[] rawShares = new BigDecimal[memberIndexes.size()];
+        BigDecimal roundedSum = BigDecimal.ZERO;
+        for (int j = 0; j < memberIndexes.size(); j++) {
+            RuleLineSpec spec = specs.get(memberIndexes.get(j));
+            // Exact raw share: multiply then shift the decimal point (÷100)
+            rawShares[j] = sharedAmount.multiply(spec.factorPercent()).movePointLeft(2);
+            BigDecimal rounded = rawShares[j].setScale(SPLIT_AMOUNT_SCALE, RoundingMode.HALF_UP);
+            amounts[memberIndexes.get(j)] = rounded;
+            roundedSum = roundedSum.add(rounded);
+        }
+
+        BigDecimal residual = sharedAmount.subtract(roundedSum);
+        if (residual.signum() != 0) {
+            int target = 0;
+            for (int j = 1; j < rawShares.length; j++) {
+                // Strict > keeps the FIRST line in rule order on ties
+                if (rawShares[j].abs().compareTo(rawShares[target].abs()) > 0) {
+                    target = j;
+                }
+            }
+            int targetIndex = memberIndexes.get(target);
+            amounts[targetIndex] = amounts[targetIndex].add(residual);
+            log.debug(
+                    "Split group '{}': residual {} assigned to line index {} (largest raw share)",
+                    groupName,
+                    residual.toPlainString(),
+                    targetIndex);
+        }
+    }
+
+    @Nullable
+    private BigDecimal parseFactorPercent(JsonNode lineNode) {
+        if (!lineNode.has("factorPercent")) {
+            return null;
+        }
+        String raw = lineNode.get("factorPercent").asString();
+        try {
+            return new BigDecimal(raw);
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException("Published rules line has non-numeric factorPercent '" + raw + "'", e);
+        }
+    }
+
+    @Nullable
+    private String parseSplitGroup(JsonNode lineNode) {
+        if (!lineNode.has("splitGroup")) {
+            return null;
+        }
+        String splitGroup = lineNode.get("splitGroup").asString();
+        if (splitGroup == null || splitGroup.isBlank()) {
+            throw new IllegalStateException("Published rules line has a blank splitGroup");
+        }
+        return splitGroup;
+    }
+
+    /**
+     * Parsed definition of one rule line within a matched condition.
+     */
+    private record RuleLineSpec(
+            UUID glAccountId,
+            String side,
+            @Nullable String amountField,
+            @Nullable String description,
+            @Nullable BigDecimal factorPercent,
+            @Nullable String splitGroup) {}
+
+    /**
+     * Checks whether an event matches a condition expression (story E2,
+     * issue #946 — whitelist predicate grammar).
      * Supports:
-     * - null/blank condition → always matches (default/catch-all rule)
-     * - "eventType == 'value'" → exact eventType matching
-     * - "*" → wildcard, always matches
+     * - null/blank condition or "*" → always matches (default/catch-all rule)
+     * - the {@link PredicateParser} grammar: {@code eventType} /
+     * {@code payload.<path>} clauses with {@code == != > >= < <=} and
+     * {@code &&} conjunction (e.g. {@code eventType == 'billing.invoicePosted'},
+     * {@code payload.paymentMethod == 'CASH'},
+     * {@code payload.amount >= 100.00 && eventType == 'PAYMENT_RECEIVED'})
+     *
+     * <p>Publish-time validation guarantees that published conditions parse,
+     * so the defensive catch below only fires for rules published before E2
+     * with unrecognized condition text — those are treated as non-matching
+     * with a WARN, exactly as before.
      */
     private boolean matchesCondition(String conditionExpr, AccountingEvent event) {
         if (conditionExpr == null || conditionExpr.isBlank() || "*".equals(conditionExpr.trim())) {
             return true; // Default/catch-all
         }
 
-        // Simple eventType equality: "eventType == 'billing.invoicePosted'"
-        if (conditionExpr.contains("eventType")) {
-            String value = extractQuotedValue(conditionExpr);
-            if (value != null) {
-                return value.equals(event.getEventType());
-            }
+        try {
+            PredicateParser.Predicate predicate = PredicateParser.parse(conditionExpr);
+            return predicate.matches(event.getEventType(), event.getPayload());
+        } catch (PredicateParser.ParseException e) {
+            // Unrecognized condition format — treat as non-matching for safety
+            log.warn("Unrecognized condition expression: '{}' — skipping ({})", conditionExpr, e.getMessage());
+            return false;
         }
-
-        // Unrecognized condition format — treat as non-matching for safety
-        log.warn("Unrecognized condition expression: '{}' — skipping", conditionExpr);
-        return false;
-    }
-
-    /**
-     * Extracts a single-quoted value from a simple expression like
-     * "eventType == 'billing.invoicePosted'".
-     */
-    private String extractQuotedValue(String expression) {
-        int start = expression.indexOf('\'');
-        int end = expression.lastIndexOf('\'');
-        if (start >= 0 && end > start) {
-            return expression.substring(start + 1, end);
-        }
-        return null;
     }
 
     /**

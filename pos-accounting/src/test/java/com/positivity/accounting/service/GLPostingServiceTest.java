@@ -2,6 +2,8 @@ package com.positivity.accounting.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -85,7 +87,8 @@ class GLPostingServiceTest {
         JournalEntry posted = new JournalEntry();
         posted.setJournalEntryId(testJournalEntryId);
         posted.setStatus(JournalEntryStatus.POSTED);
-        when(journalEntryService.postJournalEntry(testJournalEntryId)).thenReturn(posted);
+        when(journalEntryService.postJournalEntry(eq(testJournalEntryId), isNull()))
+                .thenReturn(posted);
 
         // Act
         JournalEntry result = service.postCreditMemoReversal(
@@ -119,7 +122,7 @@ class GLPostingServiceTest {
         assertThat(totalCredits).isEqualByComparingTo(new BigDecimal("110.00"));
 
         verify(journalEntryService).createJournalEntry(any(JournalEntry.class));
-        verify(journalEntryService).postJournalEntry(testJournalEntryId);
+        verify(journalEntryService).postJournalEntry(eq(testJournalEntryId), isNull());
     }
 
     @Test
@@ -135,7 +138,7 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
         service.postCreditMemoReversal(
@@ -173,7 +176,7 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
         service.postCreditMemoReversal(
@@ -212,7 +215,7 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
         service.postCreditMemoReversal(
@@ -247,7 +250,7 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
         service.postCreditMemoReversal(
@@ -276,7 +279,7 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
         service.postCreditMemoReversal(
@@ -314,7 +317,8 @@ class GLPostingServiceTest {
         JournalEntry posted = new JournalEntry();
         posted.setJournalEntryId(testJournalEntryId);
         posted.setStatus(JournalEntryStatus.POSTED);
-        when(journalEntryService.postJournalEntry(testJournalEntryId)).thenReturn(posted);
+        when(journalEntryService.postJournalEntry(eq(testJournalEntryId), isNull()))
+                .thenReturn(posted);
 
         // Act
         JournalEntry result = service.postPaymentApplication(
@@ -338,7 +342,7 @@ class GLPostingServiceTest {
         assertThat(totalDebits).isEqualByComparingTo(amount);
 
         verify(journalEntryService).createJournalEntry(any(JournalEntry.class));
-        verify(journalEntryService).postJournalEntry(testJournalEntryId);
+        verify(journalEntryService).postJournalEntry(eq(testJournalEntryId), isNull());
     }
 
     @Test
@@ -353,7 +357,7 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
         service.postPaymentApplication(testPaymentApplicationId, testCashAccountId, testArAccountId, amount, "Test");
@@ -381,7 +385,7 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
         service.postPaymentApplication(testPaymentApplicationId, testCashAccountId, testArAccountId, amount, "Test");
@@ -409,7 +413,7 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
         service.postPaymentApplication(

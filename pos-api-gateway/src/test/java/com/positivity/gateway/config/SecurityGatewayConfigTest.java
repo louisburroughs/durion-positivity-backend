@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 22")
-    void catalogVersionIsTwenty() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(22);
+    @DisplayName("CATALOG_VERSION is 23")
+    void catalogVersionMatchesCurrent() {
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(23);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 381")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 383")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1202,8 +1202,11 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(379)).isEqualTo("PERM_accounting:period:close");
         assertThat(GatewayPermissionCatalog.authorityForBit(380)).isEqualTo("PERM_accounting:period:reopen");
         assertThat(GatewayPermissionCatalog.authorityForBit(381)).isEqualTo("PERM_accounting:period:view");
+        // catalog v23 (#944/wave-2): hard-lock + override authorities appended (bits 382-383)
+        assertThat(GatewayPermissionCatalog.authorityForBit(382)).isEqualTo("PERM_accounting:period:hard_lock");
+        assertThat(GatewayPermissionCatalog.authorityForBit(383)).isEqualTo("PERM_accounting:period:override");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(382)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(384)).isNull();
     }
 
     @Test

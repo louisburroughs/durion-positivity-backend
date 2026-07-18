@@ -3,10 +3,16 @@ package com.positivity.accounting.internal.config;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
+import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
+import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
+import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
+import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
+import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -82,6 +88,48 @@ public class AccountingExceptionHandler {
         return build(HttpStatus.CONFLICT, "DUPLICATE_ACCOUNT_CODE", ex.getMessage(), request);
     }
 
+    /**
+     * Reversal state conflicts (story A3, issue #943): double reversal —
+     * including a lost concurrent-reversal race — maps to JE_ALREADY_REVERSED,
+     * reversing a DRAFT/PENDING entry to JE_NOT_POSTED; both 409.
+     */
+    @ExceptionHandler(JournalEntryNotReversibleException.class)
+    public ResponseEntity<ApiError> handleNotReversible(
+            JournalEntryNotReversibleException ex, HttpServletRequest request) {
+        String code = ex.getCurrentStatus() == JournalEntryStatus.REVERSED ? "JE_ALREADY_REVERSED" : "JE_NOT_POSTED";
+        return build(HttpStatus.CONFLICT, code, ex.getMessage(), request);
+    }
+
+    /**
+     * Operation dated into a CLOSED accounting period (AD-012); first used by
+     * reversal-date validation (story A3), extended to all posting paths in
+     * story B2.
+     */
+    @ExceptionHandler(AccountingPeriodClosedException.class)
+    public ResponseEntity<ApiError> handlePeriodClosed(AccountingPeriodClosedException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "PERIOD_CLOSED", ex.getMessage(), request);
+    }
+
+    /**
+     * Operation dated strictly before the org-level hard-lock date (story
+     * B2, issue #944). Unconditional — no override path.
+     */
+    @ExceptionHandler(AccountingPeriodHardLockedException.class)
+    public ResponseEntity<ApiError> handlePeriodHardLocked(
+            AccountingPeriodHardLockedException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "PERIOD_HARD_LOCKED", ex.getMessage(), request);
+    }
+
+    /**
+     * Hard-lock date update that would move the date backward (story B2,
+     * issue #944): the hard lock is monotonic-forward-only.
+     */
+    @ExceptionHandler(HardLockDateRegressionException.class)
+    public ResponseEntity<ApiError> handleHardLockDateRegression(
+            HardLockDateRegressionException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "HARD_LOCK_DATE_REGRESSION", ex.getMessage(), request);
+    }
+
     @ExceptionHandler(AccountingPeriodNotFoundException.class)
     public ResponseEntity<ApiError> handlePeriodNotFound(
             AccountingPeriodNotFoundException ex, HttpServletRequest request) {
@@ -110,6 +158,32 @@ public class AccountingExceptionHandler {
         return new ResponseEntity<>(
                 ApiError.withFieldErrors(
                         "PERIOD_HAS_DRAFT_ENTRIES",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        fieldErrors),
+                headers,
+                HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
+    /**
+     * Publish-time split-group validation failure (story E1, issue #945):
+     * factorPercent/splitGroup invariants violated in the rules definition.
+     * Every violation is listed as a field error whose {@code field} locates
+     * the offending group or line inside the rules definition.
+     */
+    @ExceptionHandler(UnbalancedRulesException.class)
+    public ResponseEntity<ApiError> handleUnbalancedRules(UnbalancedRulesException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        List<ApiError.FieldError> fieldErrors = ex.getViolations().stream()
+                .map(violation -> new ApiError.FieldError(violation.field(), violation.message()))
+                .toList();
+        return new ResponseEntity<>(
+                ApiError.withFieldErrors(
+                        "UNBALANCED_RULES",
                         ex.getMessage(),
                         HttpStatus.UNPROCESSABLE_CONTENT.value(),
                         Instant.now(clock).toString(),

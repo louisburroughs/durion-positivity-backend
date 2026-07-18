@@ -32,14 +32,14 @@ tags:
   description: Manage journal entries including posting and reversal.
 - name: GL Accounts
   description: Manage chart of accounts including lifecycle actions.
+- name: Accounting Periods
+  description: 'Accounting period lifecycle: list periods, close a period, reopen a closed period, and manage the org-level hard-lock date.'
 - name: Vendor Directory API
   description: Vendor search and lookup endpoints for name-to-vendorId resolution (typeahead support)
 - name: Location Cost Reporting
   description: Read-only location Labor & Overhead Cost Report (CAP-316)
 - name: AP Payments
   description: Accounts Payable vendor payment operations
-- name: Accounting Periods
-  description: 'Accounting period lifecycle: list periods, close a period, reopen a closed period.'
 - name: Financial Reporting
   description: Income Statement and Balance Sheet generation with drilldown
 - name: Vendor Bill API
@@ -203,6 +203,73 @@ paths:
         - accounting:posting-category:edit
       x-required-permissions:
       - accounting:posting-category:edit
+  /v1/accounting/periods/hard-lock:
+    get:
+      tags:
+      - Accounting Periods
+      summary: Get the accounting hard-lock date
+      description: 'Returns the org-level hard-lock date: journal entries dated strictly before this date are permanently rejected (422 PERIOD_HARD_LOCKED) with no override path — unlike a CLOSED period, which accounting:period:override plus a justification can bypass. Use this tool to check the current lock boundary before posting backdated entries or before moving the lock with setAccountingHardLockDate. Returns hardLockDate: null when no hard lock has been configured yet. No preconditions and no side effects.'
+      operationId: getAccountingHardLockDate
+      responses:
+        '200':
+          description: Current hard-lock date returned; hardLockDate is null when no hard lock is set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HardLockDateResponse'
+        '403':
+          description: Caller lacks the accounting:period:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:period:view
+      x-required-permissions:
+      - accounting:period:view
+    put:
+      tags:
+      - Accounting Periods
+      summary: Set the accounting hard-lock date
+      description: 'Sets the org-level hard-lock date: from then on, journal entries dated strictly before this date are permanently rejected (422 PERIOD_HARD_LOCKED) with NO override path — not even accounting:period:override can bypass it (that permission only covers CLOSED periods, error PERIOD_CLOSED). Use this tool after statutory filings or audits to make history immutable; use closeAccountingPeriod for the reversible month-end close instead. The date is monotonic-forward-only: it must be on or after the currently stored hard-lock date, and moving it backward is rejected with 422 HARD_LOCK_DATE_REGRESSION — effectively irreversible, so set it deliberately. Required inputs: hardLockDate (ISO date) and a non-blank justification (max 500 characters), recorded in the audit trail with the acting user. Emits ACCOUNTING_PERIOD_HARD_LOCK_SET and returns the stored hard-lock date. Returns 400 if the date is missing or the justification is missing or blank.'
+      operationId: setAccountingHardLockDate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HardLockDateUpdateRequest'
+        required: true
+      responses:
+        '200':
+          description: Hard-lock date updated; the stored value is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HardLockDateResponse'
+        '400':
+          description: hardLockDate is missing, or justification is missing, blank, or over 500 characters (ARGUMENT_NOT_VALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:period:hard_lock permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Requested date is before the currently stored hard-lock date (HARD_LOCK_DATE_REGRESSION) — the hard lock only moves forward
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:period:hard_lock
+      x-required-permissions:
+      - accounting:period:hard_lock
   /v1/accounting/mapping-keys/{mappingKeyId}:
     get:
       tags:
@@ -1427,7 +1494,7 @@ paths:
       tags:
       - Journal Entries
       summary: List journal entries
-      description: Retrieve paginated journal entries.
+      description: Retrieve paginated journal entries, optionally filtered by exact posted-entry number.
       operationId: listJournalEntries
       parameters:
       - name: page
@@ -1456,6 +1523,13 @@ paths:
           type: string
           default: createdAt
           minLength: 1
+      - name: entryNumber
+        in: query
+        description: Optional exact-match filter on the posted-entry number (format JE-{YYYYMM}-{seq}, sequential within the entry's transaction month, assigned at posting time). Entries not yet posted have no entry number and never match.
+        required: false
+        schema:
+          type: string
+        example: JE-202607-1
       responses:
         '200':
           description: Journal entries listed
@@ -1515,7 +1589,7 @@ paths:
       tags:
       - Journal Entries
       summary: Reverse journal entry
-      description: Reverse a posted journal entry.
+      description: 'Reverses a POSTED journal entry by creating and immediately posting an inverse entry (debits and credits swapped) with its own entryNumber, and transitioning the original POSTED → REVERSED. Use this tool to back out an incorrect posted entry; do NOT use it on DRAFT entries — delete or edit those instead. Preconditions: the entry must exist and be in POSTED status. Required input: a non-blank reason, recorded on the reversal entry and in the audit trail. Optional input: reversalDate — when omitted, it defaults to the original entry''s transaction date if that period is OPEN, otherwise to today; the resolved date must fall in an OPEN accounting period. Period gate (story B2): a resolved date strictly before the org-level hard-lock date is rejected unconditionally with 422 PERIOD_HARD_LOCKED (never overridable); a date in a CLOSED period is rejected with 422 PERIOD_CLOSED unless the caller holds accounting:period:override AND supplies a non-blank overrideJustification, in which case the reversal posts into the closed period and the override is audit-logged. Emits ACCOUNTING_JOURNAL_ENTRY_REVERSE and returns the reversal entry. Returns 409 JE_ALREADY_REVERSED if the entry was already reversed (including a lost concurrent-reversal race), 409 JE_NOT_POSTED if it is DRAFT/PENDING, and 422 PERIOD_CLOSED if the reversal date falls in a CLOSED period without a valid override — pick an open-period date, supply an override, or reopen the period before retrying.'
       operationId: reverseJournalEntry
       parameters:
       - name: journalEntryId
@@ -1533,17 +1607,35 @@ paths:
         required: true
       responses:
         '200':
-          description: Journal entry reversed
+          description: Journal entry reversed; the posted reversal entry is returned
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JournalEntryResponse'
-        '404':
-          description: Journal entry not found
+        '400':
+          description: Reason is missing or blank (ARGUMENT_NOT_VALID), or no journal entry exists for the identifier (VALIDATION_ERROR)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JournalEntryResponse'
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:je:reverse permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Entry is already reversed (JE_ALREADY_REVERSED) or not yet posted (JE_NOT_POSTED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Resolved reversal date falls in a CLOSED accounting period without a valid override (PERIOD_CLOSED — accounting:period:override plus a non-blank overrideJustification allows reversing into closed periods), or is strictly before the hard-lock date (PERIOD_HARD_LOCKED — never overridable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - accounting:je:reverse
@@ -1554,7 +1646,7 @@ paths:
       tags:
       - Journal Entries
       summary: Post journal entry
-      description: Post a draft journal entry to the ledger.
+      description: 'Posts a DRAFT journal entry to the general ledger (DRAFT → POSTED), assigning its entryNumber and updating GL balances; the entry is immutable afterwards — use reverseJournalEntry to back it out. Preconditions: the entry must exist, be in DRAFT status, and be balanced. The request body is OPTIONAL: omit it entirely for a normal post. The entry''s transaction date is checked against the accounting-period gate (story B2): a date strictly before the org-level hard-lock date is rejected unconditionally with 422 PERIOD_HARD_LOCKED (never overridable); a date in a CLOSED period is rejected with 422 PERIOD_CLOSED unless the caller holds accounting:period:override AND supplies a non-blank overrideJustification in the body, in which case the posting proceeds and the override is audit-logged. Emits ACCOUNTING_JOURNAL_ENTRY_POST and returns the posted entry. Returns 409 ENTRY_ALREADY_POSTED if the entry is already POSTED or REVERSED, and 422 UNBALANCED_ENTRY if debits do not equal credits.'
       operationId: postJournalEntry
       parameters:
       - name: journalEntryId
@@ -1568,20 +1660,38 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/JournalEntryPostRequest'
       responses:
         '200':
-          description: Journal entry posted
+          description: Journal entry posted; the posted entry with its entryNumber is returned
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JournalEntryResponse'
-        '404':
-          description: Journal entry not found
+        '400':
+          description: No journal entry exists for the identifier (VALIDATION_ERROR), or the overrideJustification exceeds 500 characters (ARGUMENT_NOT_VALID)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JournalEntryResponse'
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:je:post permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Entry is already posted or reversed (ENTRY_ALREADY_POSTED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Transaction date is in a CLOSED period without a valid override (PERIOD_CLOSED — accounting:period:override plus a non-blank overrideJustification allows posting into closed periods), is strictly before the hard-lock date (PERIOD_HARD_LOCKED — never overridable), or the entry is unbalanced (UNBALANCED_ENTRY)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - accounting:je:post
@@ -4247,6 +4357,98 @@ components:
       required:
       - categoryName
       - postingCategoryId
+    HardLockDateUpdateRequest:
+      type: object
+      description: Request payload for setting the org-level hard-lock date
+      properties:
+        hardLockDate:
+          type: string
+          format: date
+          description: New hard-lock date. Must be on or after the currently stored hard-lock date (monotonic forward only — a backward move is rejected with 422 HARD_LOCK_DATE_REGRESSION). Once set, journal entries dated strictly before this date are permanently rejected with no override path.
+          example: 2026-06-30
+        justification:
+          type: string
+          description: Mandatory reason for moving the hard-lock date; recorded in the audit trail with the acting user
+          example: FY2025 statutory filing complete; locking H1 2026
+          maxLength: 500
+          minLength: 0
+      required:
+      - hardLockDate
+      - justification
+    HardLockDateResponse:
+      type: object
+      description: Org-level hard-lock date payload
+      properties:
+        hardLockDate:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: The org-level hard-lock date. Journal entries dated strictly before this date are permanently rejected (422 PERIOD_HARD_LOCKED) with no override path. Null when no hard lock has been configured yet.
+          example: 2026-06-30
+    ApiError:
+      type: object
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code
+          example: 404
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+        correlationId:
+          type: string
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          items:
+            $ref: '#/components/schemas/FieldError'
+        referenceId:
+          type: string
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+        nextAction:
+          type: string
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+        supportAction:
+          type: string
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
+      required:
+      - field
+      - message
     MappingKeyUpdateRequest:
       type: object
       description: Request payload for updating an existing mapping key
@@ -4463,6 +4665,12 @@ components:
           format: uuid
           description: Journal entry UUID
           example: 01936e5e-7890-7a3d-8b6e-4d5678901234
+        entryNumber:
+          type:
+          - string
+          - 'null'
+          description: Human-readable posted-entry number in the format JE-{YYYYMM}-{seq}, sequential within the entry's transaction month and assigned at posting time. Null for DRAFT and PENDING entries and for entries posted before numbering existed.
+          example: JE-202607-1
         status:
           type: string
           description: Journal entry status
@@ -5271,69 +5479,6 @@ components:
         reopenJustification:
           type: string
           description: Justification recorded for the last reopen
-    ApiError:
-      type: object
-      description: Standard error response envelope returned by all Durion backend APIs
-      properties:
-        code:
-          type: string
-          description: Machine-readable error code
-          example: ORDER_NOT_FOUND
-        message:
-          type: string
-          description: Human-readable error message
-          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
-        status:
-          type: integer
-          format: int32
-          description: HTTP status code
-          example: 404
-        timestamp:
-          type: string
-          description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
-        correlationId:
-          type: string
-          description: Unique correlation ID for distributed request tracing
-          example: 550e8400-e29b-41d4-a716-446655440000
-        fieldErrors:
-          type: array
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
-          items:
-            $ref: '#/components/schemas/FieldError'
-        referenceId:
-          type: string
-          description: Workflow or review-case reference identifier, when applicable
-          example: REVIEW-2026-000123
-        nextAction:
-          type: string
-          description: Recommended next step for the caller, when applicable
-          example: Retry the request with a valid quantity
-        supportAction:
-          type: string
-          description: Support or admin investigation guidance, when applicable
-          example: Contact support with the correlation ID for assistance
-      required:
-      - code
-      - correlationId
-      - message
-      - status
-      - timestamp
-    FieldError:
-      type: object
-      description: Validation error for a specific request field
-      properties:
-        field:
-          type: string
-          description: Field name
-          example: quantity
-        message:
-          type: string
-          description: Validation failure message
-          example: must be greater than 0
-      required:
-      - field
-      - message
     PaymentApplicationReversalRequest:
       type: object
       description: Request payload for reversing a payment application
@@ -5671,8 +5816,29 @@ components:
           description: Reason for reversing the journal entry
           example: Correcting duplicate posting
           minLength: 1
+        reversalDate:
+          type: string
+          format: date
+          description: Optional transaction date for the reversal entry. When omitted or null, the date defaults to the original entry's transaction date if that date's accounting period is OPEN, otherwise to today's date. Whether explicit or defaulted, the resolved date must fall in an OPEN accounting period; a date in a CLOSED period is rejected with 422 PERIOD_CLOSED.
+          example: 2026-07-15
+        overrideJustification:
+          type: string
+          description: Optional justification for reversing into a CLOSED accounting period (story B2). When the resolved reversal date falls in a CLOSED period, supplying a non-blank justification together with the accounting:period:override permission allows the reversal to post into that period (audit-logged); without it the reversal is rejected with 422 PERIOD_CLOSED. Has no effect for dates in OPEN periods and can never bypass the hard lock (422 PERIOD_HARD_LOCKED).
+          example: Auditor-approved correction of June posting
+          maxLength: 500
+          minLength: 0
       required:
       - reason
+    JournalEntryPostRequest:
+      type: object
+      description: Optional request payload for posting a journal entry
+      properties:
+        overrideJustification:
+          type: string
+          description: Optional justification for posting into a CLOSED accounting period. When the entry's transaction date falls in a CLOSED period, supplying a non-blank justification together with the accounting:period:override permission allows the posting to proceed (audit-logged); without it the post is rejected with 422 PERIOD_CLOSED. Has no effect for dates in OPEN periods and can never bypass the hard lock (422 PERIOD_HARD_LOCKED).
+          example: Auditor-approved late accrual for June close
+          maxLength: 500
+          minLength: 0
     RegenerateInvoiceFromWorkorderRequest:
       type: object
       description: Request to regenerate an invoice from a completed workorder

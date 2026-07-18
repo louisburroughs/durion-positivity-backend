@@ -42,5 +42,13 @@ public enum PostingFailureReason {
      * Internal error occurred during rule evaluation.
      * Review logs and exception details for root cause.
      */
-    INTERNAL_ERROR
+    INTERNAL_ERROR,
+
+    /**
+     * Event transaction date falls in a CLOSED (or hard-locked) accounting
+     * period (story B2, issue #944). Event is marked SUSPENDED; the scheduled
+     * auto-retry loop skips it (a closed period will not reopen on a retry
+     * cadence) but manual reprocessing after the period is reopened works.
+     */
+    PERIOD_CLOSED
 }

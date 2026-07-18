@@ -1,9 +1,9 @@
-generatedAt: "2026-07-18T09:37:35.429931+00:00"
+generatedAt: "2026-07-18T18:32:13.065608+00:00"
 root: "/home/user/durion-positivity-backend"
 summary:
   manifestCount: 20
-  permissionCount: 348
-  uniquePermissionCount: 348
+  permissionCount: 350
+  uniquePermissionCount: 350
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -12,7 +12,7 @@ manifests:
     domain: "accounting"
     serviceName: "pos-accounting"
     version: "1.0"
-    permissionCount: 42
+    permissionCount: 44
     permissions:
       - name: "accounting:ap:pay"
         description: "Process payments"
@@ -76,6 +76,10 @@ manifests:
         description: "Reverse payment"
       - name: "accounting:period:close"
         description: "Close an accounting period"
+      - name: "accounting:period:hard_lock"
+        description: "Set the accounting hard-lock date"
+      - name: "accounting:period:override"
+        description: "Post into a closed accounting period with justification"
       - name: "accounting:period:reopen"
         description: "Reopen a closed accounting period"
       - name: "accounting:period:view"
@@ -1026,6 +1030,18 @@ permissions:
     source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:period:close"
     description: "Close an accounting period"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:period:hard_lock"
+    description: "Set the accounting hard-lock date"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:period:override"
+    description: "Post into a closed accounting period with justification"
     domain: "accounting"
     serviceName: "pos-accounting"
     module: "pos-accounting"
