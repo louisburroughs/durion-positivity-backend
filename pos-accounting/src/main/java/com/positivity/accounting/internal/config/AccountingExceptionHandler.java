@@ -12,6 +12,7 @@ import com.positivity.accounting.internal.exception.DuplicateAccountCodeExceptio
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
+import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -157,6 +158,32 @@ public class AccountingExceptionHandler {
         return new ResponseEntity<>(
                 ApiError.withFieldErrors(
                         "PERIOD_HAS_DRAFT_ENTRIES",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        fieldErrors),
+                headers,
+                HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
+    /**
+     * Publish-time split-group validation failure (story E1, issue #945):
+     * factorPercent/splitGroup invariants violated in the rules definition.
+     * Every violation is listed as a field error whose {@code field} locates
+     * the offending group or line inside the rules definition.
+     */
+    @ExceptionHandler(UnbalancedRulesException.class)
+    public ResponseEntity<ApiError> handleUnbalancedRules(UnbalancedRulesException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        List<ApiError.FieldError> fieldErrors = ex.getViolations().stream()
+                .map(violation -> new ApiError.FieldError(violation.field(), violation.message()))
+                .toList();
+        return new ResponseEntity<>(
+                ApiError.withFieldErrors(
+                        "UNBALANCED_RULES",
                         ex.getMessage(),
                         HttpStatus.UNPROCESSABLE_CONTENT.value(),
                         Instant.now(clock).toString(),

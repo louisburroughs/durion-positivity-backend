@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +14,7 @@ import com.positivity.accounting.internal.dto.PostingRuleVersionResponse;
 import com.positivity.accounting.internal.entity.PostingRuleSet;
 import com.positivity.accounting.internal.entity.PostingRuleVersion;
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
+import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.accounting.internal.exception.UnsupportedSortPropertyException;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
@@ -427,6 +429,71 @@ class PostingRuleServiceImplTest {
             assertThatThrownBy(() -> service.publishVersion(versionId))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("rules definition is empty");
+        }
+
+        // ── E1 (issue #945): split-group publish validation ──────────
+
+        private static final String ACCOUNT = "00000000-0000-0000-0000-0000000000a1";
+
+        private String splitRules(String factor1, String factor2) {
+            return "{\"conditions\":[{\"condition\":\"eventType == 'LABOR_CHARGE'\",\"lines\":["
+                    + "{\"glAccountId\":\"" + ACCOUNT + "\",\"side\":\"DEBIT\",\"amountField\":\"payload.amount\","
+                    + "\"factorPercent\":" + factor1 + ",\"splitGroup\":\"g1\"},"
+                    + "{\"glAccountId\":\"" + ACCOUNT + "\",\"side\":\"DEBIT\",\"amountField\":\"payload.amount\","
+                    + "\"factorPercent\":" + factor2 + ",\"splitGroup\":\"g1\"},"
+                    + "{\"glAccountId\":\"" + ACCOUNT + "\",\"side\":\"CREDIT\",\"amountField\":\"payload.amount\"}"
+                    + "]}]}";
+        }
+
+        @Test
+        @DisplayName("publishes valid split-group rules definition")
+        void validSplitRulesPublish() {
+            testVersion.setRulesDefinition(splitRules("60", "40"));
+            when(versionRepository.findById(versionId)).thenReturn(Optional.of(testVersion));
+            when(versionRepository.findByPostingRuleSet_PostingRuleSetIdAndState(
+                            eq(ruleSetId), eq(PostingRuleSetState.PUBLISHED)))
+                    .thenReturn(List.of());
+            when(versionRepository.save(any(PostingRuleVersion.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            PostingRuleVersion result = service.publishVersion(versionId);
+
+            assertThat(result.getState()).isEqualTo(PostingRuleSetState.PUBLISHED);
+        }
+
+        @Test
+        @DisplayName("rejects split group whose factors do not sum to 100 with UnbalancedRulesException")
+        void unbalancedSplitFactorsRejected() {
+            testVersion.setRulesDefinition(splitRules("60", "30"));
+            when(versionRepository.findById(versionId)).thenReturn(Optional.of(testVersion));
+
+            assertThatThrownBy(() -> service.publishVersion(versionId))
+                    .isInstanceOf(UnbalancedRulesException.class)
+                    .hasMessageContaining("splitGroup[g1]")
+                    .hasMessageContaining("sum to exactly 100");
+            verify(versionRepository, never()).save(any(PostingRuleVersion.class));
+        }
+
+        @Test
+        @DisplayName("rejects out-of-range factorPercent at publish, listing the offending line")
+        void outOfRangeFactorRejected() {
+            testVersion.setRulesDefinition(splitRules("150", "-50"));
+            when(versionRepository.findById(versionId)).thenReturn(Optional.of(testVersion));
+
+            assertThatThrownBy(() -> service.publishVersion(versionId))
+                    .isInstanceOf(UnbalancedRulesException.class)
+                    .hasMessageContaining("lines[0].factorPercent")
+                    .hasMessageContaining("lines[1].factorPercent");
+        }
+
+        @Test
+        @DisplayName("rejects unparseable rules definition JSON as IllegalArgumentException")
+        void malformedJsonRejected() {
+            testVersion.setRulesDefinition("not json at all {{");
+            when(versionRepository.findById(versionId)).thenReturn(Optional.of(testVersion));
+
+            assertThatThrownBy(() -> service.publishVersion(versionId))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("not valid JSON");
         }
     }
 
