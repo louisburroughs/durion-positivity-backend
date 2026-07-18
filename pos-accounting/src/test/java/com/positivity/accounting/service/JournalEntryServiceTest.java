@@ -10,10 +10,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
+import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.service.AccountingSequenceProvisioner;
 import com.positivity.accounting.internal.service.GLAccountServiceImpl;
 import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 import java.math.BigDecimal;
@@ -57,6 +60,12 @@ class JournalEntryServiceTest {
 
     @Mock
     private GLAccountServiceImpl glAccountService;
+
+    @Mock
+    private AccountingSequenceRepository sequenceRepository;
+
+    @Mock
+    private AccountingSequenceProvisioner sequenceProvisioner;
 
     @InjectMocks
     private JournalEntryServiceImpl service;
@@ -292,6 +301,12 @@ class JournalEntryServiceTest {
         doNothing().when(glAccountService).validateAccountForPosting(any(UUID.class), any(LocalDateTime.class));
         when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
+        // Sequence row for the entry's transaction month (2024-01, fixed clock)
+        AccountingSequence sequence = new AccountingSequence();
+        sequence.setScopeKey("JE-202401");
+        sequence.setNextValue(5L);
+        when(sequenceRepository.findByScopeKey("JE-202401")).thenReturn(Optional.of(sequence));
+
         // Act
         JournalEntry result = service.postJournalEntry(testJournalEntryId);
 
@@ -299,6 +314,8 @@ class JournalEntryServiceTest {
         assertThat(result.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
         assertThat(result.getPostedAt()).isNotNull();
         assertThat(result.getUpdatedAt()).isNotNull();
+        assertThat(result.getEntryNumber()).isEqualTo("JE-202401-5");
+        assertThat(sequence.getNextValue()).isEqualTo(6L);
         verify(journalEntryRepository).save(any(JournalEntry.class));
     }
 
@@ -376,11 +393,49 @@ class JournalEntryServiceTest {
         when(journalEntryRepository.findAll(pageable)).thenReturn(page);
 
         // Act
-        Page<JournalEntry> result = service.listJournalEntries(pageable);
+        Page<JournalEntry> result = service.listJournalEntries(pageable, null);
 
         // Assert
         assertThat(result.getContent()).hasSize(2);
         verify(journalEntryRepository).findAll(pageable);
+    }
+
+    @Test
+    @DisplayName("listJournalEntries - blank entryNumber filter is treated as no filter")
+    void listJournalEntries_blankEntryNumberFilter_ignored() {
+        // Arrange
+        Page<JournalEntry> page = new PageImpl<>(List.of(createBalancedEntry()));
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(journalEntryRepository.findAll(pageable)).thenReturn(page);
+
+        // Act
+        Page<JournalEntry> result = service.listJournalEntries(pageable, "  ");
+
+        // Assert
+        assertThat(result.getContent()).hasSize(1);
+        verify(journalEntryRepository).findAll(pageable);
+    }
+
+    @Test
+    @DisplayName("listJournalEntries - entryNumber filter delegates to exact-match query")
+    void listJournalEntries_entryNumberFilter_returnsMatch() {
+        // Arrange
+        JournalEntry posted = createBalancedEntry();
+        posted.setStatus(JournalEntryStatus.POSTED);
+        posted.setEntryNumber("JE-202607-1");
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(journalEntryRepository.findByEntryNumber("JE-202607-1", pageable))
+                .thenReturn(new PageImpl<>(List.of(posted)));
+
+        // Act
+        Page<JournalEntry> result = service.listJournalEntries(pageable, "JE-202607-1");
+
+        // Assert
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().getFirst().getEntryNumber()).isEqualTo("JE-202607-1");
+        verify(journalEntryRepository).findByEntryNumber("JE-202607-1", pageable);
     }
 
     @Test

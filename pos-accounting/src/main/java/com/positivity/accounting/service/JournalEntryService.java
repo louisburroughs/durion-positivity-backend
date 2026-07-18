@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -78,9 +79,17 @@ public interface JournalEntryService {
     JournalEntry reverseJournalEntry(UUID originalEntryId, String reversalReason);
 
     /**
-     * Lists journal entries with pagination and filtering.
+     * Lists journal entries with pagination and optional filtering.
+     *
+     * @param pageable    page, size, and sort
+     * @param entryNumber optional exact-match filter on the posted-entry number
+     *                    ({@code JE-&#123;YYYYMM&#125;-&#123;seq&#125;}); null or blank
+     *                    means no filter. Drafts, PENDING entries, and entries
+     *                    posted before numbering existed have no entry number and
+     *                    never match.
+     * @return page of matching journal entries
      */
-    Page<JournalEntry> listJournalEntries(Pageable pageable);
+    Page<JournalEntry> listJournalEntries(Pageable pageable, @Nullable String entryNumber);
 
     /**
      * Find all posted entries for audit or reconciliation.

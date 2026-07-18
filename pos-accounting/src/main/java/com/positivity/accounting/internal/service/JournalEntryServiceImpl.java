@@ -4,9 +4,11 @@ import com.positivity.accounting.internal.dto.JournalEntryMapper;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.JournalEntryTraceabilityResponse;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
+import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.service.GLAccountService;
 import com.positivity.accounting.service.JournalEntryService;
@@ -20,6 +22,8 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -48,6 +52,8 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
     private final JournalEntryRepository journalEntryRepository;
     private final GLAccountService glAccountService;
+    private final AccountingSequenceRepository sequenceRepository;
+    private final AccountingSequenceProvisioner sequenceProvisioner;
 
     private static final BigDecimal BALANCE_TOLERANCE = new BigDecimal("0.0001");
 
@@ -233,16 +239,86 @@ public class JournalEntryServiceImpl implements JournalEntryService {
             glAccountService.validateAccountForPosting(line.getGlAccountId(), entry.getTransactionDate());
         }
 
+        assignEntryNumber(entry);
         entry.setStatus(JournalEntryStatus.POSTED);
         entry.setPostedAt(Instant.now(clock));
         entry.setUpdatedAt(Instant.now(clock));
 
         JournalEntry saved = journalEntryRepository.save(entry);
         log.info(
-                "Posted journal entry {} with total debits/credits: {}",
+                "Posted journal entry {} as {} with total debits/credits: {}",
                 saved.getJournalEntryId(),
+                saved.getEntryNumber(),
                 saved.getLines().size());
         return saved;
+    }
+
+    // ===== POSTED-ENTRY NUMBERING (story A2, issue #942, decision D-1) =====
+
+    /**
+     * Assigns the posted-entry number {@code JE-{YYYYMM}-{seq}} from the
+     * per-month {@code accounting_sequence} counter.
+     *
+     * <p>Format decision: the sequence part is an <em>unpadded</em> integer
+     * (e.g. {@code JE-202607-1}, {@code JE-202607-12}) — nothing in the repo
+     * dictates a padding convention, and a fixed pad would create overflow
+     * ambiguity once a month exceeds the padded width. Consumers must not
+     * rely on lexicographic ordering of entry numbers within a month.
+     *
+     * <p>Scope key is {@code JE-{YYYYMM}} derived from the entry's
+     * {@code transactionDate} (not {@code postedAt}): a late-posted entry
+     * numbers into its transaction month.
+     *
+     * <p>Transactional design: the counter row is read under
+     * {@code FOR UPDATE} and incremented <em>inside the caller's posting
+     * transaction</em> — deliberately no {@code REQUIRES_NEW}, in contrast to
+     * {@code AccountingPeriodProvisioner} — so a posting rollback rolls the
+     * increment back too and the number is never consumed. Post-time
+     * assignment in the same transaction as the status flip is what makes the
+     * numbering gapless as a side effect (D-1; no statutory guarantee
+     * claimed). Only the zero-consumption first-use bootstrap of the counter
+     * row runs isolated (see {@link AccountingSequenceProvisioner}).
+     *
+     * <p>Shared seam: also intended for reversal numbering when story A3
+     * rewrites {@code reverseJournalEntry} — reversals get their own numbers.
+     *
+     * @param entry the entry being transitioned to POSTED in the current
+     *              transaction; its {@code entryNumber} is set as a side
+     *              effect
+     */
+    private void assignEntryNumber(JournalEntry entry) {
+        String scopeKey = entryNumberScopeKey(entry.getTransactionDate());
+        AccountingSequence sequence =
+                sequenceRepository.findByScopeKey(scopeKey).orElseGet(() -> provisionAndRelock(scopeKey));
+        long assigned = sequence.getNextValue();
+        sequence.setNextValue(assigned + 1);
+        entry.setEntryNumber(scopeKey + "-" + assigned);
+    }
+
+    /**
+     * First use of a month scope: bootstrap the counter row in an isolated
+     * transaction ({@link AccountingSequenceProvisioner}), then lock it in
+     * the current posting transaction. A concurrent bootstrapper losing the
+     * unique-key race falls through to the locked re-read of the winner's
+     * committed row.
+     */
+    private AccountingSequence provisionAndRelock(String scopeKey) {
+        try {
+            sequenceProvisioner.provision(scopeKey);
+        } catch (DataIntegrityViolationException raceLost) {
+            log.debug("Lost accounting_sequence bootstrap race for scope {}; re-reading winner's row", scopeKey);
+        }
+        return sequenceRepository
+                .findByScopeKey(scopeKey)
+                .orElseThrow(() ->
+                        new IllegalStateException("accounting_sequence row missing after bootstrap: " + scopeKey));
+    }
+
+    /**
+     * Sequence scope key {@code JE-{YYYYMM}} for a transaction date.
+     */
+    private static String entryNumberScopeKey(LocalDateTime transactionDate) {
+        return String.format("JE-%04d%02d", transactionDate.getYear(), transactionDate.getMonthValue());
     }
 
     /**
@@ -297,12 +373,16 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     }
 
     /**
-     * Lists journal entries with pagination and filtering.
+     * Lists journal entries with pagination and optional exact-match
+     * entry-number filtering.
      */
     @Override
     @Transactional(readOnly = true)
-    public Page<JournalEntry> listJournalEntries(Pageable pageable) {
-        return journalEntryRepository.findAll(pageable);
+    public Page<JournalEntry> listJournalEntries(Pageable pageable, @Nullable String entryNumber) {
+        if (entryNumber == null || entryNumber.isBlank()) {
+            return journalEntryRepository.findAll(pageable);
+        }
+        return journalEntryRepository.findByEntryNumber(entryNumber, pageable);
     }
 
     /**

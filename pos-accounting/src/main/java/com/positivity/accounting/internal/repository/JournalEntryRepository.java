@@ -28,6 +28,13 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
     Page<JournalEntry> findByStatus(JournalEntryStatus status, Pageable pageable);
 
     /**
+     * Find journal entries by exact posted-entry number
+     * ({@code JE-&#123;YYYYMM&#125;-&#123;seq&#125;}) with pagination. The column is
+     * unique, so at most one row matches; paginated for list-endpoint symmetry.
+     */
+    Page<JournalEntry> findByEntryNumber(String entryNumber, Pageable pageable);
+
+    /**
      * Find journal entries for a transaction date range.
      */
     @Query(

@@ -23,6 +23,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -58,6 +59,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EntityListeners(AuditingEntityListener.class)
 @Table(
         name = "journal_entry",
+        uniqueConstraints = {@UniqueConstraint(name = "uq_journal_entry_entry_number", columnNames = "entry_number")},
         indexes = {
             @Index(name = "idx_journal_entry_status", columnList = "status"),
             @Index(name = "idx_journal_entry_entry_type", columnList = "entry_type"),
@@ -117,6 +119,16 @@ public class JournalEntry {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20, nullable = false)
     private JournalEntryStatus status = JournalEntryStatus.DRAFT;
+
+    /**
+     * Human-readable posted-entry number, {@code JE-&#123;YYYYMM&#125;-&#123;seq&#125;}
+     * (unpadded sequence, e.g. {@code JE-202607-1}), assigned at POST time
+     * from the per-transaction-month {@code accounting_sequence} counter
+     * (story A2, issue #942, decision D-1). Null for drafts and for entries
+     * posted before numbering existed (no backfill).
+     */
+    @Column(name = "entry_number", length = 20)
+    private String entryNumber;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "entry_type", length = 20, nullable = false)

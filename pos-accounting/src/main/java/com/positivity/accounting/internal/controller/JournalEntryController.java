@@ -80,7 +80,7 @@ public class JournalEntryController {
     @PreAuthorize("hasAuthority('accounting:je:view')")
     @Operation(
             summary = "List journal entries",
-            description = "Retrieve paginated journal entries.",
+            description = "Retrieve paginated journal entries, optionally filtered by exact posted-entry number.",
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "200", description = "Journal entries listed")
     @ApiResponse(responseCode = "400", description = "Unsupported sort property or direction")
@@ -96,12 +96,20 @@ public class JournalEntryController {
                                     + "Direction defaults to desc.")
                     @NotBlank
                     @RequestParam(defaultValue = "createdAt")
-                    String sort) {
-        log.debug("Listing journal entries: page={}, size={}", page, size);
+                    String sort,
+            @Parameter(
+                            description = "Optional exact-match filter on the posted-entry number "
+                                    + "(format JE-{YYYYMM}-{seq}, sequential within the entry's transaction "
+                                    + "month, assigned at posting time). Entries not yet posted have no "
+                                    + "entry number and never match.",
+                            example = "JE-202607-1")
+                    @RequestParam(required = false)
+                    String entryNumber) {
+        log.debug("Listing journal entries: page={}, size={}, entryNumber={}", page, size, entryNumber);
 
         Pageable pageable =
                 PageRequest.of(page, size, SortParamParser.parse(sort, SORTABLE_PROPERTIES, Sort.Direction.DESC));
-        var entryPage = journalEntryService.listJournalEntries(pageable);
+        var entryPage = journalEntryService.listJournalEntries(pageable, entryNumber);
 
         PagedResponse<JournalEntryResponse> response = new PagedResponse<>(
                 entryPage.getContent().stream()
