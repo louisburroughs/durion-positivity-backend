@@ -21,8 +21,12 @@ import org.springframework.stereotype.Component;
  * a WARN and returns the warning text — it never rejects the mapping, and
  * accounts without a subtype are never flagged (backfill is optional).
  *
- * Invoked from {@link GLMappingServiceImpl#createMapping}, the single
- * production seam where source-system/external-code mappings are created.
+ * Invoked from {@link GLMappingServiceImpl#createMapping} (source-system/
+ * external-code mappings) and from
+ * {@link DefaultGLMappingServiceImpl#createDefaultMapping} /
+ * {@link DefaultGLMappingServiceImpl#updateDefaultMapping} (default event-type
+ * mappings) — the production seams where posting configuration is created or
+ * changed.
  */
 @Slf4j
 @Component
