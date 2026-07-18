@@ -299,6 +299,25 @@ outbox.append(DomainTopics.events("customer"), event); // same transaction as th
 </dependency>
 ```
 
+## Permissions: Catalog Sync (mandatory when adding `@PreAuthorize` permissions)
+
+Adding a permission to a module's `permissions.yaml` and `@PreAuthorize` is **not enough** — the
+compiled fleet catalogs must be regenerated or the `Validate Permission Catalog` CI job fails:
+
+```bash
+# After adding any new @PreAuthorize permission:
+scripts/generate-permissions.sh --sync          # regenerates PermissionCode, GatewayPermissionCatalog,
+                                                # DownstreamPermissionCatalog, docs/permissions-report.yaml
+scripts/generate-permissions.sh --sync --check  # the exact CI gate — must pass before pushing
+```
+
+Commit the regenerated files together with the feature change, and update the catalog contract
+tests that pin expectations (`PermissionCodeTest` count/version constants in `pos-security-service`;
+the versioned `authorityForBit` block and out-of-range guard in `pos-api-gateway`'s
+`SecurityGatewayConfigTest`). A sync bumps `CATALOG_VERSION`, which is a **fleet-coordinated
+deploy** (gateway, security-service, and downstream services roll together) — call that out in the
+PR body.
+
 ## Null Safety Standards
 
 ### ⚠️ MANDATORY: @NonNull Annotation for Null Safety
