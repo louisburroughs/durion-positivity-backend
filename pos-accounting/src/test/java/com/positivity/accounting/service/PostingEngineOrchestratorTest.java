@@ -117,6 +117,7 @@ class PostingEngineOrchestratorTest {
         // B2 period gate defaults to "open" so pre-B2 scenarios are
         // unaffected; PeriodGate tests override this stub explicitly.
         lenient().when(accountingPeriodGate.isPostingBlocked(any())).thenReturn(false);
+        lenient().when(accountingPeriodGate.isHardLocked(any())).thenReturn(false);
 
         testOrganizationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         testEventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -717,10 +718,51 @@ class PostingEngineOrchestratorTest {
             AccountingEvent savedEvent = eventCaptor.getValue();
             assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
             assertThat(savedEvent.getFailureReasonCode()).isEqualTo("PERIOD_CLOSED");
-            assertThat(savedEvent.getFailureDetails()).contains("reprocess after the period is reopened");
+            assertThat(savedEvent.getFailureDetails())
+                    .contains("falls in CLOSED accounting period")
+                    .contains("reprocess after the period is reopened")
+                    .doesNotContain("hard-lock");
 
             verify(reprocessingAttemptHistoryRepository).save(attemptHistoryCaptor.capture());
             assertThat(attemptHistoryCaptor.getValue().getOutcome()).isEqualTo(ReprocessingOutcome.FAILURE);
+
+            // No rule evaluation, no journal entry, no idempotency key burned
+            verify(postingRuleEvaluator, never()).evaluateEvent(any(), any());
+            verify(journalEntryService, never()).createJournalEntry(any());
+            verify(idempotencyService, never()).registerKey(anyString(), any());
+        }
+
+        @Test
+        @DisplayName("autoPost before the hard-lock date suspends with the permanent-block message, not the reopen remedy")
+        void autoPostHardLocked_suspendsWithPermanentBlockMessage() {
+            // Given - the gate blocks because of the org hard lock, not a CLOSED period
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+            when(accountingPeriodGate.isPostingBlocked(
+                            testEvent.getTransactionDate().toLocalDate()))
+                    .thenReturn(true);
+            when(accountingPeriodGate.isHardLocked(
+                            testEvent.getTransactionDate().toLocalDate()))
+                    .thenReturn(true);
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, true);
+
+            // Then - same SUSPENDED / PERIOD_CLOSED labeling, but the details must
+            // say the block is permanent instead of pointing at a reopen remedy
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.PERIOD_CLOSED);
+
+            verify(accountingEventRepository).save(eventCaptor.capture());
+            AccountingEvent savedEvent = eventCaptor.getValue();
+            assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+            assertThat(savedEvent.getFailureReasonCode()).isEqualTo("PERIOD_CLOSED");
+            assertThat(savedEvent.getFailureDetails())
+                    .contains("is before the organization hard-lock date")
+                    .contains("posting is permanently blocked and cannot be reprocessed"
+                            + " (the hard lock is never reopened)")
+                    .doesNotContain("reprocess after the period is reopened");
 
             // No rule evaluation, no journal entry, no idempotency key burned
             verify(postingRuleEvaluator, never()).evaluateEvent(any(), any());
@@ -855,14 +897,23 @@ class PostingEngineOrchestratorTest {
             // When
             PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, true);
 
-            // Then
+            // Then - permanent-block wording, not the reopen-then-reprocess remedy
             assertThat(result.isSuccess()).isFalse();
             assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.PERIOD_CLOSED);
+            assertThat(result.getFailureDetails())
+                    .contains("Posting blocked by the period gate:")
+                    .contains("Transaction date is before the hard-lock date 2024-02-01")
+                    .contains("posting is permanently blocked and cannot be reprocessed"
+                            + " (the hard lock is never reopened)")
+                    .doesNotContain("reprocess after the period is reopened");
 
             verify(accountingEventRepository).save(eventCaptor.capture());
             AccountingEvent savedEvent = eventCaptor.getValue();
             assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
             assertThat(savedEvent.getFailureReasonCode()).isEqualTo("PERIOD_CLOSED");
+            assertThat(savedEvent.getFailureDetails())
+                    .contains("posting is permanently blocked and cannot be reprocessed"
+                            + " (the hard lock is never reopened)");
         }
     }
 }

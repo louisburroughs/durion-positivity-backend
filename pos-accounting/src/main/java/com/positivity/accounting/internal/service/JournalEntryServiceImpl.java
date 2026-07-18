@@ -419,7 +419,12 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         // Linkage: the reversal points back at the entry it reverses.
         reversal.setReversalJournalEntry(original);
 
-        // Invert all lines: debits become credits and vice versa
+        // Invert all lines: debits become credits and vice versa. The
+        // reversal intentionally mirrors the original entry line-for-line and
+        // skips per-line validateAccountForPosting: an entry posted against
+        // an account that has since been deactivated must still be
+        // reversible, and reversing onto the exact original accounts is what
+        // keeps the GL balanced.
         List<JournalEntryLine> reversalLines = new java.util.ArrayList<>();
         for (JournalEntryLine line : original.getLines()) {
             JournalEntryLine reversalLine = new JournalEntryLine();

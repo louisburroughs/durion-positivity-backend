@@ -98,7 +98,7 @@ public interface JournalEntryService {
      *         if the transaction date's period is CLOSED and no valid
      *         override applies (422: PERIOD_CLOSED)
      */
-    JournalEntry postJournalEntry(UUID journalEntryId, @Nullable String overrideJustification);
+    JournalEntry postJournalEntry(@NonNull UUID journalEntryId, @Nullable String overrideJustification);
 
     /**
      * Reverses a posted journal entry by creating an inverse entry (story A3,
@@ -184,7 +184,7 @@ public interface JournalEntryService {
      *                    never match.
      * @return page of matching journal entries
      */
-    Page<JournalEntry> listJournalEntries(Pageable pageable, @Nullable String entryNumber);
+    Page<JournalEntry> listJournalEntries(@NonNull Pageable pageable, @Nullable String entryNumber);
 
     /**
      * Find all posted entries for audit or reconciliation.

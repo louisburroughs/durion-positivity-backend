@@ -3,6 +3,7 @@ package com.positivity.accounting.service;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import java.math.BigDecimal;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 public interface GLPostingService {
@@ -50,15 +51,15 @@ public interface GLPostingService {
      * @return Posted journal entry
      */
     JournalEntry postCreditMemoReversal(
-            UUID creditMemoId,
-            UUID revenueAccountId,
-            UUID taxPayableAccountId,
-            UUID arAccountId,
-            BigDecimal creditAmount,
-            BigDecimal taxReversed,
-            String description,
+            @NonNull UUID creditMemoId,
+            @NonNull UUID revenueAccountId,
+            @NonNull UUID taxPayableAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal creditAmount,
+            @NonNull BigDecimal taxReversed,
+            @NonNull String description,
             boolean isPriorPeriod,
-            String originalPeriodId,
+            @Nullable String originalPeriodId,
             @Nullable String overrideJustification);
 
     /**
@@ -91,10 +92,10 @@ public interface GLPostingService {
      * @return Posted journal entry
      */
     JournalEntry postPaymentApplication(
-            UUID paymentApplicationId,
-            UUID cashAccountId,
-            UUID arAccountId,
-            BigDecimal amount,
-            String description,
+            @NonNull UUID paymentApplicationId,
+            @NonNull UUID cashAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull String description,
             @Nullable String overrideJustification);
 }

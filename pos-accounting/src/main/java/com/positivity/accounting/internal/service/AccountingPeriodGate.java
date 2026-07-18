@@ -143,11 +143,22 @@ public class AccountingPeriodGate {
      * @return true when posting would be rejected (hard-locked or CLOSED)
      */
     public boolean isPostingBlocked(@NonNull LocalDate transactionDate) {
+        return isHardLocked(transactionDate) || !accountingPeriodService.isPeriodOpen(transactionDate);
+    }
+
+    /**
+     * Non-throwing check for whether {@code transactionDate} is blocked by
+     * the org-level hard lock specifically (strictly before the hard-lock
+     * date). Lets callers of {@link #isPostingBlocked} distinguish the
+     * permanent hard-lock block (never reopened, no remedy) from a CLOSED
+     * period (reopenable).
+     *
+     * @param transactionDate the date to check
+     * @return true when the date is strictly before the hard-lock date
+     */
+    public boolean isHardLocked(@NonNull LocalDate transactionDate) {
         Optional<LocalDate> hardLockDate = configurationService.getHardLockDate();
-        if (hardLockDate.isPresent() && transactionDate.isBefore(hardLockDate.get())) {
-            return true;
-        }
-        return !accountingPeriodService.isPeriodOpen(transactionDate);
+        return hardLockDate.isPresent() && transactionDate.isBefore(hardLockDate.get());
     }
 
     private void assertNotHardLocked(LocalDate transactionDate) {
