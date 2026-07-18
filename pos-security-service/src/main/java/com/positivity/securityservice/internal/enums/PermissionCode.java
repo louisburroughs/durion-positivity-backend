@@ -490,13 +490,17 @@ public enum PermissionCode {
     WARRANTY__REIMBURSEMENT__VIEW(375, "warranty:reimbursement:view"),
     WARRANTY__REIMBURSEMENT__MANAGE(376, "warranty:reimbursement:manage"),
     WARRANTY__PART_RETURN__VIEW(377, "warranty:part-return:view"),
-    WARRANTY__PART_RETURN__MANAGE(378, "warranty:part-return:manage");
+    WARRANTY__PART_RETURN__MANAGE(378, "warranty:part-return:manage"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
+    ACCOUNTING__PERIOD__CLOSE(379, "accounting:period:close"),
+    ACCOUNTING__PERIOD__REOPEN(380, "accounting:period:reopen"),
+    ACCOUNTING__PERIOD__VIEW(381, "accounting:period:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 21;
+    public static final int CATALOG_VERSION = 22;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
