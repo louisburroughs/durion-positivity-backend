@@ -4,24 +4,35 @@ import com.positivity.accounting.internal.dto.JournalEntryMapper;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.JournalEntryTraceabilityResponse;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
+import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.event.JournalEntryReversed;
+import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
+import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
+import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.service.AccountingPeriodService;
 import com.positivity.accounting.service.GLAccountService;
 import com.positivity.accounting.service.JournalEntryService;
+import com.positivity.accounting.service.OutboxService;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -54,8 +65,16 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     private final GLAccountService glAccountService;
     private final AccountingSequenceRepository sequenceRepository;
     private final AccountingSequenceProvisioner sequenceProvisioner;
+    private final AccountingPeriodService accountingPeriodService;
+    private final AccountingAuditLogRepository auditLogRepository;
+    private final OutboxService outboxService;
 
     private static final BigDecimal BALANCE_TOLERANCE = new BigDecimal("0.0001");
+    private static final String SYSTEM = "SYSTEM";
+    private static final String AUDIT_ENTITY_TYPE_JOURNAL_ENTRY = "JOURNAL_ENTRY";
+    private static final String AUDIT_OPERATION_REVERSE = "REVERSE";
+    private static final String AGGREGATE_TYPE_JOURNAL_ENTRY = "JournalEntry";
+    private static final String EVENT_TYPE_JOURNAL_ENTRY_REVERSED = "JournalEntryReversed";
 
     /**
      * Creates a new draft journal entry.
@@ -129,20 +148,17 @@ public class JournalEntryServiceImpl implements JournalEntryService {
                     .toList();
         }
 
+        // Linkage semantics (story A3, issue #943): on a reversal,
+        // reversalJournalEntry points at the original it reverses; on a
+        // reversed original, reversedByJournalEntry points at its reversal.
         JournalEntryResponse originalEntry = toResponseOrNull(entry.getReversalJournalEntryId());
-        if (originalEntry == null) {
-            originalEntry = journalEntryRepository
+
+        JournalEntryResponse reversalEntry = toResponseOrNull(entry.getReversedByJournalEntryId());
+        if (reversalEntry == null) {
+            reversalEntry = journalEntryRepository
                     .findByReversalReference(journalEntryId)
                     .map(JournalEntryMapper::toResponse)
                     .orElse(null);
-        }
-
-        JournalEntryResponse reversalEntry = toResponseOrNull(entry.getReversedByJournalEntryId());
-        if (reversalEntry == null
-                && entry.getReversalJournalEntryId() != null
-                && (originalEntry == null
-                        || !entry.getReversalJournalEntryId().equals(originalEntry.getJournalEntryId()))) {
-            reversalEntry = toResponseOrNull(entry.getReversalJournalEntryId());
         }
 
         return JournalEntryTraceabilityResponse.builder()
@@ -321,36 +337,53 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         return String.format("JE-%04d%02d", transactionDate.getYear(), transactionDate.getMonthValue());
     }
 
+    // ===== REVERSAL LIFECYCLE (story A3, issue #943) =====
+
     /**
-     * Reverses a posted journal entry by creating an inverse entry.
-     * Original entry remains POSTED; reversal entry appears as REVERSED.
-     * Reversal entries are immediately POSTED (no DRAFT → POSTED transition).
+     * Reverses a posted journal entry by creating an inverse entry and
+     * transitioning the original POSTED → REVERSED, all in one transaction.
      *
-     * @param originalEntryId entry to reverse
-     * @param reversalReason  reason for reversal (e.g., "CORRECTION", "ADJUSTMENT")
-     * @return reversal journal entry
-     * @throws IllegalArgumentException if original entry not found or not POSTED
+     * <p>Concurrency: the service-level status check is check-then-act, so
+     * the authoritative double-reversal guard is
+     * {@link JournalEntryRepository#markReversed} — a conditional
+     * {@code UPDATE ... WHERE status = POSTED} whose update count decides the
+     * race. The losing transaction sees 0 rows, throws, and rolls back its
+     * reversal insert and consumed entry number. (Both racers also serialize
+     * on the {@code accounting_sequence} FOR UPDATE row when their reversal
+     * dates share a month, which orders them deterministically.)
+     *
+     * <p>The reversal entry gets its own posted-entry number via the A2
+     * {@link #assignEntryNumber} seam and is saved directly as POSTED (no
+     * DRAFT → POSTED transition); story B2 will wrap both posting paths in
+     * the full period gate.
      */
     @Override
-    public JournalEntry reverseJournalEntry(UUID originalEntryId, String reversalReason) {
+    public JournalEntry reverseJournalEntry(
+            @NonNull UUID originalEntryId, @NonNull String reversalReason, @Nullable LocalDate reversalDate) {
         JournalEntry original = findById(originalEntryId);
 
         if (original.getStatus() != JournalEntryStatus.POSTED) {
-            String msg = "Cannot reverse " + original.getStatus() + " entry; only POSTED entries can be reversed";
-            log.warn(msg);
-            throw new IllegalArgumentException(msg);
+            log.warn("Rejecting reversal of journal entry {} in status {}", originalEntryId, original.getStatus());
+            throw new JournalEntryNotReversibleException(originalEntryId, original.getStatus());
         }
+
+        LocalDateTime reversalTransactionDate = resolveReversalTransactionDate(original, reversalDate);
+        accountingPeriodService.ensurePeriodExists(reversalTransactionDate.toLocalDate());
+
+        Instant now = Instant.now(clock);
 
         // Create reversal entry with inverted debits/credits
         JournalEntry reversal = new JournalEntry();
         reversal.setJournalEntryId(UUIDv7Generator.generate());
-        reversal.setTransactionDate(LocalDateTime.now(clock));
+        reversal.setTransactionDate(reversalTransactionDate);
         reversal.setDescription("REVERSAL of " + original.getJournalEntryId() + " - Reason: " + reversalReason);
         reversal.setSourceEventId(original.getSourceEventId());
         reversal.setStatus(JournalEntryStatus.POSTED); // Reversals post immediately
-        reversal.setPostedAt(Instant.now(clock));
-        reversal.setCreatedAt(Instant.now(clock));
-        reversal.setUpdatedAt(Instant.now(clock));
+        reversal.setPostedAt(now);
+        reversal.setCreatedAt(now);
+        reversal.setUpdatedAt(now);
+        // Linkage: the reversal points back at the entry it reverses.
+        reversal.setReversalJournalEntry(original);
 
         // Invert all lines: debits become credits and vice versa
         List<JournalEntryLine> reversalLines = new java.util.ArrayList<>();
@@ -367,9 +400,118 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         reversal.setLines(reversalLines);
         initializeLineMetadata(reversal);
 
-        JournalEntry saved = journalEntryRepository.save(reversal);
-        log.info("Created reversal entry {} for original entry {}", saved.getJournalEntryId(), originalEntryId);
-        return saved;
+        // Reversals get their own posted-entry numbers (A2 seam, AC of #942).
+        assignEntryNumber(reversal);
+        JournalEntry savedReversal = journalEntryRepository.save(reversal);
+
+        // Flip the original POSTED -> REVERSED; linkage: original points at
+        // the reversal that reversed it. Update count 0 = lost the race.
+        String actor = currentActor();
+        int flipped = journalEntryRepository.markReversed(originalEntryId, savedReversal, now, actor);
+        if (flipped == 0) {
+            log.warn(
+                    "Concurrent reversal race lost for journal entry {}; rolling back reversal {}",
+                    originalEntryId,
+                    savedReversal.getJournalEntryId());
+            throw new JournalEntryNotReversibleException(originalEntryId, JournalEntryStatus.REVERSED);
+        }
+
+        recordReversalAudit(original, savedReversal, actor, reversalReason);
+        publishReversalEvent(original, savedReversal, reversalTransactionDate.toLocalDate(), reversalReason, actor);
+
+        log.info(
+                "Reversed journal entry {} with reversal entry {} ({}) dated {}",
+                originalEntryId,
+                savedReversal.getJournalEntryId(),
+                savedReversal.getEntryNumber(),
+                reversalTransactionDate);
+        return savedReversal;
+    }
+
+    /**
+     * Resolves the reversal entry's transaction date (simplified Odoo
+     * date-picking): an explicit date must be in an OPEN period; the default
+     * is the original's transaction date if its period is open, else the
+     * current date, whose period must be open.
+     */
+    private LocalDateTime resolveReversalTransactionDate(JournalEntry original, @Nullable LocalDate requested) {
+        if (requested != null) {
+            requirePeriodOpen(requested, "Requested reversal date " + requested);
+            return requested.atStartOfDay();
+        }
+        LocalDate originalDate = original.getTransactionDate().toLocalDate();
+        if (accountingPeriodService.isPeriodOpen(originalDate)) {
+            return original.getTransactionDate();
+        }
+        LocalDate today = LocalDate.now(clock);
+        requirePeriodOpen(today, "Original entry's period is closed and the current date " + today);
+        return LocalDateTime.now(clock);
+    }
+
+    private void requirePeriodOpen(LocalDate date, String dateDescription) {
+        if (!accountingPeriodService.isPeriodOpen(date)) {
+            String periodCode = YearMonth.from(date).toString();
+            throw new AccountingPeriodClosedException(
+                    periodCode,
+                    dateDescription + " falls in closed accounting period " + periodCode
+                            + "; reversals must be dated in an open period");
+        }
+    }
+
+    /**
+     * Publish the reversal domain event through the transactional outbox so
+     * downstream read models see the status flip. Runs in the same
+     * transaction as the reversal ({@code saveToOutbox} is
+     * {@code Propagation.MANDATORY}), mirroring the
+     * {@code InvoicePaymentRecorded} caller pattern: simple-name event type,
+     * aggregate = the original journal entry whose state changed. A failed
+     * (409) reversal rolls the outbox row back with everything else.
+     */
+    private void publishReversalEvent(
+            JournalEntry original, JournalEntry reversal, LocalDate reversalDate, String reason, String actor) {
+        JournalEntryReversed event = new JournalEntryReversed(
+                original.getJournalEntryId(),
+                reversal.getJournalEntryId(),
+                original.getEntryNumber(),
+                reversal.getEntryNumber(),
+                reversalDate,
+                reason,
+                actor);
+        outboxService.saveToOutbox(
+                UUIDv7Generator.generate(),
+                AGGREGATE_TYPE_JOURNAL_ENTRY,
+                original.getJournalEntryId(),
+                EVENT_TYPE_JOURNAL_ENTRY_REVERSED,
+                event);
+    }
+
+    /**
+     * Audit-log the reversal (high-risk operation), mirroring the period
+     * close/reopen audit pattern: entity = the original entry whose status
+     * flipped, old/new value = the status transition, actor from the
+     * security context (ADR-0018), justification = the reversal reason plus
+     * the reversal entry's identity for traceability.
+     */
+    private void recordReversalAudit(JournalEntry original, JournalEntry reversal, String actor, String reason) {
+        AccountingAuditLog auditLog = new AccountingAuditLog();
+        auditLog.setEntityType(AUDIT_ENTITY_TYPE_JOURNAL_ENTRY);
+        auditLog.setEntityId(original.getJournalEntryId());
+        auditLog.setOperation(AUDIT_OPERATION_REVERSE);
+        auditLog.setUserId(actor);
+        auditLog.setJustification(reason);
+        auditLog.setOldValue(JournalEntryStatus.POSTED.name());
+        auditLog.setNewValue(JournalEntryStatus.REVERSED.name() + " by " + reversal.getJournalEntryId());
+        auditLogRepository.save(auditLog);
+    }
+
+    /**
+     * Acting user from the security context (ADR-0018), falling back to
+     * SYSTEM for unauthenticated internal flows.
+     */
+    private static String currentActor() {
+        return SecurityContextHelper.isAuthenticated()
+                ? SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM)
+                : SYSTEM;
     }
 
     /**

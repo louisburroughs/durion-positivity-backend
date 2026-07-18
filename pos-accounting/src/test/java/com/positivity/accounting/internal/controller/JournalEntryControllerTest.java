@@ -13,11 +13,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryReversalRequest;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
+import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.service.JournalEntryService;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -141,6 +145,114 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
                     .andExpect(jsonPath("$.status").value("DRAFT"))
                     // non_null serialization: an unnumbered draft omits entryNumber
                     .andExpect(jsonPath("$.entryNumber").doesNotExist());
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /v1/accounting/journal-entries/{id}/reverse")
+    class ReverseJournalEntry {
+
+        private static final UUID REVERSAL_ID = UUID.fromString("01936e5f-4321-7a3d-8b6e-5e6789012345");
+        private static final String REVERSAL_ENTRY_NUMBER = "JE-202607-2";
+        private static final String REASON = "Correcting duplicate posting";
+
+        private JournalEntry reversalEntry() {
+            JournalEntry reversal = new JournalEntry(REVERSAL_ID);
+            reversal.setStatus(JournalEntryStatus.POSTED);
+            reversal.setTransactionDate(LocalDateTime.of(2026, 7, 15, 10, 30));
+            reversal.setDescription("REVERSAL of " + ENTRY_ID + " - Reason: " + REASON);
+            reversal.setEntryNumber(REVERSAL_ENTRY_NUMBER);
+            reversal.setPostedAt(Instant.parse("2026-07-16T09:00:00Z"));
+            return reversal;
+        }
+
+        private String reversalBody(LocalDate reversalDate) {
+            return objectMapper.writeValueAsString(JournalEntryReversalRequest.builder()
+                    .reason(REASON)
+                    .reversalDate(reversalDate)
+                    .build());
+        }
+
+        @Test
+        @DisplayName("Should reverse with reason only, passing a null reversalDate to the service")
+        void reverse_withoutDate_passesNullDateAndReturnsReversal() throws Exception {
+            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull()))
+                    .thenReturn(reversalEntry());
+
+            mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/reverse", ENTRY_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(reversalBody(null)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.journalEntryId").value(REVERSAL_ID.toString()))
+                    .andExpect(jsonPath("$.status").value("POSTED"))
+                    // The reversal entry carries its own posted-entry number (A2 field)
+                    .andExpect(jsonPath("$.entryNumber").value(REVERSAL_ENTRY_NUMBER));
+
+            verify(journalEntryService).reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull());
+        }
+
+        @Test
+        @DisplayName("Should pass an explicit reversalDate through to the service")
+        void reverse_withDate_passesDateThrough() throws Exception {
+            LocalDate reversalDate = LocalDate.of(2026, 7, 20);
+            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), eq(reversalDate)))
+                    .thenReturn(reversalEntry());
+
+            mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/reverse", ENTRY_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(reversalBody(reversalDate)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.entryNumber").value(REVERSAL_ENTRY_NUMBER));
+
+            ArgumentCaptor<LocalDate> dateCaptor = ArgumentCaptor.forClass(LocalDate.class);
+            verify(journalEntryService).reverseJournalEntry(eq(ENTRY_ID), eq(REASON), dateCaptor.capture());
+            assertThat(dateCaptor.getValue()).isEqualTo(reversalDate);
+        }
+
+        @Test
+        @DisplayName("Should map an already-reversed entry to 409 JE_ALREADY_REVERSED")
+        void reverse_alreadyReversed_returns409AlreadyReversed() throws Exception {
+            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull()))
+                    .thenThrow(new JournalEntryNotReversibleException(ENTRY_ID, JournalEntryStatus.REVERSED));
+
+            mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/reverse", ENTRY_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(reversalBody(null)))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("JE_ALREADY_REVERSED"))
+                    .andExpect(jsonPath("$.status").value(409))
+                    .andExpect(jsonPath("$.correlationId").exists());
+        }
+
+        @Test
+        @DisplayName("Should map a not-yet-posted entry to 409 JE_NOT_POSTED")
+        void reverse_draftEntry_returns409NotPosted() throws Exception {
+            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull()))
+                    .thenThrow(new JournalEntryNotReversibleException(ENTRY_ID, JournalEntryStatus.DRAFT));
+
+            mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/reverse", ENTRY_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(reversalBody(null)))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("JE_NOT_POSTED"))
+                    .andExpect(jsonPath("$.status").value(409));
+        }
+
+        @Test
+        @DisplayName("Should map a closed-period reversal date to 422 PERIOD_CLOSED")
+        void reverse_closedPeriodDate_returns422PeriodClosed() throws Exception {
+            LocalDate reversalDate = LocalDate.of(2026, 1, 15);
+            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), eq(reversalDate)))
+                    .thenThrow(new AccountingPeriodClosedException(
+                            "2026-01", "Accounting period 2026-01 is CLOSED for reversal date 2026-01-15"));
+
+            mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/reverse", ENTRY_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(reversalBody(reversalDate)))
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.code").value("PERIOD_CLOSED"))
+                    .andExpect(jsonPath("$.status").value(422))
+                    .andExpect(jsonPath("$.correlationId").exists());
         }
     }
 

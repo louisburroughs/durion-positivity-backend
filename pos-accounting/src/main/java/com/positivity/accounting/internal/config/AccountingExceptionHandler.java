@@ -3,9 +3,12 @@ package com.positivity.accounting.internal.config;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
+import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
+import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -80,6 +83,28 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleDuplicateAccountCode(
             DuplicateAccountCodeException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "DUPLICATE_ACCOUNT_CODE", ex.getMessage(), request);
+    }
+
+    /**
+     * Reversal state conflicts (story A3, issue #943): double reversal —
+     * including a lost concurrent-reversal race — maps to JE_ALREADY_REVERSED,
+     * reversing a DRAFT/PENDING entry to JE_NOT_POSTED; both 409.
+     */
+    @ExceptionHandler(JournalEntryNotReversibleException.class)
+    public ResponseEntity<ApiError> handleNotReversible(
+            JournalEntryNotReversibleException ex, HttpServletRequest request) {
+        String code = ex.getCurrentStatus() == JournalEntryStatus.REVERSED ? "JE_ALREADY_REVERSED" : "JE_NOT_POSTED";
+        return build(HttpStatus.CONFLICT, code, ex.getMessage(), request);
+    }
+
+    /**
+     * Operation dated into a CLOSED accounting period (AD-012); first used by
+     * reversal-date validation (story A3), extended to all posting paths in
+     * story B2.
+     */
+    @ExceptionHandler(AccountingPeriodClosedException.class)
+    public ResponseEntity<ApiError> handlePeriodClosed(AccountingPeriodClosedException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "PERIOD_CLOSED", ex.getMessage(), request);
     }
 
     @ExceptionHandler(AccountingPeriodNotFoundException.class)

@@ -9,8 +9,11 @@ import com.positivity.accounting.internal.dto.PagedResponse;
 import com.positivity.accounting.internal.service.SortParamParser;
 import com.positivity.accounting.service.JournalEntryService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -226,16 +229,50 @@ public class JournalEntryController {
     @PreAuthorize("hasAuthority('accounting:je:reverse')")
     @Operation(
             summary = "Reverse journal entry",
-            description = "Reverse a posted journal entry.",
+            operationId = "reverseJournalEntry",
+            description = "Reverses a POSTED journal entry by creating and immediately posting an inverse entry"
+                    + " (debits and credits swapped) with its own entryNumber, and transitioning the original"
+                    + " POSTED → REVERSED. Use this tool to back out an incorrect posted entry; do NOT use it"
+                    + " on DRAFT entries — delete or edit those instead."
+                    + " Preconditions: the entry must exist and be in POSTED status."
+                    + " Required input: a non-blank reason, recorded on the reversal entry and in the audit"
+                    + " trail. Optional input: reversalDate — when omitted, it defaults to the original entry's"
+                    + " transaction date if that period is OPEN, otherwise to today; the resolved date must fall"
+                    + " in an OPEN accounting period."
+                    + " Emits ACCOUNTING_JOURNAL_ENTRY_REVERSE and returns the reversal entry."
+                    + " Returns 409 JE_ALREADY_REVERSED if the entry was already reversed (including a lost"
+                    + " concurrent-reversal race), 409 JE_NOT_POSTED if it is DRAFT/PENDING, and 422"
+                    + " PERIOD_CLOSED if the reversal date falls in a CLOSED period — pick an open-period date"
+                    + " or reopen the period before retrying.",
             tags = {"Journal Entries"})
-    @ApiResponse(responseCode = "200", description = "Journal entry reversed")
-    @ApiResponse(responseCode = "404", description = "Journal entry not found")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Journal entry reversed; the posted reversal entry is returned",
+            content = @Content(schema = @Schema(implementation = JournalEntryResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Reason is missing or blank (ARGUMENT_NOT_VALID), or no journal entry exists for the"
+                    + " identifier (VALIDATION_ERROR)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks the accounting:je:reverse permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Entry is already reversed (JE_ALREADY_REVERSED) or not yet posted (JE_NOT_POSTED)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Resolved reversal date falls in a CLOSED accounting period (PERIOD_CLOSED)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_REVERSE", apiVersion = "1")
     public ResponseEntity<JournalEntryResponse> reverseJournalEntry(
             @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,
             @Valid @RequestBody JournalEntryReversalRequest request) {
-
-        var reversed = journalEntryService.reverseJournalEntry(journalEntryId, request.getReason());
+        log.info("Reversing journal entry: {}", journalEntryId);
+        var reversed =
+                journalEntryService.reverseJournalEntry(journalEntryId, request.getReason(), request.getReversalDate());
         return ResponseEntity.ok(JournalEntryMapper.toResponse(reversed));
     }
 }
