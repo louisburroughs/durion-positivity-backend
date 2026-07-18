@@ -94,6 +94,11 @@ public class GLAccountServiceImpl implements GLAccountService {
         account.setAccountCode(request.getAccountCode());
         account.setAccountName(request.getAccountName());
         account.setAccountType(request.getAccountType());
+        account.setAccountSubtype(request.getAccountSubtype());
+        // Entity default is false; only override when the client sent a value
+        if (request.getReconcilable() != null) {
+            account.setReconcilable(request.getReconcilable());
+        }
         account.setDescription(request.getDescription());
         account.setParentAccountId(request.getParentAccountId());
 
@@ -136,7 +141,7 @@ public class GLAccountServiceImpl implements GLAccountService {
     }
 
     /**
-     * Updates GL account properties (name, description).
+     * Updates GL account properties (name, description, subtype, reconcilable).
      * Account type and code are immutable after creation.
      *
      * @param glAccountId account identifier
@@ -158,6 +163,12 @@ public class GLAccountServiceImpl implements GLAccountService {
         }
         if (request.getDescription() != null) {
             account.setDescription(request.getDescription());
+        }
+        if (request.getAccountSubtype() != null) {
+            account.setAccountSubtype(request.getAccountSubtype());
+        }
+        if (request.getReconcilable() != null) {
+            account.setReconcilable(request.getReconcilable());
         }
 
         account.setModifiedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM));
@@ -430,6 +441,8 @@ public class GLAccountServiceImpl implements GLAccountService {
         response.setAccountCode(account.getAccountCode());
         response.setAccountName(account.getAccountName());
         response.setAccountType(account.getAccountType());
+        response.setAccountSubtype(account.getAccountSubtype());
+        response.setReconcilable(account.isReconcilable());
         response.setDescription(account.getDescription());
         response.setParentAccountId(account.getParentAccountId());
         response.setActivationDate(account.getActivationDate());

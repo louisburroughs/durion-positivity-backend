@@ -44,6 +44,7 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
     private final DefaultGLMappingRepository repository;
     private final GLAccountRepository glAccountRepository;
     private final GLAccountService glAccountService;
+    private final GLMappingSubtypeValidator subtypeValidator;
 
     @Override
     @NonNull
@@ -52,6 +53,10 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
 
         // Validate GL accounts exist and are active
         validateGLAccounts(request.getDebitAccountId(), request.getCreditAccountId());
+
+        // Non-blocking plausibility check (Story H1): warn when a
+        // cash-receipt/settlement event type maps to an implausible account subtype.
+        checkSubtypePlausibility(request.getEventType(), request.getDebitAccountId(), request.getCreditAccountId());
 
         // Convert and save
         DefaultGLMapping mapping = DefaultGLMappingMapper.toEntity(request);
@@ -76,6 +81,10 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
 
         // Validate GL accounts
         validateGLAccounts(request.getDebitAccountId(), request.getCreditAccountId());
+
+        // Non-blocking plausibility check (Story H1): warn when a
+        // cash-receipt/settlement event type maps to an implausible account subtype.
+        checkSubtypePlausibility(request.getEventType(), request.getDebitAccountId(), request.getCreditAccountId());
 
         // Update entity
         DefaultGLMappingMapper.updateEntity(existing, request);
@@ -171,6 +180,21 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
         LocalDateTime now = LocalDateTime.now(clock);
         glAccountService.validateAccountForPosting(debitAccountId, now);
         glAccountService.validateAccountForPosting(creditAccountId, now);
+    }
+
+    /**
+     * Non-blocking subtype plausibility check for default mappings (Story H1).
+     * Resolves both mapped GL accounts and warns (log-only — the default-mapping
+     * response contract carries no warning field) when the event type is a
+     * cash-receipt/settlement code targeting an implausible account subtype.
+     */
+    private void checkSubtypePlausibility(String eventType, UUID debitAccountId, UUID creditAccountId) {
+        glAccountRepository
+                .findById(debitAccountId)
+                .ifPresent(account -> subtypeValidator.checkCashReceiptSubtype(eventType, account));
+        glAccountRepository
+                .findById(creditAccountId)
+                .ifPresent(account -> subtypeValidator.checkCashReceiptSubtype(eventType, account));
     }
 
     /**

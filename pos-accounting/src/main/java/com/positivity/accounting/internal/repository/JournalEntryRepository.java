@@ -35,6 +35,16 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
     List<JournalEntry> findByTransactionDateRange(LocalDateTime startDate, LocalDateTime endDate);
 
     /**
+     * Find journal entries with a given status dated inside a half-open
+     * transaction-date range [startDate, endDateExclusive). Used by the
+     * accounting-period close gate (DRAFT entries block close, story B1).
+     */
+    @Query(
+            "SELECT je FROM JournalEntry je WHERE je.status = :status AND je.transactionDate >= :startDate AND je.transactionDate < :endDateExclusive ORDER BY je.transactionDate ASC")
+    List<JournalEntry> findByStatusAndTransactionDateInRange(
+            JournalEntryStatus status, LocalDateTime startDate, LocalDateTime endDateExclusive);
+
+    /**
      * Find posted journal entries with pagination.
      */
     @Query("SELECT je FROM JournalEntry je WHERE je.status = 'POSTED' ORDER BY je.postedAt DESC")
