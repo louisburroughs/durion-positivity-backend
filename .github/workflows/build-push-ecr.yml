@@ -273,6 +273,8 @@ jobs:
     steps:
       - name: Write summary
         run: |
+          set -euo pipefail
+
           SHORT_SHA="${GITHUB_SHA::7}"
           IMAGE_TAG="sha-${SHORT_SHA}"
           SERVICE_COUNT="$(jq 'length' <<< '${{ needs.detect-services.outputs.services }}')"
