@@ -86,7 +86,14 @@ import tools.jackson.databind.ObjectMapper;
  * condition split their shared amountField proportionally; shares are rounded
  * HALF_UP to 2 decimal places and the rounding residual is placed on the line
  * with the largest absolute raw share (first in rule order on ties), so the
- * group always sums exactly to the source amount. Full schema:
+ * group always sums exactly to the source amount.
+ *
+ * E2 additions (issue #946): {@code "condition"} strings are parsed by
+ * {@link PredicateParser} — a strict whitelist grammar over
+ * {@code eventType} / {@code payload.<path>} clauses with
+ * {@code == != > >= < <=} and {@code &&} conjunction. Catch-all forms
+ * (absent/blank/{@code "*"}) and pre-E2 {@code eventType == '<value>'}
+ * predicates behave exactly as before. Full schema:
  * durion {@code domains/accounting/.business-rules/POSTING_RULES_SCHEMA.md}.
  */
 @Slf4j
@@ -716,41 +723,34 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             @Nullable String splitGroup) {}
 
     /**
-     * Checks whether an event matches a simple condition expression.
+     * Checks whether an event matches a condition expression (story E2,
+     * issue #946 — whitelist predicate grammar).
      * Supports:
-     * - null/blank condition → always matches (default/catch-all rule)
-     * - "eventType == 'value'" → exact eventType matching
-     * - "*" → wildcard, always matches
+     * - null/blank condition or "*" → always matches (default/catch-all rule)
+     * - the {@link PredicateParser} grammar: {@code eventType} /
+     * {@code payload.<path>} clauses with {@code == != > >= < <=} and
+     * {@code &&} conjunction (e.g. {@code eventType == 'billing.invoicePosted'},
+     * {@code payload.paymentMethod == 'CASH'},
+     * {@code payload.amount >= 100.00 && eventType == 'PAYMENT_RECEIVED'})
+     *
+     * <p>Publish-time validation guarantees that published conditions parse,
+     * so the defensive catch below only fires for rules published before E2
+     * with unrecognized condition text — those are treated as non-matching
+     * with a WARN, exactly as before.
      */
     private boolean matchesCondition(String conditionExpr, AccountingEvent event) {
         if (conditionExpr == null || conditionExpr.isBlank() || "*".equals(conditionExpr.trim())) {
             return true; // Default/catch-all
         }
 
-        // Simple eventType equality: "eventType == 'billing.invoicePosted'"
-        if (conditionExpr.contains("eventType")) {
-            String value = extractQuotedValue(conditionExpr);
-            if (value != null) {
-                return value.equals(event.getEventType());
-            }
+        try {
+            PredicateParser.Predicate predicate = PredicateParser.parse(conditionExpr);
+            return predicate.matches(event.getEventType(), event.getPayload());
+        } catch (PredicateParser.ParseException e) {
+            // Unrecognized condition format — treat as non-matching for safety
+            log.warn("Unrecognized condition expression: '{}' — skipping ({})", conditionExpr, e.getMessage());
+            return false;
         }
-
-        // Unrecognized condition format — treat as non-matching for safety
-        log.warn("Unrecognized condition expression: '{}' — skipping", conditionExpr);
-        return false;
-    }
-
-    /**
-     * Extracts a single-quoted value from a simple expression like
-     * "eventType == 'billing.invoicePosted'".
-     */
-    private String extractQuotedValue(String expression) {
-        int start = expression.indexOf('\'');
-        int end = expression.lastIndexOf('\'');
-        if (start >= 0 && end > start) {
-            return expression.substring(start + 1, end);
-        }
-        return null;
     }
 
     /**

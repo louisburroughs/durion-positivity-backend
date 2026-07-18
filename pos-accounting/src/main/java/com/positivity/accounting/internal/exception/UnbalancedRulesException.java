@@ -3,8 +3,9 @@ package com.positivity.accounting.internal.exception;
 import java.util.List;
 
 /**
- * Thrown when a posting rules definition fails split-group validation at
- * publish time (story E1, issue #945).
+ * Thrown when a posting rules definition fails publish-time validation:
+ * split-group invariants (story E1, issue #945) or condition-predicate
+ * grammar (story E2, issue #946).
  *
  * <p>Carries every violation found in the rules definition so the caller can
  * fix all problems in one pass. Maps to HTTP 422 with error code
@@ -38,7 +39,7 @@ public class UnbalancedRulesException extends RuntimeException {
     }
 
     private static String buildMessage(List<RuleViolation> violations) {
-        StringBuilder sb = new StringBuilder("Cannot publish: posting rules definition violates split-group ")
+        StringBuilder sb = new StringBuilder("Cannot publish: posting rules definition violates publish-time ")
                 .append("invariants (")
                 .append(violations.size())
                 .append(violations.size() == 1 ? " violation): " : " violations): ");

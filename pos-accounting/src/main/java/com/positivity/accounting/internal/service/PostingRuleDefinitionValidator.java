@@ -13,8 +13,18 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Publish-time validation of a posting rules definition's split-group
- * invariants (story E1, issue #945).
+ * Publish-time validation of a posting rules definition: split-group
+ * invariants (story E1, issue #945) and condition-predicate grammar
+ * (story E2, issue #946).
+ *
+ * <p>Condition predicates: every {@code conditions[].condition} string must
+ * either be a catch-all form (absent / {@code null} / blank / {@code "*"})
+ * or parse under the {@link PredicateParser} whitelist grammar. A condition
+ * that fails to parse — malformed syntax, trailing garbage, unbalanced
+ * quotes, an unknown identifier, or an ordering operator
+ * ({@code > >= < <=}) applied to a string literal — is reported as a
+ * violation located at {@code conditions[i].condition}. Malformed
+ * predicates therefore fail at publish time, never at evaluation time.
  *
  * <p>Split-group semantics (see the accounting domain
  * {@code POSTING_RULES_SCHEMA.md}): lines within one condition that carry the
@@ -49,13 +59,14 @@ public final class PostingRuleDefinitionValidator {
     private PostingRuleDefinitionValidator() {}
 
     /**
-     * Validates the split-group invariants of a rules definition prior to
-     * publishing.
+     * Validates the split-group invariants (E1) and condition-predicate
+     * grammar (E2) of a rules definition prior to publishing.
      *
      * @param rulesDefinition the raw rules definition JSON (non-blank; the
      *                        caller enforces the non-empty guard)
      * @throws IllegalArgumentException if the definition is not valid JSON
-     * @throws UnbalancedRulesException if any split-group invariant is violated
+     * @throws UnbalancedRulesException if any split-group or condition
+     *                                  predicate invariant is violated
      */
     public static void validateForPublish(@NonNull String rulesDefinition) {
         JsonNode root;
@@ -83,6 +94,8 @@ public final class PostingRuleDefinitionValidator {
     }
 
     private static void validateCondition(JsonNode conditionBlock, int conditionIndex, List<RuleViolation> violations) {
+        validateConditionPredicate(conditionBlock.get("condition"), conditionIndex, violations);
+
         JsonNode linesNode = conditionBlock.get("lines");
         if (linesNode == null || !linesNode.isArray()) {
             return;
@@ -196,6 +209,37 @@ public final class PostingRuleDefinitionValidator {
                                 + "(lines " + memberIndexes(members) + " sum to "
                                 + sum.stripTrailingZeros().toPlainString() + ")"));
             }
+        }
+    }
+
+    /**
+     * Validates one condition's predicate string (story E2, issue #946):
+     * catch-all forms (absent / null / blank / {@code "*"}) are always
+     * valid; anything else must parse under the {@link PredicateParser}
+     * whitelist grammar.
+     */
+    private static void validateConditionPredicate(
+            @Nullable JsonNode conditionNode, int conditionIndex, List<RuleViolation> violations) {
+        String conditionField = "conditions[" + conditionIndex + "].condition";
+
+        if (conditionNode == null || conditionNode.isNull()) {
+            return; // absent condition → catch-all
+        }
+        if (!conditionNode.isString()) {
+            violations.add(new RuleViolation(
+                    conditionField, "condition must be a string predicate (or absent for a catch-all rule)"));
+            return;
+        }
+
+        String expression = conditionNode.asString();
+        if (expression.isBlank() || "*".equals(expression.trim())) {
+            return; // blank / wildcard → catch-all
+        }
+
+        try {
+            PredicateParser.parse(expression);
+        } catch (PredicateParser.ParseException e) {
+            violations.add(new RuleViolation(conditionField, "condition predicate is invalid: " + e.getMessage()));
         }
     }
 

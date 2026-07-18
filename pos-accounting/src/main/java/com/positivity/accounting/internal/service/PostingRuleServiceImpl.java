@@ -247,9 +247,10 @@ public class PostingRuleServiceImpl implements PostingRuleService {
             throw new IllegalArgumentException("Cannot publish: rules definition is empty");
         }
 
-        // E1 (issue #945): split-group invariants are enforced at publish time
-        // only — drafts may hold work-in-progress definitions. Violations map
-        // to 422 UNBALANCED_RULES listing every offending group/line.
+        // E1 (issue #945) split-group invariants and E2 (issue #946)
+        // condition-predicate grammar are enforced at publish time only —
+        // drafts may hold work-in-progress definitions. Violations map to
+        // 422 UNBALANCED_RULES listing every offending condition/group/line.
         PostingRuleDefinitionValidator.validateForPublish(version.getRulesDefinition());
 
         // Archive any existing PUBLISHED version
