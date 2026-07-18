@@ -420,7 +420,7 @@ public final class GatewayPermissionCatalog {
         "PERM_accounting:period:reopen", // 380
         "PERM_accounting:period:view", // 381
 
-        // ── New batch (bits 382–382) ──────────────────────────────────────────
+        // ── New batch (bits 382–383) ──────────────────────────────────────────
         "PERM_accounting:period:hard_lock", // 382
         "PERM_accounting:period:override" // 383
     };

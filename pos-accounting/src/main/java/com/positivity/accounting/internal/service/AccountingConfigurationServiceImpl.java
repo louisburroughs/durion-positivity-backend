@@ -55,8 +55,14 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
             throw new IllegalArgumentException("A non-blank justification is required to set the hard-lock date");
         }
 
-        AccountingConfiguration config =
-                configurationRepository.findByConfigKey(HARD_LOCK_DATE_KEY).orElse(null);
+        // Locked read (FOR UPDATE): concurrent setters serialize on the row so
+        // the monotonic-forward check below always sees the latest committed
+        // date — an unlocked read-check-save would let a slower writer with an
+        // earlier date regress the hard lock (last-writer-wins). The getter
+        // stays on the unlocked finder.
+        AccountingConfiguration config = configurationRepository
+                .findWithLockByConfigKey(HARD_LOCK_DATE_KEY)
+                .orElse(null);
         LocalDate currentDate = config != null ? LocalDate.parse(config.getConfigValue()) : null;
 
         if (currentDate != null && hardLockDate.isBefore(currentDate)) {

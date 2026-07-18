@@ -20,6 +20,8 @@ import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
+import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
+import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 import com.positivity.accounting.internal.service.AccountingPeriodGate;
@@ -29,6 +31,7 @@ import com.positivity.accounting.internal.service.PostingEngineOrchestrator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -790,6 +793,76 @@ class PostingEngineOrchestratorTest {
             assertThat(testEvent.getErrorMessage()).isNull();
             assertThat(testEvent.getFinalPostingReferenceId()).isEqualTo(testJournalEntryId.toString());
             verify(idempotencyService).registerKey(anyString(), eq(testEventId));
+        }
+
+        @Test
+        @DisplayName("mid-flight period close (gate throws during posting) suspends with PERIOD_CLOSED, not FAILED")
+        void midFlightPeriodClose_suspendsWithPeriodClosed() {
+            // Given - the pre-check passes (period still open) but the period
+            // closes before the gated postJournalEntry call, which throws.
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(PostingResult.success(testJournalEntry, testMappingVersion));
+
+            JournalEntry createdEntry = new JournalEntry();
+            createdEntry.setJournalEntryId(testJournalEntryId);
+            when(journalEntryService.createJournalEntry(any())).thenReturn(createdEntry);
+            when(journalEntryService.postJournalEntry(testJournalEntryId))
+                    .thenThrow(new AccountingPeriodClosedException(
+                            "2024-01", "Transaction date falls in CLOSED accounting period 2024-01"));
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, true);
+
+            // Then - labeled like the pre-check path, not INTERNAL_ERROR/FAILED
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.PERIOD_CLOSED);
+            assertThat(result.getFailureDetails()).contains("reprocess after the period is reopened");
+
+            verify(accountingEventRepository).save(eventCaptor.capture());
+            AccountingEvent savedEvent = eventCaptor.getValue();
+            assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+            assertThat(savedEvent.getFailureReasonCode()).isEqualTo("PERIOD_CLOSED");
+            assertThat(savedEvent.getFailureDetails()).contains("2024-01");
+
+            verify(reprocessingAttemptHistoryRepository).save(attemptHistoryCaptor.capture());
+            assertThat(attemptHistoryCaptor.getValue().getOutcome()).isEqualTo(ReprocessingOutcome.FAILURE);
+
+            verify(idempotencyService, never()).registerKey(anyString(), any());
+        }
+
+        @Test
+        @DisplayName("mid-flight hard-lock advance (gate throws during posting) suspends with PERIOD_CLOSED")
+        void midFlightHardLock_suspendsWithPeriodClosed() {
+            // Given
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(PostingResult.success(testJournalEntry, testMappingVersion));
+
+            JournalEntry createdEntry = new JournalEntry();
+            createdEntry.setJournalEntryId(testJournalEntryId);
+            when(journalEntryService.createJournalEntry(any())).thenReturn(createdEntry);
+            when(journalEntryService.postJournalEntry(testJournalEntryId))
+                    .thenThrow(new AccountingPeriodHardLockedException(
+                            LocalDate.of(2024, 2, 1), "Transaction date is before the hard-lock date 2024-02-01"));
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, true);
+
+            // Then
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.PERIOD_CLOSED);
+
+            verify(accountingEventRepository).save(eventCaptor.capture());
+            AccountingEvent savedEvent = eventCaptor.getValue();
+            assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+            assertThat(savedEvent.getFailureReasonCode()).isEqualTo("PERIOD_CLOSED");
         }
     }
 }

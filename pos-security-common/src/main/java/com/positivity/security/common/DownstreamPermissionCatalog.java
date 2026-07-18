@@ -442,13 +442,13 @@ public final class DownstreamPermissionCatalog {
         "PERM_warranty:part-return:manage", // 378
 
         // ── New batch (bits 379–381) ──────────────────────────────────────────
-        "PERM_accounting:period:close",                      // 379
-        "PERM_accounting:period:reopen",                     // 380
-        "PERM_accounting:period:view",                       // 381
+        "PERM_accounting:period:close", // 379
+        "PERM_accounting:period:reopen", // 380
+        "PERM_accounting:period:view", // 381
 
-        // ── New batch (bits 382–382) ──────────────────────────────────────────
-        "PERM_accounting:period:hard_lock",                 // 382
-        "PERM_accounting:period:override"                   // 383
+        // ── New batch (bits 382–383) ──────────────────────────────────────────
+        "PERM_accounting:period:hard_lock", // 382
+        "PERM_accounting:period:override" // 383
     };
 
     public static String authorityForBit(int bitIndex) {

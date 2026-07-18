@@ -13,14 +13,17 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
+import com.positivity.accounting.internal.entity.AccountingPeriod;
 import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.event.JournalEntryReversed;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
+import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.service.AccountingPeriodGate;
@@ -80,6 +83,9 @@ class JournalEntryServiceTest {
     private AccountingPeriodService accountingPeriodService;
 
     @Mock
+    private AccountingPeriodRepository periodRepository;
+
+    @Mock
     private AccountingConfigurationService configurationService;
 
     @Mock
@@ -98,12 +104,14 @@ class JournalEntryServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Real period gate (B2) wired against the mocked period/config
-        // services, so the closed-period expectations below exercise the
-        // production gate logic instead of a stubbed gate.
+        // Real period gate (B2) wired against the mocked period repository /
+        // config service, so the closed-period expectations below exercise
+        // the production gate logic instead of a stubbed gate. The gate's
+        // locked finder defaults to Optional.empty() (missing row = OPEN);
+        // closed-period tests stub findWithLockByPeriodCode explicitly.
         lenient().when(configurationService.getHardLockDate()).thenReturn(Optional.empty());
-        AccountingPeriodGate accountingPeriodGate =
-                new AccountingPeriodGate(accountingPeriodService, configurationService, auditLogRepository);
+        AccountingPeriodGate accountingPeriodGate = new AccountingPeriodGate(
+                accountingPeriodService, periodRepository, configurationService, auditLogRepository);
         service = new JournalEntryServiceImpl(
                 clock,
                 journalEntryRepository,
@@ -366,8 +374,8 @@ class JournalEntryServiceTest {
         when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(entry));
         doNothing().when(glAccountService).validateAccountForPosting(any(UUID.class), any(LocalDateTime.class));
         when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        // Period gate (B2): the transaction month is open
-        when(accountingPeriodService.isPeriodOpen(any(LocalDate.class))).thenReturn(true);
+        // Period gate (B2): no stub needed — the gate's locked finder
+        // defaults to Optional.empty(), and a missing row counts as OPEN.
 
         // Sequence row for the entry's transaction month (2024-01, fixed clock)
         AccountingSequence sequence = new AccountingSequence();
@@ -553,7 +561,7 @@ class JournalEntryServiceTest {
         // Arrange
         arrangePostedOriginalForReversal();
         LocalDate explicitDate = LocalDate.of(2024, 1, 20);
-        when(accountingPeriodService.isPeriodOpen(explicitDate)).thenReturn(true);
+        // Gate: missing period row (locked finder default) counts as OPEN.
         arrangeReversalPersistence();
 
         // Act
@@ -570,7 +578,7 @@ class JournalEntryServiceTest {
         // Arrange
         arrangePostedOriginalForReversal();
         LocalDate explicitDate = LocalDate.of(2023, 6, 15);
-        when(accountingPeriodService.isPeriodOpen(explicitDate)).thenReturn(false);
+        when(periodRepository.findWithLockByPeriodCode("2023-06")).thenReturn(Optional.of(closedPeriod("2023-06")));
 
         // Act & Assert
         assertThatThrownBy(() -> service.reverseJournalEntry(testJournalEntryId, "CORRECTION", explicitDate))
@@ -587,7 +595,7 @@ class JournalEntryServiceTest {
         JournalEntry original = arrangePostedOriginalForReversal();
         original.setTransactionDate(LocalDateTime.of(2023, 11, 15, 10, 30));
         when(accountingPeriodService.isPeriodOpen(LocalDate.of(2023, 11, 15))).thenReturn(false);
-        when(accountingPeriodService.isPeriodOpen(LocalDate.now(TEST_CLOCK))).thenReturn(true);
+        // Gate: current month has no period row (locked finder default = OPEN).
         arrangeReversalPersistence();
 
         // Act
@@ -605,7 +613,10 @@ class JournalEntryServiceTest {
         // Arrange
         JournalEntry original = arrangePostedOriginalForReversal();
         original.setTransactionDate(LocalDateTime.of(2023, 11, 15, 10, 30));
+        // Date resolution: the original's month is closed, so it falls to now.
         when(accountingPeriodService.isPeriodOpen(any(LocalDate.class))).thenReturn(false);
+        // Gate: the current (fixed clock 2024-01) month is CLOSED too.
+        when(periodRepository.findWithLockByPeriodCode("2024-01")).thenReturn(Optional.of(closedPeriod("2024-01")));
 
         // Act & Assert
         assertThatThrownBy(() -> service.reverseJournalEntry(testJournalEntryId, "CORRECTION", null))
@@ -707,6 +718,13 @@ class JournalEntryServiceTest {
     }
 
     // ===== HELPER METHODS =====
+
+    private static AccountingPeriod closedPeriod(String periodCode) {
+        AccountingPeriod period = new AccountingPeriod();
+        period.setPeriodCode(periodCode);
+        period.setStatus(AccountingPeriodStatus.CLOSED);
+        return period;
+    }
 
     private JournalEntry createBalancedEntry() {
         JournalEntry entry = new JournalEntry();

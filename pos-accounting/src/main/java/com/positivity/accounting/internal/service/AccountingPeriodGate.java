@@ -1,9 +1,11 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
+import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
+import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.service.AccountingConfigurationService;
 import com.positivity.accounting.service.AccountingPeriodService;
 import com.positivity.security.common.SecurityContextHelper;
@@ -16,6 +18,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The single period-enforcement gate for all posting paths (story B2,
@@ -44,6 +48,19 @@ import org.springframework.stereotype.Component;
  *
  * <p>The audit row joins the caller's posting transaction, so a posting that
  * subsequently fails rolls its override audit row back with it.
+ *
+ * <p><b>Concurrency vs. {@code closePeriod}:</b> the closed/hard-lock
+ * evaluation in {@link #assertPostingAllowed} reads the period row with a
+ * pessimistic lock ({@code SELECT ... FOR UPDATE}), so a concurrent
+ * {@code closePeriod} — which updates that same row — serializes against the
+ * in-flight gated posting instead of closing the period between the gate
+ * check and the posting's commit. The lock is held to the end of the posting
+ * transaction (hence {@code Propagation.MANDATORY}); the read-only
+ * {@code isPeriodOpen} API and the engine's advisory
+ * {@link #isPostingBlocked} pre-check stay unlocked. A missing period row
+ * still counts as OPEN — there is nothing to lock, and provisioning races are
+ * covered by the provisioner's REQUIRES_NEW insert plus the unique
+ * constraint on the period code.
  */
 @Slf4j
 @Component
@@ -59,6 +76,7 @@ public class AccountingPeriodGate {
     private static final String AUDIT_ENTITY_TYPE_JOURNAL_ENTRY = "JOURNAL_ENTRY";
 
     private final AccountingPeriodService accountingPeriodService;
+    private final AccountingPeriodRepository periodRepository;
     private final AccountingConfigurationService configurationService;
     private final AccountingAuditLogRepository auditLogRepository;
 
@@ -78,15 +96,26 @@ public class AccountingPeriodGate {
      * @throws AccountingPeriodClosedException if the date's period is CLOSED
      *         and no valid override applies (422: PERIOD_CLOSED)
      */
+    @Transactional(propagation = Propagation.MANDATORY)
     public void assertPostingAllowed(
             @NonNull LocalDate transactionDate, @NonNull UUID journalEntryId, @Nullable String overrideJustification) {
         assertNotHardLocked(transactionDate);
 
-        if (accountingPeriodService.isPeriodOpen(transactionDate)) {
+        String periodCode = YearMonth.from(transactionDate).toString();
+
+        // Locked read (FOR UPDATE): holding the period row until the posting
+        // transaction ends closes the gate-vs-close window — a concurrent
+        // closePeriod updates this row and must wait for the in-flight
+        // posting (or, having committed first, is seen here as CLOSED). A
+        // missing row counts as OPEN; there is nothing to lock.
+        boolean periodOpen = periodRepository
+                .findWithLockByPeriodCode(periodCode)
+                .map(period -> period.getStatus() == AccountingPeriodStatus.OPEN)
+                .orElse(true);
+        if (periodOpen) {
             return;
         }
 
-        String periodCode = YearMonth.from(transactionDate).toString();
         if (overrideJustification == null || overrideJustification.isBlank()) {
             throw new AccountingPeriodClosedException(
                     periodCode,

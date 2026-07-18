@@ -41,7 +41,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * {@code accounting_sequence} row lock ({@code SELECT ... FOR UPDATE},
  * {@code AccountingSequenceRepository.findByScopeKey}) serializes assignment.
  * H2 cannot prove this — its locking model differs — so this runs the full
- * Flyway chain (V1..V13 + repeatable seed) on a Testcontainers Postgres with
+ * Flyway chain (V1..V15 + repeatable seed) on a Testcontainers Postgres with
  * the real service stack wired to it.
  *
  * <p>Also smoke-tests the PostgreSQL-only gap-detection query

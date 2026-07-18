@@ -1143,7 +1143,7 @@ class SecurityGatewayConfigTest {
 
     @Test
     @DisplayName("CATALOG_VERSION is 23")
-    void catalogVersionIsTwenty() {
+    void catalogVersionMatchesCurrent() {
         assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(23);
     }
 

@@ -495,7 +495,6 @@ public enum PermissionCode {
     ACCOUNTING__PERIOD__CLOSE(379, "accounting:period:close"),
     ACCOUNTING__PERIOD__REOPEN(380, "accounting:period:reopen"),
     ACCOUNTING__PERIOD__VIEW(381, "accounting:period:view"),
-    // ── Accounting (new) ───────────────────────────────────────────────────────
     ACCOUNTING__PERIOD__HARD_LOCK(382, "accounting:period:hard_lock"),
     ACCOUNTING__PERIOD__OVERRIDE(383, "accounting:period:override");
 

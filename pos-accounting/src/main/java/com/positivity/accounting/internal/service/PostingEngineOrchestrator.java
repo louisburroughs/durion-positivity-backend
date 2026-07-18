@@ -10,6 +10,8 @@ import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
+import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
+import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 import com.positivity.accounting.service.IdempotencyService;
@@ -235,6 +237,28 @@ public class PostingEngineOrchestrator {
                     .evaluationDetails(detailsWithRef)
                     .build();
 
+        } catch (AccountingPeriodClosedException | AccountingPeriodHardLockedException e) {
+            // A period closed (or the hard lock advanced) mid-flight, between
+            // the step-2 pre-check and the gated posting itself. Label it the
+            // same way as the pre-check path — SUSPENDED / PERIOD_CLOSED —
+            // so the first pass reads correctly and the remedy
+            // (reopen-then-reprocess) is evident, instead of a misleading
+            // FAILED / INTERNAL_ERROR.
+            String details = "Posting blocked by the period gate: " + e.getMessage()
+                    + "; event suspended — reprocess after the period is reopened";
+            log.warn("Suspending event {}: {}", event.getEventId(), details);
+
+            event.setStatus(AccountingEventStatus.SUSPENDED);
+            event.setFailureReasonCode(PostingFailureReason.PERIOD_CLOSED.name());
+            event.setFailureDetails(details);
+
+            attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
+            attemptHistory.setOutcomeDetails(details);
+
+            accountingEventRepository.save(event);
+            reprocessingAttemptHistoryRepository.save(attemptHistory);
+
+            return PostingResult.failure(PostingFailureReason.PERIOD_CLOSED, details);
         } catch (Exception e) {
             log.error("Error processing event {} through posting engine", event.getEventId(), e);
 
