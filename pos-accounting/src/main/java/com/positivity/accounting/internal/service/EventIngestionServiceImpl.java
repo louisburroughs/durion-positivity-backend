@@ -14,6 +14,7 @@ import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.service.EventIngestionService;
@@ -535,11 +536,16 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
         int processedCount = 0;
 
-        // Query all FAILED and SUSPENDED events that haven't exceeded max retries
+        // Query all FAILED and SUSPENDED events that haven't exceeded max
+        // retries. Events suspended with PERIOD_CLOSED (story B2, issue #944)
+        // are skipped: a closed accounting period will not reopen on the
+        // retry cadence, so retrying only burns attempts. They stay eligible
+        // for manual reprocessing after the period is reopened.
         List<AccountingEvent> failedEvents = accountingEventRepository.findAll().stream()
                 .filter(event -> (event.getStatus() == AccountingEventStatus.FAILED
                                 || event.getStatus() == AccountingEventStatus.SUSPENDED)
-                        && (event.getAttemptCount() == null || event.getAttemptCount() < maxRetries))
+                        && (event.getAttemptCount() == null || event.getAttemptCount() < maxRetries)
+                        && !PostingFailureReason.PERIOD_CLOSED.name().equals(event.getFailureReasonCode()))
                 .toList();
 
         log.info("Found {} eligible failed/suspended events for retry", failedEvents.size());

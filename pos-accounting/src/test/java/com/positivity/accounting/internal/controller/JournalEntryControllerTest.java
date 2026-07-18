@@ -13,10 +13,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryPostRequest;
 import com.positivity.accounting.internal.dto.JournalEntryReversalRequest;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
+import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.service.JournalEntryService;
 import java.math.BigDecimal;
@@ -109,15 +111,87 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
     @DisplayName("POST /v1/accounting/journal-entries/{id}/post")
     class PostJournalEntry {
 
+        private static final String OVERRIDE_JUSTIFICATION = "Auditor-approved late accrual for June close";
+
+        private String postBody(String overrideJustification) {
+            return objectMapper.writeValueAsString(JournalEntryPostRequest.builder()
+                    .overrideJustification(overrideJustification)
+                    .build());
+        }
+
         @Test
-        @DisplayName("Should return the assigned entryNumber in the post response")
+        @DisplayName("Should post without a body, passing a null overrideJustification to the service")
         void postResponse_containsEntryNumber() throws Exception {
-            when(journalEntryService.postJournalEntry(ENTRY_ID)).thenReturn(postedEntry());
+            when(journalEntryService.postJournalEntry(eq(ENTRY_ID), isNull())).thenReturn(postedEntry());
 
             mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/post", ENTRY_ID)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("POSTED"))
                     .andExpect(jsonPath("$.entryNumber").value(ENTRY_NUMBER));
+
+            verify(journalEntryService).postJournalEntry(eq(ENTRY_ID), isNull());
+        }
+
+        @Test
+        @DisplayName("Should pass a null overrideJustification for an empty JSON body")
+        void post_emptyJsonBody_passesNullOverride() throws Exception {
+            when(journalEntryService.postJournalEntry(eq(ENTRY_ID), isNull())).thenReturn(postedEntry());
+
+            mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/post", ENTRY_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.entryNumber").value(ENTRY_NUMBER));
+
+            verify(journalEntryService).postJournalEntry(eq(ENTRY_ID), isNull());
+        }
+
+        @Test
+        @DisplayName("Should pass the overrideJustification through to the service")
+        void post_withOverrideJustification_passesItThrough() throws Exception {
+            when(journalEntryService.postJournalEntry(eq(ENTRY_ID), eq(OVERRIDE_JUSTIFICATION)))
+                    .thenReturn(postedEntry());
+
+            mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/post", ENTRY_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(postBody(OVERRIDE_JUSTIFICATION)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("POSTED"));
+
+            ArgumentCaptor<String> justificationCaptor = ArgumentCaptor.forClass(String.class);
+            verify(journalEntryService).postJournalEntry(eq(ENTRY_ID), justificationCaptor.capture());
+            assertThat(justificationCaptor.getValue()).isEqualTo(OVERRIDE_JUSTIFICATION);
+        }
+
+        @Test
+        @DisplayName("Should map a closed-period post without valid override to 422 PERIOD_CLOSED")
+        void post_closedPeriod_returns422PeriodClosed() throws Exception {
+            when(journalEntryService.postJournalEntry(eq(ENTRY_ID), isNull()))
+                    .thenThrow(new AccountingPeriodClosedException(
+                            "2026-06", "Accounting period 2026-06 is CLOSED for transaction date 2026-06-15"));
+
+            mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/post", ENTRY_ID)))
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.code").value("PERIOD_CLOSED"))
+                    .andExpect(jsonPath("$.status").value(422))
+                    .andExpect(jsonPath("$.correlationId").exists());
+        }
+
+        @Test
+        @DisplayName("Should map a hard-locked post to 422 PERIOD_HARD_LOCKED even with an override")
+        void post_hardLockedDate_returns422PeriodHardLocked() throws Exception {
+            when(journalEntryService.postJournalEntry(eq(ENTRY_ID), eq(OVERRIDE_JUSTIFICATION)))
+                    .thenThrow(new AccountingPeriodHardLockedException(
+                            LocalDate.of(2026, 6, 30),
+                            "Transaction date 2026-05-15 is before the hard-lock date 2026-06-30"));
+
+            mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/post", ENTRY_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(postBody(OVERRIDE_JUSTIFICATION)))
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.code").value("PERIOD_HARD_LOCKED"))
+                    .andExpect(jsonPath("$.status").value(422))
+                    .andExpect(jsonPath("$.correlationId").exists());
         }
     }
 
@@ -166,17 +240,24 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
             return reversal;
         }
 
+        private static final String OVERRIDE_JUSTIFICATION = "Auditor-approved correction of June posting";
+
         private String reversalBody(LocalDate reversalDate) {
+            return reversalBody(reversalDate, null);
+        }
+
+        private String reversalBody(LocalDate reversalDate, String overrideJustification) {
             return objectMapper.writeValueAsString(JournalEntryReversalRequest.builder()
                     .reason(REASON)
                     .reversalDate(reversalDate)
+                    .overrideJustification(overrideJustification)
                     .build());
         }
 
         @Test
-        @DisplayName("Should reverse with reason only, passing a null reversalDate to the service")
+        @DisplayName("Should reverse with reason only, passing null reversalDate and override to the service")
         void reverse_withoutDate_passesNullDateAndReturnsReversal() throws Exception {
-            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull()))
+            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull(), isNull()))
                     .thenReturn(reversalEntry());
 
             mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/reverse", ENTRY_ID))
@@ -188,14 +269,14 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
                     // The reversal entry carries its own posted-entry number (A2 field)
                     .andExpect(jsonPath("$.entryNumber").value(REVERSAL_ENTRY_NUMBER));
 
-            verify(journalEntryService).reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull());
+            verify(journalEntryService).reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull(), isNull());
         }
 
         @Test
         @DisplayName("Should pass an explicit reversalDate through to the service")
         void reverse_withDate_passesDateThrough() throws Exception {
             LocalDate reversalDate = LocalDate.of(2026, 7, 20);
-            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), eq(reversalDate)))
+            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), eq(reversalDate), isNull()))
                     .thenReturn(reversalEntry());
 
             mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/reverse", ENTRY_ID))
@@ -205,14 +286,34 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
                     .andExpect(jsonPath("$.entryNumber").value(REVERSAL_ENTRY_NUMBER));
 
             ArgumentCaptor<LocalDate> dateCaptor = ArgumentCaptor.forClass(LocalDate.class);
-            verify(journalEntryService).reverseJournalEntry(eq(ENTRY_ID), eq(REASON), dateCaptor.capture());
+            verify(journalEntryService).reverseJournalEntry(eq(ENTRY_ID), eq(REASON), dateCaptor.capture(), isNull());
             assertThat(dateCaptor.getValue()).isEqualTo(reversalDate);
+        }
+
+        @Test
+        @DisplayName("Should pass the overrideJustification through to the service")
+        void reverse_withOverrideJustification_passesItThrough() throws Exception {
+            LocalDate reversalDate = LocalDate.of(2026, 6, 15);
+            when(journalEntryService.reverseJournalEntry(
+                            eq(ENTRY_ID), eq(REASON), eq(reversalDate), eq(OVERRIDE_JUSTIFICATION)))
+                    .thenReturn(reversalEntry());
+
+            mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/reverse", ENTRY_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(reversalBody(reversalDate, OVERRIDE_JUSTIFICATION)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.entryNumber").value(REVERSAL_ENTRY_NUMBER));
+
+            ArgumentCaptor<String> justificationCaptor = ArgumentCaptor.forClass(String.class);
+            verify(journalEntryService)
+                    .reverseJournalEntry(eq(ENTRY_ID), eq(REASON), eq(reversalDate), justificationCaptor.capture());
+            assertThat(justificationCaptor.getValue()).isEqualTo(OVERRIDE_JUSTIFICATION);
         }
 
         @Test
         @DisplayName("Should map an already-reversed entry to 409 JE_ALREADY_REVERSED")
         void reverse_alreadyReversed_returns409AlreadyReversed() throws Exception {
-            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull()))
+            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull(), isNull()))
                     .thenThrow(new JournalEntryNotReversibleException(ENTRY_ID, JournalEntryStatus.REVERSED));
 
             mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/reverse", ENTRY_ID))
@@ -227,7 +328,7 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
         @Test
         @DisplayName("Should map a not-yet-posted entry to 409 JE_NOT_POSTED")
         void reverse_draftEntry_returns409NotPosted() throws Exception {
-            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull()))
+            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull(), isNull()))
                     .thenThrow(new JournalEntryNotReversibleException(ENTRY_ID, JournalEntryStatus.DRAFT));
 
             mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/reverse", ENTRY_ID))
@@ -242,7 +343,7 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
         @DisplayName("Should map a closed-period reversal date to 422 PERIOD_CLOSED")
         void reverse_closedPeriodDate_returns422PeriodClosed() throws Exception {
             LocalDate reversalDate = LocalDate.of(2026, 1, 15);
-            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), eq(reversalDate)))
+            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), eq(reversalDate), isNull()))
                     .thenThrow(new AccountingPeriodClosedException(
                             "2026-01", "Accounting period 2026-01 is CLOSED for reversal date 2026-01-15"));
 
@@ -251,6 +352,25 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
                             .content(reversalBody(reversalDate)))
                     .andExpect(status().isUnprocessableContent())
                     .andExpect(jsonPath("$.code").value("PERIOD_CLOSED"))
+                    .andExpect(jsonPath("$.status").value(422))
+                    .andExpect(jsonPath("$.correlationId").exists());
+        }
+
+        @Test
+        @DisplayName("Should map a hard-locked reversal date to 422 PERIOD_HARD_LOCKED even with an override")
+        void reverse_hardLockedDate_returns422PeriodHardLocked() throws Exception {
+            LocalDate reversalDate = LocalDate.of(2026, 5, 15);
+            when(journalEntryService.reverseJournalEntry(
+                            eq(ENTRY_ID), eq(REASON), eq(reversalDate), eq(OVERRIDE_JUSTIFICATION)))
+                    .thenThrow(new AccountingPeriodHardLockedException(
+                            LocalDate.of(2026, 6, 30),
+                            "Reversal date 2026-05-15 is before the hard-lock date 2026-06-30"));
+
+            mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/reverse", ENTRY_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(reversalBody(reversalDate, OVERRIDE_JUSTIFICATION)))
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.code").value("PERIOD_HARD_LOCKED"))
                     .andExpect(jsonPath("$.status").value(422))
                     .andExpect(jsonPath("$.correlationId").exists());
         }

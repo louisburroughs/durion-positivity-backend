@@ -8,6 +8,7 @@ import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
@@ -18,6 +19,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
@@ -63,6 +66,7 @@ public class PostingEngineOrchestrator {
     private final AccountingEventRepository accountingEventRepository;
     private final ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
     private final ObjectMapper objectMapper;
+    private final AccountingPeriodGate accountingPeriodGate;
 
     /**
      * Processes an accounting event through the posting engine.
@@ -71,10 +75,12 @@ public class PostingEngineOrchestrator {
      * Flow:
      * 1. Create attempt history record (default to FAILURE)
      * 2. Check idempotency key
-     * 3. Evaluate posting rules
-     * 4. On success: create/post journal entry
-     * 5. Update event status and attempt history
-     * 6. Return result
+     * 3. Period gate pre-check for autoPost (B2): closed/hard-locked
+     * transaction date suspends the event with PERIOD_CLOSED
+     * 4. Evaluate posting rules
+     * 5. On success: create/post journal entry
+     * 6. Update event status and attempt history
+     * 7. Return result
      *
      * @param event               the accounting event to process
      * @param mappingVersionToUse optional specific mapping version
@@ -114,7 +120,39 @@ public class PostingEngineOrchestrator {
                 }
             }
 
-            // 2. Evaluate posting rules
+            // 2. Period gate pre-check (story B2, issue #944): an autoPost
+            // event whose transaction date falls in a CLOSED (or hard-locked)
+            // period is routed to SUSPENDED with failureReasonCode
+            // PERIOD_CLOSED instead of failing mid-posting. The engine has no
+            // interactive caller, so no override applies here — the remedy is
+            // reopening the period and reprocessing (manual reprocess;
+            // the scheduled auto-retry loop skips PERIOD_CLOSED suspensions).
+            // Draft-only processing (autoPost=false) is unaffected: drafts
+            // may be created into any period and gate at posting time.
+            if (autoPost) {
+                LocalDate transactionDate = event.getTransactionDate().toLocalDate();
+                if (accountingPeriodGate.isPostingBlocked(transactionDate)) {
+                    String periodCode = YearMonth.from(transactionDate).toString();
+                    String details = "Transaction date " + transactionDate
+                            + " falls in CLOSED or hard-locked accounting period " + periodCode
+                            + "; event suspended — reprocess after the period is reopened";
+                    log.warn("Suspending event {}: {}", event.getEventId(), details);
+
+                    event.setStatus(AccountingEventStatus.SUSPENDED);
+                    event.setFailureReasonCode(PostingFailureReason.PERIOD_CLOSED.name());
+                    event.setFailureDetails(details);
+
+                    attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
+                    attemptHistory.setOutcomeDetails(details);
+
+                    accountingEventRepository.save(event);
+                    reprocessingAttemptHistoryRepository.save(attemptHistory);
+
+                    return PostingResult.failure(PostingFailureReason.PERIOD_CLOSED, details);
+                }
+            }
+
+            // 3. Evaluate posting rules
             log.debug("Evaluating posting rules for event {}", event.getEventId());
             PostingResult evaluationResult = postingRuleEvaluator.evaluateEvent(event, mappingVersionToUse);
 
@@ -141,7 +179,7 @@ public class PostingEngineOrchestrator {
                 return evaluationResult;
             }
 
-            // 3. Evaluation succeeded - create/post journal entry
+            // 4. Evaluation succeeded - create/post journal entry
             JournalEntry journalEntry = evaluationResult.getJournalEntryDraft();
             if (journalEntry == null) {
                 throw new IllegalStateException("Evaluation succeeded but no journal entry draft present");
@@ -161,11 +199,16 @@ public class PostingEngineOrchestrator {
                 postingReference = draftEntry.getJournalEntryId().toString();
             }
 
-            // 4. Update event status to PROCESSED
+            // 5. Update event status to PROCESSED, clearing failure metadata
+            // left over from an earlier suspension (e.g. PERIOD_CLOSED before
+            // a reopen-then-reprocess) so the record reads clean.
             event.setStatus(AccountingEventStatus.PROCESSED);
             event.setFinalPostingReferenceId(postingReference);
             event.setProcessedAt(java.time.Instant.now(clock));
             event.setResolvedByUserId(triggeredByUserId);
+            event.setFailureReasonCode(null);
+            event.setFailureDetails(null);
+            event.setErrorMessage(null);
 
             attemptHistory.setOutcome(ReprocessingOutcome.SUCCESS);
             attemptHistory.setOutcomeDetails(String.format(
@@ -205,9 +248,7 @@ public class PostingEngineOrchestrator {
             accountingEventRepository.save(event);
             reprocessingAttemptHistoryRepository.save(attemptHistory);
 
-            return PostingResult.failure(
-                    com.positivity.accounting.internal.enums.PostingFailureReason.INTERNAL_ERROR,
-                    "Internal error: " + e.getMessage());
+            return PostingResult.failure(PostingFailureReason.INTERNAL_ERROR, "Internal error: " + e.getMessage());
         }
     }
 

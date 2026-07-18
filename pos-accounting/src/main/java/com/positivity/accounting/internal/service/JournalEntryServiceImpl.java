@@ -10,7 +10,6 @@ import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.event.JournalEntryReversed;
-import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
@@ -26,7 +25,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -66,6 +64,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     private final AccountingSequenceRepository sequenceRepository;
     private final AccountingSequenceProvisioner sequenceProvisioner;
     private final AccountingPeriodService accountingPeriodService;
+    private final AccountingPeriodGate accountingPeriodGate;
     private final AccountingAuditLogRepository auditLogRepository;
     private final OutboxService outboxService;
 
@@ -231,16 +230,36 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     }
 
     /**
+     * Posts a draft journal entry without a period override (system/engine
+     * paths). Delegates to {@link #postJournalEntry(UUID, String)}.
+     */
+    @Override
+    public JournalEntry postJournalEntry(UUID journalEntryId) {
+        return postJournalEntry(journalEntryId, null);
+    }
+
+    /**
      * Posts a draft journal entry to GL (transitions to POSTED).
      * Immutable thereafter; GL account balances updated.
      *
-     * @param journalEntryId entry to post
+     * <p>Period enforcement (story B2, issue #944): this method is the single
+     * choke point for all posting paths — manual post, engine auto-post,
+     * credit-memo and payment-application GL posting all funnel through it.
+     * The entry's transaction-date month is auto-provisioned OPEN when
+     * missing ({@code ensurePeriodExists}; the gate never blocks on a missing
+     * row), then {@link AccountingPeriodGate#assertPostingAllowed} applies
+     * the hard-lock / closed-period / override rules.
+     *
+     * @param journalEntryId        entry to post
+     * @param overrideJustification optional justification for posting into a
+     *                              CLOSED period (requires
+     *                              {@code accounting:period:override})
      * @return posted entry
      * @throws IllegalStateException if entry is not in DRAFT status or is
      *                               unbalanced
      */
     @Override
-    public JournalEntry postJournalEntry(UUID journalEntryId) {
+    public JournalEntry postJournalEntry(UUID journalEntryId, @Nullable String overrideJustification) {
         JournalEntry entry = findById(journalEntryId);
 
         if (entry.getStatus() != JournalEntryStatus.DRAFT) {
@@ -254,6 +273,12 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         for (JournalEntryLine line : entry.getLines()) {
             glAccountService.validateAccountForPosting(line.getGlAccountId(), entry.getTransactionDate());
         }
+
+        // Period gate (B2): provision the month row if absent, then enforce
+        // hard-lock / closed-period / override rules on the transaction date.
+        LocalDate transactionDate = entry.getTransactionDate().toLocalDate();
+        accountingPeriodService.ensurePeriodExists(transactionDate);
+        accountingPeriodGate.assertPostingAllowed(transactionDate, journalEntryId, overrideJustification);
 
         assignEntryNumber(entry);
         entry.setStatus(JournalEntryStatus.POSTED);
@@ -354,12 +379,21 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      *
      * <p>The reversal entry gets its own posted-entry number via the A2
      * {@link #assignEntryNumber} seam and is saved directly as POSTED (no
-     * DRAFT → POSTED transition); story B2 will wrap both posting paths in
-     * the full period gate.
+     * DRAFT → POSTED transition). The resolved reversal date runs through the
+     * full B2 period gate (hard lock, closed period, permissioned override).
      */
     @Override
     public JournalEntry reverseJournalEntry(
             @NonNull UUID originalEntryId, @NonNull String reversalReason, @Nullable LocalDate reversalDate) {
+        return reverseJournalEntry(originalEntryId, reversalReason, reversalDate, null);
+    }
+
+    @Override
+    public JournalEntry reverseJournalEntry(
+            @NonNull UUID originalEntryId,
+            @NonNull String reversalReason,
+            @Nullable LocalDate reversalDate,
+            @Nullable String overrideJustification) {
         JournalEntry original = findById(originalEntryId);
 
         if (original.getStatus() != JournalEntryStatus.POSTED) {
@@ -400,6 +434,12 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         reversal.setLines(reversalLines);
         initializeLineMetadata(reversal);
 
+        // Period gate (B2): the reversal posts on its resolved date, so the
+        // full hard-lock / closed-period / override rules apply to it. An
+        // override audit row references the reversal entry being posted.
+        accountingPeriodGate.assertPostingAllowed(
+                reversalTransactionDate.toLocalDate(), reversal.getJournalEntryId(), overrideJustification);
+
         // Reversals get their own posted-entry numbers (A2 seam, AC of #942).
         assignEntryNumber(reversal);
         JournalEntry savedReversal = journalEntryRepository.save(reversal);
@@ -430,32 +470,22 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
     /**
      * Resolves the reversal entry's transaction date (simplified Odoo
-     * date-picking): an explicit date must be in an OPEN period; the default
-     * is the original's transaction date if its period is open, else the
-     * current date, whose period must be open.
+     * date-picking): an explicit date is used as requested; the default is
+     * the original's transaction date if its period is open, else the current
+     * date. Enforcement is not done here — the resolved date runs through the
+     * full period gate ({@link AccountingPeriodGate#assertPostingAllowed}),
+     * which rejects hard-locked/closed dates or honors a permissioned
+     * override (story B2).
      */
     private LocalDateTime resolveReversalTransactionDate(JournalEntry original, @Nullable LocalDate requested) {
         if (requested != null) {
-            requirePeriodOpen(requested, "Requested reversal date " + requested);
             return requested.atStartOfDay();
         }
         LocalDate originalDate = original.getTransactionDate().toLocalDate();
         if (accountingPeriodService.isPeriodOpen(originalDate)) {
             return original.getTransactionDate();
         }
-        LocalDate today = LocalDate.now(clock);
-        requirePeriodOpen(today, "Original entry's period is closed and the current date " + today);
         return LocalDateTime.now(clock);
-    }
-
-    private void requirePeriodOpen(LocalDate date, String dateDescription) {
-        if (!accountingPeriodService.isPeriodOpen(date)) {
-            String periodCode = YearMonth.from(date).toString();
-            throw new AccountingPeriodClosedException(
-                    periodCode,
-                    dateDescription + " falls in closed accounting period " + periodCode
-                            + "; reversals must be dated in an open period");
-        }
     }
 
     /**

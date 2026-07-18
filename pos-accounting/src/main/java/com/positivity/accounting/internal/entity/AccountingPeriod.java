@@ -15,6 +15,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -98,6 +99,22 @@ public class AccountingPeriod {
 
     @Column(name = "reopen_justification", length = 1000)
     private String reopenJustification;
+
+    /**
+     * Optimistic-lock version (story B2 carry-over of Wave-1 close-race
+     * hardening): concurrent close/reopen of the same period conflicts at
+     * commit instead of last-writer-wins. Primitive {@code long} (not
+     * {@code Long}) is deliberate: Spring Data's version-based new-entity
+     * detection only applies to wrapper types, so {@code isNew()} falls back
+     * to the id-null check — correct here because the id is always
+     * generator-assigned at persist ({@code @GeneratedValue @UUIDv7Id}),
+     * never pre-set. No {@code Persistable} implementation needed (unlike
+     * {@link ReceivablePayment}, whose id arrives pre-set from the Payment
+     * domain).
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
 
     // Audit fields
     @CreatedDate

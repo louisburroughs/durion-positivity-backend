@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.controller;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -7,20 +8,26 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.AccountingPeriodReopenRequest;
 import com.positivity.accounting.internal.dto.AccountingPeriodResponse;
+import com.positivity.accounting.internal.dto.HardLockDateUpdateRequest;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
+import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
+import com.positivity.accounting.service.AccountingConfigurationService;
 import com.positivity.accounting.service.AccountingPeriodService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -41,6 +48,9 @@ class AccountingPeriodControllerTest extends BaseIntegrationTest {
 
     @MockitoBean
     private AccountingPeriodService accountingPeriodService;
+
+    @MockitoBean
+    private AccountingConfigurationService accountingConfigurationService;
 
     private static AccountingPeriodResponse openJune() {
         return AccountingPeriodResponse.builder()
@@ -261,6 +271,121 @@ class AccountingPeriodControllerTest extends BaseIntegrationTest {
                     .andExpect(status().isForbidden());
 
             verify(accountingPeriodService, never()).reopenPeriod(anyString(), anyString());
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /v1/accounting/periods/hard-lock")
+    class GetHardLockDate {
+
+        @Test
+        @DisplayName("Should return the configured hard-lock date")
+        void shouldReturnHardLockDate() throws Exception {
+            when(accountingConfigurationService.getHardLockDate()).thenReturn(Optional.of(LocalDate.of(2026, 6, 30)));
+
+            mockMvc.perform(withAuth(get("/v1/accounting/periods/hard-lock")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.hardLockDate").value("2026-06-30"));
+        }
+
+        @Test
+        @DisplayName("Should return an explicit null hardLockDate when no hard lock is set")
+        void shouldReturnExplicitNullWhenUnset() throws Exception {
+            when(accountingConfigurationService.getHardLockDate()).thenReturn(Optional.empty());
+
+            mockMvc.perform(withAuth(get("/v1/accounting/periods/hard-lock")))
+                    .andExpect(status().isOk())
+                    // Include.ALWAYS on the DTO: the property must be present with an explicit null value
+                    .andExpect(content().json("{\"hardLockDate\":null}"));
+        }
+
+        @Test
+        @DisplayName("Should reject viewing without accounting:period:view authority")
+        void shouldRejectWithoutPermission() throws Exception {
+            mockMvc.perform(withAuth(get("/v1/accounting/periods/hard-lock"), "accounting:je:view"))
+                    .andExpect(status().isForbidden());
+
+            verify(accountingConfigurationService, never()).getHardLockDate();
+        }
+    }
+
+    @Nested
+    @DisplayName("PUT /v1/accounting/periods/hard-lock")
+    class SetHardLockDate {
+
+        private static final LocalDate NEW_LOCK = LocalDate.of(2026, 6, 30);
+
+        private String hardLockBody(LocalDate date, String justification) {
+            return objectMapper.writeValueAsString(HardLockDateUpdateRequest.builder()
+                    .hardLockDate(date)
+                    .justification(justification)
+                    .build());
+        }
+
+        @Test
+        @DisplayName("Should set the hard-lock date and return the stored value")
+        void shouldSetHardLockDate() throws Exception {
+            when(accountingConfigurationService.setHardLockDate(NEW_LOCK, "FY close complete"))
+                    .thenReturn(NEW_LOCK);
+
+            mockMvc.perform(withAuth(put("/v1/accounting/periods/hard-lock"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(hardLockBody(NEW_LOCK, "FY close complete")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.hardLockDate").value("2026-06-30"));
+
+            verify(accountingConfigurationService).setHardLockDate(NEW_LOCK, "FY close complete");
+        }
+
+        @Test
+        @DisplayName("Should return 400 when justification is blank")
+        void shouldReturn400ForBlankJustification() throws Exception {
+            mockMvc.perform(withAuth(put("/v1/accounting/periods/hard-lock"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(hardLockBody(NEW_LOCK, "   ")))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("ARGUMENT_NOT_VALID"));
+
+            verify(accountingConfigurationService, never()).setHardLockDate(any(LocalDate.class), anyString());
+        }
+
+        @Test
+        @DisplayName("Should return 400 when hardLockDate is missing")
+        void shouldReturn400ForMissingDate() throws Exception {
+            mockMvc.perform(withAuth(put("/v1/accounting/periods/hard-lock"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(hardLockBody(null, "FY close complete")))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("ARGUMENT_NOT_VALID"));
+
+            verify(accountingConfigurationService, never()).setHardLockDate(any(LocalDate.class), anyString());
+        }
+
+        @Test
+        @DisplayName("Should map a backward date move to 422 HARD_LOCK_DATE_REGRESSION")
+        void shouldReturn422ForBackwardMove() throws Exception {
+            LocalDate earlier = LocalDate.of(2026, 1, 31);
+            when(accountingConfigurationService.setHardLockDate(earlier, "trying to unwind"))
+                    .thenThrow(new HardLockDateRegressionException(NEW_LOCK, earlier));
+
+            mockMvc.perform(withAuth(put("/v1/accounting/periods/hard-lock"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(hardLockBody(earlier, "trying to unwind")))
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.code").value("HARD_LOCK_DATE_REGRESSION"))
+                    .andExpect(jsonPath("$.status").value(422))
+                    .andExpect(jsonPath("$.correlationId").exists());
+        }
+
+        @Test
+        @DisplayName("Should reject setting without accounting:period:hard_lock authority")
+        void shouldRejectWithoutPermission() throws Exception {
+            mockMvc.perform(withAuth(put("/v1/accounting/periods/hard-lock"), "accounting:period:close")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(hardLockBody(NEW_LOCK, "FY close complete")))
+                    .andExpect(status().isForbidden());
+
+            verify(accountingConfigurationService, never()).setHardLockDate(any(LocalDate.class), anyString());
         }
     }
 }

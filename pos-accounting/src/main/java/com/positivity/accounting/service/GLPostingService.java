@@ -3,6 +3,7 @@ package com.positivity.accounting.service;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import java.math.BigDecimal;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 public interface GLPostingService {
 
@@ -37,6 +38,30 @@ public interface GLPostingService {
             String originalPeriodId);
 
     /**
+     * Post a Credit Memo reversal to GL with an optional accounting-period
+     * override (story B2, issue #944). Behaves like the overload without
+     * {@code overrideJustification}; the justification is threaded to
+     * {@link JournalEntryService#postJournalEntry(UUID, String)} so a caller
+     * holding {@code accounting:period:override} may post into a CLOSED
+     * period (audit-logged). Hard-locked dates are always rejected.
+     *
+     * @param overrideJustification optional justification for posting into a
+     *                              CLOSED period
+     * @return Posted journal entry
+     */
+    JournalEntry postCreditMemoReversal(
+            UUID creditMemoId,
+            UUID revenueAccountId,
+            UUID taxPayableAccountId,
+            UUID arAccountId,
+            BigDecimal creditAmount,
+            BigDecimal taxReversed,
+            String description,
+            boolean isPriorPeriod,
+            String originalPeriodId,
+            @Nullable String overrideJustification);
+
+    /**
      * Post a payment application to GL.
      *
      * Creates journal entry with:
@@ -52,4 +77,24 @@ public interface GLPostingService {
      */
     JournalEntry postPaymentApplication(
             UUID paymentApplicationId, UUID cashAccountId, UUID arAccountId, BigDecimal amount, String description);
+
+    /**
+     * Post a payment application to GL with an optional accounting-period
+     * override (story B2, issue #944). Behaves like the overload without
+     * {@code overrideJustification}; the justification is threaded to
+     * {@link JournalEntryService#postJournalEntry(UUID, String)} so a caller
+     * holding {@code accounting:period:override} may post into a CLOSED
+     * period (audit-logged). Hard-locked dates are always rejected.
+     *
+     * @param overrideJustification optional justification for posting into a
+     *                              CLOSED period
+     * @return Posted journal entry
+     */
+    JournalEntry postPaymentApplication(
+            UUID paymentApplicationId,
+            UUID cashAccountId,
+            UUID arAccountId,
+            BigDecimal amount,
+            String description,
+            @Nullable String overrideJustification);
 }

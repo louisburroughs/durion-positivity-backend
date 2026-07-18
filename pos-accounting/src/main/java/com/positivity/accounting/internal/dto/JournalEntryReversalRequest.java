@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -37,4 +38,16 @@ public class JournalEntryReversalRequest {
             example = "2026-07-15",
             requiredMode = NOT_REQUIRED)
     private LocalDate reversalDate;
+
+    @Size(max = 500, message = "Override justification must not exceed 500 characters")
+    @Schema(
+            description = "Optional justification for reversing into a CLOSED accounting period (story B2)."
+                    + " When the resolved reversal date falls in a CLOSED period, supplying a non-blank"
+                    + " justification together with the accounting:period:override permission allows the"
+                    + " reversal to post into that period (audit-logged); without it the reversal is rejected"
+                    + " with 422 PERIOD_CLOSED. Has no effect for dates in OPEN periods and can never bypass"
+                    + " the hard lock (422 PERIOD_HARD_LOCKED).",
+            example = "Auditor-approved correction of June posting",
+            requiredMode = NOT_REQUIRED)
+    private String overrideJustification;
 }

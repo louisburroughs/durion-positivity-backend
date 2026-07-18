@@ -13,6 +13,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -75,6 +76,31 @@ public class GLPostingServiceImpl implements GLPostingService {
             @NonNull String description,
             boolean isPriorPeriod,
             String originalPeriodId) {
+        return postCreditMemoReversal(
+                creditMemoId,
+                revenueAccountId,
+                taxPayableAccountId,
+                arAccountId,
+                creditAmount,
+                taxReversed,
+                description,
+                isPriorPeriod,
+                originalPeriodId,
+                null);
+    }
+
+    @Override
+    public JournalEntry postCreditMemoReversal(
+            @NonNull UUID creditMemoId,
+            @NonNull UUID revenueAccountId,
+            @NonNull UUID taxPayableAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal creditAmount,
+            @NonNull BigDecimal taxReversed,
+            @NonNull String description,
+            boolean isPriorPeriod,
+            String originalPeriodId,
+            @Nullable String overrideJustification) {
 
         BigDecimal totalAmount = creditAmount.add(taxReversed);
 
@@ -120,9 +146,9 @@ public class GLPostingServiceImpl implements GLPostingService {
 
         entry.setLines(lines);
 
-        // Create and post entry
+        // Create and post entry (period gate + override applied inside post, B2)
         JournalEntry created = journalEntryService.createJournalEntry(entry);
-        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId());
+        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
 
         log.info("Posted Credit Memo GL entry: journal entry ID {}", posted.getJournalEntryId());
 
@@ -150,6 +176,17 @@ public class GLPostingServiceImpl implements GLPostingService {
             @NonNull UUID arAccountId,
             @NonNull BigDecimal amount,
             @NonNull String description) {
+        return postPaymentApplication(paymentApplicationId, cashAccountId, arAccountId, amount, description, null);
+    }
+
+    @Override
+    public JournalEntry postPaymentApplication(
+            @NonNull UUID paymentApplicationId,
+            @NonNull UUID cashAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull String description,
+            @Nullable String overrideJustification) {
 
         log.info(
                 "Posting payment application GL entry {}: debit cash {}, credit AR {}",
@@ -183,7 +220,7 @@ public class GLPostingServiceImpl implements GLPostingService {
         entry.setLines(lines);
 
         JournalEntry created = journalEntryService.createJournalEntry(entry);
-        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId());
+        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
 
         log.info("Posted payment application GL entry: journal entry ID {}", posted.getJournalEntryId());
 

@@ -5,9 +5,11 @@ import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
+import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
+import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
 import com.positivity.shared.error.ApiError;
@@ -105,6 +107,26 @@ public class AccountingExceptionHandler {
     @ExceptionHandler(AccountingPeriodClosedException.class)
     public ResponseEntity<ApiError> handlePeriodClosed(AccountingPeriodClosedException ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "PERIOD_CLOSED", ex.getMessage(), request);
+    }
+
+    /**
+     * Operation dated strictly before the org-level hard-lock date (story
+     * B2, issue #944). Unconditional — no override path.
+     */
+    @ExceptionHandler(AccountingPeriodHardLockedException.class)
+    public ResponseEntity<ApiError> handlePeriodHardLocked(
+            AccountingPeriodHardLockedException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "PERIOD_HARD_LOCKED", ex.getMessage(), request);
+    }
+
+    /**
+     * Hard-lock date update that would move the date backward (story B2,
+     * issue #944): the hard lock is monotonic-forward-only.
+     */
+    @ExceptionHandler(HardLockDateRegressionException.class)
+    public ResponseEntity<ApiError> handleHardLockDateRegression(
+            HardLockDateRegressionException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "HARD_LOCK_DATE_REGRESSION", ex.getMessage(), request);
     }
 
     @ExceptionHandler(AccountingPeriodNotFoundException.class)

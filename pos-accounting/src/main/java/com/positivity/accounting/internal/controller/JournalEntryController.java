@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryMapper;
+import com.positivity.accounting.internal.dto.JournalEntryPostRequest;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.JournalEntryReversalRequest;
 import com.positivity.accounting.internal.dto.JournalEntryTraceabilityResponse;
@@ -209,16 +210,53 @@ public class JournalEntryController {
     @PreAuthorize("hasAuthority('accounting:je:post')")
     @Operation(
             summary = "Post journal entry",
-            description = "Post a draft journal entry to the ledger.",
+            operationId = "postJournalEntry",
+            description = "Posts a DRAFT journal entry to the general ledger (DRAFT → POSTED), assigning its"
+                    + " entryNumber and updating GL balances; the entry is immutable afterwards — use"
+                    + " reverseJournalEntry to back it out."
+                    + " Preconditions: the entry must exist, be in DRAFT status, and be balanced."
+                    + " The request body is OPTIONAL: omit it entirely for a normal post. The entry's"
+                    + " transaction date is checked against the accounting-period gate (story B2): a date"
+                    + " strictly before the org-level hard-lock date is rejected unconditionally with 422"
+                    + " PERIOD_HARD_LOCKED (never overridable); a date in a CLOSED period is rejected with 422"
+                    + " PERIOD_CLOSED unless the caller holds accounting:period:override AND supplies a"
+                    + " non-blank overrideJustification in the body, in which case the posting proceeds and"
+                    + " the override is audit-logged."
+                    + " Emits ACCOUNTING_JOURNAL_ENTRY_POST and returns the posted entry."
+                    + " Returns 409 ENTRY_ALREADY_POSTED if the entry is already POSTED or REVERSED, and 422"
+                    + " UNBALANCED_ENTRY if debits do not equal credits.",
             tags = {"Journal Entries"})
-    @ApiResponse(responseCode = "200", description = "Journal entry posted")
-    @ApiResponse(responseCode = "404", description = "Journal entry not found")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Journal entry posted; the posted entry with its entryNumber is returned",
+            content = @Content(schema = @Schema(implementation = JournalEntryResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "No journal entry exists for the identifier (VALIDATION_ERROR), or the"
+                    + " overrideJustification exceeds 500 characters (ARGUMENT_NOT_VALID)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks the accounting:je:post permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Entry is already posted or reversed (ENTRY_ALREADY_POSTED)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Transaction date is in a CLOSED period without a valid override (PERIOD_CLOSED —"
+                    + " accounting:period:override plus a non-blank overrideJustification allows posting into"
+                    + " closed periods), is strictly before the hard-lock date (PERIOD_HARD_LOCKED — never"
+                    + " overridable), or the entry is unbalanced (UNBALANCED_ENTRY)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_POST", apiVersion = "1")
     public ResponseEntity<JournalEntryResponse> postJournalEntry(
             @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,
-            @RequestBody(required = false) Object request) {
+            @Valid @RequestBody(required = false) JournalEntryPostRequest request) {
         log.info("Posting journal entry: {}", journalEntryId);
-        var posted = journalEntryService.postJournalEntry(journalEntryId);
+        String overrideJustification = request != null ? request.getOverrideJustification() : null;
+        var posted = journalEntryService.postJournalEntry(journalEntryId, overrideJustification);
         return ResponseEntity.ok(JournalEntryMapper.toResponse(posted));
     }
 
@@ -239,11 +277,16 @@ public class JournalEntryController {
                     + " trail. Optional input: reversalDate — when omitted, it defaults to the original entry's"
                     + " transaction date if that period is OPEN, otherwise to today; the resolved date must fall"
                     + " in an OPEN accounting period."
+                    + " Period gate (story B2): a resolved date strictly before the org-level hard-lock date"
+                    + " is rejected unconditionally with 422 PERIOD_HARD_LOCKED (never overridable); a date in"
+                    + " a CLOSED period is rejected with 422 PERIOD_CLOSED unless the caller holds"
+                    + " accounting:period:override AND supplies a non-blank overrideJustification, in which"
+                    + " case the reversal posts into the closed period and the override is audit-logged."
                     + " Emits ACCOUNTING_JOURNAL_ENTRY_REVERSE and returns the reversal entry."
                     + " Returns 409 JE_ALREADY_REVERSED if the entry was already reversed (including a lost"
                     + " concurrent-reversal race), 409 JE_NOT_POSTED if it is DRAFT/PENDING, and 422"
-                    + " PERIOD_CLOSED if the reversal date falls in a CLOSED period — pick an open-period date"
-                    + " or reopen the period before retrying.",
+                    + " PERIOD_CLOSED if the reversal date falls in a CLOSED period without a valid override —"
+                    + " pick an open-period date, supply an override, or reopen the period before retrying.",
             tags = {"Journal Entries"})
     @ApiResponse(
             responseCode = "200",
@@ -264,15 +307,18 @@ public class JournalEntryController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "Resolved reversal date falls in a CLOSED accounting period (PERIOD_CLOSED)",
+            description = "Resolved reversal date falls in a CLOSED accounting period without a valid override"
+                    + " (PERIOD_CLOSED — accounting:period:override plus a non-blank overrideJustification"
+                    + " allows reversing into closed periods), or is strictly before the hard-lock date"
+                    + " (PERIOD_HARD_LOCKED — never overridable)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_REVERSE", apiVersion = "1")
     public ResponseEntity<JournalEntryResponse> reverseJournalEntry(
             @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,
             @Valid @RequestBody JournalEntryReversalRequest request) {
         log.info("Reversing journal entry: {}", journalEntryId);
-        var reversed =
-                journalEntryService.reverseJournalEntry(journalEntryId, request.getReason(), request.getReversalDate());
+        var reversed = journalEntryService.reverseJournalEntry(
+                journalEntryId, request.getReason(), request.getReversalDate(), request.getOverrideJustification());
         return ResponseEntity.ok(JournalEntryMapper.toResponse(reversed));
     }
 }

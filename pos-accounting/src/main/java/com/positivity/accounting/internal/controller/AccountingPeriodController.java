@@ -2,6 +2,9 @@ package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.AccountingPeriodReopenRequest;
 import com.positivity.accounting.internal.dto.AccountingPeriodResponse;
+import com.positivity.accounting.internal.dto.HardLockDateResponse;
+import com.positivity.accounting.internal.dto.HardLockDateUpdateRequest;
+import com.positivity.accounting.service.AccountingConfigurationService;
 import com.positivity.accounting.service.AccountingPeriodService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
@@ -14,6 +17,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -24,6 +28,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,17 +36,19 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * REST Controller for accounting period lifecycle management (Story B1,
  * decision D-7: monthly cadence, two-state OPEN → CLOSED lifecycle).
- * Handles listing periods and the close/reopen state transitions.
+ * Handles listing periods and the close/reopen state transitions, plus the
+ * org-level hard-lock date (Story B2, issue #944).
  *
  * @see <a href=
  *      "domains/accounting/plan-odoo-parity-pos-accounting.md">Odoo Parity Plan -
- *      Story B1</a>
+ *      Stories B1/B2</a>
  */
 @RestController
 @RequestMapping("/v1/accounting/periods")
 @Tag(
         name = "Accounting Periods",
-        description = "Accounting period lifecycle: list periods, close a period, reopen a closed period.")
+        description = "Accounting period lifecycle: list periods, close a period, reopen a closed period,"
+                + " and manage the org-level hard-lock date.")
 @RequiredArgsConstructor
 @Validated
 public class AccountingPeriodController {
@@ -49,6 +56,7 @@ public class AccountingPeriodController {
     private static final Logger log = LoggerFactory.getLogger(AccountingPeriodController.class);
 
     private final AccountingPeriodService accountingPeriodService;
+    private final AccountingConfigurationService accountingConfigurationService;
 
     @GetMapping
     @SecurityRequirement(
@@ -184,5 +192,85 @@ public class AccountingPeriodController {
         AccountingPeriodResponse response =
                 accountingPeriodService.reopenPeriod(periodCode, request.getJustification());
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/hard-lock")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:period:view"})
+    @PreAuthorize("hasAuthority('accounting:period:view')")
+    @EmitEvent(id = "ACCOUNTING_PERIOD_HARD_LOCK_VIEW", apiVersion = "1")
+    @Operation(
+            summary = "Get the accounting hard-lock date",
+            operationId = "getAccountingHardLockDate",
+            description = "Returns the org-level hard-lock date: journal entries dated strictly before this"
+                    + " date are permanently rejected (422 PERIOD_HARD_LOCKED) with no override path — unlike"
+                    + " a CLOSED period, which accounting:period:override plus a justification can bypass."
+                    + " Use this tool to check the current lock boundary before posting backdated entries or"
+                    + " before moving the lock with setAccountingHardLockDate."
+                    + " Returns hardLockDate: null when no hard lock has been configured yet."
+                    + " No preconditions and no side effects.",
+            tags = {"Accounting Periods"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Current hard-lock date returned; hardLockDate is null when no hard lock is set",
+            content = @Content(schema = @Schema(implementation = HardLockDateResponse.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks the accounting:period:view permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<HardLockDateResponse> getHardLockDate() {
+        log.debug("Get accounting hard-lock date");
+        LocalDate hardLockDate =
+                accountingConfigurationService.getHardLockDate().orElse(null);
+        return ResponseEntity.ok(new HardLockDateResponse(hardLockDate));
+    }
+
+    @PutMapping("/hard-lock")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:period:hard_lock"})
+    @PreAuthorize("hasAuthority('accounting:period:hard_lock')")
+    @EmitEvent(id = "ACCOUNTING_PERIOD_HARD_LOCK_SET", apiVersion = "1")
+    @Operation(
+            summary = "Set the accounting hard-lock date",
+            operationId = "setAccountingHardLockDate",
+            description = "Sets the org-level hard-lock date: from then on, journal entries dated strictly"
+                    + " before this date are permanently rejected (422 PERIOD_HARD_LOCKED) with NO override"
+                    + " path — not even accounting:period:override can bypass it (that permission only covers"
+                    + " CLOSED periods, error PERIOD_CLOSED)."
+                    + " Use this tool after statutory filings or audits to make history immutable; use"
+                    + " closeAccountingPeriod for the reversible month-end close instead."
+                    + " The date is monotonic-forward-only: it must be on or after the currently stored"
+                    + " hard-lock date, and moving it backward is rejected with 422 HARD_LOCK_DATE_REGRESSION"
+                    + " — effectively irreversible, so set it deliberately."
+                    + " Required inputs: hardLockDate (ISO date) and a non-blank justification (max 500"
+                    + " characters), recorded in the audit trail with the acting user."
+                    + " Emits ACCOUNTING_PERIOD_HARD_LOCK_SET and returns the stored hard-lock date."
+                    + " Returns 400 if the date is missing or the justification is missing or blank.",
+            tags = {"Accounting Periods"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Hard-lock date updated; the stored value is returned",
+            content = @Content(schema = @Schema(implementation = HardLockDateResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "hardLockDate is missing, or justification is missing, blank, or over 500 characters"
+                    + " (ARGUMENT_NOT_VALID)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks the accounting:period:hard_lock permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Requested date is before the currently stored hard-lock date"
+                    + " (HARD_LOCK_DATE_REGRESSION) — the hard lock only moves forward",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<HardLockDateResponse> setHardLockDate(@Valid @RequestBody HardLockDateUpdateRequest request) {
+        log.info("Set accounting hard-lock date to {}", request.getHardLockDate());
+        LocalDate stored =
+                accountingConfigurationService.setHardLockDate(request.getHardLockDate(), request.getJustification());
+        return ResponseEntity.ok(new HardLockDateResponse(stored));
     }
 }

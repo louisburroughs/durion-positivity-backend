@@ -58,8 +58,9 @@ public interface JournalEntryService {
     JournalEntry updateJournalEntry(UUID journalEntryId, JournalEntry updates);
 
     /**
-     * Posts a draft journal entry to GL (transitions to POSTED).
-     * Immutable thereafter; GL account balances updated.
+     * Posts a draft journal entry to GL without a period override —
+     * convenience for {@link #postJournalEntry(UUID, String)} with a null
+     * justification (system/engine posting paths never override).
      *
      * @param journalEntryId entry to post
      * @return posted entry
@@ -67,6 +68,37 @@ public interface JournalEntryService {
      *                               unbalanced
      */
     JournalEntry postJournalEntry(UUID journalEntryId);
+
+    /**
+     * Posts a draft journal entry to GL (transitions to POSTED).
+     * Immutable thereafter; GL account balances updated.
+     *
+     * <p>Period enforcement (story B2, issue #944): the entry's transaction
+     * date is checked by the accounting-period gate. A date before the
+     * org-level hard-lock date is rejected unconditionally (422:
+     * PERIOD_HARD_LOCKED). A date in a CLOSED period is rejected (422:
+     * PERIOD_CLOSED) unless the caller holds
+     * {@code accounting:period:override} and supplies a non-blank
+     * {@code overrideJustification}, in which case the posting proceeds and
+     * the override is audit-logged. A missing period row counts as OPEN and
+     * is auto-provisioned.
+     *
+     * @param journalEntryId        entry to post
+     * @param overrideJustification optional justification for posting into a
+     *                              CLOSED period; requires the
+     *                              {@code accounting:period:override}
+     *                              permission
+     * @return posted entry
+     * @throws IllegalStateException if entry is not in DRAFT status or is
+     *                               unbalanced
+     * @throws com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException
+     *         if the transaction date is before the hard-lock date (422:
+     *         PERIOD_HARD_LOCKED, no override)
+     * @throws com.positivity.accounting.internal.exception.AccountingPeriodClosedException
+     *         if the transaction date's period is CLOSED and no valid
+     *         override applies (422: PERIOD_CLOSED)
+     */
+    JournalEntry postJournalEntry(UUID journalEntryId, @Nullable String overrideJustification);
 
     /**
      * Reverses a posted journal entry by creating an inverse entry (story A3,
@@ -107,6 +139,39 @@ public interface JournalEntryService {
      */
     JournalEntry reverseJournalEntry(
             @NonNull UUID originalEntryId, @NonNull String reversalReason, @Nullable LocalDate reversalDate);
+
+    /**
+     * Reverses a posted journal entry with an optional period override
+     * (story B2, issue #944). Behaves like
+     * {@link #reverseJournalEntry(UUID, String, LocalDate)}, but the resolved
+     * reversal date goes through the full accounting-period gate: a date
+     * before the hard-lock date is rejected unconditionally (422:
+     * PERIOD_HARD_LOCKED); a date in a CLOSED period is rejected (422:
+     * PERIOD_CLOSED) unless the caller holds
+     * {@code accounting:period:override} and supplies a non-blank
+     * {@code overrideJustification}, in which case the reversal posts into
+     * the closed period and the override is audit-logged.
+     *
+     * @param originalEntryId       entry to reverse
+     * @param reversalReason        reason for reversal
+     * @param reversalDate          optional transaction date for the reversal
+     *                              entry; null selects the A3 default
+     *                              (original's date if its period is open,
+     *                              else the current date)
+     * @param overrideJustification optional justification for reversing into
+     *                              a CLOSED period; requires the
+     *                              {@code accounting:period:override}
+     *                              permission
+     * @return reversal journal entry (POSTED, numbered)
+     * @throws com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException
+     *         if the resolved reversal date is before the hard-lock date
+     *         (422: PERIOD_HARD_LOCKED, no override)
+     */
+    JournalEntry reverseJournalEntry(
+            @NonNull UUID originalEntryId,
+            @NonNull String reversalReason,
+            @Nullable LocalDate reversalDate,
+            @Nullable String overrideJustification);
 
     /**
      * Lists journal entries with pagination and optional filtering.

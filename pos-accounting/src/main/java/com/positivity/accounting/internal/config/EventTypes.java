@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 59 event types (includes +2 from CAP-251 #5:
+     * Total: 61 event types (includes +2 from CAP-251 #5:
      * ACCOUNTING_STATUS_SYNC_PROCESS and ACCOUNTING_STATUS_VIEW, in addition to
      * CAP-053 Vendor Bill workflow + GL Mapping, +3 from PRD missing endpoints:
      * ACCOUNTING_REPORT_EXPORT_REQUEST, ACCOUNTING_REPORT_EXPORT_STATUS,
@@ -24,9 +24,11 @@ public final class EventTypes {
      * (Issue #816): ACCOUNTING_VENDOR_SEARCH, ACCOUNTING_VENDOR_GET, +3
      * from accounting period lifecycle (Story B1, Issue #937):
      * ACCOUNTING_PERIOD_LIST, ACCOUNTING_PERIOD_CLOSE,
-     * ACCOUNTING_PERIOD_REOPEN, and +2 previously emitted but unregistered
+     * ACCOUNTING_PERIOD_REOPEN, +2 previously emitted but unregistered
      * journal-entry lifecycle events (Story A3, Issue #943):
-     * ACCOUNTING_JOURNAL_ENTRY_POST, ACCOUNTING_JOURNAL_ENTRY_REVERSE).
+     * ACCOUNTING_JOURNAL_ENTRY_POST, ACCOUNTING_JOURNAL_ENTRY_REVERSE, and
+     * +2 from the org-level hard-lock date (Story B2, Issue #944):
+     * ACCOUNTING_PERIOD_HARD_LOCK_VIEW, ACCOUNTING_PERIOD_HARD_LOCK_SET).
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -219,6 +221,16 @@ public final class EventTypes {
                 EventTypeRegistration.approval(
                                 "ACCOUNTING_PERIOD_REOPEN",
                                 "Reopen a closed accounting period with mandatory justification")
+                        .build(),
+
+                // AccountingPeriodController hard lock — 2 events (Story B2, Issue #944)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_PERIOD_HARD_LOCK_VIEW", "View the org-level accounting hard-lock date")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_PERIOD_HARD_LOCK_SET",
+                                "Set the org-level accounting hard-lock date (monotonic forward,"
+                                        + " mandatory justification)")
                         .build());
     }
 }

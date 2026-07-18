@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,6 +23,7 @@ import com.positivity.accounting.internal.exception.JournalEntryNotReversibleExc
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.service.AccountingPeriodGate;
 import com.positivity.accounting.internal.service.AccountingSequenceProvisioner;
 import com.positivity.accounting.internal.service.GLAccountServiceImpl;
 import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
@@ -40,7 +42,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -79,12 +80,14 @@ class JournalEntryServiceTest {
     private AccountingPeriodService accountingPeriodService;
 
     @Mock
+    private AccountingConfigurationService configurationService;
+
+    @Mock
     private AccountingAuditLogRepository auditLogRepository;
 
     @Mock
     private OutboxService outboxService;
 
-    @InjectMocks
     private JournalEntryServiceImpl service;
 
     private UUID testJournalEntryId;
@@ -95,6 +98,23 @@ class JournalEntryServiceTest {
 
     @BeforeEach
     void setUp() {
+        // Real period gate (B2) wired against the mocked period/config
+        // services, so the closed-period expectations below exercise the
+        // production gate logic instead of a stubbed gate.
+        lenient().when(configurationService.getHardLockDate()).thenReturn(Optional.empty());
+        AccountingPeriodGate accountingPeriodGate =
+                new AccountingPeriodGate(accountingPeriodService, configurationService, auditLogRepository);
+        service = new JournalEntryServiceImpl(
+                clock,
+                journalEntryRepository,
+                glAccountService,
+                sequenceRepository,
+                sequenceProvisioner,
+                accountingPeriodService,
+                accountingPeriodGate,
+                auditLogRepository,
+                outboxService);
+
         testJournalEntryId = UUID.randomUUID();
         testGLAccountId1 = UUID.randomUUID();
         testGLAccountId2 = UUID.fromString("00000000-0000-0000-0000-000000000002");
@@ -346,6 +366,8 @@ class JournalEntryServiceTest {
         when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(entry));
         doNothing().when(glAccountService).validateAccountForPosting(any(UUID.class), any(LocalDateTime.class));
         when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        // Period gate (B2): the transaction month is open
+        when(accountingPeriodService.isPeriodOpen(any(LocalDate.class))).thenReturn(true);
 
         // Sequence row for the entry's transaction month (2024-01, fixed clock)
         AccountingSequence sequence = new AccountingSequence();
