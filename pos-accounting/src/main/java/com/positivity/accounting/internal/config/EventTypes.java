@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 61 event types (includes +2 from CAP-251 #5:
+     * Total: 62 event types (includes +2 from CAP-251 #5:
      * ACCOUNTING_STATUS_SYNC_PROCESS and ACCOUNTING_STATUS_VIEW, in addition to
      * CAP-053 Vendor Bill workflow + GL Mapping, +3 from PRD missing endpoints:
      * ACCOUNTING_REPORT_EXPORT_REQUEST, ACCOUNTING_REPORT_EXPORT_STATUS,
@@ -28,7 +28,9 @@ public final class EventTypes {
      * journal-entry lifecycle events (Story A3, Issue #943):
      * ACCOUNTING_JOURNAL_ENTRY_POST, ACCOUNTING_JOURNAL_ENTRY_REVERSE, and
      * +2 from the org-level hard-lock date (Story B2, Issue #944):
-     * ACCOUNTING_PERIOD_HARD_LOCK_VIEW, ACCOUNTING_PERIOD_HARD_LOCK_SET).
+     * ACCOUNTING_PERIOD_HARD_LOCK_VIEW, ACCOUNTING_PERIOD_HARD_LOCK_SET, and
+     * +1 from AR cash-receipt GL posting (Story C1, Issue #954):
+     * PAYMENT_APPLICATION_GL_POSTING).
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -182,6 +184,12 @@ public final class EventTypes {
 
                 // AP Payment GL Posting - 1 event (Issue #128)
                 EventTypeRegistration.write("AP_PAYMENT_GL_POSTING", "Post AP payment to GL (Dr AP, Cr Cash/Bank)")
+                        .build(),
+
+                // AR Payment Application GL Posting - 1 event (story C1, Issue #954)
+                EventTypeRegistration.write(
+                                "PAYMENT_APPLICATION_GL_POSTING",
+                                "Post AR payment application to GL (Dr Undeposited Funds, Cr AR)")
                         .build(),
 
                 // AccountingStatusSyncService — 2 events (CAP-251 #5)

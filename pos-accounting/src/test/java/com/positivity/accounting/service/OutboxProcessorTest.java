@@ -120,6 +120,40 @@ class OutboxProcessorTest {
     }
 
     @Test
+    @DisplayName("processPendingEvents - publishes PaymentApplicationGLPostingEvent (story C1)")
+    void processPendingEvents_publishesPaymentApplicationGLPostingEvent() throws Exception {
+        com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent event =
+                com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent.builder()
+                        .eventId(eventId)
+                        .applicationRequestId("00000000-0000-0000-0000-000000000042")
+                        .paymentId(UUID.fromString("00000000-0000-0000-0000-000000000020"))
+                        .customerId(UUID.fromString("00000000-0000-0000-0000-000000000021"))
+                        .currency("USD")
+                        .appliedAmount(new java.math.BigDecimal("500.00"))
+                        .applicationTimestamp(Instant.parse("2024-01-01T00:00:00Z"))
+                        .build();
+
+        ObjectMapper timeAwareMapper =
+                new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+        OutboxProcessor timeAwareProcessor =
+                new OutboxProcessor(clock, outboxRepository, outboxService, eventPublisher, timeAwareMapper);
+
+        testOutbox.setAggregateType("PaymentApplication");
+        testOutbox.setEventType(
+                com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent.class.getName());
+        testOutbox.setPayload(timeAwareMapper.writeValueAsString(event));
+
+        when(outboxRepository.findPendingForRetry(eq(OutboxStatus.PENDING), any(Instant.class), any(Pageable.class)))
+                .thenReturn(List.of(testOutbox));
+
+        timeAwareProcessor.processPendingEvents();
+
+        verify(eventPublisher)
+                .publishEvent(any(com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent.class));
+        verify(outboxService).markAsPublished(outboxId);
+    }
+
+    @Test
     @DisplayName("processPendingEvents - marks as failed when event type is unsupported")
     void processPendingEvents_unsupportedEventType() {
         testOutbox.setEventType("com.example.UnknownEvent");

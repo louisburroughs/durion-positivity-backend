@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
+import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
@@ -54,8 +55,11 @@ public class OutboxProcessor {
     private static final int BATCH_SIZE = 10;
     private static final int MAX_RETRIES = 5;
     private static final Duration RETRY_DELAY = Duration.ofSeconds(30);
-    private static final Map<String, Class<?>> EVENT_TYPE_REGISTRY =
-            Map.of(APPaymentGLPostingEvent.class.getName(), APPaymentGLPostingEvent.class);
+    private static final Map<String, Class<?>> EVENT_TYPE_REGISTRY = Map.of(
+            APPaymentGLPostingEvent.class.getName(),
+            APPaymentGLPostingEvent.class,
+            PaymentApplicationGLPostingEvent.class.getName(),
+            PaymentApplicationGLPostingEvent.class);
 
     /**
      * Scheduled task to process pending outbox events.

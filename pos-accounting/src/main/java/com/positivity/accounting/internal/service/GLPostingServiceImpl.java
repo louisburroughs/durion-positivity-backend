@@ -156,40 +156,43 @@ public class GLPostingServiceImpl implements GLPostingService {
     }
 
     /**
-     * Post a payment application to GL.
+     * Post a payment application (AR cash receipt) to GL.
      *
      * Creates journal entry with:
-     * - Debit: Cash/Bank
+     * - Debit: Undeposited Funds (decision D-3 — never straight to Cash)
      * - Credit: Accounts Receivable
      *
-     * @param paymentApplicationId Payment application ID (source event)
-     * @param cashAccountId        GL account for cash/bank
-     * @param arAccountId          GL account for AR
-     * @param amount               Payment amount
-     * @param description          Entry description
+     * @param paymentApplicationId      Payment application request ID (source
+     *                                  event)
+     * @param undepositedFundsAccountId GL account for Undeposited Funds (debit
+     *                                  side)
+     * @param arAccountId               GL account for AR
+     * @param amount                    Payment amount
+     * @param description               Entry description
      * @return Posted journal entry
      */
     @Override
     public JournalEntry postPaymentApplication(
             @NonNull UUID paymentApplicationId,
-            @NonNull UUID cashAccountId,
+            @NonNull UUID undepositedFundsAccountId,
             @NonNull UUID arAccountId,
             @NonNull BigDecimal amount,
             @NonNull String description) {
-        return postPaymentApplication(paymentApplicationId, cashAccountId, arAccountId, amount, description, null);
+        return postPaymentApplication(
+                paymentApplicationId, undepositedFundsAccountId, arAccountId, amount, description, null);
     }
 
     @Override
     public JournalEntry postPaymentApplication(
             @NonNull UUID paymentApplicationId,
-            @NonNull UUID cashAccountId,
+            @NonNull UUID undepositedFundsAccountId,
             @NonNull UUID arAccountId,
             @NonNull BigDecimal amount,
             @NonNull String description,
             @Nullable String overrideJustification) {
 
         log.info(
-                "Posting payment application GL entry {}: debit cash {}, credit AR {}",
+                "Posting payment application GL entry {}: debit undeposited funds {}, credit AR {}",
                 paymentApplicationId,
                 amount,
                 amount);
@@ -201,9 +204,9 @@ public class GLPostingServiceImpl implements GLPostingService {
 
         List<JournalEntryLine> lines = new ArrayList<>();
 
-        // Debit: Cash
+        // Debit: Undeposited Funds (D-3)
         JournalEntryLine cashLine = new JournalEntryLine();
-        cashLine.setGlAccountId(cashAccountId);
+        cashLine.setGlAccountId(undepositedFundsAccountId);
         cashLine.setDebitAmount(amount);
         cashLine.setCreditAmount(BigDecimal.ZERO);
         cashLine.setDescription("Cash Receipt - PA#" + paymentApplicationId);

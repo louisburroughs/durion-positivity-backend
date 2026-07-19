@@ -8,8 +8,10 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.entity.CustomerCredit;
@@ -81,6 +83,9 @@ class PaymentApplicationServiceTest {
 
     @Mock
     private InvoiceBalanceCalculator invoiceBalanceCalculator;
+
+    @Mock
+    private OutboxService outboxService;
 
     @InjectMocks
     private PaymentApplicationServiceImpl service;
@@ -499,6 +504,97 @@ class PaymentApplicationServiceTest {
                 .hasMessageContaining("Insufficient funds")
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    // ========================================
+    // GL posting outbox enqueue tests (story C1, issue #954)
+    // ========================================
+
+    @Test
+    @DisplayName("Should enqueue PAYMENT_APPLICATION_GL_POSTING outbox work item on successful application")
+    void testApplyPaymentToInvoices_Success_EnqueuesGLPostingOutboxWorkItem() {
+        // Arrange
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId, List.of(createInvoiceApplication(testInvoiceId, "500.00")));
+
+        when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                .thenReturn(false);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+        when(paymentApplicationRepository.save(any(PaymentApplication.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        stubInvoice(testInvoiceId, "1000.00");
+
+        // Act
+        service.applyPaymentToInvoices(testPaymentId, request);
+
+        // Assert: work item saved to the outbox in the same transaction
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(outboxService)
+                .saveToOutbox(
+                        any(UUID.class),
+                        eq("PaymentApplication"),
+                        eq(testPaymentId),
+                        eq(PaymentApplicationGLPostingEvent.class.getName()),
+                        eventCaptor.capture());
+
+        PaymentApplicationGLPostingEvent event = (PaymentApplicationGLPostingEvent) eventCaptor.getValue();
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getApplicationRequestId()).isEqualTo(testApplicationRequestId);
+        assertThat(event.getPaymentId()).isEqualTo(testPaymentId);
+        assertThat(event.getCustomerId()).isEqualTo(testCustomerId);
+        assertThat(event.getCurrency()).isEqualTo("USD");
+        assertThat(event.getAppliedAmount()).isEqualByComparingTo("500.00");
+        assertThat(event.getApplicationTimestamp()).isEqualTo(Instant.now(TEST_CLOCK));
+    }
+
+    @Test
+    @DisplayName("Should not enqueue GL posting work item when validation fails")
+    void testApplyPaymentToInvoices_ValidationFailure_DoesNotEnqueueGLPosting() {
+        // Arrange: insufficient funds fails before any mutation
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId, List.of(createInvoiceApplication(testInvoiceId, "1500.00")));
+
+        when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                .thenReturn(false);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.applyPaymentToInvoices(testPaymentId, request))
+                .isInstanceOf(ResponseStatusException.class);
+
+        verifyNoInteractions(outboxService);
+    }
+
+    @Test
+    @DisplayName("Should not enqueue GL posting work item on idempotent replay")
+    void testApplyPaymentToInvoices_IdempotentReplay_DoesNotEnqueueGLPosting() {
+        // Arrange: request id already processed
+        PaymentApplication existingApplication = new PaymentApplication();
+        existingApplication.setPaymentApplicationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        existingApplication.setPayment(testPayment);
+        existingApplication.setCustomerId(testCustomerId);
+        existingApplication.setInvoiceId(testInvoiceId);
+        existingApplication.setAppliedAmount(new BigDecimal("500.00"));
+        existingApplication.setCurrency("USD");
+        existingApplication.setApplicationRequestId(testApplicationRequestId);
+        existingApplication.setApplicationTimestamp(Instant.now(TEST_CLOCK));
+
+        when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                .thenReturn(true);
+        when(paymentApplicationRepository.findAllByApplicationRequestId(testApplicationRequestId))
+                .thenReturn(List.of(existingApplication));
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId, List.of(createInvoiceApplication(testInvoiceId, "500.00")));
+
+        // Act
+        service.applyPaymentToInvoices(testPaymentId, request);
+
+        // Assert: replay must not double-enqueue (double-post guard, story C1)
+        verifyNoInteractions(outboxService);
     }
 
     // ========================================

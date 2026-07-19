@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.entity.CustomerCredit;
@@ -14,6 +15,7 @@ import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
+import com.positivity.accounting.service.OutboxService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
@@ -61,6 +63,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
     private final CustomerCreditRepository customerCreditRepository;
     private final PaymentApplicationReversalRepository reversalRepository;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
+    private final OutboxService outboxService;
 
     /**
      * Handle PaymentCleared event from Payment domain.
@@ -231,7 +234,14 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
 
         receivablePaymentRepository.save(payment);
 
-        // 9. Build response
+        // 9. Enqueue GL posting work item in the SAME transaction (transactional
+        // outbox, story C1 issue #954). The async consumer posts
+        // Dr Undeposited Funds / Cr AR (decision D-3); if this transaction rolls
+        // back, the work item rolls back with it, so only committed applications
+        // ever reach the ledger.
+        enqueueGLPostingWorkItem(paymentId, request.getApplicationRequestId(), payment, validation, applicationTimestamp);
+
+        // 10. Build response
         return PaymentApplicationResponse.builder()
                 .paymentId(paymentId)
                 .customerId(payment.getCustomerId())
@@ -436,6 +446,45 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
     }
 
     // ===== PRIVATE HELPER METHODS =====
+
+    /**
+     * Persist a {@link PaymentApplicationGLPostingEvent} work item to the
+     * transactional outbox (story C1, issue #954). Runs inside the surrounding
+     * application transaction ({@code saveToOutbox} uses MANDATORY
+     * propagation), guaranteeing the ledger work item exists iff the
+     * application committed. The application request id travels on the event
+     * as both the posting idempotency key and the journal entry
+     * {@code sourceEventId} basis.
+     */
+    private void enqueueGLPostingWorkItem(
+            @NonNull UUID paymentId,
+            @NonNull String applicationRequestId,
+            @NonNull ReceivablePayment payment,
+            @NonNull InvoiceApplicationValidation validation,
+            @NonNull Instant applicationTimestamp) {
+        PaymentApplicationGLPostingEvent glPostingEvent = PaymentApplicationGLPostingEvent.builder()
+                .eventId(UUIDv7Generator.generate())
+                .applicationRequestId(applicationRequestId)
+                .paymentId(paymentId)
+                .customerId(payment.getCustomerId())
+                .currency(payment.getCurrency())
+                .appliedAmount(validation.actualTotalApplicationAmount())
+                .applicationTimestamp(applicationTimestamp)
+                .build();
+
+        outboxService.saveToOutbox(
+                glPostingEvent.getEventId(),
+                "PaymentApplication",
+                paymentId,
+                glPostingEvent.getClass().getName(),
+                glPostingEvent);
+
+        log.info(
+                "GL posting work item persisted to outbox | applicationRequestId={} | eventId={} | appliedAmount={}",
+                applicationRequestId,
+                glPostingEvent.getEventId(),
+                validation.actualTotalApplicationAmount());
+    }
 
     /**
      * Validate an invoice application against the {@code ext_invoice} replica and accounting's
