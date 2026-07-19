@@ -53,6 +53,30 @@ public interface FinancialReportingService {
     BalanceSheetReport generateBalanceSheet(@NonNull LocalDate asOfDate);
 
     /**
+     * Generate Trial Balance as of specified date.
+     *
+     * Aggregates all POSTED journal lines up to and including the as-of date
+     * into per-account debit/credit/balance rows (ordered by account number),
+     * with grand totals proving the balance constraint (sum of debits equals
+     * sum of credits; the {@code balanced} flag is false when the constraint
+     * is violated).
+     *
+     * Also runs the entry-number gap-check (per monthly sequence scope, see
+     * {@code AccountingSequenceRepository#findMissingEntryNumbers}) and
+     * attaches the results as a footnote block; the footnote is empty on a
+     * clean ledger.
+     *
+     * Returns empty rows with zero totals (balanced = true) and an empty gap
+     * footnote when no POSTED data exists as of the requested date.
+     *
+     * @param asOf reporting date (inclusive)
+     * @return trial balance report with per-account rows, grand totals, and
+     *         entry-number gap footnote
+     */
+    @NonNull
+    TrialBalanceReport generateTrialBalance(@NonNull LocalDate asOf);
+
+    /**
      * Drill down from a statement line to see contributing GL accounts.
      *
      * Returns all accounts mapped to the specified statement line code,

@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 62 event types (includes +2 from CAP-251 #5:
+     * Total: 63 event types (includes +2 from CAP-251 #5:
      * ACCOUNTING_STATUS_SYNC_PROCESS and ACCOUNTING_STATUS_VIEW, in addition to
      * CAP-053 Vendor Bill workflow + GL Mapping, +3 from PRD missing endpoints:
      * ACCOUNTING_REPORT_EXPORT_REQUEST, ACCOUNTING_REPORT_EXPORT_STATUS,
@@ -30,7 +30,8 @@ public final class EventTypes {
      * +2 from the org-level hard-lock date (Story B2, Issue #944):
      * ACCOUNTING_PERIOD_HARD_LOCK_VIEW, ACCOUNTING_PERIOD_HARD_LOCK_SET, and
      * +1 from AR cash-receipt GL posting (Story C1, Issue #954):
-     * PAYMENT_APPLICATION_GL_POSTING).
+     * PAYMENT_APPLICATION_GL_POSTING, and +1 from the trial balance report
+     * (Story G1, Issue #956): REPORT_TRIAL_BALANCE_GENERATE).
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -121,12 +122,16 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead("ACCOUNTING_CREDIT_MEMO_GET", "Get credit memo details by ID")
                         .build(),
 
-                // FinancialReportingController - 4 events (CAP-054)
+                // FinancialReportingController - 5 events (CAP-054, parity-G1)
                 EventTypeRegistration.search(
                                 "REPORT_INCOME_STATEMENT_GENERATE", "Generate income statement report for a date range")
                         .build(),
                 EventTypeRegistration.search(
                                 "REPORT_BALANCE_SHEET_GENERATE", "Generate balance sheet report as of a specific date")
+                        .build(),
+                EventTypeRegistration.search(
+                                "REPORT_TRIAL_BALANCE_GENERATE",
+                                "Generate trial balance report as of a specific date with entry-number gap footnote")
                         .build(),
                 EventTypeRegistration.fastRead(
                                 "REPORT_DRILLDOWN_ACCOUNTS",

@@ -11,7 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.internal.dto.TrialBalanceReport;
 import com.positivity.accounting.service.FinancialReportingService;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collections;
 import org.junit.jupiter.api.DisplayName;
@@ -217,6 +220,69 @@ class FinancialReportingControllerTest extends BaseIntegrationTest {
                     .andExpect(jsonPath("$.message", containsString("End date cannot be before")));
 
             verify(financialReportingService, never()).drilldownToAccounts(any(), any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("Trial Balance - asOf Validation (G1, #956)")
+    class TrialBalanceValidation {
+
+        @Test
+        @DisplayName("Should generate trial balance for a valid asOf date")
+        void shouldGenerateTrialBalanceForValidAsOf() throws Exception {
+            // Given: Service returns an empty balanced report
+            LocalDate asOf = LocalDate.of(2026, 6, 30);
+            when(financialReportingService.generateTrialBalance(eq(asOf)))
+                    .thenReturn(TrialBalanceReport.builder()
+                            .asOfDate(asOf)
+                            .generatedAt(Instant.parse("2026-07-01T00:00:00Z"))
+                            .rows(Collections.emptyList())
+                            .totalDebit(BigDecimal.ZERO)
+                            .totalCredit(BigDecimal.ZERO)
+                            .balanced(true)
+                            .entryNumberGaps(Collections.emptyList())
+                            .build());
+
+            // When: Request with valid asOf date
+            mockMvc.perform(get("/v1/accounting/reports/financial/trial-balance")
+                            .header("X-Authorities", "reporting:view:financial-statements")
+                            .header("X-User", "test-user")
+                            .param("asOf", asOf.toString()))
+                    // Then: Should succeed with the report body
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.asOfDate").value("2026-06-30"))
+                    .andExpect(jsonPath("$.balanced").value(true))
+                    .andExpect(jsonPath("$.rows").isEmpty())
+                    .andExpect(jsonPath("$.entryNumberGaps").isEmpty());
+
+            verify(financialReportingService).generateTrialBalance(eq(asOf));
+        }
+
+        @Test
+        @DisplayName("Should reject malformed asOf date")
+        void shouldRejectMalformedAsOf() throws Exception {
+            // When: Request with a non-ISO date
+            mockMvc.perform(get("/v1/accounting/reports/financial/trial-balance")
+                            .header("X-Authorities", "reporting:view:financial-statements")
+                            .header("X-User", "test-user")
+                            .param("asOf", "06/30/2026"))
+                    // Then: Spring binding rejects it before the service is reached
+                    .andExpect(status().isBadRequest());
+
+            verify(financialReportingService, never()).generateTrialBalance(any());
+        }
+
+        @Test
+        @DisplayName("Should reject missing asOf date")
+        void shouldRejectMissingAsOf() throws Exception {
+            // When: Request without the required asOf parameter
+            mockMvc.perform(get("/v1/accounting/reports/financial/trial-balance")
+                            .header("X-Authorities", "reporting:view:financial-statements")
+                            .header("X-User", "test-user"))
+                    // Then: Should return 400 Bad Request
+                    .andExpect(status().isBadRequest());
+
+            verify(financialReportingService, never()).generateTrialBalance(any());
         }
     }
 }

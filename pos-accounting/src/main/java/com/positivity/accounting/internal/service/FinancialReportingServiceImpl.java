@@ -2,12 +2,18 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.AccountDrilldownResponse;
 import com.positivity.accounting.internal.dto.BalanceSheetReport;
+import com.positivity.accounting.internal.dto.EntryNumberGapCheck;
 import com.positivity.accounting.internal.dto.IncomeStatementReport;
 import com.positivity.accounting.internal.dto.JournalLineDrilldownResponse;
+import com.positivity.accounting.internal.dto.TrialBalanceAccountTotal;
+import com.positivity.accounting.internal.dto.TrialBalanceReport;
+import com.positivity.accounting.internal.dto.TrialBalanceRow;
+import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
 import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
+import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import com.positivity.accounting.service.FinancialReportingService;
@@ -46,16 +52,25 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
     private static final BigDecimal BALANCE_TOLERANCE = new BigDecimal("0.01"); // 1 cent tolerance for rounding
 
+    /**
+     * Prefix of journal-entry monthly sequence scopes ({@code JE-{YYYYMM}}),
+     * matching {@code JournalEntryServiceImpl#entryNumberScopeKey}.
+     */
+    private static final String ENTRY_NUMBER_SCOPE_PREFIX = "JE-";
+
     private final JournalEntryRepository journalEntryRepository;
     private final StatementLineMappingRepository statementLineMappingRepository;
+    private final AccountingSequenceRepository accountingSequenceRepository;
     private final Clock clock;
 
     public FinancialReportingServiceImpl(
             JournalEntryRepository journalEntryRepository,
             StatementLineMappingRepository statementLineMappingRepository,
+            AccountingSequenceRepository accountingSequenceRepository,
             Clock clock) {
         this.journalEntryRepository = journalEntryRepository;
         this.statementLineMappingRepository = statementLineMappingRepository;
+        this.accountingSequenceRepository = accountingSequenceRepository;
         this.clock = clock;
     }
 
@@ -238,6 +253,98 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 .balanced(balanced)
                 .generatedAt(Instant.now(clock))
                 .build();
+    }
+
+    @Override
+    public @NonNull TrialBalanceReport generateTrialBalance(@NonNull LocalDate asOf) {
+
+        log.info("Generating trial balance as of {}", asOf);
+
+        LocalDateTime asOfDateTime = asOf.atTime(LocalTime.MAX);
+
+        // Per-account aggregation happens in the database (grouped JPQL over
+        // POSTED lines, ordered by account code) — the line set is never
+        // materialized in memory.
+        List<TrialBalanceAccountTotal> accountTotals =
+                journalEntryRepository.sumPostedDebitsCreditsByAccountAsOf(asOfDateTime);
+
+        List<TrialBalanceRow> rows = accountTotals.stream()
+                .map(total -> TrialBalanceRow.builder()
+                        .accountId(total.glAccountId().toString())
+                        .accountNumber(total.accountCode())
+                        .accountName(total.accountName())
+                        .totalDebit(total.totalDebit())
+                        .totalCredit(total.totalCredit())
+                        .balance(total.totalDebit().subtract(total.totalCredit()))
+                        .build())
+                .toList();
+
+        BigDecimal totalDebit = rows.stream()
+                .map(TrialBalanceRow::getTotalDebit)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalCredit = rows.stream()
+                .map(TrialBalanceRow::getTotalCredit)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Computed, never assumed: an unbalanced ledger (A1 constraint
+        // violation) must surface operationally as balanced = false.
+        boolean balanced = totalDebit.compareTo(totalCredit) == 0;
+        if (!balanced) {
+            log.warn(
+                    "Trial balance NOT balanced as of {}: totalDebit={}, totalCredit={}, diff={}",
+                    asOf,
+                    totalDebit,
+                    totalCredit,
+                    totalDebit.subtract(totalCredit));
+        }
+
+        // Per contract: an empty ledger reports an empty gap footnote (and the
+        // gap query is PostgreSQL-only, so it is not touched needlessly).
+        List<EntryNumberGapCheck> entryNumberGaps = rows.isEmpty() ? List.of() : checkEntryNumberGaps(asOf);
+
+        log.info(
+                "Trial balance generated as of {}: accounts={}, totalDebit={}, totalCredit={}, balanced={}, gapScopes={}",
+                asOf,
+                rows.size(),
+                totalDebit,
+                totalCredit,
+                balanced,
+                entryNumberGaps.size());
+
+        return TrialBalanceReport.builder()
+                .asOfDate(asOf)
+                .generatedAt(Instant.now(clock))
+                .rows(rows)
+                .totalDebit(totalDebit)
+                .totalCredit(totalCredit)
+                .balanced(balanced)
+                .entryNumberGaps(entryNumberGaps)
+                .build();
+    }
+
+    /**
+     * Run the entry-number gap-check (story A2's
+     * {@code AccountingSequenceRepository#findMissingEntryNumbers}) for every
+     * monthly journal-entry sequence scope up to and including the as-of
+     * month, keeping only scopes that actually have missing numbers. Scope
+     * keys are {@code JE-{YYYYMM}} on the entry's transaction month, so the
+     * lexicographic comparison against the as-of month boundary is a correct
+     * chronological cut. A clean ledger yields an empty footnote.
+     */
+    private List<EntryNumberGapCheck> checkEntryNumberGaps(LocalDate asOf) {
+        String asOfScopeBoundary =
+                String.format("%s%04d%02d", ENTRY_NUMBER_SCOPE_PREFIX, asOf.getYear(), asOf.getMonthValue());
+
+        return accountingSequenceRepository.findAllByOrderByScopeKeyAsc().stream()
+                .map(AccountingSequence::getScopeKey)
+                .filter(scopeKey -> scopeKey.startsWith(ENTRY_NUMBER_SCOPE_PREFIX)
+                        && scopeKey.compareTo(asOfScopeBoundary) <= 0)
+                .map(scopeKey -> EntryNumberGapCheck.builder()
+                        .scopeKey(scopeKey)
+                        .missingNumbers(accountingSequenceRepository.findMissingEntryNumbers(scopeKey))
+                        .build())
+                .filter(gapCheck -> !gapCheck.getMissingNumbers().isEmpty())
+                .toList();
     }
 
     @Override

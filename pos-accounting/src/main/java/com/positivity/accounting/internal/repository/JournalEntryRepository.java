@@ -155,6 +155,33 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
     java.math.BigDecimal sumPostedBalanceAsOf(UUID glAccountId, LocalDateTime asOfDate);
 
     /**
+     * Aggregate POSTED journal lines up to and including the as-of instant into
+     * per-account debit/credit totals, ordered by chart-of-accounts code.
+     * Used for Trial Balance generation (story G1, issue #956); aggregation is
+     * done in the database so the full line set is never loaded into memory.
+     *
+     * @param asOfDate reporting cutoff (inclusive; pass end-of-day for a date)
+     * @return one aggregate per account with POSTED activity, ordered by
+     *         account code; empty when no POSTED data exists as of the cutoff
+     */
+    @Query("""
+                SELECT new com.positivity.accounting.internal.dto.TrialBalanceAccountTotal(
+                    jel.glAccount.glAccountId,
+                    jel.glAccount.accountCode,
+                    jel.glAccount.accountName,
+                    COALESCE(SUM(CASE WHEN jel.debitAmount IS NOT NULL THEN jel.debitAmount ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN jel.creditAmount IS NOT NULL THEN jel.creditAmount ELSE 0 END), 0))
+                FROM JournalEntry je
+                JOIN je.lines jel
+                WHERE je.status = 'POSTED'
+                  AND je.transactionDate <= :asOfDate
+                GROUP BY jel.glAccount.glAccountId, jel.glAccount.accountCode, jel.glAccount.accountName
+                ORDER BY jel.glAccount.accountCode
+            """)
+    List<com.positivity.accounting.internal.dto.TrialBalanceAccountTotal> sumPostedDebitsCreditsByAccountAsOf(
+            LocalDateTime asOfDate);
+
+    /**
      * Find all POSTED journal lines for a GL account within date range.
      * Used for drilldown reporting.
      *
