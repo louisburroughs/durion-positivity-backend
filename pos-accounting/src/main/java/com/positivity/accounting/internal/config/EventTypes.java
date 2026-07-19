@@ -16,7 +16,9 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 68 event types (includes +3 from the GL + aged AR/AP reports
+     * Total: 71 event types (includes +3 from settlement reconciliation
+     * (Story F1c, Issue #963): ACCOUNTING_SETTLEMENT_LINES_LIST,
+     * ACCOUNTING_SETTLEMENT_LINE_MATCH, ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF, +3 from the GL + aged AR/AP reports
      * (Story G2, Issue #960): REPORT_GENERAL_LEDGER_GENERATE,
      * REPORT_AGED_RECEIVABLES_GENERATE, REPORT_AGED_PAYABLES_GENERATE, +1 from AR payment application reversal GL
      * posting (Story C2, Issue #958): PAYMENT_APPLICATION_REVERSAL_GL_POSTING, +1
@@ -274,6 +276,21 @@ public final class EventTypes {
                                 "ACCOUNTING_PERIOD_HARD_LOCK_SET",
                                 "Set the org-level accounting hard-lock date (monotonic forward,"
                                         + " mandatory justification)")
+                        .build(),
+
+                // SettlementReconciliationController — 3 events (Story F1c, Issue #963)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_SETTLEMENT_LINES_LIST",
+                                "List processor settlement lines for reconciliation review")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_SETTLEMENT_LINE_MATCH",
+                                "Manually match an unmatched settlement line to a receivable payment")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF",
+                                "Write off a small unmatched settlement line (reversible JE,"
+                                        + " threshold-gated, mandatory reason)")
                         .build());
     }
 }
