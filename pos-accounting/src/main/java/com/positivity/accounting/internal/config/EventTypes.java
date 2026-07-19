@@ -16,7 +16,9 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 65 event types (includes +1 from AR payment application reversal GL
+     * Total: 68 event types (includes +3 from the GL + aged AR/AP reports
+     * (Story G2, Issue #960): REPORT_GENERAL_LEDGER_GENERATE,
+     * REPORT_AGED_RECEIVABLES_GENERATE, REPORT_AGED_PAYABLES_GENERATE, +1 from AR payment application reversal GL
      * posting (Story C2, Issue #958): PAYMENT_APPLICATION_REVERSAL_GL_POSTING, +1
      * from the mapping resolution dry-run
      * (Story E3, Issue #957): ACCOUNTING_MAPPING_RESOLVE_TEST, and +2 from CAP-251 #5:
@@ -143,6 +145,20 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead(
                                 "REPORT_DRILLDOWN_JOURNAL_LINES",
                                 "Drill down from GL account to source journal entries")
+                        .build(),
+
+                // FinancialReportingController GL + aging reports - 3 events (parity-G2, Issue #960)
+                EventTypeRegistration.search(
+                                "REPORT_GENERAL_LEDGER_GENERATE",
+                                "Generate General Ledger report (per-account POSTED lines with running balance)")
+                        .build(),
+                EventTypeRegistration.search(
+                                "REPORT_AGED_RECEIVABLES_GENERATE",
+                                "Generate Aged Receivables report (bucketed open invoice balances)")
+                        .build(),
+                EventTypeRegistration.search(
+                                "REPORT_AGED_PAYABLES_GENERATE",
+                                "Generate Aged Payables report (bucketed open vendor-bill balances)")
                         .build(),
 
                 // LaborOverheadReportController - 1 event (CAP-316)

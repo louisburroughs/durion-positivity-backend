@@ -1,8 +1,11 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.AccountDrilldownResponse;
+import com.positivity.accounting.internal.dto.AgedPayablesReport;
+import com.positivity.accounting.internal.dto.AgedReceivablesReport;
 import com.positivity.accounting.internal.dto.BalanceSheetReport;
 import com.positivity.accounting.internal.dto.EntryNumberGapCheck;
+import com.positivity.accounting.internal.dto.GeneralLedgerReport;
 import com.positivity.accounting.internal.dto.IncomeStatementReport;
 import com.positivity.accounting.internal.dto.JournalLineDrilldownResponse;
 import com.positivity.accounting.internal.dto.TrialBalanceAccountTotal;
@@ -30,6 +33,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -279,12 +283,10 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                         .build())
                 .toList();
 
-        BigDecimal totalDebit = rows.stream()
-                .map(TrialBalanceRow::getTotalDebit)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalCredit = rows.stream()
-                .map(TrialBalanceRow::getTotalCredit)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalDebit =
+                rows.stream().map(TrialBalanceRow::getTotalDebit).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalCredit =
+                rows.stream().map(TrialBalanceRow::getTotalCredit).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Computed, never assumed: an unbalanced ledger (A1 constraint
         // violation) must surface operationally as balanced = false.
@@ -337,8 +339,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         return accountingSequenceRepository.findAllByOrderByScopeKeyAsc().stream()
                 .map(AccountingSequence::getScopeKey)
-                .filter(scopeKey -> scopeKey.startsWith(ENTRY_NUMBER_SCOPE_PREFIX)
-                        && scopeKey.compareTo(asOfScopeBoundary) <= 0)
+                .filter(scopeKey ->
+                        scopeKey.startsWith(ENTRY_NUMBER_SCOPE_PREFIX) && scopeKey.compareTo(asOfScopeBoundary) <= 0)
                 .map(scopeKey -> EntryNumberGapCheck.builder()
                         .scopeKey(scopeKey)
                         .missingNumbers(accountingSequenceRepository.findMissingEntryNumbers(scopeKey))
@@ -431,6 +433,55 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                                 .sourceEventType(entry.getSourceEventType())
                                 .build()))
                 .toList();
+    }
+
+    // ========================================================================
+    // Story G2 (Issue #960) — General Ledger + Aged AR/AP.
+    //
+    // TEMPORARY CONTRACT STUBS: the API surface (controller, DTOs, interface,
+    // events) is complete, but the report generation logic and repository
+    // queries are the Domain Data Coder's slice. These throw until implemented.
+    //
+    // Domain Data Coder — replace each stub, honoring the semantics in the
+    // FinancialReportingService javadoc:
+    //   * generateGeneralLedger: POSTED-only lines; A3-REVERSED originals
+    //     excluded, POSTED reversing entries included (net-zero pairs);
+    //     opening balance = net POSTED activity strictly before startDate;
+    //     per-line running balance seeded by opening balance; sections ordered
+    //     by account number; optional single-account filter. Extend the
+    //     existing drilldown repo queries (findPostedEntriesForAccount /
+    //     sumPostedBalanceForAccount) with a pre-startDate opening-balance sum.
+    //   * generateAgedReceivables / generateAgedPayables: open-balance =
+    //     total minus applied allocations; bucket by days-past-due
+    //     d = asOfDate - dueDate: current d<=30, 31-60, 61-90, 90+ d>=91;
+    //     item-level aging (each invoice/bill lands in one bucket); per-row and
+    //     grand totals. AR sources open invoices via InvoiceBalanceCalculator
+    //     inputs; AP mirrors from VendorBill / APPaymentAllocation.
+    // ========================================================================
+
+    @Override
+    public @NonNull GeneralLedgerReport generateGeneralLedger(
+            @Nullable String accountId, @NonNull LocalDate startDate, @NonNull LocalDate endDate) {
+        // TODO(Domain Data Coder, Story G2 #960): implement per-account chronological
+        // POSTED lines with running balance (see FinancialReportingService javadoc).
+        throw new UnsupportedOperationException(
+                "generateGeneralLedger not yet implemented (Story G2 #960 domain slice)");
+    }
+
+    @Override
+    public @NonNull AgedReceivablesReport generateAgedReceivables(@NonNull LocalDate asOfDate) {
+        // TODO(Domain Data Coder, Story G2 #960): implement bucketed open receivable
+        // balances (see FinancialReportingService javadoc for bucket math).
+        throw new UnsupportedOperationException(
+                "generateAgedReceivables not yet implemented (Story G2 #960 domain slice)");
+    }
+
+    @Override
+    public @NonNull AgedPayablesReport generateAgedPayables(@NonNull LocalDate asOfDate) {
+        // TODO(Domain Data Coder, Story G2 #960): implement bucketed open payable
+        // balances mirrored from VendorBill / APPaymentAllocation.
+        throw new UnsupportedOperationException(
+                "generateAgedPayables not yet implemented (Story G2 #960 domain slice)");
     }
 
     // ========== Private Helper Methods ==========
