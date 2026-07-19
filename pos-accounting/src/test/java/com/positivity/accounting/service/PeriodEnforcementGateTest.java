@@ -412,7 +412,10 @@ class PeriodEnforcementGateTest {
         @Test
         @DisplayName("hard-locked: rejected regardless of override")
         void hardLocked_rejectedRegardlessOfOverride() {
-            configurationService.setHardLockDate(LocalDate.now().plusDays(1), "Lock everything to date");
+            // plusDays(2), not plusDays(1): near local midnight the posting date (resolved in a
+            // different zone) can already be "tomorrow", which would land ON a +1 lock date where
+            // the boundary rule still posts. +2 keeps today strictly before the lock in any zone.
+            configurationService.setHardLockDate(LocalDate.now().plusDays(2), "Lock everything to date");
 
             authenticate(OVERRIDE_AUTHORITY);
             assertThatThrownBy(() -> postCreditMemo(JUSTIFICATION))
@@ -468,7 +471,10 @@ class PeriodEnforcementGateTest {
         @Test
         @DisplayName("hard-locked: rejected regardless of override")
         void hardLocked_rejectedRegardlessOfOverride() {
-            configurationService.setHardLockDate(LocalDate.now().plusDays(1), "Lock everything to date");
+            // plusDays(2), not plusDays(1): near local midnight the posting date (resolved in a
+            // different zone) can already be "tomorrow", which would land ON a +1 lock date where
+            // the boundary rule still posts. +2 keeps today strictly before the lock in any zone.
+            configurationService.setHardLockDate(LocalDate.now().plusDays(2), "Lock everything to date");
 
             authenticate(OVERRIDE_AUTHORITY);
             assertThatThrownBy(() -> postPaymentApplication(JUSTIFICATION))

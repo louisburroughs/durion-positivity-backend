@@ -118,9 +118,9 @@ class CreditMemoServiceTest {
         testCreditMemo.setPriorPeriodAdjustment(false);
         testCreditMemo.setCurrency("USD");
 
-        // Replica row for the invoice (owned by pos-invoice, fed via invoice.events.v1)
-        testInvoice =
-                replicaInvoice("FINALIZED", "110.00", Instant.now(TEST_CLOCK).minusSeconds(86400));
+        // Replica row for the invoice (owned by pos-invoice, fed via invoice.events.v1).
+        // Stored scalar tax of 10.00 on a 110.00 total => net (pre-tax) amount of 100.00.
+        testInvoice = replicaInvoice("FINALIZED", "110.00", "10.00", Instant.now(TEST_CLOCK) .minusSeconds(86400));
 
         // Mock GL config (lenient - not all tests reach GL posting)
         lenient().when(glConfig.getRevenueAccountId()).thenReturn(testRevenueAccountId);
@@ -160,6 +160,8 @@ class CreditMemoServiceTest {
 
         CreditMemo saved = captor.getValue();
         assertThat(saved.getCreditAmount()).isEqualByComparingTo("50.00");
+        // Stored tax 10.00 pro-rated by credit ratio 50.00/100.00 (net) = 5.00
+        assertThat(saved.getTaxAmountReversed()).isEqualByComparingTo("5.00");
         assertThat(saved.getReasonCode()).isEqualTo("RETURNED_GOODS");
         assertThat(saved.getStatus()).isEqualTo(CreditMemoStatus.POSTED);
         assertThat(saved.getCustomerId()).isEqualTo(testCustomerId);
@@ -229,13 +231,12 @@ class CreditMemoServiceTest {
     @Test
     @DisplayName("Should throw exception when total credit (including tax) exceeds invoice balance")
     void testCreateCreditMemo_TotalAmountWithTaxExceedsBalance() {
-        // Given - invoice balance is $110.00
-        // With a 10% tax reversal, we need a creditAmount such that:
-        // creditAmount + (creditAmount * 0.10) > balanceDue
-        // Setting creditAmount to $105.00 gives us:
+        // Given - invoice balance is $110.00, stored tax 10.00, net 100.00.
+        // A creditAmount of $105.00 exceeds the remaining net (100.00), so the
+        // final-credit residual path reverses the full stored tax:
         // - creditAmount: $105.00
-        // - taxReversed: $10.50 (10% of 105)
-        // - total: $115.50, which exceeds the $110.00 balance
+        // - taxReversed: $10.00 (full stored tax residual)
+        // - total: $115.00, which exceeds the $110.00 balance
         testRequest.setCreditAmount(new BigDecimal("105.00"));
         stubReplica(testInvoice, "110.00");
 
@@ -266,7 +267,7 @@ class CreditMemoServiceTest {
     @DisplayName("Should throw exception when invoice is not AR-eligible (DRAFT)")
     void testCreateCreditMemo_DraftInvoice() {
         // Given - a DRAFT invoice never entered AR
-        testInvoice = replicaInvoice("DRAFT", "110.00", null);
+        testInvoice = replicaInvoice("DRAFT", "110.00", "10.00", null);
         when(invoiceBalanceCalculator.findInvoice(testInvoiceId)).thenReturn(Optional.of(testInvoice));
         when(invoiceBalanceCalculator.isArEligible(testInvoice)).thenReturn(false);
 
@@ -297,7 +298,7 @@ class CreditMemoServiceTest {
     void testCreateCreditMemo_PriorPeriodAdjustment() {
         // Given - invoice finalized in a prior period
         Instant priorPeriodDate = Instant.now(TEST_CLOCK).minusSeconds(2592000); // 30 days ago
-        testInvoice = replicaInvoice("FINALIZED", "110.00", priorPeriodDate);
+        testInvoice = replicaInvoice("FINALIZED", "110.00", "10.00", priorPeriodDate);
 
         testCreditMemo.setPriorPeriodAdjustment(true);
         testCreditMemo.setOriginalPeriodId("2026-01");
@@ -484,16 +485,179 @@ class CreditMemoServiceTest {
     }
 
     // ========================================
+    // Stored-tax reversal semantics (issue #953, Odoo parity D-4)
+    // ========================================
+
+    @Test
+    @DisplayName("Regression: tax reversal derives from stored invoice tax, not a fictional 10% of balance")
+    void testStoredTax_NoFictionalTenPercent() {
+        // Given - invoice with NO stored tax; the legacy code would have invented
+        // 10% of the balance (110.00 * 0.10 * 50/110 = 5.00)
+        testInvoice = replicaInvoice("FINALIZED", "110.00", null, Instant.now(TEST_CLOCK));
+        stubReplica(testInvoice, "110.00");
+        stubSaveEcho();
+
+        // When
+        CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
+
+        // Then - no stored tax means nothing to reverse
+        assertThat(response.getTaxAmountReversed()).isEqualByComparingTo("0.00");
+        assertThat(response.getTotalAmount()).isEqualByComparingTo("50.00");
+        verify(glPostingService)
+                .postCreditMemoReversal(
+                        any(UUID.class),
+                        eq(testRevenueAccountId),
+                        eq(testTaxAccountId),
+                        eq(testArAccountId),
+                        eq(new BigDecimal("50.00")),
+                        eq(new BigDecimal("0.00")),
+                        anyString(),
+                        eq(false),
+                        eq(null));
+    }
+
+    @Test
+    @DisplayName("Partial credit rounds pro-rated stored tax HALF_UP at currency scale (35.59 * 0.5 -> 17.80)")
+    void testStoredTax_RatioRoundingHalfUp() {
+        // Given - tax 35.59 on net 200.00 (total 235.59); credit half the net
+        testInvoice = replicaInvoice("FINALIZED", "235.59", "35.59", Instant.now(TEST_CLOCK));
+        stubReplica(testInvoice, "235.59");
+        stubSaveEcho();
+        testRequest.setCreditAmount(new BigDecimal("100.00"));
+
+        // When
+        CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
+
+        // Then - 35.59 * 0.5 = 17.795 -> HALF_UP -> 17.80
+        assertThat(response.getTaxAmountReversed()).isEqualByComparingTo("17.80");
+        assertThat(response.getTotalAmount()).isEqualByComparingTo("117.80");
+    }
+
+    @Test
+    @DisplayName("Final credit posts the tax residual so cumulative reversals sum exactly to stored tax (17.79)")
+    void testStoredTax_FinalCreditResidual() {
+        // Given - same 35.59-tax invoice; a prior POSTED memo credited 100.00 net
+        // and reversed 17.80 tax; this credit consumes the remaining net
+        testInvoice = replicaInvoice("FINALIZED", "235.59", "35.59", Instant.now(TEST_CLOCK));
+        stubReplica(testInvoice, "117.79");
+        stubPriorCredits("100.00", "17.80");
+        stubSaveEcho();
+        testRequest.setCreditAmount(new BigDecimal("100.00"));
+
+        // When
+        CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
+
+        // Then - residual = 35.59 - 17.80 = 17.79 (not round(35.59 * 0.5) = 17.80)
+        assertThat(response.getTaxAmountReversed()).isEqualByComparingTo("17.79");
+        assertThat(response.getTotalAmount()).isEqualByComparingTo("117.79");
+        assertThat(response.getInvoiceBalanceAfter()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @DisplayName("Single full credit reverses the stored tax exactly")
+    void testStoredTax_SingleFullCreditExactness() {
+        // Given - full-net credit in one memo
+        testInvoice = replicaInvoice("FINALIZED", "235.59", "35.59", Instant.now(TEST_CLOCK));
+        stubReplica(testInvoice, "235.59");
+        stubSaveEcho();
+        testRequest.setCreditAmount(new BigDecimal("200.00"));
+
+        // When
+        CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
+
+        // Then - cumulative reversal equals the stored tax with a single credit
+        assertThat(response.getTaxAmountReversed()).isEqualByComparingTo("35.59");
+        assertThat(response.getTotalAmount()).isEqualByComparingTo("235.59");
+        assertThat(response.getInvoiceBalanceAfter()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @DisplayName("Adversarial: penny tax (0.01) is not lost across partial credits")
+    void testStoredTax_PennyTaxResidual() {
+        // Given - tax 0.01 on net 100.00 (total 100.01); a third-part credit
+        testInvoice = replicaInvoice("FINALIZED", "100.01", "0.01", Instant.now(TEST_CLOCK));
+        stubReplica(testInvoice, "100.01");
+        stubSaveEcho();
+        testRequest.setCreditAmount(new BigDecimal("33.33"));
+
+        // When - partial credit: 0.01 * 0.3333 rounds to 0.00
+        CreditMemoResponse partial = service.createCreditMemo(testRequest, "test-user");
+        assertThat(partial.getTaxAmountReversed()).isEqualByComparingTo("0.00");
+
+        // Given - two prior partials credited 66.66 net with 0.00 tax reversed
+        stubReplica(testInvoice, "33.35");
+        stubPriorCredits("66.66", "0.00");
+        testRequest.setCreditAmount(new BigDecimal("33.34"));
+
+        // When - final credit consumes the remaining net
+        CreditMemoResponse finalCredit = service.createCreditMemo(testRequest, "test-user");
+
+        // Then - the whole 0.01 tax surfaces on the final line
+        assertThat(finalCredit.getTaxAmountReversed()).isEqualByComparingTo("0.01");
+    }
+
+    @Test
+    @DisplayName("Adversarial: 99.99 tax over three equal credits sums exactly (33.33 + 33.33 + 33.33)")
+    void testStoredTax_HighTaxThreeWayResidual() {
+        // Given - tax 99.99 on net 300.00 (total 399.99); first third
+        testInvoice = replicaInvoice("FINALIZED", "399.99", "99.99", Instant.now(TEST_CLOCK));
+        stubReplica(testInvoice, "399.99");
+        stubSaveEcho();
+        testRequest.setCreditAmount(new BigDecimal("100.00"));
+
+        // When - 99.99 * (100/300) = 33.33
+        CreditMemoResponse first = service.createCreditMemo(testRequest, "test-user");
+        assertThat(first.getTaxAmountReversed()).isEqualByComparingTo("33.33");
+
+        // Given - two thirds already credited; final third
+        stubReplica(testInvoice, "133.33");
+        stubPriorCredits("200.00", "66.66");
+
+        // When - residual = 99.99 - 66.66 = 33.33
+        CreditMemoResponse last = service.createCreditMemo(testRequest, "test-user");
+
+        // Then - cumulative 66.66 + 33.33 = 99.99 = stored tax
+        assertThat(last.getTaxAmountReversed()).isEqualByComparingTo("33.33");
+    }
+
+    @Test
+    @DisplayName("Sequence: single partial then final credit reverses 17.80 then 17.79")
+    void testStoredTax_PartialThenFinalSequence() {
+        // Given - Odoo residual vector: tax 35.59 split 50/50 across two credits
+        testInvoice = replicaInvoice("FINALIZED", "235.59", "35.59", Instant.now(TEST_CLOCK));
+        stubReplica(testInvoice, "235.59");
+        stubSaveEcho();
+        testRequest.setCreditAmount(new BigDecimal("100.00"));
+
+        // When - first half
+        CreditMemoResponse first = service.createCreditMemo(testRequest, "test-user");
+        assertThat(first.getTaxAmountReversed()).isEqualByComparingTo("17.80");
+
+        // Given - the first memo is now POSTED history
+        stubReplica(testInvoice, "117.79");
+        stubPriorCredits("100.00", "17.80");
+
+        // When - second half (final)
+        CreditMemoResponse second = service.createCreditMemo(testRequest, "test-user");
+
+        // Then - 17.80 + 17.79 = 35.59 exactly
+        assertThat(second.getTaxAmountReversed()).isEqualByComparingTo("17.79");
+        assertThat(first.getTaxAmountReversed().add(second.getTaxAmountReversed()))
+                .isEqualByComparingTo("35.59");
+    }
+
+    // ========================================
     // Helper Methods
     // ========================================
 
-    private ExtInvoice replicaInvoice(String status, String total, Instant finalizedAt) {
+    private ExtInvoice replicaInvoice(String status, String total, String tax, Instant finalizedAt) {
         return ExtInvoice.builder()
                 .invoiceId(testInvoiceId)
                 .workorderId(UUID.fromString("00000000-0000-0000-0000-0000000000ff"))
                 .partyId(testCustomerId.toString())
                 .status(status)
                 .total(new BigDecimal(total))
+                .tax(tax != null ? new BigDecimal(tax) : null)
                 .finalizedAt(finalizedAt)
                 .aggregateVersion(1L)
                 .updatedAt(Instant.now(TEST_CLOCK))
@@ -506,5 +670,27 @@ class CreditMemoServiceTest {
                 .thenReturn(Optional.of(invoice));
         lenient().when(invoiceBalanceCalculator.isArEligible(invoice)).thenReturn(true);
         lenient().when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(new BigDecimal(balanceDue));
+        stubPriorCredits("0.00", "0.00");
+    }
+
+    /** Stub the sums of previously POSTED credit memos (revenue portion / reversed tax). */
+    private void stubPriorCredits(String creditedRevenue, String reversedTax) {
+        lenient()
+                .when(creditMemoRepository.sumCreditAmountByInvoiceIdAndStatus(
+                        testInvoiceId, CreditMemoStatus.POSTED))
+                .thenReturn(new BigDecimal(creditedRevenue));
+        lenient()
+                .when(creditMemoRepository.sumTaxReversedAmountByInvoiceIdAndStatus(
+                        testInvoiceId, CreditMemoStatus.POSTED))
+                .thenReturn(new BigDecimal(reversedTax));
+    }
+
+    /** Echo the saved entity back (with an id) so responses reflect the computed amounts. */
+    private void stubSaveEcho() {
+        when(creditMemoRepository.save(any(CreditMemo.class))).thenAnswer(invocation -> {
+            CreditMemo memo = invocation.getArgument(0);
+            memo.setCreditMemoId(testCreditMemoId);
+            return memo;
+        });
     }
 }
