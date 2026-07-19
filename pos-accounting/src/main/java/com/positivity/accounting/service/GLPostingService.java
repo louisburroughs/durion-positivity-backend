@@ -2,6 +2,7 @@ package com.positivity.accounting.service;
 
 import com.positivity.accounting.internal.entity.JournalEntry;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -77,6 +78,11 @@ public interface GLPostingService {
      *                                   (debit side)
      * @param arAccountId                GL account for AR
      * @param amount                     Payment amount
+     * @param transactionDate            Business transaction date (the payment
+     *                                   application timestamp) used as the
+     *                                   journal entry date; must not be derived
+     *                                   from processing/clock time so outbox
+     *                                   retries post into the correct period
      * @param description                Entry description
      * @return Posted journal entry
      */
@@ -85,6 +91,7 @@ public interface GLPostingService {
             UUID undepositedFundsAccountId,
             UUID arAccountId,
             BigDecimal amount,
+            LocalDateTime transactionDate,
             String description);
 
     /**
@@ -104,6 +111,7 @@ public interface GLPostingService {
             @NonNull UUID undepositedFundsAccountId,
             @NonNull UUID arAccountId,
             @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
             @NonNull String description,
             @Nullable String overrideJustification);
 }

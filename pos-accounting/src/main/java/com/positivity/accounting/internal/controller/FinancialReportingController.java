@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.dto.JournalLineDrilldownResponse;
 import com.positivity.accounting.internal.dto.TrialBalanceReport;
 import com.positivity.accounting.service.FinancialReportingService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -142,9 +143,18 @@ public class FinancialReportingController {
             responseCode = "200",
             description = "Trial balance generated successfully (rows empty when no POSTED data exists as of the date)",
             content = @Content(schema = @Schema(implementation = TrialBalanceReport.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid or missing asOf date")
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid or missing asOf date",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing reporting:view:financial-statements",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<TrialBalanceReport> generateTrialBalance(
             @Parameter(description = "As-of date (YYYY-MM-DD)", required = true, example = "2026-06-30")
                     @RequestParam

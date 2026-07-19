@@ -1457,13 +1457,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MappingResolutionTestResponse'
-        '403':
-          description: Forbidden
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Missing or invalid authentication
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MappingResolutionTestResponse'
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:posting_rules:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - accounting:posting_rules:view
@@ -2872,19 +2878,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TrialBalanceReport'
+                $ref: '#/components/schemas/ApiError'
         '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TrialBalanceReport'
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - missing reporting:view:financial-statements
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TrialBalanceReport'
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - reporting:view:financial-statements

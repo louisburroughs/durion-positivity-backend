@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -322,7 +323,7 @@ class GLPostingServiceTest {
 
         // Act
         JournalEntry result = service.postPaymentApplication(
-                testPaymentApplicationId, testCashAccountId, testArAccountId, amount, description);
+                testPaymentApplicationId, testCashAccountId, testArAccountId, amount, LocalDateTime.now(), description);
 
         // Assert
         assertThat(result.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
@@ -360,7 +361,7 @@ class GLPostingServiceTest {
         when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
-        service.postPaymentApplication(testPaymentApplicationId, testCashAccountId, testArAccountId, amount, "Test");
+        service.postPaymentApplication(testPaymentApplicationId, testCashAccountId, testArAccountId, amount, LocalDateTime.now(), "Test");
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();
@@ -388,7 +389,7 @@ class GLPostingServiceTest {
         when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
-        service.postPaymentApplication(testPaymentApplicationId, testCashAccountId, testArAccountId, amount, "Test");
+        service.postPaymentApplication(testPaymentApplicationId, testCashAccountId, testArAccountId, amount, LocalDateTime.now(), "Test");
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();
@@ -417,7 +418,7 @@ class GLPostingServiceTest {
 
         // Act
         service.postPaymentApplication(
-                testPaymentApplicationId, testCashAccountId, testArAccountId, new BigDecimal("100.00"), description);
+                testPaymentApplicationId, testCashAccountId, testArAccountId, new BigDecimal("100.00"), LocalDateTime.now(), description);
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();

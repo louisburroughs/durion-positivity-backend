@@ -435,6 +435,7 @@ class PeriodEnforcementGateTest {
                     glAccountId,
                     glAccountId,
                     new BigDecimal("55.0000"),
+                    LocalDateTime.now(),
                     "B2 payment application test",
                     overrideJustification);
         }

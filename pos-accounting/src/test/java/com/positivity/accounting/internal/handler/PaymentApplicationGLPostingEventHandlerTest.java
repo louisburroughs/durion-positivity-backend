@@ -99,7 +99,12 @@ class PaymentApplicationGLPostingEventHandlerTest {
     void happyPath_postsBalancedEntryWithResolvedAccounts() {
         stubAccountResolution();
         when(glPostingService.postPaymentApplication(
-                        any(UUID.class), any(UUID.class), any(UUID.class), any(BigDecimal.class), any(String.class)))
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(BigDecimal.class),
+                        any(LocalDateTime.class),
+                        any(String.class)))
                 .thenReturn(postedEntry);
 
         handler.onPaymentApplicationGLPosting(testEvent);
@@ -116,6 +121,7 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         debitAccountCaptor.capture(),
                         creditAccountCaptor.capture(),
                         amountCaptor.capture(),
+                        any(LocalDateTime.class),
                         descriptionCaptor.capture());
 
         assertThat(sourceEventIdCaptor.getValue()).isEqualTo(UUID.fromString(APPLICATION_REQUEST_ID));
@@ -130,7 +136,12 @@ class PaymentApplicationGLPostingEventHandlerTest {
     void happyPath_registersIdempotencyKey() {
         stubAccountResolution();
         when(glPostingService.postPaymentApplication(
-                        any(UUID.class), any(UUID.class), any(UUID.class), any(BigDecimal.class), any(String.class)))
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(BigDecimal.class),
+                        any(LocalDateTime.class),
+                        any(String.class)))
                 .thenReturn(postedEntry);
 
         handler.onPaymentApplicationGLPosting(testEvent);
@@ -191,7 +202,12 @@ class PaymentApplicationGLPostingEventHandlerTest {
     void periodClosed_propagatesForRetry() {
         stubAccountResolution();
         when(glPostingService.postPaymentApplication(
-                        any(UUID.class), any(UUID.class), any(UUID.class), any(BigDecimal.class), any(String.class)))
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(BigDecimal.class),
+                        any(LocalDateTime.class),
+                        any(String.class)))
                 .thenThrow(new AccountingPeriodClosedException("2026-03", "Period 2026-03 is CLOSED"));
 
         assertThatThrownBy(() -> handler.onPaymentApplicationGLPosting(testEvent))
@@ -205,7 +221,12 @@ class PaymentApplicationGLPostingEventHandlerTest {
     void nonUuidRequestId_derivesDeterministicSourceEventId() {
         stubAccountResolution();
         when(glPostingService.postPaymentApplication(
-                        any(UUID.class), any(UUID.class), any(UUID.class), any(BigDecimal.class), any(String.class)))
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(BigDecimal.class),
+                        any(LocalDateTime.class),
+                        any(String.class)))
                 .thenReturn(postedEntry);
 
         PaymentApplicationGLPostingEvent nonUuidEvent = PaymentApplicationGLPostingEvent.builder()
@@ -223,6 +244,11 @@ class PaymentApplicationGLPostingEventHandlerTest {
         UUID expected = UUID.nameUUIDFromBytes("REQ-2026-000123".getBytes(StandardCharsets.UTF_8));
         verify(glPostingService)
                 .postPaymentApplication(
-                        eq(expected), any(UUID.class), any(UUID.class), any(BigDecimal.class), any(String.class));
+                        eq(expected),
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(BigDecimal.class),
+                        any(LocalDateTime.class),
+                        any(String.class));
     }
 }

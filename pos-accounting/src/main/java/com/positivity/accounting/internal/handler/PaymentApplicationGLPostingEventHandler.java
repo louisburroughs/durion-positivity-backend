@@ -96,9 +96,16 @@ public class PaymentApplicationGLPostingEventHandler {
                 event.getAppliedAmount());
 
         try {
-            // Transaction date matches the journal entry date set inside
-            // postPaymentApplication (both derive from the injected clock).
-            LocalDateTime transactionDate = LocalDateTime.now(clock);
+            // Transaction date is the event's business timestamp (when the
+            // payment application actually occurred), NOT the processing/clock
+            // time. On outbox retries or backlog the clock time drifts into the
+            // wrong accounting period and selects the wrong effective-dated GL
+            // mapping; deriving from applicationTimestamp keeps both the entry
+            // date and the mapping resolution stable across replays. The Instant
+            // is converted to LocalDateTime using the injected clock's zone,
+            // matching the module's Instant→LocalDateTime convention.
+            LocalDateTime transactionDate =
+                    LocalDateTime.ofInstant(event.getApplicationTimestamp(), clock.getZone());
 
             // Account resolution via posting category / mapping key
             // configuration — no hardcoded account ids (story C1 requirement).
@@ -111,7 +118,12 @@ public class PaymentApplicationGLPostingEventHandler {
             String description = "AR cash receipt for payment application request " + applicationRequestId;
 
             JournalEntry posted = glPostingService.postPaymentApplication(
-                    sourceEventId, undepositedFundsAccountId, arAccountId, event.getAppliedAmount(), description);
+                    sourceEventId,
+                    undepositedFundsAccountId,
+                    arAccountId,
+                    event.getAppliedAmount(),
+                    transactionDate,
+                    description);
 
             idempotencyService.registerKey(idempotencyKey, posted.getJournalEntryId());
 

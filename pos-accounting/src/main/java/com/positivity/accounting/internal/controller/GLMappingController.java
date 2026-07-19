@@ -9,6 +9,7 @@ import com.positivity.accounting.internal.dto.MappingResolutionTestResponse;
 import com.positivity.accounting.service.GLMappingService;
 import com.positivity.accounting.service.MappingResolutionTestService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -147,8 +148,16 @@ public class GLMappingController {
             content = @Content(schema = @Schema(implementation = MappingResolutionTestResponse.class)))
     @ApiResponse(
             responseCode = "400",
-            description = "Invalid request payload, or the sample payload could not be interpreted by the rules")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+            description = "Invalid request payload, or the sample payload could not be interpreted by the rules",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Missing or invalid authentication",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks the accounting:posting_rules:view permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<MappingResolutionTestResponse> resolveTestMapping(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Dry-run mapping/rule resolution request",

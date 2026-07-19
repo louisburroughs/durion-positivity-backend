@@ -177,9 +177,10 @@ public class GLPostingServiceImpl implements GLPostingService {
             @NonNull UUID undepositedFundsAccountId,
             @NonNull UUID arAccountId,
             @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
             @NonNull String description) {
         return postPaymentApplication(
-                paymentApplicationId, undepositedFundsAccountId, arAccountId, amount, description, null);
+                paymentApplicationId, undepositedFundsAccountId, arAccountId, amount, transactionDate, description, null);
     }
 
     @Override
@@ -188,6 +189,7 @@ public class GLPostingServiceImpl implements GLPostingService {
             @NonNull UUID undepositedFundsAccountId,
             @NonNull UUID arAccountId,
             @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
             @NonNull String description,
             @Nullable String overrideJustification) {
 
@@ -198,7 +200,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                 amount);
 
         JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(LocalDateTime.now(clock));
+        entry.setTransactionDate(transactionDate);
         entry.setDescription(description);
         entry.setSourceEventId(paymentApplicationId);
 
