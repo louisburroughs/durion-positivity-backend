@@ -7,7 +7,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.entity.GLMapping;
+import com.positivity.accounting.internal.entity.MappingKey;
+import com.positivity.accounting.internal.entity.PostingCategory;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
+import com.positivity.accounting.internal.repository.MappingKeyRepository;
+import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 import com.positivity.accounting.internal.service.GLMappingResolverImpl;
 import java.time.Clock;
 import java.time.Instant;
@@ -48,6 +52,12 @@ class GLMappingResolverTest {
 
     @Mock
     private GLMappingRepository mappingRepository;
+
+    @Mock
+    private PostingCategoryRepository postingCategoryRepository;
+
+    @Mock
+    private MappingKeyRepository mappingKeyRepository;
 
     @InjectMocks
     private GLMappingResolverImpl resolver;
@@ -421,6 +431,69 @@ class GLMappingResolverTest {
 
             // Assert — exact match wins
             assertThat(result).isEqualTo(exactAccountId);
+        }
+    }
+
+    // ========================================
+    // Name-based resolution (story C1, issue #954)
+    // ========================================
+
+    @Nested
+    @DisplayName("resolveGLAccount by category/key name")
+    class ResolveByName {
+
+        @Test
+        @DisplayName("resolves through category and key configuration to the mapped account")
+        void resolvesThroughConfiguration() {
+            UUID glAccountId = UUID.fromString("00000000-0000-0000-0000-000000001090");
+
+            PostingCategory category = new PostingCategory();
+            category.setPostingCategoryId(postingCategoryId);
+            category.setCategoryName("PAYMENT_APPLICATION");
+            when(postingCategoryRepository.findByCategoryName("PAYMENT_APPLICATION"))
+                    .thenReturn(Optional.of(category));
+
+            MappingKey key = new MappingKey();
+            key.setMappingKeyId(mappingKeyId);
+            when(mappingKeyRepository.findByPostingCategory_PostingCategoryIdAndKeyName(
+                            postingCategoryId, "UNDEPOSITED_FUNDS"))
+                    .thenReturn(Optional.of(key));
+
+            when(mappingRepository.findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate))
+                    .thenReturn(Optional.of(createMapping(glAccountId, null)));
+
+            UUID resolved = resolver.resolveGLAccount("PAYMENT_APPLICATION", "UNDEPOSITED_FUNDS", transactionDate);
+
+            assertThat(resolved).isEqualTo(glAccountId);
+        }
+
+        @Test
+        @DisplayName("throws when the posting category is not configured")
+        void throwsWhenCategoryMissing() {
+            when(postingCategoryRepository.findByCategoryName("PAYMENT_APPLICATION"))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() ->
+                            resolver.resolveGLAccount("PAYMENT_APPLICATION", "UNDEPOSITED_FUNDS", transactionDate))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Posting category not configured");
+        }
+
+        @Test
+        @DisplayName("throws when the mapping key is not configured")
+        void throwsWhenMappingKeyMissing() {
+            PostingCategory category = new PostingCategory();
+            category.setPostingCategoryId(postingCategoryId);
+            when(postingCategoryRepository.findByCategoryName("PAYMENT_APPLICATION"))
+                    .thenReturn(Optional.of(category));
+            when(mappingKeyRepository.findByPostingCategory_PostingCategoryIdAndKeyName(
+                            postingCategoryId, "UNDEPOSITED_FUNDS"))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() ->
+                            resolver.resolveGLAccount("PAYMENT_APPLICATION", "UNDEPOSITED_FUNDS", transactionDate))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Mapping key not configured");
         }
     }
 

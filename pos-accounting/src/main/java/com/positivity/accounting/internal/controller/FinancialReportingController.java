@@ -4,8 +4,10 @@ import com.positivity.accounting.internal.dto.AccountDrilldownResponse;
 import com.positivity.accounting.internal.dto.BalanceSheetReport;
 import com.positivity.accounting.internal.dto.IncomeStatementReport;
 import com.positivity.accounting.internal.dto.JournalLineDrilldownResponse;
+import com.positivity.accounting.internal.dto.TrialBalanceReport;
 import com.positivity.accounting.service.FinancialReportingService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -123,6 +125,47 @@ public class FinancialReportingController {
                     LocalDate asOfDate) {
 
         BalanceSheetReport report = financialReportingService.generateBalanceSheet(asOfDate);
+        return ResponseEntity.ok(report);
+    }
+
+    /**
+     * Generate Trial Balance as of a specific date.
+     */
+    @GetMapping(value = "/trial-balance", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @EmitEvent(id = "REPORT_TRIAL_BALANCE_GENERATE", apiVersion = "1")
+    @Operation(
+            summary = "Generate Trial Balance",
+            description =
+                    "Generate Trial Balance as of a specific date: per-account debit/credit/balance rows from POSTED journal lines, grand totals proving sum(debit) == sum(credit), and an entry-number gap-check footnote per monthly sequence scope",
+            tags = {"Financial Reporting"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Trial balance generated successfully (rows empty when no POSTED data exists as of the date)",
+            content = @Content(schema = @Schema(implementation = TrialBalanceReport.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid or missing asOf date",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing reporting:view:financial-statements",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<TrialBalanceReport> generateTrialBalance(
+            @Parameter(description = "As-of date (YYYY-MM-DD)", required = true, example = "2026-06-30")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    @NonNull
+                    LocalDate asOf) {
+
+        // Malformed/missing asOf is rejected by Spring binding before reaching here;
+        // the module's @RestControllerAdvice maps it to 400 Bad Request with the
+        // accounting domain's standard ApiError format (ADR-0017).
+        TrialBalanceReport report = financialReportingService.generateTrialBalance(asOf);
         return ResponseEntity.ok(report);
     }
 

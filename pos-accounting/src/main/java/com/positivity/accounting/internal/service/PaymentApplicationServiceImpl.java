@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.entity.CustomerCredit;
@@ -8,17 +9,20 @@ import com.positivity.accounting.internal.entity.PaymentApplication;
 import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.enums.AllocationStrategy;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
+import com.positivity.accounting.service.OutboxService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +63,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
     private final CustomerCreditRepository customerCreditRepository;
     private final PaymentApplicationReversalRepository reversalRepository;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
+    private final OutboxService outboxService;
 
     /**
      * Handle PaymentCleared event from Payment domain.
@@ -155,7 +160,9 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
      * 8. Emit events for downstream consumers
      *
      * @param paymentId payment to apply
-     * @param request   application request with invoices and amounts
+     * @param request   application request with invoices, amounts, and optional
+     *                  allocation strategy (see
+     *                  {@link #orderApplicationsForAllocation(PaymentApplicationRequest)})
      * @return application response with details
      * @throws ResponseStatusException with NOT_FOUND if payment not found
      * @throws ResponseStatusException with BAD_REQUEST if validation fails or
@@ -227,7 +234,14 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
 
         receivablePaymentRepository.save(payment);
 
-        // 9. Build response
+        // 9. Enqueue GL posting work item in the SAME transaction (transactional
+        // outbox, story C1 issue #954). The async consumer posts
+        // Dr Undeposited Funds / Cr AR (decision D-3); if this transaction rolls
+        // back, the work item rolls back with it, so only committed applications
+        // ever reach the ledger.
+        enqueueGLPostingWorkItem(paymentId, request.getApplicationRequestId(), payment, validation, applicationTimestamp);
+
+        // 10. Build response
         return PaymentApplicationResponse.builder()
                 .paymentId(paymentId)
                 .customerId(payment.getCustomerId())
@@ -434,6 +448,45 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
     // ===== PRIVATE HELPER METHODS =====
 
     /**
+     * Persist a {@link PaymentApplicationGLPostingEvent} work item to the
+     * transactional outbox (story C1, issue #954). Runs inside the surrounding
+     * application transaction ({@code saveToOutbox} uses MANDATORY
+     * propagation), guaranteeing the ledger work item exists iff the
+     * application committed. The application request id travels on the event
+     * as both the posting idempotency key and the journal entry
+     * {@code sourceEventId} basis.
+     */
+    private void enqueueGLPostingWorkItem(
+            @NonNull UUID paymentId,
+            @NonNull String applicationRequestId,
+            @NonNull ReceivablePayment payment,
+            @NonNull InvoiceApplicationValidation validation,
+            @NonNull Instant applicationTimestamp) {
+        PaymentApplicationGLPostingEvent glPostingEvent = PaymentApplicationGLPostingEvent.builder()
+                .eventId(UUIDv7Generator.generate())
+                .applicationRequestId(applicationRequestId)
+                .paymentId(paymentId)
+                .customerId(payment.getCustomerId())
+                .currency(payment.getCurrency())
+                .appliedAmount(validation.actualTotalApplicationAmount())
+                .applicationTimestamp(applicationTimestamp)
+                .build();
+
+        outboxService.saveToOutbox(
+                glPostingEvent.getEventId(),
+                "PaymentApplication",
+                paymentId,
+                glPostingEvent.getClass().getName(),
+                glPostingEvent);
+
+        log.info(
+                "GL posting work item persisted to outbox | applicationRequestId={} | eventId={} | appliedAmount={}",
+                applicationRequestId,
+                glPostingEvent.getEventId(),
+                validation.actualTotalApplicationAmount());
+    }
+
+    /**
      * Validate an invoice application against the {@code ext_invoice} replica and accounting's
      * derived balance (ADR-0044, #842). The invoice must exist in the replica, be in an
      * AR-eligible lifecycle state (FINALIZED/POSTED), and still carry a positive balance. No
@@ -547,7 +600,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
 
         // All mutations are accounting-local (ADR-0044, #842): a failure rolls back the whole
         // transaction, so no cross-service compensating reversals are needed anymore.
-        for (PaymentApplicationRequest.InvoiceApplication invoiceApp : request.getApplications()) {
+        for (PaymentApplicationRequest.InvoiceApplication invoiceApp : orderApplicationsForAllocation(request)) {
             applySingleInvoiceApplication(
                     new InvoiceApplicationExecutionContext(
                             paymentId,
@@ -561,6 +614,47 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                             invoiceApp.getInvoiceId(), cappedAmounts.get(invoiceApp.getInvoiceId())));
         }
         return applicationDetails;
+    }
+
+    /**
+     * Resolve the allocation iteration order per the request's effective strategy (Issue #955).
+     *
+     * <p>{@code CALLER_ORDER} (including an absent strategy) returns the caller-supplied list
+     * untouched, keeping behavior byte-identical to requests predating the field.
+     * {@code OLDEST_FIRST} returns a sorted copy ordered by ascending replica invoice date
+     * ({@link ExtInvoice#getInvoiceCreatedAt()}); invoices with no replica date sort last, and
+     * equal dates tie-break deterministically by ascending invoice id. Reordering affects
+     * allocation order only — validation, capping, and idempotency semantics are unchanged.
+     *
+     * @param request the application request (strategy resolved via
+     *                {@link PaymentApplicationRequest#resolveAllocationStrategy()})
+     * @return the invoice applications in allocation order
+     */
+    @NonNull private List<PaymentApplicationRequest.InvoiceApplication> orderApplicationsForAllocation(
+            @NonNull PaymentApplicationRequest request) {
+        List<PaymentApplicationRequest.InvoiceApplication> applications = request.getApplications();
+        if (request.resolveAllocationStrategy() != AllocationStrategy.OLDEST_FIRST) {
+            return applications;
+        }
+
+        Map<UUID, Instant> invoiceDates = new HashMap<>();
+        for (PaymentApplicationRequest.InvoiceApplication invoiceApp : applications) {
+            UUID invoiceId = invoiceApp.getInvoiceId();
+            if (!invoiceDates.containsKey(invoiceId)) {
+                invoiceDates.put(
+                        invoiceId,
+                        invoiceBalanceCalculator
+                                .findInvoice(invoiceId)
+                                .map(ExtInvoice::getInvoiceCreatedAt)
+                                .orElse(null));
+            }
+        }
+
+        Comparator<PaymentApplicationRequest.InvoiceApplication> byInvoiceDateThenId = Comparator.comparing(
+                        (PaymentApplicationRequest.InvoiceApplication app) -> invoiceDates.get(app.getInvoiceId()),
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(PaymentApplicationRequest.InvoiceApplication::getInvoiceId);
+        return applications.stream().sorted(byInvoiceDateThenId).toList();
     }
 
     private void applySingleInvoiceApplication(

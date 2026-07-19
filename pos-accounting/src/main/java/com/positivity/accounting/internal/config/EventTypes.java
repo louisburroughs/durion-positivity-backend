@@ -16,7 +16,8 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 61 event types (includes +2 from CAP-251 #5:
+     * Total: 64 event types (includes +1 from the mapping resolution dry-run
+     * (Story E3, Issue #957): ACCOUNTING_MAPPING_RESOLVE_TEST, and +2 from CAP-251 #5:
      * ACCOUNTING_STATUS_SYNC_PROCESS and ACCOUNTING_STATUS_VIEW, in addition to
      * CAP-053 Vendor Bill workflow + GL Mapping, +3 from PRD missing endpoints:
      * ACCOUNTING_REPORT_EXPORT_REQUEST, ACCOUNTING_REPORT_EXPORT_STATUS,
@@ -28,7 +29,10 @@ public final class EventTypes {
      * journal-entry lifecycle events (Story A3, Issue #943):
      * ACCOUNTING_JOURNAL_ENTRY_POST, ACCOUNTING_JOURNAL_ENTRY_REVERSE, and
      * +2 from the org-level hard-lock date (Story B2, Issue #944):
-     * ACCOUNTING_PERIOD_HARD_LOCK_VIEW, ACCOUNTING_PERIOD_HARD_LOCK_SET).
+     * ACCOUNTING_PERIOD_HARD_LOCK_VIEW, ACCOUNTING_PERIOD_HARD_LOCK_SET, and
+     * +1 from AR cash-receipt GL posting (Story C1, Issue #954):
+     * PAYMENT_APPLICATION_GL_POSTING, and +1 from the trial balance report
+     * (Story G1, Issue #956): REPORT_TRIAL_BALANCE_GENERATE).
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -119,12 +123,16 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead("ACCOUNTING_CREDIT_MEMO_GET", "Get credit memo details by ID")
                         .build(),
 
-                // FinancialReportingController - 4 events (CAP-054)
+                // FinancialReportingController - 5 events (CAP-054, parity-G1)
                 EventTypeRegistration.search(
                                 "REPORT_INCOME_STATEMENT_GENERATE", "Generate income statement report for a date range")
                         .build(),
                 EventTypeRegistration.search(
                                 "REPORT_BALANCE_SHEET_GENERATE", "Generate balance sheet report as of a specific date")
+                        .build(),
+                EventTypeRegistration.search(
+                                "REPORT_TRIAL_BALANCE_GENERATE",
+                                "Generate trial balance report as of a specific date with entry-number gap footnote")
                         .build(),
                 EventTypeRegistration.fastRead(
                                 "REPORT_DRILLDOWN_ACCOUNTS",
@@ -141,13 +149,17 @@ public final class EventTypes {
                                 "Generate Labor & Overhead cost report for a location and fiscal year")
                         .build(),
 
-                // GLMappingController - 2 events (GL Mapping)
+                // GLMappingController - 3 events (GL Mapping + parity-E3 dry-run)
                 EventTypeRegistration.write(
                                 "ACCOUNTING_GL_MAPPING_CREATE", "Create GL mapping from external code to GL account")
                         .build(),
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_GL_MAPPING_RESOLVE",
                                 "Resolve external code to GL account using effective-dated mapping")
+                        .build(),
+                EventTypeRegistration.search(
+                                "ACCOUNTING_MAPPING_RESOLVE_TEST",
+                                "Dry-run mapping/rule resolution for a hypothetical event (no persistence)")
                         .build(),
 
                 // VendorBillService - 6 events (CAP-053 Issue #130)
@@ -182,6 +194,12 @@ public final class EventTypes {
 
                 // AP Payment GL Posting - 1 event (Issue #128)
                 EventTypeRegistration.write("AP_PAYMENT_GL_POSTING", "Post AP payment to GL (Dr AP, Cr Cash/Bank)")
+                        .build(),
+
+                // AR Payment Application GL Posting - 1 event (story C1, Issue #954)
+                EventTypeRegistration.write(
+                                "PAYMENT_APPLICATION_GL_POSTING",
+                                "Post AR payment application to GL (Dr Undeposited Funds, Cr AR)")
                         .build(),
 
                 // AccountingStatusSyncService — 2 events (CAP-251 #5)

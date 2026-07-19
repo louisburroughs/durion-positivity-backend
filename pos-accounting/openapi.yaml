@@ -1284,7 +1284,7 @@ paths:
       tags:
       - Payment Applications
       summary: Apply payment
-      description: Apply a payment to an invoice and update its status.
+      description: 'Apply a payment to one or more invoices and update their status. The optional allocationStrategy field controls allocation order: CALLER_ORDER (default when omitted) honors the caller-supplied order; OLDEST_FIRST allocates by ascending invoice date.'
       operationId: applyPayment
       parameters:
       - name: paymentId
@@ -1431,6 +1431,50 @@ paths:
         - accounting:gl-mapping:resolve
       x-required-permissions:
       - accounting:gl-mapping:resolve
+  /v1/accounting/mappings/resolve-test:
+    post:
+      tags:
+      - GL Mapping API
+      summary: Dry-run mapping/rule resolution
+      description: 'Resolves a hypothetical accounting event against the published posting rules and GL mappings, returning the matched rule (id/name/version), mapping details, the exact journal entry lines the evaluator would post (including E1 proportional split-line shares and residual distribution), and per-predicate evaluation outcomes (E2 condition grammar). This is a read-only inspection tool: NOTHING is persisted — no accounting event, journal entry, or outbox record is created. A no-match outcome is a normal 200 response with matched=false (not a 404).'
+      operationId: resolveTestMapping
+      requestBody:
+        description: Dry-run mapping/rule resolution request
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MappingResolutionTestRequest'
+        required: true
+      responses:
+        '200':
+          description: Dry-run resolution completed (matched=false when no published rule matched)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MappingResolutionTestResponse'
+        '400':
+          description: Invalid request payload, or the sample payload could not be interpreted by the rules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Missing or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:posting_rules:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:posting_rules:view
+      x-required-permissions:
+      - accounting:posting_rules:view
   /v1/accounting/mapping-keys:
     post:
       tags:
@@ -2801,6 +2845,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LaborOverheadCostReport'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
+  /v1/accounting/reports/financial/trial-balance:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Generate Trial Balance
+      description: 'Generate Trial Balance as of a specific date: per-account debit/credit/balance rows from POSTED journal lines, grand totals proving sum(debit) == sum(credit), and an entry-number gap-check footnote per monthly sequence scope'
+      operationId: generateTrialBalance
+      parameters:
+      - name: asOf
+        in: query
+        description: As-of date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-06-30
+      responses:
+        '200':
+          description: Trial balance generated successfully (rows empty when no POSTED data exists as of the date)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrialBalanceReport'
+        '400':
+          description: Invalid or missing asOf date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - reporting:view:financial-statements
@@ -5524,6 +5614,16 @@ components:
           items:
             $ref: '#/components/schemas/InvoiceApplication'
           minItems: 1
+        allocationStrategy:
+          type:
+          - string
+          - 'null'
+          default: CALLER_ORDER
+          description: Optional allocation strategy. CALLER_ORDER (default when absent) applies amounts in the order supplied by the caller; OLDEST_FIRST allocates by ascending invoice date. Omitting this field is equivalent to CALLER_ORDER.
+          enum:
+          - CALLER_ORDER
+          - OLDEST_FIRST
+          example: OLDEST_FIRST
       required:
       - applicationRequestId
       - applications
@@ -5775,6 +5875,166 @@ components:
           description: Resolved GL account UUID for the requested external code
           example: 01960003-0000-7000-8000-000000000001
       required:
+      - glAccountId
+    MappingResolutionTestRequest:
+      type: object
+      description: Dry-run mapping/rule resolution request describing a hypothetical accounting event. Nothing is persisted by this operation.
+      properties:
+        eventType:
+          type: string
+          description: Accounting event type to resolve posting rules for
+          example: INVOICE_FINALIZED
+          minLength: 1
+        samplePayload:
+          type: object
+          description: Sample event payload (arbitrary JSON object) evaluated against rule predicates and amount fields. Optional; when omitted the rules are evaluated against an empty payload.
+          example:
+            totalAmount: 125.0
+            channel: POS
+        transactionDate:
+          type: string
+          format: date
+          description: Transaction date used for effective-dated rule version and GL mapping selection
+          example: 2026-01-15
+      required:
+      - eventType
+      - transactionDate
+    MappingResolutionTestResponse:
+      type: object
+      description: Dry-run mapping/rule resolution result. A no-match outcome is represented as matched=false with a reason, not as an error. Nothing is persisted.
+      properties:
+        matched:
+          type: boolean
+          description: Whether a published posting rule matched the supplied event. false means no rule matched; inspect noMatchReason/noMatchDetail.
+          example: true
+        matchedRule:
+          $ref: '#/components/schemas/MatchedRule'
+        matchedMapping:
+          $ref: '#/components/schemas/MatchedMapping'
+        resolvedLines:
+          type: array
+          description: Journal entry lines the evaluator would post for this event, including E1 proportional split-line shares and residual distribution. Present when matched=true.
+          items:
+            $ref: '#/components/schemas/ResolvedLine'
+        predicateEvaluations:
+          type: array
+          description: Per-predicate evaluation outcomes against the sample payload (E2 condition grammar). Populated for every candidate rule condition that was evaluated.
+          items:
+            $ref: '#/components/schemas/PredicateEvaluation'
+        noMatchReason:
+          type: string
+          description: Machine-readable no-match reason, present when matched=false
+          example: UNMAPPED_EVENT_TYPE
+        noMatchDetail:
+          type: string
+          description: Human-readable no-match detail, present when matched=false
+          example: No published rule version maps event type INVOICE_FINALIZED on 2026-01-15
+      required:
+      - matched
+    MatchedMapping:
+      type: object
+      description: Mapping evaluation details for the matched rule
+      properties:
+        mappingType:
+          type: string
+          description: Type of mapping that was matched (exact, fallback, category_default)
+          example: exact
+        mappingKey:
+          type: string
+          description: Mapping key that was matched
+          example: INVENTORY:SKU-1234
+        keysEvaluated:
+          type: array
+          description: All mapping keys evaluated during the search, in evaluation order
+          items:
+            type: string
+    MatchedRule:
+      type: object
+      description: Identity of the posting rule that matched the dry-run event
+      properties:
+        postingRuleSetId:
+          type: string
+          format: uuid
+          description: Posting rule set identifier
+          example: 01960003-0000-7000-8000-000000000001
+        ruleSetName:
+          type: string
+          description: Posting rule set name
+          example: Invoice finalization postings
+        ruleVersionId:
+          type: string
+          format: uuid
+          description: Posting rule version identifier that was evaluated
+          example: 01960003-0000-7000-8000-000000000002
+        versionNumber:
+          type: integer
+          format: int32
+          description: Posting rule version number that was evaluated
+          example: 3
+      required:
+      - postingRuleSetId
+      - ruleSetName
+      - ruleVersionId
+      - versionNumber
+    PredicateEvaluation:
+      type: object
+      description: Evaluation outcome of one rule condition predicate (E2 grammar)
+      properties:
+        predicate:
+          type: string
+          description: Predicate expression as configured on the rule condition
+          example: payload.channel == 'POS' && payload.totalAmount > 100
+        matched:
+          type: boolean
+          description: Whether the predicate matched the supplied event type and sample payload
+          example: true
+        detail:
+          type: string
+          description: Optional evaluation detail (e.g. which clause failed)
+          example: 'clause payload.totalAmount > 100 evaluated false (actual: 42.00)'
+      required:
+      - matched
+      - predicate
+    ResolvedLine:
+      type: object
+      description: One journal entry line the dry-run evaluator would post
+      properties:
+        glAccountId:
+          type: string
+          format: uuid
+          description: Resolved GL account identifier
+          example: 01960003-0000-7000-8000-000000000003
+        accountCode:
+          type: string
+          description: Resolved GL account code
+          example: '4000'
+        accountName:
+          type: string
+          description: Resolved GL account name
+          example: Sales Revenue
+        debitAmount:
+          type: number
+          description: Debit amount for this line
+          example: 75.0
+        creditAmount:
+          type: number
+          description: Credit amount for this line
+          example: 0.0
+        description:
+          type: string
+          description: Line description
+          example: Recognize revenue (60% share)
+        splitGroup:
+          type: string
+          description: E1 split group this line belongs to; null for non-split lines
+          example: revenue-split
+        factorPercent:
+          type: number
+          description: E1 split factor percentage applied to this line; null for non-split lines
+          example: 60.0
+      required:
+      - creditAmount
+      - debitAmount
       - glAccountId
     MappingKeyCreateRequest:
       type: object
@@ -7064,6 +7324,105 @@ components:
       - monthly
       - usdOnly
       - ytd
+    EntryNumberGapCheck:
+      type: object
+      description: Entry-number gap-check result for one monthly sequence scope; absent gaps mean a clean ledger
+      properties:
+        scopeKey:
+          type: string
+          description: Monthly sequence scope key
+          example: JE-202607
+        missingNumbers:
+          type: array
+          description: Ascending sequence numbers handed out but missing from the ledger for this scope
+          example:
+          - 7
+          - 12
+          items:
+            type: integer
+            format: int64
+      required:
+      - missingNumbers
+      - scopeKey
+    TrialBalanceReport:
+      type: object
+      description: Trial Balance report with per-account debit/credit/balance rows from POSTED journal lines, grand totals proving sum(debit) == sum(credit), and an entry-number gap-check footnote
+      properties:
+        asOfDate:
+          type: string
+          format: date
+          description: Date the trial balance is reported as of (inclusive)
+          example: 2026-06-30
+        generatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the report was generated (ISO 8601)
+          example: 2026-06-30 08:00:00+00:00
+        rows:
+          type: array
+          description: Per-account trial balance rows ordered by account number; empty when no POSTED data exists
+          items:
+            $ref: '#/components/schemas/TrialBalanceRow'
+        totalDebit:
+          type: number
+          description: Grand total of all POSTED debit amounts across rows
+          example: 1250000.0
+        totalCredit:
+          type: number
+          description: Grand total of all POSTED credit amounts across rows
+          example: 1250000.0
+        balanced:
+          type: boolean
+          description: Whether sum of debits equals sum of credits; false surfaces a balance-constraint violation
+          example: true
+        entryNumberGaps:
+          type: array
+          description: 'Entry-number gap-check footnote: per-month sequence scopes with missing entry numbers; empty on a clean ledger'
+          items:
+            $ref: '#/components/schemas/EntryNumberGapCheck'
+      required:
+      - asOfDate
+      - balanced
+      - entryNumberGaps
+      - generatedAt
+      - rows
+      - totalCredit
+      - totalDebit
+    TrialBalanceRow:
+      type: object
+      description: Per-account trial balance row aggregated from POSTED journal lines
+      properties:
+        accountId:
+          type: string
+          description: GL account ID (UUID)
+          example: 123e4567-e89b-12d3-a456-426614174000
+        accountNumber:
+          type: string
+          description: GL account number (chart-of-accounts code)
+          example: '1000'
+        accountName:
+          type: string
+          description: GL account display name
+          example: Cash - Operating
+        totalDebit:
+          type: number
+          description: Sum of POSTED debit amounts for the account up to the as-of date
+          example: 125000.0
+        totalCredit:
+          type: number
+          description: Sum of POSTED credit amounts for the account up to the as-of date
+          example: 45000.0
+        balance:
+          type: number
+          description: Net account balance (totalDebit - totalCredit, signed)
+          example: 80000.0
+      required:
+      - accountId
+      - accountName
+      - accountNumber
+      - balance
+      - totalCredit
+      - totalDebit
     IncomeStatementReport:
       type: object
       description: Income statement (Profit & Loss) report built from POSTED journal entries

@@ -2,6 +2,7 @@ package com.positivity.accounting.service;
 
 import com.positivity.accounting.internal.entity.JournalEntry;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -63,21 +64,35 @@ public interface GLPostingService {
             @Nullable String overrideJustification);
 
     /**
-     * Post a payment application to GL.
+     * Post a payment application (AR cash receipt) to GL.
      *
      * Creates journal entry with:
-     * - Debit: Cash/Bank
+     * - Debit: Undeposited Funds (decision D-3 — cash receipts are never
+     * posted straight to Cash; settlement reconciliation clears Undeposited
+     * Funds to Cash later)
      * - Credit: Accounts Receivable
      *
-     * @param paymentApplicationId Payment application ID (source event)
-     * @param cashAccountId        GL account for cash/bank
-     * @param arAccountId          GL account for AR
-     * @param amount               Payment amount
-     * @param description          Entry description
+     * @param paymentApplicationId       Payment application request ID (source
+     *                                   event)
+     * @param undepositedFundsAccountId  GL account for Undeposited Funds
+     *                                   (debit side)
+     * @param arAccountId                GL account for AR
+     * @param amount                     Payment amount
+     * @param transactionDate            Business transaction date (the payment
+     *                                   application timestamp) used as the
+     *                                   journal entry date; must not be derived
+     *                                   from processing/clock time so outbox
+     *                                   retries post into the correct period
+     * @param description                Entry description
      * @return Posted journal entry
      */
     JournalEntry postPaymentApplication(
-            UUID paymentApplicationId, UUID cashAccountId, UUID arAccountId, BigDecimal amount, String description);
+            UUID paymentApplicationId,
+            UUID undepositedFundsAccountId,
+            UUID arAccountId,
+            BigDecimal amount,
+            LocalDateTime transactionDate,
+            String description);
 
     /**
      * Post a payment application to GL with an optional accounting-period
@@ -93,9 +108,10 @@ public interface GLPostingService {
      */
     JournalEntry postPaymentApplication(
             @NonNull UUID paymentApplicationId,
-            @NonNull UUID cashAccountId,
+            @NonNull UUID undepositedFundsAccountId,
             @NonNull UUID arAccountId,
             @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
             @NonNull String description,
             @Nullable String overrideJustification);
 }

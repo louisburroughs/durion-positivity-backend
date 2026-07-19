@@ -34,6 +34,24 @@ public interface GLMappingResolver {
             Map<String, String> dimensionContext);
 
     /**
+     * Resolves a posting category and mapping key to a GL account by their
+     * configured names (story C1, issue #954). Looks up the category and key
+     * configuration, then delegates to
+     * {@link #resolveGLAccount(UUID, UUID, LocalDateTime, Map)} with no
+     * dimensional context (category default resolution).
+     *
+     * @param postingCategoryName posting category name (e.g.
+     *                            {@code PAYMENT_APPLICATION})
+     * @param mappingKeyName      mapping key name within the category (e.g.
+     *                            {@code UNDEPOSITED_FUNDS})
+     * @param transactionDate     effective date for resolution
+     * @return GL account ID for posting
+     * @throws IllegalArgumentException if the category, key, or an effective
+     *                                  mapping is not configured
+     */
+    UUID resolveGLAccount(String postingCategoryName, String mappingKeyName, LocalDateTime transactionDate);
+
+    /**
      * Validates a GL mapping for consistency and non-overlapping effective dates.
      *
      * Checks:

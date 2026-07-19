@@ -8,8 +8,10 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.entity.CustomerCredit;
@@ -18,6 +20,7 @@ import com.positivity.accounting.internal.entity.PaymentApplication;
 import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.enums.AllocationStrategy;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
@@ -34,6 +37,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -79,6 +83,9 @@ class PaymentApplicationServiceTest {
 
     @Mock
     private InvoiceBalanceCalculator invoiceBalanceCalculator;
+
+    @Mock
+    private OutboxService outboxService;
 
     @InjectMocks
     private PaymentApplicationServiceImpl service;
@@ -500,6 +507,97 @@ class PaymentApplicationServiceTest {
     }
 
     // ========================================
+    // GL posting outbox enqueue tests (story C1, issue #954)
+    // ========================================
+
+    @Test
+    @DisplayName("Should enqueue PAYMENT_APPLICATION_GL_POSTING outbox work item on successful application")
+    void testApplyPaymentToInvoices_Success_EnqueuesGLPostingOutboxWorkItem() {
+        // Arrange
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId, List.of(createInvoiceApplication(testInvoiceId, "500.00")));
+
+        when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                .thenReturn(false);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+        when(paymentApplicationRepository.save(any(PaymentApplication.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        stubInvoice(testInvoiceId, "1000.00");
+
+        // Act
+        service.applyPaymentToInvoices(testPaymentId, request);
+
+        // Assert: work item saved to the outbox in the same transaction
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(outboxService)
+                .saveToOutbox(
+                        any(UUID.class),
+                        eq("PaymentApplication"),
+                        eq(testPaymentId),
+                        eq(PaymentApplicationGLPostingEvent.class.getName()),
+                        eventCaptor.capture());
+
+        PaymentApplicationGLPostingEvent event = (PaymentApplicationGLPostingEvent) eventCaptor.getValue();
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getApplicationRequestId()).isEqualTo(testApplicationRequestId);
+        assertThat(event.getPaymentId()).isEqualTo(testPaymentId);
+        assertThat(event.getCustomerId()).isEqualTo(testCustomerId);
+        assertThat(event.getCurrency()).isEqualTo("USD");
+        assertThat(event.getAppliedAmount()).isEqualByComparingTo("500.00");
+        assertThat(event.getApplicationTimestamp()).isEqualTo(Instant.now(TEST_CLOCK));
+    }
+
+    @Test
+    @DisplayName("Should not enqueue GL posting work item when validation fails")
+    void testApplyPaymentToInvoices_ValidationFailure_DoesNotEnqueueGLPosting() {
+        // Arrange: insufficient funds fails before any mutation
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId, List.of(createInvoiceApplication(testInvoiceId, "1500.00")));
+
+        when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                .thenReturn(false);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.applyPaymentToInvoices(testPaymentId, request))
+                .isInstanceOf(ResponseStatusException.class);
+
+        verifyNoInteractions(outboxService);
+    }
+
+    @Test
+    @DisplayName("Should not enqueue GL posting work item on idempotent replay")
+    void testApplyPaymentToInvoices_IdempotentReplay_DoesNotEnqueueGLPosting() {
+        // Arrange: request id already processed
+        PaymentApplication existingApplication = new PaymentApplication();
+        existingApplication.setPaymentApplicationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        existingApplication.setPayment(testPayment);
+        existingApplication.setCustomerId(testCustomerId);
+        existingApplication.setInvoiceId(testInvoiceId);
+        existingApplication.setAppliedAmount(new BigDecimal("500.00"));
+        existingApplication.setCurrency("USD");
+        existingApplication.setApplicationRequestId(testApplicationRequestId);
+        existingApplication.setApplicationTimestamp(Instant.now(TEST_CLOCK));
+
+        when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                .thenReturn(true);
+        when(paymentApplicationRepository.findAllByApplicationRequestId(testApplicationRequestId))
+                .thenReturn(List.of(existingApplication));
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId, List.of(createInvoiceApplication(testInvoiceId, "500.00")));
+
+        // Act
+        service.applyPaymentToInvoices(testPaymentId, request);
+
+        // Assert: replay must not double-enqueue (double-post guard, story C1)
+        verifyNoInteractions(outboxService);
+    }
+
+    // ========================================
     // voidPayment() Tests
     // ========================================
 
@@ -858,8 +956,188 @@ class PaymentApplicationServiceTest {
     }
 
     // ========================================
+    // Allocation Strategy Tests (Issue #955)
+    // ========================================
+
+    @Test
+    @DisplayName("Should allocate in caller order when allocationStrategy is absent (regression)")
+    void testApplyPaymentToInvoices_AbsentStrategy_PreservesCallerOrder() {
+        // Arrange: caller order [newer, older] — oldest-first would reverse it
+        UUID newerInvoice = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+        UUID olderInvoice = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId,
+                List.of(
+                        createInvoiceApplication(newerInvoice, "300.00"),
+                        createInvoiceApplication(olderInvoice, "400.00")));
+
+        stubAppliableRequest();
+        stubInvoice(newerInvoice, "1000.00", Instant.parse("2023-06-01T00:00:00Z"));
+        stubInvoice(olderInvoice, "1000.00", Instant.parse("2023-01-01T00:00:00Z"));
+
+        // Act
+        PaymentApplicationResponse response = service.applyPaymentToInvoices(testPaymentId, request);
+
+        // Assert: caller-supplied order preserved
+        verify(paymentApplicationRepository, times(2)).save(paymentApplicationCaptor.capture());
+        assertThat(paymentApplicationCaptor.getAllValues())
+                .extracting(PaymentApplication::getInvoiceId)
+                .containsExactly(newerInvoice, olderInvoice);
+        assertThat(response.getApplications())
+                .extracting(PaymentApplicationResponse.ApplicationDetail::getInvoiceId)
+                .containsExactly(newerInvoice, olderInvoice);
+        assertThat(response.getAppliedAmount()).isEqualByComparingTo("700.00");
+        assertThat(response.getRemainingAmount()).isEqualByComparingTo("300.00");
+    }
+
+    @Test
+    @DisplayName("Should allocate in caller order when CALLER_ORDER is explicit (identical to default)")
+    void testApplyPaymentToInvoices_ExplicitCallerOrder_PreservesCallerOrder() {
+        // Arrange
+        UUID newerInvoice = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+        UUID olderInvoice = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId,
+                List.of(
+                        createInvoiceApplication(newerInvoice, "300.00"),
+                        createInvoiceApplication(olderInvoice, "400.00")));
+        request.setAllocationStrategy(AllocationStrategy.CALLER_ORDER);
+
+        stubAppliableRequest();
+        stubInvoice(newerInvoice, "1000.00", Instant.parse("2023-06-01T00:00:00Z"));
+        stubInvoice(olderInvoice, "1000.00", Instant.parse("2023-01-01T00:00:00Z"));
+
+        // Act
+        PaymentApplicationResponse response = service.applyPaymentToInvoices(testPaymentId, request);
+
+        // Assert: identical to the absent-strategy path
+        verify(paymentApplicationRepository, times(2)).save(paymentApplicationCaptor.capture());
+        assertThat(paymentApplicationCaptor.getAllValues())
+                .extracting(PaymentApplication::getInvoiceId)
+                .containsExactly(newerInvoice, olderInvoice);
+        assertThat(response.getApplications())
+                .extracting(PaymentApplicationResponse.ApplicationDetail::getInvoiceId)
+                .containsExactly(newerInvoice, olderInvoice);
+    }
+
+    @Test
+    @DisplayName("Should allocate oldest invoice first when OLDEST_FIRST is requested")
+    void testApplyPaymentToInvoices_OldestFirst_ReordersByInvoiceDate() {
+        // Arrange: caller order [newest, oldest, middle]
+        UUID newestInvoice = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+        UUID oldestInvoice = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+        UUID middleInvoice = UUID.fromString("00000000-0000-0000-0000-00000000000c");
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId,
+                List.of(
+                        createInvoiceApplication(newestInvoice, "100.00"),
+                        createInvoiceApplication(oldestInvoice, "200.00"),
+                        createInvoiceApplication(middleInvoice, "300.00")));
+        request.setAllocationStrategy(AllocationStrategy.OLDEST_FIRST);
+
+        stubAppliableRequest();
+        stubInvoice(newestInvoice, "1000.00", Instant.parse("2023-09-01T00:00:00Z"));
+        stubInvoice(oldestInvoice, "1000.00", Instant.parse("2023-01-01T00:00:00Z"));
+        stubInvoice(middleInvoice, "1000.00", Instant.parse("2023-05-01T00:00:00Z"));
+
+        // Act
+        PaymentApplicationResponse response = service.applyPaymentToInvoices(testPaymentId, request);
+
+        // Assert: allocation (and response detail) order is ascending invoice date
+        verify(paymentApplicationRepository, times(3)).save(paymentApplicationCaptor.capture());
+        assertThat(paymentApplicationCaptor.getAllValues())
+                .extracting(PaymentApplication::getInvoiceId)
+                .containsExactly(oldestInvoice, middleInvoice, newestInvoice);
+        assertThat(response.getApplications())
+                .extracting(PaymentApplicationResponse.ApplicationDetail::getInvoiceId)
+                .containsExactly(oldestInvoice, middleInvoice, newestInvoice);
+
+        // Per-invoice amounts still follow the caller's requested amounts
+        assertThat(response.getApplications())
+                .extracting(PaymentApplicationResponse.ApplicationDetail::getAppliedAmount)
+                .usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(new BigDecimal("200.00"), new BigDecimal("300.00"), new BigDecimal("100.00"));
+    }
+
+    @Test
+    @DisplayName("Should tie-break equal invoice dates by invoice id for OLDEST_FIRST")
+    void testApplyPaymentToInvoices_OldestFirst_TieBreaksByInvoiceId() {
+        // Arrange: equal dates, caller order [higher id, lower id]
+        UUID lowerIdInvoice = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+        UUID higherIdInvoice = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+        Instant sharedDate = Instant.parse("2023-03-01T00:00:00Z");
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId,
+                List.of(
+                        createInvoiceApplication(higherIdInvoice, "300.00"),
+                        createInvoiceApplication(lowerIdInvoice, "400.00")));
+        request.setAllocationStrategy(AllocationStrategy.OLDEST_FIRST);
+
+        stubAppliableRequest();
+        stubInvoice(lowerIdInvoice, "1000.00", sharedDate);
+        stubInvoice(higherIdInvoice, "1000.00", sharedDate);
+
+        // Act
+        service.applyPaymentToInvoices(testPaymentId, request);
+
+        // Assert: deterministic ascending invoice-id order on equal dates
+        verify(paymentApplicationRepository, times(2)).save(paymentApplicationCaptor.capture());
+        assertThat(paymentApplicationCaptor.getAllValues())
+                .extracting(PaymentApplication::getInvoiceId)
+                .containsExactly(lowerIdInvoice, higherIdInvoice);
+    }
+
+    @Test
+    @DisplayName("Should keep unappliedAmount math unchanged for OLDEST_FIRST partial allocation")
+    void testApplyPaymentToInvoices_OldestFirst_PartialAllocation_UnappliedMathUnchanged() {
+        // Arrange: 700.00 requested of 1000.00 available, caller order [newer, older]
+        UUID newerInvoice = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+        UUID olderInvoice = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId,
+                List.of(
+                        createInvoiceApplication(newerInvoice, "400.00"),
+                        createInvoiceApplication(olderInvoice, "300.00")));
+        request.setAllocationStrategy(AllocationStrategy.OLDEST_FIRST);
+
+        stubAppliableRequest();
+        stubInvoice(newerInvoice, "800.00", Instant.parse("2023-08-01T00:00:00Z"));
+        stubInvoice(olderInvoice, "600.00", Instant.parse("2023-02-01T00:00:00Z"));
+
+        // Act
+        PaymentApplicationResponse response = service.applyPaymentToInvoices(testPaymentId, request);
+
+        // Assert: same totals as caller-order would produce — only the order differs
+        assertThat(response.getAppliedAmount()).isEqualByComparingTo("700.00");
+        assertThat(response.getRemainingAmount()).isEqualByComparingTo("300.00");
+        assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("300.00");
+        assertThat(response.getCustomerCredit()).isNull();
+
+        verify(paymentApplicationRepository, times(2)).save(paymentApplicationCaptor.capture());
+        List<PaymentApplication> savedApps = paymentApplicationCaptor.getAllValues();
+        assertThat(savedApps)
+                .extracting(PaymentApplication::getInvoiceId)
+                .containsExactly(olderInvoice, newerInvoice);
+        assertThat(savedApps)
+                .extracting(PaymentApplication::getAppliedAmount)
+                .usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(new BigDecimal("300.00"), new BigDecimal("400.00"));
+    }
+
+    // ========================================
     // Helper Methods
     // ========================================
+
+    /** Common happy-path stubbing for applyPaymentToInvoices tests. */
+    private void stubAppliableRequest() {
+        when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                .thenReturn(false);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+        when(paymentApplicationRepository.save(any(PaymentApplication.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
 
     private PaymentApplicationRequest createApplicationRequest(
             @NonNull String requestId, @NonNull List<PaymentApplicationRequest.InvoiceApplication> applications) {
@@ -882,8 +1160,18 @@ class PaymentApplicationServiceTest {
      * validation-failure tests never reach the status derivation.
      */
     private void stubInvoice(@NonNull UUID invoiceId, @NonNull String balanceDue) {
+        stubInvoice(invoiceId, balanceDue, null);
+    }
+
+    /**
+     * Stub variant that also sets the replica invoice date, used by allocation-strategy tests
+     * (Issue #955).
+     */
+    private void stubInvoice(
+            @NonNull UUID invoiceId, @NonNull String balanceDue, @Nullable Instant invoiceCreatedAt) {
         ExtInvoice invoice = ExtInvoice.builder()
                 .invoiceId(invoiceId)
+                .invoiceCreatedAt(invoiceCreatedAt)
                 .workorderId(UUID.fromString("00000000-0000-0000-0000-0000000000ff"))
                 .partyId(testCustomerId.toString())
                 .status("FINALIZED")

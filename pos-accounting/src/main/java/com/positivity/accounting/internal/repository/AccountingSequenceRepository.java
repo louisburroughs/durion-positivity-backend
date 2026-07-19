@@ -28,6 +28,13 @@ public interface AccountingSequenceRepository extends JpaRepository<AccountingSe
     Optional<AccountingSequence> findByScopeKey(String scopeKey);
 
     /**
+     * All sequence rows in deterministic scope-key order (no lock). Used by
+     * Trial Balance gap-check reporting (story G1, issue #956) to enumerate
+     * the monthly {@code JE-&#123;YYYYMM&#125;} scopes to audit.
+     */
+    List<AccountingSequence> findAllByOrderByScopeKeyAsc();
+
+    /**
      * Gap-detection: expected-vs-stored comparison for one month scope,
      * returning the sequence numbers that were handed out (per
      * {@code next_value}) but have no matching {@code journal_entry.entry_number}

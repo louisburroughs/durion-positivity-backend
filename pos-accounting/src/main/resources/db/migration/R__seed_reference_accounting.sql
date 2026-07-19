@@ -99,6 +99,18 @@ ON CONFLICT (posting_category_id) DO UPDATE SET
     modified_at = NOW(),
     modified_by = 'seed-generator';
 
+-- Story C1 (Issue #954, decision D-3): AR cash-receipt GL posting category.
+-- Payment applications post Dr Undeposited Funds (1090) / Cr AR (1200);
+-- accounts resolve through this category's mapping keys — never hardcoded.
+INSERT INTO posting_category (posting_category_id, category_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000ca01'::uuid, 'PAYMENT_APPLICATION', 'AR cash receipt GL posting (Dr Undeposited Funds / Cr AR, decision D-3)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (posting_category_id) DO UPDATE SET
+    category_name = EXCLUDED.category_name,
+    description = EXCLUDED.description,
+    is_active = EXCLUDED.is_active,
+    modified_at = NOW(),
+    modified_by = 'seed-generator';
+
 -- Mapping keys
 INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
 VALUES ('05b9e38b-003d-5a02-ec1b-db48542ccc12'::uuid, '70eb38c4-cf6a-992a-81c3-2a4c958a458a'::uuid, 'DEFAULT', 'DEFAULT', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
@@ -110,9 +122,58 @@ ON CONFLICT (mapping_key_id) DO UPDATE SET
     modified_at = NOW(),
     modified_by = 'seed-generator';
 
+-- Story C1 (Issue #954): mapping keys for the PAYMENT_APPLICATION category.
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000ca02'::uuid, '5eed0acc-0000-4000-8000-00000000ca01'::uuid, 'UNDEPOSITED_FUNDS', 'Debit side of AR cash receipt (decision D-3)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (mapping_key_id) DO UPDATE SET
+    posting_category_id = EXCLUDED.posting_category_id,
+    key_name = EXCLUDED.key_name,
+    description = EXCLUDED.description,
+    is_active = EXCLUDED.is_active,
+    modified_at = NOW(),
+    modified_by = 'seed-generator';
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000ca03'::uuid, '5eed0acc-0000-4000-8000-00000000ca01'::uuid, 'ACCOUNTS_RECEIVABLE', 'Credit side of AR cash receipt', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (mapping_key_id) DO UPDATE SET
+    posting_category_id = EXCLUDED.posting_category_id,
+    key_name = EXCLUDED.key_name,
+    description = EXCLUDED.description,
+    is_active = EXCLUDED.is_active,
+    modified_at = NOW(),
+    modified_by = 'seed-generator';
+
 -- GL mappings
 INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
 VALUES ('c3d2b7cf-a895-077a-2a37-48115a2b7c22'::uuid, 'ORDER', 'ORDER_COMPLETED', '70eb38c4-cf6a-992a-81c3-2a4c958a458a'::uuid, '05b9e38b-003d-5a02-ec1b-db48542ccc12'::uuid, 'b8798348-d3be-9582-7a6d-883ae3e64e66'::uuid, NOW(), NOW(), 'seed-generator')
+ON CONFLICT (gl_mapping_id) DO UPDATE SET
+    source_system = EXCLUDED.source_system,
+    external_code = EXCLUDED.external_code,
+    posting_category_id = EXCLUDED.posting_category_id,
+    mapping_key_id = EXCLUDED.mapping_key_id,
+    gl_account_id = EXCLUDED.gl_account_id,
+    effective_start_date = EXCLUDED.effective_start_date,
+    effective_end_date = EXCLUDED.effective_end_date,
+    dimensions = EXCLUDED.dimensions,
+    created_by = 'seed-generator';
+
+-- Story C1 (Issue #954): PAYMENT_APPLICATION account mappings. Fixed
+-- effective_start_date (not NOW()) so re-runs stay idempotent and the
+-- mapping always covers every posting date. 1090 = Undeposited Funds,
+-- 1200 = Accounts Receivable (both seeded above by story H1).
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000ca04'::uuid, 'ACCOUNTING', 'PAYMENT_APPLICATION_UNDEPOSITED_FUNDS', '5eed0acc-0000-4000-8000-00000000ca01'::uuid, '5eed0acc-0000-4000-8000-00000000ca02'::uuid, '5eed0acc-0000-4000-8000-000000001090'::uuid, TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (gl_mapping_id) DO UPDATE SET
+    source_system = EXCLUDED.source_system,
+    external_code = EXCLUDED.external_code,
+    posting_category_id = EXCLUDED.posting_category_id,
+    mapping_key_id = EXCLUDED.mapping_key_id,
+    gl_account_id = EXCLUDED.gl_account_id,
+    effective_start_date = EXCLUDED.effective_start_date,
+    effective_end_date = EXCLUDED.effective_end_date,
+    dimensions = EXCLUDED.dimensions,
+    created_by = 'seed-generator';
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000ca05'::uuid, 'ACCOUNTING', 'PAYMENT_APPLICATION_ACCOUNTS_RECEIVABLE', '5eed0acc-0000-4000-8000-00000000ca01'::uuid, '5eed0acc-0000-4000-8000-00000000ca03'::uuid, '0f12890f-383d-b449-b555-bd4b37bf1f44'::uuid, TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
 ON CONFLICT (gl_mapping_id) DO UPDATE SET
     source_system = EXCLUDED.source_system,
     external_code = EXCLUDED.external_code,

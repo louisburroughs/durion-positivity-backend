@@ -20,6 +20,19 @@ public interface PaymentApplicationService {
             @NonNull Instant clearedAt,
             @NonNull UUID sourceEventId);
 
+    /**
+     * Apply a payment across the requested invoices.
+     *
+     * <p>Allocation ordering is governed by the request's optional
+     * {@code allocationStrategy}; implementations must resolve the effective strategy via
+     * {@link PaymentApplicationRequest#resolveAllocationStrategy()} so an absent value
+     * defaults to {@code CALLER_ORDER} (behavior identical to requests predating the field),
+     * while {@code OLDEST_FIRST} allocates by ascending invoice date (Issue #955).
+     *
+     * @param paymentId payment to apply
+     * @param request   invoices, amounts, idempotency key, and optional allocation strategy
+     * @return application response with per-invoice application details
+     */
     @NonNull
     PaymentApplicationResponse applyPaymentToInvoices(
             @NonNull UUID paymentId, @NonNull PaymentApplicationRequest request);
