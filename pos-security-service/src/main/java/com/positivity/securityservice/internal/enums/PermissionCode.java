@@ -496,13 +496,16 @@ public enum PermissionCode {
     ACCOUNTING__PERIOD__REOPEN(380, "accounting:period:reopen"),
     ACCOUNTING__PERIOD__VIEW(381, "accounting:period:view"),
     ACCOUNTING__PERIOD__HARD_LOCK(382, "accounting:period:hard_lock"),
-    ACCOUNTING__PERIOD__OVERRIDE(383, "accounting:period:override");
+    ACCOUNTING__PERIOD__OVERRIDE(383, "accounting:period:override"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
+    ACCOUNTING__RECONCILIATION__ADJUST(384, "accounting:reconciliation:adjust"),
+    ACCOUNTING__RECONCILIATION__VIEW(385, "accounting:reconciliation:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 23;
+    public static final int CATALOG_VERSION = 24;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
