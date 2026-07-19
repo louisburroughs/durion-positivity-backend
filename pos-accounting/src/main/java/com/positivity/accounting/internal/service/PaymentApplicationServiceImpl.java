@@ -8,6 +8,7 @@ import com.positivity.accounting.internal.entity.PaymentApplication;
 import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.enums.AllocationStrategy;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
@@ -19,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -155,7 +157,9 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
      * 8. Emit events for downstream consumers
      *
      * @param paymentId payment to apply
-     * @param request   application request with invoices and amounts
+     * @param request   application request with invoices, amounts, and optional
+     *                  allocation strategy (see
+     *                  {@link #orderApplicationsForAllocation(PaymentApplicationRequest)})
      * @return application response with details
      * @throws ResponseStatusException with NOT_FOUND if payment not found
      * @throws ResponseStatusException with BAD_REQUEST if validation fails or
@@ -547,7 +551,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
 
         // All mutations are accounting-local (ADR-0044, #842): a failure rolls back the whole
         // transaction, so no cross-service compensating reversals are needed anymore.
-        for (PaymentApplicationRequest.InvoiceApplication invoiceApp : request.getApplications()) {
+        for (PaymentApplicationRequest.InvoiceApplication invoiceApp : orderApplicationsForAllocation(request)) {
             applySingleInvoiceApplication(
                     new InvoiceApplicationExecutionContext(
                             paymentId,
@@ -561,6 +565,47 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                             invoiceApp.getInvoiceId(), cappedAmounts.get(invoiceApp.getInvoiceId())));
         }
         return applicationDetails;
+    }
+
+    /**
+     * Resolve the allocation iteration order per the request's effective strategy (Issue #955).
+     *
+     * <p>{@code CALLER_ORDER} (including an absent strategy) returns the caller-supplied list
+     * untouched, keeping behavior byte-identical to requests predating the field.
+     * {@code OLDEST_FIRST} returns a sorted copy ordered by ascending replica invoice date
+     * ({@link ExtInvoice#getInvoiceCreatedAt()}); invoices with no replica date sort last, and
+     * equal dates tie-break deterministically by ascending invoice id. Reordering affects
+     * allocation order only — validation, capping, and idempotency semantics are unchanged.
+     *
+     * @param request the application request (strategy resolved via
+     *                {@link PaymentApplicationRequest#resolveAllocationStrategy()})
+     * @return the invoice applications in allocation order
+     */
+    @NonNull private List<PaymentApplicationRequest.InvoiceApplication> orderApplicationsForAllocation(
+            @NonNull PaymentApplicationRequest request) {
+        List<PaymentApplicationRequest.InvoiceApplication> applications = request.getApplications();
+        if (request.resolveAllocationStrategy() != AllocationStrategy.OLDEST_FIRST) {
+            return applications;
+        }
+
+        Map<UUID, Instant> invoiceDates = new HashMap<>();
+        for (PaymentApplicationRequest.InvoiceApplication invoiceApp : applications) {
+            UUID invoiceId = invoiceApp.getInvoiceId();
+            if (!invoiceDates.containsKey(invoiceId)) {
+                invoiceDates.put(
+                        invoiceId,
+                        invoiceBalanceCalculator
+                                .findInvoice(invoiceId)
+                                .map(ExtInvoice::getInvoiceCreatedAt)
+                                .orElse(null));
+            }
+        }
+
+        Comparator<PaymentApplicationRequest.InvoiceApplication> byInvoiceDateThenId = Comparator.comparing(
+                        (PaymentApplicationRequest.InvoiceApplication app) -> invoiceDates.get(app.getInvoiceId()),
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(PaymentApplicationRequest.InvoiceApplication::getInvoiceId);
+        return applications.stream().sorted(byInvoiceDateThenId).toList();
     }
 
     private void applySingleInvoiceApplication(
