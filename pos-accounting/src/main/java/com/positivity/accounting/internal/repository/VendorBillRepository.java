@@ -30,6 +30,17 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
     List<VendorBill> findByStatus(VendorBillStatus status);
 
     /**
+     * Find bills whose status is one of the given values. Used by the Aged
+     * Payables report (story G2, issue #960) to load open-payable bills
+     * (unpaid/unsettled statuses); the open balance per bill is then derived
+     * in-service as {@code totalAmount} minus applied allocations.
+     *
+     * @param statuses statuses to include
+     * @return matching bills (unordered; the report orders by vendor)
+     */
+    List<VendorBill> findByStatusIn(java.util.Collection<VendorBillStatus> statuses);
+
+    /**
      * Find bills by status with pagination.
      */
     Page<VendorBill> findByStatus(VendorBillStatus status, Pageable pageable);

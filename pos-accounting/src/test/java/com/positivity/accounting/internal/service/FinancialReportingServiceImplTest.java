@@ -55,6 +55,21 @@ class FinancialReportingServiceImplTest {
     @Mock
     private AccountingSequenceRepository accountingSequenceRepository;
 
+    @Mock
+    private com.positivity.accounting.internal.repository.GLAccountRepository glAccountRepository;
+
+    @Mock
+    private com.positivity.accounting.internal.repository.ExtInvoiceRepository extInvoiceRepository;
+
+    @Mock
+    private com.positivity.accounting.internal.repository.VendorBillRepository vendorBillRepository;
+
+    @Mock
+    private com.positivity.accounting.internal.repository.APPaymentAllocationRepository apPaymentAllocationRepository;
+
+    @Mock
+    private InvoiceBalanceCalculator invoiceBalanceCalculator;
+
     private FinancialReportingServiceImpl service;
 
     @BeforeEach
@@ -63,6 +78,11 @@ class FinancialReportingServiceImplTest {
                 journalEntryRepository,
                 statementLineMappingRepository,
                 accountingSequenceRepository,
+                glAccountRepository,
+                extInvoiceRepository,
+                vendorBillRepository,
+                apPaymentAllocationRepository,
+                invoiceBalanceCalculator,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
     }
 
@@ -82,7 +102,8 @@ class FinancialReportingServiceImplTest {
     @DisplayName("Maps per-account aggregates to rows with signed balance, preserving account-number order")
     void mapsAggregatesToRowsWithSignedBalances() {
         aggregatedTotals(
-                new TrialBalanceAccountTotal(ACCT_CASH, "1000", "Cash", new BigDecimal("150.00"), new BigDecimal("40.00")),
+                new TrialBalanceAccountTotal(
+                        ACCT_CASH, "1000", "Cash", new BigDecimal("150.00"), new BigDecimal("40.00")),
                 new TrialBalanceAccountTotal(
                         ACCT_REVENUE, "4000", "Revenue", new BigDecimal("40.00"), new BigDecimal("150.00")));
         when(accountingSequenceRepository.findAllByOrderByScopeKeyAsc()).thenReturn(List.of());
@@ -125,7 +146,8 @@ class FinancialReportingServiceImplTest {
     void computesBalancedFalseForUnbalancedLedger() {
         aggregatedTotals(
                 new TrialBalanceAccountTotal(ACCT_CASH, "1000", "Cash", new BigDecimal("100.00"), BigDecimal.ZERO),
-                new TrialBalanceAccountTotal(ACCT_REVENUE, "4000", "Revenue", BigDecimal.ZERO, new BigDecimal("90.00")));
+                new TrialBalanceAccountTotal(
+                        ACCT_REVENUE, "4000", "Revenue", BigDecimal.ZERO, new BigDecimal("90.00")));
         when(accountingSequenceRepository.findAllByOrderByScopeKeyAsc()).thenReturn(List.of());
 
         TrialBalanceReport report = service.generateTrialBalance(AS_OF);
@@ -138,8 +160,8 @@ class FinancialReportingServiceImplTest {
     @Test
     @DisplayName("Balanced compares numeric value, not BigDecimal scale")
     void balancedIgnoresBigDecimalScaleDifferences() {
-        aggregatedTotals(
-                new TrialBalanceAccountTotal(ACCT_CASH, "1000", "Cash", new BigDecimal("100.0"), new BigDecimal("100.00")));
+        aggregatedTotals(new TrialBalanceAccountTotal(
+                ACCT_CASH, "1000", "Cash", new BigDecimal("100.0"), new BigDecimal("100.00")));
         when(accountingSequenceRepository.findAllByOrderByScopeKeyAsc()).thenReturn(List.of());
 
         TrialBalanceReport report = service.generateTrialBalance(AS_OF);
@@ -150,14 +172,11 @@ class FinancialReportingServiceImplTest {
     @Test
     @DisplayName("Populates gap footnote only for JE scopes up to the as-of month that actually have gaps")
     void populatesGapFootnoteForJeScopesUpToAsOfMonth() {
-        aggregatedTotals(
-                new TrialBalanceAccountTotal(ACCT_CASH, "1000", "Cash", new BigDecimal("10.00"), new BigDecimal("10.00")));
+        aggregatedTotals(new TrialBalanceAccountTotal(
+                ACCT_CASH, "1000", "Cash", new BigDecimal("10.00"), new BigDecimal("10.00")));
         when(accountingSequenceRepository.findAllByOrderByScopeKeyAsc())
                 .thenReturn(List.of(
-                        sequence("INV-202605"),
-                        sequence("JE-202605"),
-                        sequence("JE-202606"),
-                        sequence("JE-202607")));
+                        sequence("INV-202605"), sequence("JE-202605"), sequence("JE-202606"), sequence("JE-202607")));
         when(accountingSequenceRepository.findMissingEntryNumbers("JE-202605")).thenReturn(List.of(3L, 7L));
         when(accountingSequenceRepository.findMissingEntryNumbers("JE-202606")).thenReturn(List.of());
 

@@ -11,6 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.internal.dto.AgedPayablesReport;
+import com.positivity.accounting.internal.dto.AgedReceivablesReport;
+import com.positivity.accounting.internal.dto.AgingSummary;
+import com.positivity.accounting.internal.dto.GeneralLedgerReport;
 import com.positivity.accounting.internal.dto.TrialBalanceReport;
 import com.positivity.accounting.service.FinancialReportingService;
 import java.math.BigDecimal;
@@ -283,6 +287,151 @@ class FinancialReportingControllerTest extends BaseIntegrationTest {
                     .andExpect(status().isBadRequest());
 
             verify(financialReportingService, never()).generateTrialBalance(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("General Ledger - endpoint (G2, #960)")
+    class GeneralLedgerEndpoint {
+
+        @Test
+        @DisplayName("Should return the general ledger for a valid date range (all accounts)")
+        void shouldGenerateGeneralLedger() throws Exception {
+            when(financialReportingService.generateGeneralLedger(eq(null), eq(START_DATE), eq(END_DATE)))
+                    .thenReturn(GeneralLedgerReport.builder()
+                            .accountId(null)
+                            .startDate(START_DATE)
+                            .endDate(END_DATE)
+                            .generatedAt(Instant.parse("2026-07-01T00:00:00Z"))
+                            .accounts(Collections.emptyList())
+                            .totalDebit(BigDecimal.ZERO)
+                            .totalCredit(BigDecimal.ZERO)
+                            .build());
+
+            mockMvc.perform(get("/v1/accounting/reports/financial/general-ledger")
+                            .header("X-Authorities", "reporting:view:financial-statements")
+                            .header("X-User", "test-user")
+                            .param("startDate", START_DATE.toString())
+                            .param("endDate", END_DATE.toString()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.startDate").value("2024-01-01"))
+                    .andExpect(jsonPath("$.endDate").value("2024-12-31"))
+                    .andExpect(jsonPath("$.accounts").isEmpty());
+
+            verify(financialReportingService).generateGeneralLedger(eq(null), eq(START_DATE), eq(END_DATE));
+        }
+
+        @Test
+        @DisplayName("Should reject a non-UUID accountId (400) before reaching the service")
+        void shouldRejectInvalidAccountId() throws Exception {
+            mockMvc.perform(get("/v1/accounting/reports/financial/general-ledger")
+                            .header("X-Authorities", "reporting:view:financial-statements")
+                            .header("X-User", "test-user")
+                            .param("accountId", "not-a-uuid")
+                            .param("startDate", START_DATE.toString())
+                            .param("endDate", END_DATE.toString()))
+                    .andExpect(status().isBadRequest());
+
+            verify(financialReportingService, never()).generateGeneralLedger(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("Should reject end date before start date (400)")
+        void shouldRejectInvalidDateRange() throws Exception {
+            mockMvc.perform(get("/v1/accounting/reports/financial/general-ledger")
+                            .header("X-Authorities", "reporting:view:financial-statements")
+                            .header("X-User", "test-user")
+                            .param("startDate", END_DATE.toString())
+                            .param("endDate", START_DATE.toString()))
+                    .andExpect(status().isBadRequest());
+
+            verify(financialReportingService, never()).generateGeneralLedger(any(), any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("Aged Receivables / Aged Payables - endpoints (G2, #960)")
+    class AgedReportEndpoints {
+
+        private static final LocalDate AS_OF = LocalDate.of(2026, 6, 30);
+
+        private AgingSummary zeroTotals() {
+            return AgingSummary.builder()
+                    .current(BigDecimal.ZERO)
+                    .days31To60(BigDecimal.ZERO)
+                    .days61To90(BigDecimal.ZERO)
+                    .days90Plus(BigDecimal.ZERO)
+                    .totalOutstanding(BigDecimal.ZERO)
+                    .build();
+        }
+
+        @Test
+        @DisplayName("Should return aged receivables for a valid asOfDate")
+        void shouldGenerateAgedReceivables() throws Exception {
+            when(financialReportingService.generateAgedReceivables(eq(AS_OF)))
+                    .thenReturn(AgedReceivablesReport.builder()
+                            .asOfDate(AS_OF)
+                            .generatedAt(Instant.parse("2026-07-01T00:00:00Z"))
+                            .rows(Collections.emptyList())
+                            .totals(zeroTotals())
+                            .build());
+
+            mockMvc.perform(get("/v1/accounting/reports/financial/aged-receivables")
+                            .header("X-Authorities", "reporting:view:financial-statements")
+                            .header("X-User", "test-user")
+                            .param("asOfDate", AS_OF.toString()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.asOfDate").value("2026-06-30"))
+                    .andExpect(jsonPath("$.rows").isEmpty())
+                    .andExpect(jsonPath("$.totals.totalOutstanding").value(0));
+
+            verify(financialReportingService).generateAgedReceivables(eq(AS_OF));
+        }
+
+        @Test
+        @DisplayName("Should reject missing asOfDate for aged receivables (400)")
+        void shouldRejectMissingAsOfReceivables() throws Exception {
+            mockMvc.perform(get("/v1/accounting/reports/financial/aged-receivables")
+                            .header("X-Authorities", "reporting:view:financial-statements")
+                            .header("X-User", "test-user"))
+                    .andExpect(status().isBadRequest());
+
+            verify(financialReportingService, never()).generateAgedReceivables(any());
+        }
+
+        @Test
+        @DisplayName("Should return aged payables for a valid asOfDate")
+        void shouldGenerateAgedPayables() throws Exception {
+            when(financialReportingService.generateAgedPayables(eq(AS_OF)))
+                    .thenReturn(AgedPayablesReport.builder()
+                            .asOfDate(AS_OF)
+                            .generatedAt(Instant.parse("2026-07-01T00:00:00Z"))
+                            .rows(Collections.emptyList())
+                            .totals(zeroTotals())
+                            .build());
+
+            mockMvc.perform(get("/v1/accounting/reports/financial/aged-payables")
+                            .header("X-Authorities", "reporting:view:financial-statements")
+                            .header("X-User", "test-user")
+                            .param("asOfDate", AS_OF.toString()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.asOfDate").value("2026-06-30"))
+                    .andExpect(jsonPath("$.rows").isEmpty())
+                    .andExpect(jsonPath("$.totals.totalOutstanding").value(0));
+
+            verify(financialReportingService).generateAgedPayables(eq(AS_OF));
+        }
+
+        @Test
+        @DisplayName("Should reject malformed asOfDate for aged payables (400)")
+        void shouldRejectMalformedAsOfPayables() throws Exception {
+            mockMvc.perform(get("/v1/accounting/reports/financial/aged-payables")
+                            .header("X-Authorities", "reporting:view:financial-statements")
+                            .header("X-User", "test-user")
+                            .param("asOfDate", "06/30/2026"))
+                    .andExpect(status().isBadRequest());
+
+            verify(financialReportingService, never()).generateAgedPayables(any());
         }
     }
 }
