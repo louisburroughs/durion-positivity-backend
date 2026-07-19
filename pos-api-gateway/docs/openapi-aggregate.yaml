@@ -103,6 +103,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1mappings
   /v1/accounting/mappings/resolve:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1mappings~1resolve
+  /v1/accounting/mappings/resolve-test:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1mappings~1resolve-test
   /v1/accounting/payment-applications/{applicationId}/reverse:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1payment-applications~1{applicationId}~1reverse
   /v1/accounting/payments/{paymentId}/applications:
@@ -111,6 +113,14 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1payments~1{paymentId}~1reverse
   /v1/accounting/payments/{paymentId}/void:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1payments~1{paymentId}~1void
+  /v1/accounting/periods:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1periods
+  /v1/accounting/periods/hard-lock:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1periods~1hard-lock
+  /v1/accounting/periods/{periodCode}/close:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1periods~1{periodCode}~1close
+  /v1/accounting/periods/{periodCode}/reopen:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1periods~1{periodCode}~1reopen
   /v1/accounting/posting-categories:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1posting-categories
   /v1/accounting/posting-categories/{postingCategoryId}:
@@ -141,6 +151,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1drilldown~1journal-lines~1{accountId}
   /v1/accounting/reports/financial/income-statement:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1income-statement
+  /v1/accounting/reports/financial/trial-balance:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1trial-balance
   /v1/accounting/reports/location/labor-overhead:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1location~1labor-overhead
   /v1/accounting/vendor-bills:
@@ -157,6 +169,10 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1{billId}
   /v1/accounting/vendor-bills/{billId}/resolve-exception:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1{billId}~1resolve-exception
+  /v1/accounting/vendors:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendors
+  /v1/accounting/vendors/{vendorId}:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendors~1{vendorId}
   /v1/bulk-jobs:
     $ref: ../../pos-bulk-loader/openapi.yaml#/paths/~1v1~1bulk-jobs
   /v1/bulk-jobs/{jobId}:

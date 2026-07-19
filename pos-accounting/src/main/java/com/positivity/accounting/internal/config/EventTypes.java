@@ -16,7 +16,8 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 63 event types (includes +2 from CAP-251 #5:
+     * Total: 64 event types (includes +1 from the mapping resolution dry-run
+     * (Story E3, Issue #957): ACCOUNTING_MAPPING_RESOLVE_TEST, and +2 from CAP-251 #5:
      * ACCOUNTING_STATUS_SYNC_PROCESS and ACCOUNTING_STATUS_VIEW, in addition to
      * CAP-053 Vendor Bill workflow + GL Mapping, +3 from PRD missing endpoints:
      * ACCOUNTING_REPORT_EXPORT_REQUEST, ACCOUNTING_REPORT_EXPORT_STATUS,
@@ -148,13 +149,17 @@ public final class EventTypes {
                                 "Generate Labor & Overhead cost report for a location and fiscal year")
                         .build(),
 
-                // GLMappingController - 2 events (GL Mapping)
+                // GLMappingController - 3 events (GL Mapping + parity-E3 dry-run)
                 EventTypeRegistration.write(
                                 "ACCOUNTING_GL_MAPPING_CREATE", "Create GL mapping from external code to GL account")
                         .build(),
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_GL_MAPPING_RESOLVE",
                                 "Resolve external code to GL account using effective-dated mapping")
+                        .build(),
+                EventTypeRegistration.search(
+                                "ACCOUNTING_MAPPING_RESOLVE_TEST",
+                                "Dry-run mapping/rule resolution for a hypothetical event (no persistence)")
                         .build(),
 
                 // VendorBillService - 6 events (CAP-053 Issue #130)
