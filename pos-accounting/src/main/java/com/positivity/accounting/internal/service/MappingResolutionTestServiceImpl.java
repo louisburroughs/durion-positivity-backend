@@ -140,9 +140,8 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
         }
 
         UUID versionId = result.getMappingVersionUsed();
-        PostingRuleVersion version = versionId != null
-                ? versionRepository.findById(versionId).orElse(null)
-                : null;
+        PostingRuleVersion version =
+                versionId != null ? versionRepository.findById(versionId).orElse(null) : null;
 
         // Re-read the matched rule condition for E1 split metadata and E2
         // predicate outcomes; the evaluator's result does not carry these.
@@ -161,9 +160,10 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
         if (version != null) {
             matchedRule = MatchedRule.builder()
                     .postingRuleSetId(draft.getPostingRuleSetId())
-                    .ruleSetName(version.getPostingRuleSet() != null
-                            ? version.getPostingRuleSet().getName()
-                            : null)
+                    .ruleSetName(
+                            version.getPostingRuleSet() != null
+                                    ? version.getPostingRuleSet().getName()
+                                    : null)
                     .ruleVersionId(version.getVersionId())
                     .versionNumber(version.getVersionNumber())
                     .build();
@@ -231,9 +231,8 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
 
     private MappingResolutionTestResponse buildNoMatchResponse(
             MappingResolutionTestRequest request, AccountingEvent event, PostingResult result) {
-        String reason = result.getFailureReason() != null
-                ? result.getFailureReason().name()
-                : "NO_RULE_VERSION";
+        String reason =
+                result.getFailureReason() != null ? result.getFailureReason().name() : "NO_RULE_VERSION";
 
         // A rule version was selected but no condition matched: surface the
         // per-predicate outcomes so the caller can see why.
@@ -276,7 +275,10 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
             JsonNode root = objectMapper.readTree(rulesJson);
             conditions = root.get("conditions");
         } catch (Exception e) {
-            log.warn("Dry-run could not parse rulesDefinition for version {}: {}", version.getVersionId(), e.getMessage());
+            log.warn(
+                    "Dry-run could not parse rulesDefinition for version {}: {}",
+                    version.getVersionId(),
+                    e.getMessage());
             return scan;
         }
         if (conditions == null || !conditions.isArray()) {
@@ -328,9 +330,8 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
                     factorPercent = null;
                 }
             }
-            String splitGroup = lineNode.has("splitGroup")
-                    ? lineNode.get("splitGroup").asString()
-                    : null;
+            String splitGroup =
+                    lineNode.has("splitGroup") ? lineNode.get("splitGroup").asString() : null;
             specs.add(new LineSpec(amountField, factorPercent, splitGroup));
         }
         return specs;
@@ -363,8 +364,8 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
     @Nullable
     private String firstFailingClause(PredicateParser.Predicate predicate, AccountingEvent event) {
         for (PredicateParser.Clause clause : predicate.clauses()) {
-            boolean clauseMatched = new PredicateParser.Predicate(List.of(clause))
-                    .matches(event.getEventType(), event.getPayload());
+            boolean clauseMatched =
+                    new PredicateParser.Predicate(List.of(clause)).matches(event.getEventType(), event.getPayload());
             if (!clauseMatched) {
                 return renderClause(clause);
             }
@@ -381,10 +382,11 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
         } else {
             lhs = "?";
         }
-        String rhs = switch (clause.literal()) {
-            case PredicateParser.StringLiteral s -> "'" + s.value() + "'";
-            case PredicateParser.NumberLiteral n -> n.value().toPlainString();
-        };
+        String rhs =
+                switch (clause.literal()) {
+                    case PredicateParser.StringLiteral s -> "'" + s.value() + "'";
+                    case PredicateParser.NumberLiteral n -> n.value().toPlainString();
+                };
         return lhs + " " + clause.op().symbol() + " " + rhs;
     }
 
@@ -416,7 +418,8 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
 
     @Nullable
     private Object navigatePayload(String amountField, @Nullable Map<String, Object> payload) {
-        String fieldPath = amountField.startsWith("payload.") ? amountField.substring("payload.".length()) : amountField;
+        String fieldPath =
+                amountField.startsWith("payload.") ? amountField.substring("payload.".length()) : amountField;
         Object current = payload;
         for (String part : fieldPath.split("\\.")) {
             if (current instanceof Map<?, ?> map) {
@@ -468,9 +471,13 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
 
     // ── Value carriers ─────────────────────────────────────────────────────────
 
-    private record LineSpec(@Nullable String amountField, @Nullable BigDecimal factorPercent, @Nullable String splitGroup) {}
+    private record LineSpec(
+            @Nullable String amountField,
+            @Nullable BigDecimal factorPercent,
+            @Nullable String splitGroup) {}
 
-    private record PredicateOutcome(boolean matched, @Nullable String detail) {}
+    private record PredicateOutcome(
+            boolean matched, @Nullable String detail) {}
 
     private static final class ConditionScan {
         private final List<String> keysEvaluated = new ArrayList<>();

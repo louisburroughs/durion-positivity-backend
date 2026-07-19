@@ -49,6 +49,12 @@ General-ledger accounting service for the Durion Positivity ETSMS platform. Mana
 - `POST /v1/accounting/export` — request a timekeeping export job
 - `GET /v1/accounting/export/status/{jobId}` — get export job status
 - `GET /v1/accounting/export/history` — list export job history
+- `GET /v1/accounting/reports/financial/general-ledger` — general ledger report (story G2)
+- `GET /v1/accounting/reports/financial/aged-receivables` — aged receivables buckets (story G2)
+- `GET /v1/accounting/reports/financial/aged-payables` — aged payables buckets (story G2)
+- `GET /v1/accounting/settlements/{settlementId}/lines` — list settlement lines, optional `unmatchedOnly` filter (permission `accounting:reconciliation:view`, event `ACCOUNTING_SETTLEMENT_LINES_LIST`, story F1c)
+- `POST /v1/accounting/settlements/lines/{lineId}/match` — manually match an unmatched line to a receivable payment (permission `accounting:reconciliation:adjust`, event `ACCOUNTING_SETTLEMENT_LINE_MATCH`, story F1c)
+- `POST /v1/accounting/settlements/lines/{lineId}/write-off` — write off a small unmatched line with mandatory reason (permission `accounting:reconciliation:adjust`, event `ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF`, story F1c)
 
 ## Chart of Accounts
 

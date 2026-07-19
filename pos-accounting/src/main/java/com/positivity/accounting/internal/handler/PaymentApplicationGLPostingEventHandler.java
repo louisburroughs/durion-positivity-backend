@@ -104,8 +104,7 @@ public class PaymentApplicationGLPostingEventHandler {
             // date and the mapping resolution stable across replays. The Instant
             // is converted to LocalDateTime using the injected clock's zone,
             // matching the module's Instant→LocalDateTime convention.
-            LocalDateTime transactionDate =
-                    LocalDateTime.ofInstant(event.getApplicationTimestamp(), clock.getZone());
+            LocalDateTime transactionDate = LocalDateTime.ofInstant(event.getApplicationTimestamp(), clock.getZone());
 
             // Account resolution via posting category / mapping key
             // configuration — no hardcoded account ids (story C1 requirement).

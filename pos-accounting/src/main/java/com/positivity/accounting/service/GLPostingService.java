@@ -1,5 +1,6 @@
 package com.positivity.accounting.service;
 
+import com.positivity.accounting.internal.dto.SettlementPostingCommand;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -110,6 +111,66 @@ public interface GLPostingService {
             @NonNull UUID paymentApplicationId,
             @NonNull UUID undepositedFundsAccountId,
             @NonNull UUID arAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification);
+
+    /**
+     * Post the batched settlement journal entry (story F1c, issue #963, decision
+     * D-13): {@code Dr Cash (net) / Dr Processor Fees (fee) / Cr Undeposited
+     * Funds (matched gross) / Cr Settlement Suspense (unmatched gross)}. Zero
+     * legs are omitted; the entry always balances by the header invariant. The
+     * period gate (story B2) applies inside posting.
+     *
+     * @param command settlement posting command
+     * @return posted journal entry
+     */
+    JournalEntry postSettlement(@NonNull SettlementPostingCommand command);
+
+    /**
+     * Post a reversible settlement write-off (story F1c, decision D-14): {@code
+     * Dr Settlement Suspense / Cr Settlement Adjustment}, clearing an unmatched
+     * line's parked gross out of suspense. Only used below the configured
+     * write-off threshold; a reversible entry, never a silent status flip.
+     *
+     * @param sourceEventId deterministic JE source id for the write-off
+     * @param suspenseAccountId settlement suspense account (debit)
+     * @param adjustmentAccountId settlement adjustment account (credit)
+     * @param amount write-off amount (the line gross)
+     * @param transactionDate journal entry date
+     * @param description entry description
+     * @param overrideJustification optional CLOSED-period override justification
+     * @return posted journal entry
+     */
+    JournalEntry postSettlementWriteOff(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID suspenseAccountId,
+            @NonNull UUID adjustmentAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification);
+
+    /**
+     * Post a settlement reclass when an unmatched line is manually matched
+     * (story F1c, decision D-13): {@code Dr Settlement Suspense / Cr Undeposited
+     * Funds}, moving the parked gross to the clearing account matched receipts
+     * use so suspense trends to zero.
+     *
+     * @param sourceEventId deterministic JE source id for the reclass
+     * @param suspenseAccountId settlement suspense account (debit)
+     * @param undepositedFundsAccountId undeposited funds clearing account (credit)
+     * @param amount reclass amount (the line gross)
+     * @param transactionDate journal entry date
+     * @param description entry description
+     * @param overrideJustification optional CLOSED-period override justification
+     * @return posted journal entry
+     */
+    JournalEntry postSettlementReclass(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID suspenseAccountId,
+            @NonNull UUID undepositedFundsAccountId,
             @NonNull BigDecimal amount,
             @NonNull LocalDateTime transactionDate,
             @NonNull String description,

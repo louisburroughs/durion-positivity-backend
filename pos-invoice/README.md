@@ -20,6 +20,8 @@ Invoice and payment service for the Durion Positivity ETSMS platform. Creates in
 - `PaymentReversalService` — voids and refunds settled or unsettled payments
 - `ReceiptService` — generates PDF receipts and dispatches print/email actions
 - `BillingRulesService` — reads and enforces per-customer billing rule configurations
+- `SettlementSourcePort` — outbound port for a processor settlement (payout) feed; default binding is the `UnavailableSettlementSourceAdapter` placeholder until a real adapter is provided (story F1b, #962)
+- `SettlementEventPublisher` — emits the normalized `SettlementReportedV1` fact (`payment.events.v1`, keyed by settlement id) and the compacted `SettlementProviderConfigV1` (`payment.settlement-config.v1`, keyed per provider) to pos-accounting via the invoice transactional outbox
 
 ## API Endpoints
 

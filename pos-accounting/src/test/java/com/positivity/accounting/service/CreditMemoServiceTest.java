@@ -120,7 +120,8 @@ class CreditMemoServiceTest {
 
         // Replica row for the invoice (owned by pos-invoice, fed via invoice.events.v1).
         // Stored scalar tax of 10.00 on a 110.00 total => net (pre-tax) amount of 100.00.
-        testInvoice = replicaInvoice("FINALIZED", "110.00", "10.00", Instant.now(TEST_CLOCK) .minusSeconds(86400));
+        testInvoice = replicaInvoice(
+                "FINALIZED", "110.00", "10.00", Instant.now(TEST_CLOCK).minusSeconds(86400));
 
         // Mock GL config (lenient - not all tests reach GL posting)
         lenient().when(glConfig.getRevenueAccountId()).thenReturn(testRevenueAccountId);
@@ -676,8 +677,7 @@ class CreditMemoServiceTest {
     /** Stub the sums of previously POSTED credit memos (revenue portion / reversed tax). */
     private void stubPriorCredits(String creditedRevenue, String reversedTax) {
         lenient()
-                .when(creditMemoRepository.sumCreditAmountByInvoiceIdAndStatus(
-                        testInvoiceId, CreditMemoStatus.POSTED))
+                .when(creditMemoRepository.sumCreditAmountByInvoiceIdAndStatus(testInvoiceId, CreditMemoStatus.POSTED))
                 .thenReturn(new BigDecimal(creditedRevenue));
         lenient()
                 .when(creditMemoRepository.sumTaxReversedAmountByInvoiceIdAndStatus(

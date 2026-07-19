@@ -143,18 +143,30 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1export
   /v1/accounting/reports/export/{exportId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1export~1{exportId}
+  /v1/accounting/reports/financial/aged-payables:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1aged-payables
+  /v1/accounting/reports/financial/aged-receivables:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1aged-receivables
   /v1/accounting/reports/financial/balance-sheet:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1balance-sheet
   /v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1drilldown~1accounts~1{statementLineCode}
   /v1/accounting/reports/financial/drilldown/journal-lines/{accountId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1drilldown~1journal-lines~1{accountId}
+  /v1/accounting/reports/financial/general-ledger:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1general-ledger
   /v1/accounting/reports/financial/income-statement:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1income-statement
   /v1/accounting/reports/financial/trial-balance:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1trial-balance
   /v1/accounting/reports/location/labor-overhead:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1location~1labor-overhead
+  /v1/accounting/settlements/lines/{lineId}/match:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1settlements~1lines~1{lineId}~1match
+  /v1/accounting/settlements/lines/{lineId}/write-off:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1settlements~1lines~1{lineId}~1write-off
+  /v1/accounting/settlements/{settlementId}/lines:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1settlements~1{settlementId}~1lines
   /v1/accounting/vendor-bills:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills
   /v1/accounting/vendor-bills/event/{eventId}:

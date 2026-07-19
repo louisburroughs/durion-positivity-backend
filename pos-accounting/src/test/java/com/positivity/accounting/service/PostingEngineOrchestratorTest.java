@@ -733,7 +733,8 @@ class PostingEngineOrchestratorTest {
         }
 
         @Test
-        @DisplayName("autoPost before the hard-lock date suspends with the permanent-block message, not the reopen remedy")
+        @DisplayName(
+                "autoPost before the hard-lock date suspends with the permanent-block message, not the reopen remedy")
         void autoPostHardLocked_suspendsWithPermanentBlockMessage() {
             // Given - the gate blocks because of the org hard lock, not a CLOSED period
             when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);

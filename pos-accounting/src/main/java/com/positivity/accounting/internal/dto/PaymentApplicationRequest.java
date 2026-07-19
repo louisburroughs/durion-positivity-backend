@@ -62,14 +62,16 @@ public class PaymentApplicationRequest {
             requiredMode = NOT_REQUIRED,
             nullable = true,
             defaultValue = "CALLER_ORDER")
-    @Nullable private AllocationStrategy allocationStrategy;
+    @Nullable
+    private AllocationStrategy allocationStrategy;
 
     /**
      * Resolves the effective allocation strategy, applying the documented default.
      *
      * @return the caller-supplied strategy, or {@link AllocationStrategy#CALLER_ORDER} when absent
      */
-    @NonNull public AllocationStrategy resolveAllocationStrategy() {
+    @NonNull
+    public AllocationStrategy resolveAllocationStrategy() {
         return allocationStrategy != null ? allocationStrategy : AllocationStrategy.CALLER_ORDER;
     }
 
