@@ -27,6 +27,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -471,6 +472,18 @@ public class JournalEntryServiceImpl implements JournalEntryService {
                 savedReversal.getEntryNumber(),
                 reversalTransactionDate);
         return savedReversal;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<JournalEntry> findOriginalBySourceEvent(@NonNull UUID sourceEventId) {
+        // A reversal entry shares the original's sourceEventId; exclude it by
+        // its non-null reversalJournalEntry link so only the original cash
+        // receipt is returned. Posting is idempotent per source event, so at
+        // most one non-reversal entry can exist.
+        return journalEntryRepository.findBySourceEvent(sourceEventId).stream()
+                .filter(entry -> entry.getReversalJournalEntry() == null)
+                .findFirst();
     }
 
     /**

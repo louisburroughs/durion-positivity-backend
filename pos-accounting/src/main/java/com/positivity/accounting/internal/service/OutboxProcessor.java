@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
+import com.positivity.accounting.internal.dto.PaymentApplicationReversalGLPostingEvent;
 import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
@@ -59,7 +60,9 @@ public class OutboxProcessor {
             APPaymentGLPostingEvent.class.getName(),
             APPaymentGLPostingEvent.class,
             PaymentApplicationGLPostingEvent.class.getName(),
-            PaymentApplicationGLPostingEvent.class);
+            PaymentApplicationGLPostingEvent.class,
+            PaymentApplicationReversalGLPostingEvent.class.getName(),
+            PaymentApplicationReversalGLPostingEvent.class);
 
     /**
      * Scheduled task to process pending outbox events.

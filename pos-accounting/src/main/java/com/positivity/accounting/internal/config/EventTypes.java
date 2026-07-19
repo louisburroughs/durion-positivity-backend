@@ -16,7 +16,9 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 64 event types (includes +1 from the mapping resolution dry-run
+     * Total: 65 event types (includes +1 from AR payment application reversal GL
+     * posting (Story C2, Issue #958): PAYMENT_APPLICATION_REVERSAL_GL_POSTING, +1
+     * from the mapping resolution dry-run
      * (Story E3, Issue #957): ACCOUNTING_MAPPING_RESOLVE_TEST, and +2 from CAP-251 #5:
      * ACCOUNTING_STATUS_SYNC_PROCESS and ACCOUNTING_STATUS_VIEW, in addition to
      * CAP-053 Vendor Bill workflow + GL Mapping, +3 from PRD missing endpoints:
@@ -200,6 +202,13 @@ public final class EventTypes {
                 EventTypeRegistration.write(
                                 "PAYMENT_APPLICATION_GL_POSTING",
                                 "Post AR payment application to GL (Dr Undeposited Funds, Cr AR)")
+                        .build(),
+
+                // AR Payment Application Reversal GL Posting - 1 event (story C2, Issue #958)
+                EventTypeRegistration.write(
+                                "PAYMENT_APPLICATION_REVERSAL_GL_POSTING",
+                                "Post AR payment application reversal to GL (reversing entry: Dr AR, Cr Undeposited"
+                                        + " Funds)")
                         .build(),
 
                 // AccountingStatusSyncService — 2 events (CAP-251 #5)

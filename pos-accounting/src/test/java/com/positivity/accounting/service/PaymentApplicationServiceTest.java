@@ -821,6 +821,67 @@ class PaymentApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("Should enqueue reversing-JE GL posting work item to the outbox on reversal (story C2, #958)")
+    void testReversePaymentApplication_EnqueuesReversalGLPostingWorkItem() {
+        // Arrange
+        UUID applicationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID reversalId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        PaymentApplication application = new PaymentApplication();
+        application.setPaymentApplicationId(applicationId);
+        application.setPayment(testPayment);
+        application.setCustomerId(testCustomerId);
+        application.setInvoiceId(testInvoiceId);
+        application.setAppliedAmount(new BigDecimal("500.00"));
+        application.setCurrency("USD");
+        application.setApplicationRequestId(testApplicationRequestId);
+        application.setApplicationTimestamp(Instant.now(TEST_CLOCK));
+
+        testPayment.setUnappliedAmount(new BigDecimal("500.00"));
+
+        when(paymentApplicationReversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(
+                        applicationId))
+                .thenReturn(false);
+        when(paymentApplicationRepository.findById(applicationId)).thenReturn(Optional.of(application));
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+        when(paymentApplicationReversalRepository.save(any(PaymentApplicationReversal.class)))
+                .thenAnswer(invocation -> {
+                    PaymentApplicationReversal rev = invocation.getArgument(0);
+                    if (rev.getReversalId() == null) {
+                        rev.setReversalId(reversalId);
+                    }
+                    return rev;
+                });
+        when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        service.reversePaymentApplication(applicationId, "Customer disputed charge");
+
+        // Assert: outbox work item enqueued in the same transaction with the
+        // reversal event class as its type and the payment as the aggregate.
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(outboxService)
+                .saveToOutbox(
+                        any(UUID.class),
+                        eq("PaymentApplicationReversal"),
+                        eq(testPaymentId),
+                        eq(
+                                com.positivity.accounting.internal.dto.PaymentApplicationReversalGLPostingEvent.class
+                                        .getName()),
+                        eventCaptor.capture());
+
+        assertThat(eventCaptor.getValue())
+                .isInstanceOf(com.positivity.accounting.internal.dto.PaymentApplicationReversalGLPostingEvent.class);
+        var reversalEvent = (com.positivity.accounting.internal.dto.PaymentApplicationReversalGLPostingEvent)
+                eventCaptor.getValue();
+        assertThat(reversalEvent.getApplicationRequestId()).isEqualTo(testApplicationRequestId);
+        assertThat(reversalEvent.getReversalId()).isEqualTo(reversalId);
+        assertThat(reversalEvent.getPaymentId()).isEqualTo(testPaymentId);
+        assertThat(reversalEvent.getReason()).isEqualTo("Customer disputed charge");
+        assertThat(reversalEvent.getEventId()).isNotNull();
+    }
+
+    @Test
     @DisplayName("Should use authenticated user from SecurityContext for reversal audit")
     void testReversePaymentApplication_WithAuthenticatedUser() {
         // Arrange
@@ -1115,9 +1176,7 @@ class PaymentApplicationServiceTest {
 
         verify(paymentApplicationRepository, times(2)).save(paymentApplicationCaptor.capture());
         List<PaymentApplication> savedApps = paymentApplicationCaptor.getAllValues();
-        assertThat(savedApps)
-                .extracting(PaymentApplication::getInvoiceId)
-                .containsExactly(olderInvoice, newerInvoice);
+        assertThat(savedApps).extracting(PaymentApplication::getInvoiceId).containsExactly(olderInvoice, newerInvoice);
         assertThat(savedApps)
                 .extracting(PaymentApplication::getAppliedAmount)
                 .usingElementComparator(BigDecimal::compareTo)
@@ -1167,8 +1226,7 @@ class PaymentApplicationServiceTest {
      * Stub variant that also sets the replica invoice date, used by allocation-strategy tests
      * (Issue #955).
      */
-    private void stubInvoice(
-            @NonNull UUID invoiceId, @NonNull String balanceDue, @Nullable Instant invoiceCreatedAt) {
+    private void stubInvoice(@NonNull UUID invoiceId, @NonNull String balanceDue, @Nullable Instant invoiceCreatedAt) {
         ExtInvoice invoice = ExtInvoice.builder()
                 .invoiceId(invoiceId)
                 .invoiceCreatedAt(invoiceCreatedAt)
