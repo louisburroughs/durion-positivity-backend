@@ -217,6 +217,67 @@ class PaymentApplicationGLPostingEventHandlerTest {
     }
 
     @Test
+    @DisplayName("F4: transaction date and mapping resolution derive from applicationTimestamp, not clock-now (outbox backlog)")
+    void backlogRetry_usesApplicationTimestampNotClockNow() {
+        // Simulate an outbox retry / backlog: the payment application actually
+        // happened weeks BEFORE the clock's "now". The JE transaction date and
+        // the effective-dated GL mapping resolution must both anchor to the
+        // business (application) date, never the later processing clock time —
+        // otherwise the entry lands in the wrong accounting period and selects
+        // the wrong effective-dated mapping (F4, PR #974).
+        Instant applicationInstant = Instant.parse("2026-02-01T08:30:00Z");
+        LocalDateTime expectedTransactionDate = LocalDateTime.ofInstant(applicationInstant, clock.getZone());
+        LocalDateTime clockNow = LocalDateTime.now(clock);
+
+        // Guard: the two dates must genuinely differ so the assertions below
+        // distinguish application-date provenance from clock-now provenance.
+        assertThat(expectedTransactionDate).isNotEqualTo(clockNow);
+
+        PaymentApplicationGLPostingEvent backlogEvent = PaymentApplicationGLPostingEvent.builder()
+                .eventId(testEvent.getEventId())
+                .applicationRequestId(APPLICATION_REQUEST_ID)
+                .paymentId(testEvent.getPaymentId())
+                .customerId(testEvent.getCustomerId())
+                .currency("USD")
+                .appliedAmount(new BigDecimal("500.00"))
+                .applicationTimestamp(applicationInstant)
+                .build();
+
+        stubAccountResolution();
+        when(glPostingService.postPaymentApplication(
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(BigDecimal.class),
+                        any(LocalDateTime.class),
+                        any(String.class)))
+                .thenReturn(postedEntry);
+
+        handler.onPaymentApplicationGLPosting(backlogEvent);
+
+        // Mapping resolution effective date == application-derived date (both legs).
+        ArgumentCaptor<LocalDateTime> mappingDateCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(glMappingResolver)
+                .resolveGLAccount(eq("PAYMENT_APPLICATION"), eq("UNDEPOSITED_FUNDS"), mappingDateCaptor.capture());
+        assertThat(mappingDateCaptor.getValue()).isEqualTo(expectedTransactionDate).isNotEqualTo(clockNow);
+
+        verify(glMappingResolver)
+                .resolveGLAccount(eq("PAYMENT_APPLICATION"), eq("ACCOUNTS_RECEIVABLE"), eq(expectedTransactionDate));
+
+        // Journal entry transaction date == application-derived date, NOT clock-now.
+        ArgumentCaptor<LocalDateTime> postDateCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(glPostingService)
+                .postPaymentApplication(
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(BigDecimal.class),
+                        postDateCaptor.capture(),
+                        any(String.class));
+        assertThat(postDateCaptor.getValue()).isEqualTo(expectedTransactionDate).isNotEqualTo(clockNow);
+    }
+
+    @Test
     @DisplayName("non-UUID application request id derives a deterministic name-based sourceEventId")
     void nonUuidRequestId_derivesDeterministicSourceEventId() {
         stubAccountResolution();
