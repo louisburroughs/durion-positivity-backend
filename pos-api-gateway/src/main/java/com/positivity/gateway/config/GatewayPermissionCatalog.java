@@ -425,8 +425,8 @@ public final class GatewayPermissionCatalog {
         "PERM_accounting:period:override", // 383
 
         // ── New batch (bits 384–385) ──────────────────────────────────────────
-        "PERM_accounting:reconciliation:adjust",             // 384
-        "PERM_accounting:reconciliation:view"               // 385
+        "PERM_accounting:reconciliation:adjust", // 384
+        "PERM_accounting:reconciliation:view" // 385
     };
 
     public static String authorityForBit(int bitIndex) {
