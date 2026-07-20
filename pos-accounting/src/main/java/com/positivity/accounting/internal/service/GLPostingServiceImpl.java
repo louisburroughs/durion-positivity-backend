@@ -255,14 +255,21 @@ public class GLPostingServiceImpl implements GLPostingService {
         entry.setSourceEventId(command.sourceEventId());
 
         List<JournalEntryLine> lines = new ArrayList<>();
-        // Debits: net bank payout + processor fees (sum to gross).
-        addDebit(lines, command.cashAccountId(), command.netAmount(), "Settlement Cash");
-        addDebit(lines, command.feesAccountId(), command.feeAmount(), "Processor Fees");
-        // Credits: clear matched receipts from Undeposited Funds; park the rest
-        // in suspense (decision D-13). Together they equal gross, so the entry
+        // Sign-route every leg so a refund/chargeback or net-negative payout never
+        // produces a negative debit or credit (which would violate the
+        // chk_journal_entry_line_debit_xor_credit CHECK and poison the outbox). The
+        // natural side of each leg is its normal-balance side; a negative amount is
+        // posted as its absolute value on the opposite side.
+        //
+        // Debits (natural side): net bank payout + processor fees (sum to gross).
+        addSigned(lines, command.cashAccountId(), command.netAmount(), "Settlement Cash", true);
+        addSigned(lines, command.feesAccountId(), command.feeAmount(), "Processor Fees", true);
+        // Credits (natural side): clear matched receipts from Undeposited Funds; park
+        // the rest in suspense (decision D-13). Together they equal gross, so the entry
         // balances (net + fee == gross == matchedGross + unmatchedGross).
-        addCredit(lines, command.undepositedFundsAccountId(), command.matchedGross(), "Undeposited Funds Cleared");
-        addCredit(lines, command.suspenseAccountId(), command.unmatchedGross(), "Settlement Suspense");
+        addSigned(
+                lines, command.undepositedFundsAccountId(), command.matchedGross(), "Undeposited Funds Cleared", false);
+        addSigned(lines, command.suspenseAccountId(), command.unmatchedGross(), "Settlement Suspense", false);
 
         entry.setLines(lines);
 
@@ -342,6 +349,31 @@ public class GLPostingServiceImpl implements GLPostingService {
         JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
         log.info("Posted {} GL entry: journal entry ID {}", lineLabel, posted.getJournalEntryId());
         return posted;
+    }
+
+    /**
+     * Append a sign-routed line unless the amount is zero (zero legs are omitted).
+     * A positive amount posts to the leg's natural side; a negative amount posts its
+     * absolute value to the opposite side, so no leg is ever a negative debit or
+     * credit. {@code naturallyDebit} = true for normal-debit legs (Cash, Fees),
+     * false for normal-credit legs (Undeposited Funds, Suspense).
+     */
+    private static void addSigned(
+            @NonNull List<JournalEntryLine> lines,
+            @NonNull UUID accountId,
+            @NonNull BigDecimal amount,
+            @NonNull String description,
+            boolean naturallyDebit) {
+        int sign = amount.signum();
+        if (sign == 0) {
+            return;
+        }
+        boolean debitSide = (sign > 0) == naturallyDebit;
+        if (debitSide) {
+            addDebit(lines, accountId, amount.abs(), description);
+        } else {
+            addCredit(lines, accountId, amount.abs(), description);
+        }
     }
 
     /** Append a debit line unless the amount is zero (zero legs are omitted). */

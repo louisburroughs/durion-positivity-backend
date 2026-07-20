@@ -132,6 +132,73 @@ class GLPostingSettlementTest {
     }
 
     @Test
+    @DisplayName("postSettlement - net-negative payout sign-routes Cash to a credit leg and still balances")
+    void postSettlement_netNegativePayout_signRoutesCash() {
+        ArgumentCaptor<JournalEntry> captor = capturePosting();
+        // gross 100 = fee 120 + net -20 (processor withheld more than the payout). All unmatched.
+        SettlementPostingCommand cmd = new SettlementPostingCommand(
+                UUID.randomUUID(),
+                cash,
+                fees,
+                undeposited,
+                suspense,
+                new BigDecimal("-20.00"),
+                new BigDecimal("120.00"),
+                BigDecimal.ZERO,
+                new BigDecimal("100.00"),
+                TXN_DATE,
+                "settlement net-negative",
+                null);
+
+        service.postSettlement(cmd);
+        JournalEntry je = captor.getValue();
+
+        // No negative leg anywhere: the -20 net is posted as a 20.00 CREDIT to Cash.
+        assertThat(je.getLines())
+                .allSatisfy(l -> assertThat(l.getDebitAmount()).isGreaterThanOrEqualTo(BigDecimal.ZERO));
+        assertThat(je.getLines())
+                .allSatisfy(l -> assertThat(l.getCreditAmount()).isGreaterThanOrEqualTo(BigDecimal.ZERO));
+        BigDecimal cashCredit = je.getLines().stream()
+                .filter(l -> cash.equals(l.getGlAccountId()))
+                .map(JournalEntryLine::getCreditAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(cashCredit).isEqualByComparingTo("20.00");
+        assertThat(sumDebits(je)).isEqualByComparingTo(sumCredits(je));
+        assertThat(sumDebits(je)).isEqualByComparingTo("120.00");
+    }
+
+    @Test
+    @DisplayName("postSettlement - fee rebate (negative fee) sign-routes Fees to a credit leg and still balances")
+    void postSettlement_feeRebate_signRoutesFees() {
+        ArgumentCaptor<JournalEntry> captor = capturePosting();
+        // gross 1000 = fee -30 (rebate) + net 1030; fully matched.
+        SettlementPostingCommand cmd = new SettlementPostingCommand(
+                UUID.randomUUID(),
+                cash,
+                fees,
+                undeposited,
+                suspense,
+                new BigDecimal("1030.00"),
+                new BigDecimal("-30.00"),
+                new BigDecimal("1000.00"),
+                BigDecimal.ZERO,
+                TXN_DATE,
+                "settlement fee rebate",
+                null);
+
+        service.postSettlement(cmd);
+        JournalEntry je = captor.getValue();
+
+        BigDecimal feesCredit = je.getLines().stream()
+                .filter(l -> fees.equals(l.getGlAccountId()))
+                .map(JournalEntryLine::getCreditAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(feesCredit).isEqualByComparingTo("30.00");
+        assertThat(sumDebits(je)).isEqualByComparingTo(sumCredits(je));
+        assertThat(sumDebits(je)).isEqualByComparingTo("1030.00");
+    }
+
+    @Test
     @DisplayName("postSettlementWriteOff - posts balanced two-line Dr Suspense / Cr Adjustment")
     void postSettlementWriteOff_balances() {
         ArgumentCaptor<JournalEntry> captor = capturePosting();

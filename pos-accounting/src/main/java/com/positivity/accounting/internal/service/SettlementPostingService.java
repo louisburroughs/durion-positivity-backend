@@ -86,6 +86,12 @@ public class SettlementPostingService {
             log.info("Settlement already POSTED, skipping | settlementId={}", settlementId);
             return;
         }
+        if (settlement.getStatus() == SettlementStatus.REJECTED) {
+            // Rejected at ingest (non-base currency or incoherent match): never post. Defensive —
+            // rejected settlements are not enqueued, so this should not normally be reached.
+            log.warn("Settlement REJECTED at ingest, skipping GL posting | settlementId={}", settlementId);
+            return;
+        }
 
         // Transaction date = the provider settlement date (business date), not clock time, so outbox
         // retries post into the correct period and select the correct effective-dated GL mapping.
@@ -97,6 +103,18 @@ public class SettlementPostingService {
                 .map(ProcessorSettlementLine::getGrossAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal unmatchedGross = settlement.getGrossAmount().subtract(matchedGross);
+
+        // Invariant guard (decision D-13): matched gross can never exceed header gross,
+        // so unmatched gross is always >= 0. Assert it in code rather than relying on
+        // the DB CHECK — a violation here means the settlement was mis-matched and must
+        // not post; ingest rejects such settlements deterministically
+        // (SettlementReconciliationServiceImpl#ingestSettlement), so this is defence in
+        // depth against a corrupted line set on the outbox retry path.
+        if (unmatchedGross.signum() < 0) {
+            throw new IllegalStateException("Settlement " + settlementId + " has negative unmatched gross "
+                    + unmatchedGross + " (matchedGross=" + matchedGross + " > headerGross="
+                    + settlement.getGrossAmount() + "); refusing to post an incoherent batched JE");
+        }
 
         UUID cashAccountId =
                 glMappingResolver.resolveGLAccount(POSTING_CATEGORY_NAME, CASH_MAPPING_KEY, transactionDate);

@@ -18,6 +18,11 @@ import com.positivity.accounting.internal.dto.SettlementWriteOffRequest;
 import com.positivity.accounting.internal.entity.ProcessorSettlementLine;
 import com.positivity.accounting.internal.enums.SettlementLineMatchStatus;
 import com.positivity.accounting.internal.enums.SettlementLineType;
+import com.positivity.accounting.internal.exception.ReceivablePaymentNotFoundException;
+import com.positivity.accounting.internal.exception.SettlementLineNotFoundException;
+import com.positivity.accounting.internal.exception.SettlementLineNotUnmatchedException;
+import com.positivity.accounting.internal.exception.SettlementNotPostedException;
+import com.positivity.accounting.internal.exception.SettlementWriteOffThresholdExceededException;
 import com.positivity.accounting.service.SettlementReconciliationService;
 import java.math.BigDecimal;
 import java.util.List;
@@ -25,10 +30,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Tests for SettlementReconciliationController (Story F1c, Issue #963,
@@ -130,10 +133,10 @@ class SettlementReconciliationControllerTest extends BaseIntegrationTest {
         }
 
         @Test
-        @DisplayName("Should return 409 when the line is not UNMATCHED")
+        @DisplayName("Should return 409 SETTLEMENT_LINE_NOT_UNMATCHED when the line is not UNMATCHED")
         void shouldReturn409WhenNotUnmatched() throws Exception {
             when(settlementReconciliationService.manualMatchToReceivable(LINE_ID, RECEIVABLE_PAYMENT_ID))
-                    .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "not UNMATCHED"));
+                    .thenThrow(new SettlementLineNotUnmatchedException("not UNMATCHED"));
             SettlementManualMatchRequest req = SettlementManualMatchRequest.builder()
                     .receivablePaymentId(RECEIVABLE_PAYMENT_ID)
                     .build();
@@ -141,7 +144,56 @@ class SettlementReconciliationControllerTest extends BaseIntegrationTest {
             mockMvc.perform(withAuth(post("/v1/accounting/settlements/lines/{lineId}/match", LINE_ID))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(req)))
-                    .andExpect(status().isConflict());
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("SETTLEMENT_LINE_NOT_UNMATCHED"));
+        }
+
+        @Test
+        @DisplayName("Should return 404 SETTLEMENT_LINE_NOT_FOUND when the line is missing")
+        void shouldReturn404WhenLineMissing() throws Exception {
+            when(settlementReconciliationService.manualMatchToReceivable(LINE_ID, RECEIVABLE_PAYMENT_ID))
+                    .thenThrow(new SettlementLineNotFoundException("no line"));
+            SettlementManualMatchRequest req = SettlementManualMatchRequest.builder()
+                    .receivablePaymentId(RECEIVABLE_PAYMENT_ID)
+                    .build();
+
+            mockMvc.perform(withAuth(post("/v1/accounting/settlements/lines/{lineId}/match", LINE_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(req)))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("SETTLEMENT_LINE_NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("Should return 404 RECEIVABLE_PAYMENT_NOT_FOUND when the payment is missing")
+        void shouldReturn404WhenPaymentMissing() throws Exception {
+            when(settlementReconciliationService.manualMatchToReceivable(LINE_ID, RECEIVABLE_PAYMENT_ID))
+                    .thenThrow(new ReceivablePaymentNotFoundException("no payment"));
+            SettlementManualMatchRequest req = SettlementManualMatchRequest.builder()
+                    .receivablePaymentId(RECEIVABLE_PAYMENT_ID)
+                    .build();
+
+            mockMvc.perform(withAuth(post("/v1/accounting/settlements/lines/{lineId}/match", LINE_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(req)))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("RECEIVABLE_PAYMENT_NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("Should return 409 SETTLEMENT_NOT_POSTED when the settlement has not yet posted")
+        void shouldReturn409WhenSettlementNotPosted() throws Exception {
+            when(settlementReconciliationService.manualMatchToReceivable(LINE_ID, RECEIVABLE_PAYMENT_ID))
+                    .thenThrow(new SettlementNotPostedException("not posted"));
+            SettlementManualMatchRequest req = SettlementManualMatchRequest.builder()
+                    .receivablePaymentId(RECEIVABLE_PAYMENT_ID)
+                    .build();
+
+            mockMvc.perform(withAuth(post("/v1/accounting/settlements/lines/{lineId}/match", LINE_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(req)))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("SETTLEMENT_NOT_POSTED"));
         }
 
         @Test
@@ -196,17 +248,18 @@ class SettlementReconciliationControllerTest extends BaseIntegrationTest {
         }
 
         @Test
-        @DisplayName("Should return 422 when the gross exceeds the write-off threshold")
+        @DisplayName("Should return 422 WRITE_OFF_THRESHOLD_EXCEEDED when the gross exceeds the threshold")
         void shouldReturn422WhenAboveThreshold() throws Exception {
             when(settlementReconciliationService.writeOffLine(eq(LINE_ID), anyString()))
-                    .thenThrow(new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "exceeds threshold"));
+                    .thenThrow(new SettlementWriteOffThresholdExceededException("exceeds threshold"));
             SettlementWriteOffRequest req =
                     SettlementWriteOffRequest.builder().reason("too big").build();
 
             mockMvc.perform(withAuth(post("/v1/accounting/settlements/lines/{lineId}/write-off", LINE_ID))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(req)))
-                    .andExpect(status().isUnprocessableContent());
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.code").value("WRITE_OFF_THRESHOLD_EXCEEDED"));
         }
 
         @Test

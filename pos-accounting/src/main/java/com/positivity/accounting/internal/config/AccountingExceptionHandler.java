@@ -11,7 +11,13 @@ import com.positivity.accounting.internal.exception.AccountingPeriodStateExcepti
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
+import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
+import com.positivity.accounting.internal.exception.ReceivablePaymentNotFoundException;
+import com.positivity.accounting.internal.exception.SettlementLineNotFoundException;
+import com.positivity.accounting.internal.exception.SettlementLineNotUnmatchedException;
+import com.positivity.accounting.internal.exception.SettlementNotPostedException;
+import com.positivity.accounting.internal.exception.SettlementWriteOffThresholdExceededException;
 import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -191,6 +197,55 @@ public class AccountingExceptionHandler {
                         fieldErrors),
                 headers,
                 HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
+    /**
+     * Settlement reconciliation errors (story F1c, issue #963, PR #977 finding 5):
+     * dedicated codes so ADR-0017 clients can branch on the failure instead of a
+     * generic REQUEST_FAILED.
+     */
+    @ExceptionHandler(SettlementLineNotFoundException.class)
+    public ResponseEntity<ApiError> handleSettlementLineNotFound(
+            SettlementLineNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "SETTLEMENT_LINE_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ReceivablePaymentNotFoundException.class)
+    public ResponseEntity<ApiError> handleReceivablePaymentNotFound(
+            ReceivablePaymentNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "RECEIVABLE_PAYMENT_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(SettlementLineNotUnmatchedException.class)
+    public ResponseEntity<ApiError> handleSettlementLineNotUnmatched(
+            SettlementLineNotUnmatchedException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "SETTLEMENT_LINE_NOT_UNMATCHED", ex.getMessage(), request);
+    }
+
+    /**
+     * Manual match or write-off attempted before the settlement's batched JE
+     * posted (story F1c, PR #977 finding 2). 409 while still RECEIVED.
+     */
+    @ExceptionHandler(SettlementNotPostedException.class)
+    public ResponseEntity<ApiError> handleSettlementNotPosted(
+            SettlementNotPostedException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "SETTLEMENT_NOT_POSTED", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(SettlementWriteOffThresholdExceededException.class)
+    public ResponseEntity<ApiError> handleWriteOffThresholdExceeded(
+            SettlementWriteOffThresholdExceededException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "WRITE_OFF_THRESHOLD_EXCEEDED", ex.getMessage(), request);
+    }
+
+    /**
+     * Single-application reversal of a multi-application apply request (story C2,
+     * PR #977 finding 3): must be reversed as a whole payment instead.
+     */
+    @ExceptionHandler(MultiApplicationReversalException.class)
+    public ResponseEntity<ApiError> handleMultiApplicationReversal(
+            MultiApplicationReversalException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "WHOLE_REQUEST_REVERSAL_REQUIRED", ex.getMessage(), request);
     }
 
     @ExceptionHandler(ResponseStatusException.class)

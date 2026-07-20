@@ -111,9 +111,12 @@ public class SettlementReconciliationController {
                     + " reclass entry (Dr Settlement Suspense / Cr Undeposited Funds) that clears the line's gross"
                     + " out of suspense. Use this tool when the automatic gross match could not identify the"
                     + " payment. AP (vendor) matching is not supported in v1."
-                    + " Preconditions: the line must exist and be UNMATCHED, and the receivable payment must"
-                    + " exist. Returns 404 if the line or payment is not found and 409 if the line is no longer"
-                    + " UNMATCHED. Emits ACCOUNTING_SETTLEMENT_LINE_MATCH.",
+                    + " Preconditions: the line must exist and be UNMATCHED, its parent settlement must already"
+                    + " be POSTED, and the receivable payment must exist. Returns 404 if the line or payment is"
+                    + " not found (SETTLEMENT_LINE_NOT_FOUND / RECEIVABLE_PAYMENT_NOT_FOUND), 409 if the line is"
+                    + " no longer UNMATCHED (SETTLEMENT_LINE_NOT_UNMATCHED) or the settlement has not yet posted"
+                    + " (SETTLEMENT_NOT_POSTED), and 422 if the reclass entry is dated into a locked accounting"
+                    + " period (PERIOD_CLOSED / PERIOD_HARD_LOCKED). Emits ACCOUNTING_SETTLEMENT_LINE_MATCH.",
             tags = {"Settlement Reconciliation"})
     @ApiResponse(
             responseCode = "200",
@@ -129,11 +132,18 @@ public class SettlementReconciliationController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "Settlement line or receivable payment not found",
+            description = "Settlement line or receivable payment not found"
+                    + " (SETTLEMENT_LINE_NOT_FOUND / RECEIVABLE_PAYMENT_NOT_FOUND)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Settlement line is not UNMATCHED",
+            description = "Settlement line is not UNMATCHED (SETTLEMENT_LINE_NOT_UNMATCHED), or the settlement"
+                    + " has not yet posted (SETTLEMENT_NOT_POSTED)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Reclass entry is dated into a CLOSED or hard-locked accounting period"
+                    + " (PERIOD_CLOSED / PERIOD_HARD_LOCKED)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<SettlementLineResponse> matchSettlementLine(
             @Parameter(description = "Settlement line id", required = true) @PathVariable UUID lineId,
@@ -159,10 +169,13 @@ public class SettlementReconciliationController {
                     + " status flip. Use this tool only for genuinely unidentifiable small residuals; above the"
                     + " threshold there is no self-service write-off — manually match or escalate."
                     + " Preconditions: the line must exist and be UNMATCHED, its gross must not exceed the"
-                    + " threshold, and a non-blank reason (max 500 chars) is required and audited. Respects"
-                    + " accounting period locks (Story B2). Emits ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF."
-                    + " Returns 422 when the gross exceeds the threshold and 409 when the line is no longer"
-                    + " UNMATCHED.",
+                    + " threshold (compared on absolute value), and a non-blank reason (max 500 chars) is required"
+                    + " and audited. Respects accounting period locks (Story B2). Emits"
+                    + " ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF. Returns 422 when the absolute gross exceeds the"
+                    + " threshold (WRITE_OFF_THRESHOLD_EXCEEDED) or the adjustment entry is dated into a locked"
+                    + " accounting period (PERIOD_CLOSED / PERIOD_HARD_LOCKED), and 409 when the line is no longer"
+                    + " UNMATCHED (SETTLEMENT_LINE_NOT_UNMATCHED) or the settlement has not yet posted"
+                    + " (SETTLEMENT_NOT_POSTED).",
             tags = {"Settlement Reconciliation"})
     @ApiResponse(
             responseCode = "200",
@@ -178,15 +191,18 @@ public class SettlementReconciliationController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "Settlement line not found",
+            description = "Settlement line not found (SETTLEMENT_LINE_NOT_FOUND)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Settlement line is not UNMATCHED",
+            description = "Settlement line is not UNMATCHED (SETTLEMENT_LINE_NOT_UNMATCHED), or the settlement"
+                    + " has not yet posted (SETTLEMENT_NOT_POSTED)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "Line gross exceeds the write-off threshold; manual match or escalate",
+            description = "Line absolute gross exceeds the write-off threshold (WRITE_OFF_THRESHOLD_EXCEEDED);"
+                    + " manual match or escalate — or the adjustment entry is dated into a CLOSED or hard-locked"
+                    + " accounting period (PERIOD_CLOSED / PERIOD_HARD_LOCKED)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<SettlementLineResponse> writeOffSettlementLine(
             @Parameter(description = "Settlement line id", required = true) @PathVariable UUID lineId,

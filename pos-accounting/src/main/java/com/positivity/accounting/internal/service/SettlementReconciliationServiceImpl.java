@@ -10,6 +10,11 @@ import com.positivity.accounting.internal.enums.MatchedPaymentType;
 import com.positivity.accounting.internal.enums.SettlementLineMatchStatus;
 import com.positivity.accounting.internal.enums.SettlementLineType;
 import com.positivity.accounting.internal.enums.SettlementStatus;
+import com.positivity.accounting.internal.exception.ReceivablePaymentNotFoundException;
+import com.positivity.accounting.internal.exception.SettlementLineNotFoundException;
+import com.positivity.accounting.internal.exception.SettlementLineNotUnmatchedException;
+import com.positivity.accounting.internal.exception.SettlementNotPostedException;
+import com.positivity.accounting.internal.exception.SettlementWriteOffThresholdExceededException;
 import com.positivity.accounting.internal.repository.ExtPaymentSettlementConfigRepository;
 import com.positivity.accounting.internal.repository.ProcessorSettlementLineRepository;
 import com.positivity.accounting.internal.repository.ProcessorSettlementRepository;
@@ -25,7 +30,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -70,6 +77,14 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
     @Value("${accounting.reconciliation.writeoff.threshold:25.00}")
     private BigDecimal writeOffThreshold;
 
+    /**
+     * Ledger base currency (single-currency assumption). Settlements reported in any other currency
+     * cannot be posted into the base-currency ledger without FX handling (not in scope for F1c), so
+     * they are rejected at ingest rather than mis-posted at par.
+     */
+    @Value("${accounting.ledger.base-currency:USD}")
+    private String baseCurrency;
+
     @Override
     public void ingestSettlement(@NonNull SettlementReportedV1 payload) {
         if (settlementRepository.existsByEventId(payload.eventId())
@@ -83,6 +98,10 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
 
         ExtPaymentSettlementConfig config =
                 configRepository.findById(payload.providerCode()).orElse(null);
+
+        // Single-currency guard (finding 16): a settlement in a non-base currency cannot be posted
+        // into the base-currency ledger without FX handling. Skip matching and reject deterministically.
+        boolean currencyMismatch = payload.currency() != null && !baseCurrency.equalsIgnoreCase(payload.currency());
 
         ProcessorSettlement settlement = ProcessorSettlement.builder()
                 .settlementId(payload.settlementId())
@@ -102,10 +121,13 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
 
         BigDecimal matchedGross = BigDecimal.ZERO;
         int unmatchedCount = 0;
+        // Track payments already consumed by a matched line in this settlement (finding 12): a single
+        // ReceivablePayment must clear at most one CHARGE line, otherwise matchedGross double-counts.
+        Set<UUID> consumedPaymentIds = new HashSet<>();
         for (SettlementReportedV1.Line contractLine : payload.lines()) {
             ProcessorSettlementLine line = toLine(payload.settlementId(), contractLine);
-            ReceivablePayment matched = matchCharge(contractLine, config);
-            if (matched != null) {
+            ReceivablePayment matched = currencyMismatch ? null : matchCharge(contractLine, config);
+            if (matched != null && consumedPaymentIds.add(matched.getPaymentId())) {
                 line.setMatchStatus(SettlementLineMatchStatus.MATCHED);
                 line.setMatchedPaymentType(MatchedPaymentType.AR);
                 line.setMatchedPaymentId(matched.getPaymentId());
@@ -119,6 +141,29 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
 
         settlement.setMatchedGross(matchedGross);
         settlement.setUnmatchedCount(unmatchedCount);
+
+        // Coherence guard (finding 1): matched gross must never exceed header gross, otherwise the
+        // batched JE's unmatched-gross (suspense) leg would be negative and poison the outbox. This
+        // also rejects net-negative-gross payouts (matched 0 > negative gross). Reject deterministically
+        // at ingest — persist REJECTED for operational visibility and do NOT enqueue posting.
+        boolean overMatched = matchedGross.compareTo(payload.grossAmount()) > 0;
+        if (currencyMismatch || overMatched) {
+            settlement.setStatus(SettlementStatus.REJECTED);
+            settlementRepository.save(settlement);
+            log.error(
+                    "Rejecting settlement at ingest, not posted | settlementId={} | provider={} | currency={} "
+                            + "| baseCurrency={} | currencyMismatch={} | overMatched={} | matchedGross={} | headerGross={}",
+                    payload.settlementId(),
+                    payload.providerCode(),
+                    payload.currency(),
+                    baseCurrency,
+                    currencyMismatch,
+                    overMatched,
+                    matchedGross,
+                    payload.grossAmount());
+            return;
+        }
+
         settlementRepository.save(settlement);
 
         enqueuePosting(settlement);
@@ -214,8 +259,8 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
         ProcessorSettlementLine line = requireUnmatchedLine(lineId);
         ReceivablePayment payment = receivablePaymentRepository
                 .findById(receivablePaymentId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Receivable payment not found: " + receivablePaymentId));
+                .orElseThrow(() ->
+                        new ReceivablePaymentNotFoundException("Receivable payment not found: " + receivablePaymentId));
 
         LocalDateTime txDate = txDateOf(line);
         UUID suspenseAccount = glMappingResolver.resolveGLAccount(SETTLEMENT_CATEGORY, SUSPENSE_MAPPING_KEY, txDate);
@@ -248,11 +293,14 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Write-off reason is required");
         }
         ProcessorSettlementLine line = requireUnmatchedLine(lineId);
-        if (line.getGrossAmount().compareTo(writeOffThreshold) > 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNPROCESSABLE_ENTITY,
+        // Compare on absolute value (finding 11): a negative-gross line (refund/chargeback residual)
+        // must not slip under the ceiling via a signed comparison. Non-positive gross is not a
+        // write-off candidate and is rejected as exceeding the self-service path.
+        BigDecimal absGross = line.getGrossAmount().abs();
+        if (absGross.signum() <= 0 || absGross.compareTo(writeOffThreshold) > 0) {
+            throw new SettlementWriteOffThresholdExceededException(
                     "Write-off amount " + line.getGrossAmount() + " exceeds threshold " + writeOffThreshold
-                            + "; manual match or escalate");
+                            + " (absolute) or is non-positive; manual match or escalate");
         }
 
         LocalDateTime txDate = txDateOf(line);
@@ -283,11 +331,19 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
     private ProcessorSettlementLine requireUnmatchedLine(@NonNull UUID lineId) {
         ProcessorSettlementLine line = lineRepository
                 .findById(lineId)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Settlement line not found: " + lineId));
+                .orElseThrow(() -> new SettlementLineNotFoundException("Settlement line not found: " + lineId));
+        // Guard on the parent settlement being POSTED (finding 2): manual match or write-off before
+        // the async batched JE posts would double-clear Undeposited Funds and strand a Suspense debit.
+        // While the settlement is still RECEIVED, adjustments must wait (409); posting stays async.
+        ProcessorSettlement settlement = settlementRepository
+                .findById(line.getSettlementId())
+                .orElseThrow(() -> new SettlementLineNotFoundException("Settlement not found for line: " + lineId));
+        if (settlement.getStatus() != SettlementStatus.POSTED) {
+            throw new SettlementNotPostedException("Settlement " + line.getSettlementId() + " is not POSTED ("
+                    + settlement.getStatus() + "); manual adjustments must wait for GL posting");
+        }
         if (line.getMatchStatus() != SettlementLineMatchStatus.UNMATCHED) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
+            throw new SettlementLineNotUnmatchedException(
                     "Settlement line " + lineId + " is not UNMATCHED (" + line.getMatchStatus() + ")");
         }
         return line;
