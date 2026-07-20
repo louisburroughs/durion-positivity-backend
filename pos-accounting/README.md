@@ -55,6 +55,13 @@ General-ledger accounting service for the Durion Positivity ETSMS platform. Mana
 - `GET /v1/accounting/settlements/{settlementId}/lines` — list settlement lines, optional `unmatchedOnly` filter (permission `accounting:reconciliation:view`, event `ACCOUNTING_SETTLEMENT_LINES_LIST`, story F1c)
 - `POST /v1/accounting/settlements/lines/{lineId}/match` — manually match an unmatched line to a receivable payment (permission `accounting:reconciliation:adjust`, event `ACCOUNTING_SETTLEMENT_LINE_MATCH`, story F1c)
 - `POST /v1/accounting/settlements/lines/{lineId}/write-off` — write off a small unmatched line with mandatory reason (permission `accounting:reconciliation:adjust`, event `ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF`, story F1c)
+- `POST /v1/accounting/reconciliations/import` — start a CSV bank reconciliation for a reconcilable GL account (permission `accounting:reconciliation:adjust`, story F2)
+- `GET /v1/accounting/reconciliations` / `GET /v1/accounting/reconciliations/{id}` — list / get reconciliations (permission `accounting:reconciliation:view`)
+- `POST /v1/accounting/reconciliations/{id}/match` · `/unmatch` — match (1-to-1 / N-to-1, ±0.01) or unmatch statement lines to posted GL lines (permission `accounting:reconciliation:adjust`)
+- `GET /v1/accounting/reconciliations/adjustment-types` — served adjustment-type enum (`BANK_FEE, NSF_FEE, INTEREST_EARNED, FLOAT_ADJUSTMENT, OTHER`; frontend never hardcodes it)
+- `POST /v1/accounting/reconciliations/{id}/adjustments` — record an adjustment; posts a real balanced JE via posting categories, respecting period locks (permission `accounting:reconciliation:adjust`)
+- `POST /v1/accounting/reconciliations/{id}/finalize` — finalize only when statement vs GL ending balance agree within ±0.01 (permission `accounting:reconciliation:adjust`)
+- `GET /v1/accounting/reconciliations/{id}/report` · `/audit` — reconciliation report / audit trail (permission `accounting:reconciliation:view`)
 
 ## Chart of Accounts
 

@@ -32,6 +32,8 @@ tags:
   description: Manage journal entries including posting and reversal.
 - name: GL Accounts
   description: Manage chart of accounts including lifecycle actions.
+- name: Bank Reconciliation
+  description: 'Manual CSV bank reconciliation: import a statement, match lines to posted GL entries, record adjustments, and finalize when balanced.'
 - name: Accounting Periods
   description: 'Accounting period lifecycle: list periods, close a period, reopen a closed period, and manage the org-level hard-lock date.'
 - name: Settlement Reconciliation
@@ -947,6 +949,283 @@ paths:
         - accounting:report:export
       x-required-permissions:
       - accounting:report:export
+  /v1/accounting/reconciliations/{reconciliationId}/unmatch:
+    post:
+      tags:
+      - Bank Reconciliation
+      summary: Reverse a match
+      description: Reverses a match by matchId or by statement line ids, returning the affected statement lines to UNMATCHED and releasing the linked GL lines. Returns 404 RECONCILIATION_NOT_FOUND if the reconciliation or match group is missing, and 409 RECONCILIATION_ALREADY_FINALIZED if the reconciliation is finalized.
+      operationId: unmatchReconciliation
+      parameters:
+      - name: reconciliationId
+        in: path
+        description: Reconciliation id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationUnmatchRequest'
+        required: true
+      responses:
+        '200':
+          description: Match reversed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationResponse'
+        '400':
+          description: Neither matchId nor statementLineIds resolved to a single match group (VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:reconciliation:adjust permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reconciliation or match group not found (RECONCILIATION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/{reconciliationId}/match:
+    post:
+      tags:
+      - Bank Reconciliation
+      summary: Match statement lines to GL lines
+      description: Matches a set of statement lines to a set of posted GL journal-entry lines on the reconciled account (1-to-1 or N-to-1). The two sets must net to equal signed amounts within ±0.01. Marks the statement lines MATCHED and records the linkage. Returns 404 RECONCILIATION_NOT_FOUND if the reconciliation or a line is missing, 409 RECONCILIATION_ALREADY_FINALIZED if the reconciliation is finalized, and 422 MATCH_AMOUNT_MISMATCH if the sets do not net.
+      operationId: matchReconciliation
+      parameters:
+      - name: reconciliationId
+        in: path
+        description: Reconciliation id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationMatchRequest'
+        required: true
+      responses:
+        '200':
+          description: Lines matched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationResponse'
+        '400':
+          description: Request body invalid (ARGUMENT_NOT_VALID / VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:reconciliation:adjust permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reconciliation or a referenced line not found (RECONCILIATION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED), or a statement/GL line is ineligible — not UNMATCHED, not POSTED, or already reconciled (RECONCILIATION_LINE_INELIGIBLE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Matched sets do not net to equal amounts (MATCH_AMOUNT_MISMATCH)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/{reconciliationId}/finalize:
+    post:
+      tags:
+      - Bank Reconciliation
+      summary: Finalize a reconciliation
+      description: 'Finalizes a reconciliation (IN_PROGRESS to FINALIZED) only when it balances: the statement ending balance must equal the GL ending balance plus the sum of adjustments, within ±0.01 (matched GL lines are already reflected in the GL ending balance). Returns 404 RECONCILIATION_NOT_FOUND if missing, 409 RECONCILIATION_ALREADY_FINALIZED if already finalized, and 422 RECONCILIATION_NOT_BALANCED (with the outstanding difference) if it does not balance.'
+      operationId: finalizeReconciliation
+      parameters:
+      - name: reconciliationId
+        in: path
+        description: Reconciliation id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Reconciliation finalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationResponse'
+        '403':
+          description: Caller lacks the accounting:reconciliation:adjust permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reconciliation not found (RECONCILIATION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Reconciliation does not balance (RECONCILIATION_NOT_BALANCED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/{reconciliationId}/adjustments:
+    post:
+      tags:
+      - Bank Reconciliation
+      summary: Record a reconciliation adjustment
+      description: Records a signed adjustment and posts a real balanced journal entry (Dr/Cr the reconciled cash account against the type's mapped counter account) through the accounting-period gate. Returns 404 RECONCILIATION_NOT_FOUND if the reconciliation is missing, 409 RECONCILIATION_ALREADY_FINALIZED if it is finalized, and 422 PERIOD_CLOSED / PERIOD_HARD_LOCKED if the adjustment JE is dated into a locked accounting period.
+      operationId: addReconciliationAdjustment
+      parameters:
+      - name: reconciliationId
+        in: path
+        description: Reconciliation id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationAdjustmentRequest'
+        required: true
+      responses:
+        '200':
+          description: Adjustment recorded and JE posted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationResponse'
+        '400':
+          description: Request body invalid or amount is zero (ARGUMENT_NOT_VALID / VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:reconciliation:adjust permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reconciliation not found (RECONCILIATION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Adjustment JE dated into a CLOSED or hard-locked period (PERIOD_CLOSED / PERIOD_HARD_LOCKED), or the amount sign is not permitted for the type — BANK_FEE/NSF_FEE must be negative, INTEREST_EARNED must be positive (RECONCILIATION_ADJUSTMENT_SIGN_INVALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/import:
+    post:
+      tags:
+      - Bank Reconciliation
+      summary: Import a bank statement CSV and start a reconciliation
+      description: 'Parses a bank statement CSV (columns: date, description, amount [signed], reference) for a reconcilable GL cash account and creates an IN_PROGRESS reconciliation with its imported statement lines (UNMATCHED). The GL ending balance is snapshotted from posted journal-entry lines on the account as-of the statement date. Returns 422 ACCOUNT_NOT_RECONCILABLE if the account''s reconcilable flag (story H1) is false, and 400 if the CSV is malformed.'
+      operationId: importReconciliation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankReconciliationImportRequest'
+        required: true
+      responses:
+        '200':
+          description: Reconciliation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationResponse'
+        '400':
+          description: Request body invalid or CSV malformed (ARGUMENT_NOT_VALID / VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:reconciliation:adjust permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: GL account is not reconcilable (ACCOUNT_NOT_RECONCILABLE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      x-required-permissions:
+      - accounting:reconciliation:adjust
   /v1/accounting/posting-rules:
     get:
       tags:
@@ -3507,6 +3786,211 @@ paths:
         - accounting:report:export
       x-required-permissions:
       - accounting:report:export
+  /v1/accounting/reconciliations:
+    get:
+      tags:
+      - Bank Reconciliation
+      summary: List reconciliations
+      description: Lists reconciliations, optionally filtered by glAccountId and/or status, most recent first. Paginated. No side effects.
+      operationId: listReconciliations
+      parameters:
+      - name: glAccountId
+        in: query
+        description: Filter by reconciled GL account id
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        description: Filter by reconciliation status
+        required: false
+        schema:
+          type: string
+          enum:
+          - IN_PROGRESS
+          - FINALIZED
+          - CANCELLED
+      - name: page
+        in: query
+        description: Zero-based page index
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+        example: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+        example: 20
+      responses:
+        '200':
+          description: Reconciliations listed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationListResponse'
+        '403':
+          description: Caller lacks the accounting:reconciliation:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      x-required-permissions:
+      - accounting:reconciliation:view
+  /v1/accounting/reconciliations/{reconciliationId}:
+    get:
+      tags:
+      - Bank Reconciliation
+      summary: Get a reconciliation
+      description: Returns one reconciliation with its imported statement lines and adjustments. Returns 404 RECONCILIATION_NOT_FOUND if the id is unknown.
+      operationId: getReconciliation
+      parameters:
+      - name: reconciliationId
+        in: path
+        description: Reconciliation id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Reconciliation found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationResponse'
+        '403':
+          description: Caller lacks the accounting:reconciliation:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reconciliation not found (RECONCILIATION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      x-required-permissions:
+      - accounting:reconciliation:view
+  /v1/accounting/reconciliations/{reconciliationId}/report:
+    get:
+      tags:
+      - Bank Reconciliation
+      summary: Reconciliation report
+      description: 'Returns the reconciliation report: opening (GL) and closing (statement) balances, matched vs outstanding lines, adjustments, and the outstanding difference. Returns 404 RECONCILIATION_NOT_FOUND if the id is unknown.'
+      operationId: getReconciliationReport
+      parameters:
+      - name: reconciliationId
+        in: path
+        description: Reconciliation id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Report generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationReportResponse'
+        '403':
+          description: Caller lacks the accounting:reconciliation:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reconciliation not found (RECONCILIATION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      x-required-permissions:
+      - accounting:reconciliation:view
+  /v1/accounting/reconciliations/{reconciliationId}/audit:
+    get:
+      tags:
+      - Bank Reconciliation
+      summary: Reconciliation audit trail
+      description: Returns the audit trail of a reconciliation's actions (import, matches, adjustments, finalize), ordered by time. Returns 404 RECONCILIATION_NOT_FOUND if the id is unknown.
+      operationId: getReconciliationAudit
+      parameters:
+      - name: reconciliationId
+        in: path
+        description: Reconciliation id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Audit trail generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationAuditResponse'
+        '403':
+          description: Caller lacks the accounting:reconciliation:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reconciliation not found (RECONCILIATION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      x-required-permissions:
+      - accounting:reconciliation:view
+  /v1/accounting/reconciliations/adjustment-types:
+    get:
+      tags:
+      - Bank Reconciliation
+      summary: List reconciliation adjustment types
+      description: Returns the supported reconciliation adjustment types (decision D-6) so the frontend never hardcodes the enum. No preconditions and no side effects.
+      operationId: listReconciliationAdjustmentTypes
+      responses:
+        '200':
+          description: Adjustment types listed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdjustmentTypeResponse'
+        '403':
+          description: Caller lacks the accounting:reconciliation:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      x-required-permissions:
+      - accounting:reconciliation:view
   /v1/accounting/posting-rules/{postingRuleSetId}/versions:
     get:
       tags:
@@ -5911,6 +6395,271 @@ components:
       required:
       - exportId
       - status
+    ReconciliationUnmatchRequest:
+      type: object
+      description: Request to reverse a match by matchId or by statement line ids
+      properties:
+        matchId:
+          type: string
+          format: uuid
+          description: Match group id to reverse
+        statementLineIds:
+          type: array
+          description: Statement line ids whose match group should be reversed
+          items:
+            type: string
+            format: uuid
+    BankReconciliationAdjustmentResponse:
+      type: object
+      description: Reconciliation adjustment with its posted journal entry
+      properties:
+        adjustmentId:
+          type: string
+          format: uuid
+          description: Adjustment id
+        type:
+          type: string
+          description: Adjustment type (decision D-6)
+          enum:
+          - BANK_FEE
+          - NSF_FEE
+          - INTEREST_EARNED
+          - OTHER
+          example: BANK_FEE
+        amount:
+          type: number
+          description: Signed adjustment amount
+          example: -12.5
+        description:
+          type: string
+          description: Adjustment description
+        journalEntryId:
+          type: string
+          format: uuid
+          description: Id of the real balanced journal entry this adjustment posted
+        createdAt:
+          type: string
+          format: date-time
+          description: When the adjustment was recorded
+        createdBy:
+          type: string
+          description: Who recorded the adjustment
+    BankReconciliationLineResponse:
+      type: object
+      description: Imported bank statement line
+      properties:
+        lineId:
+          type: string
+          format: uuid
+          description: Statement line id
+        lineNumber:
+          type: integer
+          format: int32
+          description: 1-based line number in the imported statement
+          example: 1
+        lineDate:
+          type: string
+          format: date
+          description: Statement line date
+          example: 2026-06-15
+        description:
+          type: string
+          description: Statement line description
+          example: ACH DEPOSIT
+        amount:
+          type: number
+          description: Signed statement amount
+          example: 1500.0
+        reference:
+          type: string
+          description: Statement line reference
+          example: REF-88213
+        status:
+          type: string
+          description: Match status
+          enum:
+          - UNMATCHED
+          - MATCHED
+          example: UNMATCHED
+        matchId:
+          type: string
+          format: uuid
+          description: Match group id when MATCHED; null while UNMATCHED
+    BankReconciliationResponse:
+      type: object
+      description: Bank reconciliation with its statement lines and adjustments
+      properties:
+        reconciliationId:
+          type: string
+          format: uuid
+          description: Reconciliation id
+        glAccountId:
+          type: string
+          format: uuid
+          description: Reconciled GL cash account id
+        accountCode:
+          type: string
+          description: Reconciled account code
+          example: '1000'
+        accountName:
+          type: string
+          description: Reconciled account name
+          example: Cash
+        periodStartDate:
+          type: string
+          format: date
+          description: Statement period start date
+          example: 2026-06-01
+        periodEndDate:
+          type: string
+          format: date
+          description: Statement period end date
+          example: 2026-06-30
+        statementDate:
+          type: string
+          format: date
+          description: Statement date
+          example: 2026-06-30
+        currency:
+          type: string
+          description: Reconciliation currency
+          example: USD
+        statementEndingBalance:
+          type: number
+          description: Statement ending balance
+          example: 12500.0
+        glEndingBalance:
+          type: number
+          description: GL ending balance snapshotted at import as-of the statement date
+          example: 12000.0
+        difference:
+          type: number
+          description: statementEndingBalance − (glEndingBalance + Σ adjustments); 0 when balanced
+          example: 0.0
+        status:
+          type: string
+          description: Reconciliation status
+          enum:
+          - IN_PROGRESS
+          - FINALIZED
+          - CANCELLED
+          example: IN_PROGRESS
+        createdAt:
+          type: string
+          format: date-time
+          description: When the reconciliation was created
+        createdBy:
+          type: string
+          description: Who created the reconciliation
+        finalizedAt:
+          type: string
+          format: date-time
+          description: When the reconciliation was finalized; null while IN_PROGRESS
+        finalizedBy:
+          type: string
+          description: Who finalized the reconciliation
+        statementLines:
+          type: array
+          description: Imported statement lines
+          items:
+            $ref: '#/components/schemas/BankReconciliationLineResponse'
+        adjustments:
+          type: array
+          description: Recorded adjustments
+          items:
+            $ref: '#/components/schemas/BankReconciliationAdjustmentResponse'
+    ReconciliationMatchRequest:
+      type: object
+      description: Request to match statement lines to GL journal-entry lines
+      properties:
+        statementLineIds:
+          type: array
+          description: Statement line ids to match
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+        glLineIds:
+          type: array
+          description: Posted GL journal-entry line ids to match against
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+      required:
+      - glLineIds
+      - statementLineIds
+    ReconciliationAdjustmentRequest:
+      type: object
+      description: Request to record a reconciliation adjustment (posts a real JE)
+      properties:
+        type:
+          type: string
+          description: Adjustment type (decision D-6)
+          enum:
+          - BANK_FEE
+          - NSF_FEE
+          - INTEREST_EARNED
+          - OTHER
+          example: BANK_FEE
+        amount:
+          type: number
+          description: Signed adjustment amount; positive increases the reconciled cash account
+          example: -12.5
+        description:
+          type: string
+          description: Optional description recorded on the adjustment
+          example: Monthly account service charge
+          maxLength: 500
+          minLength: 0
+      required:
+      - amount
+      - type
+    BankReconciliationImportRequest:
+      type: object
+      description: Request to import a bank statement CSV and start a reconciliation
+      properties:
+        glAccountId:
+          type: string
+          format: uuid
+          description: Reconcilable GL cash account being reconciled
+        periodStartDate:
+          type: string
+          format: date
+          description: Statement period start date
+          example: 2026-06-01
+        periodEndDate:
+          type: string
+          format: date
+          description: Statement period end date
+          example: 2026-06-30
+        statementDate:
+          type: string
+          format: date
+          description: Statement date; GL ending balance is computed as-of this date
+          example: 2026-06-30
+        statementEndingBalance:
+          type: number
+          description: Statement ending balance
+          example: 12500.0
+        currency:
+          type: string
+          description: ISO currency code; single currency governs the reconciliation
+          example: USD
+          maxLength: 3
+          minLength: 3
+        csv:
+          type: string
+          description: 'Bank statement CSV (columns: date, description, amount, reference), raw text lines or base64'
+          minLength: 1
+      required:
+      - csv
+      - currency
+      - glAccountId
+      - periodEndDate
+      - periodStartDate
+      - statementDate
+      - statementEndingBalance
     PostingCategoryCreateRequest:
       type: object
       description: Request payload for creating a new posting category
@@ -8368,6 +9117,154 @@ components:
           type: boolean
         unsorted:
           type: boolean
+    BankReconciliationListResponse:
+      type: object
+      description: Paginated list of bank reconciliations
+      properties:
+        reconciliations:
+          type: array
+          description: Reconciliations on the current page
+          items:
+            $ref: '#/components/schemas/BankReconciliationResponse'
+        totalElements:
+          type: integer
+          format: int64
+          description: Total number of matching reconciliations
+          example: 42
+        pageNumber:
+          type: integer
+          format: int32
+          description: Zero-based page index
+          example: 0
+        pageSize:
+          type: integer
+          format: int32
+          description: Page size
+          example: 20
+        totalPages:
+          type: integer
+          format: int32
+          description: Total number of pages
+          example: 3
+      required:
+      - pageNumber
+      - pageSize
+      - reconciliations
+      - totalElements
+      - totalPages
+    ReconciliationReportResponse:
+      type: object
+      description: Bank reconciliation report
+      properties:
+        reconciliationId:
+          type: string
+          format: uuid
+          description: Reconciliation id
+        accountCode:
+          type: string
+          description: Reconciled account code
+          example: '1000'
+        accountName:
+          type: string
+          description: Reconciled account name
+          example: Cash
+        currency:
+          type: string
+          description: Reconciliation currency
+          example: USD
+        statementDate:
+          type: string
+          format: date
+          description: Statement date
+          example: 2026-06-30
+        glEndingBalance:
+          type: number
+          description: GL ending balance snapshotted at import (opening basis)
+          example: 12000.0
+        statementEndingBalance:
+          type: number
+          description: Statement ending balance (closing basis)
+          example: 12500.0
+        totalMatched:
+          type: number
+          description: Sum of signed amounts over MATCHED statement lines
+          example: 500.0
+        totalAdjustments:
+          type: number
+          description: Sum of signed adjustment amounts
+          example: 0.0
+        totalOutstanding:
+          type: number
+          description: Sum of signed amounts over UNMATCHED statement lines
+          example: 0.0
+        matchedLineCount:
+          type: integer
+          format: int32
+          description: Number of MATCHED statement lines
+          example: 5
+        outstandingLineCount:
+          type: integer
+          format: int32
+          description: Number of UNMATCHED statement lines
+          example: 0
+        difference:
+          type: number
+          description: statementEndingBalance − (glEndingBalance + totalAdjustments); matched lines are already reflected in glEndingBalance
+          example: 0.0
+        adjustments:
+          type: array
+          description: Recorded adjustments
+          items:
+            $ref: '#/components/schemas/BankReconciliationAdjustmentResponse'
+        outstandingLines:
+          type: array
+          description: Outstanding (UNMATCHED) statement lines
+          items:
+            $ref: '#/components/schemas/BankReconciliationLineResponse'
+    Entry:
+      type: object
+      description: One reconciliation audit entry
+      properties:
+        action:
+          type: string
+          description: Action
+          example: ADJUSTMENT
+        at:
+          type: string
+          format: date-time
+          description: When the action occurred
+        by:
+          type: string
+          description: Who performed the action
+        detail:
+          type: string
+          description: Human-readable detail
+    ReconciliationAuditResponse:
+      type: object
+      description: Audit trail of a reconciliation's actions
+      properties:
+        reconciliationId:
+          type: string
+          format: uuid
+          description: Reconciliation id
+        entries:
+          type: array
+          description: Audit entries ordered by time
+          items:
+            $ref: '#/components/schemas/Entry'
+    AdjustmentTypeResponse:
+      type: object
+      description: A supported reconciliation adjustment type
+      properties:
+        code:
+          type: string
+          description: Adjustment type code
+          enum:
+          - BANK_FEE
+          - NSF_FEE
+          - INTEREST_EARNED
+          - OTHER
+          example: BANK_FEE
     PostingRuleSetListResponse:
       type: object
       description: Paginated list of posting rule sets

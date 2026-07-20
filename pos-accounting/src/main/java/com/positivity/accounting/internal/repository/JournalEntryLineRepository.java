@@ -52,6 +52,18 @@ public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLi
     BigDecimal getAccountBalance(UUID glAccountId);
 
     /**
+     * Signed GL balance for an account as-of a date: sum of (debit − credit) over POSTED lines whose
+     * parent entry's transaction date is on or before {@code asOf}. Used by bank reconciliation
+     * (Story F2, issue #965) to snapshot the GL ending balance at import time.
+     */
+    @Query("SELECT COALESCE(SUM(jel.debitAmount) - SUM(jel.creditAmount), 0) "
+            + "FROM JournalEntryLine jel "
+            + "JOIN jel.journalEntry je "
+            + "WHERE jel.glAccount.glAccountId = :glAccountId AND je.status = 'POSTED' "
+            + "AND je.transactionDate <= :asOf")
+    BigDecimal getAccountBalanceAsOf(@Param("glAccountId") UUID glAccountId, @Param("asOf") LocalDateTime asOf);
+
+    /**
      * Find posted journal entry lines for a set of GL accounts whose entry transaction date falls
      * within the given range. The parent entry is fetched so callers can read its transaction date and
      * each line's dimensions without triggering lazy loads.
