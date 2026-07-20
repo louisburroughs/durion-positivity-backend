@@ -25,6 +25,7 @@ Core workorder service for the Durion Positivity ETSMS platform. Manages the ful
 - `WorkorderInvoiceService` — invokes `pos-invoice` to generate an invoice at close
 - `TechnicianAssignmentService` — assign and reassign technicians
 - `DashboardService` — aggregated shop dashboard data
+- `TaxClient` — outbound client for `pos-tax`; forwards `X-User: pos-workorder` and `X-Authorities: tax:calculate` on the tax-calculate call so the request satisfies `tax:calculate` enforcement (matching `pos-invoice`'s `TaxServiceClient`)
 
 ## API Endpoints
 
