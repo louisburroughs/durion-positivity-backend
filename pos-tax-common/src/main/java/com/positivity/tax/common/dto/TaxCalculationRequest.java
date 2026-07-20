@@ -1,5 +1,7 @@
 package com.positivity.tax.common.dto;
 
+import com.positivity.tax.common.enums.ExemptionReasonCode;
+import com.positivity.tax.common.enums.TaxCalculationType;
 import com.positivity.tax.common.enums.TaxReferenceType;
 import com.positivity.tax.common.validation.IsoCountryCode;
 import com.positivity.tax.common.validation.IsoCurrencyCode;
@@ -102,6 +104,47 @@ public class TaxCalculationRequest {
     private String customerId;
 
     /**
+     * Optional transaction-level exemption claim applying to every line (story T3).
+     * <p>
+     * When set, all lines are evaluated as certificate-backed exemption claims: honored
+     * only if an active, effective, non-expired certificate is found; otherwise taxed
+     * anyway and flagged {@code exemptionDenied} (decision D-T2).
+     */
+    @Valid
+    @Schema(
+            description = "Optional transaction-level exemption claim applying to all lines",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private CustomerExemption customerExemption;
+
+    /**
+     * Calculation direction/intent (story T4). Defaults to {@link TaxCalculationType#SALE}.
+     * <p>
+     * {@link TaxCalculationType#REFUND} computes positive refund tax priced at the
+     * supplied {@code transactionDate} (the original sale date); the value is echoed on
+     * the response.
+     */
+    @Builder.Default
+    @Schema(
+            description = "Calculation direction: SALE (default) or REFUND. REFUND amounts are positive and"
+                    + " priced at the supplied transactionDate (the original sale date); callers negate at"
+                    + " posting. Finalized-invoice credits must use the stored breakdown, not REFUND recompute.",
+            example = "SALE",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private TaxCalculationType calculationType = TaxCalculationType.SALE;
+
+    /**
+     * Optional identifier of the original sale transaction being refunded (story T4).
+     * <p>
+     * Carried through for provider refund-document correlation (story T6); ignored by the
+     * test-mode calculator beyond being accepted.
+     */
+    @Schema(
+            description = "Optional reference to the original sale transaction being refunded",
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private UUID originalReferenceId;
+
+    /**
      * Optional transaction date (ISO 8601 format).
      * <p>
      * If not provided, current date is used.
@@ -168,6 +211,35 @@ public class TaxCalculationRequest {
             return null;
         }
         return destinationAddress.getLine1();
+    }
+
+    /**
+     * Transaction-level exemption claim applying to all line items (story T3).
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(name = "CustomerExemption", description = "Transaction-level exemption claim applying to all lines")
+    public static class CustomerExemption {
+
+        /**
+         * Reason the customer claims exemption for this transaction.
+         */
+        @Schema(
+                description = "Exemption reason (RESALE, GOVERNMENT, NONPROFIT, AGRICULTURAL, OTHER)",
+                example = "GOVERNMENT",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        private ExemptionReasonCode reasonCode;
+
+        /**
+         * Optional exemption-certificate identifier backing the claim.
+         */
+        @Schema(
+                description = "Optional exemption-certificate identifier backing the claim",
+                example = "018f0000-0000-7000-8000-0000000000aa",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        private UUID certificateId;
     }
 
     /**

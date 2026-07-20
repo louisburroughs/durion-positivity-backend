@@ -6,6 +6,23 @@ spring:
       # Disabled by default - pos-tax is internal-only and should not be externally accessible
       # Enable only if deploying as standalone internal microservice
       enabled: false
+  # Persistence for the T3 exemption-certificate registry (pos-tax's only table).
+  # Deployed profiles (docker/alpha/prod) inject a Postgres datasource via env; dev/test
+  # use in-memory H2 (see application-dev.yml / application-test.yml). Flyway owns the
+  # schema; Hibernate only validates the mapping.
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    database-platform: ${SPRING_JPA_DATABASE_PLATFORM:org.hibernate.dialect.PostgreSQLDialect}
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
 
 server:
   port: 8091

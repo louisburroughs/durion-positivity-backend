@@ -12,9 +12,9 @@
       "description": "Default tax rates used in test mode by jurisdiction type."
     },
     {
-      "name": "pos.tax.test-mode.postal-code-mapping",
-      "type": "java.util.Map<java.lang.String, java.util.Map<java.lang.String, java.lang.String>>",
-      "description": "Postal-code to jurisdiction mappings used in test mode."
+      "name": "pos.tax.test-mode.jurisdictions",
+      "type": "java.util.List<com.positivity.tax.internal.config.TaxProperties$JurisdictionRule>",
+      "description": "Address-driven, effective-dated jurisdiction rate rules (story T7). Each rule matches on destination-address facets and carries its own rates, effective-from date, and optional per-category exemptions."
     },
     {
       "name": "pos.tax.external-service.base-url",

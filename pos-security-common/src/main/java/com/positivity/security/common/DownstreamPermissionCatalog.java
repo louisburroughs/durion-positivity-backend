@@ -451,8 +451,12 @@ public final class DownstreamPermissionCatalog {
         "PERM_accounting:period:override", // 383
 
         // ── New batch (bits 384–385) ──────────────────────────────────────────
-        "PERM_accounting:reconciliation:adjust",             // 384
-        "PERM_accounting:reconciliation:view"               // 385
+        "PERM_accounting:reconciliation:adjust", // 384
+        "PERM_accounting:reconciliation:view", // 385
+
+        // ── New batch (bits 386–387) ──────────────────────────────────────────
+        "PERM_tax:exemption:view", // 386
+        "PERM_tax:exemption:manage" // 387
     };
 
     public static String authorityForBit(int bitIndex) {

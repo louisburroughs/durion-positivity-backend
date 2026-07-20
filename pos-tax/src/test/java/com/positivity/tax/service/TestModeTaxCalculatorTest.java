@@ -6,9 +6,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxLineItem;
+import com.positivity.tax.common.enums.ExemptionReasonCode;
+import com.positivity.tax.common.enums.TaxCalculationType;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
 import com.positivity.tax.common.enums.TaxReferenceType;
 import com.positivity.tax.internal.config.TaxProperties;
+import com.positivity.tax.internal.service.ActiveCertificateLookup;
+import com.positivity.tax.internal.service.ExemptionResolver;
 import com.positivity.tax.internal.service.TestModeTaxCalculator;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -19,7 +23,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,6 +42,7 @@ class TestModeTaxCalculatorTest {
 
     private TaxProperties properties;
     private TestModeTaxCalculator calculator;
+    private StubLookup lookup;
 
     @BeforeEach
     void setUp() {
@@ -48,7 +55,27 @@ class TestModeTaxCalculatorTest {
         rates.put("CITY", new BigDecimal("0.01"));
         testMode.setDefaultRates(rates);
         properties.setTestMode(testMode);
-        calculator = new TestModeTaxCalculator(properties, FIXED_CLOCK);
+        lookup = new StubLookup();
+        calculator = new TestModeTaxCalculator(properties, FIXED_CLOCK, new ExemptionResolver(lookup));
+    }
+
+    /** Configurable stub certificate lookup: returns {@link #result} for any query. */
+    private static final class StubLookup implements ActiveCertificateLookup {
+        private Optional<ActiveCertificate> result = Optional.empty();
+
+        void returns(ActiveCertificate certificate) {
+            this.result = Optional.of(certificate);
+        }
+
+        @Override
+        public Optional<ActiveCertificate> findActive(
+                String customerId,
+                UUID certificateId,
+                String stateScope,
+                ExemptionReasonCode requestedReason,
+                LocalDate date) {
+            return result;
+        }
     }
 
     @Test
@@ -658,7 +685,276 @@ class TestModeTaxCalculatorTest {
         assertSigmaInvariant(response);
     }
 
+    // ------------------------------------------------------------------
+    // T3: Exemptions as reportable zero-tax
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("T3: certificate-backed exemption yields zero-rate jurisdiction rows with reason echoed")
+    void shouldEmitZeroRateRowsForHonoredExemption() {
+        // Given - a $100 exempt line (claim: RESALE) backed by a valid certificate, plus a
+        // $50 taxable line. Combined rate is 10%.
+        lookup.returns(new ActiveCertificateLookup.ActiveCertificate(UUID.randomUUID(), ExemptionReasonCode.RESALE));
+        TaxLineItem exempt = TaxLineItem.builder()
+                .lineItemId("1")
+                .description("Resale part")
+                .quantity(BigDecimal.ONE)
+                .unitPrice(new BigDecimal("100"))
+                .taxExempt(true)
+                .exemptionReasonCode(ExemptionReasonCode.RESALE)
+                .build();
+        TaxCalculationRequest request = TaxCalculationRequest.builder()
+                .lineItems(List.of(exempt, createLineItem("2", "Taxable", "1", "50")))
+                .destinationAddress(createAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
+                .build();
+
+        // When
+        TaxCalculationResponse response = calculator.calculate(request);
+
+        // Then - only the taxable $50 line contributes: 50 * 0.10 = 5.00.
+        assertThat(response.getSubtotal()).isEqualByComparingTo("150.00");
+        assertThat(response.getTotalTax()).isEqualByComparingTo("5.00");
+        TaxCalculationResponse.LineItemTax exemptLine = findLine(response, "1");
+        assertThat(exemptLine.isTaxExempt()).isTrue();
+        assertThat(exemptLine.isExemptionDenied()).isFalse();
+        assertThat(exemptLine.getExemptionReasonCode()).isEqualTo(ExemptionReasonCode.RESALE);
+        assertThat(exemptLine.getTaxAmount()).isEqualByComparingTo("0.00");
+        // Zero-rate rows: one per applicable jurisdiction, rate = jurisdiction rate, amount 0.
+        assertThat(exemptLine.getJurisdictions()).hasSize(3);
+        assertThat(exemptLine.getJurisdictions()).allSatisfy(cell -> {
+            assertThat(cell.isExempt()).isTrue();
+            assertThat(cell.getExemptionReasonCode()).isEqualTo(ExemptionReasonCode.RESALE);
+            assertThat(cell.getAmount()).isEqualByComparingTo("0.00");
+            assertThat(cell.getRate()).isGreaterThan(BigDecimal.ZERO);
+        });
+        assertSigmaInvariant(response);
+    }
+
+    @Test
+    @DisplayName("T3/D-T2: claimed exemption with no valid certificate is taxed anyway and flagged denied")
+    void shouldTaxAndFlagDeniedWhenCertificateMissing() {
+        // Given - a $100 line claims GOVERNMENT exemption but the registry returns nothing
+        // (stub defaults to empty).
+        TaxLineItem claimed = TaxLineItem.builder()
+                .lineItemId("1")
+                .description("Claimed exempt")
+                .quantity(BigDecimal.ONE)
+                .unitPrice(new BigDecimal("100"))
+                .taxExempt(true)
+                .exemptionReasonCode(ExemptionReasonCode.GOVERNMENT)
+                .build();
+        TaxCalculationRequest request = TaxCalculationRequest.builder()
+                .lineItems(List.of(claimed))
+                .destinationAddress(createAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
+                .build();
+
+        // When
+        TaxCalculationResponse response = calculator.calculate(request);
+
+        // Then - taxed normally (never hard-blocked): 100 * 0.10 = 10.00, flagged denied.
+        assertThat(response.getTotalTax()).isEqualByComparingTo("10.00");
+        TaxCalculationResponse.LineItemTax line = findLine(response, "1");
+        assertThat(line.isTaxExempt()).isFalse();
+        assertThat(line.isExemptionDenied()).isTrue();
+        assertThat(line.getExemptionReasonCode()).isEqualTo(ExemptionReasonCode.GOVERNMENT);
+        assertThat(line.getTaxAmount()).isEqualByComparingTo("10.00");
+        assertSigmaInvariant(response);
+    }
+
+    @Test
+    @DisplayName(
+            "T3: bare taxExempt with no claim stays intrinsically exempt (backward compatible) with zero-rate rows")
+    void shouldKeepBareTaxExemptLineExempt() {
+        // Given - taxExempt=true, no reason/certificate/customerExemption; registry empty.
+        TaxLineItem bare = TaxLineItem.builder()
+                .lineItemId("1")
+                .description("Non-taxable")
+                .quantity(BigDecimal.ONE)
+                .unitPrice(new BigDecimal("100"))
+                .taxExempt(true)
+                .build();
+        TaxCalculationRequest request = TaxCalculationRequest.builder()
+                .lineItems(List.of(bare, createLineItem("2", "Taxable", "1", "100")))
+                .destinationAddress(createAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
+                .build();
+
+        // When
+        TaxCalculationResponse response = calculator.calculate(request);
+
+        // Then - only the taxable line contributes: 100 * 0.10 = 10.00.
+        assertThat(response.getTotalTax()).isEqualByComparingTo("10.00");
+        TaxCalculationResponse.LineItemTax exemptLine = findLine(response, "1");
+        assertThat(exemptLine.isTaxExempt()).isTrue();
+        assertThat(exemptLine.isExemptionDenied()).isFalse();
+        assertThat(exemptLine.getExemptionReasonCode()).isNull();
+        assertThat(exemptLine.getJurisdictions()).hasSize(3);
+        assertThat(exemptLine.getJurisdictions())
+                .allSatisfy(cell -> assertThat(cell.isExempt()).isTrue());
+        assertSigmaInvariant(response);
+    }
+
+    @Test
+    @DisplayName("T3: request-level customerExemption applies to all lines")
+    void shouldApplyRequestLevelCustomerExemption() {
+        lookup.returns(new ActiveCertificateLookup.ActiveCertificate(UUID.randomUUID(), ExemptionReasonCode.NONPROFIT));
+        TaxCalculationRequest request = TaxCalculationRequest.builder()
+                .lineItems(List.of(createLineItem("1", "A", "1", "100"), createLineItem("2", "B", "1", "40")))
+                .destinationAddress(createAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
+                .customerId("CUST-1")
+                .customerExemption(TaxCalculationRequest.CustomerExemption.builder()
+                        .reasonCode(ExemptionReasonCode.NONPROFIT)
+                        .build())
+                .build();
+
+        TaxCalculationResponse response = calculator.calculate(request);
+
+        // Both lines exempt -> zero total tax, both flagged exempt with reason echoed.
+        assertThat(response.getTotalTax()).isEqualByComparingTo("0.00");
+        assertThat(response.getLineItemTaxes()).allSatisfy(line -> {
+            assertThat(line.isTaxExempt()).isTrue();
+            assertThat(line.getExemptionReasonCode()).isEqualTo(ExemptionReasonCode.NONPROFIT);
+        });
+        assertThat(response.getEffectiveTaxRate()).isEqualByComparingTo("0.00");
+        assertSigmaInvariant(response);
+    }
+
+    // ------------------------------------------------------------------
+    // T4: Refund/credit calculation mode
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("T4: REFUND echoes calculationType, prices at the supplied (original) date, amounts positive")
+    void shouldComputeRefundModePositiveAtOriginalDate() {
+        // Effective-dated schedule: 5% before 2024-06-01, 10% after. A refund priced at the
+        // original sale date (2024-03-15) must use 5%, not today's/default rate.
+        configureSchedule(
+                scheduleEntry("2024-01-01", Map.of("STATE", new BigDecimal("0.05"))),
+                scheduleEntry("2024-06-01", Map.of("STATE", new BigDecimal("0.10"))));
+        TaxCalculationRequest request = TaxCalculationRequest.builder()
+                .lineItems(List.of(createLineItem("1", "Returned part", "1", "100")))
+                .destinationAddress(createAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
+                .transactionDate("2024-03-15")
+                .calculationType(TaxCalculationType.REFUND)
+                .originalReferenceId(UUID.randomUUID())
+                .build();
+
+        TaxCalculationResponse response = calculator.calculate(request);
+
+        assertThat(response.getCalculationType()).isEqualTo(TaxCalculationType.REFUND);
+        // Positive amount priced at the original date (5%), callers negate at posting.
+        assertThat(response.getTotalTax()).isEqualByComparingTo("5.00");
+        assertThat(response.getTotalTax()).isGreaterThan(BigDecimal.ZERO);
+        assertSigmaInvariant(response);
+    }
+
+    @Test
+    @DisplayName("T4: calculationType defaults to SALE and is echoed on the response")
+    void shouldDefaultCalculationTypeToSale() {
+        TaxCalculationRequest request = TaxCalculationRequest.builder()
+                .lineItems(List.of(createLineItem("1", "Part", "1", "100")))
+                .destinationAddress(createAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
+                .build();
+
+        assertThat(calculator.calculate(request).getCalculationType()).isEqualTo(TaxCalculationType.SALE);
+    }
+
+    // ------------------------------------------------------------------
+    // T7: Config-driven rate resolution in test mode
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("T7: two different destination states produce different breakdowns")
+    void shouldResolveDifferentRatesPerState() {
+        configureJurisdictions(
+                rule("CA", null, Map.of("STATE", new BigDecimal("0.0625"), "COUNTY", new BigDecimal("0.0100"))),
+                rule("TX", null, Map.of("STATE", new BigDecimal("0.0625"))));
+
+        TaxCalculationResponse ca =
+                calculator.calculate(requestForState("CA", List.of(createLineItem("1", "P", "1", "100"))));
+        TaxCalculationResponse tx =
+                calculator.calculate(requestForState("TX", List.of(createLineItem("1", "P", "1", "100"))));
+
+        // CA: 6.25% + 1% = 7.25% over two jurisdictions; TX: 6.25% over one.
+        assertThat(ca.getTotalTax()).isEqualByComparingTo("7.25");
+        assertThat(ca.getJurisdictions()).hasSize(2);
+        assertThat(tx.getTotalTax()).isEqualByComparingTo("6.25");
+        assertThat(tx.getJurisdictions()).hasSize(1);
+        assertThat(ca.getTotalTax()).isNotEqualByComparingTo(tx.getTotalTax());
+    }
+
+    @Test
+    @DisplayName("T7: unknown address falls back to default-rates (current behavior preserved)")
+    void shouldFallBackToDefaultRatesForUnknownAddress() {
+        configureJurisdictions(rule("CA", null, Map.of("STATE", new BigDecimal("0.0625"))));
+
+        // NY has no matching rule -> default-rates (combined 10%) across 3 jurisdictions.
+        TaxCalculationResponse response =
+                calculator.calculate(requestForState("NY", List.of(createLineItem("1", "P", "1", "100"))));
+
+        assertThat(response.getTotalTax()).isEqualByComparingTo("10.00");
+        assertThat(response.getJurisdictions()).hasSize(3);
+    }
+
+    @Test
+    @DisplayName("T7: per-category exemption (LABOR exempt in TX) is honored and documented")
+    void shouldHonorCategoryExemption() {
+        configureJurisdictions(rule("TX", Set.of("LABOR"), Map.of("STATE", new BigDecimal("0.0625"))));
+
+        TaxLineItem labor = TaxLineItem.builder()
+                .lineItemId("1")
+                .description("Diagnostic labor")
+                .quantity(BigDecimal.ONE)
+                .unitPrice(new BigDecimal("100"))
+                .taxCategory("LABOR")
+                .build();
+        TaxLineItem goods = TaxLineItem.builder()
+                .lineItemId("2")
+                .description("Oil filter")
+                .quantity(BigDecimal.ONE)
+                .unitPrice(new BigDecimal("100"))
+                .taxCategory("GOODS")
+                .build();
+
+        TaxCalculationResponse response = calculator.calculate(requestForState("TX", List.of(labor, goods)));
+
+        // Only GOODS taxed: 100 * 0.0625 = 6.25. LABOR is a zero-rate exempt line.
+        assertThat(response.getTotalTax()).isEqualByComparingTo("6.25");
+        TaxCalculationResponse.LineItemTax laborLine = findLine(response, "1");
+        assertThat(laborLine.isTaxExempt()).isTrue();
+        assertThat(laborLine.getTaxAmount()).isEqualByComparingTo("0.00");
+        assertThat(laborLine.getJurisdictions()).isNotEmpty();
+        assertThat(laborLine.getJurisdictions())
+                .allSatisfy(cell -> assertThat(cell.isExempt()).isTrue());
+        assertThat(findLine(response, "2").getTaxAmount()).isEqualByComparingTo("6.25");
+        assertSigmaInvariant(response);
+    }
+
     // Helper methods
+
+    /** Replace the test-mode jurisdiction rules with the given rules. */
+    private void configureJurisdictions(TaxProperties.JurisdictionRule... rules) {
+        properties.getTestMode().setJurisdictions(new ArrayList<>(List.of(rules)));
+    }
+
+    private TaxProperties.JurisdictionRule rule(
+            String stateCode, Set<String> exemptCategories, Map<String, BigDecimal> rates) {
+        TaxProperties.JurisdictionRule rule = new TaxProperties.JurisdictionRule();
+        TaxProperties.JurisdictionMatch match = new TaxProperties.JurisdictionMatch();
+        match.setStateCode(stateCode);
+        rule.setMatch(match);
+        rule.setRates(new HashMap<>(rates));
+        if (exemptCategories != null) {
+            rule.setExemptCategories(new java.util.LinkedHashSet<>(exemptCategories));
+        }
+        return rule;
+    }
+
+    private TaxCalculationRequest requestForState(String state, List<TaxLineItem> items) {
+        return TaxCalculationRequest.builder()
+                .lineItems(items)
+                .destinationAddress(createAddress(TEST_POSTAL_CODE, state, "Anytown", "US"))
+                .build();
+    }
 
     /** Assert the three-way keystone invariant on a single response. */
     private void assertSigmaInvariant(TaxCalculationResponse response) {

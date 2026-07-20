@@ -3,6 +3,20 @@ spring:
   cloud:
     discovery:
       enabled: false
+  # In-memory H2 (PostgreSQL mode); Flyway V1 owns the schema, Hibernate validates.
+  datasource:
+    url: jdbc:h2:mem:pos_tax_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ''
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
 
 eureka:
   client:
@@ -19,11 +33,6 @@ pos:
         STATE: 0.08        # 8% state tax for tests
         COUNTY: 0.01       # 1% county tax for tests
         CITY: 0.01         # 1% city tax for tests
-      postal-code-mapping:
-        "12345":
-          state: "TS"
-          county: "Test County"
-          city: "Test City"
     retry:
       max-attempts: 1      # No retries in tests
       initial-backoff: 0

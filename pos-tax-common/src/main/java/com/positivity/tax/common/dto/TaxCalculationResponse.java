@@ -1,5 +1,7 @@
 package com.positivity.tax.common.dto;
 
+import com.positivity.tax.common.enums.ExemptionReasonCode;
+import com.positivity.tax.common.enums.TaxCalculationType;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
 import com.positivity.tax.common.enums.TaxReferenceType;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -133,6 +135,21 @@ public class TaxCalculationResponse {
     private String externalTransactionId;
 
     /**
+     * Calculation direction echoed from the request (story T4).
+     * <p>
+     * Never {@code null}; defaults to {@link TaxCalculationType#SALE}. For
+     * {@link TaxCalculationType#REFUND} the amounts are positive refund tax priced at the
+     * original sale date; callers negate at posting.
+     */
+    @Builder.Default
+    @Schema(
+            description = "Calculation direction echoed from the request: SALE or REFUND. REFUND amounts are"
+                    + " positive; callers negate at posting.",
+            example = "SALE",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private TaxCalculationType calculationType = TaxCalculationType.SALE;
+
+    /**
      * Nested class for line item tax breakdown.
      */
     @Data
@@ -167,10 +184,38 @@ public class TaxCalculationResponse {
         private BigDecimal total;
 
         @Schema(
-                description = "Whether this line item is tax exempt",
+                description = "Whether this line item is tax exempt (resolved exemption produced zero-rate rows)",
                 example = "false",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         private boolean taxExempt;
+
+        /**
+         * Resolved exemption reason echoed onto this line (story T3).
+         * <p>
+         * Set for an honored certificate-backed exemption (with {@link #taxExempt} true) and
+         * for a denied exemption (with {@link #exemptionDenied} true). {@code null} for a
+         * plain taxable line or an intrinsic {@code taxExempt} line carrying no reason.
+         */
+        @Schema(
+                description = "Resolved exemption reason echoed onto this line (honored or denied)",
+                example = "RESALE",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        private ExemptionReasonCode exemptionReasonCode;
+
+        /**
+         * Whether an exemption was claimed for this line but denied for lack of an active,
+         * effective, non-expired certificate (decision D-T2).
+         * <p>
+         * When {@code true} the line is taxed normally (never hard-blocked); the flag is an
+         * auditable signal persisted downstream (story T5).
+         */
+        @Builder.Default
+        @Schema(
+                description = "Whether a claimed exemption was denied (unbacked by a valid certificate) and the"
+                        + " line taxed anyway",
+                example = "false",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        private boolean exemptionDenied = false;
 
         /**
          * Additive per-jurisdiction tax breakdown for this line item.
@@ -233,5 +278,30 @@ public class TaxCalculationResponse {
                 example = "6.53",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         private BigDecimal amount;
+
+        /**
+         * Whether this is a zero-rate exempt row (story T3, reportable zero-tax).
+         * <p>
+         * When {@code true}, {@link #rate} carries the jurisdiction rate that would have
+         * applied and {@link #amount} is zero, so tax-liability reports can attribute exempt
+         * sales to the correct jurisdiction.
+         */
+        @Builder.Default
+        @Schema(
+                description = "Whether this is a zero-rate exempt row (rate is the would-be jurisdiction rate,"
+                        + " amount is zero)",
+                example = "false",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        private boolean exempt = false;
+
+        /**
+         * Exemption reason echoed onto a zero-rate exempt row (story T3); {@code null} for a
+         * normal taxed row.
+         */
+        @Schema(
+                description = "Exemption reason echoed onto a zero-rate exempt row",
+                example = "RESALE",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        private ExemptionReasonCode exemptionReasonCode;
     }
 }
