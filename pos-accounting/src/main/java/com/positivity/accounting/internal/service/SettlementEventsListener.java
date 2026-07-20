@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,15 +63,25 @@ public class SettlementEventsListener {
             return;
         }
 
+        // Only deserialization/validation failures are terminal for this record — skip and mark
+        // processed so a malformed payload does not poison the partition. Anything thrown by
+        // ingest (transient DB errors and unexpected failures alike) propagates unwrapped for
+        // container retry / DLQ, rather than being silently swallowed and marked processed
+        // (finding 13).
+        SettlementReportedV1 payload;
         try {
-            SettlementReportedV1 payload =
-                    objectMapper.treeToValue(envelope.path("payload"), SettlementReportedV1.class);
-            reconciliationService.ingestSettlement(payload);
-        } catch (TransientDataAccessException e) {
-            throw e;
+            payload = objectMapper.treeToValue(envelope.path("payload"), SettlementReportedV1.class);
         } catch (Exception e) {
             log.warn("Skipping malformed settlement event eventId={}", eventId, e);
+            markProcessed(eventId);
+            return;
         }
+
+        reconciliationService.ingestSettlement(payload);
+        markProcessed(eventId);
+    }
+
+    private void markProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .processedAt(Instant.now(clock))

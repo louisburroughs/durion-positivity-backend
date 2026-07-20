@@ -1,10 +1,6 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.entity.ExtPaymentSettlementConfig;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
-import com.positivity.accounting.internal.enums.FeeRepresentation;
-import com.positivity.accounting.internal.enums.MatchReferenceField;
-import com.positivity.accounting.internal.repository.ExtPaymentSettlementConfigRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.payment.SettlementProviderConfigV1;
 import java.time.Clock;
@@ -13,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,7 +32,7 @@ public class SettlementConfigEventsListener {
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
-    private final ExtPaymentSettlementConfigRepository configRepository;
+    private final SettlementConfigService settlementConfigService;
 
     @KafkaListener(
             topics = "${pos.accounting.kafka.settlement-config-topic:payment.settlement-config.v1}",
@@ -66,25 +61,23 @@ public class SettlementConfigEventsListener {
             return;
         }
 
+        // Deserialization/validation failures are terminal for this record — skip and mark processed
+        // so a malformed payload does not poison the partition. Anything thrown by the upsert
+        // (transient DB errors, unexpected failures) propagates for container retry / DLQ (finding 13).
+        SettlementProviderConfigV1 payload;
         try {
-            SettlementProviderConfigV1 payload =
-                    objectMapper.treeToValue(envelope.path("payload"), SettlementProviderConfigV1.class);
-            configRepository.save(ExtPaymentSettlementConfig.builder()
-                    .providerCode(payload.providerCode())
-                    .eventId(payload.eventId())
-                    .providerName(payload.providerName())
-                    .matchReferenceField(MatchReferenceField.valueOf(
-                            payload.matchReferenceField().name()))
-                    .amountTolerance(payload.amountTolerance())
-                    .feeRepresentation(FeeRepresentation.valueOf(
-                            payload.feeRepresentation().name()))
-                    .build());
-            log.info("Upserted settlement config replica providerCode={}", payload.providerCode());
-        } catch (TransientDataAccessException e) {
-            throw e;
+            payload = objectMapper.treeToValue(envelope.path("payload"), SettlementProviderConfigV1.class);
         } catch (Exception e) {
             log.warn("Skipping malformed settlement config event eventId={}", eventId, e);
+            markProcessed(eventId);
+            return;
         }
+
+        settlementConfigService.upsert(payload);
+        markProcessed(eventId);
+    }
+
+    private void markProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .processedAt(Instant.now(clock))
