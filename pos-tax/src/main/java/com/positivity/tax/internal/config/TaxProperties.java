@@ -1,7 +1,10 @@
 package com.positivity.tax.internal.config;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -52,6 +55,41 @@ public class TaxProperties {
          * Example: 90001={state=CA, county=LA}
          */
         private Map<String, Map<String, String>> postalCodeMapping = new HashMap<>();
+
+        /**
+         * Effective-dated override schedule for test-mode rates.
+         * <p>
+         * Ordered list of {@link RateScheduleEntry}. When resolving rates for a
+         * transaction, the entry with the greatest {@code effectiveFrom} that is not
+         * after the transaction date is selected. When empty (the default) or when no
+         * entry is effective on or before the transaction date, {@link #defaultRates}
+         * is used, preserving prior behavior.
+         * <p>
+         * Never {@code null}; defaults to an empty list.
+         */
+        private List<RateScheduleEntry> rateSchedule = new ArrayList<>();
+    }
+
+    /**
+     * A single effective-dated set of test-mode tax rates.
+     * <p>
+     * {@code effectiveFrom} is the inclusive start date on which {@code rates}
+     * become applicable; an entry applies to any transaction date on or after it,
+     * until a later entry supersedes it.
+     */
+    @Data
+    public static class RateScheduleEntry {
+        /**
+         * Inclusive date on which this rate set becomes effective.
+         */
+        private LocalDate effectiveFrom;
+
+        /**
+         * Tax rates by jurisdiction type code for this effective period.
+         * <p>
+         * Example: STATE=0.0725, COUNTY=0.01, CITY=0.0025
+         */
+        private Map<String, BigDecimal> rates = new HashMap<>();
     }
 
     @Data

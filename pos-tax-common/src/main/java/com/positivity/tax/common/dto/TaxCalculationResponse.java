@@ -1,5 +1,6 @@
 package com.positivity.tax.common.dto;
 
+import com.positivity.tax.common.enums.TaxJurisdictionType;
 import com.positivity.tax.common.enums.TaxReferenceType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -8,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -60,7 +62,10 @@ public class TaxCalculationResponse {
     @NotNull(message = "effectiveTaxRate is required")
     @PositiveOrZero(message = "effectiveTaxRate must be >= 0")
     @Schema(
-            description = "Effective tax rate as percentage",
+            description =
+                    "Effective tax rate: total tax divided by the exempt-filtered taxable base (the taxable"
+                            + " amount remaining after tax-exempt lines are excluded), expressed as percentage"
+                            + " points. This is NOT total tax divided by the raw subtotal (ADR-0042).",
             example = "10.00",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private BigDecimal effectiveTaxRate;
@@ -167,5 +172,62 @@ public class TaxCalculationResponse {
                 example = "false",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         private boolean taxExempt;
+
+        /**
+         * Additive per-jurisdiction tax breakdown for this line item.
+         * <p>
+         * Never {@code null}; defaults to an empty list. Provides the individual
+         * jurisdiction rows (type, code, rate, amount) that sum to
+         * {@link #taxAmount}.
+         */
+        @Valid
+        @Builder.Default
+        @Schema(
+                description = "Per-jurisdiction tax breakdown for this line item; rows sum to taxAmount",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        private List<JurisdictionTax> jurisdictions = new ArrayList<>();
+    }
+
+    /**
+     * Nested class for the per-jurisdiction tax breakdown within a single line item.
+     * <p>
+     * Compact companion to {@link TaxJurisdiction}: {@code jurisdictionType} mirrors
+     * the naming of the top-level jurisdiction rows, while {@code rate}/{@code amount}
+     * are the per-line analogues of {@code taxRate}/{@code taxAmount}.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(name = "JurisdictionTax", description = "Per-jurisdiction tax breakdown for a single line item")
+    public static class JurisdictionTax {
+
+        @Schema(
+                description = "Jurisdiction type (e.g. STATE, COUNTY, CITY, DISTRICT)",
+                example = "STATE",
+                requiredMode = Schema.RequiredMode.REQUIRED)
+        private TaxJurisdictionType jurisdictionType;
+
+        @Schema(
+                description = "Jurisdiction code; in test mode this is the jurisdiction type code"
+                        + " (e.g. STATE, COUNTY, CITY). With an external tax provider it carries the"
+                        + " provider's taxing-authority code.",
+                example = "STATE",
+                requiredMode = Schema.RequiredMode.REQUIRED)
+        private String code;
+
+        @Schema(
+                description = "Tax rate applied for this jurisdiction, expressed as a decimal fraction"
+                        + " (e.g. 0.0725 for 7.25%)",
+                example = "0.0725",
+                requiredMode = Schema.RequiredMode.REQUIRED)
+        private BigDecimal rate;
+
+        @PositiveOrZero(message = "amount must be >= 0")
+        @Schema(
+                description = "Tax amount calculated for this jurisdiction on this line item",
+                example = "6.53",
+                requiredMode = Schema.RequiredMode.REQUIRED)
+        private BigDecimal amount;
     }
 }

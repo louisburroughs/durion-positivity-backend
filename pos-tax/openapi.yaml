@@ -238,6 +238,39 @@ components:
       - lineItemId
       - quantity
       - unitPrice
+    JurisdictionTax:
+      type: object
+      description: Per-jurisdiction tax breakdown for a single line item
+      properties:
+        jurisdictionType:
+          type: string
+          description: Jurisdiction type (e.g. STATE, COUNTY, CITY, DISTRICT)
+          enum:
+          - COUNTRY
+          - STATE
+          - PROVINCE
+          - COUNTY
+          - CITY
+          - DISTRICT
+          - SPECIAL
+          example: STATE
+        code:
+          type: string
+          description: Jurisdiction code; in test mode this is the jurisdiction type code (e.g. STATE, COUNTY, CITY). With an external tax provider it carries the provider's taxing-authority code.
+          example: STATE
+        rate:
+          type: number
+          description: Tax rate applied for this jurisdiction, expressed as a decimal fraction (e.g. 0.0725 for 7.25%)
+          example: 0.0725
+        amount:
+          type: number
+          description: Tax amount calculated for this jurisdiction on this line item
+          example: 6.53
+      required:
+      - amount
+      - code
+      - jurisdictionType
+      - rate
     LineItemTax:
       type: object
       description: Tax breakdown for a single line item
@@ -263,6 +296,11 @@ components:
           type: boolean
           description: Whether this line item is tax exempt
           example: false
+        jurisdictions:
+          type: array
+          description: Per-jurisdiction tax breakdown for this line item; rows sum to taxAmount
+          items:
+            $ref: '#/components/schemas/JurisdictionTax'
       required:
       - lineItemId
       - subtotal
@@ -287,7 +325,7 @@ components:
           example: 165.0
         effectiveTaxRate:
           type: number
-          description: Effective tax rate as percentage
+          description: 'Effective tax rate: total tax divided by the exempt-filtered taxable base (the taxable amount remaining after tax-exempt lines are excluded), expressed as percentage points. This is NOT total tax divided by the raw subtotal (ADR-0042).'
           example: 10.0
         jurisdictions:
           type: array

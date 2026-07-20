@@ -13,6 +13,7 @@ Shared DTO and validation library for consuming the `pos-tax` tax calculation AP
 
 - `TaxCalculationRequest` — input: line items, postal code, state, city, country
 - `TaxCalculationResponse` — output: subtotal, total tax, effective rate, per-jurisdiction breakdown, per-line breakdown
+- `TaxCalculationResponse.LineItemTax.jurisdictions[]` — additive per-line jurisdiction rows, each a `JurisdictionTax {jurisdictionType (TaxJurisdictionType), code, rate, amount}`; the rows sum to the line's `taxAmount`. Never `null` (defaults to an empty list); existing `LineItemTax` fields are unchanged
 - `TaxLineItem` — individual line item within a tax calculation request
 - `IsoCountryCode` / `IsoCountryCodeValidator` — validates ISO 3166-1 alpha-2 country codes
 - `IsoCurrencyCode` / `IsoCurrencyCodeValidator` — validates ISO 4217 currency codes
