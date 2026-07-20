@@ -32,6 +32,14 @@ tags:
   description: Manage journal entries including posting and reversal.
 - name: GL Accounts
   description: Manage chart of accounts including lifecycle actions.
+- name: Bank Reconciliation
+  description: 'Manual CSV bank reconciliation: import a statement, match lines to posted GL entries, record adjustments, and finalize when balanced.'
+- name: Accounting Periods
+  description: 'Accounting period lifecycle: list periods, close a period, reopen a closed period, and manage the org-level hard-lock date.'
+- name: Settlement Reconciliation
+  description: 'Processor settlement reconciliation review: list settlement lines, manually match an unmatched line to a receivable payment, and write off small unmatched lines.'
+- name: Vendor Directory API
+  description: Vendor search and lookup endpoints for name-to-vendorId resolution (typeahead support)
 - name: Location Cost Reporting
   description: Read-only location Labor & Overhead Cost Report (CAP-316)
 - name: AP Payments
@@ -199,6 +207,73 @@ paths:
         - accounting:posting-category:edit
       x-required-permissions:
       - accounting:posting-category:edit
+  /v1/accounting/periods/hard-lock:
+    get:
+      tags:
+      - Accounting Periods
+      summary: Get the accounting hard-lock date
+      description: 'Returns the org-level hard-lock date: journal entries dated strictly before this date are permanently rejected (422 PERIOD_HARD_LOCKED) with no override path — unlike a CLOSED period, which accounting:period:override plus a justification can bypass. Use this tool to check the current lock boundary before posting backdated entries or before moving the lock with setAccountingHardLockDate. Returns hardLockDate: null when no hard lock has been configured yet. No preconditions and no side effects.'
+      operationId: getAccountingHardLockDate
+      responses:
+        '200':
+          description: Current hard-lock date returned; hardLockDate is null when no hard lock is set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HardLockDateResponse'
+        '403':
+          description: Caller lacks the accounting:period:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:period:view
+      x-required-permissions:
+      - accounting:period:view
+    put:
+      tags:
+      - Accounting Periods
+      summary: Set the accounting hard-lock date
+      description: 'Sets the org-level hard-lock date: from then on, journal entries dated strictly before this date are permanently rejected (422 PERIOD_HARD_LOCKED) with NO override path — not even accounting:period:override can bypass it (that permission only covers CLOSED periods, error PERIOD_CLOSED). Use this tool after statutory filings or audits to make history immutable; use closeAccountingPeriod for the reversible month-end close instead. The date is monotonic-forward-only: it must be on or after the currently stored hard-lock date, and moving it backward is rejected with 422 HARD_LOCK_DATE_REGRESSION — effectively irreversible, so set it deliberately. Required inputs: hardLockDate (ISO date) and a non-blank justification (max 500 characters), recorded in the audit trail with the acting user. Emits ACCOUNTING_PERIOD_HARD_LOCK_SET and returns the stored hard-lock date. Returns 400 if the date is missing or the justification is missing or blank.'
+      operationId: setAccountingHardLockDate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HardLockDateUpdateRequest'
+        required: true
+      responses:
+        '200':
+          description: Hard-lock date updated; the stored value is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HardLockDateResponse'
+        '400':
+          description: hardLockDate is missing, or justification is missing, blank, or over 500 characters (ARGUMENT_NOT_VALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:period:hard_lock permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Requested date is before the currently stored hard-lock date (HARD_LOCK_DATE_REGRESSION) — the hard lock only moves forward
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:period:hard_lock
+      x-required-permissions:
+      - accounting:period:hard_lock
   /v1/accounting/mapping-keys/{mappingKeyId}:
     get:
       tags:
@@ -669,6 +744,132 @@ paths:
         - accounting:ap:pay
       x-required-permissions:
       - accounting:ap:pay
+  /v1/accounting/settlements/lines/{lineId}/write-off:
+    post:
+      tags:
+      - Settlement Reconciliation
+      summary: Write off a small unmatched settlement line
+      description: 'Writes off an UNMATCHED settlement line whose gross is at or below the configured reconciliation write-off threshold (default $25.00, decision D-14), posting a reversible adjustment entry (Dr Settlement Suspense / Cr Settlement Adjustment) — never a silent status flip. Use this tool only for genuinely unidentifiable small residuals; above the threshold there is no self-service write-off — manually match or escalate. Preconditions: the line must exist and be UNMATCHED, its gross must not exceed the threshold (compared on absolute value), and a non-blank reason (max 500 chars) is required and audited. Respects accounting period locks (Story B2). Emits ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF. Returns 422 when the absolute gross exceeds the threshold (WRITE_OFF_THRESHOLD_EXCEEDED) or the adjustment entry is dated into a locked accounting period (PERIOD_CLOSED / PERIOD_HARD_LOCKED), and 409 when the line is no longer UNMATCHED (SETTLEMENT_LINE_NOT_UNMATCHED) or the settlement has not yet posted (SETTLEMENT_NOT_POSTED).'
+      operationId: writeOffSettlementLine
+      parameters:
+      - name: lineId
+        in: path
+        description: Settlement line id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementWriteOffRequest'
+        required: true
+      responses:
+        '200':
+          description: Line written off; the updated line is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementLineResponse'
+        '400':
+          description: reason is missing, blank, or over 500 characters (ARGUMENT_NOT_VALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:reconciliation:adjust permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Settlement line not found (SETTLEMENT_LINE_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Settlement line is not UNMATCHED (SETTLEMENT_LINE_NOT_UNMATCHED), or the settlement has not yet posted (SETTLEMENT_NOT_POSTED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Line absolute gross exceeds the write-off threshold (WRITE_OFF_THRESHOLD_EXCEEDED); manual match or escalate — or the adjustment entry is dated into a CLOSED or hard-locked accounting period (PERIOD_CLOSED / PERIOD_HARD_LOCKED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/settlements/lines/{lineId}/match:
+    post:
+      tags:
+      - Settlement Reconciliation
+      summary: Manually match a settlement line
+      description: 'Manually matches an UNMATCHED settlement line to an AR receivable payment, posting a reclass entry (Dr Settlement Suspense / Cr Undeposited Funds) that clears the line''s gross out of suspense. Use this tool when the automatic gross match could not identify the payment. AP (vendor) matching is not supported in v1. Preconditions: the line must exist and be UNMATCHED, its parent settlement must already be POSTED, and the receivable payment must exist. Returns 404 if the line or payment is not found (SETTLEMENT_LINE_NOT_FOUND / RECEIVABLE_PAYMENT_NOT_FOUND), 409 if the line is no longer UNMATCHED (SETTLEMENT_LINE_NOT_UNMATCHED) or the settlement has not yet posted (SETTLEMENT_NOT_POSTED), and 422 if the reclass entry is dated into a locked accounting period (PERIOD_CLOSED / PERIOD_HARD_LOCKED). Emits ACCOUNTING_SETTLEMENT_LINE_MATCH.'
+      operationId: matchSettlementLine
+      parameters:
+      - name: lineId
+        in: path
+        description: Settlement line id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementManualMatchRequest'
+        required: true
+      responses:
+        '200':
+          description: Line matched; the updated line is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementLineResponse'
+        '400':
+          description: receivablePaymentId is missing (ARGUMENT_NOT_VALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:reconciliation:adjust permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Settlement line or receivable payment not found (SETTLEMENT_LINE_NOT_FOUND / RECEIVABLE_PAYMENT_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Settlement line is not UNMATCHED (SETTLEMENT_LINE_NOT_UNMATCHED), or the settlement has not yet posted (SETTLEMENT_NOT_POSTED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Reclass entry is dated into a CLOSED or hard-locked accounting period (PERIOD_CLOSED / PERIOD_HARD_LOCKED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      x-required-permissions:
+      - accounting:reconciliation:adjust
   /v1/accounting/reports/export:
     get:
       tags:
@@ -748,6 +949,283 @@ paths:
         - accounting:report:export
       x-required-permissions:
       - accounting:report:export
+  /v1/accounting/reconciliations/{reconciliationId}/unmatch:
+    post:
+      tags:
+      - Bank Reconciliation
+      summary: Reverse a match
+      description: Reverses a match by matchId or by statement line ids, returning the affected statement lines to UNMATCHED and releasing the linked GL lines. Returns 404 RECONCILIATION_NOT_FOUND if the reconciliation or match group is missing, and 409 RECONCILIATION_ALREADY_FINALIZED if the reconciliation is finalized.
+      operationId: unmatchReconciliation
+      parameters:
+      - name: reconciliationId
+        in: path
+        description: Reconciliation id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationUnmatchRequest'
+        required: true
+      responses:
+        '200':
+          description: Match reversed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationResponse'
+        '400':
+          description: Neither matchId nor statementLineIds resolved to a single match group (VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:reconciliation:adjust permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reconciliation or match group not found (RECONCILIATION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/{reconciliationId}/match:
+    post:
+      tags:
+      - Bank Reconciliation
+      summary: Match statement lines to GL lines
+      description: Matches a set of statement lines to a set of posted GL journal-entry lines on the reconciled account (1-to-1 or N-to-1). The two sets must net to equal signed amounts within ±0.01. Marks the statement lines MATCHED and records the linkage. Returns 404 RECONCILIATION_NOT_FOUND if the reconciliation or a line is missing, 409 RECONCILIATION_ALREADY_FINALIZED if the reconciliation is finalized, and 422 MATCH_AMOUNT_MISMATCH if the sets do not net.
+      operationId: matchReconciliation
+      parameters:
+      - name: reconciliationId
+        in: path
+        description: Reconciliation id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationMatchRequest'
+        required: true
+      responses:
+        '200':
+          description: Lines matched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationResponse'
+        '400':
+          description: Request body invalid (ARGUMENT_NOT_VALID / VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:reconciliation:adjust permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reconciliation or a referenced line not found (RECONCILIATION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED), or a statement/GL line is ineligible — not UNMATCHED, not POSTED, or already reconciled (RECONCILIATION_LINE_INELIGIBLE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Matched sets do not net to equal amounts (MATCH_AMOUNT_MISMATCH)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/{reconciliationId}/finalize:
+    post:
+      tags:
+      - Bank Reconciliation
+      summary: Finalize a reconciliation
+      description: 'Finalizes a reconciliation (IN_PROGRESS to FINALIZED) only when it balances: the statement ending balance must equal the GL ending balance plus the sum of adjustments, within ±0.01 (matched GL lines are already reflected in the GL ending balance). Returns 404 RECONCILIATION_NOT_FOUND if missing, 409 RECONCILIATION_ALREADY_FINALIZED if already finalized, and 422 RECONCILIATION_NOT_BALANCED (with the outstanding difference) if it does not balance.'
+      operationId: finalizeReconciliation
+      parameters:
+      - name: reconciliationId
+        in: path
+        description: Reconciliation id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Reconciliation finalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationResponse'
+        '403':
+          description: Caller lacks the accounting:reconciliation:adjust permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reconciliation not found (RECONCILIATION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Reconciliation does not balance (RECONCILIATION_NOT_BALANCED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/{reconciliationId}/adjustments:
+    post:
+      tags:
+      - Bank Reconciliation
+      summary: Record a reconciliation adjustment
+      description: Records a signed adjustment and posts a real balanced journal entry (Dr/Cr the reconciled cash account against the type's mapped counter account) through the accounting-period gate. Returns 404 RECONCILIATION_NOT_FOUND if the reconciliation is missing, 409 RECONCILIATION_ALREADY_FINALIZED if it is finalized, and 422 PERIOD_CLOSED / PERIOD_HARD_LOCKED if the adjustment JE is dated into a locked accounting period.
+      operationId: addReconciliationAdjustment
+      parameters:
+      - name: reconciliationId
+        in: path
+        description: Reconciliation id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationAdjustmentRequest'
+        required: true
+      responses:
+        '200':
+          description: Adjustment recorded and JE posted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationResponse'
+        '400':
+          description: Request body invalid or amount is zero (ARGUMENT_NOT_VALID / VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:reconciliation:adjust permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reconciliation not found (RECONCILIATION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Adjustment JE dated into a CLOSED or hard-locked period (PERIOD_CLOSED / PERIOD_HARD_LOCKED), or the amount sign is not permitted for the type — BANK_FEE/NSF_FEE must be negative, INTEREST_EARNED must be positive (RECONCILIATION_ADJUSTMENT_SIGN_INVALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/import:
+    post:
+      tags:
+      - Bank Reconciliation
+      summary: Import a bank statement CSV and start a reconciliation
+      description: 'Parses a bank statement CSV (columns: date, description, amount [signed], reference) for a reconcilable GL cash account and creates an IN_PROGRESS reconciliation with its imported statement lines (UNMATCHED). The GL ending balance is snapshotted from posted journal-entry lines on the account as-of the statement date. Returns 422 ACCOUNT_NOT_RECONCILABLE if the account''s reconcilable flag (story H1) is false, and 400 if the CSV is malformed.'
+      operationId: importReconciliation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankReconciliationImportRequest'
+        required: true
+      responses:
+        '200':
+          description: Reconciliation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationResponse'
+        '400':
+          description: Request body invalid or CSV malformed (ARGUMENT_NOT_VALID / VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:reconciliation:adjust permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: GL account is not reconcilable (ACCOUNT_NOT_RECONCILABLE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      x-required-permissions:
+      - accounting:reconciliation:adjust
   /v1/accounting/posting-rules:
     get:
       tags:
@@ -776,9 +1254,7 @@ paths:
           exclusiveMinimum: 0
       - name: sort
         in: query
-        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported
-          fields: createdAt, modifiedAt, updatedAt, name, eventType, description, createdBy,
-          modifiedBy, postingRuleSetId. Direction defaults to desc.'
+        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported fields: createdAt, modifiedAt, updatedAt, name, eventType. Direction defaults to desc.'
         required: true
         schema:
           type: string
@@ -1031,6 +1507,120 @@ paths:
         - accounting:posting-category:deactivate
       x-required-permissions:
       - accounting:posting-category:deactivate
+  /v1/accounting/periods/{periodCode}/reopen:
+    post:
+      tags:
+      - Accounting Periods
+      summary: Reopen a closed accounting period
+      description: 'Reopens a CLOSED accounting period (CLOSED → OPEN), resetting its lifecycle status to OPEN. Use this tool only when late adjustments must be posted into an already-closed month; use closeAccountingPeriod to close it again afterwards. Preconditions: a period row must exist for the code and be CLOSED. Required input: a non-blank justification (max 500 characters) which is recorded on the period and in the audit trail with the acting user. Emits ACCOUNTING_PERIOD_REOPEN. Returns 409 PERIOD_ALREADY_OPEN if the period is not closed, and 400 if the justification is missing or blank.'
+      operationId: reopenAccountingPeriod
+      parameters:
+      - name: periodCode
+        in: path
+        description: Period code in YYYY-MM format
+        required: true
+        schema:
+          type: string
+        example: 2026-06
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountingPeriodReopenRequest'
+        required: true
+      responses:
+        '200':
+          description: Period reopened; the updated period is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingPeriodResponse'
+        '400':
+          description: periodCode is not a valid YYYY-MM period code, or justification is missing or blank
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:period:reopen permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: No period row exists for the code (PERIOD_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Period is already open (PERIOD_ALREADY_OPEN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:period:reopen
+      x-required-permissions:
+      - accounting:period:reopen
+  /v1/accounting/periods/{periodCode}/close:
+    post:
+      tags:
+      - Accounting Periods
+      summary: Close an accounting period
+      description: 'Closes an OPEN accounting period (OPEN → CLOSED), recording its lifecycle status as CLOSED. Use this tool during month-end close after all journal entries for the month are posted; use reopenAccountingPeriod to reverse the transition. Note: journal-entry posting paths do not yet reject postings dated into a CLOSED period; that enforcement (error code PERIOD_CLOSED) arrives with the period-enforcement story (parity-B2). Preconditions: the period must not already be CLOSED, and no DRAFT journal entries may be dated inside the period. A valid YYYY-MM period with no row whose month has already started is auto-provisioned and then closed. The close is audit-logged with the acting user and emits ACCOUNTING_PERIOD_CLOSE. Returns 409 PERIOD_ALREADY_CLOSED if the period is already closed, and 422 PERIOD_HAS_DRAFT_ENTRIES listing the blocking draft journal entry IDs in fieldErrors — post or delete those entries before retrying.'
+      operationId: closeAccountingPeriod
+      parameters:
+      - name: periodCode
+        in: path
+        description: Period code in YYYY-MM format
+        required: true
+        schema:
+          type: string
+        example: 2026-06
+      responses:
+        '200':
+          description: Period closed; the updated period is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingPeriodResponse'
+        '400':
+          description: periodCode is not a valid YYYY-MM period code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:period:close permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Period not found and its month has not started (PERIOD_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Period is already closed (PERIOD_ALREADY_CLOSED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: DRAFT journal entries are dated inside the period (PERIOD_HAS_DRAFT_ENTRIES); fieldErrors lists the blocking draftJournalEntryIds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:period:close
+      x-required-permissions:
+      - accounting:period:close
   /v1/accounting/payments/{paymentId}/void:
     post:
       tags:
@@ -1101,7 +1691,7 @@ paths:
       tags:
       - Payment Applications
       summary: Apply payment
-      description: Apply a payment to an invoice and update its status.
+      description: 'Apply a payment to one or more invoices and update their status. The optional allocationStrategy field controls allocation order: CALLER_ORDER (default when omitted) honors the caller-supplied order; OLDEST_FIRST allocates by ascending invoice date.'
       operationId: applyPayment
       parameters:
       - name: paymentId
@@ -1248,6 +1838,50 @@ paths:
         - accounting:gl-mapping:resolve
       x-required-permissions:
       - accounting:gl-mapping:resolve
+  /v1/accounting/mappings/resolve-test:
+    post:
+      tags:
+      - GL Mapping API
+      summary: Dry-run mapping/rule resolution
+      description: 'Resolves a hypothetical accounting event against the published posting rules and GL mappings, returning the matched rule (id/name/version), mapping details, the exact journal entry lines the evaluator would post (including E1 proportional split-line shares and residual distribution), and per-predicate evaluation outcomes (E2 condition grammar). This is a read-only inspection tool: NOTHING is persisted — no accounting event, journal entry, or outbox record is created. A no-match outcome is a normal 200 response with matched=false (not a 404).'
+      operationId: resolveTestMapping
+      requestBody:
+        description: Dry-run mapping/rule resolution request
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MappingResolutionTestRequest'
+        required: true
+      responses:
+        '200':
+          description: Dry-run resolution completed (matched=false when no published rule matched)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MappingResolutionTestResponse'
+        '400':
+          description: Invalid request payload, or the sample payload could not be interpreted by the rules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Missing or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:posting_rules:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:posting_rules:view
+      x-required-permissions:
+      - accounting:posting_rules:view
   /v1/accounting/mapping-keys:
     post:
       tags:
@@ -1311,7 +1945,7 @@ paths:
       tags:
       - Journal Entries
       summary: List journal entries
-      description: Retrieve paginated journal entries.
+      description: Retrieve paginated journal entries, optionally filtered by exact posted-entry number.
       operationId: listJournalEntries
       parameters:
       - name: page
@@ -1334,14 +1968,19 @@ paths:
           exclusiveMinimum: 0
       - name: sort
         in: query
-        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported
-          fields: createdAt, modifiedAt, updatedAt, transactionDate, postedAt, status,
-          entryType, description, createdBy, journalEntryId. Direction defaults to desc.'
+        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported fields: createdAt, modifiedAt, updatedAt, transactionDate, postedAt, status, entryType, description, createdBy, journalEntryId. Direction defaults to desc.'
         required: true
         schema:
           type: string
           default: createdAt
           minLength: 1
+      - name: entryNumber
+        in: query
+        description: Optional exact-match filter on the posted-entry number (format JE-{YYYYMM}-{seq}, sequential within the entry's transaction month, assigned at posting time). Entries not yet posted have no entry number and never match.
+        required: false
+        schema:
+          type: string
+        example: JE-202607-1
       responses:
         '200':
           description: Journal entries listed
@@ -1401,7 +2040,7 @@ paths:
       tags:
       - Journal Entries
       summary: Reverse journal entry
-      description: Reverse a posted journal entry.
+      description: 'Reverses a POSTED journal entry by creating and immediately posting an inverse entry (debits and credits swapped) with its own entryNumber, and transitioning the original POSTED → REVERSED. Use this tool to back out an incorrect posted entry; do NOT use it on DRAFT entries — delete or edit those instead. Preconditions: the entry must exist and be in POSTED status. Required input: a non-blank reason, recorded on the reversal entry and in the audit trail. Optional input: reversalDate — when omitted, it defaults to the original entry''s transaction date if that period is OPEN, otherwise to today; the resolved date must fall in an OPEN accounting period. Period gate (story B2): a resolved date strictly before the org-level hard-lock date is rejected unconditionally with 422 PERIOD_HARD_LOCKED (never overridable); a date in a CLOSED period is rejected with 422 PERIOD_CLOSED unless the caller holds accounting:period:override AND supplies a non-blank overrideJustification, in which case the reversal posts into the closed period and the override is audit-logged. Emits ACCOUNTING_JOURNAL_ENTRY_REVERSE and returns the reversal entry. Returns 409 JE_ALREADY_REVERSED if the entry was already reversed (including a lost concurrent-reversal race), 409 JE_NOT_POSTED if it is DRAFT/PENDING, and 422 PERIOD_CLOSED if the reversal date falls in a CLOSED period without a valid override — pick an open-period date, supply an override, or reopen the period before retrying.'
       operationId: reverseJournalEntry
       parameters:
       - name: journalEntryId
@@ -1419,17 +2058,35 @@ paths:
         required: true
       responses:
         '200':
-          description: Journal entry reversed
+          description: Journal entry reversed; the posted reversal entry is returned
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JournalEntryResponse'
-        '404':
-          description: Journal entry not found
+        '400':
+          description: Reason is missing or blank (ARGUMENT_NOT_VALID), or no journal entry exists for the identifier (VALIDATION_ERROR)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JournalEntryResponse'
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:je:reverse permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Entry is already reversed (JE_ALREADY_REVERSED) or not yet posted (JE_NOT_POSTED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Resolved reversal date falls in a CLOSED accounting period without a valid override (PERIOD_CLOSED — accounting:period:override plus a non-blank overrideJustification allows reversing into closed periods), or is strictly before the hard-lock date (PERIOD_HARD_LOCKED — never overridable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - accounting:je:reverse
@@ -1440,7 +2097,7 @@ paths:
       tags:
       - Journal Entries
       summary: Post journal entry
-      description: Post a draft journal entry to the ledger.
+      description: 'Posts a DRAFT journal entry to the general ledger (DRAFT → POSTED), assigning its entryNumber and updating GL balances; the entry is immutable afterwards — use reverseJournalEntry to back it out. Preconditions: the entry must exist, be in DRAFT status, and be balanced. The request body is OPTIONAL: omit it entirely for a normal post. The entry''s transaction date is checked against the accounting-period gate (story B2): a date strictly before the org-level hard-lock date is rejected unconditionally with 422 PERIOD_HARD_LOCKED (never overridable); a date in a CLOSED period is rejected with 422 PERIOD_CLOSED unless the caller holds accounting:period:override AND supplies a non-blank overrideJustification in the body, in which case the posting proceeds and the override is audit-logged. Emits ACCOUNTING_JOURNAL_ENTRY_POST and returns the posted entry. Returns 409 ENTRY_ALREADY_POSTED if the entry is already POSTED or REVERSED, and 422 UNBALANCED_ENTRY if debits do not equal credits.'
       operationId: postJournalEntry
       parameters:
       - name: journalEntryId
@@ -1454,20 +2111,38 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/JournalEntryPostRequest'
       responses:
         '200':
-          description: Journal entry posted
+          description: Journal entry posted; the posted entry with its entryNumber is returned
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JournalEntryResponse'
-        '404':
-          description: Journal entry not found
+        '400':
+          description: No journal entry exists for the identifier (VALIDATION_ERROR), or the overrideJustification exceeds 500 characters (ARGUMENT_NOT_VALID)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JournalEntryResponse'
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:je:post permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Entry is already posted or reversed (ENTRY_ALREADY_POSTED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Transaction date is in a CLOSED period without a valid override (PERIOD_CLOSED — accounting:period:override plus a non-blank overrideJustification allows posting into closed periods), is strictly before the hard-lock date (PERIOD_HARD_LOCKED — never overridable), or the entry is unbalanced (UNBALANCED_ENTRY)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - accounting:je:post
@@ -1489,6 +2164,12 @@ paths:
       responses:
         '200':
           description: Invoice regenerated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceGenerationResponse'
+        '202':
+          description: Regeneration command accepted (ADR-0044 async path); invoice arrives via invoice.events.v1
           content:
             application/json:
               schema:
@@ -1544,10 +2225,7 @@ paths:
           exclusiveMinimum: 0
       - name: sort
         in: query
-        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported
-          fields: accountCode, accountName, accountType, description, activationDate,
-          deactivationDate, createdAt, modifiedAt, updatedAt, glAccountId. Direction
-          defaults to asc.'
+        description: 'Sort field with optional direction, e.g. ''modifiedAt,desc''. Supported fields: accountCode, accountName, accountType, description, activationDate, deactivationDate, createdAt, modifiedAt, updatedAt, glAccountId. Direction defaults to asc.'
         required: true
         schema:
           type: string
@@ -2349,6 +3027,78 @@ paths:
         - accounting:ap:pay
       x-required-permissions:
       - accounting:ap:pay
+  /v1/accounting/vendors:
+    get:
+      tags:
+      - Vendor Directory API
+      summary: Search vendors by name
+      description: Case-insensitive name-contains search over the AP vendor directory, ordered by name. Omit the name parameter to list all vendors (up to the limit).
+      operationId: searchVendors
+      parameters:
+      - name: name
+        in: query
+        description: Name search term (case-insensitive contains)
+        required: false
+        schema:
+          type: string
+        example: acme
+      - name: limit
+        in: query
+        description: Maximum results to return (server caps at 100)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+        example: 20
+      responses:
+        '200':
+          description: Matching vendors returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VendorResponse'
+      security:
+      - bearerAuth:
+        - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
+  /v1/accounting/vendors/{vendorId}:
+    get:
+      tags:
+      - Vendor Directory API
+      summary: Get vendor by id
+      description: Resolves a single vendor by its identifier, e.g. to display a name for a deep-linked id
+      operationId: getVendorById
+      parameters:
+      - name: vendorId
+        in: path
+        description: Vendor identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440001
+      responses:
+        '200':
+          description: Vendor found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorResponse'
+        '404':
+          description: Vendor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorResponse'
+      security:
+      - bearerAuth:
+        - accounting:ap:view
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/vendor-bills/{billId}:
     get:
       tags:
@@ -2445,6 +3195,49 @@ paths:
         - accounting:ap:view
       x-required-permissions:
       - accounting:ap:view
+  /v1/accounting/settlements/{settlementId}/lines:
+    get:
+      tags:
+      - Settlement Reconciliation
+      summary: List settlement lines
+      description: Lists the lines of one processor settlement (payout), optionally filtered to only the UNMATCHED lines awaiting review. Use this tool to triage a settlement before manually matching or writing off its unmatched lines. Matched lines are already posted; unmatched lines park their gross in the settlement suspense account until resolved (decision D-13). No preconditions and no side effects; an unknown settlementId returns an empty list.
+      operationId: listSettlementLines
+      parameters:
+      - name: settlementId
+        in: path
+        description: Provider settlement (payout) id
+        required: true
+        schema:
+          type: string
+        example: stl_1Mx3k2eZvKYlo2C0
+      - name: unmatchedOnly
+        in: query
+        description: When true, return only UNMATCHED lines
+        required: false
+        schema:
+          type: boolean
+          default: false
+        example: true
+      responses:
+        '200':
+          description: Settlement lines listed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SettlementLineResponse'
+        '403':
+          description: Caller lacks the accounting:reconciliation:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      x-required-permissions:
+      - accounting:reconciliation:view
   /v1/accounting/reports/location/labor-overhead:
     get:
       tags:
@@ -2507,6 +3300,52 @@ paths:
         - reporting:view:financial-statements
       x-required-permissions:
       - reporting:view:financial-statements
+  /v1/accounting/reports/financial/trial-balance:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Generate Trial Balance
+      description: 'Generate Trial Balance as of a specific date: per-account debit/credit/balance rows from POSTED journal lines, grand totals proving sum(debit) == sum(credit), and an entry-number gap-check footnote per monthly sequence scope'
+      operationId: generateTrialBalance
+      parameters:
+      - name: asOf
+        in: query
+        description: As-of date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-06-30
+      responses:
+        '200':
+          description: Trial balance generated successfully (rows empty when no POSTED data exists as of the date)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrialBalanceReport'
+        '400':
+          description: Invalid or missing asOf date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reports/financial/income-statement:
     get:
       tags:
@@ -2556,6 +3395,68 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IncomeStatementReport'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
+  /v1/accounting/reports/financial/general-ledger:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Generate General Ledger
+      description: 'Generate a General Ledger report for a date range: per-account chronological POSTED journal lines with a running balance, opening/closing balances, and grand totals. Optionally filter to a single account.'
+      operationId: generateGeneralLedger
+      parameters:
+      - name: accountId
+        in: query
+        description: Optional GL account ID (UUID) to filter to a single account
+        required: false
+        schema:
+          type: string
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        example: 123e4567-e89b-12d3-a456-426614174000
+      - name: startDate
+        in: query
+        description: Period start date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-01-01
+      - name: endDate
+        in: query
+        description: Period end date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-06-30
+      responses:
+        '200':
+          description: General ledger generated successfully (sections empty when no POSTED activity exists)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralLedgerReport'
+        '400':
+          description: Invalid account ID or date range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - reporting:view:financial-statements
@@ -2748,6 +3649,98 @@ paths:
         - reporting:view:financial-statements
       x-required-permissions:
       - reporting:view:financial-statements
+  /v1/accounting/reports/financial/aged-receivables:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Generate Aged Receivables
+      description: 'Generate the Aged Receivables report as of a date: per-customer open invoice balances bucketed by days past due (0-30 / 31-60 / 61-90 / 90+) with grand totals.'
+      operationId: generateAgedReceivables
+      parameters:
+      - name: asOfDate
+        in: query
+        description: As-of date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-06-30
+      responses:
+        '200':
+          description: Aged receivables generated successfully (rows empty when no open receivables exist)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgedReceivablesReport'
+        '400':
+          description: Invalid or missing asOfDate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
+  /v1/accounting/reports/financial/aged-payables:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Generate Aged Payables
+      description: 'Generate the Aged Payables report as of a date: per-vendor open vendor-bill balances bucketed by days past due (0-30 / 31-60 / 61-90 / 90+) with grand totals.'
+      operationId: generateAgedPayables
+      parameters:
+      - name: asOfDate
+        in: query
+        description: As-of date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-06-30
+      responses:
+        '200':
+          description: Aged payables generated successfully (rows empty when no open payables exist)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgedPayablesReport'
+        '400':
+          description: Invalid or missing asOfDate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reports/export/{exportId}:
     get:
       tags:
@@ -2793,6 +3786,211 @@ paths:
         - accounting:report:export
       x-required-permissions:
       - accounting:report:export
+  /v1/accounting/reconciliations:
+    get:
+      tags:
+      - Bank Reconciliation
+      summary: List reconciliations
+      description: Lists reconciliations, optionally filtered by glAccountId and/or status, most recent first. Paginated. No side effects.
+      operationId: listReconciliations
+      parameters:
+      - name: glAccountId
+        in: query
+        description: Filter by reconciled GL account id
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        description: Filter by reconciliation status
+        required: false
+        schema:
+          type: string
+          enum:
+          - IN_PROGRESS
+          - FINALIZED
+          - CANCELLED
+      - name: page
+        in: query
+        description: Zero-based page index
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+        example: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+        example: 20
+      responses:
+        '200':
+          description: Reconciliations listed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationListResponse'
+        '403':
+          description: Caller lacks the accounting:reconciliation:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      x-required-permissions:
+      - accounting:reconciliation:view
+  /v1/accounting/reconciliations/{reconciliationId}:
+    get:
+      tags:
+      - Bank Reconciliation
+      summary: Get a reconciliation
+      description: Returns one reconciliation with its imported statement lines and adjustments. Returns 404 RECONCILIATION_NOT_FOUND if the id is unknown.
+      operationId: getReconciliation
+      parameters:
+      - name: reconciliationId
+        in: path
+        description: Reconciliation id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Reconciliation found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationResponse'
+        '403':
+          description: Caller lacks the accounting:reconciliation:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reconciliation not found (RECONCILIATION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      x-required-permissions:
+      - accounting:reconciliation:view
+  /v1/accounting/reconciliations/{reconciliationId}/report:
+    get:
+      tags:
+      - Bank Reconciliation
+      summary: Reconciliation report
+      description: 'Returns the reconciliation report: opening (GL) and closing (statement) balances, matched vs outstanding lines, adjustments, and the outstanding difference. Returns 404 RECONCILIATION_NOT_FOUND if the id is unknown.'
+      operationId: getReconciliationReport
+      parameters:
+      - name: reconciliationId
+        in: path
+        description: Reconciliation id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Report generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationReportResponse'
+        '403':
+          description: Caller lacks the accounting:reconciliation:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reconciliation not found (RECONCILIATION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      x-required-permissions:
+      - accounting:reconciliation:view
+  /v1/accounting/reconciliations/{reconciliationId}/audit:
+    get:
+      tags:
+      - Bank Reconciliation
+      summary: Reconciliation audit trail
+      description: Returns the audit trail of a reconciliation's actions (import, matches, adjustments, finalize), ordered by time. Returns 404 RECONCILIATION_NOT_FOUND if the id is unknown.
+      operationId: getReconciliationAudit
+      parameters:
+      - name: reconciliationId
+        in: path
+        description: Reconciliation id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Audit trail generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationAuditResponse'
+        '403':
+          description: Caller lacks the accounting:reconciliation:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reconciliation not found (RECONCILIATION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      x-required-permissions:
+      - accounting:reconciliation:view
+  /v1/accounting/reconciliations/adjustment-types:
+    get:
+      tags:
+      - Bank Reconciliation
+      summary: List reconciliation adjustment types
+      description: Returns the supported reconciliation adjustment types (decision D-6) so the frontend never hardcodes the enum. No preconditions and no side effects.
+      operationId: listReconciliationAdjustmentTypes
+      responses:
+        '200':
+          description: Adjustment types listed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdjustmentTypeResponse'
+        '403':
+          description: Caller lacks the accounting:reconciliation:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      x-required-permissions:
+      - accounting:reconciliation:view
   /v1/accounting/posting-rules/{postingRuleSetId}/versions:
     get:
       tags:
@@ -2919,6 +4117,33 @@ paths:
         - accounting:mapping-key:view
       x-required-permissions:
       - accounting:mapping-key:view
+  /v1/accounting/periods:
+    get:
+      tags:
+      - Accounting Periods
+      summary: List accounting periods
+      description: Lists all known accounting periods, most recent first (descending period code). Use this tool to review period statuses before closing or reopening a period. Periods are auto-provisioned on first posting, so months never posted into may be absent; an absent month counts as OPEN for posting purposes. No preconditions and no side effects; nothing is created by this call.
+      operationId: listAccountingPeriods
+      responses:
+        '200':
+          description: Accounting periods listed, most recent first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountingPeriodResponse'
+        '403':
+          description: Caller lacks the accounting:period:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:period:view
+      x-required-permissions:
+      - accounting:period:view
   /v1/accounting/journal-entries/{journalEntryId}/traceability:
     get:
       tags:
@@ -4031,6 +5256,98 @@ components:
       required:
       - categoryName
       - postingCategoryId
+    HardLockDateUpdateRequest:
+      type: object
+      description: Request payload for setting the org-level hard-lock date
+      properties:
+        hardLockDate:
+          type: string
+          format: date
+          description: New hard-lock date. Must be on or after the currently stored hard-lock date (monotonic forward only — a backward move is rejected with 422 HARD_LOCK_DATE_REGRESSION). Once set, journal entries dated strictly before this date are permanently rejected with no override path.
+          example: 2026-06-30
+        justification:
+          type: string
+          description: Mandatory reason for moving the hard-lock date; recorded in the audit trail with the acting user
+          example: FY2025 statutory filing complete; locking H1 2026
+          maxLength: 500
+          minLength: 0
+      required:
+      - hardLockDate
+      - justification
+    HardLockDateResponse:
+      type: object
+      description: Org-level hard-lock date payload
+      properties:
+        hardLockDate:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: The org-level hard-lock date. Journal entries dated strictly before this date are permanently rejected (422 PERIOD_HARD_LOCKED) with no override path. Null when no hard lock has been configured yet.
+          example: 2026-06-30
+    ApiError:
+      type: object
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code
+          example: 404
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+        correlationId:
+          type: string
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          items:
+            $ref: '#/components/schemas/FieldError'
+        referenceId:
+          type: string
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+        nextAction:
+          type: string
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+        supportAction:
+          type: string
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
+      required:
+      - field
+      - message
     MappingKeyUpdateRequest:
       type: object
       description: Request payload for updating an existing mapping key
@@ -4247,6 +5564,12 @@ components:
           format: uuid
           description: Journal entry UUID
           example: 01936e5e-7890-7a3d-8b6e-4d5678901234
+        entryNumber:
+          type:
+          - string
+          - 'null'
+          description: Human-readable posted-entry number in the format JE-{YYYYMM}-{seq}, sequential within the entry's transaction month and assigned at posting time. Null for DRAFT and PENDING entries and for entries posted before numbering existed.
+          example: JE-202607-1
         status:
           type: string
           description: Journal entry status
@@ -4355,6 +5678,27 @@ components:
           example: Primary receivables account
           maxLength: 500
           minLength: 0
+        accountSubtype:
+          type: string
+          description: Updated account subtype refining the immutable accountType for report grouping and posting-config plausibility checks. Left unchanged when omitted.
+          enum:
+          - RECEIVABLE
+          - PAYABLE
+          - BANK_CASH
+          - UNDEPOSITED_FUNDS
+          - TAX_PAYABLE
+          - CURRENT_ASSET
+          - FIXED_ASSET
+          - CURRENT_LIABILITY
+          - SALES
+          - COST_OF_SALES
+          - OPERATING_EXPENSE
+          - OTHER
+          example: BANK_CASH
+        reconcilable:
+          type: boolean
+          description: Whether journal entry lines on this account participate in reconciliation (e.g. settlement/bank reconciliation). Left unchanged when omitted.
+          example: true
     GLAccountResponse:
       type: object
       description: GL account response with computed status
@@ -4382,6 +5726,27 @@ components:
           - REVENUE
           - EXPENSE
           example: ASSET
+        accountSubtype:
+          type: string
+          description: Optional subtype refining accountType for report grouping and posting-config plausibility checks. Null when no refinement applies.
+          enum:
+          - RECEIVABLE
+          - PAYABLE
+          - BANK_CASH
+          - UNDEPOSITED_FUNDS
+          - TAX_PAYABLE
+          - CURRENT_ASSET
+          - FIXED_ASSET
+          - CURRENT_LIABILITY
+          - SALES
+          - COST_OF_SALES
+          - OPERATING_EXPENSE
+          - OTHER
+          example: UNDEPOSITED_FUNDS
+        reconcilable:
+          type: boolean
+          description: Whether journal entry lines on this account participate in reconciliation (e.g. settlement/bank reconciliation).
+          example: false
         description:
           type: string
           description: GL account description
@@ -4434,6 +5799,7 @@ components:
           example: 6
       required:
       - glAccountId
+      - reconcilable
     DefaultGLMappingRequest:
       type: object
       description: Request to create or update a default GL account mapping
@@ -4834,6 +6200,107 @@ components:
           minLength: 1
       required:
       - operatorId
+    SettlementWriteOffRequest:
+      type: object
+      description: Request payload for writing off a small unmatched settlement line
+      properties:
+        reason:
+          type: string
+          description: Mandatory reason for the write-off; recorded on the line and in the audit trail
+          example: Unidentifiable micro-deposit below reconciliation threshold
+          maxLength: 500
+          minLength: 0
+      required:
+      - reason
+    SettlementLineResponse:
+      type: object
+      description: Processor settlement line with its reconciliation match status
+      properties:
+        lineId:
+          type: string
+          format: uuid
+          description: Settlement line UUID
+          example: 01936e5e-7890-7a3d-8b6e-4d5678901234
+        settlementId:
+          type: string
+          description: Owning settlement id (provider payout id)
+          example: stl_1Mx3k2eZvKYlo2C0
+        providerLineRef:
+          type: string
+          description: Provider's own line reference
+          example: txn_3Mx3k2eZvKYlo2C0
+        lineType:
+          type: string
+          description: Settlement line type
+          enum:
+          - CHARGE
+          - REFUND
+          - CHARGEBACK
+          - FEE
+          - ADJUSTMENT
+          - RESERVE_HOLD
+          - RESERVE_RELEASE
+          - PAYOUT_CORRECTION
+          example: CHARGE
+        grossAmount:
+          type: number
+          description: Line gross amount (matched on gross, decision D-11)
+          example: 1000.0
+        feeAmount:
+          type: number
+          description: Line fee amount; null for netted/header-only providers
+          example: 30.0
+        netAmount:
+          type: number
+          description: Line net amount; null for netted/header-only providers
+          example: 970.0
+        paymentReference:
+          type: string
+          description: Platform correlation token echoed by the processor (decision D-11)
+        matchStatus:
+          type: string
+          description: Reconciliation match status
+          enum:
+          - MATCHED
+          - UNMATCHED
+          - WRITTEN_OFF
+          example: UNMATCHED
+        matchedPaymentId:
+          type: string
+          format: uuid
+          description: Id of the matched AR/AP payment; null while UNMATCHED
+        matchedPaymentType:
+          type: string
+          description: Whether the matched payment is AR (receivable) or AP (vendor)
+          enum:
+          - AR
+          - AP
+        writeoffReason:
+          type: string
+          description: Recorded reason when the line was written off
+        writeoffJournalEntryId:
+          type: string
+          format: uuid
+          description: Journal entry id of the reversible write-off posting
+        createdAt:
+          type: string
+          format: date-time
+          description: When the line was first ingested
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the line was last updated
+    SettlementManualMatchRequest:
+      type: object
+      description: Request payload for manually matching a settlement line to a receivable payment
+      properties:
+        receivablePaymentId:
+          type: string
+          format: uuid
+          description: The receivable payment to match the settlement line to
+          example: 01936e5e-7890-7a3d-8b6e-4d5678901234
+      required:
+      - receivablePaymentId
     ReportExportRequest:
       type: object
       description: Request payload for exporting a financial report
@@ -4928,6 +6395,271 @@ components:
       required:
       - exportId
       - status
+    ReconciliationUnmatchRequest:
+      type: object
+      description: Request to reverse a match by matchId or by statement line ids
+      properties:
+        matchId:
+          type: string
+          format: uuid
+          description: Match group id to reverse
+        statementLineIds:
+          type: array
+          description: Statement line ids whose match group should be reversed
+          items:
+            type: string
+            format: uuid
+    BankReconciliationAdjustmentResponse:
+      type: object
+      description: Reconciliation adjustment with its posted journal entry
+      properties:
+        adjustmentId:
+          type: string
+          format: uuid
+          description: Adjustment id
+        type:
+          type: string
+          description: Adjustment type (decision D-6)
+          enum:
+          - BANK_FEE
+          - NSF_FEE
+          - INTEREST_EARNED
+          - OTHER
+          example: BANK_FEE
+        amount:
+          type: number
+          description: Signed adjustment amount
+          example: -12.5
+        description:
+          type: string
+          description: Adjustment description
+        journalEntryId:
+          type: string
+          format: uuid
+          description: Id of the real balanced journal entry this adjustment posted
+        createdAt:
+          type: string
+          format: date-time
+          description: When the adjustment was recorded
+        createdBy:
+          type: string
+          description: Who recorded the adjustment
+    BankReconciliationLineResponse:
+      type: object
+      description: Imported bank statement line
+      properties:
+        lineId:
+          type: string
+          format: uuid
+          description: Statement line id
+        lineNumber:
+          type: integer
+          format: int32
+          description: 1-based line number in the imported statement
+          example: 1
+        lineDate:
+          type: string
+          format: date
+          description: Statement line date
+          example: 2026-06-15
+        description:
+          type: string
+          description: Statement line description
+          example: ACH DEPOSIT
+        amount:
+          type: number
+          description: Signed statement amount
+          example: 1500.0
+        reference:
+          type: string
+          description: Statement line reference
+          example: REF-88213
+        status:
+          type: string
+          description: Match status
+          enum:
+          - UNMATCHED
+          - MATCHED
+          example: UNMATCHED
+        matchId:
+          type: string
+          format: uuid
+          description: Match group id when MATCHED; null while UNMATCHED
+    BankReconciliationResponse:
+      type: object
+      description: Bank reconciliation with its statement lines and adjustments
+      properties:
+        reconciliationId:
+          type: string
+          format: uuid
+          description: Reconciliation id
+        glAccountId:
+          type: string
+          format: uuid
+          description: Reconciled GL cash account id
+        accountCode:
+          type: string
+          description: Reconciled account code
+          example: '1000'
+        accountName:
+          type: string
+          description: Reconciled account name
+          example: Cash
+        periodStartDate:
+          type: string
+          format: date
+          description: Statement period start date
+          example: 2026-06-01
+        periodEndDate:
+          type: string
+          format: date
+          description: Statement period end date
+          example: 2026-06-30
+        statementDate:
+          type: string
+          format: date
+          description: Statement date
+          example: 2026-06-30
+        currency:
+          type: string
+          description: Reconciliation currency
+          example: USD
+        statementEndingBalance:
+          type: number
+          description: Statement ending balance
+          example: 12500.0
+        glEndingBalance:
+          type: number
+          description: GL ending balance snapshotted at import as-of the statement date
+          example: 12000.0
+        difference:
+          type: number
+          description: statementEndingBalance − (glEndingBalance + Σ adjustments); 0 when balanced
+          example: 0.0
+        status:
+          type: string
+          description: Reconciliation status
+          enum:
+          - IN_PROGRESS
+          - FINALIZED
+          - CANCELLED
+          example: IN_PROGRESS
+        createdAt:
+          type: string
+          format: date-time
+          description: When the reconciliation was created
+        createdBy:
+          type: string
+          description: Who created the reconciliation
+        finalizedAt:
+          type: string
+          format: date-time
+          description: When the reconciliation was finalized; null while IN_PROGRESS
+        finalizedBy:
+          type: string
+          description: Who finalized the reconciliation
+        statementLines:
+          type: array
+          description: Imported statement lines
+          items:
+            $ref: '#/components/schemas/BankReconciliationLineResponse'
+        adjustments:
+          type: array
+          description: Recorded adjustments
+          items:
+            $ref: '#/components/schemas/BankReconciliationAdjustmentResponse'
+    ReconciliationMatchRequest:
+      type: object
+      description: Request to match statement lines to GL journal-entry lines
+      properties:
+        statementLineIds:
+          type: array
+          description: Statement line ids to match
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+        glLineIds:
+          type: array
+          description: Posted GL journal-entry line ids to match against
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+      required:
+      - glLineIds
+      - statementLineIds
+    ReconciliationAdjustmentRequest:
+      type: object
+      description: Request to record a reconciliation adjustment (posts a real JE)
+      properties:
+        type:
+          type: string
+          description: Adjustment type (decision D-6)
+          enum:
+          - BANK_FEE
+          - NSF_FEE
+          - INTEREST_EARNED
+          - OTHER
+          example: BANK_FEE
+        amount:
+          type: number
+          description: Signed adjustment amount; positive increases the reconciled cash account
+          example: -12.5
+        description:
+          type: string
+          description: Optional description recorded on the adjustment
+          example: Monthly account service charge
+          maxLength: 500
+          minLength: 0
+      required:
+      - amount
+      - type
+    BankReconciliationImportRequest:
+      type: object
+      description: Request to import a bank statement CSV and start a reconciliation
+      properties:
+        glAccountId:
+          type: string
+          format: uuid
+          description: Reconcilable GL cash account being reconciled
+        periodStartDate:
+          type: string
+          format: date
+          description: Statement period start date
+          example: 2026-06-01
+        periodEndDate:
+          type: string
+          format: date
+          description: Statement period end date
+          example: 2026-06-30
+        statementDate:
+          type: string
+          format: date
+          description: Statement date; GL ending balance is computed as-of this date
+          example: 2026-06-30
+        statementEndingBalance:
+          type: number
+          description: Statement ending balance
+          example: 12500.0
+        currency:
+          type: string
+          description: ISO currency code; single currency governs the reconciliation
+          example: USD
+          maxLength: 3
+          minLength: 3
+        csv:
+          type: string
+          description: 'Bank statement CSV (columns: date, description, amount, reference), raw text lines or base64'
+          minLength: 1
+      required:
+      - csv
+      - currency
+      - glAccountId
+      - periodEndDate
+      - periodStartDate
+      - statementDate
+      - statementEndingBalance
     PostingCategoryCreateRequest:
       type: object
       description: Request payload for creating a new posting category
@@ -4953,6 +6685,65 @@ components:
       required:
       - categoryName
       - createdBy
+    AccountingPeriodReopenRequest:
+      type: object
+      description: Request payload for reopening a closed accounting period
+      properties:
+        justification:
+          type: string
+          description: Mandatory reason for reopening the period; recorded on the period and in the audit trail
+          example: Late vendor bill for June must be posted before restatement
+          maxLength: 500
+          minLength: 0
+      required:
+      - justification
+    AccountingPeriodResponse:
+      type: object
+      description: Accounting period response payload
+      properties:
+        periodId:
+          type: string
+          format: uuid
+          description: Period UUID
+          example: 01936e5e-7890-7a3d-8b6e-4d5678901234
+        periodCode:
+          type: string
+          description: Period code (YYYY-MM)
+          example: 2026-07
+        startDate:
+          type: string
+          format: date
+          description: First day of the period
+          example: 2026-07-01
+        endDate:
+          type: string
+          format: date
+          description: Last day of the period (inclusive)
+          example: 2026-07-31
+        status:
+          type: string
+          description: Lifecycle status
+          enum:
+          - OPEN
+          - CLOSED
+          example: OPEN
+        closedAt:
+          type: string
+          format: date-time
+          description: When the period was closed (null while OPEN)
+        closedBy:
+          type: string
+          description: Actor who closed the period
+        reopenedAt:
+          type: string
+          format: date-time
+          description: When the period was last reopened
+        reopenedBy:
+          type: string
+          description: Actor who last reopened the period
+        reopenJustification:
+          type: string
+          description: Justification recorded for the last reopen
     PaymentApplicationReversalRequest:
       type: object
       description: Request payload for reversing a payment application
@@ -4998,6 +6789,16 @@ components:
           items:
             $ref: '#/components/schemas/InvoiceApplication'
           minItems: 1
+        allocationStrategy:
+          type:
+          - string
+          - 'null'
+          default: CALLER_ORDER
+          description: Optional allocation strategy. CALLER_ORDER (default when absent) applies amounts in the order supplied by the caller; OLDEST_FIRST allocates by ascending invoice date. Omitting this field is equivalent to CALLER_ORDER.
+          enum:
+          - CALLER_ORDER
+          - OLDEST_FIRST
+          example: OLDEST_FIRST
       required:
       - applicationRequestId
       - applications
@@ -5250,6 +7051,166 @@ components:
           example: 01960003-0000-7000-8000-000000000001
       required:
       - glAccountId
+    MappingResolutionTestRequest:
+      type: object
+      description: Dry-run mapping/rule resolution request describing a hypothetical accounting event. Nothing is persisted by this operation.
+      properties:
+        eventType:
+          type: string
+          description: Accounting event type to resolve posting rules for
+          example: INVOICE_FINALIZED
+          minLength: 1
+        samplePayload:
+          type: object
+          description: Sample event payload (arbitrary JSON object) evaluated against rule predicates and amount fields. Optional; when omitted the rules are evaluated against an empty payload.
+          example:
+            totalAmount: 125.0
+            channel: POS
+        transactionDate:
+          type: string
+          format: date
+          description: Transaction date used for effective-dated rule version and GL mapping selection
+          example: 2026-01-15
+      required:
+      - eventType
+      - transactionDate
+    MappingResolutionTestResponse:
+      type: object
+      description: Dry-run mapping/rule resolution result. A no-match outcome is represented as matched=false with a reason, not as an error. Nothing is persisted.
+      properties:
+        matched:
+          type: boolean
+          description: Whether a published posting rule matched the supplied event. false means no rule matched; inspect noMatchReason/noMatchDetail.
+          example: true
+        matchedRule:
+          $ref: '#/components/schemas/MatchedRule'
+        matchedMapping:
+          $ref: '#/components/schemas/MatchedMapping'
+        resolvedLines:
+          type: array
+          description: Journal entry lines the evaluator would post for this event, including E1 proportional split-line shares and residual distribution. Present when matched=true.
+          items:
+            $ref: '#/components/schemas/ResolvedLine'
+        predicateEvaluations:
+          type: array
+          description: Per-predicate evaluation outcomes against the sample payload (E2 condition grammar). Populated for every candidate rule condition that was evaluated.
+          items:
+            $ref: '#/components/schemas/PredicateEvaluation'
+        noMatchReason:
+          type: string
+          description: Machine-readable no-match reason, present when matched=false
+          example: UNMAPPED_EVENT_TYPE
+        noMatchDetail:
+          type: string
+          description: Human-readable no-match detail, present when matched=false
+          example: No published rule version maps event type INVOICE_FINALIZED on 2026-01-15
+      required:
+      - matched
+    MatchedMapping:
+      type: object
+      description: Mapping evaluation details for the matched rule
+      properties:
+        mappingType:
+          type: string
+          description: Type of mapping that was matched (exact, fallback, category_default)
+          example: exact
+        mappingKey:
+          type: string
+          description: Mapping key that was matched
+          example: INVENTORY:SKU-1234
+        keysEvaluated:
+          type: array
+          description: All mapping keys evaluated during the search, in evaluation order
+          items:
+            type: string
+    MatchedRule:
+      type: object
+      description: Identity of the posting rule that matched the dry-run event
+      properties:
+        postingRuleSetId:
+          type: string
+          format: uuid
+          description: Posting rule set identifier
+          example: 01960003-0000-7000-8000-000000000001
+        ruleSetName:
+          type: string
+          description: Posting rule set name
+          example: Invoice finalization postings
+        ruleVersionId:
+          type: string
+          format: uuid
+          description: Posting rule version identifier that was evaluated
+          example: 01960003-0000-7000-8000-000000000002
+        versionNumber:
+          type: integer
+          format: int32
+          description: Posting rule version number that was evaluated
+          example: 3
+      required:
+      - postingRuleSetId
+      - ruleSetName
+      - ruleVersionId
+      - versionNumber
+    PredicateEvaluation:
+      type: object
+      description: Evaluation outcome of one rule condition predicate (E2 grammar)
+      properties:
+        predicate:
+          type: string
+          description: Predicate expression as configured on the rule condition
+          example: payload.channel == 'POS' && payload.totalAmount > 100
+        matched:
+          type: boolean
+          description: Whether the predicate matched the supplied event type and sample payload
+          example: true
+        detail:
+          type: string
+          description: Optional evaluation detail (e.g. which clause failed)
+          example: 'clause payload.totalAmount > 100 evaluated false (actual: 42.00)'
+      required:
+      - matched
+      - predicate
+    ResolvedLine:
+      type: object
+      description: One journal entry line the dry-run evaluator would post
+      properties:
+        glAccountId:
+          type: string
+          format: uuid
+          description: Resolved GL account identifier
+          example: 01960003-0000-7000-8000-000000000003
+        accountCode:
+          type: string
+          description: Resolved GL account code
+          example: '4000'
+        accountName:
+          type: string
+          description: Resolved GL account name
+          example: Sales Revenue
+        debitAmount:
+          type: number
+          description: Debit amount for this line
+          example: 75.0
+        creditAmount:
+          type: number
+          description: Credit amount for this line
+          example: 0.0
+        description:
+          type: string
+          description: Line description
+          example: Recognize revenue (60% share)
+        splitGroup:
+          type: string
+          description: E1 split group this line belongs to; null for non-split lines
+          example: revenue-split
+        factorPercent:
+          type: number
+          description: E1 split factor percentage applied to this line; null for non-split lines
+          example: 60.0
+      required:
+      - creditAmount
+      - debitAmount
+      - glAccountId
     MappingKeyCreateRequest:
       type: object
       description: Request payload for creating a new mapping key
@@ -5290,8 +7251,29 @@ components:
           description: Reason for reversing the journal entry
           example: Correcting duplicate posting
           minLength: 1
+        reversalDate:
+          type: string
+          format: date
+          description: Optional transaction date for the reversal entry. When omitted or null, the date defaults to the original entry's transaction date if that date's accounting period is OPEN, otherwise to today's date. Whether explicit or defaulted, the resolved date must fall in an OPEN accounting period; a date in a CLOSED period is rejected with 422 PERIOD_CLOSED.
+          example: 2026-07-15
+        overrideJustification:
+          type: string
+          description: Optional justification for reversing into a CLOSED accounting period (story B2). When the resolved reversal date falls in a CLOSED period, supplying a non-blank justification together with the accounting:period:override permission allows the reversal to post into that period (audit-logged); without it the reversal is rejected with 422 PERIOD_CLOSED. Has no effect for dates in OPEN periods and can never bypass the hard lock (422 PERIOD_HARD_LOCKED).
+          example: Auditor-approved correction of June posting
+          maxLength: 500
+          minLength: 0
       required:
       - reason
+    JournalEntryPostRequest:
+      type: object
+      description: Optional request payload for posting a journal entry
+      properties:
+        overrideJustification:
+          type: string
+          description: Optional justification for posting into a CLOSED accounting period. When the entry's transaction date falls in a CLOSED period, supplying a non-blank justification together with the accounting:period:override permission allows the posting to proceed (audit-logged); without it the post is rejected with 422 PERIOD_CLOSED. Has no effect for dates in OPEN periods and can never bypass the hard lock (422 PERIOD_HARD_LOCKED).
+          example: Auditor-approved late accrual for June close
+          maxLength: 500
+          minLength: 0
     RegenerateInvoiceFromWorkorderRequest:
       type: object
       description: Request to regenerate an invoice from a completed workorder
@@ -5385,6 +7367,28 @@ components:
           - REVENUE
           - EXPENSE
           example: REVENUE
+        accountSubtype:
+          type: string
+          description: Optional subtype refining accountType for report grouping and posting-config plausibility checks (e.g. UNDEPOSITED_FUNDS for the cash-receipt clearing account). Null when no refinement applies.
+          enum:
+          - RECEIVABLE
+          - PAYABLE
+          - BANK_CASH
+          - UNDEPOSITED_FUNDS
+          - TAX_PAYABLE
+          - CURRENT_ASSET
+          - FIXED_ASSET
+          - CURRENT_LIABILITY
+          - SALES
+          - COST_OF_SALES
+          - OPERATING_EXPENSE
+          - OTHER
+          example: UNDEPOSITED_FUNDS
+        reconcilable:
+          type: boolean
+          default: false
+          description: Whether journal entry lines on this account participate in reconciliation (e.g. settlement/bank reconciliation). Defaults to false when omitted.
+          example: false
         description:
           type: string
           description: Optional description of the account
@@ -6292,6 +8296,33 @@ components:
           format: int32
           description: Allocation sequence number
           example: 1
+    VendorResponse:
+      type: object
+      description: AP vendor directory entry (name to vendorId resolution)
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+          description: Stable vendor identifier
+          example: 01960003-0000-7000-8000-000000000001
+        name:
+          type: string
+          description: Vendor display name
+          example: Acme Auto Parts
+        vendorNumber:
+          type: string
+          description: Human-readable vendor number, when assigned
+          example: V-1042
+        status:
+          type: string
+          description: Vendor status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          example: ACTIVE
+      required:
+      - name
+      - vendorId
     VendorBillMatchCandidateResponse:
       type: object
       description: Vendor bill match candidate presented for manual selection during ambiguous matching
@@ -6468,6 +8499,105 @@ components:
       - monthly
       - usdOnly
       - ytd
+    EntryNumberGapCheck:
+      type: object
+      description: Entry-number gap-check result for one monthly sequence scope; absent gaps mean a clean ledger
+      properties:
+        scopeKey:
+          type: string
+          description: Monthly sequence scope key
+          example: JE-202607
+        missingNumbers:
+          type: array
+          description: Ascending sequence numbers handed out but missing from the ledger for this scope
+          example:
+          - 7
+          - 12
+          items:
+            type: integer
+            format: int64
+      required:
+      - missingNumbers
+      - scopeKey
+    TrialBalanceReport:
+      type: object
+      description: Trial Balance report with per-account debit/credit/balance rows from POSTED journal lines, grand totals proving sum(debit) == sum(credit), and an entry-number gap-check footnote
+      properties:
+        asOfDate:
+          type: string
+          format: date
+          description: Date the trial balance is reported as of (inclusive)
+          example: 2026-06-30
+        generatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the report was generated (ISO 8601)
+          example: 2026-06-30 08:00:00+00:00
+        rows:
+          type: array
+          description: Per-account trial balance rows ordered by account number; empty when no POSTED data exists
+          items:
+            $ref: '#/components/schemas/TrialBalanceRow'
+        totalDebit:
+          type: number
+          description: Grand total of all POSTED debit amounts across rows
+          example: 1250000.0
+        totalCredit:
+          type: number
+          description: Grand total of all POSTED credit amounts across rows
+          example: 1250000.0
+        balanced:
+          type: boolean
+          description: Whether sum of debits equals sum of credits; false surfaces a balance-constraint violation
+          example: true
+        entryNumberGaps:
+          type: array
+          description: 'Entry-number gap-check footnote: per-month sequence scopes with missing entry numbers; empty on a clean ledger'
+          items:
+            $ref: '#/components/schemas/EntryNumberGapCheck'
+      required:
+      - asOfDate
+      - balanced
+      - entryNumberGaps
+      - generatedAt
+      - rows
+      - totalCredit
+      - totalDebit
+    TrialBalanceRow:
+      type: object
+      description: Per-account trial balance row aggregated from POSTED journal lines
+      properties:
+        accountId:
+          type: string
+          description: GL account ID (UUID)
+          example: 123e4567-e89b-12d3-a456-426614174000
+        accountNumber:
+          type: string
+          description: GL account number (chart-of-accounts code)
+          example: '1000'
+        accountName:
+          type: string
+          description: GL account display name
+          example: Cash - Operating
+        totalDebit:
+          type: number
+          description: Sum of POSTED debit amounts for the account up to the as-of date
+          example: 125000.0
+        totalCredit:
+          type: number
+          description: Sum of POSTED credit amounts for the account up to the as-of date
+          example: 45000.0
+        balance:
+          type: number
+          description: Net account balance (totalDebit - totalCredit, signed)
+          example: 80000.0
+      required:
+      - accountId
+      - accountName
+      - accountNumber
+      - balance
+      - totalCredit
+      - totalDebit
     IncomeStatementReport:
       type: object
       description: Income statement (Profit & Loss) report built from POSTED journal entries
@@ -6514,6 +8644,137 @@ components:
       - startDate
       - totalExpenses
       - totalRevenue
+    GeneralLedgerAccountSection:
+      type: object
+      description: General Ledger section for a single account with opening/closing balances and lines
+      properties:
+        accountId:
+          type: string
+          description: GL account ID (UUID)
+          example: 123e4567-e89b-12d3-a456-426614174000
+        accountNumber:
+          type: string
+          description: GL account number (chart-of-accounts code)
+          example: '1000'
+        accountName:
+          type: string
+          description: GL account display name
+          example: Cash - Operating
+        openingBalance:
+          type: number
+          description: Signed opening balance (debit positive) from POSTED activity before the start date
+          example: 50000.0
+        lines:
+          type: array
+          description: Chronological in-period POSTED lines with running balance
+          items:
+            $ref: '#/components/schemas/GeneralLedgerLine'
+        totalDebit:
+          type: number
+          description: Sum of in-period POSTED debit amounts for the account
+          example: 30000.0
+        totalCredit:
+          type: number
+          description: Sum of in-period POSTED credit amounts for the account
+          example: 0.0
+        closingBalance:
+          type: number
+          description: 'Signed closing balance (debit positive): opening balance plus in-period net activity'
+          example: 80000.0
+      required:
+      - accountId
+      - accountName
+      - accountNumber
+      - closingBalance
+      - lines
+      - openingBalance
+      - totalCredit
+      - totalDebit
+    GeneralLedgerLine:
+      type: object
+      description: Chronological POSTED journal line with running balance for a GL account
+      properties:
+        journalEntryId:
+          type: string
+          format: uuid
+          description: Journal entry UUID
+          example: 01960003-0000-7000-8000-000000000001
+        entryNumber:
+          type: string
+          description: Journal entry number
+          example: JE-202606-0042
+        transactionDate:
+          type: string
+          format: date
+          description: Transaction date
+          example: 2026-06-15
+        description:
+          type: string
+          description: Description/narrative for the journal line
+          example: Recognize receivable
+        debitAmount:
+          type: number
+          description: Debit amount (null if credit)
+          example: 1250.0
+        creditAmount:
+          type: number
+          description: Credit amount (null if debit)
+          example: 1250.0
+        runningBalance:
+          type: number
+          description: Cumulative signed account balance (debit positive) through this line
+          example: 80000.0
+        sourceEventType:
+          type: string
+          description: Source event type
+          example: INVOICE_POSTED
+      required:
+      - journalEntryId
+      - runningBalance
+      - transactionDate
+    GeneralLedgerReport:
+      type: object
+      description: General Ledger report with per-account chronological POSTED lines and running balance
+      properties:
+        accountId:
+          type: string
+          description: Account ID the report was filtered to; null when spanning all accounts
+          example: 123e4567-e89b-12d3-a456-426614174000
+        startDate:
+          type: string
+          format: date
+          description: Period start date (inclusive)
+          example: 2026-01-01
+        endDate:
+          type: string
+          format: date
+          description: Period end date (inclusive)
+          example: 2026-06-30
+        generatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the report was generated (ISO 8601)
+          example: 2026-06-30 08:00:00+00:00
+        accounts:
+          type: array
+          description: Per-account sections ordered by account number; empty when no POSTED activity exists
+          items:
+            $ref: '#/components/schemas/GeneralLedgerAccountSection'
+        totalDebit:
+          type: number
+          description: Grand total of in-period POSTED debit amounts across all sections
+          example: 125000.0
+        totalCredit:
+          type: number
+          description: Grand total of in-period POSTED credit amounts across all sections
+          example: 125000.0
+      required:
+      - accounts
+      - endDate
+      - generatedAt
+      - startDate
+      - totalCredit
+      - totalDebit
     JournalLineDrilldownResponse:
       type: object
       description: Drilldown of an individual journal line affecting an account
@@ -6620,6 +8881,168 @@ components:
       - totalAssets
       - totalEquity
       - totalLiabilities
+    AgedReceivablesReport:
+      type: object
+      description: Aged Receivables report with per-customer bucketed open invoice balances
+      properties:
+        asOfDate:
+          type: string
+          format: date
+          description: Date the receivables aging is reported as of (inclusive)
+          example: 2026-06-30
+        generatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the report was generated (ISO 8601)
+          example: 2026-06-30 08:00:00+00:00
+        rows:
+          type: array
+          description: Per-customer aging rows ordered by customer name; empty when no open receivables exist
+          items:
+            $ref: '#/components/schemas/AgedReceivablesRow'
+        totals:
+          $ref: '#/components/schemas/AgingSummary'
+      required:
+      - asOfDate
+      - generatedAt
+      - rows
+      - totals
+    AgedReceivablesRow:
+      type: object
+      description: Per-customer aged receivables row with bucketed open invoice balances
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          description: Customer (party) UUID
+          example: d10217f9-3ec6-46b9-9c87-e7066c100c24
+        customerName:
+          type: string
+          description: Customer display name
+          example: Acme Fleet Services
+        current:
+          type: number
+          description: Outstanding 0-30 days past due (includes not-yet-due)
+          example: 1250.0
+        days31To60:
+          type: number
+          description: Outstanding 31-60 days past due
+          example: 500.0
+        days61To90:
+          type: number
+          description: Outstanding 61-90 days past due
+          example: 0.0
+        days90Plus:
+          type: number
+          description: Outstanding more than 90 days past due
+          example: 0.0
+        totalOutstanding:
+          type: number
+          description: Total outstanding for the customer across all buckets
+          example: 1750.0
+      required:
+      - current
+      - customerId
+      - days31To60
+      - days61To90
+      - days90Plus
+      - totalOutstanding
+    AgingSummary:
+      type: object
+      description: Grand-total aging buckets across all rows of an aged AR/AP report
+      properties:
+        current:
+          type: number
+          description: Total outstanding 0-30 days past due (includes not-yet-due items)
+          example: 12500.0
+        days31To60:
+          type: number
+          description: Total outstanding 31-60 days past due
+          example: 4200.0
+        days61To90:
+          type: number
+          description: Total outstanding 61-90 days past due
+          example: 1800.0
+        days90Plus:
+          type: number
+          description: Total outstanding more than 90 days past due
+          example: 900.0
+        totalOutstanding:
+          type: number
+          description: Grand total outstanding across all buckets
+          example: 19400.0
+      required:
+      - current
+      - days31To60
+      - days61To90
+      - days90Plus
+      - totalOutstanding
+    AgedPayablesReport:
+      type: object
+      description: Aged Payables report with per-vendor bucketed open vendor-bill balances
+      properties:
+        asOfDate:
+          type: string
+          format: date
+          description: Date the payables aging is reported as of (inclusive)
+          example: 2026-06-30
+        generatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the report was generated (ISO 8601)
+          example: 2026-06-30 08:00:00+00:00
+        rows:
+          type: array
+          description: Per-vendor aging rows ordered by vendor name; empty when no open payables exist
+          items:
+            $ref: '#/components/schemas/AgedPayablesRow'
+        totals:
+          $ref: '#/components/schemas/AgingSummary'
+      required:
+      - asOfDate
+      - generatedAt
+      - rows
+      - totals
+    AgedPayablesRow:
+      type: object
+      description: Per-vendor aged payables row with bucketed open vendor-bill balances
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+          description: Vendor UUID
+          example: d10217f9-3ec6-46b9-9c87-e7066c100c24
+        vendorName:
+          type: string
+          description: Vendor display name
+          example: Global Parts Supply
+        current:
+          type: number
+          description: Outstanding 0-30 days past due (includes not-yet-due)
+          example: 3200.0
+        days31To60:
+          type: number
+          description: Outstanding 31-60 days past due
+          example: 750.0
+        days61To90:
+          type: number
+          description: Outstanding 61-90 days past due
+          example: 0.0
+        days90Plus:
+          type: number
+          description: Outstanding more than 90 days past due
+          example: 0.0
+        totalOutstanding:
+          type: number
+          description: Total outstanding for the vendor across all buckets
+          example: 3950.0
+      required:
+      - current
+      - days31To60
+      - days61To90
+      - days90Plus
+      - totalOutstanding
+      - vendorId
     Pageable:
       type: object
       properties:
@@ -6694,6 +9117,154 @@ components:
           type: boolean
         unsorted:
           type: boolean
+    BankReconciliationListResponse:
+      type: object
+      description: Paginated list of bank reconciliations
+      properties:
+        reconciliations:
+          type: array
+          description: Reconciliations on the current page
+          items:
+            $ref: '#/components/schemas/BankReconciliationResponse'
+        totalElements:
+          type: integer
+          format: int64
+          description: Total number of matching reconciliations
+          example: 42
+        pageNumber:
+          type: integer
+          format: int32
+          description: Zero-based page index
+          example: 0
+        pageSize:
+          type: integer
+          format: int32
+          description: Page size
+          example: 20
+        totalPages:
+          type: integer
+          format: int32
+          description: Total number of pages
+          example: 3
+      required:
+      - pageNumber
+      - pageSize
+      - reconciliations
+      - totalElements
+      - totalPages
+    ReconciliationReportResponse:
+      type: object
+      description: Bank reconciliation report
+      properties:
+        reconciliationId:
+          type: string
+          format: uuid
+          description: Reconciliation id
+        accountCode:
+          type: string
+          description: Reconciled account code
+          example: '1000'
+        accountName:
+          type: string
+          description: Reconciled account name
+          example: Cash
+        currency:
+          type: string
+          description: Reconciliation currency
+          example: USD
+        statementDate:
+          type: string
+          format: date
+          description: Statement date
+          example: 2026-06-30
+        glEndingBalance:
+          type: number
+          description: GL ending balance snapshotted at import (opening basis)
+          example: 12000.0
+        statementEndingBalance:
+          type: number
+          description: Statement ending balance (closing basis)
+          example: 12500.0
+        totalMatched:
+          type: number
+          description: Sum of signed amounts over MATCHED statement lines
+          example: 500.0
+        totalAdjustments:
+          type: number
+          description: Sum of signed adjustment amounts
+          example: 0.0
+        totalOutstanding:
+          type: number
+          description: Sum of signed amounts over UNMATCHED statement lines
+          example: 0.0
+        matchedLineCount:
+          type: integer
+          format: int32
+          description: Number of MATCHED statement lines
+          example: 5
+        outstandingLineCount:
+          type: integer
+          format: int32
+          description: Number of UNMATCHED statement lines
+          example: 0
+        difference:
+          type: number
+          description: statementEndingBalance − (glEndingBalance + totalAdjustments); matched lines are already reflected in glEndingBalance
+          example: 0.0
+        adjustments:
+          type: array
+          description: Recorded adjustments
+          items:
+            $ref: '#/components/schemas/BankReconciliationAdjustmentResponse'
+        outstandingLines:
+          type: array
+          description: Outstanding (UNMATCHED) statement lines
+          items:
+            $ref: '#/components/schemas/BankReconciliationLineResponse'
+    Entry:
+      type: object
+      description: One reconciliation audit entry
+      properties:
+        action:
+          type: string
+          description: Action
+          example: ADJUSTMENT
+        at:
+          type: string
+          format: date-time
+          description: When the action occurred
+        by:
+          type: string
+          description: Who performed the action
+        detail:
+          type: string
+          description: Human-readable detail
+    ReconciliationAuditResponse:
+      type: object
+      description: Audit trail of a reconciliation's actions
+      properties:
+        reconciliationId:
+          type: string
+          format: uuid
+          description: Reconciliation id
+        entries:
+          type: array
+          description: Audit entries ordered by time
+          items:
+            $ref: '#/components/schemas/Entry'
+    AdjustmentTypeResponse:
+      type: object
+      description: A supported reconciliation adjustment type
+      properties:
+        code:
+          type: string
+          description: Adjustment type code
+          enum:
+          - BANK_FEE
+          - NSF_FEE
+          - INTEREST_EARNED
+          - OTHER
+          example: BANK_FEE
     PostingRuleSetListResponse:
       type: object
       description: Paginated list of posting rule sets

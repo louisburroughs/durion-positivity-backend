@@ -55,6 +55,14 @@ public class CreditMemoServiceImpl implements CreditMemoService {
 
     private static final String DEFAULT_CURRENCY = "USD";
 
+    /** Currency scale (2dp) applied to reversed tax amounts. */
+    private static final int CURRENCY_SCALE = 2;
+
+    /** Precision of the intermediate credit ratio; only the final tax amount is currency-rounded. */
+    private static final int RATIO_SCALE = 10;
+
+    private static final BigDecimal ZERO_TAX = new BigDecimal("0.00");
+
     private final CreditMemoRepository creditMemoRepository;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
     private final GLPostingService glPostingService;
@@ -91,7 +99,7 @@ public class CreditMemoServiceImpl implements CreditMemoService {
         BigDecimal balanceDue = invoiceBalanceCalculator.balanceDue(invoice);
         validateBalanceDue(invoice, balanceDue);
 
-        CreditAmountCalculation creditCalculation = calculateCreditAmounts(request, balanceDue);
+        CreditAmountCalculation creditCalculation = calculateCreditAmounts(request, invoice);
         validateCreditDoesNotExceedBalance(request, balanceDue, creditCalculation);
 
         PriorPeriodInfo priorPeriodInfo = determinePriorPeriodInfo(invoice);
@@ -145,12 +153,52 @@ public class CreditMemoServiceImpl implements CreditMemoService {
                         + invoice.getTotal());
     }
 
-    private CreditAmountCalculation calculateCreditAmounts(CreateCreditMemoRequest request, BigDecimal balanceDue) {
-        BigDecimal taxAmount = balanceDue.multiply(new BigDecimal("0.10"));
-        BigDecimal creditRatio = request.getCreditAmount().divide(balanceDue, 4, RoundingMode.HALF_UP);
-        BigDecimal taxReversed = taxAmount.multiply(creditRatio).setScale(2, RoundingMode.HALF_UP);
+    private CreditAmountCalculation calculateCreditAmounts(CreateCreditMemoRequest request, ExtInvoice invoice) {
+        BigDecimal taxReversed = calculateTaxReversed(request.getCreditAmount(), invoice);
         BigDecimal totalCreditAmount = request.getCreditAmount().add(taxReversed);
         return new CreditAmountCalculation(taxReversed, totalCreditAmount);
+    }
+
+    /**
+     * Derive the tax to reverse from the invoice's STORED tax scalar (issue #953, Odoo parity
+     * decision D-4). Tax is frozen at invoice finalization and is never recomputed from rates at
+     * credit time (rate-drift protection).
+     *
+     * <p>The credit amount is the revenue (pre-tax) portion being reversed, so the pro-rating
+     * ratio is {@code creditAmount / net} where {@code net = total − tax}, and
+     * {@code taxReversed = round(tax × ratio)} HALF_UP at currency scale.
+     *
+     * <p>Final-credit residual correction (Odoo last-partial pattern): when this credit consumes
+     * the invoice's remaining net amount, the reversal is {@code tax − previouslyReversed} so the
+     * cumulative reversals across all POSTED memos sum exactly to the stored tax (e.g. 35.59
+     * split 50/50 posts 17.80 then 17.79).
+     */
+    @NonNull
+    private BigDecimal calculateTaxReversed(@NonNull BigDecimal creditAmount, @NonNull ExtInvoice invoice) {
+        BigDecimal storedTax = invoice.getTax();
+        if (storedTax == null || storedTax.signum() <= 0) {
+            return ZERO_TAX;
+        }
+        BigDecimal totalTax = storedTax.setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
+        BigDecimal total = invoice.getTotal() == null ? BigDecimal.ZERO : invoice.getTotal();
+        BigDecimal netAmount = total.subtract(storedTax);
+
+        BigDecimal previouslyCreditedNet = creditMemoRepository.sumCreditAmountByInvoiceIdAndStatus(
+                invoice.getInvoiceId(), CreditMemoStatus.POSTED);
+        BigDecimal remainingNet = netAmount.subtract(previouslyCreditedNet);
+
+        if (creditAmount.compareTo(remainingNet) >= 0) {
+            // Final line: reverse the residual so cumulative reversals sum exactly to the
+            // stored tax. A non-positive residual means the tax is already fully reversed.
+            BigDecimal previouslyReversed = creditMemoRepository.sumTaxReversedAmountByInvoiceIdAndStatus(
+                    invoice.getInvoiceId(), CreditMemoStatus.POSTED);
+            BigDecimal residual = totalTax.subtract(previouslyReversed);
+            return residual.signum() > 0 ? residual : ZERO_TAX;
+        }
+
+        // remainingNet > creditAmount > 0 implies netAmount > 0: division is safe.
+        BigDecimal creditRatio = creditAmount.divide(netAmount, RATIO_SCALE, RoundingMode.HALF_UP);
+        return totalTax.multiply(creditRatio).setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
     }
 
     private void validateCreditDoesNotExceedBalance(

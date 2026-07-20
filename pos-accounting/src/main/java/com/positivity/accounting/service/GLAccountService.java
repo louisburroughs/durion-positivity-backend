@@ -35,7 +35,7 @@ public interface GLAccountService {
     GLAccountResponse getGLAccount(UUID glAccountId);
 
     /**
-     * Updates GL account properties (name, description).
+     * Updates GL account properties (name, description, subtype, reconcilable).
      * Account type and code are immutable after creation.
      *
      * @param glAccountId account identifier

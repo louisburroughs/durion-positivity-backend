@@ -1,24 +1,30 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
+import com.positivity.accounting.internal.dto.PaymentApplicationReversalGLPostingEvent;
 import com.positivity.accounting.internal.entity.CustomerCredit;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.PaymentApplication;
 import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.enums.AllocationStrategy;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
+import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
+import com.positivity.accounting.service.OutboxService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +65,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
     private final CustomerCreditRepository customerCreditRepository;
     private final PaymentApplicationReversalRepository reversalRepository;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
+    private final OutboxService outboxService;
 
     /**
      * Handle PaymentCleared event from Payment domain.
@@ -155,7 +162,9 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
      * 8. Emit events for downstream consumers
      *
      * @param paymentId payment to apply
-     * @param request   application request with invoices and amounts
+     * @param request   application request with invoices, amounts, and optional
+     *                  allocation strategy (see
+     *                  {@link #orderApplicationsForAllocation(PaymentApplicationRequest)})
      * @return application response with details
      * @throws ResponseStatusException with NOT_FOUND if payment not found
      * @throws ResponseStatusException with BAD_REQUEST if validation fails or
@@ -227,7 +236,15 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
 
         receivablePaymentRepository.save(payment);
 
-        // 9. Build response
+        // 9. Enqueue GL posting work item in the SAME transaction (transactional
+        // outbox, story C1 issue #954). The async consumer posts
+        // Dr Undeposited Funds / Cr AR (decision D-3); if this transaction rolls
+        // back, the work item rolls back with it, so only committed applications
+        // ever reach the ledger.
+        enqueueGLPostingWorkItem(
+                paymentId, request.getApplicationRequestId(), payment, validation, applicationTimestamp);
+
+        // 10. Build response
         return PaymentApplicationResponse.builder()
                 .paymentId(paymentId)
                 .customerId(payment.getCustomerId())
@@ -313,7 +330,9 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                 continue;
             }
 
-            reversePaymentApplication(applicationId, reason);
+            // Whole-payment reversal reverses every application of each request as a unit, so it
+            // uses the core path directly and bypasses the single-application multi-app guard.
+            applyReversal(applicationId, reason);
             reversedCount++;
         }
 
@@ -336,14 +355,64 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
      * - Requires non-empty reason for audit
      * - Derives reversedBy from SecurityContext
      *
+     * <p>
+     * Single-application reversals are blocked when the application belongs to a
+     * multi-application apply request (story C2, PR #977 finding 3): the C1
+     * cash-receipt JE is batched per {@code applicationRequestId} and the C2
+     * reversing entry is keyed the same way, so reversing one application of a
+     * multi-invoice request would fully reverse the batched JE and desync the
+     * ledger. Such requests must be reversed as a whole via {@link
+     * #reversePayment(UUID, String)}, which reverses every application of the
+     * request (the batched JE is reversed once; the rest are idempotent no-ops).
+     *
      * @param paymentApplicationId application to reverse
      * @param reason               reversal reason (required)
      * @return reversal record
      * @throws ResponseStatusException with NOT_FOUND if application not found
      * @throws ResponseStatusException with CONFLICT if already reversed
+     * @throws MultiApplicationReversalException if the application is one of several
+     *                                           for the same apply request
      */
     public PaymentApplicationReversal reversePaymentApplication(
             @NonNull UUID paymentApplicationId, @NonNull String reason) {
+
+        // Already-reversed guard first (409), preserving the prior contract before the multi-application
+        // guard and the core reversal both re-check it.
+        if (reversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(paymentApplicationId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Payment application " + paymentApplicationId + " has already been reversed");
+        }
+
+        PaymentApplication original = paymentApplicationRepository
+                .findById(paymentApplicationId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Payment application not found: " + paymentApplicationId));
+
+        // Block single-application reversal of a multi-application apply request (finding 3): the C1
+        // cash-receipt JE and C2 reversing entry are both keyed per applicationRequestId, so reversing
+        // one application of the request would fully reverse the batched JE and desync the ledger.
+        String applicationRequestId = original.getApplicationRequestId();
+        if (applicationRequestId != null) {
+            long siblingCount = paymentApplicationRepository
+                    .findAllByApplicationRequestId(applicationRequestId)
+                    .size();
+            if (siblingCount > 1) {
+                throw new MultiApplicationReversalException("Payment application " + paymentApplicationId
+                        + " is one of " + siblingCount + " applications for apply request " + applicationRequestId
+                        + "; reverse the whole payment instead of a single application");
+            }
+        }
+        return applyReversal(paymentApplicationId, reason);
+    }
+
+    /**
+     * Core single-application reversal used by both the public single-application
+     * path (after the multi-application guard) and {@link #reversePayment(UUID,
+     * String)} (which reverses every application of a request as a unit, so it
+     * bypasses the guard). See {@link #reversePaymentApplication(UUID, String)} for
+     * the business rules.
+     */
+    private PaymentApplicationReversal applyReversal(@NonNull UUID paymentApplicationId, @NonNull String reason) {
 
         String reversedBy = getCurrentUser();
 
@@ -392,6 +461,15 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                 original.getAppliedAmount(),
                 reason);
 
+        // Enqueue the reversing-JE work item in the SAME transaction (transactional
+        // outbox, story C2 issue #958). The async consumer posts a reversing journal
+        // entry against the C1 cash-receipt entry (Cr Undeposited Funds / Dr AR) via
+        // A3's reverseJournalEntry, keeping the GL symmetric. Keyed on the original
+        // application request id, so reversing multiple applications of the same
+        // request still yields exactly one reversing entry. If this transaction
+        // rolls back, the work item rolls back with it.
+        enqueueReversalGLPostingWorkItem(original, saved.getReversalId(), reason);
+
         log.info(
                 "Created reversal {} for application {} by {} (reason: {})",
                 saved.getReversalId(),
@@ -400,6 +478,40 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                 reason);
 
         return saved;
+    }
+
+    /**
+     * Persist a {@link PaymentApplicationReversalGLPostingEvent} work item to the
+     * transactional outbox (story C2, issue #958). Runs inside the surrounding
+     * reversal transaction ({@code saveToOutbox} uses MANDATORY propagation),
+     * guaranteeing the reversing-JE work item exists iff the reversal committed.
+     * The original application's request id travels on the event as both the
+     * posting idempotency key and the basis for locating the C1 cash-receipt
+     * entry to reverse.
+     */
+    private void enqueueReversalGLPostingWorkItem(
+            @NonNull PaymentApplication original, @NonNull UUID reversalId, @NonNull String reason) {
+        PaymentApplicationReversalGLPostingEvent reversalEvent = PaymentApplicationReversalGLPostingEvent.builder()
+                .eventId(UUIDv7Generator.generate())
+                .applicationRequestId(original.getApplicationRequestId())
+                .reversalId(reversalId)
+                .paymentId(original.getPaymentId())
+                .reason(reason)
+                .build();
+
+        outboxService.saveToOutbox(
+                reversalEvent.getEventId(),
+                "PaymentApplicationReversal",
+                original.getPaymentId(),
+                reversalEvent.getClass().getName(),
+                reversalEvent);
+
+        log.info(
+                "Reversal GL posting work item persisted to outbox | applicationRequestId={} | eventId={} "
+                        + "| reversalId={}",
+                original.getApplicationRequestId(),
+                reversalEvent.getEventId(),
+                reversalId);
     }
 
     /**
@@ -432,6 +544,45 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
     }
 
     // ===== PRIVATE HELPER METHODS =====
+
+    /**
+     * Persist a {@link PaymentApplicationGLPostingEvent} work item to the
+     * transactional outbox (story C1, issue #954). Runs inside the surrounding
+     * application transaction ({@code saveToOutbox} uses MANDATORY
+     * propagation), guaranteeing the ledger work item exists iff the
+     * application committed. The application request id travels on the event
+     * as both the posting idempotency key and the journal entry
+     * {@code sourceEventId} basis.
+     */
+    private void enqueueGLPostingWorkItem(
+            @NonNull UUID paymentId,
+            @NonNull String applicationRequestId,
+            @NonNull ReceivablePayment payment,
+            @NonNull InvoiceApplicationValidation validation,
+            @NonNull Instant applicationTimestamp) {
+        PaymentApplicationGLPostingEvent glPostingEvent = PaymentApplicationGLPostingEvent.builder()
+                .eventId(UUIDv7Generator.generate())
+                .applicationRequestId(applicationRequestId)
+                .paymentId(paymentId)
+                .customerId(payment.getCustomerId())
+                .currency(payment.getCurrency())
+                .appliedAmount(validation.actualTotalApplicationAmount())
+                .applicationTimestamp(applicationTimestamp)
+                .build();
+
+        outboxService.saveToOutbox(
+                glPostingEvent.getEventId(),
+                "PaymentApplication",
+                paymentId,
+                glPostingEvent.getClass().getName(),
+                glPostingEvent);
+
+        log.info(
+                "GL posting work item persisted to outbox | applicationRequestId={} | eventId={} | appliedAmount={}",
+                applicationRequestId,
+                glPostingEvent.getEventId(),
+                validation.actualTotalApplicationAmount());
+    }
 
     /**
      * Validate an invoice application against the {@code ext_invoice} replica and accounting's
@@ -547,7 +698,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
 
         // All mutations are accounting-local (ADR-0044, #842): a failure rolls back the whole
         // transaction, so no cross-service compensating reversals are needed anymore.
-        for (PaymentApplicationRequest.InvoiceApplication invoiceApp : request.getApplications()) {
+        for (PaymentApplicationRequest.InvoiceApplication invoiceApp : orderApplicationsForAllocation(request)) {
             applySingleInvoiceApplication(
                     new InvoiceApplicationExecutionContext(
                             paymentId,
@@ -561,6 +712,48 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                             invoiceApp.getInvoiceId(), cappedAmounts.get(invoiceApp.getInvoiceId())));
         }
         return applicationDetails;
+    }
+
+    /**
+     * Resolve the allocation iteration order per the request's effective strategy (Issue #955).
+     *
+     * <p>{@code CALLER_ORDER} (including an absent strategy) returns the caller-supplied list
+     * untouched, keeping behavior byte-identical to requests predating the field.
+     * {@code OLDEST_FIRST} returns a sorted copy ordered by ascending replica invoice date
+     * ({@link ExtInvoice#getInvoiceCreatedAt()}); invoices with no replica date sort last, and
+     * equal dates tie-break deterministically by ascending invoice id. Reordering affects
+     * allocation order only — validation, capping, and idempotency semantics are unchanged.
+     *
+     * @param request the application request (strategy resolved via
+     *                {@link PaymentApplicationRequest#resolveAllocationStrategy()})
+     * @return the invoice applications in allocation order
+     */
+    @NonNull
+    private List<PaymentApplicationRequest.InvoiceApplication> orderApplicationsForAllocation(
+            @NonNull PaymentApplicationRequest request) {
+        List<PaymentApplicationRequest.InvoiceApplication> applications = request.getApplications();
+        if (request.resolveAllocationStrategy() != AllocationStrategy.OLDEST_FIRST) {
+            return applications;
+        }
+
+        Map<UUID, Instant> invoiceDates = new HashMap<>();
+        for (PaymentApplicationRequest.InvoiceApplication invoiceApp : applications) {
+            UUID invoiceId = invoiceApp.getInvoiceId();
+            if (!invoiceDates.containsKey(invoiceId)) {
+                invoiceDates.put(
+                        invoiceId,
+                        invoiceBalanceCalculator
+                                .findInvoice(invoiceId)
+                                .map(ExtInvoice::getInvoiceCreatedAt)
+                                .orElse(null));
+            }
+        }
+
+        Comparator<PaymentApplicationRequest.InvoiceApplication> byInvoiceDateThenId = Comparator.comparing(
+                        (PaymentApplicationRequest.InvoiceApplication app) -> invoiceDates.get(app.getInvoiceId()),
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(PaymentApplicationRequest.InvoiceApplication::getInvoiceId);
+        return applications.stream().sorted(byInvoiceDateThenId).toList();
     }
 
     private void applySingleInvoiceApplication(

@@ -68,4 +68,30 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
             "SELECT COALESCE(SUM(cm.creditAmount + cm.taxAmountReversed), 0) FROM CreditMemo cm"
                     + " WHERE cm.originalInvoiceId = :originalInvoiceId AND cm.status = :status")
     java.math.BigDecimal sumCreditedAmountByInvoiceIdAndStatus(UUID originalInvoiceId, CreditMemoStatus status);
+
+    /**
+     * Sum of credit amounts (revenue portion only, excluding reversed tax) for an invoice in a
+     * given status. Used to determine how much of the invoice's net (pre-tax) amount has already
+     * been credited (issue #953).
+     *
+     * @param originalInvoiceId invoice identifier
+     * @param status            credit memo status to include (normally POSTED)
+     * @return total credited revenue amount
+     */
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(cm.creditAmount), 0) FROM CreditMemo cm"
+            + " WHERE cm.originalInvoiceId = :originalInvoiceId AND cm.status = :status")
+    java.math.BigDecimal sumCreditAmountByInvoiceIdAndStatus(UUID originalInvoiceId, CreditMemoStatus status);
+
+    /**
+     * Sum of reversed tax amounts for an invoice in a given status. Used for the final-credit
+     * residual correction so cumulative tax reversals sum exactly to the invoice's stored tax
+     * (issue #953).
+     *
+     * @param originalInvoiceId invoice identifier
+     * @param status            credit memo status to include (normally POSTED)
+     * @return total reversed tax amount
+     */
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(cm.taxAmountReversed), 0) FROM CreditMemo cm"
+            + " WHERE cm.originalInvoiceId = :originalInvoiceId AND cm.status = :status")
+    java.math.BigDecimal sumTaxReversedAmountByInvoiceIdAndStatus(UUID originalInvoiceId, CreditMemoStatus status);
 }

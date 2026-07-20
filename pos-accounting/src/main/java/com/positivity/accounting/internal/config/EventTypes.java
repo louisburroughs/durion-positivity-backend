@@ -16,22 +16,51 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 54 event types (includes +2 from CAP-251 #5:
+     * Total: 81 event types (includes +10 from manual CSV bank reconciliation
+     * (Story F2, Issue #965): ACCOUNTING_RECONCILIATION_IMPORT,
+     * ACCOUNTING_RECONCILIATION_MATCH, ACCOUNTING_RECONCILIATION_UNMATCH,
+     * ACCOUNTING_RECONCILIATION_ADJUSTMENT, ACCOUNTING_RECONCILIATION_FINALIZE,
+     * ACCOUNTING_RECONCILIATION_LIST, ACCOUNTING_RECONCILIATION_GET,
+     * ACCOUNTING_RECONCILIATION_REPORT, ACCOUNTING_RECONCILIATION_AUDIT,
+     * ACCOUNTING_RECONCILIATION_ADJUSTMENT_TYPES_LIST, +3 from settlement reconciliation
+     * (Story F1c, Issue #963): ACCOUNTING_SETTLEMENT_LINES_LIST,
+     * ACCOUNTING_SETTLEMENT_LINE_MATCH, ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF, +3 from the GL + aged AR/AP reports
+     * (Story G2, Issue #960): REPORT_GENERAL_LEDGER_GENERATE,
+     * REPORT_AGED_RECEIVABLES_GENERATE, REPORT_AGED_PAYABLES_GENERATE, +1 from AR payment application reversal GL
+     * posting (Story C2, Issue #958): PAYMENT_APPLICATION_REVERSAL_GL_POSTING, +1
+     * from the mapping resolution dry-run
+     * (Story E3, Issue #957): ACCOUNTING_MAPPING_RESOLVE_TEST, and +2 from CAP-251 #5:
      * ACCOUNTING_STATUS_SYNC_PROCESS and ACCOUNTING_STATUS_VIEW, in addition to
      * CAP-053 Vendor Bill workflow + GL Mapping, +3 from PRD missing endpoints:
      * ACCOUNTING_REPORT_EXPORT_REQUEST, ACCOUNTING_REPORT_EXPORT_STATUS,
-     * ACCOUNTING_REPORT_EXPORT_LIST, and +2 from the vendor directory
-     * (Issue #816): ACCOUNTING_VENDOR_SEARCH, ACCOUNTING_VENDOR_GET).
+     * ACCOUNTING_REPORT_EXPORT_LIST, +2 from the vendor directory
+     * (Issue #816): ACCOUNTING_VENDOR_SEARCH, ACCOUNTING_VENDOR_GET, +3
+     * from accounting period lifecycle (Story B1, Issue #937):
+     * ACCOUNTING_PERIOD_LIST, ACCOUNTING_PERIOD_CLOSE,
+     * ACCOUNTING_PERIOD_REOPEN, +2 previously emitted but unregistered
+     * journal-entry lifecycle events (Story A3, Issue #943):
+     * ACCOUNTING_JOURNAL_ENTRY_POST, ACCOUNTING_JOURNAL_ENTRY_REVERSE, and
+     * +2 from the org-level hard-lock date (Story B2, Issue #944):
+     * ACCOUNTING_PERIOD_HARD_LOCK_VIEW, ACCOUNTING_PERIOD_HARD_LOCK_SET, and
+     * +1 from AR cash-receipt GL posting (Story C1, Issue #954):
+     * PAYMENT_APPLICATION_GL_POSTING, and +1 from the trial balance report
+     * (Story G1, Issue #956): REPORT_TRIAL_BALANCE_GENERATE).
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
-                // JournalEntryController - 3 events
+                // JournalEntryController - 5 events
                 EventTypeRegistration.search(
                                 "ACCOUNTING_JOURNAL_ENTRY_LIST", "List journal entries with optional filters")
                         .build(),
                 EventTypeRegistration.write("ACCOUNTING_JOURNAL_ENTRY_CREATE", "Create a new journal entry")
                         .build(),
                 EventTypeRegistration.write("ACCOUNTING_JOURNAL_ENTRY_UPDATE", "Update an existing journal entry")
+                        .build(),
+                EventTypeRegistration.write("ACCOUNTING_JOURNAL_ENTRY_POST", "Post a draft journal entry to the ledger")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_JOURNAL_ENTRY_REVERSE",
+                                "Reverse a posted journal entry (original flips to REVERSED)")
                         .build(),
 
                 // GLAccountController - 6 events
@@ -106,12 +135,16 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead("ACCOUNTING_CREDIT_MEMO_GET", "Get credit memo details by ID")
                         .build(),
 
-                // FinancialReportingController - 4 events (CAP-054)
+                // FinancialReportingController - 5 events (CAP-054, parity-G1)
                 EventTypeRegistration.search(
                                 "REPORT_INCOME_STATEMENT_GENERATE", "Generate income statement report for a date range")
                         .build(),
                 EventTypeRegistration.search(
                                 "REPORT_BALANCE_SHEET_GENERATE", "Generate balance sheet report as of a specific date")
+                        .build(),
+                EventTypeRegistration.search(
+                                "REPORT_TRIAL_BALANCE_GENERATE",
+                                "Generate trial balance report as of a specific date with entry-number gap footnote")
                         .build(),
                 EventTypeRegistration.fastRead(
                                 "REPORT_DRILLDOWN_ACCOUNTS",
@@ -122,19 +155,37 @@ public final class EventTypes {
                                 "Drill down from GL account to source journal entries")
                         .build(),
 
+                // FinancialReportingController GL + aging reports - 3 events (parity-G2, Issue #960)
+                EventTypeRegistration.search(
+                                "REPORT_GENERAL_LEDGER_GENERATE",
+                                "Generate General Ledger report (per-account POSTED lines with running balance)")
+                        .build(),
+                EventTypeRegistration.search(
+                                "REPORT_AGED_RECEIVABLES_GENERATE",
+                                "Generate Aged Receivables report (bucketed open invoice balances)")
+                        .build(),
+                EventTypeRegistration.search(
+                                "REPORT_AGED_PAYABLES_GENERATE",
+                                "Generate Aged Payables report (bucketed open vendor-bill balances)")
+                        .build(),
+
                 // LaborOverheadReportController - 1 event (CAP-316)
                 EventTypeRegistration.search(
                                 "REPORT_LABOR_OVERHEAD_GENERATE",
                                 "Generate Labor & Overhead cost report for a location and fiscal year")
                         .build(),
 
-                // GLMappingController - 2 events (GL Mapping)
+                // GLMappingController - 3 events (GL Mapping + parity-E3 dry-run)
                 EventTypeRegistration.write(
                                 "ACCOUNTING_GL_MAPPING_CREATE", "Create GL mapping from external code to GL account")
                         .build(),
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_GL_MAPPING_RESOLVE",
                                 "Resolve external code to GL account using effective-dated mapping")
+                        .build(),
+                EventTypeRegistration.search(
+                                "ACCOUNTING_MAPPING_RESOLVE_TEST",
+                                "Dry-run mapping/rule resolution for a hypothetical event (no persistence)")
                         .build(),
 
                 // VendorBillService - 6 events (CAP-053 Issue #130)
@@ -171,6 +222,19 @@ public final class EventTypes {
                 EventTypeRegistration.write("AP_PAYMENT_GL_POSTING", "Post AP payment to GL (Dr AP, Cr Cash/Bank)")
                         .build(),
 
+                // AR Payment Application GL Posting - 1 event (story C1, Issue #954)
+                EventTypeRegistration.write(
+                                "PAYMENT_APPLICATION_GL_POSTING",
+                                "Post AR payment application to GL (Dr Undeposited Funds, Cr AR)")
+                        .build(),
+
+                // AR Payment Application Reversal GL Posting - 1 event (story C2, Issue #958)
+                EventTypeRegistration.write(
+                                "PAYMENT_APPLICATION_REVERSAL_GL_POSTING",
+                                "Post AR payment application reversal to GL (reversing entry: Dr AR, Cr Undeposited"
+                                        + " Funds)")
+                        .build(),
+
                 // AccountingStatusSyncService — 2 events (CAP-251 #5)
                 EventTypeRegistration.write(
                                 "ACCOUNTING_STATUS_SYNC_PROCESS",
@@ -197,6 +261,82 @@ public final class EventTypes {
                                 "ACCOUNTING_VENDOR_SEARCH", "Search AP vendor directory by name (typeahead)")
                         .build(),
                 EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_GET", "Get AP vendor directory entry by ID")
+                        .build(),
+
+                // AccountingPeriodController — 3 events (Story B1, Issue #937)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_PERIOD_LIST", "List accounting periods with lifecycle status")
+                        .build(),
+                EventTypeRegistration.approval("ACCOUNTING_PERIOD_CLOSE", "Close an accounting period (OPEN to CLOSED)")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_PERIOD_REOPEN",
+                                "Reopen a closed accounting period with mandatory justification")
+                        .build(),
+
+                // AccountingPeriodController hard lock — 2 events (Story B2, Issue #944)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_PERIOD_HARD_LOCK_VIEW", "View the org-level accounting hard-lock date")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_PERIOD_HARD_LOCK_SET",
+                                "Set the org-level accounting hard-lock date (monotonic forward,"
+                                        + " mandatory justification)")
+                        .build(),
+
+                // SettlementReconciliationController — 3 events (Story F1c, Issue #963)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_SETTLEMENT_LINES_LIST",
+                                "List processor settlement lines for reconciliation review")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_SETTLEMENT_LINE_MATCH",
+                                "Manually match an unmatched settlement line to a receivable payment")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF",
+                                "Write off a small unmatched settlement line (reversible JE,"
+                                        + " threshold-gated, mandatory reason)")
+                        .build(),
+
+                // BankReconciliationController — 10 events (Story F2, Issue #965)
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_IMPORT",
+                                "Import a bank statement CSV and start a reconciliation")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_MATCH",
+                                "Match statement lines to posted GL journal-entry lines")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_UNMATCH", "Reverse a match, returning lines to UNMATCHED")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_RECONCILIATION_ADJUSTMENT",
+                                "Record a reconciliation adjustment (posts a real balanced JE)")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_RECONCILIATION_FINALIZE",
+                                "Finalize a balanced reconciliation (IN_PROGRESS to FINALIZED)")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_RECONCILIATION_LIST",
+                                "List reconciliations with optional glAccountId/status filters")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_RECONCILIATION_GET",
+                                "Get one reconciliation with its lines and adjustments")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_RECONCILIATION_REPORT",
+                                "Reconciliation report: balances, matched vs outstanding, adjustments, difference")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_RECONCILIATION_AUDIT", "Audit trail of a reconciliation's actions")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_RECONCILIATION_ADJUSTMENT_TYPES_LIST",
+                                "List the supported reconciliation adjustment types (decision D-6)")
                         .build());
     }
 }

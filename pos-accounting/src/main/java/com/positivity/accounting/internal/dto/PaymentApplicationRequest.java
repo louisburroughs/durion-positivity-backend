@@ -1,7 +1,9 @@
 package com.positivity.accounting.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.positivity.accounting.internal.enums.AllocationStrategy;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -9,6 +11,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import lombok.*;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Request DTO for applying a payment to one or more invoices.
@@ -45,6 +49,31 @@ public class PaymentApplicationRequest {
     @NotEmpty(message = "At least one invoice application is required")
     @Valid
     private List<InvoiceApplication> applications;
+
+    /**
+     * Optional allocation strategy. When absent, {@link AllocationStrategy#CALLER_ORDER}
+     * is used and behavior is identical to requests that predate this field.
+     */
+    @Schema(
+            description = "Optional allocation strategy. CALLER_ORDER (default when absent) applies amounts in "
+                    + "the order supplied by the caller; OLDEST_FIRST allocates by ascending invoice date. "
+                    + "Omitting this field is equivalent to CALLER_ORDER.",
+            example = "OLDEST_FIRST",
+            requiredMode = NOT_REQUIRED,
+            nullable = true,
+            defaultValue = "CALLER_ORDER")
+    @Nullable
+    private AllocationStrategy allocationStrategy;
+
+    /**
+     * Resolves the effective allocation strategy, applying the documented default.
+     *
+     * @return the caller-supplied strategy, or {@link AllocationStrategy#CALLER_ORDER} when absent
+     */
+    @NonNull
+    public AllocationStrategy resolveAllocationStrategy() {
+        return allocationStrategy != null ? allocationStrategy : AllocationStrategy.CALLER_ORDER;
+    }
 
     /**
      * Individual invoice application within a payment application request.

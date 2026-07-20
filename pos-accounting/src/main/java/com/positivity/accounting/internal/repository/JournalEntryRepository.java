@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -9,6 +10,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 /**
@@ -28,11 +30,28 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
     Page<JournalEntry> findByStatus(JournalEntryStatus status, Pageable pageable);
 
     /**
+     * Find journal entries by exact posted-entry number
+     * ({@code JE-&#123;YYYYMM&#125;-&#123;seq&#125;}) with pagination. The column is
+     * unique, so at most one row matches; paginated for list-endpoint symmetry.
+     */
+    Page<JournalEntry> findByEntryNumber(String entryNumber, Pageable pageable);
+
+    /**
      * Find journal entries for a transaction date range.
      */
     @Query(
             "SELECT je FROM JournalEntry je WHERE je.transactionDate >= :startDate AND je.transactionDate <= :endDate ORDER BY je.transactionDate DESC")
     List<JournalEntry> findByTransactionDateRange(LocalDateTime startDate, LocalDateTime endDate);
+
+    /**
+     * Find journal entries with a given status dated inside a half-open
+     * transaction-date range [startDate, endDateExclusive). Used by the
+     * accounting-period close gate (DRAFT entries block close, story B1).
+     */
+    @Query(
+            "SELECT je FROM JournalEntry je WHERE je.status = :status AND je.transactionDate >= :startDate AND je.transactionDate < :endDateExclusive ORDER BY je.transactionDate ASC")
+    List<JournalEntry> findByStatusAndTransactionDateInRange(
+            JournalEntryStatus status, LocalDateTime startDate, LocalDateTime endDateExclusive);
 
     /**
      * Find posted journal entries with pagination.
@@ -47,10 +66,40 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
     List<JournalEntry> findBySourceEvent(UUID sourceEventId);
 
     /**
-     * Find journal entries reversed by another entry.
+     * Find the reversal entry of a given original entry: the entry whose
+     * {@code reversalJournalEntry} link ("the entry I reverse") points at
+     * {@code originalId}. At most one row can match because an entry is
+     * reversible only once (guarded by {@link #markReversed}).
      */
-    @Query("SELECT je FROM JournalEntry je WHERE je.reversalJournalEntry.journalEntryId = :reversalId")
-    Optional<JournalEntry> findByReversalReference(UUID reversalId);
+    @Query("SELECT je FROM JournalEntry je WHERE je.reversalJournalEntry.journalEntryId = :originalId")
+    Optional<JournalEntry> findByReversalReference(UUID originalId);
+
+    /**
+     * Atomically transition a POSTED entry to REVERSED, stamping the reversal
+     * linkage, {@code reversedAt}, and audit columns (story A3, issue #943).
+     *
+     * <p>The {@code status = POSTED} predicate is the concurrency guard for
+     * the double-reversal race: two competing reversal transactions both pass
+     * the service-level status check, but only one UPDATE matches the row —
+     * the loser gets an update count of 0 and must abort (409). A bulk update
+     * bypasses entity callbacks ({@code @PreUpdate}/auditing), so
+     * {@code updatedAt}/{@code modifiedBy} are set explicitly here.
+     *
+     * @param journalEntryId original entry to flip
+     * @param reversal       the already-persisted reversal entry (FK target of
+     *                       {@code reversedByJournalEntry})
+     * @param reversedAt     reversal instant (also used for {@code updatedAt})
+     * @param actor          acting user recorded in {@code modifiedBy}
+     * @return number of rows updated: 1 on success, 0 when the entry was no
+     *         longer POSTED (concurrent reversal won the race)
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+            "UPDATE JournalEntry je SET je.status = com.positivity.accounting.internal.enums.JournalEntryStatus.REVERSED,"
+                    + " je.reversedByJournalEntry = :reversal, je.reversedAt = :reversedAt, je.updatedAt = :reversedAt,"
+                    + " je.modifiedBy = :actor WHERE je.journalEntryId = :journalEntryId"
+                    + " AND je.status = com.positivity.accounting.internal.enums.JournalEntryStatus.POSTED")
+    int markReversed(UUID journalEntryId, JournalEntry reversal, Instant reversedAt, String actor);
 
     /**
      * Find draft entries for an organization (for editing).
@@ -106,6 +155,33 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
     java.math.BigDecimal sumPostedBalanceAsOf(UUID glAccountId, LocalDateTime asOfDate);
 
     /**
+     * Aggregate POSTED journal lines up to and including the as-of instant into
+     * per-account debit/credit totals, ordered by chart-of-accounts code.
+     * Used for Trial Balance generation (story G1, issue #956); aggregation is
+     * done in the database so the full line set is never loaded into memory.
+     *
+     * @param asOfDate reporting cutoff (inclusive; pass end-of-day for a date)
+     * @return one aggregate per account with POSTED activity, ordered by
+     *         account code; empty when no POSTED data exists as of the cutoff
+     */
+    @Query("""
+                SELECT new com.positivity.accounting.internal.dto.TrialBalanceAccountTotal(
+                    jel.glAccount.glAccountId,
+                    jel.glAccount.accountCode,
+                    jel.glAccount.accountName,
+                    COALESCE(SUM(CASE WHEN jel.debitAmount IS NOT NULL THEN jel.debitAmount ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN jel.creditAmount IS NOT NULL THEN jel.creditAmount ELSE 0 END), 0))
+                FROM JournalEntry je
+                JOIN je.lines jel
+                WHERE je.status = 'POSTED'
+                  AND je.transactionDate <= :asOfDate
+                GROUP BY jel.glAccount.glAccountId, jel.glAccount.accountCode, jel.glAccount.accountName
+                ORDER BY jel.glAccount.accountCode
+            """)
+    List<com.positivity.accounting.internal.dto.TrialBalanceAccountTotal> sumPostedDebitsCreditsByAccountAsOf(
+            LocalDateTime asOfDate);
+
+    /**
      * Find all POSTED journal lines for a GL account within date range.
      * Used for drilldown reporting.
      *
@@ -125,4 +201,57 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                 ORDER BY je.transactionDate DESC
             """)
     List<JournalEntry> findPostedEntriesForAccount(UUID glAccountId, LocalDateTime startDate, LocalDateTime endDate);
+
+    /**
+     * Sum the signed net balance (debits - credits, debit positive) for a GL
+     * account across POSTED entries dated strictly before the given instant.
+     * Used as the General Ledger opening balance (story G2, issue #960): the net
+     * of all POSTED activity that precedes the report's start date.
+     *
+     * <p>Only POSTED lines participate — an A3-REVERSED original (status
+     * {@code REVERSED}) is excluded while its POSTED reversing entry is included,
+     * so reversed/reversing pairs net to zero here with no reversal-linkage
+     * special-casing.
+     *
+     * @param glAccountId    GL account ID (UUID)
+     * @param startExclusive start-of-day of the report start date; entries dated
+     *                       strictly before this instant contribute
+     * @return net balance (sum of debits - sum of credits), or 0 if none
+     */
+    @Query("""
+                SELECT COALESCE(
+                    SUM(CASE WHEN jel.debitAmount IS NOT NULL THEN jel.debitAmount ELSE 0 END) -
+                    SUM(CASE WHEN jel.creditAmount IS NOT NULL THEN jel.creditAmount ELSE 0 END),
+                    0
+                )
+                FROM JournalEntry je
+                JOIN je.lines jel
+                WHERE je.status = 'POSTED'
+                  AND jel.glAccount.glAccountId = :glAccountId
+                  AND je.transactionDate < :startExclusive
+            """)
+    java.math.BigDecimal sumPostedBalanceForAccountBefore(UUID glAccountId, LocalDateTime startExclusive);
+
+    /**
+     * Find all POSTED journal entries (with their lines) whose transaction date
+     * falls in the inclusive range, across every account. Used by the
+     * all-accounts General Ledger report (story G2, issue #960) to build one
+     * section per account with activity; grouping by account is done in-service.
+     * Only POSTED entries are returned, so REVERSED originals are excluded while
+     * POSTED reversing entries are included (net-zero pairs).
+     *
+     * @param startDate period start (inclusive; pass start-of-day)
+     * @param endDate   period end (inclusive; pass end-of-day)
+     * @return POSTED entries with fetched lines, ordered by transaction date
+     */
+    @Query("""
+                SELECT DISTINCT je
+                FROM JournalEntry je
+                JOIN FETCH je.lines jel
+                WHERE je.status = 'POSTED'
+                  AND je.transactionDate >= :startDate
+                  AND je.transactionDate <= :endDate
+                ORDER BY je.transactionDate ASC
+            """)
+    List<JournalEntry> findPostedEntriesInRange(LocalDateTime startDate, LocalDateTime endDate);
 }

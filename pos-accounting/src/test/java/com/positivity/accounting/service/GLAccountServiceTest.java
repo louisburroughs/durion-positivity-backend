@@ -12,6 +12,7 @@ import com.positivity.accounting.internal.dto.GLAccountListResponse;
 import com.positivity.accounting.internal.dto.GLAccountResponse;
 import com.positivity.accounting.internal.dto.GLAccountUpdateRequest;
 import com.positivity.accounting.internal.entity.GLAccount;
+import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.GLAccountStatus;
 import com.positivity.accounting.internal.exception.AccountNotInactiveException;
@@ -123,6 +124,57 @@ class GLAccountServiceTest {
         }
 
         @Test
+        @DisplayName("maps accountSubtype and reconcilable onto the entity and response")
+        void mapsSubtypeAndReconcilable() {
+            GLAccountCreateRequest request = GLAccountCreateRequest.builder()
+                    .accountCode("1090")
+                    .accountName("Undeposited Funds")
+                    .accountType(AccountType.ASSET)
+                    .accountSubtype(AccountSubtype.UNDEPOSITED_FUNDS)
+                    .reconcilable(true)
+                    .activationDate(LocalDateTime.of(2024, 1, 1, 0, 0))
+                    .build();
+
+            when(glAccountRepository.existsByAccountCode("1090")).thenReturn(false);
+            ArgumentCaptor<GLAccount> savedCaptor = ArgumentCaptor.forClass(GLAccount.class);
+            when(glAccountRepository.save(savedCaptor.capture())).thenAnswer(inv -> {
+                GLAccount a = inv.getArgument(0);
+                a.setGlAccountId(testAccountId);
+                return a;
+            });
+
+            GLAccountResponse result = service.createGLAccount(request);
+
+            assertThat(savedCaptor.getValue().getAccountSubtype()).isEqualTo(AccountSubtype.UNDEPOSITED_FUNDS);
+            assertThat(savedCaptor.getValue().isReconcilable()).isTrue();
+            assertThat(result.getAccountSubtype()).isEqualTo(AccountSubtype.UNDEPOSITED_FUNDS);
+            assertThat(result.isReconcilable()).isTrue();
+        }
+
+        @Test
+        @DisplayName("defaults reconcilable to false and accountSubtype to null when omitted")
+        void defaultsSubtypeAndReconcilableWhenOmitted() {
+            GLAccountCreateRequest request = GLAccountCreateRequest.builder()
+                    .accountCode("4000")
+                    .accountName("Service Revenue")
+                    .accountType(AccountType.REVENUE)
+                    .activationDate(LocalDateTime.of(2024, 1, 1, 0, 0))
+                    .build();
+
+            when(glAccountRepository.existsByAccountCode("4000")).thenReturn(false);
+            when(glAccountRepository.save(any(GLAccount.class))).thenAnswer(inv -> {
+                GLAccount a = inv.getArgument(0);
+                a.setGlAccountId(testAccountId);
+                return a;
+            });
+
+            GLAccountResponse result = service.createGLAccount(request);
+
+            assertThat(result.getAccountSubtype()).isNull();
+            assertThat(result.isReconcilable()).isFalse();
+        }
+
+        @Test
         @DisplayName("uses clock-based activation date when not provided in request")
         void defaultActivationDate() {
             GLAccountCreateRequest request = GLAccountCreateRequest.builder()
@@ -221,6 +273,47 @@ class GLAccountServiceTest {
         GLAccountResponse result = service.updateGLAccount(testAccountId, request);
 
         assertThat(result).isNotNull();
+    }
+
+    @Test
+    @DisplayName("updateGLAccount - updates accountSubtype and reconcilable")
+    void updateGLAccount_subtypeAndReconcilable() {
+        GLAccountUpdateRequest request = GLAccountUpdateRequest.builder()
+                .accountSubtype(AccountSubtype.RECEIVABLE)
+                .reconcilable(true)
+                .build();
+
+        when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+        when(glAccountRepository.save(any(GLAccount.class))).thenReturn(testAccount);
+
+        GLAccountResponse result = service.updateGLAccount(testAccountId, request);
+
+        assertThat(testAccount.getAccountSubtype()).isEqualTo(AccountSubtype.RECEIVABLE);
+        assertThat(testAccount.isReconcilable()).isTrue();
+        assertThat(result.getAccountSubtype()).isEqualTo(AccountSubtype.RECEIVABLE);
+        assertThat(result.isReconcilable()).isTrue();
+        // Name and description untouched when omitted
+        assertThat(testAccount.getAccountName()).isEqualTo("Cash");
+        assertThat(testAccount.getDescription()).isEqualTo("Primary cash account");
+    }
+
+    @Test
+    @DisplayName("updateGLAccount - leaves accountSubtype and reconcilable unchanged when omitted")
+    void updateGLAccount_metadataUnchangedWhenOmitted() {
+        testAccount.setAccountSubtype(AccountSubtype.BANK_CASH);
+        testAccount.setReconcilable(true);
+        GLAccountUpdateRequest request =
+                GLAccountUpdateRequest.builder().accountName("Renamed Cash").build();
+
+        when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+        when(glAccountRepository.save(any(GLAccount.class))).thenReturn(testAccount);
+
+        GLAccountResponse result = service.updateGLAccount(testAccountId, request);
+
+        assertThat(testAccount.getAccountSubtype()).isEqualTo(AccountSubtype.BANK_CASH);
+        assertThat(testAccount.isReconcilable()).isTrue();
+        assertThat(result.getAccountSubtype()).isEqualTo(AccountSubtype.BANK_CASH);
+        assertThat(result.isReconcilable()).isTrue();
     }
 
     // ===== ACTIVATE =====

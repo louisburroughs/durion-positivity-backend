@@ -9,10 +9,13 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PostPersist;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -25,6 +28,7 @@ import lombok.ToString;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.domain.Persistable;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
@@ -64,7 +68,18 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         uniqueConstraints = {
             @UniqueConstraint(name = "uk_receivable_payment_source_event", columnNames = "source_event_id")
         })
-public class ReceivablePayment {
+public class ReceivablePayment implements Persistable<UUID> {
+
+    /**
+     * Transient flag used by Spring Data JPA to distinguish new entities from
+     * existing ones. Required because the entity uses an assigned/pre-set ID
+     * (paymentId comes from the Payment domain) combined with an initialized
+     * {@code @Version} field, which would otherwise cause {@code save()} to
+     * call {@code merge()} instead of {@code persist()}. Mirrors the
+     * {@link GLAccount} pattern.
+     */
+    @Transient
+    private boolean isNew = true;
 
     @EqualsAndHashCode.Include
     @Id
@@ -78,6 +93,22 @@ public class ReceivablePayment {
         if (status == null) {
             status = ReceivablePaymentStatus.AVAILABLE;
         }
+    }
+
+    @PostPersist
+    @PostLoad
+    protected void markNotNew() {
+        this.isNew = false;
+    }
+
+    @Override
+    public UUID getId() {
+        return paymentId;
+    }
+
+    @Override
+    public boolean isNew() {
+        return isNew;
     }
 
     @Column(name = "customer_id", nullable = false, columnDefinition = "UUID")
@@ -101,6 +132,17 @@ public class ReceivablePayment {
 
     @Column(name = "source_event_id", columnDefinition = "UUID")
     private UUID sourceEventId; // PaymentCleared event ID (idempotency)
+
+    /**
+     * Optimistic-lock version (Story C4, issue #936). Every mutation of this
+     * row (application, reversal, void) bumps the version, so two concurrent
+     * transactions updating {@code unappliedAmount} cannot both commit —
+     * the loser fails at flush/commit with an optimistic-lock conflict and is
+     * retried once by the service layer.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
 
     // Audit fields
     @CreatedDate

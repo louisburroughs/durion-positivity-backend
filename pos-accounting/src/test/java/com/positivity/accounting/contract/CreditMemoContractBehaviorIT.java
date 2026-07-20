@@ -89,7 +89,8 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         glAccountRepository.deleteAll();
 
         // Default replica state (ADR-0044 #842): a FINALIZED $110 invoice with a $110
-        // derived balance, matching the previous invoice-service stubs.
+        // derived balance, matching the previous invoice-service stubs. Stored scalar
+        // tax of $10 (issue #953): tax reversal derives from this frozen value.
         UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ExtInvoice defaultInvoice = ExtInvoice.builder()
@@ -98,6 +99,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                 .partyId(customerId.toString())
                 .status("FINALIZED")
                 .total(new BigDecimal("110.00"))
+                .tax(new BigDecimal("10.00"))
                 .finalizedAt(Instant.now(Clock.systemUTC()))
                 .aggregateVersion(1L)
                 .updatedAt(Instant.now(Clock.systemUTC()))
@@ -162,8 +164,9 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.creditMemoId").exists())
                 .andExpect(jsonPath("$.originalInvoiceId").value(testInvoiceId.toString()))
                 .andExpect(jsonPath("$.creditAmount").value(100.00))
-                .andExpect(jsonPath("$.taxAmountReversed").exists()) // Calculated proportionally
-                .andExpect(jsonPath("$.totalAmount").exists()) // Credit + tax
+                // Full-net credit reverses the entire stored tax (issue #953)
+                .andExpect(jsonPath("$.taxAmountReversed").value(10.00))
+                .andExpect(jsonPath("$.totalAmount").value(110.00)) // Credit + tax
                 .andExpect(jsonPath("$.reasonCode").value("RETURNED_GOODS"))
                 .andExpect(jsonPath("$.status").value("POSTED"))
                 .andExpect(jsonPath("$.priorPeriodAdjustment").value(false))
@@ -201,6 +204,9 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
                 .andDo(print())
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.creditAmount").value(25.00))
+                // Stored tax 10.00 pro-rated by 25.00/100.00 of the net (issue #953)
+                .andExpect(jsonPath("$.taxAmountReversed").value(2.50))
+                .andExpect(jsonPath("$.totalAmount").value(27.50))
                 .andExpect(jsonPath("$.reasonCode").value("PRICING_ERROR"))
                 .andExpect(jsonPath("$.status").value("POSTED"));
     }

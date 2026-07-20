@@ -2,12 +2,37 @@ package com.positivity.accounting.internal.config;
 
 import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
+import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
+import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
+import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
+import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
+import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
+import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
+import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
+import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
+import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
+import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
+import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
+import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
+import com.positivity.accounting.internal.exception.ReceivablePaymentNotFoundException;
+import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
+import com.positivity.accounting.internal.exception.ReconciliationLineIneligibleException;
+import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
+import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
+import com.positivity.accounting.internal.exception.SettlementLineNotFoundException;
+import com.positivity.accounting.internal.exception.SettlementLineNotUnmatchedException;
+import com.positivity.accounting.internal.exception.SettlementNotPostedException;
+import com.positivity.accounting.internal.exception.SettlementWriteOffThresholdExceededException;
+import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -74,6 +99,225 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleDuplicateAccountCode(
             DuplicateAccountCodeException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "DUPLICATE_ACCOUNT_CODE", ex.getMessage(), request);
+    }
+
+    /**
+     * Reversal state conflicts (story A3, issue #943): double reversal —
+     * including a lost concurrent-reversal race — maps to JE_ALREADY_REVERSED,
+     * reversing a DRAFT/PENDING entry to JE_NOT_POSTED; both 409.
+     */
+    @ExceptionHandler(JournalEntryNotReversibleException.class)
+    public ResponseEntity<ApiError> handleNotReversible(
+            JournalEntryNotReversibleException ex, HttpServletRequest request) {
+        String code = ex.getCurrentStatus() == JournalEntryStatus.REVERSED ? "JE_ALREADY_REVERSED" : "JE_NOT_POSTED";
+        return build(HttpStatus.CONFLICT, code, ex.getMessage(), request);
+    }
+
+    /**
+     * Operation dated into a CLOSED accounting period (AD-012); first used by
+     * reversal-date validation (story A3), extended to all posting paths in
+     * story B2.
+     */
+    @ExceptionHandler(AccountingPeriodClosedException.class)
+    public ResponseEntity<ApiError> handlePeriodClosed(AccountingPeriodClosedException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "PERIOD_CLOSED", ex.getMessage(), request);
+    }
+
+    /**
+     * Operation dated strictly before the org-level hard-lock date (story
+     * B2, issue #944). Unconditional — no override path.
+     */
+    @ExceptionHandler(AccountingPeriodHardLockedException.class)
+    public ResponseEntity<ApiError> handlePeriodHardLocked(
+            AccountingPeriodHardLockedException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "PERIOD_HARD_LOCKED", ex.getMessage(), request);
+    }
+
+    /**
+     * Hard-lock date update that would move the date backward (story B2,
+     * issue #944): the hard lock is monotonic-forward-only.
+     */
+    @ExceptionHandler(HardLockDateRegressionException.class)
+    public ResponseEntity<ApiError> handleHardLockDateRegression(
+            HardLockDateRegressionException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "HARD_LOCK_DATE_REGRESSION", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(AccountingPeriodNotFoundException.class)
+    public ResponseEntity<ApiError> handlePeriodNotFound(
+            AccountingPeriodNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "PERIOD_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(AccountingPeriodStateException.class)
+    public ResponseEntity<ApiError> handlePeriodStateConflict(
+            AccountingPeriodStateException ex, HttpServletRequest request) {
+        String code = ex.getCurrentStatus() == AccountingPeriodStatus.CLOSED
+                ? "PERIOD_ALREADY_CLOSED"
+                : "PERIOD_ALREADY_OPEN";
+        return build(HttpStatus.CONFLICT, code, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(PeriodCloseBlockedException.class)
+    public ResponseEntity<ApiError> handlePeriodCloseBlocked(
+            PeriodCloseBlockedException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        List<ApiError.FieldError> fieldErrors = ex.getDraftJournalEntryIds().stream()
+                .map(UUID::toString)
+                .map(id -> new ApiError.FieldError("draftJournalEntryIds", id))
+                .toList();
+        return new ResponseEntity<>(
+                ApiError.withFieldErrors(
+                        "PERIOD_HAS_DRAFT_ENTRIES",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        fieldErrors),
+                headers,
+                HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
+    /**
+     * Publish-time split-group validation failure (story E1, issue #945):
+     * factorPercent/splitGroup invariants violated in the rules definition.
+     * Every violation is listed as a field error whose {@code field} locates
+     * the offending group or line inside the rules definition.
+     */
+    @ExceptionHandler(UnbalancedRulesException.class)
+    public ResponseEntity<ApiError> handleUnbalancedRules(UnbalancedRulesException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        List<ApiError.FieldError> fieldErrors = ex.getViolations().stream()
+                .map(violation -> new ApiError.FieldError(violation.field(), violation.message()))
+                .toList();
+        return new ResponseEntity<>(
+                ApiError.withFieldErrors(
+                        "UNBALANCED_RULES",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        fieldErrors),
+                headers,
+                HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
+    /**
+     * Settlement reconciliation errors (story F1c, issue #963, PR #977 finding 5):
+     * dedicated codes so ADR-0017 clients can branch on the failure instead of a
+     * generic REQUEST_FAILED.
+     */
+    @ExceptionHandler(SettlementLineNotFoundException.class)
+    public ResponseEntity<ApiError> handleSettlementLineNotFound(
+            SettlementLineNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "SETTLEMENT_LINE_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ReceivablePaymentNotFoundException.class)
+    public ResponseEntity<ApiError> handleReceivablePaymentNotFound(
+            ReceivablePaymentNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "RECEIVABLE_PAYMENT_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(SettlementLineNotUnmatchedException.class)
+    public ResponseEntity<ApiError> handleSettlementLineNotUnmatched(
+            SettlementLineNotUnmatchedException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "SETTLEMENT_LINE_NOT_UNMATCHED", ex.getMessage(), request);
+    }
+
+    /**
+     * Manual match or write-off attempted before the settlement's batched JE
+     * posted (story F1c, PR #977 finding 2). 409 while still RECEIVED.
+     */
+    @ExceptionHandler(SettlementNotPostedException.class)
+    public ResponseEntity<ApiError> handleSettlementNotPosted(
+            SettlementNotPostedException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "SETTLEMENT_NOT_POSTED", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(SettlementWriteOffThresholdExceededException.class)
+    public ResponseEntity<ApiError> handleWriteOffThresholdExceeded(
+            SettlementWriteOffThresholdExceededException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "WRITE_OFF_THRESHOLD_EXCEEDED", ex.getMessage(), request);
+    }
+
+    /**
+     * Single-application reversal of a multi-application apply request (story C2,
+     * PR #977 finding 3): must be reversed as a whole payment instead.
+     */
+    @ExceptionHandler(MultiApplicationReversalException.class)
+    public ResponseEntity<ApiError> handleMultiApplicationReversal(
+            MultiApplicationReversalException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "WHOLE_REQUEST_REVERSAL_REQUIRED", ex.getMessage(), request);
+    }
+
+    /**
+     * Bank reconciliation errors (story F2, issue #965): dedicated ADR-0017 codes.
+     */
+    @ExceptionHandler(AccountNotReconcilableException.class)
+    public ResponseEntity<ApiError> handleAccountNotReconcilable(
+            AccountNotReconcilableException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "ACCOUNT_NOT_RECONCILABLE", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ReconciliationNotFoundException.class)
+    public ResponseEntity<ApiError> handleReconciliationNotFound(
+            ReconciliationNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "RECONCILIATION_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ReconciliationAlreadyFinalizedException.class)
+    public ResponseEntity<ApiError> handleReconciliationAlreadyFinalized(
+            ReconciliationAlreadyFinalizedException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "RECONCILIATION_ALREADY_FINALIZED", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(MatchAmountMismatchException.class)
+    public ResponseEntity<ApiError> handleMatchAmountMismatch(
+            MatchAmountMismatchException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "MATCH_AMOUNT_MISMATCH", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(AdjustmentSignInvalidException.class)
+    public ResponseEntity<ApiError> handleAdjustmentSignInvalid(
+            AdjustmentSignInvalidException ex, HttpServletRequest request) {
+        return build(
+                HttpStatus.UNPROCESSABLE_CONTENT, "RECONCILIATION_ADJUSTMENT_SIGN_INVALID", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ReconciliationLineIneligibleException.class)
+    public ResponseEntity<ApiError> handleReconciliationLineIneligible(
+            ReconciliationLineIneligibleException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "RECONCILIATION_LINE_INELIGIBLE", ex.getMessage(), request);
+    }
+
+    /**
+     * Finalize attempted while the reconciliation does not balance (story F2). 422
+     * with the outstanding {@code difference} carried as a field error so ADR-0017
+     * clients can display it without re-deriving it.
+     */
+    @ExceptionHandler(ReconciliationNotBalancedException.class)
+    public ResponseEntity<ApiError> handleReconciliationNotBalanced(
+            ReconciliationNotBalancedException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        List<ApiError.FieldError> fieldErrors = List.of(new ApiError.FieldError(
+                "difference", ex.getDifference() != null ? ex.getDifference().toPlainString() : null));
+        return new ResponseEntity<>(
+                ApiError.withFieldErrors(
+                        "RECONCILIATION_NOT_BALANCED",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        fieldErrors),
+                headers,
+                HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     @ExceptionHandler(ResponseStatusException.class)

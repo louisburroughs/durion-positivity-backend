@@ -1,11 +1,16 @@
 package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.AccountDrilldownResponse;
+import com.positivity.accounting.internal.dto.AgedPayablesReport;
+import com.positivity.accounting.internal.dto.AgedReceivablesReport;
 import com.positivity.accounting.internal.dto.BalanceSheetReport;
+import com.positivity.accounting.internal.dto.GeneralLedgerReport;
 import com.positivity.accounting.internal.dto.IncomeStatementReport;
 import com.positivity.accounting.internal.dto.JournalLineDrilldownResponse;
+import com.positivity.accounting.internal.dto.TrialBalanceReport;
 import com.positivity.accounting.service.FinancialReportingService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -19,6 +24,7 @@ import jakarta.validation.constraints.Pattern;
 import java.time.LocalDate;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -123,6 +129,47 @@ public class FinancialReportingController {
                     LocalDate asOfDate) {
 
         BalanceSheetReport report = financialReportingService.generateBalanceSheet(asOfDate);
+        return ResponseEntity.ok(report);
+    }
+
+    /**
+     * Generate Trial Balance as of a specific date.
+     */
+    @GetMapping(value = "/trial-balance", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @EmitEvent(id = "REPORT_TRIAL_BALANCE_GENERATE", apiVersion = "1")
+    @Operation(
+            summary = "Generate Trial Balance",
+            description =
+                    "Generate Trial Balance as of a specific date: per-account debit/credit/balance rows from POSTED journal lines, grand totals proving sum(debit) == sum(credit), and an entry-number gap-check footnote per monthly sequence scope",
+            tags = {"Financial Reporting"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Trial balance generated successfully (rows empty when no POSTED data exists as of the date)",
+            content = @Content(schema = @Schema(implementation = TrialBalanceReport.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid or missing asOf date",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing reporting:view:financial-statements",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<TrialBalanceReport> generateTrialBalance(
+            @Parameter(description = "As-of date (YYYY-MM-DD)", required = true, example = "2026-06-30")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    @NonNull
+                    LocalDate asOf) {
+
+        // Malformed/missing asOf is rejected by Spring binding before reaching here;
+        // the module's @RestControllerAdvice maps it to 400 Bad Request with the
+        // accounting domain's standard ApiError format (ADR-0017).
+        TrialBalanceReport report = financialReportingService.generateTrialBalance(asOf);
         return ResponseEntity.ok(report);
     }
 
@@ -238,5 +285,147 @@ public class FinancialReportingController {
         List<JournalLineDrilldownResponse> response =
                 financialReportingService.drilldownToJournalLines(accountId, startDate, endDate);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Generate a General Ledger report for a date range, optionally filtered to a
+     * single account (Story G2, Issue #960).
+     */
+    @GetMapping(value = "/general-ledger", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @EmitEvent(id = "REPORT_GENERAL_LEDGER_GENERATE", apiVersion = "1")
+    @Operation(
+            summary = "Generate General Ledger",
+            description =
+                    "Generate a General Ledger report for a date range: per-account chronological POSTED journal lines with a running balance, opening/closing balances, and grand totals. Optionally filter to a single account.",
+            tags = {"Financial Reporting"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "General ledger generated successfully (sections empty when no POSTED activity exists)",
+            content = @Content(schema = @Schema(implementation = GeneralLedgerReport.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid account ID or date range",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing reporting:view:financial-statements",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<GeneralLedgerReport> generateGeneralLedger(
+            @Parameter(
+                            description = "Optional GL account ID (UUID) to filter to a single account",
+                            example = "123e4567-e89b-12d3-a456-426614174000")
+                    @RequestParam(required = false)
+                    @Pattern(
+                            regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            message = "Account ID must be a valid UUID")
+                    @Nullable
+                    String accountId,
+            @Parameter(description = "Period start date (YYYY-MM-DD)", required = true, example = "2026-01-01")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    @NonNull
+                    LocalDate startDate,
+            @Parameter(description = "Period end date (YYYY-MM-DD)", required = true, example = "2026-06-30")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    @NonNull
+                    LocalDate endDate) {
+
+        // Use IllegalArgumentException for validation errors to leverage the module's
+        // @RestControllerAdvice (APPaymentExceptionHandler) which maps it to 400 Bad
+        // Request with the accounting domain's standard ApiError format (ADR-0017).
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("End date cannot be before start date");
+        }
+
+        GeneralLedgerReport report = financialReportingService.generateGeneralLedger(accountId, startDate, endDate);
+        return ResponseEntity.ok(report);
+    }
+
+    /**
+     * Generate the Aged Receivables report as of a date (Story G2, Issue #960).
+     */
+    @GetMapping(value = "/aged-receivables", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @EmitEvent(id = "REPORT_AGED_RECEIVABLES_GENERATE", apiVersion = "1")
+    @Operation(
+            summary = "Generate Aged Receivables",
+            description =
+                    "Generate the Aged Receivables report as of a date: per-customer open invoice balances bucketed by days past due (0-30 / 31-60 / 61-90 / 90+) with grand totals.",
+            tags = {"Financial Reporting"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Aged receivables generated successfully (rows empty when no open receivables exist)",
+            content = @Content(schema = @Schema(implementation = AgedReceivablesReport.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid or missing asOfDate",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing reporting:view:financial-statements",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<AgedReceivablesReport> generateAgedReceivables(
+            @Parameter(description = "As-of date (YYYY-MM-DD)", required = true, example = "2026-06-30")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    @NonNull
+                    LocalDate asOfDate) {
+
+        // Malformed/missing asOfDate is rejected by Spring binding before reaching
+        // here; the module's @RestControllerAdvice maps it to 400 Bad Request with the
+        // accounting domain's standard ApiError format (ADR-0017).
+        AgedReceivablesReport report = financialReportingService.generateAgedReceivables(asOfDate);
+        return ResponseEntity.ok(report);
+    }
+
+    /**
+     * Generate the Aged Payables report as of a date (Story G2, Issue #960).
+     */
+    @GetMapping(value = "/aged-payables", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @EmitEvent(id = "REPORT_AGED_PAYABLES_GENERATE", apiVersion = "1")
+    @Operation(
+            summary = "Generate Aged Payables",
+            description =
+                    "Generate the Aged Payables report as of a date: per-vendor open vendor-bill balances bucketed by days past due (0-30 / 31-60 / 61-90 / 90+) with grand totals.",
+            tags = {"Financial Reporting"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Aged payables generated successfully (rows empty when no open payables exist)",
+            content = @Content(schema = @Schema(implementation = AgedPayablesReport.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid or missing asOfDate",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing reporting:view:financial-statements",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<AgedPayablesReport> generateAgedPayables(
+            @Parameter(description = "As-of date (YYYY-MM-DD)", required = true, example = "2026-06-30")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    @NonNull
+                    LocalDate asOfDate) {
+
+        // Malformed/missing asOfDate is rejected by Spring binding before reaching
+        // here; the module's @RestControllerAdvice maps it to 400 Bad Request with the
+        // accounting domain's standard ApiError format (ADR-0017).
+        AgedPayablesReport report = financialReportingService.generateAgedPayables(asOfDate);
+        return ResponseEntity.ok(report);
     }
 }

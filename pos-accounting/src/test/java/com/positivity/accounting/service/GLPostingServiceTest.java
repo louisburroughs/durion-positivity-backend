@@ -2,6 +2,8 @@ package com.positivity.accounting.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +15,7 @@ import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +39,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class GLPostingServiceTest {
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    /**
+     * Deterministic transaction date threaded into {@code postPaymentApplication}.
+     * The exact value is arbitrary but fixed so the posted entry's transaction
+     * date is stable and assertable (never wall-clock {@code now()}).
+     */
+    private static final LocalDateTime TXN_DATE = LocalDateTime.of(2024, 2, 15, 9, 30, 0);
 
     @Spy
     private Clock clock = TEST_CLOCK;
@@ -85,7 +95,8 @@ class GLPostingServiceTest {
         JournalEntry posted = new JournalEntry();
         posted.setJournalEntryId(testJournalEntryId);
         posted.setStatus(JournalEntryStatus.POSTED);
-        when(journalEntryService.postJournalEntry(testJournalEntryId)).thenReturn(posted);
+        when(journalEntryService.postJournalEntry(eq(testJournalEntryId), isNull()))
+                .thenReturn(posted);
 
         // Act
         JournalEntry result = service.postCreditMemoReversal(
@@ -119,7 +130,7 @@ class GLPostingServiceTest {
         assertThat(totalCredits).isEqualByComparingTo(new BigDecimal("110.00"));
 
         verify(journalEntryService).createJournalEntry(any(JournalEntry.class));
-        verify(journalEntryService).postJournalEntry(testJournalEntryId);
+        verify(journalEntryService).postJournalEntry(eq(testJournalEntryId), isNull());
     }
 
     @Test
@@ -135,7 +146,7 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
         service.postCreditMemoReversal(
@@ -173,7 +184,7 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
         service.postCreditMemoReversal(
@@ -212,7 +223,7 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
         service.postCreditMemoReversal(
@@ -247,7 +258,7 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
         service.postCreditMemoReversal(
@@ -276,7 +287,7 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
         service.postCreditMemoReversal(
@@ -314,11 +325,12 @@ class GLPostingServiceTest {
         JournalEntry posted = new JournalEntry();
         posted.setJournalEntryId(testJournalEntryId);
         posted.setStatus(JournalEntryStatus.POSTED);
-        when(journalEntryService.postJournalEntry(testJournalEntryId)).thenReturn(posted);
+        when(journalEntryService.postJournalEntry(eq(testJournalEntryId), isNull()))
+                .thenReturn(posted);
 
         // Act
         JournalEntry result = service.postPaymentApplication(
-                testPaymentApplicationId, testCashAccountId, testArAccountId, amount, description);
+                testPaymentApplicationId, testCashAccountId, testArAccountId, amount, TXN_DATE, description);
 
         // Assert
         assertThat(result.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
@@ -326,6 +338,9 @@ class GLPostingServiceTest {
         JournalEntry createdEntry = entryCaptor.getValue();
         assertThat(createdEntry.getLines()).hasSize(2);
         assertThat(createdEntry.getSourceEventId()).isEqualTo(testPaymentApplicationId);
+        // The caller-supplied transaction date is threaded onto the entry
+        // verbatim (no wall-clock substitution) — F4 date-provenance guard.
+        assertThat(createdEntry.getTransactionDate()).isEqualTo(TXN_DATE);
 
         // Verify balance
         BigDecimal totalDebits = createdEntry.getLines().stream()
@@ -338,7 +353,7 @@ class GLPostingServiceTest {
         assertThat(totalDebits).isEqualByComparingTo(amount);
 
         verify(journalEntryService).createJournalEntry(any(JournalEntry.class));
-        verify(journalEntryService).postJournalEntry(testJournalEntryId);
+        verify(journalEntryService).postJournalEntry(eq(testJournalEntryId), isNull());
     }
 
     @Test
@@ -353,10 +368,11 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
-        service.postPaymentApplication(testPaymentApplicationId, testCashAccountId, testArAccountId, amount, "Test");
+        service.postPaymentApplication(
+                testPaymentApplicationId, testCashAccountId, testArAccountId, amount, TXN_DATE, "Test");
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();
@@ -381,10 +397,11 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
-        service.postPaymentApplication(testPaymentApplicationId, testCashAccountId, testArAccountId, amount, "Test");
+        service.postPaymentApplication(
+                testPaymentApplicationId, testCashAccountId, testArAccountId, amount, TXN_DATE, "Test");
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();
@@ -409,11 +426,16 @@ class GLPostingServiceTest {
             entry.setJournalEntryId(testJournalEntryId);
             return entry;
         });
-        when(journalEntryService.postJournalEntry(any())).thenReturn(new JournalEntry());
+        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
         service.postPaymentApplication(
-                testPaymentApplicationId, testCashAccountId, testArAccountId, new BigDecimal("100.00"), description);
+                testPaymentApplicationId,
+                testCashAccountId,
+                testArAccountId,
+                new BigDecimal("100.00"),
+                TXN_DATE,
+                description);
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();

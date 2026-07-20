@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.dto;
 
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 
+import com.positivity.accounting.internal.enums.AccountSubtype;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Size;
@@ -13,7 +14,8 @@ import lombok.NoArgsConstructor;
 /**
  * DTO for updating an existing GL Account.
  *
- * Only accountName and description can be updated.
+ * Only accountName, description, accountSubtype, and reconcilable can be
+ * updated. Omitted (null) fields are left unchanged.
  *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
@@ -37,8 +39,25 @@ public class GLAccountUpdateRequest {
             requiredMode = NOT_REQUIRED)
     private String description;
 
-    @AssertTrue(message = "At least one non-blank field (accountName or description) is required")
+    @Schema(
+            description = "Updated account subtype refining the immutable accountType for report grouping "
+                    + "and posting-config plausibility checks. Left unchanged when omitted.",
+            example = "BANK_CASH",
+            requiredMode = NOT_REQUIRED)
+    private AccountSubtype accountSubtype;
+
+    @Schema(
+            description = "Whether journal entry lines on this account participate in reconciliation "
+                    + "(e.g. settlement/bank reconciliation). Left unchanged when omitted.",
+            example = "true",
+            requiredMode = NOT_REQUIRED)
+    private Boolean reconcilable;
+
+    @AssertTrue(message = "At least one field (accountName, description, accountSubtype, or reconcilable) is required")
     public boolean hasAtLeastOneFieldToUpdate() {
-        return (accountName != null && !accountName.isBlank()) || (description != null && !description.isBlank());
+        return (accountName != null && !accountName.isBlank())
+                || (description != null && !description.isBlank())
+                || accountSubtype != null
+                || reconcilable != null;
     }
 }

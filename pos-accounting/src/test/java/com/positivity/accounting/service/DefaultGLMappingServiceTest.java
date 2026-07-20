@@ -20,6 +20,7 @@ import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.service.DefaultGLMappingServiceImpl;
 import com.positivity.accounting.internal.service.GLAccountServiceImpl;
+import com.positivity.accounting.internal.service.GLMappingSubtypeValidator;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -70,7 +72,7 @@ class DefaultGLMappingServiceTest {
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-    @org.mockito.Spy
+    @Spy
     private Clock clock = TEST_CLOCK;
 
     @Mock
@@ -81,6 +83,9 @@ class DefaultGLMappingServiceTest {
 
     @Mock
     private GLAccountServiceImpl glAccountService;
+
+    @Spy
+    private GLMappingSubtypeValidator subtypeValidator = new GLMappingSubtypeValidator();
 
     @InjectMocks
     private DefaultGLMappingServiceImpl service;

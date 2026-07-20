@@ -421,6 +421,42 @@ class EventIngestionServiceAdditionalTest {
     }
 
     @Test
+    @DisplayName("processFailed should skip PERIOD_CLOSED suspensions but retry other suspended events (B2)")
+    void processFailed_SkipsPeriodClosedSuspensions() {
+        // Given: two SUSPENDED events under maxRetries — one suspended for a
+        // closed accounting period (story B2, issue #944), one for a mapping
+        // gap. A closed period will not reopen on the retry cadence, so only
+        // the mapping-gap event is retried.
+        UUID periodClosedEventId = UUID.fromString("00000000-0000-0000-0000-000000000077");
+        AccountingEvent periodClosedEvent = buildEvent(periodClosedEventId, AccountingEventStatus.SUSPENDED);
+        periodClosedEvent.setAttemptCount(0);
+        periodClosedEvent.setFailureReasonCode(PostingFailureReason.PERIOD_CLOSED.name());
+
+        UUID unmappedEventId = UUID.fromString("00000000-0000-0000-0000-000000000078");
+        AccountingEvent unmappedEvent = buildEvent(unmappedEventId, AccountingEventStatus.SUSPENDED);
+        unmappedEvent.setAttemptCount(0);
+        unmappedEvent.setFailureReasonCode(PostingFailureReason.UNMAPPED_EVENT_TYPE.name());
+
+        when(accountingEventRepository.findAll()).thenReturn(List.of(periodClosedEvent, unmappedEvent));
+        when(accountingEventRepository.findById(unmappedEventId)).thenReturn(Optional.of(unmappedEvent));
+        when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(postingEngineOrchestrator.processEvent(any(), any(), anyString(), eq(true)))
+                .thenReturn(PostingResult.builder()
+                        .success(true)
+                        .evaluationDetails(Map.of("postingReference", "je-ref"))
+                        .build());
+
+        // When
+        int result = service.processFailed(3);
+
+        // Then: only the mapping-gap event was retried; the PERIOD_CLOSED
+        // suspension was never touched (manual reprocess after reopen only).
+        assertThat(result).isEqualTo(1);
+        verify(accountingEventRepository, never()).findById(periodClosedEventId);
+        verify(postingEngineOrchestrator).processEvent(eq(unmappedEvent), any(), anyString(), eq(true));
+    }
+
+    @Test
     @DisplayName("processFailed should skip events that already reached maxRetries")
     void processFailed_SkipsEventsAtMaxRetries() {
         UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000088");

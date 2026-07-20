@@ -99,9 +99,11 @@ public class PaymentApplicationController {
      * - Applications are atomic across all target invoices
      * - Idempotent via applicationRequestId
      * - Overpayments create CustomerCredit
+     * - Optional allocationStrategy: CALLER_ORDER (default when absent) or
+     *   OLDEST_FIRST (allocate by ascending invoice date) — Issue #955
      *
      * @param paymentId payment to apply
-     * @param request   application request with invoices and amounts
+     * @param request   application request with invoices, amounts, and optional allocation strategy
      * @return application response with details
      */
     @PostMapping("/payments/{paymentId}/applications")
@@ -111,7 +113,10 @@ public class PaymentApplicationController {
     @PreAuthorize("hasAuthority('accounting:payment:apply')")
     @Operation(
             summary = "Apply payment",
-            description = "Apply a payment to an invoice and update its status.",
+            description = "Apply a payment to one or more invoices and update their status. "
+                    + "The optional allocationStrategy field controls allocation order: "
+                    + "CALLER_ORDER (default when omitted) honors the caller-supplied order; "
+                    + "OLDEST_FIRST allocates by ascending invoice date.",
             tags = {"Payment Applications"})
     @ApiResponse(responseCode = "201", description = "Payment applied successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request or insufficient funds")

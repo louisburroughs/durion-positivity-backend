@@ -101,6 +101,10 @@ public abstract class BaseIntegrationTest {
             "accounting:payment-application:apply",
             "accounting:payment:apply",
             "accounting:payment:reverse",
+            "accounting:period:view",
+            "accounting:period:close",
+            "accounting:period:reopen",
+            "accounting:period:hard_lock",
             "accounting:financial-reporting:view",
             "reporting:view:financial-statements",
             "accounting:posting-category:view",
@@ -110,7 +114,9 @@ public abstract class BaseIntegrationTest {
             "accounting:mapping-key:view",
             "accounting:mapping-key:create",
             "accounting:mapping-key:edit",
-            "accounting:mapping-key:deactivate");
+            "accounting:mapping-key:deactivate",
+            "accounting:reconciliation:view",
+            "accounting:reconciliation:adjust");
 
     /**
      * Initialize MockMvc with Spring Security integration before each test.

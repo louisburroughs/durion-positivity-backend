@@ -1,7 +1,11 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.entity.GLMapping;
+import com.positivity.accounting.internal.entity.MappingKey;
+import com.positivity.accounting.internal.entity.PostingCategory;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
+import com.positivity.accounting.internal.repository.MappingKeyRepository;
+import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 import com.positivity.accounting.service.GLMappingResolver;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -46,6 +50,8 @@ public class GLMappingResolverImpl implements GLMappingResolver {
             List.of("businessUnitId", "locationId", "departmentId", "costCenterId");
 
     private final GLMappingRepository mappingRepository;
+    private final PostingCategoryRepository postingCategoryRepository;
+    private final MappingKeyRepository mappingKeyRepository;
 
     /**
      * Resolves a posting category and mapping key to a GL account.
@@ -116,6 +122,34 @@ public class GLMappingResolverImpl implements GLMappingResolver {
                 String.format("No GL mapping found for %s:%s on %s", postingCategoryId, mappingKeyId, transactionDate);
         log.warn(msg);
         throw new IllegalArgumentException(msg);
+    }
+
+    /**
+     * Resolves a posting category and mapping key to a GL account by their
+     * configured names (story C1, issue #954). No dimensional context —
+     * resolution falls through to the category default mapping.
+     *
+     * @param postingCategoryName posting category name
+     * @param mappingKeyName      mapping key name within the category
+     * @param transactionDate     effective date for resolution
+     * @return GL account ID for posting
+     * @throws IllegalArgumentException if the category, key, or an effective
+     *                                  mapping is not configured
+     */
+    @Override
+    public UUID resolveGLAccount(String postingCategoryName, String mappingKeyName, LocalDateTime transactionDate) {
+        PostingCategory category = postingCategoryRepository
+                .findByCategoryName(postingCategoryName)
+                .orElseThrow(
+                        () -> new IllegalArgumentException("Posting category not configured: " + postingCategoryName));
+
+        MappingKey mappingKey = mappingKeyRepository
+                .findByPostingCategory_PostingCategoryIdAndKeyName(category.getPostingCategoryId(), mappingKeyName)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Mapping key not configured: " + postingCategoryName + "/" + mappingKeyName));
+
+        return resolveGLAccount(
+                category.getPostingCategoryId(), mappingKey.getMappingKeyId(), transactionDate, Map.of());
     }
 
     /**
