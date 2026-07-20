@@ -456,7 +456,10 @@ public final class DownstreamPermissionCatalog {
 
         // ── New batch (bits 386–387) ──────────────────────────────────────────
         "PERM_tax:exemption:manage", // 386
-        "PERM_tax:exemption:view" // 387
+        "PERM_tax:exemption:view", // 387
+
+        // ── New batch (bit 388) ───────────────────────────────────────────────
+        "PERM_tax:commit" // 388
     };
 
     public static String authorityForBit(int bitIndex) {

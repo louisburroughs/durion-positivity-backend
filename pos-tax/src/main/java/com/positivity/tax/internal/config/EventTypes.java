@@ -32,6 +32,13 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.approval("TAX_EXEMPTION_CERT_UPDATE", "Update tax exemption certificate")
                         .description("Updates a customer tax exemption certificate in the pos-tax exemption registry.")
+                        .build(),
+                EventTypeRegistration.write("TAX_COMMIT", "Commit provider tax document")
+                        .description(
+                                "Commits the provider tax document for a finalized invoice (story T6). Idempotent; records PENDING_COMMIT on provider outage for the scheduled re-commit job.")
+                        .build(),
+                EventTypeRegistration.write("TAX_VOID", "Void provider tax document")
+                        .description("Voids the provider tax document when its invoice reverts to DRAFT (story T6).")
                         .build());
     }
 }

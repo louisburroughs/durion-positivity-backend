@@ -210,7 +210,6 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
                 .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .currencyUomId("USD")
-                .taxRegionId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .status(EstimateStatus.DRAFT)
                 .createdByUserId(SYSTEM_USER_ID.toString())
                 .createdById(SYSTEM_USER_ID.toString())

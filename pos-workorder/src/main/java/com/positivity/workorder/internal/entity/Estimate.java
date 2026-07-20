@@ -58,7 +58,15 @@ public class Estimate {
     private EstimateStatus status = EstimateStatus.DRAFT;
 
     private String currencyUomId; // Currency code (e.g., 'USD')
-    private UUID taxRegionId; // Reference to tax region
+
+    /**
+     * Whether this estimate's tax is pending because the tax service was unavailable at
+     * calculation time (story T9, decision D-T5). Flag-and-continue: the estimate is not
+     * blocked and no rate is invented — {@code taxAmount} stays at zero until a successful
+     * recalculation clears the flag. Never {@code null}.
+     */
+    @Builder.Default
+    private boolean taxPending = false;
 
     private String createdByUserId; // Username who created the estimate (from JWT via SecurityContextHelper)
 

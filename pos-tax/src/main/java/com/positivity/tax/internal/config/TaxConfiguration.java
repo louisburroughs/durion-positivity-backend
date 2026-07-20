@@ -75,6 +75,9 @@ public class TaxConfiguration {
                 .maxAttempts(retryProps.getMaxAttempts())
                 .intervalFunction(attempt ->
                         (long) (retryProps.getInitialBackoff() * Math.pow(retryProps.getMultiplier(), attempt - 1)))
+                // ADR-0021 (story T6): retry only transient failures (5xx / timeouts / connect
+                // errors); never retry 4xx — a 400 is a deterministic data error.
+                .retryOnException(new TaxRetryPredicate())
                 .build();
 
         return Retry.of("taxService", config);

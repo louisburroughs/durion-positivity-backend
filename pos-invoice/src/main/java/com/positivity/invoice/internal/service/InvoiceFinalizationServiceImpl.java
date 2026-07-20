@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.client.TaxLifecycleClient;
 import com.positivity.invoice.internal.config.InvoiceEventPublisher;
 import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
@@ -73,18 +74,21 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     private final ApplicationEventPublisher eventPublisher;
     private final ElevationTokenService elevationTokenService;
     private final InvoiceEventPublisher invoiceEventPublisher;
+    private final TaxLifecycleClient taxLifecycleClient;
 
     public InvoiceFinalizationServiceImpl(
             InvoiceRepository invoiceRepository,
             ApplicationEventPublisher eventPublisher,
             Clock clock,
             ElevationTokenService elevationTokenService,
-            InvoiceEventPublisher invoiceEventPublisher) {
+            InvoiceEventPublisher invoiceEventPublisher,
+            TaxLifecycleClient taxLifecycleClient) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.eventPublisher = eventPublisher;
         this.elevationTokenService = elevationTokenService;
         this.invoiceEventPublisher = invoiceEventPublisher;
+        this.taxLifecycleClient = taxLifecycleClient;
     }
 
     /**
@@ -145,6 +149,14 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
                 throw new IllegalStateException(
                         "Invoice " + invoiceId + " is in " + existing.getStatus() + " status and cannot be finalized");
             }
+            // Decision D-T5: invoice finalization hard-requires a successful tax calculation —
+            // it must never issue with a silently-missing tax result. pos-invoice never applies a
+            // silent fallback (unlike the old pos-workorder estimate path); a failed tax
+            // calculation propagates at re-price time and leaves tax unset, so guard here too.
+            if (existing.getTax() == null) {
+                throw new IllegalStateException(
+                        "Invoice " + invoiceId + " cannot be finalized: tax has not been calculated");
+            }
         }
 
         // Total from the stored invoice; ZERO when no invoice found (in-memory path)
@@ -170,6 +182,11 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
 
             // AC5: Emit async accounting event
             publishFinalizedEvent(saved.getId(), saved.getWorkorderId(), finalizedBy, now, saved.getTotal());
+
+            // Story T6 / D-T3: commit the provider tax document for the finalized invoice.
+            // Synchronous utility call; never blocks the sale (the client swallows failures and
+            // pos-tax records PENDING_COMMIT for the scheduled re-commit job on provider outage).
+            taxLifecycleClient.commit(saved.getId());
 
             return toDetailsResponse(saved);
         } else {
@@ -245,6 +262,10 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         invoice.setRevertedBy(revertedBy);
         Invoice saved = invoiceRepository.save(invoice);
         invoiceEventPublisher.publishInvoiceUpdated(saved);
+
+        // Story T6 (R-T2): InvoiceStatus has no CANCELLED/VOIDED — void hooks the revert
+        // transition. Void the provider tax document for the invoice returning to DRAFT.
+        taxLifecycleClient.voidTransaction(saved.getId());
 
         return toDetailsResponse(saved);
     }

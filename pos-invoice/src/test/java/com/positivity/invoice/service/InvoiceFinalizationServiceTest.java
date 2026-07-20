@@ -3,6 +3,7 @@ package com.positivity.invoice.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
@@ -78,6 +79,9 @@ class InvoiceFinalizationServiceTest {
 
     @Mock
     private com.positivity.invoice.internal.config.InvoiceEventPublisher invoiceEventPublisher;
+
+    @Mock
+    private com.positivity.invoice.internal.client.TaxLifecycleClient taxLifecycleClient;
 
     @InjectMocks
     private InvoiceFinalizationServiceImpl service;
@@ -516,6 +520,61 @@ class InvoiceFinalizationServiceTest {
      */
     private FinalizationRequest shopManagerRequest() {
         return new FinalizationRequest();
+    }
+
+    /**
+     * Story T6 / D-T3: finalization commits the provider tax document for the finalized
+     * invoice (synchronous utility call; never blocks the sale).
+     */
+    @Test
+    void finalize_commitsProviderTaxDocument() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-0000000000c2");
+        Invoice draft = draftInvoice(workorderId, new BigDecimal("99.00"));
+        draft.setId(invoiceId);
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.completeInvoice(invoiceId, shopManagerRequest());
+
+        verify(taxLifecycleClient).commit(invoiceId);
+    }
+
+    /**
+     * Story T6 (R-T2): revert-to-DRAFT voids the provider tax document (InvoiceStatus has no
+     * CANCELLED/VOIDED, so void hooks the revert transition).
+     */
+    @Test
+    void revert_voidsProviderTaxDocument() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-0000000000d2");
+        Invoice invoice = finalizedInvoice(workorderId);
+        invoice.setId(invoiceId);
+        invoice.setFinalizedAt(Instant.now(TEST_CLOCK).minusSeconds(3600));
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(elevationTokenService.verify(any(), any())).thenReturn(Optional.of(UUID.randomUUID()));
+
+        service.revert(invoiceId, "MGR-APPROVAL-001", "Customer dispute");
+
+        verify(taxLifecycleClient).voidTransaction(invoiceId);
+    }
+
+    /**
+     * Decision D-T5: invoice finalization hard-requires a successful tax calculation — an
+     * invoice whose tax was never computed (null) must not finalize with a silent zero-tax.
+     */
+    @Test
+    void finalize_throws_whenTaxNotCalculated() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        Invoice draft = draftInvoice(UUID.fromString("00000000-0000-0000-0000-0000000000e2"), new BigDecimal("99.00"));
+        draft.setId(invoiceId);
+        draft.setTax(null);
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+
+        assertThatThrownBy(() -> service.completeInvoice(invoiceId, shopManagerRequest()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageMatching("(?i).*tax has not been calculated.*");
     }
 
     private Invoice draftInvoice(UUID workorderId, BigDecimal total) {

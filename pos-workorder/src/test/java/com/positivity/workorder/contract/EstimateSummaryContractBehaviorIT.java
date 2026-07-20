@@ -194,7 +194,6 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
                 .vehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .customerId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .currencyUomId("USD")
-                .taxRegionId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .status(EstimateStatus.DRAFT)
                 .subtotal(new BigDecimal("200.00"))
                 .taxAmount(new BigDecimal("16.50"))
