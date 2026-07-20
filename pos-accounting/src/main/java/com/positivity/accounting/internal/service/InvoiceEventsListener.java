@@ -1,16 +1,21 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.entity.ExtInvoice;
+import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
+import com.positivity.domainevents.invoice.TaxBreakdownLine;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -37,6 +42,7 @@ public class InvoiceEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtInvoiceRepository extInvoiceRepository;
+    private final ExtInvoiceTaxRepository extInvoiceTaxRepository;
 
     @KafkaListener(
             topics = "${pos.accounting.kafka.invoice-events-topic:invoice.events.v1}",
@@ -114,10 +120,45 @@ public class InvoiceEventsListener {
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
+        replaceTaxBreakdown(invoiceId, aggregateVersion, payload.taxBreakdown());
         log.info(
                 "Updated ext_invoice replica invoiceId={} status={} version={}",
                 invoiceId,
                 payload.status(),
                 aggregateVersion);
+    }
+
+    /**
+     * Replicate the per-line jurisdiction breakdown into {@code ext_invoice_tax} (story T5c),
+     * replacing the invoice's rows to match to the cent. Runs only on the non-stale path (the
+     * same {@code aggregateVersion} guard that protects {@link ExtInvoice} above). A {@code null}
+     * breakdown (older events / non-breakdown producers) leaves existing tax rows untouched.
+     */
+    private void replaceTaxBreakdown(
+            @NonNull UUID invoiceId, long aggregateVersion, @Nullable List<TaxBreakdownLine> breakdown) {
+        if (breakdown == null) {
+            return;
+        }
+        extInvoiceTaxRepository.deleteByInvoiceId(invoiceId);
+        if (breakdown.isEmpty()) {
+            return;
+        }
+        Instant now = Instant.now(clock);
+        List<ExtInvoiceTax> rows = breakdown.stream()
+                .map(line -> ExtInvoiceTax.builder()
+                        .invoiceId(invoiceId)
+                        .lineItemId(line.lineItemId())
+                        .jurisdictionType(line.jurisdictionType())
+                        .jurisdictionCode(line.jurisdictionCode())
+                        .rate(line.rate())
+                        .taxableBase(line.taxableBase())
+                        .taxAmount(line.taxAmount())
+                        .exempt(line.exempt())
+                        .exemptionReasonCode(line.exemptionReasonCode())
+                        .aggregateVersion(aggregateVersion)
+                        .updatedAt(now)
+                        .build())
+                .toList();
+        extInvoiceTaxRepository.saveAll(rows);
     }
 }

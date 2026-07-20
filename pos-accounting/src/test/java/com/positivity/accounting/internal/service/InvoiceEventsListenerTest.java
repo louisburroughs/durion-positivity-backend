@@ -9,12 +9,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.entity.ExtInvoice;
+import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,12 +34,29 @@ class InvoiceEventsListenerTest {
 
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final ExtInvoiceRepository replica = mock(ExtInvoiceRepository.class);
+    private final ExtInvoiceTaxRepository taxReplica = mock(ExtInvoiceTaxRepository.class);
 
     private InvoiceEventsListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new InvoiceEventsListener(TEST_CLOCK, new ObjectMapper(), processedEvents, replica);
+        listener = new InvoiceEventsListener(TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica);
+    }
+
+    private String eventWithBreakdown(String eventId, long version) {
+        return """
+                {"eventId":"%s","eventType":"invoice.invoice.updated","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":%d,
+                 "payload":{"invoiceId":"%s","workorderId":"%s","status":"FINALIZED",
+                            "invoiceNumber":"INV-2026-000123","total":216.53,"subtotal":200.00,"tax":16.53,
+                            "taxBreakdown":[
+                              {"lineItemId":"1","jurisdictionType":"STATE","jurisdictionCode":"STATE",
+                               "rate":0.0725,"taxableBase":200.00,"taxAmount":14.50,"exempt":false,
+                               "exemptionReasonCode":null},
+                              {"lineItemId":"1","jurisdictionType":"COUNTY","jurisdictionCode":"COUNTY",
+                               "rate":0.0102,"taxableBase":200.00,"taxAmount":2.03,"exempt":false,
+                               "exemptionReasonCode":null}]}}
+                """.formatted(eventId, INVOICE_ID, version, INVOICE_ID, WORKORDER_ID);
     }
 
     private String event(String eventId, long version) {
@@ -64,6 +84,60 @@ class InvoiceEventsListenerTest {
         assertThat(saved.getValue().getTotal()).isEqualByComparingTo(new BigDecimal("216.00"));
         assertThat(saved.getValue().getAggregateVersion()).isEqualTo(5L);
         verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Materializes the tax breakdown into ext_invoice_tax matching the scalar to the cent")
+    void materializesTaxBreakdown() {
+        when(processedEvents.existsById("e-tb")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+
+        listener.onInvoiceEvent(eventWithBreakdown("e-tb", 7));
+
+        verify(taxReplica).deleteByInvoiceId(INVOICE_ID);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ExtInvoiceTax>> saved = ArgumentCaptor.forClass(List.class);
+        verify(taxReplica).saveAll(saved.capture());
+        List<ExtInvoiceTax> rows = saved.getValue();
+        assertThat(rows).hasSize(2);
+        assertThat(rows).allSatisfy(r -> {
+            assertThat(r.getInvoiceId()).isEqualTo(INVOICE_ID);
+            assertThat(r.getAggregateVersion()).isEqualTo(7L);
+        });
+        // T1 invariant: the replicated per-jurisdiction amounts sum to the scalar tax (16.53).
+        BigDecimal sum = rows.stream().map(ExtInvoiceTax::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(sum).isEqualByComparingTo(new BigDecimal("16.53"));
+    }
+
+    @Test
+    @DisplayName("Leaves ext_invoice_tax untouched when the event carries no breakdown")
+    void skipsTaxBreakdownWhenAbsent() {
+        when(processedEvents.existsById("e-nobreak")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+
+        listener.onInvoiceEvent(event("e-nobreak", 3));
+
+        verify(taxReplica, never()).deleteByInvoiceId(any());
+        verify(taxReplica, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("Does not replicate the breakdown for a stale event")
+    void skipsTaxBreakdownForStaleEvent() {
+        when(processedEvents.existsById("e-stale-tb")).thenReturn(false);
+        when(replica.findById(INVOICE_ID))
+                .thenReturn(Optional.of(ExtInvoice.builder()
+                        .invoiceId(INVOICE_ID)
+                        .workorderId(WORKORDER_ID)
+                        .status("POSTED")
+                        .aggregateVersion(9L)
+                        .updatedAt(Instant.now(TEST_CLOCK))
+                        .build()));
+
+        listener.onInvoiceEvent(eventWithBreakdown("e-stale-tb", 5));
+
+        verify(taxReplica, never()).deleteByInvoiceId(any());
+        verify(taxReplica, never()).saveAll(any());
     }
 
     @Test

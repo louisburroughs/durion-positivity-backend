@@ -4,15 +4,20 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.invoice.BillingRulesUpdatedV1;
 import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
+import com.positivity.domainevents.invoice.TaxBreakdownLine;
 import com.positivity.invoice.internal.entity.BillingRules;
 import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.InvoiceLineTax;
+import com.positivity.invoice.internal.repository.InvoiceLineTaxRepository;
 import jakarta.persistence.EntityManager;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
@@ -32,6 +37,7 @@ public class InvoiceEventPublisher {
     private final Clock clock;
     private final EntityManager entityManager;
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
+    private final InvoiceLineTaxRepository invoiceLineTaxRepository;
 
     public void publishInvoiceUpdated(@NonNull Invoice invoice) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
@@ -55,7 +61,8 @@ public class InvoiceEventPublisher {
                 invoice.getTotal(),
                 invoice.getAdjustmentsAmount(),
                 invoice.getCreatedAt(),
-                invoice.getFinalizedAt());
+                invoice.getFinalizedAt(),
+                buildTaxBreakdown(invoice.getId()));
         DomainEventEnvelope<InvoiceUpdatedV1> envelope = DomainEventEnvelope.of(
                 InvoiceUpdatedV1.EVENT_TYPE,
                 InvoiceUpdatedV1.SCHEMA_VERSION,
@@ -68,6 +75,33 @@ public class InvoiceEventPublisher {
                 clock);
         writer.publish(DomainTopics.events("invoice"), envelope);
         log.debug("Queued invoice.invoice.updated invoiceId={} status={}", invoice.getId(), invoice.getStatus());
+    }
+
+    /**
+     * Projects the persisted {@code invoice_line_tax} rows onto the additive event breakdown
+     * (story T5b). Returns {@code null} when there are no rows so downstream replicas leave any
+     * existing tax rows untouched (matches the accounting listener's null-tolerant contract).
+     */
+    @Nullable
+    private List<TaxBreakdownLine> buildTaxBreakdown(@Nullable UUID invoiceId) {
+        if (invoiceId == null) {
+            return null;
+        }
+        List<InvoiceLineTax> rows = invoiceLineTaxRepository.findByInvoiceId(invoiceId);
+        if (rows.isEmpty()) {
+            return null;
+        }
+        return rows.stream()
+                .map(r -> new TaxBreakdownLine(
+                        r.getLineItemId(),
+                        r.getJurisdictionType(),
+                        r.getJurisdictionCode(),
+                        r.getRate(),
+                        r.getTaxableBase(),
+                        r.getTaxAmount(),
+                        r.isExempt(),
+                        r.getExemptionReasonCode()))
+                .toList();
     }
 
     /** Emits {@code invoice.billing-rules.updated} after a rules mutation (ADR-0044, #902). */
