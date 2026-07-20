@@ -54,6 +54,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * Unit tests for {@link BankReconciliationServiceImpl} (Story F2, issue #965):
@@ -261,7 +262,55 @@ class BankReconciliationServiceTest {
         assertThat(line1.getStatus()).isEqualTo(BankReconciliationLineStatus.MATCHED);
         assertThat(line2.getStatus()).isEqualTo(BankReconciliationLineStatus.MATCHED);
         assertThat(line1.getMatchId()).isNotNull().isEqualTo(line2.getMatchId());
-        verify(glMatchRepository).saveAll(anyList());
+        verify(glMatchRepository).saveAllAndFlush(anyList());
+    }
+
+    @Test
+    @DisplayName("match maps a concurrent unique(gl_line_id) violation to RECONCILIATION_LINE_INELIGIBLE (409)")
+    void matchConcurrentConstraintViolationMappedTo409() {
+        BankReconciliation recon = openReconciliation();
+        when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.of(recon));
+
+        UUID s1 = UUID.randomUUID();
+        UUID g1 = UUID.randomUUID();
+        BankReconciliationLine line1 = statementLine(s1, new BigDecimal("500.0000"));
+        when(lineRepository.findAllById(List.of(s1))).thenReturn(List.of(line1));
+        JournalEntryLine glLine = postedGlLine(g1, new BigDecimal("500.0000"), BigDecimal.ZERO);
+        when(journalEntryLineRepository.findAllById(List.of(g1))).thenReturn(List.of(glLine));
+        when(glMatchRepository.existsByGlLineId(g1)).thenReturn(false);
+        // A racing match committed first; the unique(gl_line_id) index rejects this one.
+        when(glMatchRepository.saveAllAndFlush(anyList()))
+                .thenThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint"));
+
+        ReconciliationMatchRequest request = ReconciliationMatchRequest.builder()
+                .statementLineIds(List.of(s1))
+                .glLineIds(List.of(g1))
+                .build();
+
+        assertThatThrownBy(() -> service.match(RECON_ID, request))
+                .isInstanceOf(ReconciliationLineIneligibleException.class);
+    }
+
+    @Test
+    @DisplayName("unmatch by statementLineIds rejects a line from another reconciliation with 404")
+    void unmatchRejectsCrossReconciliationLine() {
+        BankReconciliation recon = openReconciliation();
+        when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.of(recon));
+
+        UUID foreignLineId = UUID.randomUUID();
+        BankReconciliationLine foreign = statementLine(foreignLineId, new BigDecimal("100.0000"));
+        foreign.setReconciliation(new BankReconciliation(UUID.randomUUID())); // different reconciliation
+        foreign.setStatus(BankReconciliationLineStatus.MATCHED);
+        foreign.setMatchId(UUID.randomUUID());
+        when(lineRepository.findAllById(List.of(foreignLineId))).thenReturn(List.of(foreign));
+
+        com.positivity.accounting.internal.dto.ReconciliationUnmatchRequest request =
+                com.positivity.accounting.internal.dto.ReconciliationUnmatchRequest.builder()
+                        .statementLineIds(List.of(foreignLineId))
+                        .build();
+
+        assertThatThrownBy(() -> service.unmatch(RECON_ID, request))
+                .isInstanceOf(ReconciliationNotFoundException.class);
     }
 
     @Test

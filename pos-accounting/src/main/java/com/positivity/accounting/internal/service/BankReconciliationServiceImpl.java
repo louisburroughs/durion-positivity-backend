@@ -55,6 +55,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -248,7 +249,15 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
             m.setSignedAmount(signedGl(glLine));
             matches.add(m);
         }
-        glMatchRepository.saveAll(matches);
+        try {
+            // Flush inside the guard so a concurrent match that raced past the existsByGlLineId()
+            // check-then-act surfaces the unique(gl_line_id) violation here as a 409 rather than
+            // bubbling to a 500 at commit time.
+            glMatchRepository.saveAllAndFlush(matches);
+        } catch (DataIntegrityViolationException e) {
+            throw new ReconciliationLineIneligibleException(
+                    "A GL line in this match was concurrently matched in another reconciliation");
+        }
 
         recomputeDifference(recon);
         reconciliationRepository.save(recon);
@@ -272,8 +281,19 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
                     || request.getStatementLineIds().isEmpty()) {
                 throw new IllegalArgumentException("Provide either matchId or statementLineIds to unmatch");
             }
+            List<UUID> requestedIds = request.getStatementLineIds();
+            List<BankReconciliationLine> requested = lineRepository.findAllById(requestedIds);
+            if (requested.size() != new HashSet<>(requestedIds).size()) {
+                throw new ReconciliationNotFoundException("One or more statement lines were not found");
+            }
             Set<UUID> matchIds = new HashSet<>();
-            for (BankReconciliationLine line : lineRepository.findAllById(request.getStatementLineIds())) {
+            for (BankReconciliationLine line : requested) {
+                // Ownership check: a line from another reconciliation must not influence matchId
+                // resolution (returns 404 rather than silently matching across reconciliations).
+                if (!reconciliationId.equals(line.getReconciliationId())) {
+                    throw new ReconciliationNotFoundException("Statement line " + line.getLineId()
+                            + " does not belong to reconciliation " + reconciliationId);
+                }
                 if (line.getMatchId() != null) {
                     matchIds.add(line.getMatchId());
                 }
