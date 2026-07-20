@@ -105,7 +105,7 @@ public class ExemptionCertificateServiceImpl implements ExemptionCertificateServ
         if (certificateId != null) {
             return repository
                     .findById(certificateId)
-                    .filter(c -> isValid(c, customerId, date))
+                    .filter(c -> isValid(c, customerId, stateScope, requestedReason, date))
                     .map(c -> new ActiveCertificate(c.getId(), c.getReasonCode()));
         }
         if (customerId == null || customerId.isBlank()) {
@@ -116,12 +116,29 @@ public class ExemptionCertificateServiceImpl implements ExemptionCertificateServ
                 .map(c -> new ActiveCertificate(c.getId(), c.getReasonCode()));
     }
 
-    private static boolean isValid(ExemptionCertificate c, @Nullable String customerId, LocalDate date) {
+    /**
+     * Mirrors the predicate of {@link ExemptionCertificateRepository#findActiveForCustomer} so the
+     * by-id lookup honors the same status/date-window, customer, state-scope, and reason constraints
+     * as the customer-query path. A null/blank {@code cert.stateScope} means all states; otherwise it
+     * must match the requested scope case-insensitively. When a {@code requestedReason} is supplied it
+     * must equal the certificate's reason.
+     */
+    private static boolean isValid(
+            ExemptionCertificate c,
+            @Nullable String customerId,
+            @Nullable String stateScope,
+            @Nullable ExemptionReasonCode requestedReason,
+            LocalDate date) {
         boolean active = c.getStatus() == ExemptionCertificateStatus.ACTIVE;
         boolean effective = !c.getEffectiveFrom().isAfter(date);
         boolean notExpired = c.getExpiresAt() == null || !c.getExpiresAt().isBefore(date);
         boolean customerMatches = customerId == null || customerId.isBlank() || customerId.equals(c.getCustomerId());
-        return active && effective && notExpired && customerMatches;
+        boolean scopeMatches = stateScope == null
+                || c.getStateScope() == null
+                || c.getStateScope().isBlank()
+                || c.getStateScope().equalsIgnoreCase(stateScope);
+        boolean reasonMatches = requestedReason == null || requestedReason == c.getReasonCode();
+        return active && effective && notExpired && customerMatches && scopeMatches && reasonMatches;
     }
 
     private static ResponseStatusException notFound(UUID id) {

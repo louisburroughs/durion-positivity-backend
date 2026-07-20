@@ -140,6 +140,45 @@ class ExemptionCertificateServiceImplTest {
     }
 
     @Test
+    @DisplayName("F3: findActive by id honors a certificate scoped to the requested state (CA cert, CA request)")
+    void findActiveByIdHonorsMatchingStateScope() {
+        // persisted(...) has stateScope='CA'. A request scoped to CA must be honored.
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(persisted(id, "CUST-1")));
+
+        Optional<ActiveCertificateLookup.ActiveCertificate> result =
+                service.findActive("CUST-1", id, "CA", ExemptionReasonCode.RESALE, TXN);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().id()).isEqualTo(id);
+    }
+
+    @Test
+    @DisplayName("F3: findActive by id rejects a certificate scoped to a different state (CA cert, TX request)")
+    void findActiveByIdRejectsMismatchedStateScope() {
+        // persisted(...) has stateScope='CA'. A TX-scoped request must NOT be honored, mirroring
+        // findActiveForCustomer's stateScope predicate -> classify() sees empty -> DENIED.
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(persisted(id, "CUST-1")));
+
+        assertThat(service.findActive("CUST-1", id, "TX", ExemptionReasonCode.RESALE, TXN))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("F3: findActive by id honors a certificate with blank stateScope against any requested state")
+    void findActiveByIdHonorsBlankStateScopeForAnyState() {
+        // A null/blank cert stateScope means all states: a TX-scoped request is still honored.
+        UUID id = UUID.randomUUID();
+        ExemptionCertificate allStates = persisted(id, "CUST-1");
+        allStates.setStateScope(null);
+        when(repository.findById(id)).thenReturn(Optional.of(allStates));
+
+        assertThat(service.findActive("CUST-1", id, "TX", ExemptionReasonCode.RESALE, TXN))
+                .isPresent();
+    }
+
+    @Test
     @DisplayName("findActive by customer delegates to the active-window query and takes the first row")
     void findActiveByCustomerQuery() {
         UUID id = UUID.randomUUID();

@@ -1,9 +1,9 @@
-generatedAt: "2026-07-19T21:43:43.822590+00:00"
+generatedAt: "2026-07-20T22:17:21.594221+00:00"
 root: "/home/louis-burroughs/IdeaProjects/durion-positivity-backend"
 summary:
   manifestCount: 40
-  permissionCount: 702
-  uniquePermissionCount: 352
+  permissionCount: 704
+  uniquePermissionCount: 354
   duplicatePermissionNameCount: 350
   parseIssueCount: 0
 manifests:
@@ -1499,12 +1499,16 @@ manifests:
     domain: "tax"
     serviceName: "pos-tax"
     version: "1.0"
-    permissionCount: 2
+    permissionCount: 4
     permissions:
       - name: "tax:calculate"
         description: "Calculate tax for line items based on destination and jurisdiction rules"
       - name: "tax:mode:view"
         description: "View current tax service mode (test or production)"
+      - name: "tax:exemption:view"
+        description: "View tax exemption certificates in the pos-tax exemption registry"
+      - name: "tax:exemption:manage"
+        description: "Create and update tax exemption certificates in the pos-tax exemption registry"
   - module: "pos-vehicle-fitment"
     path: "pos-vehicle-fitment/src/main/resources/permissions.yaml"
     domain: "vehicle-fitment"
@@ -4940,6 +4944,18 @@ permissions:
     source: ".worktrees/feat-api-spring-ai-migration/pos-tax/src/main/resources/permissions.yaml"
   - name: "tax:calculate"
     description: "Calculate tax for line items based on destination and jurisdiction rules"
+    domain: "tax"
+    serviceName: "pos-tax"
+    module: "pos-tax"
+    source: "pos-tax/src/main/resources/permissions.yaml"
+  - name: "tax:exemption:manage"
+    description: "Create and update tax exemption certificates in the pos-tax exemption registry"
+    domain: "tax"
+    serviceName: "pos-tax"
+    module: "pos-tax"
+    source: "pos-tax/src/main/resources/permissions.yaml"
+  - name: "tax:exemption:view"
+    description: "View tax exemption certificates in the pos-tax exemption registry"
     domain: "tax"
     serviceName: "pos-tax"
     module: "pos-tax"

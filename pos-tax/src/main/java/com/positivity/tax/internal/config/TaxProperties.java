@@ -67,7 +67,7 @@ public class TaxProperties {
         /**
          * Address-driven, effective-dated jurisdiction rate rules (story T7).
          * <p>
-         * Each rule matches on {@code destinationAddress} facets (state, county, city,
+         * Each rule matches on {@code destinationAddress} facets (state, city,
          * postal-code prefix) and carries its own rates and optional per-category
          * exemptions. For a given transaction the rule is selected from those that match
          * the address and whose {@code effectiveFrom} is not after the transaction date;
@@ -121,9 +121,6 @@ public class TaxProperties {
     public static class JurisdictionMatch {
         /** State/region subdivision code (e.g. CA, TX). */
         private String stateCode;
-
-        /** County name. */
-        private String county;
 
         /** City/locality name. */
         private String city;

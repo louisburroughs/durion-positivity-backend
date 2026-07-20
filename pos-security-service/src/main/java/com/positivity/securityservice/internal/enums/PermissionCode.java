@@ -499,13 +499,16 @@ public enum PermissionCode {
     ACCOUNTING__PERIOD__OVERRIDE(383, "accounting:period:override"),
     // ── Accounting (new) ───────────────────────────────────────────────────────
     ACCOUNTING__RECONCILIATION__ADJUST(384, "accounting:reconciliation:adjust"),
-    ACCOUNTING__RECONCILIATION__VIEW(385, "accounting:reconciliation:view");
+    ACCOUNTING__RECONCILIATION__VIEW(385, "accounting:reconciliation:view"),
+    // ── Tax (new) ──────────────────────────────────────────────────────────────
+    TAX__EXEMPTION__MANAGE(386, "tax:exemption:manage"),
+    TAX__EXEMPTION__VIEW(387, "tax:exemption:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 24;
+    public static final int CATALOG_VERSION = 25;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

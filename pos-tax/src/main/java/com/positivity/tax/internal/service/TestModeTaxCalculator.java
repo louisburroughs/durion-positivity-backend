@@ -350,9 +350,6 @@ public class TestModeTaxCalculator {
         if (match.getStateCode() != null && !match.getStateCode().isBlank()) {
             count++;
         }
-        if (match.getCounty() != null && !match.getCounty().isBlank()) {
-            count++;
-        }
         if (match.getCity() != null && !match.getCity().isBlank()) {
             count++;
         }

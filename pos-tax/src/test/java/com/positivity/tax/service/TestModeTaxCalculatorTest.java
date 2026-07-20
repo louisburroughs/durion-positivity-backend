@@ -819,6 +819,74 @@ class TestModeTaxCalculatorTest {
     }
 
     // ------------------------------------------------------------------
+    // F2: present-but-EMPTY customerExemption {} is a no-op, not a claim
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+            "F2: empty customerExemption {} on an intrinsic taxExempt line stays intrinsically exempt (not denied, not taxed)")
+    void emptyCustomerExemptionKeepsIntrinsicExemptLineExempt() {
+        // Given - request carries a present-but-empty customerExemption ({} : no reasonCode,
+        // no certificateId) and NO certificate is available (stub defaults to empty). One
+        // intrinsic taxExempt=true line plus a $100 taxable line. Combined rate is 10%.
+        TaxLineItem intrinsicExempt = TaxLineItem.builder()
+                .lineItemId("1")
+                .description("Non-taxable")
+                .quantity(BigDecimal.ONE)
+                .unitPrice(new BigDecimal("100"))
+                .taxExempt(true)
+                .build();
+        TaxCalculationRequest request = TaxCalculationRequest.builder()
+                .lineItems(List.of(intrinsicExempt, createLineItem("2", "Taxable", "1", "100")))
+                .destinationAddress(createAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
+                .customerId("CUST-1")
+                .customerExemption(TaxCalculationRequest.CustomerExemption.builder().build())
+                .build();
+
+        // When
+        TaxCalculationResponse response = calculator.calculate(request);
+
+        // Then - the empty exemption is a no-op: the intrinsic line stays exempt via the
+        // intrinsic path (reason null), is NOT flagged denied, and is NOT taxed. Only the
+        // taxable $100 line contributes: 100 * 0.10 = 10.00.
+        assertThat(response.getTotalTax()).isEqualByComparingTo("10.00");
+        TaxCalculationResponse.LineItemTax exemptLine = findLine(response, "1");
+        assertThat(exemptLine.isTaxExempt()).isTrue();
+        assertThat(exemptLine.isExemptionDenied()).isFalse();
+        assertThat(exemptLine.getExemptionReasonCode()).isNull();
+        assertThat(exemptLine.getTaxAmount()).isEqualByComparingTo("0.00");
+        assertThat(exemptLine.getJurisdictions())
+                .allSatisfy(cell -> assertThat(cell.isExempt()).isTrue());
+        assertSigmaInvariant(response);
+    }
+
+    @Test
+    @DisplayName("F2: empty customerExemption {} on a plain taxable line taxes normally with no exemptionDenied flag")
+    void emptyCustomerExemptionLeavesTaxableLineNormallyTaxed() {
+        // Given - a present-but-empty customerExemption ({}) and a plain taxable line
+        // (taxExempt=false, no reason/certificate). No certificate available. Combined rate 10%.
+        TaxCalculationRequest request = TaxCalculationRequest.builder()
+                .lineItems(List.of(createLineItem("1", "Plain taxable", "1", "100")))
+                .destinationAddress(createAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
+                .customerId("CUST-1")
+                .customerExemption(TaxCalculationRequest.CustomerExemption.builder().build())
+                .build();
+
+        // When
+        TaxCalculationResponse response = calculator.calculate(request);
+
+        // Then - taxed normally (100 * 0.10 = 10.00); the empty exemption never turns into a
+        // claim, so the line is neither exempt nor flagged denied.
+        assertThat(response.getTotalTax()).isEqualByComparingTo("10.00");
+        TaxCalculationResponse.LineItemTax line = findLine(response, "1");
+        assertThat(line.isTaxExempt()).isFalse();
+        assertThat(line.isExemptionDenied()).isFalse();
+        assertThat(line.getExemptionReasonCode()).isNull();
+        assertThat(line.getTaxAmount()).isEqualByComparingTo("10.00");
+        assertSigmaInvariant(response);
+    }
+
+    // ------------------------------------------------------------------
     // T4: Refund/credit calculation mode
     // ------------------------------------------------------------------
 

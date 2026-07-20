@@ -16,8 +16,10 @@ import org.springframework.stereotype.Component;
  * Classifies a line's exemption outcome for the calculate path (story T3, decision D-T2).
  * <p>
  * A line is a <em>certificate-backed exemption claim</em> when it carries an
- * {@code exemptionReasonCode} or {@code exemptionCertificateId}, or when the request
- * carries a transaction-level {@code customerExemption}. A claim is honored only if an
+ * {@code exemptionReasonCode} or {@code exemptionCertificateId} — either on the line
+ * itself or folded in from the request's transaction-level {@code customerExemption}.
+ * A present-but-empty {@code customerExemption} ({@code {}}) is a no-op, not a claim.
+ * A claim is honored only if an
  * active, effective, non-expired certificate is found ({@link Outcome#EXEMPT}); otherwise
  * the line is taxed anyway and flagged ({@link Outcome#DENIED}) — a sale is never
  * hard-blocked. A bare {@code taxExempt=true} with no claim remains an intrinsic
@@ -88,8 +90,9 @@ public class ExemptionResolver {
                 line.getExemptionCertificateId(),
                 customerExemption == null ? null : customerExemption.getCertificateId());
 
-        boolean certificateBackedClaim =
-                claimedReason != null || claimedCertificateId != null || customerExemption != null;
+        // A present-but-empty customerExemption ({}) is a no-op, not a claim: a claim
+        // requires an actual reason code or certificate id (top-level or folded in above).
+        boolean certificateBackedClaim = claimedReason != null || claimedCertificateId != null;
 
         if (!certificateBackedClaim) {
             // No certificate-backed claim: a bare taxExempt flag is an intrinsic non-taxable
