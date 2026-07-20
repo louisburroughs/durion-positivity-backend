@@ -6,3 +6,7 @@ permissions:
     description: "Calculate tax for line items based on destination and jurisdiction rules"
   - name: "tax:mode:view"
     description: "View current tax service mode (test or production)"
+  - name: "tax:exemption:view"
+    description: "View tax exemption certificates in the pos-tax exemption registry"
+  - name: "tax:exemption:manage"
+    description: "Create and update tax exemption certificates in the pos-tax exemption registry"

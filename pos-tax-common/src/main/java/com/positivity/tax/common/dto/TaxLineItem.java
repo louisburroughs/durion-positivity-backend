@@ -3,11 +3,13 @@ package com.positivity.tax.common.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.positivity.tax.common.enums.ExemptionReasonCode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -91,6 +93,32 @@ public class TaxLineItem {
     @Builder.Default
     @Schema(description = "Whether this item is tax-exempt", example = "false", requiredMode = NOT_REQUIRED)
     private boolean taxExempt = false;
+
+    /**
+     * Optional reason a certificate-backed exemption is claimed for this line (story T3).
+     * <p>
+     * When present (or when a {@code certificateId} is supplied, or a request-level
+     * {@code customerExemption} is set), the exemption is treated as a
+     * certificate-backed claim: it is honored only if an active, effective, non-expired
+     * exemption certificate is found; otherwise the line is taxed anyway and flagged
+     * {@code exemptionDenied} in the response (decision D-T2). A bare {@code taxExempt=true}
+     * with no reason/certificate remains an intrinsic non-taxable declaration.
+     */
+    @Schema(
+            description = "Optional certificate-backed exemption reason for this line (RESALE, GOVERNMENT,"
+                    + " NONPROFIT, AGRICULTURAL, OTHER)",
+            example = "RESALE",
+            requiredMode = NOT_REQUIRED)
+    private ExemptionReasonCode exemptionReasonCode;
+
+    /**
+     * Optional exemption-certificate identifier backing this line's exemption claim (story T3).
+     */
+    @Schema(
+            description = "Optional exemption-certificate identifier backing this line's exemption claim",
+            example = "018f0000-0000-7000-8000-0000000000aa",
+            requiredMode = NOT_REQUIRED)
+    private UUID exemptionCertificateId;
 
     /**
      * Gets the subtotal, calculating it if not explicitly provided.

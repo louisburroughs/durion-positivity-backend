@@ -21,9 +21,17 @@ public final class EventTypes {
      * @return list of event type registrations
      */
     public static List<EventTypeRegistration> all() {
-        return List.of(EventTypeRegistration.write("TAX_CALCULATE", "Calculate tax for line items")
-                .description(
-                        "Calculates tax based on line items and location. Routes to external service in production or test calculator in test mode.")
-                .build());
+        return List.of(
+                EventTypeRegistration.write("TAX_CALCULATE", "Calculate tax for line items")
+                        .description(
+                                "Calculates tax based on line items and location. Routes to external service in production or test calculator in test mode.")
+                        .build(),
+                EventTypeRegistration.approval("TAX_EXEMPTION_CERT_CREATE", "Create tax exemption certificate")
+                        .description(
+                                "Registers a customer tax exemption certificate in the pos-tax exemption registry.")
+                        .build(),
+                EventTypeRegistration.approval("TAX_EXEMPTION_CERT_UPDATE", "Update tax exemption certificate")
+                        .description("Updates a customer tax exemption certificate in the pos-tax exemption registry.")
+                        .build());
     }
 }

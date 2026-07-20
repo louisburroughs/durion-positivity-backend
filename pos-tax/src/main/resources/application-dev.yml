@@ -1,4 +1,41 @@
+spring:
+  # In-memory H2 (PostgreSQL compatibility mode) for local dev; Flyway V1 runs on it.
+  datasource:
+    url: jdbc:h2:mem:pos_tax;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ''
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: validate
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
 eureka:
   client:
     serviceUrl:
       defaultZone: http://localhost:8761/eureka/
+
+# Story T7: sample address-driven jurisdiction rules demonstrating two states with
+# different breakdowns, plus a per-category exemption (LABOR exempt in TX). Unknown
+# addresses fall back to pos.tax.test-mode.default-rates (see application.yml).
+pos:
+  tax:
+    test-mode:
+      jurisdictions:
+        - match:
+            state-code: CA
+          rates:
+            STATE: 0.0625
+            COUNTY: 0.0100
+            CITY: 0.0075
+        - match:
+            state-code: TX
+          rates:
+            STATE: 0.0625
+            COUNTY: 0.0050
+          exempt-categories:
+            - LABOR

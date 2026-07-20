@@ -84,6 +84,17 @@
             <groupId>com.positivity</groupId>
             <artifactId>pos-tax-common</artifactId>
         </dependency>
+        <!-- pos-shared-dtos for UUID v7 identifier generation (ADR-0013) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-shared-dtos</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.swagger.core.v3</groupId>
+                    <artifactId>swagger-annotations</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
 
         <!-- Utilities -->
         <dependency>
@@ -122,6 +133,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Spring Boot Data JPA test slice (@DataJpaTest) for the exemption-certificate repository test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
