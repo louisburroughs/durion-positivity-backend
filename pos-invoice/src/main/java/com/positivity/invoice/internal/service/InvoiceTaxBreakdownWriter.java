@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Component;
  * DRAFT re-price is idempotent. Callers guard finalized invoices before invoking this (the freeze
  * lives in the service). Mechanical only — no state or lifecycle knowledge here.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 class InvoiceTaxBreakdownWriter {
@@ -62,6 +64,20 @@ class InvoiceTaxBreakdownWriter {
                 String type = j.getJurisdictionType() == null
                         ? null
                         : j.getJurisdictionType().code();
+                // jurisdiction_type/code/rate are NOT NULL in the schema. A row missing any of
+                // them cannot be persisted; skip it defensively rather than fail the whole
+                // finalization (pos-tax always populates these for real tax rows).
+                if (type == null || j.getCode() == null || j.getRate() == null) {
+                    log.warn(
+                            "Skipping tax breakdown row for invoice {} line {}: incomplete jurisdiction"
+                                    + " identity (type={}, code={}, rate={})",
+                            invoiceId,
+                            line.getLineItemId(),
+                            type,
+                            j.getCode(),
+                            j.getRate());
+                    continue;
+                }
                 String reason = j.getExemptionReasonCode() == null
                         ? null
                         : j.getExemptionReasonCode().name();

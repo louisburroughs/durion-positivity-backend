@@ -20,6 +20,8 @@ CREATE TABLE invoice_line_tax (
     CONSTRAINT invoice_line_tax_pkey PRIMARY KEY (id)
 );
 CREATE INDEX idx_invoice_line_tax_invoice ON invoice_line_tax (invoice_id);
+ALTER TABLE invoice_line_tax
+    ADD CONSTRAINT fk_invoice_line_tax_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id);
 
 CREATE TABLE invoice_tax_summary (
     id uuid NOT NULL,
@@ -33,3 +35,5 @@ CREATE TABLE invoice_tax_summary (
     CONSTRAINT invoice_tax_summary_pkey PRIMARY KEY (id)
 );
 CREATE INDEX idx_invoice_tax_summary_invoice ON invoice_tax_summary (invoice_id);
+ALTER TABLE invoice_tax_summary
+    ADD CONSTRAINT fk_invoice_tax_summary_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id);
