@@ -573,6 +573,12 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         log.info("Generating aged receivables as of {}", asOfDate);
 
+        // As-of semantics (finding 10): items whose aging date is after asOfDate are excluded
+        // (daysPastDue < 0), and buckets are keyed on asOfDate. KNOWN LIMITATION: the open balance is
+        // the invoice's CURRENT balance (InvoiceBalanceCalculator derives it from all payment
+        // applications/reversals/credit-memos to date), not a balance reconstructed as-of asOfDate, so
+        // a back-dated asOfDate reflects today's balances against historical aging dates. A true
+        // historical-balance reconstruction is deferred (needs point-in-time application replay).
         // AR-eligible invoices; open balance is derived from accounting-owned
         // facts (payment applications, reversals, credit memos) via the shared
         // InvoiceBalanceCalculator — never fetched from another service.
@@ -593,6 +599,9 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             }
             LocalDate agingDate = receivableAgingDate(invoice);
             long daysPastDue = ChronoUnit.DAYS.between(agingDate, asOfDate);
+            if (daysPastDue < 0) {
+                continue; // future-dated as of asOfDate — not yet an outstanding item (finding 10)
+            }
             byCustomer.computeIfAbsent(customerId, key -> new AgingBuckets()).add(daysPastDue, openBalance);
         }
 
@@ -634,18 +643,33 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         log.info("Generating aged payables as of {}", asOfDate);
 
+        // As-of semantics (finding 10): items whose aging date is after asOfDate are excluded
+        // (daysPastDue < 0), and buckets are keyed on asOfDate. KNOWN LIMITATION: the open balance is
+        // the bill's CURRENT balance (total minus all allocations to date), not a balance reconstructed
+        // as-of asOfDate. A true historical-balance reconstruction is deferred.
         List<VendorBill> bills = vendorBillRepository.findByStatusIn(OPEN_PAYABLE_STATUSES);
+
+        // Batch every bill's allocated total in one query to avoid a per-bill N+1 (finding 9).
+        List<UUID> billIds = bills.stream().map(VendorBill::getVendorBillId).toList();
+        Map<UUID, BigDecimal> allocatedByBill = billIds.isEmpty()
+                ? Map.of()
+                : apPaymentAllocationRepository.sumAllocatedAmountByVendorBillIdIn(billIds).stream()
+                        .collect(Collectors.toMap(
+                                APPaymentAllocationRepository.VendorBillAllocationSum::getVendorBillId,
+                                APPaymentAllocationRepository.VendorBillAllocationSum::getAllocated));
 
         Map<UUID, VendorAging> byVendor = new LinkedHashMap<>();
         for (VendorBill bill : bills) {
-            BigDecimal allocated =
-                    apPaymentAllocationRepository.sumAllocatedAmountByVendorBillId(bill.getVendorBillId());
-            BigDecimal openBalance = nullSafe(bill.getTotalAmount()).subtract(nullSafe(allocated));
+            BigDecimal allocated = nullSafe(allocatedByBill.get(bill.getVendorBillId()));
+            BigDecimal openBalance = nullSafe(bill.getTotalAmount()).subtract(allocated);
             if (openBalance.signum() <= 0) {
                 continue; // only positive-open items contribute
             }
             LocalDate agingDate = payableAgingDate(bill);
             long daysPastDue = ChronoUnit.DAYS.between(agingDate, asOfDate);
+            if (daysPastDue < 0) {
+                continue; // future-dated as of asOfDate — not yet an outstanding item (finding 10)
+            }
             VendorAging aging =
                     byVendor.computeIfAbsent(bill.getVendorId(), key -> new VendorAging(bill.getVendorName()));
             aging.buckets.add(daysPastDue, openBalance);
@@ -849,9 +873,11 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
     /**
      * Item-level aging accumulator: each item's full open balance lands in exactly
-     * one bucket keyed on whole days past due ({@code asOfDate - dueDate}).
-     * Boundaries: {@code d <= 30} current (includes not-yet-due), {@code 31..60},
-     * {@code 61..90}, {@code d >= 91} 90+.
+     * one bucket keyed on whole days past due ({@code asOfDate - agingDate}).
+     * Boundaries: {@code 0 <= d <= 30} current, {@code 31..60}, {@code 61..90},
+     * {@code d >= 91} 90+. Callers exclude future-dated items ({@code d < 0}) before
+     * adding, so {@code current} holds only items already dated on/before asOfDate
+     * (finding 10).
      */
     private static final class AgingBuckets {
         private BigDecimal current = BigDecimal.ZERO;

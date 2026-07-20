@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.APPaymentAllocation;
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -43,4 +44,28 @@ public interface APPaymentAllocationRepository extends JpaRepository<APPaymentAl
     @Query(
             "SELECT COALESCE(SUM(a.appliedAmount), 0) FROM APPaymentAllocation a WHERE a.vendorBill.vendorBillId = :vendorBillId")
     BigDecimal sumAllocatedAmountByVendorBillId(@Param("vendorBillId") UUID vendorBillId);
+
+    /**
+     * Batched allocation totals for many vendor bills in one query, so the Aged
+     * Payables report avoids a per-bill N+1 (PR #977 finding 9). Bills with no
+     * allocations are simply absent from the result (treat as zero).
+     *
+     * @param vendorBillIds the vendor bill ids to total
+     * @return one row per bill that has at least one allocation
+     */
+    @Query("""
+            SELECT a.vendorBill.vendorBillId AS vendorBillId, COALESCE(SUM(a.appliedAmount), 0) AS allocated
+            FROM APPaymentAllocation a
+            WHERE a.vendorBill.vendorBillId IN :vendorBillIds
+            GROUP BY a.vendorBill.vendorBillId
+            """)
+    List<VendorBillAllocationSum> sumAllocatedAmountByVendorBillIdIn(
+            @Param("vendorBillIds") Collection<UUID> vendorBillIds);
+
+    /** Projection for {@link #sumAllocatedAmountByVendorBillIdIn(Collection)}. */
+    interface VendorBillAllocationSum {
+        UUID getVendorBillId();
+
+        BigDecimal getAllocated();
+    }
 }

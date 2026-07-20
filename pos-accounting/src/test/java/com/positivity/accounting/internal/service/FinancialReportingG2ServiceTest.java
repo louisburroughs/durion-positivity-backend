@@ -202,9 +202,9 @@ class FinancialReportingG2ServiceTest {
     // ================= Aged Receivables — bucket boundaries =================
 
     @Test
-    @DisplayName("Aged AR: bucket boundaries 30/31/60/61/90/91 + not-yet-due land in the correct bucket")
+    @DisplayName("Aged AR: bucket boundaries 30/31/60/61/90/91; future-dated is excluded (finding 10)")
     void agedReceivablesBucketBoundaries() {
-        ExtInvoice notYetDue = arInvoice(new BigDecimal("10.00"), AS_OF.plusDays(5)); // d = -5 -> current
+        ExtInvoice notYetDue = arInvoice(new BigDecimal("10.00"), AS_OF.plusDays(5)); // d = -5 -> excluded
         ExtInvoice d30 = arInvoice(new BigDecimal("30.00"), AS_OF.minusDays(30)); // current
         ExtInvoice d31 = arInvoice(new BigDecimal("31.00"), AS_OF.minusDays(31)); // 31-60
         ExtInvoice d60 = arInvoice(new BigDecimal("60.00"), AS_OF.minusDays(60)); // 31-60
@@ -221,11 +221,11 @@ class FinancialReportingG2ServiceTest {
 
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
 
-        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("40.00"); // 10 + 30
+        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("30.00"); // 30 (future-dated 10 excluded)
         assertThat(report.getTotals().getDays31To60()).isEqualByComparingTo("91.00"); // 31 + 60
         assertThat(report.getTotals().getDays61To90()).isEqualByComparingTo("151.00"); // 61 + 90
         assertThat(report.getTotals().getDays90Plus()).isEqualByComparingTo("91.00");
-        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("373.00");
+        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("363.00");
     }
 
     @Test
@@ -274,6 +274,21 @@ class FinancialReportingG2ServiceTest {
         assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("0");
     }
 
+    @Test
+    @DisplayName("Aged AR: future-dated invoice (after asOfDate) is excluded, not bucketed as current (finding 10)")
+    void agedReceivablesExcludesFutureDated() {
+        ExtInvoice future = arInvoice(new BigDecimal("100.00"), AS_OF.plusDays(10));
+        when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(future));
+        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
+        when(invoiceBalanceCalculator.balanceDue(future)).thenReturn(new BigDecimal("100.00"));
+
+        AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
+
+        assertThat(report.getRows()).isEmpty();
+        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("0");
+        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("0");
+    }
+
     // ================= Aged Payables — bucket boundaries =================
 
     @Test
@@ -285,12 +300,10 @@ class FinancialReportingG2ServiceTest {
         VendorBill partiallyPaid = apBill(vendorId, "Acme", new BigDecimal("500.00"), AS_OF.minusDays(91));
 
         when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(current, mid, partiallyPaid));
-        when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillId(current.getVendorBillId()))
-                .thenReturn(BigDecimal.ZERO);
-        when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillId(mid.getVendorBillId()))
-                .thenReturn(BigDecimal.ZERO);
-        when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillId(partiallyPaid.getVendorBillId()))
-                .thenReturn(new BigDecimal("200.00")); // open = 300
+        // Batched allocation totals (finding 9): bills with no allocation are simply absent (treated 0);
+        // only the partially-paid bill returns a row (200 allocated → open 300).
+        when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillIdIn(any()))
+                .thenReturn(List.of(allocSum(partiallyPaid.getVendorBillId(), new BigDecimal("200.00"))));
 
         AgedPayablesReport report = service.generateAgedPayables(AS_OF);
 
@@ -315,8 +328,9 @@ class FinancialReportingG2ServiceTest {
         bill.setBillDate(AS_OF.minusDays(75).atStartOfDay());
 
         when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(bill));
-        when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillId(bill.getVendorBillId()))
-                .thenReturn(BigDecimal.ZERO);
+        // No allocation rows returned → the bill's full total is open (finding 9 batched query).
+        when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillIdIn(any()))
+                .thenReturn(List.of());
 
         AgedPayablesReport report = service.generateAgedPayables(AS_OF);
 
@@ -331,6 +345,20 @@ class FinancialReportingG2ServiceTest {
         AgedPayablesReport report = service.generateAgedPayables(AS_OF);
 
         assertThat(report.getRows()).isEmpty();
+        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("Aged AP: future-dated bill (due after asOfDate) is excluded, not bucketed as current (finding 10)")
+    void agedPayablesExcludesFutureDated() {
+        UUID vendorId = UUID.randomUUID();
+        VendorBill future = apBill(vendorId, "Acme", new BigDecimal("300.00"), AS_OF.plusDays(10));
+        when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(future));
+
+        AgedPayablesReport report = service.generateAgedPayables(AS_OF);
+
+        assertThat(report.getRows()).isEmpty();
+        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("0");
         assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("0");
     }
 
@@ -383,5 +411,20 @@ class FinancialReportingG2ServiceTest {
         bill.setDueDate(dueDate.atStartOfDay());
         bill.setBillDate(dueDate.atStartOfDay());
         return bill;
+    }
+
+    private static APPaymentAllocationRepository.VendorBillAllocationSum allocSum(
+            UUID vendorBillId, BigDecimal amount) {
+        return new APPaymentAllocationRepository.VendorBillAllocationSum() {
+            @Override
+            public UUID getVendorBillId() {
+                return vendorBillId;
+            }
+
+            @Override
+            public BigDecimal getAllocated() {
+                return amount;
+            }
+        };
     }
 }
