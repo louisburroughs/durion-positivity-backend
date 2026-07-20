@@ -20,7 +20,7 @@
       "name": "pos.tax.provider",
       "type": "com.positivity.tax.internal.config.TaxProperties$Provider",
       "description": "Concrete external tax provider used when test mode is disabled: AVALARA (real AvaTax adapter) or EXTERNAL (legacy stub). Default/unset (TEST_MODE) resolves to the legacy external stub, preserving prior behavior.",
-      "defaultValue": "test-mode"
+      "defaultValue": "TEST_MODE"
     },
     {
       "name": "pos.tax.avalara.base-url",

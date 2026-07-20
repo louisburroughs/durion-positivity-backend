@@ -204,18 +204,22 @@ public class AvalaraTaxProvider implements TaxProviderClient {
     @NonNull
     private String transactionDate(@NonNull TaxCalculationRequest request) {
         String raw = request.getTransactionDate();
-        if (raw != null && !raw.isBlank()) {
+        if (raw == null || raw.isBlank()) {
+            return LocalDate.now(clock).toString();
+        }
+        try {
+            return Instant.parse(raw).atZone(ZoneOffset.UTC).toLocalDate().toString();
+        } catch (DateTimeParseException _) {
             try {
-                return Instant.parse(raw).atZone(ZoneOffset.UTC).toLocalDate().toString();
-            } catch (DateTimeParseException ex) {
-                try {
-                    return LocalDate.parse(raw).toString();
-                } catch (DateTimeParseException ignored) {
-                    log.debug("Unparseable transactionDate '{}'; defaulting to today", raw);
-                }
+                return LocalDate.parse(raw).toString();
+            } catch (DateTimeParseException _) {
+                // Match the test-mode calculator: a non-blank but unparseable date is a client
+                // error, not a silent fall-back to today (which would hide the bug and make
+                // effective-dated rates depend on the provider).
+                throw new IllegalArgumentException(
+                        "transactionDate must be a valid ISO-8601 date or date-time: " + raw);
             }
         }
-        return LocalDate.now(clock).toString();
     }
 
     // ---- response mapping ------------------------------------------------------------
@@ -394,7 +398,10 @@ public class AvalaraTaxProvider implements TaxProviderClient {
             } catch (TaxCalculationException ex) {
                 throw ex;
             } catch (Exception ex) {
-                throw new TaxCalculationException("AvaTax call failed: " + ex.getMessage(), ex);
+                // Keep the client-facing message stable; log the provider detail rather than
+                // leaking it into the exception message.
+                log.warn("AvaTax call failed: {}", ex.getMessage(), ex);
+                throw new TaxCalculationException("AvaTax call failed", ex);
             }
         };
         return Retry.decorateSupplier(retry, supplier).get();
