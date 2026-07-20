@@ -201,4 +201,57 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                 ORDER BY je.transactionDate DESC
             """)
     List<JournalEntry> findPostedEntriesForAccount(UUID glAccountId, LocalDateTime startDate, LocalDateTime endDate);
+
+    /**
+     * Sum the signed net balance (debits - credits, debit positive) for a GL
+     * account across POSTED entries dated strictly before the given instant.
+     * Used as the General Ledger opening balance (story G2, issue #960): the net
+     * of all POSTED activity that precedes the report's start date.
+     *
+     * <p>Only POSTED lines participate — an A3-REVERSED original (status
+     * {@code REVERSED}) is excluded while its POSTED reversing entry is included,
+     * so reversed/reversing pairs net to zero here with no reversal-linkage
+     * special-casing.
+     *
+     * @param glAccountId    GL account ID (UUID)
+     * @param startExclusive start-of-day of the report start date; entries dated
+     *                       strictly before this instant contribute
+     * @return net balance (sum of debits - sum of credits), or 0 if none
+     */
+    @Query("""
+                SELECT COALESCE(
+                    SUM(CASE WHEN jel.debitAmount IS NOT NULL THEN jel.debitAmount ELSE 0 END) -
+                    SUM(CASE WHEN jel.creditAmount IS NOT NULL THEN jel.creditAmount ELSE 0 END),
+                    0
+                )
+                FROM JournalEntry je
+                JOIN je.lines jel
+                WHERE je.status = 'POSTED'
+                  AND jel.glAccount.glAccountId = :glAccountId
+                  AND je.transactionDate < :startExclusive
+            """)
+    java.math.BigDecimal sumPostedBalanceForAccountBefore(UUID glAccountId, LocalDateTime startExclusive);
+
+    /**
+     * Find all POSTED journal entries (with their lines) whose transaction date
+     * falls in the inclusive range, across every account. Used by the
+     * all-accounts General Ledger report (story G2, issue #960) to build one
+     * section per account with activity; grouping by account is done in-service.
+     * Only POSTED entries are returned, so REVERSED originals are excluded while
+     * POSTED reversing entries are included (net-zero pairs).
+     *
+     * @param startDate period start (inclusive; pass start-of-day)
+     * @param endDate   period end (inclusive; pass end-of-day)
+     * @return POSTED entries with fetched lines, ordered by transaction date
+     */
+    @Query("""
+                SELECT DISTINCT je
+                FROM JournalEntry je
+                JOIN FETCH je.lines jel
+                WHERE je.status = 'POSTED'
+                  AND je.transactionDate >= :startDate
+                  AND je.transactionDate <= :endDate
+                ORDER BY je.transactionDate ASC
+            """)
+    List<JournalEntry> findPostedEntriesInRange(LocalDateTime startDate, LocalDateTime endDate);
 }

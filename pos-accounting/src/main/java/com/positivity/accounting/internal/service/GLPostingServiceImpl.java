@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.SettlementPostingCommand;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.service.GLPostingService;
@@ -180,7 +181,13 @@ public class GLPostingServiceImpl implements GLPostingService {
             @NonNull LocalDateTime transactionDate,
             @NonNull String description) {
         return postPaymentApplication(
-                paymentApplicationId, undepositedFundsAccountId, arAccountId, amount, transactionDate, description, null);
+                paymentApplicationId,
+                undepositedFundsAccountId,
+                arAccountId,
+                amount,
+                transactionDate,
+                description,
+                null);
     }
 
     @Override
@@ -230,5 +237,176 @@ public class GLPostingServiceImpl implements GLPostingService {
         log.info("Posted payment application GL entry: journal entry ID {}", posted.getJournalEntryId());
 
         return posted;
+    }
+
+    @Override
+    public JournalEntry postSettlement(@NonNull SettlementPostingCommand command) {
+        log.info(
+                "Posting settlement GL entry {}: Dr Cash {}, Dr Fees {}, Cr Undeposited {}, Cr Suspense {}",
+                command.sourceEventId(),
+                command.netAmount(),
+                command.feeAmount(),
+                command.matchedGross(),
+                command.unmatchedGross());
+
+        JournalEntry entry = new JournalEntry();
+        entry.setTransactionDate(command.transactionDate());
+        entry.setDescription(command.description());
+        entry.setSourceEventId(command.sourceEventId());
+
+        List<JournalEntryLine> lines = new ArrayList<>();
+        // Sign-route every leg so a refund/chargeback or net-negative payout never
+        // produces a negative debit or credit (which would violate the
+        // chk_journal_entry_line_debit_xor_credit CHECK and poison the outbox). The
+        // natural side of each leg is its normal-balance side; a negative amount is
+        // posted as its absolute value on the opposite side.
+        //
+        // Debits (natural side): net bank payout + processor fees (sum to gross).
+        addSigned(lines, command.cashAccountId(), command.netAmount(), "Settlement Cash", true);
+        addSigned(lines, command.feesAccountId(), command.feeAmount(), "Processor Fees", true);
+        // Credits (natural side): clear matched receipts from Undeposited Funds; park
+        // the rest in suspense (decision D-13). Together they equal gross, so the entry
+        // balances (net + fee == gross == matchedGross + unmatchedGross).
+        addSigned(
+                lines, command.undepositedFundsAccountId(), command.matchedGross(), "Undeposited Funds Cleared", false);
+        addSigned(lines, command.suspenseAccountId(), command.unmatchedGross(), "Settlement Suspense", false);
+
+        entry.setLines(lines);
+
+        JournalEntry created = journalEntryService.createJournalEntry(entry);
+        JournalEntry posted =
+                journalEntryService.postJournalEntry(created.getJournalEntryId(), command.overrideJustification());
+
+        log.info("Posted settlement GL entry: journal entry ID {}", posted.getJournalEntryId());
+        return posted;
+    }
+
+    @Override
+    public JournalEntry postSettlementWriteOff(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID suspenseAccountId,
+            @NonNull UUID adjustmentAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification) {
+        return postTwoLineReclass(
+                sourceEventId,
+                suspenseAccountId,
+                adjustmentAccountId,
+                amount,
+                transactionDate,
+                description,
+                overrideJustification,
+                "Settlement Write-off");
+    }
+
+    @Override
+    public JournalEntry postSettlementReclass(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID suspenseAccountId,
+            @NonNull UUID undepositedFundsAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification) {
+        return postTwoLineReclass(
+                sourceEventId,
+                suspenseAccountId,
+                undepositedFundsAccountId,
+                amount,
+                transactionDate,
+                description,
+                overrideJustification,
+                "Settlement Reclass");
+    }
+
+    /**
+     * Post a balanced two-line entry {@code Dr debitAccount / Cr creditAccount}
+     * of {@code amount}. Used by settlement write-off (Dr Suspense / Cr
+     * Adjustment) and manual-match reclass (Dr Suspense / Cr Undeposited Funds).
+     */
+    private JournalEntry postTwoLineReclass(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID debitAccountId,
+            @NonNull UUID creditAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification,
+            @NonNull String lineLabel) {
+        JournalEntry entry = new JournalEntry();
+        entry.setTransactionDate(transactionDate);
+        entry.setDescription(description);
+        entry.setSourceEventId(sourceEventId);
+
+        List<JournalEntryLine> lines = new ArrayList<>();
+        addDebit(lines, debitAccountId, amount, lineLabel);
+        addCredit(lines, creditAccountId, amount, lineLabel);
+        entry.setLines(lines);
+
+        JournalEntry created = journalEntryService.createJournalEntry(entry);
+        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
+        log.info("Posted {} GL entry: journal entry ID {}", lineLabel, posted.getJournalEntryId());
+        return posted;
+    }
+
+    /**
+     * Append a sign-routed line unless the amount is zero (zero legs are omitted).
+     * A positive amount posts to the leg's natural side; a negative amount posts its
+     * absolute value to the opposite side, so no leg is ever a negative debit or
+     * credit. {@code naturallyDebit} = true for normal-debit legs (Cash, Fees),
+     * false for normal-credit legs (Undeposited Funds, Suspense).
+     */
+    private static void addSigned(
+            @NonNull List<JournalEntryLine> lines,
+            @NonNull UUID accountId,
+            @NonNull BigDecimal amount,
+            @NonNull String description,
+            boolean naturallyDebit) {
+        int sign = amount.signum();
+        if (sign == 0) {
+            return;
+        }
+        boolean debitSide = (sign > 0) == naturallyDebit;
+        if (debitSide) {
+            addDebit(lines, accountId, amount.abs(), description);
+        } else {
+            addCredit(lines, accountId, amount.abs(), description);
+        }
+    }
+
+    /** Append a debit line unless the amount is zero (zero legs are omitted). */
+    private static void addDebit(
+            @NonNull List<JournalEntryLine> lines,
+            @NonNull UUID accountId,
+            @NonNull BigDecimal amount,
+            @NonNull String description) {
+        if (amount.signum() == 0) {
+            return;
+        }
+        JournalEntryLine line = new JournalEntryLine();
+        line.setGlAccountId(accountId);
+        line.setDebitAmount(amount);
+        line.setCreditAmount(BigDecimal.ZERO);
+        line.setDescription(description);
+        lines.add(line);
+    }
+
+    /** Append a credit line unless the amount is zero (zero legs are omitted). */
+    private static void addCredit(
+            @NonNull List<JournalEntryLine> lines,
+            @NonNull UUID accountId,
+            @NonNull BigDecimal amount,
+            @NonNull String description) {
+        if (amount.signum() == 0) {
+            return;
+        }
+        JournalEntryLine line = new JournalEntryLine();
+        line.setGlAccountId(accountId);
+        line.setDebitAmount(BigDecimal.ZERO);
+        line.setCreditAmount(amount);
+        line.setDescription(description);
+        lines.add(line);
     }
 }

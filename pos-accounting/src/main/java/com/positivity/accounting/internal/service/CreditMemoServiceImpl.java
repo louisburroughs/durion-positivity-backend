@@ -183,8 +183,8 @@ public class CreditMemoServiceImpl implements CreditMemoService {
         BigDecimal total = invoice.getTotal() == null ? BigDecimal.ZERO : invoice.getTotal();
         BigDecimal netAmount = total.subtract(storedTax);
 
-        BigDecimal previouslyCreditedNet =
-                creditMemoRepository.sumCreditAmountByInvoiceIdAndStatus(invoice.getInvoiceId(), CreditMemoStatus.POSTED);
+        BigDecimal previouslyCreditedNet = creditMemoRepository.sumCreditAmountByInvoiceIdAndStatus(
+                invoice.getInvoiceId(), CreditMemoStatus.POSTED);
         BigDecimal remainingNet = netAmount.subtract(previouslyCreditedNet);
 
         if (creditAmount.compareTo(remainingNet) >= 0) {

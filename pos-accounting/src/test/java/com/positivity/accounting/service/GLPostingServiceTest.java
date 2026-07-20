@@ -371,7 +371,8 @@ class GLPostingServiceTest {
         when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
-        service.postPaymentApplication(testPaymentApplicationId, testCashAccountId, testArAccountId, amount, TXN_DATE, "Test");
+        service.postPaymentApplication(
+                testPaymentApplicationId, testCashAccountId, testArAccountId, amount, TXN_DATE, "Test");
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();
@@ -399,7 +400,8 @@ class GLPostingServiceTest {
         when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
 
         // Act
-        service.postPaymentApplication(testPaymentApplicationId, testCashAccountId, testArAccountId, amount, TXN_DATE, "Test");
+        service.postPaymentApplication(
+                testPaymentApplicationId, testCashAccountId, testArAccountId, amount, TXN_DATE, "Test");
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();
@@ -428,7 +430,12 @@ class GLPostingServiceTest {
 
         // Act
         service.postPaymentApplication(
-                testPaymentApplicationId, testCashAccountId, testArAccountId, new BigDecimal("100.00"), TXN_DATE, description);
+                testPaymentApplicationId,
+                testCashAccountId,
+                testArAccountId,
+                new BigDecimal("100.00"),
+                TXN_DATE,
+                description);
 
         // Assert
         JournalEntry entry = entryCaptor.getValue();

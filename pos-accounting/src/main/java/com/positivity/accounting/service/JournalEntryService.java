@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -172,6 +173,23 @@ public interface JournalEntryService {
             @NonNull String reversalReason,
             @Nullable LocalDate reversalDate,
             @Nullable String overrideJustification);
+
+    /**
+     * Find the original (non-reversal) journal entry posted for a source event
+     * id, if one exists.
+     *
+     * <p>Used by the AR payment-application reversal GL poster (story C2, issue
+     * #958) to locate the C1 cash-receipt entry to reverse by its posting key.
+     * A reversal entry shares the original's {@code sourceEventId} but is
+     * excluded here: only the entry whose {@code reversalJournalEntry} link is
+     * null (i.e. it does not itself reverse anything) is returned. At most one
+     * such entry can exist because posting is idempotent per source event.
+     *
+     * @param sourceEventId source event id (the posting key) to look up
+     * @return the original entry for the source event, or empty if none is
+     *         posted yet
+     */
+    Optional<JournalEntry> findOriginalBySourceEvent(@NonNull UUID sourceEventId);
 
     /**
      * Lists journal entries with pagination and optional filtering.

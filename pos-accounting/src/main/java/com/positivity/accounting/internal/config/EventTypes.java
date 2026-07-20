@@ -16,7 +16,13 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 64 event types (includes +1 from the mapping resolution dry-run
+     * Total: 71 event types (includes +3 from settlement reconciliation
+     * (Story F1c, Issue #963): ACCOUNTING_SETTLEMENT_LINES_LIST,
+     * ACCOUNTING_SETTLEMENT_LINE_MATCH, ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF, +3 from the GL + aged AR/AP reports
+     * (Story G2, Issue #960): REPORT_GENERAL_LEDGER_GENERATE,
+     * REPORT_AGED_RECEIVABLES_GENERATE, REPORT_AGED_PAYABLES_GENERATE, +1 from AR payment application reversal GL
+     * posting (Story C2, Issue #958): PAYMENT_APPLICATION_REVERSAL_GL_POSTING, +1
+     * from the mapping resolution dry-run
      * (Story E3, Issue #957): ACCOUNTING_MAPPING_RESOLVE_TEST, and +2 from CAP-251 #5:
      * ACCOUNTING_STATUS_SYNC_PROCESS and ACCOUNTING_STATUS_VIEW, in addition to
      * CAP-053 Vendor Bill workflow + GL Mapping, +3 from PRD missing endpoints:
@@ -143,6 +149,20 @@ public final class EventTypes {
                                 "Drill down from GL account to source journal entries")
                         .build(),
 
+                // FinancialReportingController GL + aging reports - 3 events (parity-G2, Issue #960)
+                EventTypeRegistration.search(
+                                "REPORT_GENERAL_LEDGER_GENERATE",
+                                "Generate General Ledger report (per-account POSTED lines with running balance)")
+                        .build(),
+                EventTypeRegistration.search(
+                                "REPORT_AGED_RECEIVABLES_GENERATE",
+                                "Generate Aged Receivables report (bucketed open invoice balances)")
+                        .build(),
+                EventTypeRegistration.search(
+                                "REPORT_AGED_PAYABLES_GENERATE",
+                                "Generate Aged Payables report (bucketed open vendor-bill balances)")
+                        .build(),
+
                 // LaborOverheadReportController - 1 event (CAP-316)
                 EventTypeRegistration.search(
                                 "REPORT_LABOR_OVERHEAD_GENERATE",
@@ -202,6 +222,13 @@ public final class EventTypes {
                                 "Post AR payment application to GL (Dr Undeposited Funds, Cr AR)")
                         .build(),
 
+                // AR Payment Application Reversal GL Posting - 1 event (story C2, Issue #958)
+                EventTypeRegistration.write(
+                                "PAYMENT_APPLICATION_REVERSAL_GL_POSTING",
+                                "Post AR payment application reversal to GL (reversing entry: Dr AR, Cr Undeposited"
+                                        + " Funds)")
+                        .build(),
+
                 // AccountingStatusSyncService — 2 events (CAP-251 #5)
                 EventTypeRegistration.write(
                                 "ACCOUNTING_STATUS_SYNC_PROCESS",
@@ -249,6 +276,21 @@ public final class EventTypes {
                                 "ACCOUNTING_PERIOD_HARD_LOCK_SET",
                                 "Set the org-level accounting hard-lock date (monotonic forward,"
                                         + " mandatory justification)")
+                        .build(),
+
+                // SettlementReconciliationController — 3 events (Story F1c, Issue #963)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_SETTLEMENT_LINES_LIST",
+                                "List processor settlement lines for reconciliation review")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_SETTLEMENT_LINE_MATCH",
+                                "Manually match an unmatched settlement line to a receivable payment")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF",
+                                "Write off a small unmatched settlement line (reversible JE,"
+                                        + " threshold-gated, mandatory reason)")
                         .build());
     }
 }

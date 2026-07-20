@@ -34,6 +34,8 @@ tags:
   description: Manage chart of accounts including lifecycle actions.
 - name: Accounting Periods
   description: 'Accounting period lifecycle: list periods, close a period, reopen a closed period, and manage the org-level hard-lock date.'
+- name: Settlement Reconciliation
+  description: 'Processor settlement reconciliation review: list settlement lines, manually match an unmatched line to a receivable payment, and write off small unmatched lines.'
 - name: Vendor Directory API
   description: Vendor search and lookup endpoints for name-to-vendorId resolution (typeahead support)
 - name: Location Cost Reporting
@@ -740,6 +742,132 @@ paths:
         - accounting:ap:pay
       x-required-permissions:
       - accounting:ap:pay
+  /v1/accounting/settlements/lines/{lineId}/write-off:
+    post:
+      tags:
+      - Settlement Reconciliation
+      summary: Write off a small unmatched settlement line
+      description: 'Writes off an UNMATCHED settlement line whose gross is at or below the configured reconciliation write-off threshold (default $25.00, decision D-14), posting a reversible adjustment entry (Dr Settlement Suspense / Cr Settlement Adjustment) — never a silent status flip. Use this tool only for genuinely unidentifiable small residuals; above the threshold there is no self-service write-off — manually match or escalate. Preconditions: the line must exist and be UNMATCHED, its gross must not exceed the threshold (compared on absolute value), and a non-blank reason (max 500 chars) is required and audited. Respects accounting period locks (Story B2). Emits ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF. Returns 422 when the absolute gross exceeds the threshold (WRITE_OFF_THRESHOLD_EXCEEDED) or the adjustment entry is dated into a locked accounting period (PERIOD_CLOSED / PERIOD_HARD_LOCKED), and 409 when the line is no longer UNMATCHED (SETTLEMENT_LINE_NOT_UNMATCHED) or the settlement has not yet posted (SETTLEMENT_NOT_POSTED).'
+      operationId: writeOffSettlementLine
+      parameters:
+      - name: lineId
+        in: path
+        description: Settlement line id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementWriteOffRequest'
+        required: true
+      responses:
+        '200':
+          description: Line written off; the updated line is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementLineResponse'
+        '400':
+          description: reason is missing, blank, or over 500 characters (ARGUMENT_NOT_VALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:reconciliation:adjust permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Settlement line not found (SETTLEMENT_LINE_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Settlement line is not UNMATCHED (SETTLEMENT_LINE_NOT_UNMATCHED), or the settlement has not yet posted (SETTLEMENT_NOT_POSTED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Line absolute gross exceeds the write-off threshold (WRITE_OFF_THRESHOLD_EXCEEDED); manual match or escalate — or the adjustment entry is dated into a CLOSED or hard-locked accounting period (PERIOD_CLOSED / PERIOD_HARD_LOCKED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/settlements/lines/{lineId}/match:
+    post:
+      tags:
+      - Settlement Reconciliation
+      summary: Manually match a settlement line
+      description: 'Manually matches an UNMATCHED settlement line to an AR receivable payment, posting a reclass entry (Dr Settlement Suspense / Cr Undeposited Funds) that clears the line''s gross out of suspense. Use this tool when the automatic gross match could not identify the payment. AP (vendor) matching is not supported in v1. Preconditions: the line must exist and be UNMATCHED, its parent settlement must already be POSTED, and the receivable payment must exist. Returns 404 if the line or payment is not found (SETTLEMENT_LINE_NOT_FOUND / RECEIVABLE_PAYMENT_NOT_FOUND), 409 if the line is no longer UNMATCHED (SETTLEMENT_LINE_NOT_UNMATCHED) or the settlement has not yet posted (SETTLEMENT_NOT_POSTED), and 422 if the reclass entry is dated into a locked accounting period (PERIOD_CLOSED / PERIOD_HARD_LOCKED). Emits ACCOUNTING_SETTLEMENT_LINE_MATCH.'
+      operationId: matchSettlementLine
+      parameters:
+      - name: lineId
+        in: path
+        description: Settlement line id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementManualMatchRequest'
+        required: true
+      responses:
+        '200':
+          description: Line matched; the updated line is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementLineResponse'
+        '400':
+          description: receivablePaymentId is missing (ARGUMENT_NOT_VALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Caller lacks the accounting:reconciliation:adjust permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Settlement line or receivable payment not found (SETTLEMENT_LINE_NOT_FOUND / RECEIVABLE_PAYMENT_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Settlement line is not UNMATCHED (SETTLEMENT_LINE_NOT_UNMATCHED), or the settlement has not yet posted (SETTLEMENT_NOT_POSTED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Reclass entry is dated into a CLOSED or hard-locked accounting period (PERIOD_CLOSED / PERIOD_HARD_LOCKED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      x-required-permissions:
+      - accounting:reconciliation:adjust
   /v1/accounting/reports/export:
     get:
       tags:
@@ -2788,6 +2916,49 @@ paths:
         - accounting:ap:view
       x-required-permissions:
       - accounting:ap:view
+  /v1/accounting/settlements/{settlementId}/lines:
+    get:
+      tags:
+      - Settlement Reconciliation
+      summary: List settlement lines
+      description: Lists the lines of one processor settlement (payout), optionally filtered to only the UNMATCHED lines awaiting review. Use this tool to triage a settlement before manually matching or writing off its unmatched lines. Matched lines are already posted; unmatched lines park their gross in the settlement suspense account until resolved (decision D-13). No preconditions and no side effects; an unknown settlementId returns an empty list.
+      operationId: listSettlementLines
+      parameters:
+      - name: settlementId
+        in: path
+        description: Provider settlement (payout) id
+        required: true
+        schema:
+          type: string
+        example: stl_1Mx3k2eZvKYlo2C0
+      - name: unmatchedOnly
+        in: query
+        description: When true, return only UNMATCHED lines
+        required: false
+        schema:
+          type: boolean
+          default: false
+        example: true
+      responses:
+        '200':
+          description: Settlement lines listed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SettlementLineResponse'
+        '403':
+          description: Caller lacks the accounting:reconciliation:view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      x-required-permissions:
+      - accounting:reconciliation:view
   /v1/accounting/reports/location/labor-overhead:
     get:
       tags:
@@ -2945,6 +3116,68 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IncomeStatementReport'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
+  /v1/accounting/reports/financial/general-ledger:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Generate General Ledger
+      description: 'Generate a General Ledger report for a date range: per-account chronological POSTED journal lines with a running balance, opening/closing balances, and grand totals. Optionally filter to a single account.'
+      operationId: generateGeneralLedger
+      parameters:
+      - name: accountId
+        in: query
+        description: Optional GL account ID (UUID) to filter to a single account
+        required: false
+        schema:
+          type: string
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        example: 123e4567-e89b-12d3-a456-426614174000
+      - name: startDate
+        in: query
+        description: Period start date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-01-01
+      - name: endDate
+        in: query
+        description: Period end date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-06-30
+      responses:
+        '200':
+          description: General ledger generated successfully (sections empty when no POSTED activity exists)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralLedgerReport'
+        '400':
+          description: Invalid account ID or date range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - reporting:view:financial-statements
@@ -3132,6 +3365,98 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BalanceSheetReport'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
+  /v1/accounting/reports/financial/aged-receivables:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Generate Aged Receivables
+      description: 'Generate the Aged Receivables report as of a date: per-customer open invoice balances bucketed by days past due (0-30 / 31-60 / 61-90 / 90+) with grand totals.'
+      operationId: generateAgedReceivables
+      parameters:
+      - name: asOfDate
+        in: query
+        description: As-of date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-06-30
+      responses:
+        '200':
+          description: Aged receivables generated successfully (rows empty when no open receivables exist)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgedReceivablesReport'
+        '400':
+          description: Invalid or missing asOfDate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
+  /v1/accounting/reports/financial/aged-payables:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Generate Aged Payables
+      description: 'Generate the Aged Payables report as of a date: per-vendor open vendor-bill balances bucketed by days past due (0-30 / 31-60 / 61-90 / 90+) with grand totals.'
+      operationId: generateAgedPayables
+      parameters:
+      - name: asOfDate
+        in: query
+        description: As-of date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-06-30
+      responses:
+        '200':
+          description: Aged payables generated successfully (rows empty when no open payables exist)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgedPayablesReport'
+        '400':
+          description: Invalid or missing asOfDate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - reporting:view:financial-statements
@@ -5391,6 +5716,107 @@ components:
           minLength: 1
       required:
       - operatorId
+    SettlementWriteOffRequest:
+      type: object
+      description: Request payload for writing off a small unmatched settlement line
+      properties:
+        reason:
+          type: string
+          description: Mandatory reason for the write-off; recorded on the line and in the audit trail
+          example: Unidentifiable micro-deposit below reconciliation threshold
+          maxLength: 500
+          minLength: 0
+      required:
+      - reason
+    SettlementLineResponse:
+      type: object
+      description: Processor settlement line with its reconciliation match status
+      properties:
+        lineId:
+          type: string
+          format: uuid
+          description: Settlement line UUID
+          example: 01936e5e-7890-7a3d-8b6e-4d5678901234
+        settlementId:
+          type: string
+          description: Owning settlement id (provider payout id)
+          example: stl_1Mx3k2eZvKYlo2C0
+        providerLineRef:
+          type: string
+          description: Provider's own line reference
+          example: txn_3Mx3k2eZvKYlo2C0
+        lineType:
+          type: string
+          description: Settlement line type
+          enum:
+          - CHARGE
+          - REFUND
+          - CHARGEBACK
+          - FEE
+          - ADJUSTMENT
+          - RESERVE_HOLD
+          - RESERVE_RELEASE
+          - PAYOUT_CORRECTION
+          example: CHARGE
+        grossAmount:
+          type: number
+          description: Line gross amount (matched on gross, decision D-11)
+          example: 1000.0
+        feeAmount:
+          type: number
+          description: Line fee amount; null for netted/header-only providers
+          example: 30.0
+        netAmount:
+          type: number
+          description: Line net amount; null for netted/header-only providers
+          example: 970.0
+        paymentReference:
+          type: string
+          description: Platform correlation token echoed by the processor (decision D-11)
+        matchStatus:
+          type: string
+          description: Reconciliation match status
+          enum:
+          - MATCHED
+          - UNMATCHED
+          - WRITTEN_OFF
+          example: UNMATCHED
+        matchedPaymentId:
+          type: string
+          format: uuid
+          description: Id of the matched AR/AP payment; null while UNMATCHED
+        matchedPaymentType:
+          type: string
+          description: Whether the matched payment is AR (receivable) or AP (vendor)
+          enum:
+          - AR
+          - AP
+        writeoffReason:
+          type: string
+          description: Recorded reason when the line was written off
+        writeoffJournalEntryId:
+          type: string
+          format: uuid
+          description: Journal entry id of the reversible write-off posting
+        createdAt:
+          type: string
+          format: date-time
+          description: When the line was first ingested
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the line was last updated
+    SettlementManualMatchRequest:
+      type: object
+      description: Request payload for manually matching a settlement line to a receivable payment
+      properties:
+        receivablePaymentId:
+          type: string
+          format: uuid
+          description: The receivable payment to match the settlement line to
+          example: 01936e5e-7890-7a3d-8b6e-4d5678901234
+      required:
+      - receivablePaymentId
     ReportExportRequest:
       type: object
       description: Request payload for exporting a financial report
@@ -7469,6 +7895,137 @@ components:
       - startDate
       - totalExpenses
       - totalRevenue
+    GeneralLedgerAccountSection:
+      type: object
+      description: General Ledger section for a single account with opening/closing balances and lines
+      properties:
+        accountId:
+          type: string
+          description: GL account ID (UUID)
+          example: 123e4567-e89b-12d3-a456-426614174000
+        accountNumber:
+          type: string
+          description: GL account number (chart-of-accounts code)
+          example: '1000'
+        accountName:
+          type: string
+          description: GL account display name
+          example: Cash - Operating
+        openingBalance:
+          type: number
+          description: Signed opening balance (debit positive) from POSTED activity before the start date
+          example: 50000.0
+        lines:
+          type: array
+          description: Chronological in-period POSTED lines with running balance
+          items:
+            $ref: '#/components/schemas/GeneralLedgerLine'
+        totalDebit:
+          type: number
+          description: Sum of in-period POSTED debit amounts for the account
+          example: 30000.0
+        totalCredit:
+          type: number
+          description: Sum of in-period POSTED credit amounts for the account
+          example: 0.0
+        closingBalance:
+          type: number
+          description: 'Signed closing balance (debit positive): opening balance plus in-period net activity'
+          example: 80000.0
+      required:
+      - accountId
+      - accountName
+      - accountNumber
+      - closingBalance
+      - lines
+      - openingBalance
+      - totalCredit
+      - totalDebit
+    GeneralLedgerLine:
+      type: object
+      description: Chronological POSTED journal line with running balance for a GL account
+      properties:
+        journalEntryId:
+          type: string
+          format: uuid
+          description: Journal entry UUID
+          example: 01960003-0000-7000-8000-000000000001
+        entryNumber:
+          type: string
+          description: Journal entry number
+          example: JE-202606-0042
+        transactionDate:
+          type: string
+          format: date
+          description: Transaction date
+          example: 2026-06-15
+        description:
+          type: string
+          description: Description/narrative for the journal line
+          example: Recognize receivable
+        debitAmount:
+          type: number
+          description: Debit amount (null if credit)
+          example: 1250.0
+        creditAmount:
+          type: number
+          description: Credit amount (null if debit)
+          example: 1250.0
+        runningBalance:
+          type: number
+          description: Cumulative signed account balance (debit positive) through this line
+          example: 80000.0
+        sourceEventType:
+          type: string
+          description: Source event type
+          example: INVOICE_POSTED
+      required:
+      - journalEntryId
+      - runningBalance
+      - transactionDate
+    GeneralLedgerReport:
+      type: object
+      description: General Ledger report with per-account chronological POSTED lines and running balance
+      properties:
+        accountId:
+          type: string
+          description: Account ID the report was filtered to; null when spanning all accounts
+          example: 123e4567-e89b-12d3-a456-426614174000
+        startDate:
+          type: string
+          format: date
+          description: Period start date (inclusive)
+          example: 2026-01-01
+        endDate:
+          type: string
+          format: date
+          description: Period end date (inclusive)
+          example: 2026-06-30
+        generatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the report was generated (ISO 8601)
+          example: 2026-06-30 08:00:00+00:00
+        accounts:
+          type: array
+          description: Per-account sections ordered by account number; empty when no POSTED activity exists
+          items:
+            $ref: '#/components/schemas/GeneralLedgerAccountSection'
+        totalDebit:
+          type: number
+          description: Grand total of in-period POSTED debit amounts across all sections
+          example: 125000.0
+        totalCredit:
+          type: number
+          description: Grand total of in-period POSTED credit amounts across all sections
+          example: 125000.0
+      required:
+      - accounts
+      - endDate
+      - generatedAt
+      - startDate
+      - totalCredit
+      - totalDebit
     JournalLineDrilldownResponse:
       type: object
       description: Drilldown of an individual journal line affecting an account
@@ -7575,6 +8132,168 @@ components:
       - totalAssets
       - totalEquity
       - totalLiabilities
+    AgedReceivablesReport:
+      type: object
+      description: Aged Receivables report with per-customer bucketed open invoice balances
+      properties:
+        asOfDate:
+          type: string
+          format: date
+          description: Date the receivables aging is reported as of (inclusive)
+          example: 2026-06-30
+        generatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the report was generated (ISO 8601)
+          example: 2026-06-30 08:00:00+00:00
+        rows:
+          type: array
+          description: Per-customer aging rows ordered by customer name; empty when no open receivables exist
+          items:
+            $ref: '#/components/schemas/AgedReceivablesRow'
+        totals:
+          $ref: '#/components/schemas/AgingSummary'
+      required:
+      - asOfDate
+      - generatedAt
+      - rows
+      - totals
+    AgedReceivablesRow:
+      type: object
+      description: Per-customer aged receivables row with bucketed open invoice balances
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          description: Customer (party) UUID
+          example: d10217f9-3ec6-46b9-9c87-e7066c100c24
+        customerName:
+          type: string
+          description: Customer display name
+          example: Acme Fleet Services
+        current:
+          type: number
+          description: Outstanding 0-30 days past due (includes not-yet-due)
+          example: 1250.0
+        days31To60:
+          type: number
+          description: Outstanding 31-60 days past due
+          example: 500.0
+        days61To90:
+          type: number
+          description: Outstanding 61-90 days past due
+          example: 0.0
+        days90Plus:
+          type: number
+          description: Outstanding more than 90 days past due
+          example: 0.0
+        totalOutstanding:
+          type: number
+          description: Total outstanding for the customer across all buckets
+          example: 1750.0
+      required:
+      - current
+      - customerId
+      - days31To60
+      - days61To90
+      - days90Plus
+      - totalOutstanding
+    AgingSummary:
+      type: object
+      description: Grand-total aging buckets across all rows of an aged AR/AP report
+      properties:
+        current:
+          type: number
+          description: Total outstanding 0-30 days past due (includes not-yet-due items)
+          example: 12500.0
+        days31To60:
+          type: number
+          description: Total outstanding 31-60 days past due
+          example: 4200.0
+        days61To90:
+          type: number
+          description: Total outstanding 61-90 days past due
+          example: 1800.0
+        days90Plus:
+          type: number
+          description: Total outstanding more than 90 days past due
+          example: 900.0
+        totalOutstanding:
+          type: number
+          description: Grand total outstanding across all buckets
+          example: 19400.0
+      required:
+      - current
+      - days31To60
+      - days61To90
+      - days90Plus
+      - totalOutstanding
+    AgedPayablesReport:
+      type: object
+      description: Aged Payables report with per-vendor bucketed open vendor-bill balances
+      properties:
+        asOfDate:
+          type: string
+          format: date
+          description: Date the payables aging is reported as of (inclusive)
+          example: 2026-06-30
+        generatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the report was generated (ISO 8601)
+          example: 2026-06-30 08:00:00+00:00
+        rows:
+          type: array
+          description: Per-vendor aging rows ordered by vendor name; empty when no open payables exist
+          items:
+            $ref: '#/components/schemas/AgedPayablesRow'
+        totals:
+          $ref: '#/components/schemas/AgingSummary'
+      required:
+      - asOfDate
+      - generatedAt
+      - rows
+      - totals
+    AgedPayablesRow:
+      type: object
+      description: Per-vendor aged payables row with bucketed open vendor-bill balances
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+          description: Vendor UUID
+          example: d10217f9-3ec6-46b9-9c87-e7066c100c24
+        vendorName:
+          type: string
+          description: Vendor display name
+          example: Global Parts Supply
+        current:
+          type: number
+          description: Outstanding 0-30 days past due (includes not-yet-due)
+          example: 3200.0
+        days31To60:
+          type: number
+          description: Outstanding 31-60 days past due
+          example: 750.0
+        days61To90:
+          type: number
+          description: Outstanding 61-90 days past due
+          example: 0.0
+        days90Plus:
+          type: number
+          description: Outstanding more than 90 days past due
+          example: 0.0
+        totalOutstanding:
+          type: number
+          description: Total outstanding for the vendor across all buckets
+          example: 3950.0
+      required:
+      - current
+      - days31To60
+      - days61To90
+      - days90Plus
+      - totalOutstanding
+      - vendorId
     Pageable:
       type: object
       properties:

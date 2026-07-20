@@ -140,8 +140,8 @@ public class GLMappingResolverImpl implements GLMappingResolver {
     public UUID resolveGLAccount(String postingCategoryName, String mappingKeyName, LocalDateTime transactionDate) {
         PostingCategory category = postingCategoryRepository
                 .findByCategoryName(postingCategoryName)
-                .orElseThrow(() ->
-                        new IllegalArgumentException("Posting category not configured: " + postingCategoryName));
+                .orElseThrow(
+                        () -> new IllegalArgumentException("Posting category not configured: " + postingCategoryName));
 
         MappingKey mappingKey = mappingKeyRepository
                 .findByPostingCategory_PostingCategoryIdAndKeyName(category.getPostingCategoryId(), mappingKeyName)

@@ -169,11 +169,12 @@ class MappingResolutionTestServiceTest {
                     splitLine(ACCOUNT_B, "DEBIT", "33.3333", "revenue-split"),
                     splitLine(ACCOUNT_C, "DEBIT", "33.3334", "revenue-split"),
                     line(ACCOUNT_D, "CREDIT", "")));
-            when(glAccountRepository.findAllById(any())).thenReturn(List.of(
-                    glAccount(ACCOUNT_A, "4000", "Sales Revenue A"),
-                    glAccount(ACCOUNT_B, "4001", "Sales Revenue B"),
-                    glAccount(ACCOUNT_C, "4002", "Sales Revenue C"),
-                    glAccount(ACCOUNT_D, "1200", "Accounts Receivable")));
+            when(glAccountRepository.findAllById(any()))
+                    .thenReturn(List.of(
+                            glAccount(ACCOUNT_A, "4000", "Sales Revenue A"),
+                            glAccount(ACCOUNT_B, "4001", "Sales Revenue B"),
+                            glAccount(ACCOUNT_C, "4002", "Sales Revenue C"),
+                            glAccount(ACCOUNT_D, "1200", "Accounts Receivable")));
 
             Map<String, Object> payload = new HashMap<>();
             payload.put("channel", "POS");
@@ -356,9 +357,7 @@ class MappingResolutionTestServiceTest {
         @DisplayName("non-numeric amount field in sample payload throws IllegalArgumentException")
         void nonNumericAmountThrows() {
             stubPublishedRules(rules(
-                    "eventType == '" + EVENT_TYPE + "'",
-                    line(ACCOUNT_A, "DEBIT", ""),
-                    line(ACCOUNT_D, "CREDIT", "")));
+                    "eventType == '" + EVENT_TYPE + "'", line(ACCOUNT_A, "DEBIT", ""), line(ACCOUNT_D, "CREDIT", "")));
 
             Map<String, Object> payload = new HashMap<>();
             payload.put("totalAmount", "not-a-number");
@@ -388,15 +387,13 @@ class MappingResolutionTestServiceTest {
         @DisplayName("absent amount field resolves to zero amounts, matching real posting")
         void absentAmountFieldMatchesWithZeroAmounts() {
             stubPublishedRules(rules(
-                    "eventType == '" + EVENT_TYPE + "'",
-                    line(ACCOUNT_A, "DEBIT", ""),
-                    line(ACCOUNT_D, "CREDIT", "")));
-            when(glAccountRepository.findAllById(any())).thenReturn(List.of(
-                    glAccount(ACCOUNT_A, "4000", "Sales Revenue A"),
-                    glAccount(ACCOUNT_D, "1200", "Accounts Receivable")));
+                    "eventType == '" + EVENT_TYPE + "'", line(ACCOUNT_A, "DEBIT", ""), line(ACCOUNT_D, "CREDIT", "")));
+            when(glAccountRepository.findAllById(any()))
+                    .thenReturn(List.of(
+                            glAccount(ACCOUNT_A, "4000", "Sales Revenue A"),
+                            glAccount(ACCOUNT_D, "1200", "Accounts Receivable")));
 
-            MappingResolutionTestResponse response =
-                    service.resolveTest(request(EVENT_TYPE, Map.of("channel", "POS")));
+            MappingResolutionTestResponse response = service.resolveTest(request(EVENT_TYPE, Map.of("channel", "POS")));
 
             assertThat(response.isMatched()).isTrue();
             assertThat(response.getResolvedLines()).hasSize(2);

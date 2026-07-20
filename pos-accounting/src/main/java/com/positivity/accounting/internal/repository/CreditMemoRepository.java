@@ -78,9 +78,8 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
      * @param status            credit memo status to include (normally POSTED)
      * @return total credited revenue amount
      */
-    @org.springframework.data.jpa.repository.Query(
-            "SELECT COALESCE(SUM(cm.creditAmount), 0) FROM CreditMemo cm"
-                    + " WHERE cm.originalInvoiceId = :originalInvoiceId AND cm.status = :status")
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(cm.creditAmount), 0) FROM CreditMemo cm"
+            + " WHERE cm.originalInvoiceId = :originalInvoiceId AND cm.status = :status")
     java.math.BigDecimal sumCreditAmountByInvoiceIdAndStatus(UUID originalInvoiceId, CreditMemoStatus status);
 
     /**
@@ -92,8 +91,7 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
      * @param status            credit memo status to include (normally POSTED)
      * @return total reversed tax amount
      */
-    @org.springframework.data.jpa.repository.Query(
-            "SELECT COALESCE(SUM(cm.taxAmountReversed), 0) FROM CreditMemo cm"
-                    + " WHERE cm.originalInvoiceId = :originalInvoiceId AND cm.status = :status")
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(cm.taxAmountReversed), 0) FROM CreditMemo cm"
+            + " WHERE cm.originalInvoiceId = :originalInvoiceId AND cm.status = :status")
     java.math.BigDecimal sumTaxReversedAmountByInvoiceIdAndStatus(UUID originalInvoiceId, CreditMemoStatus status);
 }

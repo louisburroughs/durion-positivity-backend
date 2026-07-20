@@ -217,7 +217,8 @@ class PaymentApplicationGLPostingEventHandlerTest {
     }
 
     @Test
-    @DisplayName("F4: transaction date and mapping resolution derive from applicationTimestamp, not clock-now (outbox backlog)")
+    @DisplayName(
+            "F4: transaction date and mapping resolution derive from applicationTimestamp, not clock-now (outbox backlog)")
     void backlogRetry_usesApplicationTimestampNotClockNow() {
         // Simulate an outbox retry / backlog: the payment application actually
         // happened weeks BEFORE the clock's "now". The JE transaction date and
@@ -259,7 +260,9 @@ class PaymentApplicationGLPostingEventHandlerTest {
         ArgumentCaptor<LocalDateTime> mappingDateCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(glMappingResolver)
                 .resolveGLAccount(eq("PAYMENT_APPLICATION"), eq("UNDEPOSITED_FUNDS"), mappingDateCaptor.capture());
-        assertThat(mappingDateCaptor.getValue()).isEqualTo(expectedTransactionDate).isNotEqualTo(clockNow);
+        assertThat(mappingDateCaptor.getValue())
+                .isEqualTo(expectedTransactionDate)
+                .isNotEqualTo(clockNow);
 
         verify(glMappingResolver)
                 .resolveGLAccount(eq("PAYMENT_APPLICATION"), eq("ACCOUNTS_RECEIVABLE"), eq(expectedTransactionDate));
