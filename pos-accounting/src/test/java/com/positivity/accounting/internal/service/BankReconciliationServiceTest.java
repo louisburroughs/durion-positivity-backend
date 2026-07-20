@@ -24,6 +24,7 @@ import com.positivity.accounting.internal.enums.BankReconciliationLineStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
+import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
 import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationLineIneligibleException;
@@ -349,6 +350,38 @@ class BankReconciliationServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.addAdjustment(RECON_ID, request)).isInstanceOf(IllegalArgumentException.class);
+        verify(journalEntryService, never()).createJournalEntry(any());
+    }
+
+    @Test
+    @DisplayName("a positive BANK_FEE is rejected — a fee may only reduce cash (D2 sign guard)")
+    void adjustmentPositiveBankFeeRejected() {
+        BankReconciliation recon = openReconciliation();
+        when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.of(recon));
+
+        ReconciliationAdjustmentRequest request = ReconciliationAdjustmentRequest.builder()
+                .type(BankAdjustmentType.BANK_FEE)
+                .amount(new BigDecimal("12.5000"))
+                .build();
+
+        assertThatThrownBy(() -> service.addAdjustment(RECON_ID, request))
+                .isInstanceOf(AdjustmentSignInvalidException.class);
+        verify(journalEntryService, never()).createJournalEntry(any());
+    }
+
+    @Test
+    @DisplayName("a negative INTEREST_EARNED is rejected — interest may only increase cash (D2 sign guard)")
+    void adjustmentNegativeInterestRejected() {
+        BankReconciliation recon = openReconciliation();
+        when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.of(recon));
+
+        ReconciliationAdjustmentRequest request = ReconciliationAdjustmentRequest.builder()
+                .type(BankAdjustmentType.INTEREST_EARNED)
+                .amount(new BigDecimal("-5.0000"))
+                .build();
+
+        assertThatThrownBy(() -> service.addAdjustment(RECON_ID, request))
+                .isInstanceOf(AdjustmentSignInvalidException.class);
         verify(journalEntryService, never()).createJournalEntry(any());
     }
 

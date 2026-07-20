@@ -9,6 +9,7 @@ import com.positivity.accounting.internal.exception.AccountingPeriodClosedExcept
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
+import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
@@ -279,6 +280,13 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleMatchAmountMismatch(
             MatchAmountMismatchException ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "MATCH_AMOUNT_MISMATCH", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(AdjustmentSignInvalidException.class)
+    public ResponseEntity<ApiError> handleAdjustmentSignInvalid(
+            AdjustmentSignInvalidException ex, HttpServletRequest request) {
+        return build(
+                HttpStatus.UNPROCESSABLE_CONTENT, "RECONCILIATION_ADJUSTMENT_SIGN_INVALID", ex.getMessage(), request);
     }
 
     @ExceptionHandler(ReconciliationLineIneligibleException.class)

@@ -1173,7 +1173,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '422':
-          description: Adjustment JE dated into a CLOSED or hard-locked period (PERIOD_CLOSED / PERIOD_HARD_LOCKED)
+          description: Adjustment JE dated into a CLOSED or hard-locked period (PERIOD_CLOSED / PERIOD_HARD_LOCKED), or the amount sign is not permitted for the type — BANK_FEE/NSF_FEE must be negative, INTEREST_EARNED must be positive (RECONCILIATION_ADJUSTMENT_SIGN_INVALID)
           content:
             application/json:
               schema:
@@ -6424,7 +6424,6 @@ components:
           - BANK_FEE
           - NSF_FEE
           - INTEREST_EARNED
-          - FLOAT_ADJUSTMENT
           - OTHER
           example: BANK_FEE
         amount:
@@ -6601,7 +6600,6 @@ components:
           - BANK_FEE
           - NSF_FEE
           - INTEREST_EARNED
-          - FLOAT_ADJUSTMENT
           - OTHER
           example: BANK_FEE
         amount:
@@ -9265,7 +9263,6 @@ components:
           - BANK_FEE
           - NSF_FEE
           - INTEREST_EARNED
-          - FLOAT_ADJUSTMENT
           - OTHER
           example: BANK_FEE
     PostingRuleSetListResponse:

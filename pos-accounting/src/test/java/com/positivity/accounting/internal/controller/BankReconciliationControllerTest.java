@@ -18,6 +18,7 @@ import com.positivity.accounting.internal.dto.ReconciliationMatchRequest;
 import com.positivity.accounting.internal.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
+import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
 import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
@@ -205,6 +206,14 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
             mockMvc.perform(withAuth(get("/v1/accounting/reconciliations/adjustment-types"), "accounting:je:view"))
                     .andExpect(status().isForbidden());
         }
+
+        @Test
+        @DisplayName("Should not serve FLOAT_ADJUSTMENT (removed in v1)")
+        void shouldNotServeFloatAdjustment() throws Exception {
+            mockMvc.perform(withAuth(get("/v1/accounting/reconciliations/adjustment-types")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[?(@.code == 'FLOAT_ADJUSTMENT')]").isEmpty());
+        }
     }
 
     @Nested
@@ -264,6 +273,23 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
     @Nested
     @DisplayName("POST /v1/accounting/reconciliations/{id}/adjustments")
     class Adjustments {
+
+        @Test
+        @DisplayName("Should return 422 RECONCILIATION_ADJUSTMENT_SIGN_INVALID for a wrong-sign adjustment")
+        void shouldReturn422SignInvalid() throws Exception {
+            when(bankReconciliationService.addAdjustment(eq(RECON_ID), any()))
+                    .thenThrow(new AdjustmentSignInvalidException(BankAdjustmentType.BANK_FEE));
+            ReconciliationAdjustmentRequest req = ReconciliationAdjustmentRequest.builder()
+                    .type(BankAdjustmentType.BANK_FEE)
+                    .amount(new BigDecimal("12.5000"))
+                    .build();
+
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/adjustments", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(req)))
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.code").value("RECONCILIATION_ADJUSTMENT_SIGN_INVALID"));
+        }
 
         @Test
         @DisplayName("Should return 409 RECONCILIATION_ALREADY_FINALIZED when finalized")

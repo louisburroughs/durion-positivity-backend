@@ -82,7 +82,7 @@ CREATE TABLE bank_reconciliation_adjustment (
     CONSTRAINT bank_reconciliation_adjustment_recon_fk
         FOREIGN KEY (reconciliation_id) REFERENCES bank_reconciliation (reconciliation_id),
     CONSTRAINT bank_reconciliation_adjustment_type_ck
-        CHECK (adjustment_type IN ('BANK_FEE', 'NSF_FEE', 'INTEREST_EARNED', 'FLOAT_ADJUSTMENT', 'OTHER'))
+        CHECK (adjustment_type IN ('BANK_FEE', 'NSF_FEE', 'INTEREST_EARNED', 'OTHER'))
 );
 
 CREATE INDEX idx_bank_reconciliation_adjustment_recon ON bank_reconciliation_adjustment (reconciliation_id);

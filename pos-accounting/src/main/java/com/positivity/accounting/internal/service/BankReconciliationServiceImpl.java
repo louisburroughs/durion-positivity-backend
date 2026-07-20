@@ -22,6 +22,7 @@ import com.positivity.accounting.internal.enums.BankReconciliationLineStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
+import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
 import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationLineIneligibleException;
@@ -312,6 +313,9 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
             throw new IllegalArgumentException("Adjustment amount must be non-zero");
         }
         BankAdjustmentType type = request.getType();
+        if (!type.permits(amount.signum())) {
+            throw new AdjustmentSignInvalidException(type);
+        }
 
         LocalDateTime txDate = recon.getStatementDate().atStartOfDay();
         UUID cashAccountId = recon.getGlAccountId();
