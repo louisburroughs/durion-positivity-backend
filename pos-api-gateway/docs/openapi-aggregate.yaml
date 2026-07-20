@@ -139,6 +139,26 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1posting-rules~1{postingRuleSetId}~1publish
   /v1/accounting/posting-rules/{postingRuleSetId}/versions:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1posting-rules~1{postingRuleSetId}~1versions
+  /v1/accounting/reconciliations:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations
+  /v1/accounting/reconciliations/adjustment-types:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1adjustment-types
+  /v1/accounting/reconciliations/import:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1import
+  /v1/accounting/reconciliations/{reconciliationId}:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}
+  /v1/accounting/reconciliations/{reconciliationId}/adjustments:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1adjustments
+  /v1/accounting/reconciliations/{reconciliationId}/audit:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1audit
+  /v1/accounting/reconciliations/{reconciliationId}/finalize:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1finalize
+  /v1/accounting/reconciliations/{reconciliationId}/match:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1match
+  /v1/accounting/reconciliations/{reconciliationId}/report:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1report
+  /v1/accounting/reconciliations/{reconciliationId}/unmatch:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1unmatch
   /v1/accounting/reports/export:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1export
   /v1/accounting/reports/export/{exportId}:
