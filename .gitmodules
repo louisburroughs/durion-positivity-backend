@@ -1,0 +1,3 @@
+[submodule ".sre"]
+	path = .sre
+	url = https://gitlab.michelin.com/DOTI/bs/zam/it-for-it/templates/ai/digital-sre.git
