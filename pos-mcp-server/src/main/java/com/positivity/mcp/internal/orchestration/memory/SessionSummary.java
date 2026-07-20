@@ -1,17 +1,17 @@
 package com.positivity.mcp.internal.orchestration.memory;
 
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
+import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import java.util.Collections;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,14 +52,14 @@ public class SessionSummary {
 
     private final @NonNull ChatModel chatModel;
     private final @NonNull EmbeddingModel embeddingModel;
-    private final @Nullable PgVectorEmbeddingStore embeddingStore;
-    private final @Nullable ContentRetriever summaryRetriever;
+        private final @Nullable PgVectorStore embeddingStore;
+        private final @Nullable QueryDocumentRetriever summaryRetriever;
 
     public SessionSummary(
             @NonNull ChatModel chatModel,
             @NonNull EmbeddingModel embeddingModel,
-            @Nullable PgVectorEmbeddingStore embeddingStore,
-            @Nullable ContentRetriever summaryRetriever) {
+            @Nullable PgVectorStore embeddingStore,
+            @Nullable QueryDocumentRetriever summaryRetriever) {
         this.chatModel = chatModel;
         this.embeddingModel = embeddingModel;
         this.embeddingStore = embeddingStore;
@@ -76,17 +76,15 @@ public class SessionSummary {
      * @return Summary text
      */
     @NonNull
-    public String summarize(@NonNull List<ChatMessage> messages) {
+    public String summarize(@NonNull List<Message> messages) {
         try {
             String conversationText = formatMessagesForSummarization(messages);
             if (conversationText.isEmpty()) {
                 return "";
             }
             String prompt = String.format(SUMMARIZATION_PROMPT_TEMPLATE, conversationText);
-            ChatResponse response = chatModel.chat(ChatRequest.builder()
-                    .messages(List.of(SystemMessage.from(prompt)))
-                    .build());
-            String summary = response.aiMessage().text();
+            ChatResponse response = chatModel.call(new Prompt(new SystemMessage(prompt)));
+            String summary = response.getResult().getOutput().getText();
             LOGGER.debug("Generated summary for {} messages; summaryLength={}", messages.size(), summary.length());
             return summary;
         } catch (RuntimeException e) {
@@ -116,7 +114,7 @@ public class SessionSummary {
      * @param messages  Original conversation messages
      */
     public void archiveSession(
-            @NonNull String sessionId, @NonNull String summary, @NonNull List<ChatMessage> messages) {
+            @NonNull String sessionId, @NonNull String summary, @NonNull List<Message> messages) {
         try {
             LOGGER.info(
                     "Archiving session sessionId={} summaryLength={} messageCount={}",
@@ -153,13 +151,13 @@ public class SessionSummary {
                 LOGGER.trace("Summary retriever not available; no cross-session context");
                 return Collections.emptyList();
             }
-            // Tier 3: Would query against archived session summaries for this userId
-            // SELECT summary FROM session_summaries
-            // WHERE user_id = ? AND created_at > NOW() - INTERVAL '30 days'
-            // ORDER BY embedding_similarity(query_embedding, summary_embedding) DESC
-            // LIMIT topK
+            // Tier 3: Retrieved summaries should remain permission-filtered by the caller's context.
             LOGGER.debug("Retrieved relevant context for userId={} topK={}", userId, topK);
-            return Collections.emptyList(); // Placeholder
+            return summaryRetriever.retrieve(query).stream()
+                    .map(document -> document.getText() == null ? "" : document.getText())
+                    .filter(text -> !text.isBlank())
+                    .limit(Math.max(1, topK))
+                    .toList();
         } catch (RuntimeException e) {
             LOGGER.warn(
                     "Failed to retrieve context userId={} error={}",
@@ -182,7 +180,7 @@ public class SessionSummary {
      * @return Extracted preferences
      */
     @NonNull
-    public List<String> extractUserPreferences(@NonNull List<ChatMessage> messages) {
+    public List<String> extractUserPreferences(@NonNull List<Message> messages) {
         try {
             if (messages.isEmpty()) {
                 return Collections.emptyList();
@@ -204,12 +202,12 @@ public class SessionSummary {
      * @return Formatted text representation
      */
     @NonNull
-    private static String formatMessagesForSummarization(@NonNull List<ChatMessage> messages) {
+    private static String formatMessagesForSummarization(@NonNull List<Message> messages) {
         StringBuilder sb = new StringBuilder();
-        for (ChatMessage msg : messages) {
+        for (Message msg : messages) {
             sb.append(msg.getClass().getSimpleName())
                     .append(": ")
-                    .append(msg.toString())
+                    .append(msg.getText())
                     .append("\n");
         }
         return sb.toString();

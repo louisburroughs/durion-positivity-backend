@@ -1,8 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
-import dev.langchain4j.rag.content.Content;
-import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.rag.query.Query;
+import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -10,31 +8,33 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.NonNull;
+import org.springframework.ai.document.Document;
 
 /**
  * Expands user queries with a small set of deterministic paraphrases to improve
  * recall on wording variations without depending on an extra LLM call.
  */
-final class QueryExpansionContentRetriever implements ContentRetriever {
+final class QueryExpansionContentRetriever implements QueryDocumentRetriever {
 
-    private final ContentRetriever delegate;
+    private final QueryDocumentRetriever delegate;
     private final int expandedQueryLimit;
     private final int maxMergedResults;
 
-    QueryExpansionContentRetriever(@NonNull ContentRetriever delegate, int expandedQueryLimit, int maxMergedResults) {
+    QueryExpansionContentRetriever(
+            @NonNull QueryDocumentRetriever delegate, int expandedQueryLimit, int maxMergedResults) {
         this.delegate = delegate;
         this.expandedQueryLimit = Math.max(1, expandedQueryLimit);
         this.maxMergedResults = Math.max(1, maxMergedResults);
     }
 
     @Override
-    public @NonNull List<Content> retrieve(@NonNull Query query) {
-        List<String> expandedQueries = expand(query.text());
-        Map<String, Content> merged = new LinkedHashMap<>();
+    public @NonNull List<Document> retrieve(@NonNull String queryText) {
+        List<String> expandedQueries = expand(queryText);
+        Map<String, Document> merged = new LinkedHashMap<>();
         for (String expandedQuery : expandedQueries) {
-            List<Content> retrieved = delegate.retrieve(new Query(expandedQuery));
-            for (Content content : retrieved) {
-                merged.putIfAbsent(contentKey(content), content);
+            List<Document> retrieved = delegate.retrieve(expandedQuery);
+            for (Document document : retrieved) {
+                merged.putIfAbsent(contentKey(document), document);
             }
         }
         return merged.values().stream().limit(maxMergedResults).toList();
@@ -68,11 +68,12 @@ final class QueryExpansionContentRetriever implements ContentRetriever {
                 });
     }
 
-    private static @NonNull String contentKey(@NonNull Content content) {
-        if (content.textSegment() == null || content.textSegment().text() == null) {
-            return String.valueOf(content.hashCode());
+    private static @NonNull String contentKey(@NonNull Document document) {
+        String text = document.getText();
+        if (text == null || text.isBlank()) {
+            return String.valueOf(document.hashCode());
         }
-        return normalize(content.textSegment().text());
+        return normalize(text);
     }
 
     private static @NonNull String normalize(@NonNull String text) {

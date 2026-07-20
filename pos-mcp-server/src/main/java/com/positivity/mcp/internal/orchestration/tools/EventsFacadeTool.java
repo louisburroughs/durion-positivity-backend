@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,13 +29,13 @@ public class EventsFacadeTool {
         this.eventHistoryUriTemplate = eventHistoryUriTemplate;
     }
 
-    @Tool("Get all registered event types and metadata")
+    @Tool(description = "Get all registered event types and metadata")
     public String getEventTypes() {
         return restClient.get().uri(eventTypesUriTemplate).retrieve().body(String.class);
     }
 
-    @Tool("Search events by query text, event type, or other criteria")
-    public String searchEvents(@P("Search query for events") @NonNull String query) {
+    @Tool(description = "Search events by query text, event type, or other criteria")
+    public String searchEvents(@ToolParam(description = "Search query for events") @NonNull String query) {
         return restClient
                 .get()
                 .uri(eventSearchUriTemplate, Map.of("query", query))
@@ -43,8 +43,8 @@ public class EventsFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Get historical event activity for a specific entity")
-    public String getEventHistory(@P("The entity ID") @NonNull String entityId) {
+    @Tool(description = "Get historical event activity for a specific entity")
+    public String getEventHistory(@ToolParam(description = "The entity ID") @NonNull String entityId) {
         return restClient
                 .get()
                 .uri(eventHistoryUriTemplate, Map.of("entityId", entityId))

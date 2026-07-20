@@ -1,6 +1,5 @@
 package com.positivity.mcp.internal.orchestration;
 
-import dev.langchain4j.agent.tool.Tool;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -8,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.jspecify.annotations.NonNull;
+import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.util.ClassUtils;
 
 final class ToolSelectionSupport {

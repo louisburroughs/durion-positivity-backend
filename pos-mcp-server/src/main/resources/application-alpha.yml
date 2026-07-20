@@ -14,6 +14,20 @@ spring:
         jdbc:
           "[time_zone]": UTC
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  ai:
+    ollama:
+      base-url: ${OLLAMA_CHAT_BASE_URL:https://ollama.com}
+      chat:
+        options:
+          model: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
+          temperature: 0.2
+        timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
+        streaming-timeout: ${OLLAMA_STREAMING_CHAT_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
+      embedding:
+        base-url: ${OLLAMA_EMBEDDING_BASE_URL:http://ollama:11434}
+        options:
+          model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+        timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
 
 eureka:
   client:
@@ -23,29 +37,6 @@ eureka:
 
 server:
   port: 8086
-
-langchain4j:
-  ollama:
-    chat-model:
-      base-url: ${OLLAMA_CHAT_BASE_URL:https://ollama.com}
-      model-name: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
-      custom-headers:
-        Authorization: Bearer ${OLLAMA_API_KEY}
-      temperature: 0.2
-      timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
-    embedding-model:
-      base-url: ${OLLAMA_EMBEDDING_BASE_URL:http://ollama:11434}
-      model-name: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
-      custom-headers:
-        Authorization: Bearer ${OLLAMA_API_KEY}
-      timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
-    streaming-chat-model:
-      base-url: ${OLLAMA_CHAT_BASE_URL:https://ollama.com}
-      model-name: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
-      custom-headers:
-        Authorization: Bearer ${OLLAMA_API_KEY}
-      temperature: 0.2
-      timeout: ${OLLAMA_STREAMING_CHAT_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
 
 mcp:
   server:

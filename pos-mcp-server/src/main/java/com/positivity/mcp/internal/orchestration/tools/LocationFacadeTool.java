@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,8 +29,8 @@ public class LocationFacadeTool {
         this.locationInventoryUriTemplate = locationInventoryUriTemplate;
     }
 
-    @Tool("Get location details by location ID")
-    public String getLocation(@P("The location ID") @NonNull String locationId) {
+    @Tool(description = "Get location details by location ID")
+    public String getLocation(@ToolParam(description = "The location ID") @NonNull String locationId) {
         return restClient
                 .get()
                 .uri(locationUriTemplate, Map.of("locationId", locationId))
@@ -38,8 +38,8 @@ public class LocationFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Search locations by name, city, code, or attributes")
-    public String searchLocations(@P("Search query for locations") @NonNull String query) {
+    @Tool(description = "Search locations by name, city, code, or attributes")
+    public String searchLocations(@ToolParam(description = "Search query for locations") @NonNull String query) {
         return restClient
                 .get()
                 .uri(locationSearchUriTemplate, Map.of("query", query))
@@ -47,8 +47,8 @@ public class LocationFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Get inventory context for a specific location")
-    public String getLocationInventory(@P("The location ID") @NonNull String locationId) {
+    @Tool(description = "Get inventory context for a specific location")
+    public String getLocationInventory(@ToolParam(description = "The location ID") @NonNull String locationId) {
         return restClient
                 .get()
                 .uri(locationInventoryUriTemplate, Map.of("locationId", locationId))

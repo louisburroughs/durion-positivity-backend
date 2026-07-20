@@ -1,8 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
-import dev.langchain4j.rag.content.Content;
-import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.rag.query.Query;
+import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -10,30 +8,31 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.NonNull;
+import org.springframework.ai.document.Document;
 
 /**
  * Re-ranks retrieved content by lexical overlap and source rank.
  */
-final class RerankedContentRetriever implements ContentRetriever {
+final class RerankedContentRetriever implements QueryDocumentRetriever {
 
-    private final ContentRetriever delegate;
+    private final QueryDocumentRetriever delegate;
     private final int topK;
 
-    RerankedContentRetriever(@NonNull ContentRetriever delegate, int topK) {
+    RerankedContentRetriever(@NonNull QueryDocumentRetriever delegate, int topK) {
         this.delegate = delegate;
         this.topK = Math.max(1, topK);
     }
 
     @Override
-    public @NonNull List<Content> retrieve(@NonNull Query query) {
-        List<Content> candidates = delegate.retrieve(query);
-        Set<String> queryTokens = tokens(query.text());
+    public @NonNull List<Document> retrieve(@NonNull String queryText) {
+        List<Document> candidates = delegate.retrieve(queryText);
+        Set<String> queryTokens = tokens(queryText);
 
         Map<String, RankedContent> deduped = new LinkedHashMap<>();
         for (int index = 0; index < candidates.size(); index++) {
-            Content content = candidates.get(index);
-            String key = contentKey(content);
-            RankedContent candidate = rankContent(content, query.text(), queryTokens, index);
+            Document document = candidates.get(index);
+            String key = contentKey(document);
+            RankedContent candidate = rankContent(document, queryText, queryTokens, index);
             deduped.merge(key, candidate, (left, right) -> left.score() >= right.score() ? left : right);
         }
 
@@ -47,8 +46,8 @@ final class RerankedContentRetriever implements ContentRetriever {
     }
 
     private static @NonNull RankedContent rankContent(
-            @NonNull Content content, @NonNull String queryText, @NonNull Set<String> queryTokens, int index) {
-        String contentText = contentText(content);
+            @NonNull Document document, @NonNull String queryText, @NonNull Set<String> queryTokens, int index) {
+        String contentText = contentText(document);
         Set<String> contentTokens = tokens(contentText);
         int overlap = 0;
         for (String queryToken : queryTokens) {
@@ -62,22 +61,22 @@ final class RerankedContentRetriever implements ContentRetriever {
                 contentText.toLowerCase(Locale.ROOT).contains(queryText.toLowerCase(Locale.ROOT)) ? 0.2 : 0.0;
         double rankScore = 1.0 / (index + 1);
         double totalScore = (0.6 * lexicalScore) + (0.3 * rankScore) + phraseBoost;
-        return new RankedContent(content, totalScore, index);
+        return new RankedContent(document, totalScore, index);
     }
 
-    private static @NonNull String contentKey(@NonNull Content content) {
-        String text = contentText(content);
+    private static @NonNull String contentKey(@NonNull Document document) {
+        String text = contentText(document);
         if (text.isBlank()) {
-            return String.valueOf(content.hashCode());
+            return String.valueOf(document.hashCode());
         }
         return text;
     }
 
-    private static @NonNull String contentText(@NonNull Content content) {
-        if (content.textSegment() == null || content.textSegment().text() == null) {
+    private static @NonNull String contentText(@NonNull Document document) {
+        if (document.getText() == null) {
             return "";
         }
-        return normalize(content.textSegment().text());
+        return normalize(document.getText());
     }
 
     private static @NonNull String normalize(@NonNull String text) {
@@ -90,5 +89,5 @@ final class RerankedContentRetriever implements ContentRetriever {
                 .toList());
     }
 
-    private record RankedContent(@NonNull Content content, double score, int originalRank) {}
+    private record RankedContent(@NonNull Document content, double score, int originalRank) {}
 }

@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,8 +29,8 @@ public class CatalogFacadeTool {
         this.categoryUriTemplate = categoryUriTemplate;
     }
 
-    @Tool("Get product details from the catalog by product ID")
-    public String getProduct(@P("The product ID") @NonNull String productId) {
+    @Tool(description = "Get product details from the catalog by product ID")
+    public String getProduct(@ToolParam(description = "The product ID") @NonNull String productId) {
         return restClient
                 .get()
                 .uri(productUriTemplate, Map.of("productId", productId))
@@ -38,8 +38,8 @@ public class CatalogFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Search the catalog by name, SKU, part number, or keyword")
-    public String searchCatalog(@P("Search query for catalog") @NonNull String query) {
+    @Tool(description = "Search the catalog by name, SKU, part number, or keyword")
+    public String searchCatalog(@ToolParam(description = "Search query for catalog") @NonNull String query) {
         return restClient
                 .get()
                 .uri(catalogSearchUriTemplate, Map.of("query", query))
@@ -47,8 +47,8 @@ public class CatalogFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Get catalog products filtered by category")
-    public String getCatalogByCategory(@P("Catalog category name or code") @NonNull String category) {
+    @Tool(description = "Get catalog products filtered by category")
+    public String getCatalogByCategory(@ToolParam(description = "Catalog category name or code") @NonNull String category) {
         return restClient
                 .get()
                 .uri(categoryUriTemplate, Map.of("category", category))

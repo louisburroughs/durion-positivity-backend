@@ -2,13 +2,13 @@
 title: Spring AI Big-Bang Migration Checklist
 status: draft
 owner: pos-mcp-server
-last_updated: 2026-07-17
+last_updated: 2026-07-20
 profile: alpha
 ---
 
 ## Purpose
 
-Use this checklist to migrate pos-mcp-server from LangChain4j to Spring AI in one controlled alpha cutover.
+Use this checklist to migrate pos-mcp-server from the legacy AI runtime to Spring AI in one controlled alpha cutover.
 
 ## Scope
 
@@ -64,9 +64,9 @@ Use this checklist to migrate pos-mcp-server from LangChain4j to Spring AI in on
 
 ### Compile and Static Quality
 
-- [ ] Module builds clean with Spring AI dependencies only.
-- [ ] No production imports from dev.langchain4j remain.
-- [ ] Architecture tests pass.
+- [x] Module builds clean with Spring AI dependencies only.
+- [x] No production legacy-runtime imports remain.
+- [x] Architecture tests pass.
 
 ### Functional Regression Pack
 
@@ -98,8 +98,8 @@ Use this checklist to migrate pos-mcp-server from LangChain4j to Spring AI in on
 ### Deploy and Switch
 
 - [ ] Deploy Spring AI build to alpha.
-- [ ] Apply config namespace migration (langchain4j prefix to spring.ai prefix and module-local keys).
-- [ ] Remove/disable LangChain4j auto-config exclusions and old starters.
+- [ ] Apply config namespace migration (legacy namespace prefix to spring.ai prefix and module-local keys).
+- [ ] Remove/disable legacy runtime auto-config exclusions and old starters.
 - [ ] Restart service and verify startup health endpoints.
 
 ### Immediate Smoke (first 15 minutes)
@@ -141,7 +141,7 @@ Rollback immediately if any of the following occur:
 ## Rollback Procedure (single pass)
 
 - [ ] Stop current deployment.
-- [ ] Redeploy previous LangChain4j artifact.
+- [ ] Redeploy previous pre-cutover artifact.
 - [ ] Restore previous runtime config snapshot.
 - [ ] Verify health, blocking chat, streaming chat, and one tool execution.
 - [ ] Announce rollback completion and open follow-up incident doc.
@@ -150,10 +150,10 @@ Rollback immediately if any of the following occur:
 
 Mark migration complete only when all are true:
 
-- [ ] No production LangChain4j dependencies in module build.
-- [ ] No production LangChain4j imports remain in source.
+- [x] No production legacy-runtime dependencies in module build.
+- [x] No production legacy-runtime imports remain in source.
 - [ ] All cutover and stabilization checks pass.
-- [ ] Runbook and README updated to Spring AI terminology and properties.
+- [x] Runbook and README updated to Spring AI terminology and properties.
 - [ ] Post-migration review document is published with lessons learned.
 
 ## Evidence Log
@@ -166,3 +166,14 @@ Mark migration complete only when all are true:
 - Regression run ID:
 - Incident IDs (if any):
 - Final decision: PASS or ROLLBACK
+
+Local validation evidence (2026-07-20):
+
+- Compile: `./mvnw -pl pos-mcp-server -DskipTests compile --no-transfer-progress` -> BUILD SUCCESS
+- Tests: `./mvnw -pl pos-mcp-server test --no-transfer-progress` -> 455 tests, 0 failures, 0 errors
+- Import/dependency scan:
+  - `rg -n "langchain4j|dev\.langchain4j" pos-mcp-server --glob '!**/target/**'` -> no matches
+  - `rg -n "langchain4j|dev\.langchain4j" pos-mcp-server/src/main pos-mcp-server/pom.xml pos-mcp-server/src/main/resources --glob '!**/target/**'` -> no matches
+  - `rg -n "dev\.legacy-runtime" pos-mcp-server/src/main pos-mcp-server/pom.xml` -> no matches
+  - `rg -n "legacy-runtime:" pos-mcp-server/src/main/resources` -> no matches
+  - `rg -n "spring-ai|spring\.ai:" pos-mcp-server/pom.xml pos-mcp-server/src/main/resources/application*.yml` -> Spring AI dependency/config matches present

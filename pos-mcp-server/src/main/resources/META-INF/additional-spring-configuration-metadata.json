@@ -638,85 +638,52 @@
       "defaultValue": "/workorder/v1/workorders/{workorderId}/status"
     },
     {
-      "name": "langchain4j.ollama.chat-model.base-url",
+      "name": "spring.ai.ollama.base-url",
       "type": "java.lang.String",
-      "description": "Base URL of the Ollama server used for the chat model.",
+      "description": "Base URL of the Ollama server used for the primary chat model.",
       "defaultValue": "http://localhost:11434"
     },
     {
-      "name": "langchain4j.ollama.chat-model.model-name",
+      "name": "spring.ai.ollama.chat.options.model",
       "type": "java.lang.String",
       "description": "Ollama model name used for chat completions.",
       "defaultValue": "qwen3.5:cloud"
     },
     {
-      "name": "langchain4j.ollama.chat-model.temperature",
+      "name": "spring.ai.ollama.chat.options.temperature",
       "type": "java.lang.Double",
       "description": "Sampling temperature for the Ollama chat model (0.0\u20131.0).",
       "defaultValue": 0.2
     },
     {
-      "name": "langchain4j.ollama.chat-model.timeout",
+      "name": "spring.ai.ollama.chat.timeout",
       "type": "java.time.Duration",
       "description": "Request timeout for the Ollama chat model.",
       "defaultValue": "180s"
     },
     {
-      "name": "langchain4j.ollama.chat-model.custom-headers",
-      "type": "java.util.Map<java.lang.String,java.lang.String>",
-      "description": "Custom HTTP headers sent with each Ollama chat model request (e.g. Authorization)."
-    },
-    {
-      "name": "langchain4j.ollama.embedding-model.base-url",
+      "name": "spring.ai.ollama.embedding.base-url",
       "type": "java.lang.String",
       "description": "Base URL of the Ollama server used for the embedding model.",
       "defaultValue": "http://localhost:11434"
     },
     {
-      "name": "langchain4j.ollama.embedding-model.model-name",
+      "name": "spring.ai.ollama.embedding.options.model",
       "type": "java.lang.String",
       "description": "Ollama model name used for generating embeddings.",
       "defaultValue": "nomic-embed-text"
     },
     {
-      "name": "langchain4j.ollama.embedding-model.timeout",
+      "name": "spring.ai.ollama.embedding.timeout",
       "type": "java.time.Duration",
       "description": "Request timeout for the Ollama embedding model.",
       "defaultValue": "30s"
     },
     {
-      "name": "langchain4j.ollama.embedding-model.custom-headers",
-      "type": "java.util.Map<java.lang.String,java.lang.String>",
-      "description": "Custom HTTP headers sent with each Ollama embedding model request (e.g. Authorization)."
-    },
-    {
-      "name": "langchain4j.ollama.streaming-chat-model.base-url",
-      "type": "java.lang.String",
-      "description": "Base URL of the Ollama server used for the streaming chat model.",
-      "defaultValue": "http://localhost:11434"
-    },
-    {
-      "name": "langchain4j.ollama.streaming-chat-model.model-name",
-      "type": "java.lang.String",
-      "description": "Ollama model name used for streaming chat completions.",
-      "defaultValue": "qwen3.5:cloud"
-    },
-    {
-      "name": "langchain4j.ollama.streaming-chat-model.temperature",
-      "type": "java.lang.Double",
-      "description": "Sampling temperature for the Ollama streaming chat model (0.0\u20131.0).",
-      "defaultValue": 0.2
-    },
-    {
-      "name": "langchain4j.ollama.streaming-chat-model.timeout",
+      "name": "spring.ai.ollama.chat.streaming-timeout",
       "type": "java.time.Duration",
       "description": "Request timeout for the Ollama streaming chat model.",
       "defaultValue": "180s"
-    },
-    {
-      "name": "langchain4j.ollama.streaming-chat-model.custom-headers",
-      "type": "java.util.Map<java.lang.String,java.lang.String>",
-      "description": "Custom HTTP headers sent with each Ollama streaming chat model request (e.g. Authorization)."
     },
     {
       "name": "mcp.rag.preload.docs",

@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -26,8 +26,8 @@ public class OrderFacadeTool {
         this.orderSearchUriTemplate = orderSearchUriTemplate;
     }
 
-    @Tool("Look up an order by order ID")
-    public String getOrder(@P("The order ID") @NonNull String orderId) {
+    @Tool(description = "Look up an order by order ID")
+    public String getOrder(@ToolParam(description = "The order ID") @NonNull String orderId) {
         return restClient
                 .get()
                 .uri(orderUriTemplate, Map.of("orderId", orderId))
@@ -35,8 +35,8 @@ public class OrderFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Search orders by customer name, date range, or status")
-    public String searchOrders(@P("Search query: customer name, date, or status") @NonNull String query) {
+    @Tool(description = "Search orders by customer name, date range, or status")
+    public String searchOrders(@ToolParam(description = "Search query: customer name, date, or status") @NonNull String query) {
         return restClient
                 .get()
                 .uri(orderSearchUriTemplate, Map.of("query", query))
