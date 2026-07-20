@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
@@ -11,9 +12,14 @@ import com.positivity.accounting.internal.exception.AccountingPeriodStateExcepti
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
+import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
 import com.positivity.accounting.internal.exception.ReceivablePaymentNotFoundException;
+import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
+import com.positivity.accounting.internal.exception.ReconciliationLineIneligibleException;
+import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
+import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
 import com.positivity.accounting.internal.exception.SettlementLineNotFoundException;
 import com.positivity.accounting.internal.exception.SettlementLineNotUnmatchedException;
 import com.positivity.accounting.internal.exception.SettlementNotPostedException;
@@ -246,6 +252,64 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleMultiApplicationReversal(
             MultiApplicationReversalException ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "WHOLE_REQUEST_REVERSAL_REQUIRED", ex.getMessage(), request);
+    }
+
+    /**
+     * Bank reconciliation errors (story F2, issue #965): dedicated ADR-0017 codes.
+     */
+    @ExceptionHandler(AccountNotReconcilableException.class)
+    public ResponseEntity<ApiError> handleAccountNotReconcilable(
+            AccountNotReconcilableException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "ACCOUNT_NOT_RECONCILABLE", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ReconciliationNotFoundException.class)
+    public ResponseEntity<ApiError> handleReconciliationNotFound(
+            ReconciliationNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "RECONCILIATION_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ReconciliationAlreadyFinalizedException.class)
+    public ResponseEntity<ApiError> handleReconciliationAlreadyFinalized(
+            ReconciliationAlreadyFinalizedException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "RECONCILIATION_ALREADY_FINALIZED", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(MatchAmountMismatchException.class)
+    public ResponseEntity<ApiError> handleMatchAmountMismatch(
+            MatchAmountMismatchException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "MATCH_AMOUNT_MISMATCH", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ReconciliationLineIneligibleException.class)
+    public ResponseEntity<ApiError> handleReconciliationLineIneligible(
+            ReconciliationLineIneligibleException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "RECONCILIATION_LINE_INELIGIBLE", ex.getMessage(), request);
+    }
+
+    /**
+     * Finalize attempted while the reconciliation does not balance (story F2). 422
+     * with the outstanding {@code difference} carried as a field error so ADR-0017
+     * clients can display it without re-deriving it.
+     */
+    @ExceptionHandler(ReconciliationNotBalancedException.class)
+    public ResponseEntity<ApiError> handleReconciliationNotBalanced(
+            ReconciliationNotBalancedException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        List<ApiError.FieldError> fieldErrors = List.of(new ApiError.FieldError(
+                "difference", ex.getDifference() != null ? ex.getDifference().toPlainString() : null));
+        return new ResponseEntity<>(
+                ApiError.withFieldErrors(
+                        "RECONCILIATION_NOT_BALANCED",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        fieldErrors),
+                headers,
+                HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     @ExceptionHandler(ResponseStatusException.class)

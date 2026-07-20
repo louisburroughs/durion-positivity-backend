@@ -16,7 +16,13 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 71 event types (includes +3 from settlement reconciliation
+     * Total: 81 event types (includes +10 from manual CSV bank reconciliation
+     * (Story F2, Issue #965): ACCOUNTING_RECONCILIATION_IMPORT,
+     * ACCOUNTING_RECONCILIATION_MATCH, ACCOUNTING_RECONCILIATION_UNMATCH,
+     * ACCOUNTING_RECONCILIATION_ADJUSTMENT, ACCOUNTING_RECONCILIATION_FINALIZE,
+     * ACCOUNTING_RECONCILIATION_LIST, ACCOUNTING_RECONCILIATION_GET,
+     * ACCOUNTING_RECONCILIATION_REPORT, ACCOUNTING_RECONCILIATION_AUDIT,
+     * ACCOUNTING_RECONCILIATION_ADJUSTMENT_TYPES_LIST, +3 from settlement reconciliation
      * (Story F1c, Issue #963): ACCOUNTING_SETTLEMENT_LINES_LIST,
      * ACCOUNTING_SETTLEMENT_LINE_MATCH, ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF, +3 from the GL + aged AR/AP reports
      * (Story G2, Issue #960): REPORT_GENERAL_LEDGER_GENERATE,
@@ -291,6 +297,46 @@ public final class EventTypes {
                                 "ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF",
                                 "Write off a small unmatched settlement line (reversible JE,"
                                         + " threshold-gated, mandatory reason)")
+                        .build(),
+
+                // BankReconciliationController — 10 events (Story F2, Issue #965)
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_IMPORT",
+                                "Import a bank statement CSV and start a reconciliation")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_MATCH",
+                                "Match statement lines to posted GL journal-entry lines")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_UNMATCH", "Reverse a match, returning lines to UNMATCHED")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_RECONCILIATION_ADJUSTMENT",
+                                "Record a reconciliation adjustment (posts a real balanced JE)")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_RECONCILIATION_FINALIZE",
+                                "Finalize a balanced reconciliation (IN_PROGRESS to FINALIZED)")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_RECONCILIATION_LIST",
+                                "List reconciliations with optional glAccountId/status filters")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_RECONCILIATION_GET",
+                                "Get one reconciliation with its lines and adjustments")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_RECONCILIATION_REPORT",
+                                "Reconciliation report: balances, matched vs outstanding, adjustments, difference")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_RECONCILIATION_AUDIT", "Audit trail of a reconciliation's actions")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_RECONCILIATION_ADJUSTMENT_TYPES_LIST",
+                                "List the supported reconciliation adjustment types (decision D-6)")
                         .build());
     }
 }
