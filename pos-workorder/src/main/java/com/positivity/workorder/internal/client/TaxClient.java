@@ -24,7 +24,7 @@ public class TaxClient {
                 .post()
                 .uri("/v1/tax/calculate")
                 // pos-tax is internal-only and guards /v1/tax/calculate with
-                // @PreAuthorize('tax:calculate'). Propagate the required authority via the
+                // @PreAuthorize("hasAuthority('tax:calculate')"). Propagate the required authority via the
                 // gateway authorities header for this service-to-service call (see
                 // GatewayAuthoritiesFilter and the pos-invoice TaxServiceClient pattern).
                 .header("X-User", "pos-workorder")

@@ -66,8 +66,7 @@ public class TestModeTaxCalculator {
         List<TaxLineItem> lineItems = request.getLineItems();
 
         // Subtotal includes ALL line items (exempt and non-exempt).
-        BigDecimal subtotal =
-                lineItems.stream().map(TaxLineItem::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal subtotal = lineItems.stream().map(TaxLineItem::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Resolve the effective transaction date (defaulting to today via the shared
         // Clock) and the rates map effective on that date.
@@ -78,25 +77,22 @@ public class TestModeTaxCalculator {
         List<JurisdictionSpec> specs = determineJurisdictionSpecs(effectiveRates);
 
         // Non-exempt lines form the taxable rows of the matrix (row order preserved).
-        List<TaxLineItem> taxableLines = lineItems.stream()
-                .filter(item -> !item.isTaxExempt())
-                .toList();
+        List<TaxLineItem> taxableLines =
+                lineItems.stream().filter(item -> !item.isTaxExempt()).toList();
         List<BigDecimal> lineTaxableAmounts =
                 taxableLines.stream().map(TaxLineItem::getSubtotal).toList();
         List<BigDecimal> jurisdictionRates =
                 specs.stream().map(JurisdictionSpec::rate).toList();
 
         // Exempt-filtered taxable base: the denominator for the effective rate.
-        BigDecimal taxBase =
-                lineTaxableAmounts.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal taxBase = lineTaxableAmounts.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Single rounding stage: all totals reconciled to the same grand total.
         TaxTotalsReconciler.ReconciledTax reconciled = reconciler.reconcile(lineTaxableAmounts, jurisdictionRates);
 
         BigDecimal totalTax = reconciled.totalTax();
         List<TaxJurisdiction> jurisdictions = buildJurisdictions(request, specs, reconciled.jurisdictionAmounts());
-        List<TaxCalculationResponse.LineItemTax> lineItemTaxes =
-                buildLineItemTaxes(lineItems, taxableLines, specs, reconciled);
+        List<TaxCalculationResponse.LineItemTax> lineItemTaxes = buildLineItemTaxes(lineItems, specs, reconciled);
 
         // Effective tax rate = totalTax / exempt-filtered taxable base (ADR-0042),
         // NOT totalTax / raw subtotal. Guard an all-exempt / zero base.
@@ -238,9 +234,8 @@ public class TestModeTaxCalculator {
     @NonNull
     private List<TaxCalculationResponse.LineItemTax> buildLineItemTaxes(
             @NonNull List<TaxLineItem> lineItems,
-            @NonNull List<TaxLineItem> taxableLines,
             @NonNull List<JurisdictionSpec> specs,
-            TaxTotalsReconciler.ReconciledTax reconciled) {
+            TaxTotalsReconciler.@NonNull ReconciledTax reconciled) {
         List<TaxCalculationResponse.LineItemTax> result = new ArrayList<>(lineItems.size());
         int taxableIndex = 0;
         for (TaxLineItem item : lineItems) {
@@ -290,5 +285,6 @@ public class TestModeTaxCalculator {
      * @param type the jurisdiction type
      * @param rate the tax rate as a decimal fraction
      */
-    private record JurisdictionSpec(@NonNull TaxJurisdictionType type, @NonNull BigDecimal rate) {}
+    private record JurisdictionSpec(
+            @NonNull TaxJurisdictionType type, @NonNull BigDecimal rate) {}
 }

@@ -62,10 +62,9 @@ public class TaxCalculationResponse {
     @NotNull(message = "effectiveTaxRate is required")
     @PositiveOrZero(message = "effectiveTaxRate must be >= 0")
     @Schema(
-            description =
-                    "Effective tax rate: total tax divided by the exempt-filtered taxable base (the taxable"
-                            + " amount remaining after tax-exempt lines are excluded), expressed as percentage"
-                            + " points. This is NOT total tax divided by the raw subtotal (ADR-0042).",
+            description = "Effective tax rate: total tax divided by the exempt-filtered taxable base (the taxable"
+                    + " amount remaining after tax-exempt lines are excluded), expressed as percentage"
+                    + " points. This is NOT total tax divided by the raw subtotal (ADR-0042).",
             example = "10.00",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private BigDecimal effectiveTaxRate;
@@ -202,12 +201,14 @@ public class TaxCalculationResponse {
     @Schema(name = "JurisdictionTax", description = "Per-jurisdiction tax breakdown for a single line item")
     public static class JurisdictionTax {
 
+        @NotNull(message = "jurisdictionType is required")
         @Schema(
                 description = "Jurisdiction type (e.g. STATE, COUNTY, CITY, DISTRICT)",
                 example = "STATE",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         private TaxJurisdictionType jurisdictionType;
 
+        @NotBlank(message = "code is required")
         @Schema(
                 description = "Jurisdiction code; in test mode this is the jurisdiction type code"
                         + " (e.g. STATE, COUNTY, CITY). With an external tax provider it carries the"
@@ -216,6 +217,8 @@ public class TaxCalculationResponse {
                 requiredMode = Schema.RequiredMode.REQUIRED)
         private String code;
 
+        @NotNull(message = "rate is required")
+        @PositiveOrZero(message = "rate must be >= 0")
         @Schema(
                 description = "Tax rate applied for this jurisdiction, expressed as a decimal fraction"
                         + " (e.g. 0.0725 for 7.25%)",
@@ -223,6 +226,7 @@ public class TaxCalculationResponse {
                 requiredMode = Schema.RequiredMode.REQUIRED)
         private BigDecimal rate;
 
+        @NotNull(message = "amount is required")
         @PositiveOrZero(message = "amount must be >= 0")
         @Schema(
                 description = "Tax amount calculated for this jurisdiction on this line item",

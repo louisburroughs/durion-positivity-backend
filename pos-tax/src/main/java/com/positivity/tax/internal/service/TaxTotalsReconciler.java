@@ -17,7 +17,7 @@ import org.jspecify.annotations.NonNull;
  * each line, {@code Sum(cellAmounts[line]) == lineAmounts[line]}.
  * <p>
  * All money math uses {@link BigDecimal}, {@link RoundingMode#HALF_UP} and
- * currency scale 2 (see ADR-0044 money policy). Residual cents left over after
+ * currency scale 2. Residual cents left over after
  * independent per-item rounding are distributed one cent at a time using a
  * deterministic largest-raw-first rule (ties broken by larger fractional
  * remainder, then by ascending stable index), so identical input yields
@@ -62,8 +62,7 @@ class TaxTotalsReconciler {
      * @return the reconciled totals satisfying all money invariants
      */
     @NonNull
-    ReconciledTax reconcile(
-            @NonNull List<BigDecimal> lineTaxableAmounts, @NonNull List<BigDecimal> jurisdictionRates) {
+    ReconciledTax reconcile(@NonNull List<BigDecimal> lineTaxableAmounts, @NonNull List<BigDecimal> jurisdictionRates) {
         int rowCount = lineTaxableAmounts.size();
         int colCount = jurisdictionRates.size();
 

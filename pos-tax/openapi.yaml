@@ -258,6 +258,7 @@ components:
           type: string
           description: Jurisdiction code; in test mode this is the jurisdiction type code (e.g. STATE, COUNTY, CITY). With an external tax provider it carries the provider's taxing-authority code.
           example: STATE
+          minLength: 1
         rate:
           type: number
           description: Tax rate applied for this jurisdiction, expressed as a decimal fraction (e.g. 0.0725 for 7.25%)

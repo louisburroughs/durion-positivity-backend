@@ -249,7 +249,8 @@ class TestModeTaxCalculatorTest {
         // reconciler must remove one cent from the line dimension.
         properties.getTestMode().setDefaultRates(Map.of("STATE", new BigDecimal("0.07")));
         TaxCalculationRequest request = TaxCalculationRequest.builder()
-                .lineItems(List.of(createLineItem("1", "Line A", "1", "17.79"), createLineItem("2", "Line B", "1", "17.80")))
+                .lineItems(List.of(
+                        createLineItem("1", "Line A", "1", "17.79"), createLineItem("2", "Line B", "1", "17.80")))
                 .destinationAddress(createAddress(TEST_POSTAL_CODE, "TX", "Austin", "US"))
                 .build();
 
@@ -301,7 +302,8 @@ class TestModeTaxCalculatorTest {
     }
 
     @Test
-    @DisplayName("Odoo vector: odd-priced 4-line cart across STATE/COUNTY/CITY reconciles to 3.74 (naive per-dim rounding drifts to 3.75)")
+    @DisplayName(
+            "Odoo vector: odd-priced 4-line cart across STATE/COUNTY/CITY reconciles to 3.74 (naive per-dim rounding drifts to 3.75)")
     void shouldReconcile_multiLine_threeJurisdictions() {
         // Given - STATE 6.25% / COUNTY 1.25% / CITY 0.75% over four odd prices.
         // Both the per-line row sum and the per-jurisdiction column sum of the
@@ -364,8 +366,9 @@ class TestModeTaxCalculatorTest {
     private static final int PROPERTY_ITERATIONS = 2000;
 
     @Test
-    @DisplayName("Property: for every randomized cart, sigma(line taxAmount) == totalTax == sigma(jurisdiction taxAmount), "
-            + "and each line's jurisdiction cells sum to its taxAmount")
+    @DisplayName(
+            "Property: for every randomized cart, sigma(line taxAmount) == totalTax == sigma(jurisdiction taxAmount), "
+                    + "and each line's jurisdiction cells sum to its taxAmount")
     void sigmaInvariantHoldsForRandomizedCarts() {
         Random random = new Random(PROPERTY_SEED);
         String[] typeCodes = {"STATE", "COUNTY", "CITY"};
@@ -421,7 +424,8 @@ class TestModeTaxCalculatorTest {
                         .map(TaxCalculationResponse.JurisdictionTax::getAmount)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
                 assertThat(cellSum)
-                        .as("sum(line " + line.getLineItemId() + " jurisdictions[].amount) == line.taxAmount [" + ctx + "]")
+                        .as("sum(line " + line.getLineItemId() + " jurisdictions[].amount) == line.taxAmount [" + ctx
+                                + "]")
                         .isEqualByComparingTo(line.getTaxAmount());
             }
         }
@@ -585,7 +589,9 @@ class TestModeTaxCalculatorTest {
         assertThat(calculator.calculate(requestOn("", oneHundredDollarLine())).getTotalTax())
                 .as("empty transactionDate -> clock today")
                 .isEqualByComparingTo("5.00");
-        assertThat(calculator.calculate(requestOn("   ", oneHundredDollarLine())).getTotalTax())
+        assertThat(calculator
+                        .calculate(requestOn("   ", oneHundredDollarLine()))
+                        .getTotalTax())
                 .as("blank transactionDate -> clock today")
                 .isEqualByComparingTo("5.00");
     }
@@ -687,9 +693,7 @@ class TestModeTaxCalculatorTest {
 
     private void assertLineTax(TaxCalculationResponse response, String lineItemId, String expected) {
         TaxCalculationResponse.LineItemTax line = findLine(response, lineItemId);
-        assertThat(line.getTaxAmount())
-                .as("line " + lineItemId + " taxAmount")
-                .isEqualByComparingTo(expected);
+        assertThat(line.getTaxAmount()).as("line " + lineItemId + " taxAmount").isEqualByComparingTo(expected);
     }
 
     private void assertLineCellAmounts(
@@ -699,15 +703,13 @@ class TestModeTaxCalculatorTest {
                 .filter(cell -> cell.getJurisdictionType() == type)
                 .map(TaxCalculationResponse.JurisdictionTax::getAmount)
                 .findFirst()
-                .orElseThrow(() -> new AssertionError(
-                        "line " + lineItemId + " has no " + type + " jurisdiction cell"));
+                .orElseThrow(() -> new AssertionError("line " + lineItemId + " has no " + type + " jurisdiction cell"));
         assertThat(amount)
                 .as("line " + lineItemId + " " + type + " cell amount")
                 .isEqualByComparingTo(expected);
     }
 
-    private void assertJurisdictionAmount(
-            TaxCalculationResponse response, TaxJurisdictionType type, String expected) {
+    private void assertJurisdictionAmount(TaxCalculationResponse response, TaxJurisdictionType type, String expected) {
         BigDecimal amount = response.getJurisdictions().stream()
                 .filter(jur -> jur.getJurisdictionType() == type)
                 .map(jur -> jur.getTaxAmount())

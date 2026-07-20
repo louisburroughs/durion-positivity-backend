@@ -22,7 +22,7 @@ import org.springframework.web.client.RestClient;
  * {@link TaxClient} wire behavior against a {@link MockRestServiceServer}
  * (same lightweight pattern as pos-warranty's {@code InvoiceClientTest}).
  * <p>
- * pos-tax guards {@code /v1/tax/calculate} with {@code @PreAuthorize("tax:calculate")},
+ * pos-tax guards {@code /v1/tax/calculate} with {@code @PreAuthorize("hasAuthority('tax:calculate')")},
  * so this service-to-service call must propagate the gateway authority headers
  * (mirrors the pos-invoice {@code TaxServiceClient} pattern).
  */
