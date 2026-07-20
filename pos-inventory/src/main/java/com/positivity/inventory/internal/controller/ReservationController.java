@@ -4,8 +4,14 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
+import com.positivity.inventory.internal.observability.BusinessSpanSupport;
 import com.positivity.inventory.service.ReservationService;
 import com.positivity.shared.error.ApiError;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -35,6 +41,11 @@ import org.springframework.web.bind.annotation.RestController;
         name = "Inventory Reservations",
         description = "Reserve, promote, and cancel inventory allocations for workorder lines")
 public class ReservationController {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ReservationController.class);
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-inventory");
+    private static final String DOMAIN = "inventory";
+    private static final String TEAM = "inventory-eng";
 
     private final ReservationService reservationService;
 
@@ -73,9 +84,23 @@ public class ReservationController {
                     @Valid
                     @RequestBody
                     CreateReservationRequest request) {
-        ReservationResponse response = reservationService.createOrUpdateReservation(request);
-        return ResponseEntity.created(URI.create("/v1/inventory/reservations/" + response.getReservationId()))
-                .body(response);
+        Span span = TRACER.spanBuilder("Reserve Inventory").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Reserve Inventory");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            ReservationResponse response = reservationService.createOrUpdateReservation(request);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            BusinessSpanSupport.logWithTraceContext(log, "Reserved inventory {}", response.getReservationId());
+            return ResponseEntity.created(URI.create("/v1/inventory/reservations/" + response.getReservationId()))
+                    .body(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @PostMapping("/{allocationId}/promote")
@@ -121,7 +146,22 @@ public class ReservationController {
                     @Valid
                     @RequestBody
                     PromoteAllocationRequest request) {
-        return ResponseEntity.ok(reservationService.promoteToHard(allocationId, request));
+        Span span = TRACER.spanBuilder("Promote Inventory Allocation").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Promote Inventory Allocation");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            ReservationResponse response = reservationService.promoteToHard(allocationId, request);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            BusinessSpanSupport.logWithTraceContext(log, "Promoted inventory allocation {}", allocationId);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @DeleteMapping("/{workorderLineId}")

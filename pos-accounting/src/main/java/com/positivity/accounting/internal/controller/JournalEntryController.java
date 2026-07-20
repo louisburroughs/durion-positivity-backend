@@ -6,9 +6,15 @@ import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.JournalEntryReversalRequest;
 import com.positivity.accounting.internal.dto.JournalEntryTraceabilityResponse;
 import com.positivity.accounting.internal.dto.PagedResponse;
+import com.positivity.accounting.internal.observability.BusinessSpanSupport;
 import com.positivity.accounting.internal.service.SortParamParser;
 import com.positivity.accounting.service.JournalEntryService;
 import com.positivity.events.EmitEvent;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -50,6 +56,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class JournalEntryController {
 
     private static final Logger log = LoggerFactory.getLogger(JournalEntryController.class);
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-accounting");
+    private static final String DOMAIN = "accounting";
+    private static final String TEAM = "accounting-eng";
 
     /**
      * API sort field → entity property. The API exposes {@code modifiedAt}
@@ -206,9 +215,22 @@ public class JournalEntryController {
     public ResponseEntity<JournalEntryResponse> postJournalEntry(
             @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,
             @RequestBody(required = false) Object request) {
-        log.info("Posting journal entry: {}", journalEntryId);
-        var posted = journalEntryService.postJournalEntry(journalEntryId);
-        return ResponseEntity.ok(JournalEntryMapper.toResponse(posted));
+        Span span = TRACER.spanBuilder("Post Journal Entry").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Post Journal Entry");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            BusinessSpanSupport.logWithTraceContext(log, "Posting journal entry: {}", journalEntryId);
+            var posted = journalEntryService.postJournalEntry(journalEntryId);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.ok(JournalEntryMapper.toResponse(posted));
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @PostMapping("/{journalEntryId}/reverse")

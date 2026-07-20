@@ -1,5 +1,11 @@
 package com.positivity.gateway.filter;
 
+import com.positivity.gateway.observability.BusinessSpanSupport;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +72,9 @@ import reactor.core.publisher.Mono;
 @Component
 public class ApiVersionHeaderToPathFilter implements GlobalFilter, Ordered {
 
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-api-gateway");
+    private static final String DOMAIN = "gateway";
+    private static final String TEAM = "platform-eng";
     private static final String VERSION_HEADER = "X-API-Version";
     private static final String PATH_SEP = "/";
     private static final Pattern VERSIONED_SERVICE_PATH = Pattern.compile("^/[^/]+/v\\d+(?:/.*)?$");
@@ -92,6 +101,26 @@ public class ApiVersionHeaderToPathFilter implements GlobalFilter, Ordered {
      */
     @Override
     public Mono<Void> filter(
+            ServerWebExchange exchange, org.springframework.cloud.gateway.filter.GatewayFilterChain chain) {
+
+        Span span = TRACER.spanBuilder("Route Gateway Request").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Route Gateway Request");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            return doFilter(exchange, chain)
+                    .doOnSuccess(v -> span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS))
+                    .doOnError(e -> BusinessSpanSupport.recordFailure(span, e))
+                    .doFinally(signalType -> span.end());
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            span.end();
+            throw e;
+        }
+    }
+
+    private Mono<Void> doFilter(
             ServerWebExchange exchange, org.springframework.cloud.gateway.filter.GatewayFilterChain chain) {
 
         var req = exchange.getRequest();

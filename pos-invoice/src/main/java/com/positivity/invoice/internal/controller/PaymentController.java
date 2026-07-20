@@ -5,7 +5,13 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
+import com.positivity.invoice.internal.observability.BusinessSpanSupport;
 import com.positivity.invoice.service.PaymentService;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -41,6 +47,10 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("isAuthenticated()")
 @Tag(name = "Payment", description = "Card payment initiation and capture endpoints")
 public class PaymentController {
+
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-invoice");
+    private static final String DOMAIN = "invoicing";
+    private static final String TEAM = "invoice-eng";
 
     private final PaymentService paymentService;
 
@@ -92,7 +102,22 @@ public class PaymentController {
             @PathVariable @NonNull UUID invoiceId,
             @PathVariable @NonNull UUID paymentId,
             @Valid @RequestBody @NonNull CaptureAmountRequest body) {
-        return paymentService.capturePayment(invoiceId, paymentId, body.amount(), body.captureIdempotencyKey());
+        Span span = TRACER.spanBuilder("Capture Payment").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Capture Payment");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            InitiatePaymentResponse response =
+                    paymentService.capturePayment(invoiceId, paymentId, body.amount(), body.captureIdempotencyKey());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return response;
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     /**

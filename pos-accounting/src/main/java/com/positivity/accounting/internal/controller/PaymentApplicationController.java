@@ -3,8 +3,14 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalRequest;
+import com.positivity.accounting.internal.observability.BusinessSpanSupport;
 import com.positivity.accounting.service.PaymentApplicationService;
 import com.positivity.events.EmitEvent;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -43,6 +49,10 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 public class PaymentApplicationController {
 
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-accounting");
+    private static final String DOMAIN = "accounting";
+    private static final String TEAM = "accounting-eng";
+
     private final PaymentApplicationService paymentApplicationService;
 
     @PostMapping("/payments/{paymentId}/void")
@@ -61,9 +71,22 @@ public class PaymentApplicationController {
     public ResponseEntity<Void> voidPayment(
             @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
             @RequestBody(required = false) Object body) {
-        log.info("Voiding payment(mask) {}", maskForLog(paymentId));
-        paymentApplicationService.voidPayment(paymentId);
-        return ResponseEntity.noContent().build();
+        Span span = TRACER.spanBuilder("Void Payment").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Void Payment");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            BusinessSpanSupport.logWithTraceContext(log, "Voiding payment(mask) {}", maskForLog(paymentId));
+            paymentApplicationService.voidPayment(paymentId);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.noContent().build();
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @PostMapping("/payments/{paymentId}/reverse")
@@ -121,22 +144,34 @@ public class PaymentApplicationController {
     public ResponseEntity<PaymentApplicationResponse> applyPayment(
             @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
             @Valid @RequestBody PaymentApplicationRequest request) {
+        Span span = TRACER.spanBuilder("Apply Payment").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Apply Payment");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            log.info(
+                    "Applying payment(mask) {} to {} invoices (request(mask): {})",
+                    maskForLog(paymentId),
+                    request.getApplications().size(),
+                    maskForLog(request.getApplicationRequestId()));
 
-        log.info(
-                "Applying payment(mask) {} to {} invoices (request(mask): {})",
-                maskForLog(paymentId),
-                request.getApplications().size(),
-                maskForLog(request.getApplicationRequestId()));
+            PaymentApplicationResponse response = paymentApplicationService.applyPaymentToInvoices(paymentId, request);
 
-        PaymentApplicationResponse response = paymentApplicationService.applyPaymentToInvoices(paymentId, request);
+            log.info(
+                    "Successfully applied payment(mask) {} with total {} to {} invoices",
+                    maskForLog(paymentId),
+                    response.getAppliedAmount(),
+                    response.getApplications().size());
 
-        log.info(
-                "Successfully applied payment(mask) {} with total {} to {} invoices",
-                maskForLog(paymentId),
-                response.getAppliedAmount(),
-                response.getApplications().size());
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     /**

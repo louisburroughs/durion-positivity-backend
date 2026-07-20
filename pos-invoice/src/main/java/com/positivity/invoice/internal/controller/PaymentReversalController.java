@@ -8,8 +8,14 @@ import com.positivity.invoice.internal.dto.InvoiceRefundResponse;
 import com.positivity.invoice.internal.dto.RefundPaymentResponse;
 import com.positivity.invoice.internal.enums.RefundReason;
 import com.positivity.invoice.internal.enums.VoidReason;
+import com.positivity.invoice.internal.observability.BusinessSpanSupport;
 import com.positivity.invoice.service.PaymentReversalService;
 import com.positivity.invoice.service.RefundPaymentResult;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -39,6 +45,10 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "PaymentReversal")
 public class PaymentReversalController {
 
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-invoice");
+    private static final String DOMAIN = "invoicing";
+    private static final String TEAM = "invoice-eng";
+
     private final PaymentReversalService paymentReversalService;
 
     public PaymentReversalController(@NonNull PaymentReversalService paymentReversalService) {
@@ -58,8 +68,21 @@ public class PaymentReversalController {
             @PathVariable @NonNull UUID invoiceId,
             @PathVariable @NonNull UUID paymentId,
             @Valid @RequestBody @NonNull VoidPaymentRequest request) {
-        paymentReversalService.voidPayment(invoiceId, paymentId, request.reason(), request.notes());
-        return ResponseEntity.ok().build();
+        Span span = TRACER.spanBuilder("Void Invoice Payment").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Void Invoice Payment");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            paymentReversalService.voidPayment(invoiceId, paymentId, request.reason(), request.notes());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.ok().build();
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @PostMapping("/{invoiceId}/payments/{paymentId}/refunds")
@@ -75,22 +98,40 @@ public class PaymentReversalController {
             @PathVariable @NonNull UUID invoiceId,
             @PathVariable @NonNull UUID paymentId,
             @Valid @RequestBody @NonNull RefundPaymentRequest request) {
-        var saved = paymentReversalService.refundPayment(
-                invoiceId, paymentId, request.amount(), request.reason(), request.notes(), request.externalReference());
+        Span span = TRACER.spanBuilder("Refund Payment").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Refund Payment");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            var saved = paymentReversalService.refundPayment(
+                    invoiceId,
+                    paymentId,
+                    request.amount(),
+                    request.reason(),
+                    request.notes(),
+                    request.externalReference());
 
-        RefundPaymentResponse response = new RefundPaymentResponse();
-        response.setRefundId(saved.getRefundId());
-        response.setInvoiceId(saved.getInvoiceId());
-        response.setPaymentIntentId(saved.getPaymentIntentId());
-        response.setAmount(saved.getAmount());
-        response.setReason(saved.getReason());
-        response.setNotes(saved.getNotes());
-        response.setStatus(saved.getStatus());
-        response.setGatewayReference(saved.getGatewayReference());
-        response.setExternalReference(saved.getExternalReference());
-        response.setCompletedAt(saved.getCompletedAt());
+            RefundPaymentResponse response = new RefundPaymentResponse();
+            response.setRefundId(saved.getRefundId());
+            response.setInvoiceId(saved.getInvoiceId());
+            response.setPaymentIntentId(saved.getPaymentIntentId());
+            response.setAmount(saved.getAmount());
+            response.setReason(saved.getReason());
+            response.setNotes(saved.getNotes());
+            response.setStatus(saved.getStatus());
+            response.setGatewayReference(saved.getGatewayReference());
+            response.setExternalReference(saved.getExternalReference());
+            response.setCompletedAt(saved.getCompletedAt());
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @GetMapping("/{invoiceId}/refunds")

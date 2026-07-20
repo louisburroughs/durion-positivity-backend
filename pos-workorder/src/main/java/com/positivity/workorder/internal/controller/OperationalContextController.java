@@ -6,7 +6,13 @@ import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
 import com.positivity.workorder.internal.dto.OperationalContextResponse;
 import com.positivity.workorder.internal.dto.StartWorkorderRequest;
 import com.positivity.workorder.internal.dto.WorkorderStartResponse;
+import com.positivity.workorder.internal.observability.BusinessSpanSupport;
 import com.positivity.workorder.service.WorkorderService;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,6 +33,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Tag(name = "Operational Context", description = "Workorder execution context operations")
 public class OperationalContextController {
+
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-workorder");
+    private static final String DOMAIN = "work-order-execution";
+    private static final String TEAM = "workorder-eng";
 
     private final WorkorderService workorderService;
 
@@ -77,19 +87,31 @@ public class OperationalContextController {
     @ApiResponse(responseCode = "409", description = "Work already started")
     public ResponseEntity<WorkorderStartResponse> startWork(
             @PathVariable UUID workorderId, @RequestBody(required = false) StartWorkorderRequest request) {
-        try {
+        Span span = TRACER.spanBuilder("Start Workorder").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Start Workorder");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
             String requestedUserId = SecurityContextHelper.getCurrentUsername().orElse(null);
             String reason = request != null ? request.getReason() : null;
-            return ResponseEntity.ok(workorderService.startWork(workorderId, requestedUserId, reason));
+            ResponseEntity<WorkorderStartResponse> response =
+                    ResponseEntity.ok(workorderService.startWork(workorderId, requestedUserId, reason));
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return response;
         } catch (IllegalStateException ex) {
             if (isPendingChangeRequestStartFailure(ex)) {
+                span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
                 return ResponseEntity.badRequest()
                         .body(WorkorderStartResponse.builder()
                                 .workorderId(workorderId)
                                 .message(ex.getMessage())
                                 .build());
             }
+            BusinessSpanSupport.recordFailure(span, ex);
             throw ex;
+        } finally {
+            span.end();
         }
     }
 

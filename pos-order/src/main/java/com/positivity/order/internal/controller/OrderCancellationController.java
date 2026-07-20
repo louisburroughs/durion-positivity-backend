@@ -3,10 +3,16 @@ package com.positivity.order.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.order.internal.dto.CancelOrderRequest;
 import com.positivity.order.internal.dto.CancellationResponse;
+import com.positivity.order.internal.observability.BusinessSpanSupport;
 import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.service.OrderCancellationService;
 import com.positivity.order.service.model.CancelOrderCommand;
 import com.positivity.order.service.model.CancellationResult;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,6 +35,10 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 public class OrderCancellationController {
 
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-order");
+    private static final String DOMAIN = "order-management";
+    private static final String TEAM = "order-eng";
+
     private final OrderCancellationService orderCancellationService;
 
     @Operation(
@@ -45,18 +55,32 @@ public class OrderCancellationController {
     @EmitEvent(id = "ORDER_CART_CANCEL_REQUEST", apiVersion = "1")
     public ResponseEntity<CancellationResponse> cancelOrder(
             @PathVariable UUID orderId, @Valid @RequestBody CancelOrderRequest request) {
-        CancelOrderCommand command = new CancelOrderCommand(
-                request.getCancellationReason(),
-                request.getWorkOrderId(),
-                request.getPaymentId(),
-                request.getIdempotencyKey());
-        CancellationResult result = orderCancellationService.cancelOrder(orderId, command);
-        CancellationResponse response = new CancellationResponse();
-        response.setOrderId(result.orderId().toString());
-        response.setStatus(result.status());
-        response.setMessage(result.message());
-        response.setCancellationIdempotencyKey(result.cancellationIdempotencyKey());
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        Span span = TRACER.spanBuilder("Cancel Sales Order").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Cancel Sales Order");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            CancelOrderCommand command = new CancelOrderCommand(
+                    request.getCancellationReason(),
+                    request.getWorkOrderId(),
+                    request.getPaymentId(),
+                    request.getIdempotencyKey());
+            CancellationResult result = orderCancellationService.cancelOrder(orderId, command);
+            CancellationResponse response = new CancellationResponse();
+            response.setOrderId(result.orderId().toString());
+            response.setStatus(result.status());
+            response.setMessage(result.message());
+            response.setCancellationIdempotencyKey(result.cancellationIdempotencyKey());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            BusinessSpanSupport.logWithTraceContext(log, "Cancelled sales order {}", orderId);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @Operation(

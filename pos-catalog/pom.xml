@@ -83,6 +83,11 @@
             <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>
         </dependency>
+        <!-- OpenTelemetry API for manual business spans (agent-managed SDK, API-only) -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+        </dependency>
         <!-- ADR-0044 §6 (#899): inventory availability/lead-time replica feed -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

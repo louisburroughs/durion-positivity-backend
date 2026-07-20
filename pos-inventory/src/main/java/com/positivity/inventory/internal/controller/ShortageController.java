@@ -4,8 +4,14 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.ShortageOptionDto;
 import com.positivity.inventory.internal.dto.ShortageResolutionResultDto;
 import com.positivity.inventory.internal.dto.ShortageResolveRequest;
+import com.positivity.inventory.internal.observability.BusinessSpanSupport;
 import com.positivity.inventory.service.ShortageResolutionService;
 import com.positivity.shared.error.ApiError;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -30,6 +36,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Tag(name = "Shortage Resolution", description = "Shortage resolution recommendation endpoints")
 public class ShortageController {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ShortageController.class);
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-inventory");
+    private static final String DOMAIN = "inventory";
+    private static final String TEAM = "inventory-eng";
 
     private final ShortageResolutionService shortageResolutionService;
 
@@ -94,6 +105,21 @@ public class ShortageController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ShortageResolutionResultDto> resolveShortage(
             @Valid @RequestBody ShortageResolveRequest request) {
-        return ResponseEntity.ok(shortageResolutionService.resolveShortage(request));
+        Span span = TRACER.spanBuilder("Resolve Inventory Shortage").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Resolve Inventory Shortage");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            ShortageResolutionResultDto response = shortageResolutionService.resolveShortage(request);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            BusinessSpanSupport.logWithTraceContext(log, "Resolved inventory shortage");
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 }

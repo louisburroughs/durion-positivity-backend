@@ -3,6 +3,7 @@ package com.positivity.order.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.order.internal.dto.ApprovePriceOverrideRequest;
 import com.positivity.order.internal.dto.RejectPriceOverrideRequest;
+import com.positivity.order.internal.observability.BusinessSpanSupport;
 import com.positivity.order.internal.security.PriceOverridePermissions;
 import com.positivity.order.service.PriceOverrideService;
 import com.positivity.order.service.model.ApplyPriceOverrideRequest;
@@ -12,6 +13,11 @@ import com.positivity.order.service.model.PriceOverrideResult;
 import com.positivity.order.service.model.RejectOverrideCommand;
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.security.common.SecurityContextHelper;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -47,6 +53,9 @@ import org.springframework.web.bind.annotation.*;
 public class PriceOverrideController {
 
     private static final String UNKNOWN_REVIEWER_ROLE = "UNKNOWN";
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-order");
+    private static final String DOMAIN = "order-management";
+    private static final String TEAM = "order-eng";
 
     private final PriceOverrideService priceOverrideService;
 
@@ -109,12 +118,26 @@ public class PriceOverrideController {
                     UUID overrideId,
             @Valid @RequestBody ApprovePriceOverrideRequest request) {
 
-        String role = resolveReviewerRole();
+        Span span = TRACER.spanBuilder("Approve Price Override").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Approve Price Override");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            String role = resolveReviewerRole();
 
-        PriceOverrideDetail override = priceOverrideService.approveOverride(
-                overrideId, new ApproveOverrideCommand(role, request.getComments()));
+            PriceOverrideDetail override = priceOverrideService.approveOverride(
+                    overrideId, new ApproveOverrideCommand(role, request.getComments()));
 
-        return ResponseEntity.ok(override);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            BusinessSpanSupport.logWithTraceContext(log, "Approved price override {}", overrideId);
+            return ResponseEntity.ok(override);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     /**
@@ -147,12 +170,26 @@ public class PriceOverrideController {
                     UUID overrideId,
             @Valid @RequestBody RejectPriceOverrideRequest request) {
 
-        String role = resolveReviewerRole();
+        Span span = TRACER.spanBuilder("Reject Price Override").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Reject Price Override");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            String role = resolveReviewerRole();
 
-        PriceOverrideDetail override = priceOverrideService.rejectOverride(
-                overrideId, new RejectOverrideCommand(role, request.getReason(), request.getComments()));
+            PriceOverrideDetail override = priceOverrideService.rejectOverride(
+                    overrideId, new RejectOverrideCommand(role, request.getReason(), request.getComments()));
 
-        return ResponseEntity.ok(override);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            BusinessSpanSupport.logWithTraceContext(log, "Rejected price override {}", overrideId);
+            return ResponseEntity.ok(override);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     /**

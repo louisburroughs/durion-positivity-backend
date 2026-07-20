@@ -80,6 +80,11 @@
             <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>
         </dependency>
+        <!-- OpenTelemetry API for manual business spans (agent-managed SDK, API-only) -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-tax-common</artifactId>

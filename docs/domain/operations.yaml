@@ -1,0 +1,4674 @@
+# =============================================================================
+# Operations Catalog - durion-positivity-backend (schema v1.2)
+#
+# Produced by: Repo Domain Analyst (Phase 1)
+# Primary contract for all downstream SRE agents. Do not hand-edit generated
+# sections without updating this source of truth first.
+#
+# Provisional note: service.team and every operation `owner` below use
+# bounded-context-derived placeholder team slugs because `sre.config.yaml`
+# declares `service.team: TBD`. Reconcile with real ownership before Phase 4/6.
+# =============================================================================
+
+schemaVersion: "1.2"
+
+service:
+  name: durion-positivity-backend
+  team: TBD
+  tier: 1
+  display_name: Durion Positivity Backend
+
+instrumentation:
+  state: preserve
+  agent: otel-java-agent
+  agent_version: "v2.9.0"
+  resource_config: env-vars
+
+operations:
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: order-management (pos-order) - Tier 1
+  # ---------------------------------------------------------------------------
+  - id: create-sales-order-cart
+    name: Create Sales Order Cart
+    owner: order-eng
+    bounded_context: order-management
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: order-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/orders/carts
+    telemetry:
+      spans:
+        business_span: Create Sales Order
+        recipe: http-handler
+      metric_prefix: create_sales_order_cart
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-customer
+        criticality: critical
+      - service: pos-price
+        criticality: medium
+    data_entities:
+      - SalesOrder
+    slis:
+      - id: create-sales-order-cart-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful cart creations to total attempts.
+      - id: create-sales-order-cart-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+        description: 95th percentile latency to create a sales order cart.
+    slos:
+      - sli: create-sales-order-cart-availability
+        target: 0.999
+        window: 30d
+      - sli: create-sales-order-cart-latency
+        target: 0.99
+        window: 30d
+
+  - id: add-sales-order-item
+    name: Add Cart Item
+    owner: order-eng
+    bounded_context: order-management
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: order-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/orders/carts/{orderId}/items
+    telemetry:
+      spans:
+        business_span: Add Cart Item
+        recipe: http-handler
+      metric_prefix: add_sales_order_item
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-catalog
+        criticality: critical
+      - service: pos-price
+        criticality: critical
+      - service: pos-inventory
+        criticality: critical
+    data_entities:
+      - SalesOrder
+      - SalesOrderLine
+    slis:
+      - id: add-sales-order-item-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful cart line additions to total attempts.
+      - id: add-sales-order-item-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+        description: 95th percentile latency to add a cart line.
+    slos:
+      - sli: add-sales-order-item-availability
+        target: 0.999
+        window: 30d
+      - sli: add-sales-order-item-latency
+        target: 0.99
+        window: 30d
+
+  - id: update-sales-order-item
+    name: Update Cart Item
+    owner: order-eng
+    bounded_context: order-management
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: order-eng
+    entrypoints:
+      - type: http
+        method: PUT
+        path: /v1/orders/carts/{orderId}/items/{lineId}
+    telemetry:
+      spans:
+        business_span: Update Cart Item
+        recipe: http-handler
+      metric_prefix: update_sales_order_item
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-price
+        criticality: critical
+    data_entities:
+      - SalesOrderLine
+    slis:
+      - id: update-sales-order-item-availability
+        type: availability
+        recipe: success-rate
+      - id: update-sales-order-item-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: update-sales-order-item-availability
+        target: 0.999
+        window: 30d
+      - sli: update-sales-order-item-latency
+        target: 0.99
+        window: 30d
+
+  - id: remove-sales-order-item
+    name: Remove Cart Item
+    owner: order-eng
+    bounded_context: order-management
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: order-eng
+    entrypoints:
+      - type: http
+        method: DELETE
+        path: /v1/orders/carts/{orderId}/items/{lineId}
+    telemetry:
+      spans:
+        business_span: Remove Cart Item
+        recipe: http-handler
+      metric_prefix: remove_sales_order_item
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-inventory
+        criticality: medium
+    data_entities:
+      - SalesOrderLine
+    slis:
+      - id: remove-sales-order-item-availability
+        type: availability
+        recipe: success-rate
+      - id: remove-sales-order-item-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: remove-sales-order-item-availability
+        target: 0.999
+        window: 30d
+      - sli: remove-sales-order-item-latency
+        target: 0.99
+        window: 30d
+
+  - id: cancel-sales-order
+    name: Cancel Sales Order
+    owner: order-eng
+    bounded_context: order-management
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: order-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/orders/carts/{orderId}/cancel
+    telemetry:
+      spans:
+        business_span: Cancel Sales Order
+        recipe: http-handler
+      metric_prefix: cancel_sales_order
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-inventory
+        criticality: critical
+      - service: pos-invoice
+        criticality: critical
+    data_entities:
+      - SalesOrder
+      - CancellationRequest
+    slis:
+      - id: cancel-sales-order-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful order cancellations to total attempts.
+      - id: cancel-sales-order-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: cancel-sales-order-availability
+        target: 0.999
+        window: 30d
+      - sli: cancel-sales-order-latency
+        target: 0.99
+        window: 30d
+
+  - id: approve-price-override
+    name: Approve Price Override
+    owner: order-eng
+    bounded_context: order-management
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: order-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/orders/price-overrides/{overrideId}/approve
+    telemetry:
+      spans:
+        business_span: Approve Price Override
+        recipe: http-handler
+      metric_prefix: approve_price_override
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-price
+        criticality: medium
+    data_entities:
+      - PriceOverride
+    slis:
+      - id: approve-price-override-availability
+        type: availability
+        recipe: success-rate
+      - id: approve-price-override-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: approve-price-override-availability
+        target: 0.999
+        window: 30d
+      - sli: approve-price-override-latency
+        target: 0.99
+        window: 30d
+
+  - id: reject-price-override
+    name: Reject Price Override
+    owner: order-eng
+    bounded_context: order-management
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: order-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/orders/price-overrides/{overrideId}/reject
+    telemetry:
+      spans:
+        business_span: Reject Price Override
+        recipe: http-handler
+      metric_prefix: reject_price_override
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - PriceOverride
+    slis:
+      - id: reject-price-override-availability
+        type: availability
+        recipe: success-rate
+      - id: reject-price-override-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: reject-price-override-availability
+        target: 0.999
+        window: 30d
+      - sli: reject-price-override-latency
+        target: 0.99
+        window: 30d
+
+  - id: get-sales-order-cart
+    name: Get Sales Order Cart
+    owner: order-eng
+    bounded_context: order-management
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: order-eng
+    entrypoints:
+      - type: http
+        method: GET
+        path: /v1/orders/carts/{orderId}
+    telemetry:
+      spans:
+        business_span: Get Sales Order
+        recipe: http-handler
+      metric_prefix: get_sales_order_cart
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - SalesOrder
+    slis:
+      - id: get-sales-order-cart-availability
+        type: availability
+        recipe: success-rate
+      - id: get-sales-order-cart-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: get-sales-order-cart-availability
+        target: 0.99
+        window: 30d
+      - sli: get-sales-order-cart-latency
+        target: 0.97
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: pricing (pos-price) - Tier 1
+  # ---------------------------------------------------------------------------
+  - id: calculate-price-quote
+    name: Calculate Price Quote
+    owner: price-eng
+    bounded_context: pricing
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: price-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/price/quotes
+    telemetry:
+      spans:
+        business_span: Calculate Price Quote
+        recipe: http-handler
+      metric_prefix: calculate_price_quote
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-catalog
+        criticality: critical
+    data_entities:
+      - PriceQuote
+    slis:
+      - id: calculate-price-quote-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful price quote calculations to total attempts.
+      - id: calculate-price-quote-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: calculate-price-quote-availability
+        target: 0.999
+        window: 30d
+      - sli: calculate-price-quote-latency
+        target: 0.99
+        window: 30d
+
+  - id: evaluate-price-restrictions
+    name: Evaluate Price Restrictions
+    owner: price-eng
+    bounded_context: pricing
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: price-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: "/v1/price/restrictions:evaluate"
+    telemetry:
+      spans:
+        business_span: Evaluate Price Restriction
+        recipe: http-handler
+      metric_prefix: evaluate_price_restrictions
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - RestrictionRule
+    slis:
+      - id: evaluate-price-restrictions-availability
+        type: availability
+        recipe: success-rate
+      - id: evaluate-price-restrictions-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: evaluate-price-restrictions-availability
+        target: 0.999
+        window: 30d
+      - sli: evaluate-price-restrictions-latency
+        target: 0.99
+        window: 30d
+
+  - id: override-price-restriction
+    name: Override Price Restriction
+    owner: price-eng
+    bounded_context: pricing
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: price-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: "/v1/price/restrictions:override"
+    telemetry:
+      spans:
+        business_span: Override Price Restriction
+        recipe: http-handler
+      metric_prefix: override_price_restriction
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - RestrictionRule
+    slis:
+      - id: override-price-restriction-availability
+        type: availability
+        recipe: success-rate
+      - id: override-price-restriction-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: override-price-restriction-availability
+        target: 0.999
+        window: 30d
+      - sli: override-price-restriction-latency
+        target: 0.99
+        window: 30d
+
+  - id: apply-promotion-offer
+    name: Apply Promotion Offer
+    owner: price-eng
+    bounded_context: pricing
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: price-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/promotions/offers/apply
+    telemetry:
+      spans:
+        business_span: Apply Promotion Offer
+        recipe: http-handler
+      metric_prefix: apply_promotion_offer
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-customer
+        criticality: medium
+    data_entities:
+      - PromotionOffer
+    slis:
+      - id: apply-promotion-offer-availability
+        type: availability
+        recipe: success-rate
+      - id: apply-promotion-offer-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: apply-promotion-offer-availability
+        target: 0.999
+        window: 30d
+      - sli: apply-promotion-offer-latency
+        target: 0.99
+        window: 30d
+
+  - id: evaluate-promotion-eligibility
+    name: Evaluate Promotion Eligibility
+    owner: price-eng
+    bounded_context: pricing
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: price-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/promotions/offers/{promotionId}/rules/evaluate
+    telemetry:
+      spans:
+        business_span: Evaluate Promotion Eligibility
+        recipe: http-handler
+      metric_prefix: evaluate_promotion_eligibility
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - PromotionEligibilityRule
+    slis:
+      - id: evaluate-promotion-eligibility-availability
+        type: availability
+        recipe: success-rate
+      - id: evaluate-promotion-eligibility-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: evaluate-promotion-eligibility-availability
+        target: 0.99
+        window: 30d
+      - sli: evaluate-promotion-eligibility-latency
+        target: 0.97
+        window: 30d
+
+  - id: get-pricing-snapshot
+    name: Get Pricing Snapshot
+    owner: price-eng
+    bounded_context: pricing
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: price-eng
+    entrypoints:
+      - type: http
+        method: GET
+        path: /v1/price/snapshots/{snapshotId}
+    telemetry:
+      spans:
+        business_span: Get Pricing Snapshot
+        recipe: http-handler
+      metric_prefix: get_pricing_snapshot
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - PricingSnapshot
+    slis:
+      - id: get-pricing-snapshot-availability
+        type: availability
+        recipe: success-rate
+      - id: get-pricing-snapshot-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: get-pricing-snapshot-availability
+        target: 0.99
+        window: 30d
+      - sli: get-pricing-snapshot-latency
+        target: 0.97
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: catalog (pos-catalog) - Tier 1
+  # ---------------------------------------------------------------------------
+  - id: search-products
+    name: Search Products
+    owner: catalog-eng
+    bounded_context: catalog
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: catalog-eng
+    entrypoints:
+      - type: http
+        method: GET
+        path: /v1/products/search
+    telemetry:
+      spans:
+        business_span: Search Products
+        recipe: http-handler
+      metric_prefix: search_products
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Product
+    slis:
+      - id: search-products-availability
+        type: availability
+        recipe: success-rate
+      - id: search-products-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 1500
+    slos:
+      - sli: search-products-availability
+        target: 0.999
+        window: 30d
+      - sli: search-products-latency
+        target: 0.99
+        window: 30d
+
+  - id: resolve-effective-price
+    name: Resolve Effective Price
+    owner: catalog-eng
+    bounded_context: catalog
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: catalog-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/products/price-books/resolve-price
+    telemetry:
+      spans:
+        business_span: Resolve Effective Price
+        recipe: http-handler
+      metric_prefix: resolve_effective_price
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - PriceBook
+      - Product
+    slis:
+      - id: resolve-effective-price-availability
+        type: availability
+        recipe: success-rate
+      - id: resolve-effective-price-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: resolve-effective-price-availability
+        target: 0.999
+        window: 30d
+      - sli: resolve-effective-price-latency
+        target: 0.99
+        window: 30d
+
+  - id: get-product-detail
+    name: Get Product Detail
+    owner: catalog-eng
+    bounded_context: catalog
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: catalog-eng
+    entrypoints:
+      - type: http
+        method: GET
+        path: /v1/products/{productId}/detail
+    telemetry:
+      spans:
+        business_span: Get Product Detail
+        recipe: http-handler
+      metric_prefix: get_product_detail
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Product
+    slis:
+      - id: get-product-detail-availability
+        type: availability
+        recipe: success-rate
+      - id: get-product-detail-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: get-product-detail-availability
+        target: 0.99
+        window: 30d
+      - sli: get-product-detail-latency
+        target: 0.97
+        window: 30d
+
+  - id: update-item-standard-cost
+    name: Update Item Standard Cost
+    owner: catalog-eng
+    bounded_context: catalog
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: catalog-eng
+    entrypoints:
+      - type: http
+        method: PUT
+        path: /v1/products/items/{itemId}/standard-cost
+    telemetry:
+      spans:
+        business_span: Update Item Standard Cost
+        recipe: http-handler
+      metric_prefix: update_item_standard_cost
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-accounting
+        criticality: medium
+    data_entities:
+      - ItemCost
+    slis:
+      - id: update-item-standard-cost-availability
+        type: availability
+        recipe: success-rate
+      - id: update-item-standard-cost-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: update-item-standard-cost-availability
+        target: 0.99
+        window: 30d
+      - sli: update-item-standard-cost-latency
+        target: 0.97
+        window: 30d
+
+  - id: approve-price-location-override
+    name: Approve Price Location Override
+    owner: catalog-eng
+    bounded_context: catalog
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: catalog-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/products/pricing/location-overrides/{overrideId}/approve
+    telemetry:
+      spans:
+        business_span: Approve Location Price Override
+        recipe: http-handler
+      metric_prefix: approve_price_location_override
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Product
+    slis:
+      - id: approve-price-location-override-availability
+        type: availability
+        recipe: success-rate
+      - id: approve-price-location-override-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: approve-price-location-override-availability
+        target: 0.99
+        window: 30d
+      - sli: approve-price-location-override-latency
+        target: 0.97
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: inventory (pos-inventory) - Tier 1
+  # ---------------------------------------------------------------------------
+  - id: check-inventory-availability
+    name: Check Inventory Availability
+    owner: inventory-eng
+    bounded_context: inventory
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: inventory-eng
+    entrypoints:
+      - type: http
+        method: GET
+        path: /v1/inventory/availability/{productId}
+    telemetry:
+      spans:
+        business_span: Check Inventory Availability
+        recipe: http-handler
+      metric_prefix: check_inventory_availability
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - InventoryLedgerEntry
+    slis:
+      - id: check-inventory-availability-availability
+        type: availability
+        recipe: success-rate
+      - id: check-inventory-availability-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 1500
+    slos:
+      - sli: check-inventory-availability-availability
+        target: 0.999
+        window: 30d
+      - sli: check-inventory-availability-latency
+        target: 0.99
+        window: 30d
+
+  - id: reserve-inventory
+    name: Reserve Inventory
+    owner: inventory-eng
+    bounded_context: inventory
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: inventory-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/inventory/reservations
+    telemetry:
+      spans:
+        business_span: Reserve Inventory
+        recipe: http-handler
+      metric_prefix: reserve_inventory
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-order
+        criticality: medium
+      - service: pos-workorder
+        criticality: medium
+    data_entities:
+      - Reservation
+    slis:
+      - id: reserve-inventory-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful inventory reservations to total attempts.
+      - id: reserve-inventory-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: reserve-inventory-availability
+        target: 0.999
+        window: 30d
+      - sli: reserve-inventory-latency
+        target: 0.99
+        window: 30d
+
+  - id: promote-inventory-allocation
+    name: Promote Inventory Allocation
+    owner: inventory-eng
+    bounded_context: inventory
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: inventory-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/inventory/reservations/{allocationId}/promote
+    telemetry:
+      spans:
+        business_span: Promote Inventory Allocation
+        recipe: http-handler
+      metric_prefix: promote_inventory_allocation
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Reservation
+    slis:
+      - id: promote-inventory-allocation-availability
+        type: availability
+        recipe: success-rate
+      - id: promote-inventory-allocation-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: promote-inventory-allocation-availability
+        target: 0.999
+        window: 30d
+      - sli: promote-inventory-allocation-latency
+        target: 0.99
+        window: 30d
+
+  - id: release-pick-list
+    name: Release Pick List
+    owner: inventory-eng
+    bounded_context: inventory
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: inventory-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/inventory/pick-lists/{pickListId}/release
+    telemetry:
+      spans:
+        business_span: Release Pick List
+        recipe: http-handler
+      metric_prefix: release_pick_list
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - PickList
+    slis:
+      - id: release-pick-list-availability
+        type: availability
+        recipe: success-rate
+      - id: release-pick-list-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: release-pick-list-availability
+        target: 0.999
+        window: 30d
+      - sli: release-pick-list-latency
+        target: 0.99
+        window: 30d
+
+  - id: confirm-pick-task
+    name: Confirm Pick Task
+    owner: inventory-eng
+    bounded_context: inventory
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: inventory-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/inventory/pick-lists/{pickListId}/tasks/{taskId}/confirm
+    telemetry:
+      spans:
+        business_span: Confirm Pick Task
+        recipe: http-handler
+      metric_prefix: confirm_pick_task
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - PickList
+    slis:
+      - id: confirm-pick-task-availability
+        type: availability
+        recipe: success-rate
+      - id: confirm-pick-task-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: confirm-pick-task-availability
+        target: 0.999
+        window: 30d
+      - sli: confirm-pick-task-latency
+        target: 0.99
+        window: 30d
+
+  - id: receive-goods
+    name: Receive Goods
+    owner: inventory-eng
+    bounded_context: inventory
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: inventory-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/inventory/goods-receipts
+    telemetry:
+      spans:
+        business_span: Receive Goods
+        recipe: http-handler
+      metric_prefix: receive_goods
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-accounting
+        criticality: medium
+    data_entities:
+      - ASN
+      - GoodsReceipt
+    slis:
+      - id: receive-goods-availability
+        type: availability
+        recipe: success-rate
+      - id: receive-goods-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: receive-goods-availability
+        target: 0.999
+        window: 30d
+      - sli: receive-goods-latency
+        target: 0.99
+        window: 30d
+
+  - id: approve-purchase-order
+    name: Approve Purchase Order
+    owner: inventory-eng
+    bounded_context: inventory
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: inventory-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/inventory/purchase-orders/{poId}/approve
+    telemetry:
+      spans:
+        business_span: Approve Purchase Order
+        recipe: http-handler
+      metric_prefix: approve_purchase_order
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - PurchaseOrder
+    slis:
+      - id: approve-purchase-order-availability
+        type: availability
+        recipe: success-rate
+      - id: approve-purchase-order-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: approve-purchase-order-availability
+        target: 0.999
+        window: 30d
+      - sli: approve-purchase-order-latency
+        target: 0.99
+        window: 30d
+
+  - id: submit-cycle-count
+    name: Submit Cycle Count
+    owner: inventory-eng
+    bounded_context: inventory
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: inventory-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/inventory/cycleCount/submit
+    telemetry:
+      spans:
+        business_span: Submit Cycle Count
+        recipe: http-handler
+      metric_prefix: submit_cycle_count
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - CycleCount
+    slis:
+      - id: submit-cycle-count-availability
+        type: availability
+        recipe: success-rate
+      - id: submit-cycle-count-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: submit-cycle-count-availability
+        target: 0.99
+        window: 30d
+      - sli: submit-cycle-count-latency
+        target: 0.97
+        window: 30d
+
+  - id: resolve-inventory-shortage
+    name: Resolve Inventory Shortage
+    owner: inventory-eng
+    bounded_context: inventory
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: inventory-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/inventory/shortage/resolve
+    telemetry:
+      spans:
+        business_span: Resolve Inventory Shortage
+        recipe: http-handler
+      metric_prefix: resolve_inventory_shortage
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-workorder
+        criticality: medium
+    data_entities:
+      - Reservation
+    slis:
+      - id: resolve-inventory-shortage-availability
+        type: availability
+        recipe: success-rate
+      - id: resolve-inventory-shortage-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: resolve-inventory-shortage-availability
+        target: 0.999
+        window: 30d
+      - sli: resolve-inventory-shortage-latency
+        target: 0.99
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: accounting (pos-accounting) - Tier 1
+  # ---------------------------------------------------------------------------
+  - id: post-journal-entry
+    name: Post Journal Entry
+    owner: accounting-eng
+    bounded_context: accounting
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: accounting-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/accounting/journal-entries/{journalEntryId}/post
+    telemetry:
+      spans:
+        business_span: Post Journal Entry
+        recipe: http-handler
+      metric_prefix: post_journal_entry
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - JournalEntry
+    slis:
+      - id: post-journal-entry-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful journal entry postings to total attempts.
+      - id: post-journal-entry-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: post-journal-entry-availability
+        target: 0.999
+        window: 30d
+      - sli: post-journal-entry-latency
+        target: 0.99
+        window: 30d
+
+  - id: reverse-journal-entry
+    name: Reverse Journal Entry
+    owner: accounting-eng
+    bounded_context: accounting
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: accounting-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/accounting/journal-entries/{journalEntryId}/reverse
+    telemetry:
+      spans:
+        business_span: Reverse Journal Entry
+        recipe: http-handler
+      metric_prefix: reverse_journal_entry
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - JournalEntry
+    slis:
+      - id: reverse-journal-entry-availability
+        type: availability
+        recipe: success-rate
+      - id: reverse-journal-entry-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: reverse-journal-entry-availability
+        target: 0.99
+        window: 30d
+      - sli: reverse-journal-entry-latency
+        target: 0.97
+        window: 30d
+
+  - id: create-ap-payment
+    name: Create AP Payment
+    owner: accounting-eng
+    bounded_context: accounting
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: accounting-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/accounting/ap/payments
+    telemetry:
+      spans:
+        business_span: Create Ap Payment
+        recipe: http-handler
+      metric_prefix: create_ap_payment
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - APPayment
+    slis:
+      - id: create-ap-payment-availability
+        type: availability
+        recipe: success-rate
+      - id: create-ap-payment-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: create-ap-payment-availability
+        target: 0.999
+        window: 30d
+      - sli: create-ap-payment-latency
+        target: 0.99
+        window: 30d
+
+  - id: match-vendor-bill
+    name: Match Vendor Bill
+    owner: accounting-eng
+    bounded_context: accounting
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: accounting-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/accounting/vendor-bills/match
+    telemetry:
+      spans:
+        business_span: Match Vendor Bill
+        recipe: http-handler
+      metric_prefix: match_vendor_bill
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - VendorBill
+    slis:
+      - id: match-vendor-bill-availability
+        type: availability
+        recipe: success-rate
+      - id: match-vendor-bill-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: match-vendor-bill-availability
+        target: 0.999
+        window: 30d
+      - sli: match-vendor-bill-latency
+        target: 0.99
+        window: 30d
+
+  - id: apply-payment
+    name: Apply Payment
+    owner: accounting-eng
+    bounded_context: accounting
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: accounting-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/accounting/payments/{paymentId}/applications
+    telemetry:
+      spans:
+        business_span: Apply Payment
+        recipe: http-handler
+      metric_prefix: apply_payment
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - APPayment
+    slis:
+      - id: apply-payment-availability
+        type: availability
+        recipe: success-rate
+      - id: apply-payment-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: apply-payment-availability
+        target: 0.999
+        window: 30d
+      - sli: apply-payment-latency
+        target: 0.99
+        window: 30d
+
+  - id: void-payment
+    name: Void Payment
+    owner: accounting-eng
+    bounded_context: accounting
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: accounting-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/accounting/payments/{paymentId}/void
+    telemetry:
+      spans:
+        business_span: Void Payment
+        recipe: http-handler
+      metric_prefix: void_payment
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - APPayment
+    slis:
+      - id: void-payment-availability
+        type: availability
+        recipe: success-rate
+      - id: void-payment-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: void-payment-availability
+        target: 0.999
+        window: 30d
+      - sli: void-payment-latency
+        target: 0.99
+        window: 30d
+
+  - id: resolve-gl-mapping
+    name: Resolve GL Mapping
+    owner: accounting-eng
+    bounded_context: accounting
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: accounting-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/accounting/mappings/resolve
+    telemetry:
+      spans:
+        business_span: Resolve Gl Mapping
+        recipe: http-handler
+      metric_prefix: resolve_gl_mapping
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - GLAccount
+    slis:
+      - id: resolve-gl-mapping-availability
+        type: availability
+        recipe: success-rate
+      - id: resolve-gl-mapping-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: resolve-gl-mapping-availability
+        target: 0.999
+        window: 30d
+      - sli: resolve-gl-mapping-latency
+        target: 0.99
+        window: 30d
+
+  - id: reconcile-invoice-event
+    name: Reconcile Invoice Event
+    owner: accounting-eng
+    bounded_context: accounting
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: accounting-eng
+    entrypoints:
+      - type: event
+        method: KAFKA_CONSUMER
+        path: invoice.events.v1
+    telemetry:
+      spans:
+        business_span: Reconcile Invoice Event
+        recipe: queue-consumer
+      metric_prefix: reconcile_invoice_event
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-invoice
+        criticality: critical
+    data_entities:
+      - JournalEntry
+      - Invoice
+    slis:
+      - id: reconcile-invoice-event-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of invoice domain events successfully reconciled to the GL.
+      - id: reconcile-invoice-event-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: reconcile-invoice-event-availability
+        target: 0.999
+        window: 30d
+      - sli: reconcile-invoice-event-latency
+        target: 0.99
+        window: 30d
+
+  - id: request-timekeeping-export
+    name: Request Timekeeping Export
+    owner: accounting-eng
+    bounded_context: accounting
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: accounting-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/accounting/export
+    telemetry:
+      spans:
+        business_span: Request Timekeeping Export
+        recipe: http-handler
+      metric_prefix: request_timekeeping_export
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - ExportJob
+    slis:
+      - id: request-timekeeping-export-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful timekeeping/payroll export job submissions to total attempts.
+      - id: request-timekeeping-export-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: request-timekeeping-export-availability
+        target: 0.99
+        window: 30d
+      - sli: request-timekeeping-export-latency
+        target: 0.97
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: customer-crm (pos-customer) - Tier 1
+  # ---------------------------------------------------------------------------
+  - id: resolve-account-tier
+    name: Resolve Account Tier
+    owner: customer-eng
+    bounded_context: customer-crm
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: customer-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/crm/accounts/tierResolve
+    telemetry:
+      spans:
+        business_span: Resolve Account Tier
+        recipe: http-handler
+      metric_prefix: resolve_account_tier
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Account
+    slis:
+      - id: resolve-account-tier-availability
+        type: availability
+        recipe: success-rate
+      - id: resolve-account-tier-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: resolve-account-tier-availability
+        target: 0.999
+        window: 30d
+      - sli: resolve-account-tier-latency
+        target: 0.99
+        window: 30d
+
+  - id: create-party
+    name: Create Party
+    owner: customer-eng
+    bounded_context: customer-crm
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: customer-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/crm/accounts/parties
+    telemetry:
+      spans:
+        business_span: Create Party
+        recipe: http-handler
+      metric_prefix: create_party
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Party
+    slis:
+      - id: create-party-availability
+        type: availability
+        recipe: success-rate
+      - id: create-party-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: create-party-availability
+        target: 0.999
+        window: 30d
+      - sli: create-party-latency
+        target: 0.99
+        window: 30d
+
+  - id: resolve-party
+    name: Resolve Party
+    owner: customer-eng
+    bounded_context: customer-crm
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: customer-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: "/v1/crm/accounts/parties:resolve"
+    telemetry:
+      spans:
+        business_span: Resolve Party
+        recipe: http-handler
+      metric_prefix: resolve_party
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Party
+    slis:
+      - id: resolve-party-availability
+        type: availability
+        recipe: success-rate
+      - id: resolve-party-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: resolve-party-availability
+        target: 0.999
+        window: 30d
+      - sli: resolve-party-latency
+        target: 0.99
+        window: 30d
+
+  - id: merge-party
+    name: Merge Party
+    owner: customer-eng
+    bounded_context: customer-crm
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: customer-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/crm/accounts/parties/{partyId}/merge
+    telemetry:
+      spans:
+        business_span: Merge Party
+        recipe: http-handler
+      metric_prefix: merge_party
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Party
+    slis:
+      - id: merge-party-availability
+        type: availability
+        recipe: success-rate
+      - id: merge-party-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: merge-party-availability
+        target: 0.99
+        window: 30d
+      - sli: merge-party-latency
+        target: 0.97
+        window: 30d
+
+  - id: link-party-vehicle
+    name: Link Party Vehicle
+    owner: customer-eng
+    bounded_context: customer-crm
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: customer-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/crm/accounts/parties/{partyId}/vehicles
+    telemetry:
+      spans:
+        business_span: Link Party Vehicle
+        recipe: http-handler
+      metric_prefix: link_party_vehicle
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-vehicle-inventory
+        criticality: medium
+    data_entities:
+      - Party
+      - Vehicle
+    slis:
+      - id: link-party-vehicle-availability
+        type: availability
+        recipe: success-rate
+      - id: link-party-vehicle-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: link-party-vehicle-availability
+        target: 0.99
+        window: 30d
+      - sli: link-party-vehicle-latency
+        target: 0.97
+        window: 30d
+
+  - id: set-communication-preferences
+    name: Set Communication Preferences
+    owner: customer-eng
+    bounded_context: customer-crm
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: customer-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/crm/accounts/parties/{partyId}/communicationPreferences
+    telemetry:
+      spans:
+        business_span: Set Communication Preferences
+        recipe: http-handler
+      metric_prefix: set_communication_preferences
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - CommunicationPreference
+    slis:
+      - id: set-communication-preferences-availability
+        type: availability
+        recipe: success-rate
+      - id: set-communication-preferences-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: set-communication-preferences-availability
+        target: 0.99
+        window: 30d
+      - sli: set-communication-preferences-latency
+        target: 0.97
+        window: 30d
+
+  - id: reconcile-workorder-manifest
+    name: Reconcile Workorder Manifest
+    owner: customer-eng
+    bounded_context: customer-crm
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: customer-eng
+    entrypoints:
+      - type: event
+        method: KAFKA_CONSUMER
+        path: workorder.manifest.v1
+    telemetry:
+      spans:
+        business_span: Reconcile Workorder Manifest
+        recipe: queue-consumer
+      metric_prefix: reconcile_workorder_manifest
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-workorder
+        criticality: medium
+    data_entities:
+      - Party
+    slis:
+      - id: reconcile-workorder-manifest-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of workorder reconciliation manifests processed without drift.
+      - id: reconcile-workorder-manifest-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: reconcile-workorder-manifest-availability
+        target: 0.99
+        window: 30d
+      - sli: reconcile-workorder-manifest-latency
+        target: 0.97
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: invoicing (pos-invoice) - Tier 1
+  # ---------------------------------------------------------------------------
+  - id: finalize-invoice
+    name: Finalize Invoice
+    owner: invoice-eng
+    bounded_context: invoicing
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: invoice-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/invoices/{invoiceId}/finalize
+    telemetry:
+      spans:
+        business_span: Finalize Invoice
+        recipe: http-handler
+      metric_prefix: finalize_invoice
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-accounting
+        criticality: critical
+    data_entities:
+      - Invoice
+    slis:
+      - id: finalize-invoice-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful invoice finalizations to total attempts.
+      - id: finalize-invoice-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: finalize-invoice-availability
+        target: 0.999
+        window: 30d
+      - sli: finalize-invoice-latency
+        target: 0.99
+        window: 30d
+
+  - id: revert-invoice
+    name: Revert Invoice
+    owner: invoice-eng
+    bounded_context: invoicing
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: invoice-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/invoices/{invoiceId}/revert
+    telemetry:
+      spans:
+        business_span: Revert Invoice
+        recipe: http-handler
+      metric_prefix: revert_invoice
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Invoice
+    slis:
+      - id: revert-invoice-availability
+        type: availability
+        recipe: success-rate
+      - id: revert-invoice-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: revert-invoice-availability
+        target: 0.99
+        window: 30d
+      - sli: revert-invoice-latency
+        target: 0.97
+        window: 30d
+
+  - id: capture-payment
+    name: Capture Payment
+    owner: invoice-eng
+    bounded_context: invoicing
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: invoice-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/invoices/{invoiceId}/payments/{paymentId}/capture
+    telemetry:
+      spans:
+        business_span: Capture Payment
+        recipe: http-handler
+      metric_prefix: capture_payment
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-accounting
+        criticality: critical
+    data_entities:
+      - Payment
+    slis:
+      - id: capture-payment-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful payment captures to total attempts.
+      - id: capture-payment-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: capture-payment-availability
+        target: 0.999
+        window: 30d
+      - sli: capture-payment-latency
+        target: 0.99
+        window: 30d
+
+  - id: void-invoice-payment
+    name: Void Invoice Payment
+    owner: invoice-eng
+    bounded_context: invoicing
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: invoice-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/invoices/{invoiceId}/payments/{paymentId}/void
+    telemetry:
+      spans:
+        business_span: Void Invoice Payment
+        recipe: http-handler
+      metric_prefix: void_invoice_payment
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-accounting
+        criticality: critical
+    data_entities:
+      - Payment
+    slis:
+      - id: void-invoice-payment-availability
+        type: availability
+        recipe: success-rate
+      - id: void-invoice-payment-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: void-invoice-payment-availability
+        target: 0.999
+        window: 30d
+      - sli: void-invoice-payment-latency
+        target: 0.99
+        window: 30d
+
+  - id: refund-payment
+    name: Refund Payment
+    owner: invoice-eng
+    bounded_context: invoicing
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: invoice-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/invoices/{invoiceId}/payments/{paymentId}/refunds
+    telemetry:
+      spans:
+        business_span: Refund Payment
+        recipe: http-handler
+      metric_prefix: refund_payment
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-accounting
+        criticality: critical
+    data_entities:
+      - Refund
+    slis:
+      - id: refund-payment-availability
+        type: availability
+        recipe: success-rate
+      - id: refund-payment-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: refund-payment-availability
+        target: 0.999
+        window: 30d
+      - sli: refund-payment-latency
+        target: 0.99
+        window: 30d
+
+  - id: issue-receipt
+    name: Issue Receipt
+    owner: invoice-eng
+    bounded_context: invoicing
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: invoice-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/invoices/{invoiceId}/receipts
+    telemetry:
+      spans:
+        business_span: Issue Receipt
+        recipe: http-handler
+      metric_prefix: issue_receipt
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Receipt
+    slis:
+      - id: issue-receipt-availability
+        type: availability
+        recipe: success-rate
+      - id: issue-receipt-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: issue-receipt-availability
+        target: 0.99
+        window: 30d
+      - sli: issue-receipt-latency
+        target: 0.97
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: work-order-execution (pos-workorder) - Tier 1
+  # ---------------------------------------------------------------------------
+  - id: create-estimate
+    name: Create Estimate
+    owner: workorder-eng
+    bounded_context: work-order-execution
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: workorder-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/workorders/estimates
+    telemetry:
+      spans:
+        business_span: Create Estimate
+        recipe: http-handler
+      metric_prefix: create_estimate
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-price
+        criticality: critical
+      - service: pos-tax
+        criticality: medium
+    data_entities:
+      - Estimate
+    slis:
+      - id: create-estimate-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful estimate creations to total attempts.
+      - id: create-estimate-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: create-estimate-availability
+        target: 0.999
+        window: 30d
+      - sli: create-estimate-latency
+        target: 0.99
+        window: 30d
+
+  - id: approve-estimate
+    name: Approve Estimate
+    owner: workorder-eng
+    bounded_context: work-order-execution
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: workorder-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/workorders/estimates/{estimateId}/approval
+    telemetry:
+      spans:
+        business_span: Approve Estimate
+        recipe: http-handler
+      metric_prefix: approve_estimate
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Estimate
+    slis:
+      - id: approve-estimate-availability
+        type: availability
+        recipe: success-rate
+      - id: approve-estimate-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: approve-estimate-availability
+        target: 0.999
+        window: 30d
+      - sli: approve-estimate-latency
+        target: 0.99
+        window: 30d
+
+  - id: promote-estimate-to-workorder
+    name: Promote Estimate To Workorder
+    owner: workorder-eng
+    bounded_context: work-order-execution
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: workorder-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/workorders/estimates/{estimateId}/promote
+    telemetry:
+      spans:
+        business_span: Promote Estimate
+        recipe: http-handler
+      metric_prefix: promote_estimate_to_workorder
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Estimate
+      - Workorder
+    slis:
+      - id: promote-estimate-to-workorder-availability
+        type: availability
+        recipe: success-rate
+      - id: promote-estimate-to-workorder-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: promote-estimate-to-workorder-availability
+        target: 0.999
+        window: 30d
+      - sli: promote-estimate-to-workorder-latency
+        target: 0.99
+        window: 30d
+
+  - id: start-workorder
+    name: Start Workorder
+    owner: workorder-eng
+    bounded_context: work-order-execution
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: workorder-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/workorders/{workorderId}/start
+    telemetry:
+      spans:
+        business_span: Start Workorder
+        recipe: http-handler
+      metric_prefix: start_workorder
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Workorder
+    slis:
+      - id: start-workorder-availability
+        type: availability
+        recipe: success-rate
+      - id: start-workorder-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: start-workorder-availability
+        target: 0.999
+        window: 30d
+      - sli: start-workorder-latency
+        target: 0.99
+        window: 30d
+
+  - id: assign-technician
+    name: Assign Technician
+    owner: workorder-eng
+    bounded_context: work-order-execution
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: workorder-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/workorders/{workorderId}/technician
+    telemetry:
+      spans:
+        business_span: Assign Technician
+        recipe: http-handler
+      metric_prefix: assign_technician
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-people
+        criticality: medium
+    data_entities:
+      - Workorder
+    slis:
+      - id: assign-technician-availability
+        type: availability
+        recipe: success-rate
+      - id: assign-technician-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: assign-technician-availability
+        target: 0.999
+        window: 30d
+      - sli: assign-technician-latency
+        target: 0.99
+        window: 30d
+
+  - id: complete-workorder
+    name: Complete Workorder
+    owner: workorder-eng
+    bounded_context: work-order-execution
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: workorder-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/workorders/{workorderId}/complete
+    telemetry:
+      spans:
+        business_span: Complete Workorder
+        recipe: http-handler
+      metric_prefix: complete_workorder
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Workorder
+    slis:
+      - id: complete-workorder-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful workorder completions to total attempts.
+      - id: complete-workorder-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: complete-workorder-availability
+        target: 0.999
+        window: 30d
+      - sli: complete-workorder-latency
+        target: 0.99
+        window: 30d
+
+  - id: generate-workorder-invoice
+    name: Generate Workorder Invoice
+    owner: workorder-eng
+    bounded_context: work-order-execution
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: workorder-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/workorders/{workorderId}/generate-invoice
+    telemetry:
+      spans:
+        business_span: Generate Workorder Invoice
+        recipe: http-handler
+      metric_prefix: generate_workorder_invoice
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-invoice
+        criticality: critical
+    data_entities:
+      - Workorder
+      - Invoice
+    slis:
+      - id: generate-workorder-invoice-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful invoice generations from completed workorders.
+      - id: generate-workorder-invoice-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: generate-workorder-invoice-availability
+        target: 0.999
+        window: 30d
+      - sli: generate-workorder-invoice-latency
+        target: 0.99
+        window: 30d
+
+  - id: consume-workorder-parts
+    name: Consume Workorder Parts
+    owner: workorder-eng
+    bounded_context: work-order-execution
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: workorder-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/workorders/{workorderId}/parts/consume
+    telemetry:
+      spans:
+        business_span: Consume Workorder Parts
+        recipe: http-handler
+      metric_prefix: consume_workorder_parts
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-inventory
+        criticality: critical
+    data_entities:
+      - PartUsage
+    slis:
+      - id: consume-workorder-parts-availability
+        type: availability
+        recipe: success-rate
+      - id: consume-workorder-parts-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: consume-workorder-parts-availability
+        target: 0.999
+        window: 30d
+      - sli: consume-workorder-parts-latency
+        target: 0.99
+        window: 30d
+
+  - id: start-workorder-labor
+    name: Start Workorder Labor
+    owner: workorder-eng
+    bounded_context: work-order-execution
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: workorder-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/workorders/{workorderId}/services/{serviceId}/labor/start
+    telemetry:
+      spans:
+        business_span: Start Workorder Labor
+        recipe: http-handler
+      metric_prefix: start_workorder_labor
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-people
+        criticality: medium
+    data_entities:
+      - LaborEntry
+    slis:
+      - id: start-workorder-labor-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful labor session starts against a workorder service item to total attempts.
+      - id: start-workorder-labor-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: start-workorder-labor-availability
+        target: 0.999
+        window: 30d
+      - sli: start-workorder-labor-latency
+        target: 0.99
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: shop-scheduling (pos-shop-manager) - Tier 2
+  # ---------------------------------------------------------------------------
+  - id: create-appointment
+    name: Create Appointment
+    owner: shop-eng
+    bounded_context: shop-scheduling
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: shop-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/appointments
+    telemetry:
+      spans:
+        business_span: Create Appointment
+        recipe: http-handler
+      metric_prefix: create_appointment
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Appointment
+    slis:
+      - id: create-appointment-availability
+        type: availability
+        recipe: success-rate
+      - id: create-appointment-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: create-appointment-availability
+        target: 0.99
+        window: 30d
+      - sli: create-appointment-latency
+        target: 0.97
+        window: 30d
+
+  - id: reschedule-appointment
+    name: Reschedule Appointment
+    owner: shop-eng
+    bounded_context: shop-scheduling
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: shop-eng
+    entrypoints:
+      - type: http
+        method: PUT
+        path: /v1/appointments/{appointmentId}/reschedule
+    telemetry:
+      spans:
+        business_span: Reschedule Appointment
+        recipe: http-handler
+      metric_prefix: reschedule_appointment
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Appointment
+    slis:
+      - id: reschedule-appointment-availability
+        type: availability
+        recipe: success-rate
+      - id: reschedule-appointment-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: reschedule-appointment-availability
+        target: 0.99
+        window: 30d
+      - sli: reschedule-appointment-latency
+        target: 0.97
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: warranty (pos-warranty) - Tier 2
+  # ---------------------------------------------------------------------------
+  - id: submit-warranty-claim
+    name: Submit Warranty Claim
+    owner: warranty-eng
+    bounded_context: warranty
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: warranty-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/warranty/claims/{id}/submit
+    telemetry:
+      spans:
+        business_span: Submit Warranty Claim
+        recipe: http-handler
+      metric_prefix: submit_warranty_claim
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Claim
+    slis:
+      - id: submit-warranty-claim-availability
+        type: availability
+        recipe: success-rate
+      - id: submit-warranty-claim-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: submit-warranty-claim-availability
+        target: 0.999
+        window: 30d
+      - sli: submit-warranty-claim-latency
+        target: 0.99
+        window: 30d
+
+  - id: decide-warranty-claim
+    name: Decide Warranty Claim
+    owner: warranty-eng
+    bounded_context: warranty
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: warranty-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/warranty/claims/{id}/decision
+    telemetry:
+      spans:
+        business_span: Decide Warranty Claim
+        recipe: http-handler
+      metric_prefix: decide_warranty_claim
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Claim
+    slis:
+      - id: decide-warranty-claim-availability
+        type: availability
+        recipe: success-rate
+      - id: decide-warranty-claim-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 2000
+    slos:
+      - sli: decide-warranty-claim-availability
+        target: 0.999
+        window: 30d
+      - sli: decide-warranty-claim-latency
+        target: 0.99
+        window: 30d
+
+  - id: submit-claim-settlement
+    name: Submit Claim Settlement
+    owner: warranty-eng
+    bounded_context: warranty
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: warranty-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/warranty/claims/{id}/settlements
+    telemetry:
+      spans:
+        business_span: Submit Claim Settlement
+        recipe: http-handler
+      metric_prefix: submit_claim_settlement
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-accounting
+        criticality: medium
+    data_entities:
+      - Settlement
+    slis:
+      - id: submit-claim-settlement-availability
+        type: availability
+        recipe: success-rate
+      - id: submit-claim-settlement-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: submit-claim-settlement-availability
+        target: 0.99
+        window: 30d
+      - sli: submit-claim-settlement-latency
+        target: 0.97
+        window: 30d
+
+  - id: submit-part-return
+    name: Submit Part Return
+    owner: warranty-eng
+    bounded_context: warranty
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: warranty-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/warranty/claims/{id}/part-returns
+    telemetry:
+      spans:
+        business_span: Submit Part Return
+        recipe: http-handler
+      metric_prefix: submit_part_return
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-inventory
+        criticality: medium
+    data_entities:
+      - PartReturn
+    slis:
+      - id: submit-part-return-availability
+        type: availability
+        recipe: success-rate
+      - id: submit-part-return-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: submit-part-return-availability
+        target: 0.99
+        window: 30d
+      - sli: submit-part-return-latency
+        target: 0.97
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: vehicle-inventory (pos-vehicle-inventory) - Tier 2
+  # ---------------------------------------------------------------------------
+  - id: register-vehicle-by-vin
+    name: Register Vehicle By Vin
+    owner: vehicle-eng
+    bounded_context: vehicle-inventory
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: vehicle-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/vehicles/vin
+    telemetry:
+      spans:
+        business_span: Register Vehicle
+        recipe: http-handler
+      metric_prefix: register_vehicle_by_vin
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Vehicle
+    slis:
+      - id: register-vehicle-by-vin-availability
+        type: availability
+        recipe: success-rate
+      - id: register-vehicle-by-vin-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: register-vehicle-by-vin-availability
+        target: 0.99
+        window: 30d
+      - sli: register-vehicle-by-vin-latency
+        target: 0.97
+        window: 30d
+
+  - id: search-vehicles
+    name: Search Vehicles
+    owner: vehicle-eng
+    bounded_context: vehicle-inventory
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: vehicle-eng
+    entrypoints:
+      - type: http
+        method: GET
+        path: /v1/vehicles/search
+    telemetry:
+      spans:
+        business_span: Search Vehicles
+        recipe: http-handler
+      metric_prefix: search_vehicles
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Vehicle
+    slis:
+      - id: search-vehicles-availability
+        type: availability
+        recipe: success-rate
+      - id: search-vehicles-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: search-vehicles-availability
+        target: 0.99
+        window: 30d
+      - sli: search-vehicles-latency
+        target: 0.97
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: vehicle-fitment (pos-vehicle-fitment) - Tier 2
+  # ---------------------------------------------------------------------------
+  - id: filter-products-by-fitment
+    name: Filter Products By Fitment
+    owner: vehicle-eng
+    bounded_context: vehicle-fitment
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: vehicle-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/vehicle-fitment/hints/filter-products
+    telemetry:
+      spans:
+        business_span: Filter Products By Fitment
+        recipe: http-handler
+      metric_prefix: filter_products_by_fitment
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-catalog
+        criticality: medium
+    data_entities:
+      - FitmentHint
+    slis:
+      - id: filter-products-by-fitment-availability
+        type: availability
+        recipe: success-rate
+      - id: filter-products-by-fitment-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: filter-products-by-fitment-availability
+        target: 0.99
+        window: 30d
+      - sli: filter-products-by-fitment-latency
+        target: 0.97
+        window: 30d
+
+  - id: get-fitment-hint
+    name: Get Fitment Hint
+    owner: vehicle-eng
+    bounded_context: vehicle-fitment
+    tier: 3
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: vehicle-eng
+    entrypoints:
+      - type: http
+        method: GET
+        path: /v1/vehicle-fitment/hints/{hintId}
+    telemetry:
+      spans:
+        business_span: Get Fitment Hint
+        recipe: http-handler
+      metric_prefix: get_fitment_hint
+      histogram_buckets: tier-3
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - FitmentHint
+    slis:
+      - id: get-fitment-hint-availability
+        type: availability
+        recipe: success-rate
+    slos:
+      - sli: get-fitment-hint-availability
+        target: 0.98
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: vehicle-reference (pos-vehicle-reference-carapi, pos-vehicle-reference-nhtsa) - Tier 3
+  # ---------------------------------------------------------------------------
+  - id: lookup-vehicle-models-carapi
+    name: Lookup Vehicle Models (CarAPI)
+    owner: vehicle-eng
+    bounded_context: vehicle-reference
+    tier: 3
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: vehicle-eng
+    entrypoints:
+      - type: http
+        method: GET
+        path: /v1/vehicle-reference/models/{makeId}
+    telemetry:
+      spans:
+        business_span: Lookup Vehicle Models
+        recipe: http-handler
+      metric_prefix: lookup_vehicle_models_carapi
+      histogram_buckets: tier-3
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Model
+    slis:
+      - id: lookup-vehicle-models-carapi-availability
+        type: availability
+        recipe: success-rate
+    slos:
+      - sli: lookup-vehicle-models-carapi-availability
+        target: 0.98
+        window: 30d
+
+  - id: lookup-vehicle-makes-nhtsa
+    name: Lookup Vehicle Makes (NHTSA)
+    owner: vehicle-eng
+    bounded_context: vehicle-reference
+    tier: 3
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: vehicle-eng
+    entrypoints:
+      - type: http
+        method: GET
+        path: /v1/vehicle-fitment/makes/{manufacturerId}
+    telemetry:
+      spans:
+        business_span: Lookup Vehicle Makes
+        recipe: http-handler
+      metric_prefix: lookup_vehicle_makes_nhtsa
+      histogram_buckets: tier-3
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Make
+    slis:
+      - id: lookup-vehicle-makes-nhtsa-availability
+        type: availability
+        recipe: success-rate
+    slos:
+      - sli: lookup-vehicle-makes-nhtsa-availability
+        target: 0.98
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: workforce (pos-people) - Tier 2
+  # ---------------------------------------------------------------------------
+  - id: approve-time-entry
+    name: Approve Time Entry
+    owner: people-eng
+    bounded_context: workforce
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: people-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/people/timeEntries/approve
+    telemetry:
+      spans:
+        business_span: Approve Time Entry
+        recipe: http-handler
+      metric_prefix: approve_time_entry
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - TimeEntry
+    slis:
+      - id: approve-time-entry-availability
+        type: availability
+        recipe: success-rate
+      - id: approve-time-entry-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: approve-time-entry-availability
+        target: 0.99
+        window: 30d
+      - sli: approve-time-entry-latency
+        target: 0.97
+        window: 30d
+
+  - id: start-work-session
+    name: Start Work Session
+    owner: people-eng
+    bounded_context: workforce
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: people-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/people/workSessions/start
+    telemetry:
+      spans:
+        business_span: Start Work Session
+        recipe: http-handler
+      metric_prefix: start_work_session
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - WorkSession
+    slis:
+      - id: start-work-session-availability
+        type: availability
+        recipe: success-rate
+      - id: start-work-session-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: start-work-session-availability
+        target: 0.99
+        window: 30d
+      - sli: start-work-session-latency
+        target: 0.97
+        window: 30d
+
+  - id: create-staffing-assignment
+    name: Create Staffing Assignment
+    owner: people-eng
+    bounded_context: workforce
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: people-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/people/staffing/assignments
+    telemetry:
+      spans:
+        business_span: Create Staffing Assignment
+        recipe: http-handler
+      metric_prefix: create_staffing_assignment
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - StaffingAssignment
+    slis:
+      - id: create-staffing-assignment-availability
+        type: availability
+        recipe: success-rate
+      - id: create-staffing-assignment-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: create-staffing-assignment-availability
+        target: 0.99
+        window: 30d
+      - sli: create-staffing-assignment-latency
+        target: 0.97
+        window: 30d
+
+  - id: create-time-entry-adjustment
+    name: Create Time Entry Adjustment
+    owner: people-eng
+    bounded_context: workforce
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: people-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/people/timeEntries/adjustments
+    telemetry:
+      spans:
+        business_span: Create Time Entry Adjustment
+        recipe: http-handler
+      metric_prefix: create_time_entry_adjustment
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - TimeEntryAdjustment
+    slis:
+      - id: create-time-entry-adjustment-availability
+        type: availability
+        recipe: success-rate
+      - id: create-time-entry-adjustment-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: create-time-entry-adjustment-availability
+        target: 0.99
+        window: 30d
+      - sli: create-time-entry-adjustment-latency
+        target: 0.97
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: people-identity (pos-people-contact) - Tier 2
+  # ---------------------------------------------------------------------------
+  - id: resolve-person
+    name: Resolve Person
+    owner: identity-eng
+    bounded_context: people-identity
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: identity-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/people/resolve
+    telemetry:
+      spans:
+        business_span: Resolve Person
+        recipe: http-handler
+      metric_prefix: resolve_person
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Person
+    slis:
+      - id: resolve-person-availability
+        type: availability
+        recipe: success-rate
+      - id: resolve-person-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: resolve-person-availability
+        target: 0.99
+        window: 30d
+      - sli: resolve-person-latency
+        target: 0.97
+        window: 30d
+
+  - id: link-user-to-person
+    name: Link User To Person
+    owner: identity-eng
+    bounded_context: people-identity
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: identity-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/people/users/link
+    telemetry:
+      spans:
+        business_span: Link User To Person
+        recipe: http-handler
+      metric_prefix: link_user_to_person
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream:
+      - service: pos-security-service
+        criticality: medium
+    data_entities:
+      - UserPersonLink
+    slis:
+      - id: link-user-to-person-availability
+        type: availability
+        recipe: success-rate
+      - id: link-user-to-person-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: link-user-to-person-availability
+        target: 0.99
+        window: 30d
+      - sli: link-user-to-person-latency
+        target: 0.97
+        window: 30d
+
+  - id: update-person-contact-points
+    name: Update Person Contact Points
+    owner: identity-eng
+    bounded_context: people-identity
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: identity-eng
+    entrypoints:
+      - type: http
+        method: PUT
+        path: /v1/people/{personId}/contact-points
+    telemetry:
+      spans:
+        business_span: Update Contact Points
+        recipe: http-handler
+      metric_prefix: update_person_contact_points
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - ContactPoint
+    slis:
+      - id: update-person-contact-points-availability
+        type: availability
+        recipe: success-rate
+      - id: update-person-contact-points-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: update-person-contact-points-availability
+        target: 0.99
+        window: 30d
+      - sli: update-person-contact-points-latency
+        target: 0.97
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: location (pos-location) - Tier 2
+  # ---------------------------------------------------------------------------
+  - id: update-location
+    name: Update Location
+    owner: location-eng
+    bounded_context: location
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: location-eng
+    entrypoints:
+      - type: http
+        method: PUT
+        path: /v1/locations/{locationId}
+    telemetry:
+      spans:
+        business_span: Update Location
+        recipe: http-handler
+      metric_prefix: update_location
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Location
+    slis:
+      - id: update-location-availability
+        type: availability
+        recipe: success-rate
+      - id: update-location-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: update-location-availability
+        target: 0.99
+        window: 30d
+      - sli: update-location-latency
+        target: 0.97
+        window: 30d
+
+  - id: get-mobile-unit-eligibility
+    name: Get Mobile Unit Eligibility
+    owner: location-eng
+    bounded_context: location
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: location-eng
+    entrypoints:
+      - type: http
+        method: GET
+        path: "/v1/mobile-units:eligible"
+    telemetry:
+      spans:
+        business_span: Check Mobile Unit Eligibility
+        recipe: http-handler
+      metric_prefix: get_mobile_unit_eligibility
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - MobileUnit
+    slis:
+      - id: get-mobile-unit-eligibility-availability
+        type: availability
+        recipe: success-rate
+      - id: get-mobile-unit-eligibility-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: get-mobile-unit-eligibility-availability
+        target: 0.99
+        window: 30d
+      - sli: get-mobile-unit-eligibility-latency
+        target: 0.97
+        window: 30d
+
+  - id: update-storage-location
+    name: Update Storage Location
+    owner: location-eng
+    bounded_context: location
+    tier: 3
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: location-eng
+    entrypoints:
+      - type: http
+        method: PATCH
+        path: /v1/locations/{siteId}/storage-locations/{storageLocationId}
+    telemetry:
+      spans:
+        business_span: Update Storage Location
+        recipe: http-handler
+      metric_prefix: update_storage_location
+      histogram_buckets: tier-3
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - StorageLocation
+    slis:
+      - id: update-storage-location-availability
+        type: availability
+        recipe: success-rate
+    slos:
+      - sli: update-storage-location-availability
+        target: 0.98
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: tax (pos-tax) - Tier 1
+  # ---------------------------------------------------------------------------
+  - id: calculate-tax
+    name: Calculate Tax
+    owner: tax-eng
+    bounded_context: tax
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: tax-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/tax/calculate
+    telemetry:
+      spans:
+        business_span: Calculate Tax
+        recipe: http-handler
+      metric_prefix: calculate_tax
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - TaxCalculationResult
+    slis:
+      - id: calculate-tax-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful tax calculations to total attempts.
+      - id: calculate-tax-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 1500
+    slos:
+      - sli: calculate-tax-availability
+        target: 0.999
+        window: 30d
+      - sli: calculate-tax-latency
+        target: 0.99
+        window: 30d
+
+  - id: get-tax-mode
+    name: Get Tax Mode
+    owner: tax-eng
+    bounded_context: tax
+    tier: 3
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: tax-eng
+    entrypoints:
+      - type: http
+        method: GET
+        path: /v1/tax/mode
+    telemetry:
+      spans:
+        business_span: Get Tax Mode
+        recipe: http-handler
+      metric_prefix: get_tax_mode
+      histogram_buckets: tier-3
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - TaxCalculationResult
+    slis:
+      - id: get-tax-mode-availability
+        type: availability
+        recipe: success-rate
+    slos:
+      - sli: get-tax-mode-availability
+        target: 0.98
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: security-identity (pos-security-service) - Tier 1
+  # ---------------------------------------------------------------------------
+  - id: login-user
+    name: Login User
+    owner: security-eng
+    bounded_context: security-identity
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: security-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/auth/login
+    telemetry:
+      spans:
+        business_span: Login User
+        recipe: http-handler
+      metric_prefix: login_user
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - User
+    slis:
+      - id: login-user-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful logins to total login attempts.
+      - id: login-user-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 1500
+    slos:
+      - sli: login-user-availability
+        target: 0.999
+        window: 30d
+      - sli: login-user-latency
+        target: 0.99
+        window: 30d
+
+  - id: issue-token-pair
+    name: Issue Token Pair
+    owner: security-eng
+    bounded_context: security-identity
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: security-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/auth/token-pair
+    telemetry:
+      spans:
+        business_span: Issue Token Pair
+        recipe: http-handler
+      metric_prefix: issue_token_pair
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - JwtToken
+    slis:
+      - id: issue-token-pair-availability
+        type: availability
+        recipe: success-rate
+      - id: issue-token-pair-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 1500
+    slos:
+      - sli: issue-token-pair-availability
+        target: 0.999
+        window: 30d
+      - sli: issue-token-pair-latency
+        target: 0.99
+        window: 30d
+
+  - id: refresh-token
+    name: Refresh Token
+    owner: security-eng
+    bounded_context: security-identity
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: security-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/auth/refresh
+    telemetry:
+      spans:
+        business_span: Refresh Token
+        recipe: http-handler
+      metric_prefix: refresh_token
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - JwtToken
+    slis:
+      - id: refresh-token-availability
+        type: availability
+        recipe: success-rate
+      - id: refresh-token-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 1500
+    slos:
+      - sli: refresh-token-availability
+        target: 0.999
+        window: 30d
+      - sli: refresh-token-latency
+        target: 0.99
+        window: 30d
+
+  - id: check-authorization-decision
+    name: Check Authorization Decision
+    owner: security-eng
+    bounded_context: security-identity
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: security-eng
+    entrypoints:
+      - type: http
+        method: GET
+        path: /v1/users/authorization/decision
+    telemetry:
+      spans:
+        business_span: Check Authorization Decision
+        recipe: http-handler
+      metric_prefix: check_authorization_decision
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Permission
+    slis:
+      - id: check-authorization-decision-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful authorization-decision checks to total attempts.
+      - id: check-authorization-decision-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 1000
+    slos:
+      - sli: check-authorization-decision-availability
+        target: 0.999
+        window: 30d
+      - sli: check-authorization-decision-latency
+        target: 0.99
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: gateway (pos-api-gateway) - Tier 1
+  # ---------------------------------------------------------------------------
+  - id: route-gateway-request
+    name: Route Gateway Request
+    owner: platform-eng
+    bounded_context: gateway
+    tier: 1
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: platform-eng
+    entrypoints:
+      - type: http
+        method: ANY
+        path: /**
+    telemetry:
+      spans:
+        business_span: Route Gateway Request
+        recipe: http-handler
+      metric_prefix: route_gateway_request
+      histogram_buckets: tier-1
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities: []
+    slis:
+      - id: route-gateway-request-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of gateway requests successfully authenticated, rewritten, and routed.
+      - id: route-gateway-request-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 500
+    slos:
+      - sli: route-gateway-request-availability
+        target: 0.999
+        window: 30d
+      - sli: route-gateway-request-latency
+        target: 0.99
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: event-backbone (pos-event-receiver) - Tier 2
+  # ---------------------------------------------------------------------------
+  - id: ingest-emitted-event
+    name: Ingest Emitted Event
+    owner: platform-eng
+    bounded_context: event-backbone
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: platform-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/events
+    telemetry:
+      spans:
+        business_span: Ingest Emitted Event
+        recipe: http-handler
+      metric_prefix: ingest_emitted_event
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - EventRecord
+    slis:
+      - id: ingest-emitted-event-availability
+        type: availability
+        recipe: success-rate
+      - id: ingest-emitted-event-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: ingest-emitted-event-availability
+        target: 0.99
+        window: 30d
+      - sli: ingest-emitted-event-latency
+        target: 0.97
+        window: 30d
+
+  - id: register-event-type
+    name: Register Event Type
+    owner: platform-eng
+    bounded_context: event-backbone
+    tier: 3
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: platform-eng
+    entrypoints:
+      - type: http
+        method: PUT
+        path: /v1/eventTypes/code/{typeCode}
+    telemetry:
+      spans:
+        business_span: Register Event Type
+        recipe: http-handler
+      metric_prefix: register_event_type
+      histogram_buckets: tier-3
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - EventType
+    slis:
+      - id: register-event-type-availability
+        type: availability
+        recipe: success-rate
+    slos:
+      - sli: register-event-type-availability
+        target: 0.98
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: bulk-ingestion (pos-bulk-loader) - Tier 3
+  # ---------------------------------------------------------------------------
+  - id: upload-bulk-load-file
+    name: Upload Bulk Load File
+    owner: platform-eng
+    bounded_context: bulk-ingestion
+    tier: 3
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: platform-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/bulk-jobs/{jobId}/upload
+    telemetry:
+      spans:
+        business_span: Upload Bulk Load File
+        recipe: http-handler
+      metric_prefix: upload_bulk_load_file
+      histogram_buckets: tier-3
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - BulkLoadJob
+    slis:
+      - id: upload-bulk-load-file-availability
+        type: availability
+        recipe: success-rate
+    slos:
+      - sli: upload-bulk-load-file-availability
+        target: 0.98
+        window: 30d
+
+  - id: process-bulk-load-job
+    name: Process Bulk Load Job
+    owner: platform-eng
+    bounded_context: bulk-ingestion
+    tier: 3
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: platform-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/bulk-jobs/{jobId}/process
+    telemetry:
+      spans:
+        business_span: Process Bulk Load Job
+        recipe: http-handler
+      metric_prefix: process_bulk_load_job
+      histogram_buckets: tier-3
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - BulkLoadJob
+    slis:
+      - id: process-bulk-load-job-availability
+        type: availability
+        recipe: success-rate
+    slos:
+      - sli: process-bulk-load-job-availability
+        target: 0.98
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: documents (pos-documents) - Tier 3
+  # ---------------------------------------------------------------------------
+  - id: render-document
+    name: Render Document
+    owner: platform-eng
+    bounded_context: documents
+    tier: 3
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: platform-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/documents/render
+    telemetry:
+      spans:
+        business_span: Render Document
+        recipe: http-handler
+      metric_prefix: render_document
+      histogram_buckets: tier-3
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - DocumentRenderRequest
+    slis:
+      - id: render-document-availability
+        type: availability
+        recipe: success-rate
+    slos:
+      - sli: render-document-availability
+        target: 0.98
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: image-management (pos-image) - Tier 3
+  # ---------------------------------------------------------------------------
+  - id: get-image-by-id
+    name: Get Image By Id
+    owner: platform-eng
+    bounded_context: image-management
+    tier: 3
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: platform-eng
+    entrypoints:
+      - type: http
+        method: GET
+        path: /v1/images/id/{id}
+    telemetry:
+      spans:
+        business_span: Retrieve Image Asset
+        recipe: http-handler
+      metric_prefix: get_image_by_id
+      histogram_buckets: tier-3
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - Image
+    slis:
+      - id: get-image-by-id-availability
+        type: availability
+        recipe: success-rate
+    slos:
+      - sli: get-image-by-id-availability
+        target: 0.98
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Bounded context: genai-assistant (pos-mcp-server) - Tier 2
+  # ---------------------------------------------------------------------------
+  - id: submit-nlti-request
+    name: Submit Nlti Request
+    owner: genai-eng
+    bounded_context: genai-assistant
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: genai-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/nlt/requests
+    telemetry:
+      spans:
+        business_span: Submit Nlti Request
+        recipe: http-handler
+      metric_prefix: submit_nlti_request
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - NltiRequest
+    slis:
+      - id: submit-nlti-request-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of successful NLTI request submissions to total attempts.
+      - id: submit-nlti-request-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: submit-nlti-request-availability
+        target: 0.99
+        window: 30d
+      - sli: submit-nlti-request-latency
+        target: 0.97
+        window: 30d
+
+  - id: stream-mcp-chat
+    name: Stream Mcp Chat
+    owner: genai-eng
+    bounded_context: genai-assistant
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: genai-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/mcp/chat/stream
+    telemetry:
+      spans:
+        business_span: Stream Chat Response
+        recipe: http-handler
+      metric_prefix: stream_mcp_chat
+      histogram_buckets: tier-2
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - ChatSession
+    slis:
+      - id: stream-mcp-chat-availability
+        type: availability
+        recipe: success-rate
+      - id: stream-mcp-chat-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 5000
+    slos:
+      - sli: stream-mcp-chat-availability
+        target: 0.99
+        window: 30d
+      - sli: stream-mcp-chat-latency
+        target: 0.95
+        window: 30d
+
+  - id: ingest-mcp-document
+    name: Ingest Mcp Document
+    owner: genai-eng
+    bounded_context: genai-assistant
+    tier: 3
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: genai-eng
+    entrypoints:
+      - type: http
+        method: POST
+        path: /v1/mcp/documents
+    telemetry:
+      spans:
+        business_span: Ingest Knowledge Document
+        recipe: http-handler
+      metric_prefix: ingest_mcp_document
+      histogram_buckets: tier-3
+    instrumentation:
+      state: preserve
+      agent: otel-java-agent
+      agent_version: "v2.9.0"
+      resource_config: env-vars
+    downstream: []
+    data_entities:
+      - KnowledgeDocument
+    slis:
+      - id: ingest-mcp-document-availability
+        type: availability
+        recipe: success-rate
+    slos:
+      - sli: ingest-mcp-document-availability
+        target: 0.98
+        window: 30d
+
+  # ---------------------------------------------------------------------------
+  # Frontend-driven operations (durion-positivity-frontend, Angular 21)
+  #
+  # Added: 2026-07-17 (Phase 1 extension - frontend scope added to sre.config.yaml
+  # context.frontend / context.frontend_root). Source state: greenfield
+  # (see docs/domain/brownfield-assessment.md "Frontend" section).
+  #
+  # These operations represent genuinely frontend-only CUJs (aggregation/board
+  # views, multi-step UI wizards) that do not correspond 1:1 to a single already
+  # -cataloged backend operation above. `telemetry.semanticConvention: frontend`
+  # marks these as browser/RUM spans, not backend HTTP-handler spans, so
+  # downstream instrumentation agents route them to the OTel Web SDK / Faro
+  # (Phase 3b), never the Java agent. Where a frontend operation is fulfilled by
+  # an existing backend operation cataloged above, we link via
+  # `downstream[].operation` instead of re-cataloging it here (e.g. order-cart,
+  # estimate-approval, and NLTI chat flows already have Tier-1/2 backend
+  # operations under order-management / work-order-execution / genai-assistant
+  # and are intentionally NOT duplicated).
+  # ---------------------------------------------------------------------------
+
+  - id: view-operations-dashboard
+    name: View Operations Dashboard
+    owner: frontend-eng
+    bounded_context: frontend-shell
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: frontend-eng
+    entrypoints:
+      - type: ui
+        path: /app
+    telemetry:
+      spans:
+        business_span: View Operations Dashboard
+      semanticConvention: frontend
+      metric_prefix: view_operations_dashboard
+      histogram_buckets: tier-2
+    instrumentation:
+      state: greenfield
+      agent: otel-web-sdk
+      agent_version: "not-yet-installed"
+      resource_config: code
+    downstream:
+      - service: pos-mcp-server
+        criticality: medium
+        operation: submit-nlti-request
+    data_entities:
+      - DashboardWidget
+    slis:
+      - id: view-operations-dashboard-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of dashboard page loads that render without a client-side error.
+      - id: view-operations-dashboard-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+        description: 95th percentile time to first meaningful paint of the dashboard shell.
+    slos:
+      - sli: view-operations-dashboard-availability
+        target: 0.99
+        window: 30d
+      - sli: view-operations-dashboard-latency
+        target: 0.95
+        window: 30d
+
+  - id: view-customer-snapshot
+    name: View Customer Snapshot
+    owner: frontend-eng
+    bounded_context: customer-crm
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: frontend-eng
+    entrypoints:
+      - type: ui
+        path: /app/crm/crm-snapshot/{partyId}
+    telemetry:
+      spans:
+        business_span: View Customer Snapshot
+      semanticConvention: frontend
+      metric_prefix: view_customer_snapshot
+      histogram_buckets: tier-2
+    instrumentation:
+      state: greenfield
+      agent: otel-web-sdk
+      agent_version: "not-yet-installed"
+      resource_config: code
+    downstream:
+      - service: pos-customer
+        criticality: high
+        operation: resolve-party
+      - service: pos-order
+        criticality: medium
+      - service: pos-vehicle-inventory
+        criticality: low
+    data_entities:
+      - Party
+      - Vehicle
+      - SalesOrder
+    slis:
+      - id: view-customer-snapshot-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of CRM snapshot views that load all panels without error.
+      - id: view-customer-snapshot-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: view-customer-snapshot-availability
+        target: 0.99
+        window: 30d
+      - sli: view-customer-snapshot-latency
+        target: 0.95
+        window: 30d
+
+  - id: view-work-in-progress-board
+    name: View Work In Progress Board
+    owner: frontend-eng
+    bounded_context: work-order-execution
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: frontend-eng
+    entrypoints:
+      - type: ui
+        path: /app/workexec/wip-status
+    telemetry:
+      spans:
+        business_span: View Work In Progress Board
+      semanticConvention: frontend
+      metric_prefix: view_work_in_progress_board
+      histogram_buckets: tier-2
+    instrumentation:
+      state: greenfield
+      agent: otel-web-sdk
+      agent_version: "not-yet-installed"
+      resource_config: code
+    downstream:
+      - service: pos-workorder
+        criticality: high
+      - service: pos-people
+        criticality: medium
+    data_entities:
+      - Workorder
+    slis:
+      - id: view-work-in-progress-board-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of WIP board loads that return workorder status data without error.
+      - id: view-work-in-progress-board-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: view-work-in-progress-board-availability
+        target: 0.99
+        window: 30d
+      - sli: view-work-in-progress-board-latency
+        target: 0.95
+        window: 30d
+
+  - id: view-dispatch-board
+    name: View Dispatch Board
+    owner: frontend-eng
+    bounded_context: shop-scheduling
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: frontend-eng
+    entrypoints:
+      - type: ui
+        path: /app/shopmgmt/dispatch-board
+    telemetry:
+      spans:
+        business_span: View Dispatch Board
+      semanticConvention: frontend
+      metric_prefix: view_dispatch_board
+      histogram_buckets: tier-2
+    instrumentation:
+      state: greenfield
+      agent: otel-web-sdk
+      agent_version: "not-yet-installed"
+      resource_config: code
+    downstream:
+      - service: pos-shop-manager
+        criticality: high
+    data_entities:
+      - Appointment
+    slis:
+      - id: view-dispatch-board-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of dispatch board loads that render appointment/technician data without error.
+      - id: view-dispatch-board-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: view-dispatch-board-availability
+        target: 0.99
+        window: 30d
+      - sli: view-dispatch-board-latency
+        target: 0.95
+        window: 30d
+
+  - id: complete-bulk-import-job
+    name: Complete Bulk Import Job
+    owner: frontend-eng
+    bounded_context: bulk-ingestion
+    tier: 3
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: frontend-eng
+    entrypoints:
+      - type: ui
+        path: /app/bulk-import/jobs
+    telemetry:
+      spans:
+        business_span: Complete Bulk Import Job
+      semanticConvention: frontend
+      metric_prefix: complete_bulk_import_job
+      histogram_buckets: tier-3
+    instrumentation:
+      state: greenfield
+      agent: otel-web-sdk
+      agent_version: "not-yet-installed"
+      resource_config: code
+    downstream:
+      - service: pos-bulk-loader
+        criticality: critical
+        operation: upload-bulk-load-file
+      - service: pos-bulk-loader
+        criticality: critical
+        operation: process-bulk-load-job
+    data_entities:
+      - BulkLoadJob
+    slis:
+      - id: complete-bulk-import-job-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of bulk-import wizard sessions (file drop through results summary) completed without a client-side error.
+    slos:
+      - sli: complete-bulk-import-job-availability
+        target: 0.97
+        window: 30d
+
+  - id: view-timekeeping-discrepancy-report
+    name: View Timekeeping Discrepancy Report
+    owner: frontend-eng
+    bounded_context: workforce
+    tier: 3
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: frontend-eng
+    entrypoints:
+      - type: ui
+        path: /app/people/timekeeping/discrepancy
+    telemetry:
+      spans:
+        business_span: View Timekeeping Discrepancy Report
+      semanticConvention: frontend
+      metric_prefix: view_timekeeping_discrepancy_report
+      histogram_buckets: tier-3
+    instrumentation:
+      state: greenfield
+      agent: otel-web-sdk
+      agent_version: "not-yet-installed"
+      resource_config: code
+    downstream:
+      - service: pos-people
+        criticality: medium
+    data_entities:
+      - TimeEntry
+    slis:
+      - id: view-timekeeping-discrepancy-report-availability
+        type: availability
+        recipe: success-rate
+    slos:
+      - sli: view-timekeeping-discrepancy-report-availability
+        target: 0.98
+        window: 30d
+
+  - id: view-security-audit-log
+    name: View Security Audit Log
+    owner: frontend-eng
+    bounded_context: security-identity
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: frontend-eng
+    entrypoints:
+      - type: ui
+        path: /app/security/audit-logs
+    telemetry:
+      spans:
+        business_span: View Security Audit Log
+      semanticConvention: frontend
+      metric_prefix: view_security_audit_log
+      histogram_buckets: tier-2
+    instrumentation:
+      state: greenfield
+      agent: otel-web-sdk
+      agent_version: "not-yet-installed"
+      resource_config: code
+    downstream:
+      - service: pos-security-service
+        criticality: medium
+    data_entities:
+      - AuditEntry
+    slis:
+      - id: view-security-audit-log-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of audit-log page loads that return results without error.
+      - id: view-security-audit-log-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: view-security-audit-log-availability
+        target: 0.99
+        window: 30d
+      - sli: view-security-audit-log-latency
+        target: 0.95
+        window: 30d
+
+  - id: view-inventory-by-location
+    name: View Inventory By Location
+    owner: frontend-eng
+    bounded_context: inventory
+    tier: 2
+    lifecycle:
+      state: active
+      since: "2026-07-17"
+      owner: frontend-eng
+    entrypoints:
+      - type: ui
+        path: /app/inventory/by-location
+    telemetry:
+      spans:
+        business_span: View Inventory By Location
+      semanticConvention: frontend
+      metric_prefix: view_inventory_by_location
+      histogram_buckets: tier-2
+    instrumentation:
+      state: greenfield
+      agent: otel-web-sdk
+      agent_version: "not-yet-installed"
+      resource_config: code
+    downstream:
+      - service: pos-inventory
+        criticality: high
+        operation: check-inventory-availability
+      - service: pos-location
+        criticality: medium
+    data_entities:
+      - InventoryLedgerEntry
+      - Location
+    slis:
+      - id: view-inventory-by-location-availability
+        type: availability
+        recipe: success-rate
+        description: Ratio of by-location inventory tree/rollup views that load without error.
+      - id: view-inventory-by-location-latency
+        type: latency
+        recipe: p95-latency
+        threshold_ms: 3000
+    slos:
+      - sli: view-inventory-by-location-availability
+        target: 0.99
+        window: 30d
+      - sli: view-inventory-by-location-latency
+        target: 0.95
+        window: 30d

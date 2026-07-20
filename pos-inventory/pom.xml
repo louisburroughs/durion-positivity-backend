@@ -119,6 +119,11 @@
             <artifactId>pos-events</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- OpenTelemetry API for manual business spans (agent-managed SDK, API-only) -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+        </dependency>
         <!-- ADR-0044 §6 (#892): location replica feed from location.events.v1 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

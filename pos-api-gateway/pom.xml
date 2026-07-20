@@ -48,6 +48,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-logging</artifactId>
         </dependency>
+        <!-- OpenTelemetry API for manual business spans (agent-managed SDK, API-only) -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+        </dependency>
         <!-- PERM: JJWT 0.12.5 for local JWT validation in gateway auth filter -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

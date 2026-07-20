@@ -7,8 +7,14 @@ import com.positivity.inventory.internal.dto.picklist.PickListResponse;
 import com.positivity.inventory.internal.dto.picklist.PickTaskResponse;
 import com.positivity.inventory.internal.dto.picklist.UpdatePickListStatusRequest;
 import com.positivity.inventory.internal.enums.PickListStatus;
+import com.positivity.inventory.internal.observability.BusinessSpanSupport;
 import com.positivity.inventory.service.PickListService;
 import com.positivity.shared.error.ApiError;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -38,6 +44,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Tag(name = "Pick Lists", description = "Pick list and pick task management endpoints")
 public class PickListController {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PickListController.class);
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-inventory");
+    private static final String DOMAIN = "inventory";
+    private static final String TEAM = "inventory-eng";
 
     private final PickListService pickListService;
 
@@ -151,7 +162,22 @@ public class PickListController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PickListResponse> releasePickList(
             @Parameter(description = "Pick list identifier", required = true) @PathVariable UUID pickListId) {
-        return ResponseEntity.ok(pickListService.releasePickList(pickListId));
+        Span span = TRACER.spanBuilder("Release Pick List").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Release Pick List");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            PickListResponse response = pickListService.releasePickList(pickListId);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            BusinessSpanSupport.logWithTraceContext(log, "Released pick list {}", pickListId);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @PostMapping("/{pickListId}/tasks/{taskId}/confirm")
@@ -195,12 +221,27 @@ public class PickListController {
                     @Valid
                     @RequestBody
                     ConfirmPickTaskRequest request) {
-        return ResponseEntity.ok(pickListService.confirmPickTask(
-                pickListId,
-                taskId,
-                request.getScannedSkuId(),
-                request.getScannedLocationId(),
-                request.getQuantityPicked()));
+        Span span = TRACER.spanBuilder("Confirm Pick Task").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Confirm Pick Task");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            PickTaskResponse response = pickListService.confirmPickTask(
+                    pickListId,
+                    taskId,
+                    request.getScannedSkuId(),
+                    request.getScannedLocationId(),
+                    request.getQuantityPicked());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            BusinessSpanSupport.logWithTraceContext(log, "Confirmed pick task {} on pick list {}", taskId, pickListId);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @GetMapping("/{pickListId}/tasks")

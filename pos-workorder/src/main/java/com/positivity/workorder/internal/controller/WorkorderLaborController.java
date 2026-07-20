@@ -6,7 +6,13 @@ import com.positivity.workorder.internal.dto.AdjustLaborRequest;
 import com.positivity.workorder.internal.dto.StartLaborRequest;
 import com.positivity.workorder.internal.dto.WorkorderLaborEntryResponse;
 import com.positivity.workorder.internal.dto.WorkorderLaborMapper;
+import com.positivity.workorder.internal.observability.BusinessSpanSupport;
 import com.positivity.workorder.service.WorkorderLaborService;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -44,6 +50,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Slf4j
 public class WorkorderLaborController {
+
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-workorder");
+    private static final String DOMAIN = "work-order-execution";
+    private static final String TEAM = "workorder-eng";
 
     private final WorkorderLaborService laborService;
 
@@ -104,7 +114,12 @@ public class WorkorderLaborController {
 
         String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USERNAME);
 
-        try {
+        Span span = TRACER.spanBuilder("Start Workorder Labor").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Start Workorder Labor");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
             // Check if this is an idempotent replay
             boolean isIdempotent = idempotencyKey != null && !idempotencyKey.isBlank();
 
@@ -122,14 +137,22 @@ public class WorkorderLaborController {
 
             // Return 200 for idempotent replay, 201 for new creation
             HttpStatus status = isIdempotent ? HttpStatus.OK : HttpStatus.CREATED;
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
             return ResponseEntity.status(status).body(response);
 
         } catch (NoSuchElementException e) {
             log.warn("Start labor failed - not found: {}", e.getMessage());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.notFound().build();
         } catch (IllegalStateException e) {
             log.warn("Start labor failed - invalid state: {}", e.getMessage());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.badRequest().build();
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
         }
     }
 

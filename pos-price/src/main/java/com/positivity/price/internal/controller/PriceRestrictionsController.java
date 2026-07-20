@@ -6,8 +6,14 @@ import com.positivity.price.internal.dto.RestrictionEvaluationResponse;
 import com.positivity.price.internal.dto.RestrictionEvaluationResult;
 import com.positivity.price.internal.dto.RestrictionOverrideRequest;
 import com.positivity.price.internal.dto.RestrictionOverrideResponse;
+import com.positivity.price.internal.observability.BusinessSpanSupport;
 import com.positivity.price.service.RestrictionEvaluationService;
 import com.positivity.price.service.RestrictionOverrideService;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,6 +34,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class PriceRestrictionsController {
 
     private static final Logger log = LoggerFactory.getLogger(PriceRestrictionsController.class);
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-price");
+    private static final String DOMAIN = "pricing";
+    private static final String TEAM = "price-eng";
 
     private final RestrictionEvaluationService evaluationService;
     private final RestrictionOverrideService overrideService;
@@ -51,10 +60,24 @@ public class PriceRestrictionsController {
     @PostMapping("/restrictions:evaluate")
     public ResponseEntity<RestrictionEvaluationResponse> evaluateRestrictions(
             @Valid @RequestBody RestrictionEvaluationRequest request) {
-        log.info(
-                "POST /v1/price/restrictions:evaluate items={}", request.items().size());
-        List<RestrictionEvaluationResult> results = evaluationService.evaluate(request);
-        return ResponseEntity.ok(new RestrictionEvaluationResponse(results));
+        Span span = TRACER.spanBuilder("Evaluate Price Restriction").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Evaluate Price Restriction");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            log.info(
+                    "POST /v1/price/restrictions:evaluate items={}",
+                    request.items().size());
+            List<RestrictionEvaluationResult> results = evaluationService.evaluate(request);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.ok(new RestrictionEvaluationResponse(results));
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @Operation(
@@ -72,8 +95,21 @@ public class PriceRestrictionsController {
     @PostMapping("/restrictions:override")
     public ResponseEntity<RestrictionOverrideResponse> overrideRestrictions(
             @Valid @RequestBody RestrictionOverrideRequest request) {
-        log.info("POST /v1/price/restrictions:override context={}", request.overrideContext());
-        RestrictionOverrideResponse response = overrideService.createOverride(request);
-        return ResponseEntity.ok(response);
+        Span span = TRACER.spanBuilder("Override Price Restriction").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Override Price Restriction");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            log.info("POST /v1/price/restrictions:override context={}", request.overrideContext());
+            RestrictionOverrideResponse response = overrideService.createOverride(request);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 }

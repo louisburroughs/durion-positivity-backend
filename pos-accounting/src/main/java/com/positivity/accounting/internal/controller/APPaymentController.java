@@ -3,8 +3,14 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
+import com.positivity.accounting.internal.observability.BusinessSpanSupport;
 import com.positivity.accounting.service.APPaymentService;
 import com.positivity.events.EmitEvent;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -60,6 +66,10 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 public class APPaymentController {
 
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-accounting");
+    private static final String DOMAIN = "accounting";
+    private static final String TEAM = "accounting-eng";
+
     private final APPaymentService apPaymentService;
 
     @PostMapping("/payments")
@@ -81,25 +91,39 @@ public class APPaymentController {
     @PreAuthorize("hasAuthority('accounting:ap:pay')")
     public @NonNull ResponseEntity<APPaymentResponse> executePayment(
             @Valid @RequestBody @NonNull ExecuteAPPaymentRequest request, Authentication authentication) {
+        Span span = TRACER.spanBuilder("Create Ap Payment").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Create Ap Payment");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            String currentUser = authentication != null ? authentication.getName() : "system";
+            log.info(
+                    "Executing payment for vendor(mask) {} with paymentRef(mask) {}",
+                    maskForLog(request.getVendorId()),
+                    maskForLog(request.getPaymentRef()));
 
-        String currentUser = authentication != null ? authentication.getName() : "system";
-        log.info(
-                "Executing payment for vendor(mask) {} with paymentRef(mask) {}",
-                maskForLog(request.getVendorId()),
-                maskForLog(request.getPaymentRef()));
-
-        // Check if payment already exists for idempotency
-        Optional<APPaymentResponse> existing = apPaymentService.getPaymentByRef(request.getPaymentRef());
-        if (existing.isPresent()) {
-            // Idempotent replay: validate and return existing payment with 200 OK
-            log.info("Idempotent replay for paymentRef(mask) {}", maskForLog(request.getPaymentRef()));
-            APPaymentResponse response = apPaymentService.executePayment(request, currentUser);
-            return ResponseEntity.ok(response);
+            // Check if payment already exists for idempotency
+            Optional<APPaymentResponse> existing = apPaymentService.getPaymentByRef(request.getPaymentRef());
+            ResponseEntity<APPaymentResponse> result;
+            if (existing.isPresent()) {
+                // Idempotent replay: validate and return existing payment with 200 OK
+                log.info("Idempotent replay for paymentRef(mask) {}", maskForLog(request.getPaymentRef()));
+                APPaymentResponse response = apPaymentService.executePayment(request, currentUser);
+                result = ResponseEntity.ok(response);
+            } else {
+                // New payment: return 201 Created
+                APPaymentResponse response = apPaymentService.executePayment(request, currentUser);
+                result = ResponseEntity.status(HttpStatus.CREATED).body(response);
+            }
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return result;
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
         }
-
-        // New payment: return 201 Created
-        APPaymentResponse response = apPaymentService.executePayment(request, currentUser);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/payments/{paymentId}")

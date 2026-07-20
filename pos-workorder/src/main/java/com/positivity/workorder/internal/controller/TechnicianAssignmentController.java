@@ -6,7 +6,13 @@ import com.positivity.workorder.internal.dto.AssignTechnicianRequest;
 import com.positivity.workorder.internal.dto.ReassignTechnicianRequest;
 import com.positivity.workorder.internal.dto.TechnicianAssignmentMapper;
 import com.positivity.workorder.internal.dto.TechnicianAssignmentResponse;
+import com.positivity.workorder.internal.observability.BusinessSpanSupport;
 import com.positivity.workorder.service.TechnicianAssignmentService;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -36,6 +42,10 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @Slf4j
 public class TechnicianAssignmentController {
+
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-workorder");
+    private static final String DOMAIN = "work-order-execution";
+    private static final String TEAM = "workorder-eng";
 
     private final TechnicianAssignmentService assignmentService;
 
@@ -92,7 +102,12 @@ public class TechnicianAssignmentController {
 
         String assignedBy = resolveAssignedByUsername();
 
-        try {
+        Span span = TRACER.spanBuilder("Assign Technician").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Assign Technician");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
             var assignment = assignmentService.assignTechnician(
                     workorderId, request.getTechnicianId(), assignedBy, request.getNotes());
 
@@ -111,16 +126,24 @@ public class TechnicianAssignmentController {
                     workorderId,
                     assignedBy);
 
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
             return ResponseEntity.ok(response);
 
         } catch (NoSuchElementException e) {
             log.warn("Assignment failed - not found: {}", e.getMessage());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.notFound().build();
         } catch (IllegalStateException e) {
             log.warn("Assignment failed - invalid state: {}", e.getMessage());
             // Surface the reason (e.g. workorder status not assignable) so the client can show
             // it instead of an empty 400.
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.badRequest().body(errorResponse(workorderId, e.getMessage()));
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
         }
     }
 

@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "phase": "0b",
+  "validation_log": "docs/generated/audit/validation/phase-0b.log",
+  "validator_result": "pass (with known, out-of-scope failures)",
+  "verdict": "PASS",
+  "criteria": [
+    {
+      "id": 1,
+      "criterion": "brownfield-assessment.md exists with all required sections",
+      "status": "pass",
+      "evidence": [
+        "docs/domain/brownfield-assessment.md - sections present: Recommendation, SDK Setup Assessment, Per-Service Assessment, Span Inventory, Metric Inventory, Operations Coverage, Must-fix Items, Migration Steps (matches template in .github/agents/brownfield-analyst.agent.md#L155-L188)"
+      ]
+    },
+    {
+      "id": 2,
+      "criterion": "Every service with non-greenfield state assessed (all 28)",
+      "status": "pass",
+      "evidence": [
+        "docs/domain/brownfield-assessment.md Per-Service Assessment table lists all 28 pos-* services, each with state api-only-no-spans and a recommendation"
+      ]
+    },
+    {
+      "id": 3,
+      "criterion": "Every existing span classified (conformant/fixable/non-conformant/redundant/must-fix)",
+      "status": "pass",
+      "evidence": [
+        "docs/domain/brownfield-assessment.md Span Inventory: 27 services explicitly noted as having no manual spans (n/a, out of scope); pos-mcp-server Span.current() enrichment classified Fixable with rationale"
+      ]
+    },
+    {
+      "id": 4,
+      "criterion": "Overall recommendation stated per service (expected: keep Grafana OTel Java agent, add business spans via OTel API only)",
+      "status": "pass",
+      "evidence": [
+        "docs/domain/brownfield-assessment.md top-level Recommendation: Preserve and extend (all 28 services); Per-Service Assessment table has a Recommendation column, all rows = 'Preserve and extend'; matches expected 'keep agent, add API-only business spans' guidance"
+      ]
+    },
+    {
+      "id": 5,
+      "criterion": "Must-fix items listed for immediate attention",
+      "status": "pass",
+      "evidence": [
+        "docs/domain/brownfield-assessment.md Must-fix Items section lists 2 items (nlt.sessionId taxonomy violation, nlt.userId -> enduser.id rename) with file:line references"
+      ]
+    }
+  ],
+  "blocking_issues": [],
+  "recommendations": [
+    "docs/generated/audit/current/context.json detected_services omits pos-order (27 of 28) - assessment already flagged this to the Planner; not a Phase 0b blocker but should be regenerated before relying on context.json elsewhere",
+    "Known/excluded log findings confirmed out of scope for Phase 0b: sre:validate:contracts operations.yaml missing (Phase 1 dependency, not yet run) and sre.config.yaml service.team=TBD (pre-existing config gap, tracked separately)"
+  ]
+}

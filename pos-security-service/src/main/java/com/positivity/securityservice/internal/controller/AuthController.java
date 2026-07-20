@@ -5,9 +5,15 @@ import com.positivity.securityservice.internal.dto.LoginRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
+import com.positivity.securityservice.internal.observability.BusinessSpanSupport;
 import com.positivity.securityservice.service.AuthenticationService;
 import com.positivity.securityservice.service.SelfRegistrationService;
 import com.positivity.shared.error.ApiError;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -37,6 +43,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AuthController {
 
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-security-service");
+    private static final String DOMAIN = "security-identity";
+    private static final String TEAM = "security-eng";
+
     private final AuthenticationService authenticationService;
     private final SelfRegistrationService selfRegistrationService;
 
@@ -54,7 +64,21 @@ public class AuthController {
     @PostMapping("/login")
     @PreAuthorize("permitAll()")
     public ResponseEntity<TokenPairResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authenticationService.login(request));
+        Span span = TRACER.spanBuilder("Login User").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Login User");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            ResponseEntity<TokenPairResponse> response = ResponseEntity.ok(authenticationService.login(request));
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return response;
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @Operation(

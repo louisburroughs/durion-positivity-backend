@@ -1,0 +1,121 @@
+{
+  "repo": {
+    "name": "durion-positivity-backend",
+    "type": "java-spring-boot-multi-module-maven",
+    "backend": true,
+    "frontend": false,
+    "genai": true
+  },
+  "mode": "consumed",
+  "framework": {
+    "source": "submodule",
+    "path": ".sre"
+  },
+  "outputs_root": ".",
+  "otel_destination": {
+    "target": "local",
+    "otlp_endpoint": "http://localhost:4318",
+    "otlp_protocol": "http/protobuf",
+    "ui_url": "http://localhost:3000",
+    "note": "sre.config.yaml declares localhost:4318; all service Dockerfiles hardcode OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 (docker-compose network alias). Not a functional conflict; confirm authoritative target before Phase 5."
+  },
+  "detected_services": [
+    { "name": "pos-accounting", "path": "pos-accounting", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-accounting/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-api-gateway", "path": "pos-api-gateway", "framework": "spring-boot-4 / spring-cloud-gateway", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-api-gateway/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-bulk-loader", "path": "pos-bulk-loader", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-bulk-loader/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-catalog", "path": "pos-catalog", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-catalog/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-customer", "path": "pos-customer", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-customer/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-documents", "path": "pos-documents", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-documents/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-event-receiver", "path": "pos-event-receiver", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-event-receiver/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-events", "path": "pos-events", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-events/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-image", "path": "pos-image", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-image/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-inquiry", "path": "pos-inquiry", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-inquiry/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-inventory", "path": "pos-inventory", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-inventory/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-invoice", "path": "pos-invoice", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-invoice/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-location", "path": "pos-location", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-location/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-mcp-server", "path": "pos-mcp-server", "framework": "spring-boot-4 / langchain4j / mcp", "instrumentation_state": "api-only-no-spans", "evidence": [
+        "pos-mcp-server/Dockerfile: -javaagent grafana-opentelemetry-java.jar",
+        "pos-mcp-server/src/main/java/com/positivity/mcp/internal/service/NltiRequestServiceImpl.java: Span.current() used to attach correlation-id/user-id attributes only, no app.operation.* business span",
+        "pos-mcp-server/pom.xml: dev.langchain4j:langchain4j-ollama-spring-boot4-starter, langchain4j-pgvector, langchain4j-spring-boot4-starter",
+        "docker-compose.yml: ollama + ollama-init services; pos-mcp-server env OLLAMA_CHAT_BASE_URL/OLLAMA_EMBEDDING_BASE_URL/OLLAMA_CHAT_MODEL/OLLAMA_FALLBACK_MODEL"
+      ] },
+    { "name": "pos-people", "path": "pos-people", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-people/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-people-contact", "path": "pos-people-contact", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-people-contact/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-price", "path": "pos-price", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-price/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-security-service", "path": "pos-security-service", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-security-service/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-service-discovery", "path": "pos-service-discovery", "framework": "spring-boot-4 / eureka", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-service-discovery/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-shop-manager", "path": "pos-shop-manager", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-shop-manager/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-tax", "path": "pos-tax", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-tax/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-vehicle-fitment", "path": "pos-vehicle-fitment", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-vehicle-fitment/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-vehicle-inventory", "path": "pos-vehicle-inventory", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-vehicle-inventory/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-vehicle-reference-carapi", "path": "pos-vehicle-reference-carapi", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-vehicle-reference-carapi/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-vehicle-reference-nhtsa", "path": "pos-vehicle-reference-nhtsa", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-vehicle-reference-nhtsa/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-warranty", "path": "pos-warranty", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-warranty/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] },
+    { "name": "pos-workorder", "path": "pos-workorder", "framework": "spring-boot-4", "instrumentation_state": "api-only-no-spans", "evidence": ["pos-workorder/Dockerfile: -javaagent grafana-opentelemetry-java.jar"] }
+  ],
+  "non_deployed_shared_libraries": [
+    "pos-archunit", "pos-bulk-ingest-lib", "pos-dependencies", "pos-document-helper",
+    "pos-domain-events", "pos-security-common", "pos-shared-dtos", "pos-tax-common",
+    "pos-coverage-aggregate"
+  ],
+  "instrumentation_summary": {
+    "backend": {
+      "state": "api-only-no-spans",
+      "agent": "otel-java-agent",
+      "agent_vendor": "grafana-opentelemetry-java",
+      "agent_version": "v2.9.0",
+      "double_init_risk": false,
+      "business_spans_found": false
+    },
+    "frontend": {
+      "state": "none",
+      "framework": "none"
+    },
+    "genai": {
+      "state": "none",
+      "providers": ["langchain4j", "ollama"],
+      "scope": "pos-mcp-server only",
+      "is_conflict": false
+    }
+  },
+  "sre_artifacts": {
+    "domain_map": "missing",
+    "operations_yaml": "missing",
+    "observability_plan": "missing",
+    "slo_pack": "missing",
+    "grafana_alerting": "missing",
+    "grafana_dashboards": "missing",
+    "runbooks": "missing",
+    "generated_catalogs": "missing",
+    "sre_todo": "created_this_run"
+  },
+  "enabled_agents": [
+    "sre-orchestrator", "sre-planner", "sre-progress-tracker", "brownfield-analyst",
+    "repo-domain-analyst", "observability-engineer", "genai-observability-assistant",
+    "genai-instrumentation-engineer", "genai-cost-guardian", "genai-evaluator",
+    "otel-instrumentation-backend", "slo-sli-engineer", "grafana-alerting",
+    "grafana-dashboard-generator", "incident-readiness", "reviewer-sre-quality",
+    "otel-michelin"
+  ],
+  "disabled_agents": {
+    "otel-instrumentation-frontend": "no frontend detected; skip_phases includes 3b in sre.config.yaml"
+  },
+  "next_tasks": [
+    "Phase 0b: Brownfield Analyst - assess all 28 services (api-only-no-spans) and pos-mcp-server correlation-id span usage",
+    "Phase 1: Repo Domain Analyst - create docs/domain/domain-map.md and docs/domain/operations.yaml",
+    "Phase 2: Observability Engineer - create docs/observability/plan.md",
+    "Phase 2g: GenAI Observability Assistant - populate genai block in operations.yaml for pos-mcp-server (langchain4j/ollama)",
+    "Phase 3a: OTel Instrumentation Backend - add business spans (app.operation.*) across all 28 services on top of existing Grafana OTel Java agent",
+    "Phase 3g: GenAI Instrumentation Engineer - add gen_ai.* spans/metrics to pos-mcp-server",
+    "Phase 4: SLI/SLO Engineer - author SLI/SLO specs and alert policies",
+    "Phase 5a/5b: Grafana Alerting + Dashboard Generator - generate docs/generated/* catalogs first, then burnrate rules and dashboards",
+    "Phase 6: Incident Readiness - author runbooks per alert policy",
+    "Phase 7: SRE Quality Reviewer - final review"
+  ],
+  "blockers": [
+    "sre.config.yaml service.team is 'TBD' - required for alert/runbook ownership metadata",
+    "OTLP endpoint discrepancy between sre.config.yaml (localhost:4318) and service Dockerfiles (otel-collector:4318) - confirm authoritative target",
+    "docs/generated/* catalogs do not exist yet in this repo (only as examples under .sre/examples/) - must be generated before Phase 5a/5b",
+    "GenAI cost model for self-hosted Ollama (+ cloud fallback model gpt-oss:120b) is non-standard - needs GenAI Cost Guardian input once Phase 2g/3g land"
+  ]
+}

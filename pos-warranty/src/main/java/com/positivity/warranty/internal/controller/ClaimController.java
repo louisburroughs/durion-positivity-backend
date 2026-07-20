@@ -12,9 +12,15 @@ import com.positivity.warranty.internal.dto.ClaimResponse;
 import com.positivity.warranty.internal.dto.ClaimSummaryResponse;
 import com.positivity.warranty.internal.dto.ClaimUpdateRequest;
 import com.positivity.warranty.internal.enums.ClaimStatus;
+import com.positivity.warranty.internal.observability.BusinessSpanSupport;
 import com.positivity.warranty.internal.security.WarrantyPermissions;
 import com.positivity.warranty.internal.service.CandidateLineService;
 import com.positivity.warranty.internal.service.ClaimService;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -57,6 +63,10 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/warranty/claims")
 public class ClaimController {
+
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-warranty");
+    private static final String DOMAIN = "warranty";
+    private static final String TEAM = "warranty-eng";
 
     private final ClaimService claimService;
     private final CandidateLineService candidateLineService;
@@ -200,7 +210,21 @@ public class ClaimController {
     @PostMapping("/{id}/submit")
     public ResponseEntity<ClaimResponse> submitClaim(
             @Parameter(description = "Claim UUID", required = true) @PathVariable @NotNull UUID id) {
-        return ResponseEntity.ok(claimService.submit(id));
+        Span span = TRACER.spanBuilder("Submit Warranty Claim").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Submit Warranty Claim");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            ResponseEntity<ClaimResponse> response = ResponseEntity.ok(claimService.submit(id));
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return response;
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @Operation(
@@ -234,7 +258,21 @@ public class ClaimController {
     public ResponseEntity<ClaimResponse> decideClaim(
             @Parameter(description = "Claim UUID", required = true) @PathVariable @NotNull UUID id,
             @Valid @NotNull @RequestBody ClaimDecisionRequest request) {
-        return ResponseEntity.ok(claimService.decide(id, request));
+        Span span = TRACER.spanBuilder("Decide Warranty Claim").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Decide Warranty Claim");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            ResponseEntity<ClaimResponse> response = ResponseEntity.ok(claimService.decide(id, request));
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return response;
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @Operation(summary = "Cancel claim", description = "Cancel from DRAFT, SUBMITTED, or INFO_NEEDED")

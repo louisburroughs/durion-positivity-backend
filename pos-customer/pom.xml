@@ -178,6 +178,11 @@
             <artifactId>pos-events</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- OpenTelemetry API for manual business spans (agent-managed SDK, API-only) -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+        </dependency>
         <!-- POS Security Common for authentication/authorization -->
         <dependency>
             <groupId>com.positivity</groupId>

@@ -5,7 +5,13 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import com.positivity.events.EmitEvent;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
+import com.positivity.tax.internal.observability.BusinessSpanSupport;
 import com.positivity.tax.service.TaxCalculationService;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -27,6 +33,10 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/v1/tax")
 @Tag(name = "Tax", description = "Tax calculation API")
 public class TaxController {
+
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-tax");
+    private static final String DOMAIN = "tax";
+    private static final String TEAM = "tax-eng";
 
     private final TaxCalculationService taxCalculationService;
 
@@ -68,19 +78,32 @@ public class TaxController {
                     @Valid
                     @RequestBody
                     TaxCalculationRequest request) {
-        log.info(
-                "Received tax calculation request for {} line items, postal code(mask): {}",
-                request.getLineItems().size(),
-                maskForLog(request.getPostalCode()));
+        Span span = TRACER.spanBuilder("Calculate Tax").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Calculate Tax");
+        span.setAttribute("app.operation.type", "query");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            log.info(
+                    "Received tax calculation request for {} line items, postal code(mask): {}",
+                    request.getLineItems().size(),
+                    maskForLog(request.getPostalCode()));
 
-        TaxCalculationResponse response = taxCalculationService.calculateTax(request);
+            TaxCalculationResponse response = taxCalculationService.calculateTax(request);
 
-        log.info(
-                "Tax calculation completed. Total tax: {}, Test mode: {}",
-                response.getTotalTax(),
-                response.isTestMode());
+            log.info(
+                    "Tax calculation completed. Total tax: {}, Test mode: {}",
+                    response.getTotalTax(),
+                    response.isTestMode());
 
-        return ResponseEntity.ok(response);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     private String maskForLog(Object value) {

@@ -1,7 +1,13 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.securityservice.internal.dto.AuthorizationDecisionResponse;
+import com.positivity.securityservice.internal.observability.BusinessSpanSupport;
 import com.positivity.securityservice.service.AuthorizationService;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -29,6 +35,10 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Authorization", description = "Authorization decision endpoints for principal permissions")
 public class AuthorizationController {
 
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-security-service");
+    private static final String DOMAIN = "security-identity";
+    private static final String TEAM = "security-eng";
+
     private final AuthorizationService authorizationService;
 
     @GetMapping("/authorization/decision")
@@ -44,9 +54,22 @@ public class AuthorizationController {
             @Parameter(description = "Permission key to evaluate", example = "pricing:msrp:edit")
                     @RequestParam(name = "permission")
                     String permission) {
-        var decision = authorizationService.authorize(principalId, permission);
-        return ResponseEntity.ok(
-                new AuthorizationDecisionResponse(decision.name().toLowerCase()));
+        Span span = TRACER.spanBuilder("Check Authorization Decision").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Check Authorization Decision");
+        span.setAttribute("app.operation.type", "query");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            var decision = authorizationService.authorize(principalId, permission);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.ok(
+                    new AuthorizationDecisionResponse(decision.name().toLowerCase()));
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @GetMapping("/authorization/person-decision")

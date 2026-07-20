@@ -4,8 +4,14 @@ import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
+import com.positivity.accounting.internal.observability.BusinessSpanSupport;
 import com.positivity.accounting.service.VendorBillService;
 import com.positivity.events.EmitEvent;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -47,6 +53,10 @@ import org.springframework.web.bind.annotation.RestController;
         description = "Endpoints for vendor bill creation, matching, retrieval, and exception resolution")
 @Validated
 public class VendorBillController {
+
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-accounting");
+    private static final String DOMAIN = "accounting";
+    private static final String TEAM = "accounting-eng";
 
     private final VendorBillService vendorBillService;
 
@@ -110,14 +120,27 @@ public class VendorBillController {
     @ApiResponse(responseCode = "400", description = "Invalid request payload")
     public ResponseEntity<VendorBillResponse> matchVendorInvoice(
             @NonNull @Valid @RequestBody VendorInvoiceReceivedEvent event) {
-        log.info(
-                "Received request to perform three-way match | eventId={} | invoiceRef={}",
-                event.getEventId(),
-                event.getInvoiceReference());
+        Span span = TRACER.spanBuilder("Match Vendor Bill").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Match Vendor Bill");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            log.info(
+                    "Received request to perform three-way match | eventId={} | invoiceRef={}",
+                    event.getEventId(),
+                    event.getInvoiceReference());
 
-        VendorBillResponse response = vendorBillService.handleVendorInvoiceReceivedEvent(event);
+            VendorBillResponse response = vendorBillService.handleVendorInvoiceReceivedEvent(event);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     /**

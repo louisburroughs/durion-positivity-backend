@@ -13,9 +13,15 @@ import com.positivity.workorder.internal.dto.UpdateEstimateItemRequest;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
+import com.positivity.workorder.internal.observability.BusinessSpanSupport;
 import com.positivity.workorder.service.EstimateService;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderService;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -54,6 +60,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Slf4j
 public class EstimateController {
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-workorder");
+    private static final String DOMAIN = "work-order-execution";
+    private static final String TEAM = "workorder-eng";
     private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
     private static final String CONFLICT = "CONFLICT";
     private static final String SYSTEM = "SYSTEM";
@@ -175,7 +184,12 @@ public class EstimateController {
                     @RequestHeader(value = "Idempotency-Key", required = false)
                     String idempotencyKey) {
 
-        try {
+        Span span = TRACER.spanBuilder("Create Estimate").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Create Estimate");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
             log.info(
                     "Received create estimate request for customerId(mask)={}, vehicleId(mask)={}",
                     maskForLog(request.getCustomerId()),
@@ -185,6 +199,7 @@ public class EstimateController {
                 var existingEstimateId = idempotencyService.getExistingWorkorderId(
                         IDEMPOTENCY_OPERATION_ESTIMATE_CREATE, idempotencyKey);
                 if (existingEstimateId.isPresent()) {
+                    span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
                     return estimateService
                             .getEstimateById(existingEstimateId.get())
                             .<ResponseEntity<Object>>map(existing ->
@@ -201,23 +216,30 @@ public class EstimateController {
 
             log.info("Estimate created successfully: id={}, number={}", response.getId(), response.getEstimateNumber());
 
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
         } catch (IllegalArgumentException e) {
             log.warn("Validation error creating estimate: {}", e.getMessage());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
 
         } catch (IllegalStateException e) {
             log.warn("Conflict creating estimate: {}", e.getMessage());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
 
         } catch (DataIntegrityViolationException e) {
             log.warn("Conflict creating estimate: {}", e.getMessage());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
 
         } catch (Exception e) {
             log.error("Unexpected error creating estimate", e);
+            BusinessSpanSupport.recordFailure(span, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        } finally {
+            span.end();
         }
     }
 
@@ -365,7 +387,12 @@ public class EstimateController {
                     @Valid
                     @RequestBody
                     ApproveEstimateRequest request) {
-        try {
+        Span span = TRACER.spanBuilder("Approve Estimate").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Approve Estimate");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
             EstimateResponse approved = estimateService.approveEstimate(
                     estimateId,
                     request.getCustomerId(),
@@ -375,13 +402,21 @@ public class EstimateController {
                     request.getNotes(),
                     request.getPurchaseOrderNumber(),
                     request.getLineItemApprovals()); // CAP:003 - Pass selective line item approvals
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
             return ResponseEntity.ok(approved);
         } catch (EntityNotFoundException e) {
             log.warn("Estimate {} not found: {}", estimateId, e.getMessage());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalStateException | IllegalArgumentException e) {
             log.warn("Failed to approve estimate {}: {}", estimateId, e.getMessage());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.badRequest().build();
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
         }
     }
 
@@ -415,7 +450,12 @@ public class EstimateController {
                             example = "estimate-promote-550e8400-e29b-41d4-a716-446655440000")
                     @RequestHeader(value = "Idempotency-Key", required = false)
                     String idempotencyKey) {
-        try {
+        Span span = TRACER.spanBuilder("Promote Estimate").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Promote Estimate");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
             log.info(
                     "Promoting estimate(mask) {} to workorder (idempotencyKey(mask)={})",
                     maskForLog(estimateId),
@@ -423,6 +463,7 @@ public class EstimateController {
 
             ResponseEntity<WorkorderResponse> idempotentResponse = getIdempotentResponseIfPresent(idempotencyKey);
             if (idempotentResponse != null) {
+                span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
                 return idempotentResponse;
             }
 
@@ -432,15 +473,18 @@ public class EstimateController {
             ResponseEntity<WorkorderResponse> raceConditionResponse =
                     registerIdempotencyKeyAndHandleRaceCondition(idempotencyKey, response);
             if (raceConditionResponse != null) {
+                span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
                 return raceConditionResponse;
             }
 
             log.info("Successfully promoted estimate {} to workorder {}", estimateId, response.getId());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
             return ResponseEntity.ok(response);
 
         } catch (PromotionValidationException e) {
             ResponseEntity<WorkorderResponse> alreadyPromotedResponse = handleAlreadyPromoted(estimateId, e);
             if (alreadyPromotedResponse != null) {
+                span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
                 return alreadyPromotedResponse;
             }
 
@@ -449,19 +493,25 @@ public class EstimateController {
                     estimateId,
                     e.getErrorCode(),
                     e.getMessage());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
 
         } catch (EntityNotFoundException _) {
             log.warn("Estimate {} not found", estimateId);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
 
         } catch (IllegalArgumentException e) {
             log.warn("Invalid argument promoting estimate {}: {}", estimateId, e.getMessage());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.badRequest().build();
 
         } catch (Exception e) {
             log.error("Unexpected error promoting estimate {}", estimateId, e);
+            BusinessSpanSupport.recordFailure(span, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        } finally {
+            span.end();
         }
     }
 

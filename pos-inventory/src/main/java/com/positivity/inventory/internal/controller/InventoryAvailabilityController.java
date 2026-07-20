@@ -7,9 +7,15 @@ import com.positivity.inventory.internal.dto.LeadTimeView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.enums.InventorySourceType;
 import com.positivity.inventory.internal.exception.InvalidParamCombinationException;
+import com.positivity.inventory.internal.observability.BusinessSpanSupport;
 import com.positivity.inventory.service.InventoryAvailabilityService;
 import com.positivity.inventory.service.InventoryLeadTimeService;
 import com.positivity.shared.error.ApiError;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -30,6 +36,10 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/v1/inventory/availability")
 @Tag(name = "Inventory Availability", description = "Inventory availability read/write endpoints")
 public class InventoryAvailabilityController {
+
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-inventory");
+    private static final String DOMAIN = "inventory";
+    private static final String TEAM = "inventory-eng";
 
     private final InventoryAvailabilityService availabilityService;
     private final InventoryLeadTimeService inventoryLeadTimeService;
@@ -61,8 +71,22 @@ public class InventoryAvailabilityController {
     // Issue #48: Expose on-hand and ATP grouped by location.
     public ResponseEntity<List<LocationAvailabilityDto>> queryInventoryAvailability(
             @Parameter(description = "Product identifier", required = true) @PathVariable UUID productId) {
-        log.info("GET /v1/inventory/availability/{}", productId);
-        return ResponseEntity.ok(availabilityService.getAvailabilityByProduct(productId));
+        Span span = TRACER.spanBuilder("Check Inventory Availability").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Check Inventory Availability");
+        span.setAttribute("app.operation.type", "query");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            List<LocationAvailabilityDto> result = availabilityService.getAvailabilityByProduct(productId);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            BusinessSpanSupport.logWithTraceContext(log, "Checked inventory availability for product {}", productId);
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @GetMapping

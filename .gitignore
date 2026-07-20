@@ -82,3 +82,4 @@ pos-mcp-server/src/main/resources/exa.prompt.md
 
 .tokensave
 repomix-output.*
+.github/agents/otel-michelin.agent.md

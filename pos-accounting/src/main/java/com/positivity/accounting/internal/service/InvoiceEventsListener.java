@@ -2,9 +2,15 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
+import com.positivity.accounting.internal.observability.BusinessSpanSupport;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
@@ -32,6 +38,10 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
 public class InvoiceEventsListener {
+
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-accounting");
+    private static final String DOMAIN = "accounting";
+    private static final String TEAM = "accounting-eng";
 
     private final Clock clock;
     private final ObjectMapper objectMapper;
@@ -65,13 +75,24 @@ public class InvoiceEventsListener {
             return;
         }
 
-        try {
+        Span span = TRACER.spanBuilder("Reconcile Invoice Event").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Reconcile Invoice Event");
+        span.setAttribute("app.operation.type", "event");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
             applyInvoiceUpdate(envelope);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
+            BusinessSpanSupport.recordFailure(span, e);
             throw e;
         } catch (Exception e) {
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_PARTIAL);
+            BusinessSpanSupport.logWithTraceContext(log, "Skipping malformed invoice event eventId={}", eventId);
             log.warn("Skipping malformed invoice event eventId={}", eventId, e);
+        } finally {
+            span.end();
         }
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)

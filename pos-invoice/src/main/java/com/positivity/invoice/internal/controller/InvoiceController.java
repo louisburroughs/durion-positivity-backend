@@ -5,10 +5,16 @@ import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.dto.RevertRequest;
+import com.positivity.invoice.internal.observability.BusinessSpanSupport;
 import com.positivity.invoice.service.InvoiceFinalizationService;
 import com.positivity.invoice.service.InvoiceService;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -31,6 +37,10 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Invoice", description = "Invoice generation and lifecycle management")
 @PreAuthorize("hasAuthority('invoice:manage')")
 public class InvoiceController {
+
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-invoice");
+    private static final String DOMAIN = "invoicing";
+    private static final String TEAM = "invoice-eng";
 
     private final InvoiceService invoiceService;
     private final InvoiceFinalizationService invoiceFinalizationService;
@@ -92,7 +102,21 @@ public class InvoiceController {
     @PreAuthorize("hasAuthority('invoice:finalize')")
     public ResponseEntity<InvoiceDetailsResponse> finalizeInvoice(
             @PathVariable @NonNull UUID invoiceId, @Valid @RequestBody @NonNull FinalizationRequest request) {
-        return ResponseEntity.ok(invoiceFinalizationService.completeInvoice(invoiceId, request));
+        Span span = TRACER.spanBuilder("Finalize Invoice").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Finalize Invoice");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            InvoiceDetailsResponse response = invoiceFinalizationService.completeInvoice(invoiceId, request);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @PostMapping("/{invoiceId}/revert")

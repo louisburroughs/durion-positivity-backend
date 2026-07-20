@@ -4,8 +4,14 @@ import com.positivity.accounting.internal.dto.GLMappingCreateRequest;
 import com.positivity.accounting.internal.dto.GLMappingCreateResponse;
 import com.positivity.accounting.internal.dto.GLMappingResolveRequest;
 import com.positivity.accounting.internal.dto.GLMappingResolveResponse;
+import com.positivity.accounting.internal.observability.BusinessSpanSupport;
 import com.positivity.accounting.service.GLMappingService;
 import com.positivity.events.EmitEvent;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -32,6 +38,10 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "GL Mapping API", description = "Endpoints for creating and resolving GL mappings")
 @Validated
 public class GLMappingController {
+
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-accounting");
+    private static final String DOMAIN = "accounting";
+    private static final String TEAM = "accounting-eng";
 
     private final GLMappingService glMappingService;
 
@@ -103,14 +113,27 @@ public class GLMappingController {
                     @Valid
                     @RequestBody
                     GLMappingResolveRequest request) {
-        log.info(
-                "Resolve GL mapping request: sourceSystem={}, externalCode={}, transactionDate={}",
-                request.getSourceSystem(),
-                request.getExternalCode(),
-                request.getTransactionDate());
+        Span span = TRACER.spanBuilder("Resolve Gl Mapping").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Resolve Gl Mapping");
+        span.setAttribute("app.operation.type", "query");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            log.info(
+                    "Resolve GL mapping request: sourceSystem={}, externalCode={}, transactionDate={}",
+                    request.getSourceSystem(),
+                    request.getExternalCode(),
+                    request.getTransactionDate());
 
-        GLMappingResolveResponse response = glMappingService.resolveMapping(request);
+            GLMappingResolveResponse response = glMappingService.resolveMapping(request);
 
-        return ResponseEntity.ok(response);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 }

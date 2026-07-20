@@ -6,9 +6,15 @@ import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
 import com.positivity.securityservice.internal.dto.TokenPairRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.dto.TokenResponse;
+import com.positivity.securityservice.internal.observability.BusinessSpanSupport;
 import com.positivity.securityservice.service.JwtService;
 import com.positivity.securityservice.service.UserService;
 import com.positivity.shared.error.ApiError;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -53,6 +59,9 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/v1/auth")
 @RequiredArgsConstructor
 public class JwtController {
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-security-service");
+    private static final String DOMAIN = "security-identity";
+    private static final String TEAM = "security-eng";
     private final JwtService jwtService;
     private final UserService userService;
 
@@ -168,22 +177,36 @@ public class JwtController {
     @PostMapping("/token-pair")
     public ResponseEntity<TokenPairResponse> generateTokenPair(@Valid @RequestBody TokenPairRequest request) {
 
-        log.info(
-                "Token pair request received: subject={}, rolesCount={}",
-                request.subject(),
-                request.roles() != null ? request.roles().size() : 0);
+        Span span = TRACER.spanBuilder("Issue Token Pair").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Issue Token Pair");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            log.info(
+                    "Token pair request received: subject={}, rolesCount={}",
+                    request.subject(),
+                    request.roles() != null ? request.roles().size() : 0);
 
-        var user = userService
-                .getUserByUsername(request.subject())
-                .orElseThrow(() -> new IllegalArgumentException("User not found for subject: " + request.subject()));
-        if (user.getId() == null) {
-            throw new IllegalStateException("User exists but id is missing for subject: " + request.subject());
+            var user = userService
+                    .getUserByUsername(request.subject())
+                    .orElseThrow(
+                            () -> new IllegalArgumentException("User not found for subject: " + request.subject()));
+            if (user.getId() == null) {
+                throw new IllegalStateException("User exists but id is missing for subject: " + request.subject());
+            }
+
+            JwtService.TokenPair tokenPair = jwtService.generateTokenPair(
+                    request.subject(), user.getId(), null, request.roles() != null ? request.roles() : Set.of());
+
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.ok(TokenPairResponse.of(tokenPair.accessToken(), tokenPair.refreshToken()));
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
         }
-
-        JwtService.TokenPair tokenPair = jwtService.generateTokenPair(
-                request.subject(), user.getId(), null, request.roles() != null ? request.roles() : Set.of());
-
-        return ResponseEntity.ok(TokenPairResponse.of(tokenPair.accessToken(), tokenPair.refreshToken()));
     }
 
     /**
@@ -233,11 +256,24 @@ public class JwtController {
     @PostMapping("/refresh")
     public ResponseEntity<TokenPairResponse> refreshAccessToken(@Valid @RequestBody RefreshTokenRequest request) {
 
-        log.debug("Refresh token request received");
+        Span span = TRACER.spanBuilder("Refresh Token").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Refresh Token");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            log.debug("Refresh token request received");
 
-        JwtService.TokenPair tokenPair = jwtService.refreshAccessToken(request.refreshToken());
+            JwtService.TokenPair tokenPair = jwtService.refreshAccessToken(request.refreshToken());
 
-        return ResponseEntity.ok(TokenPairResponse.of(tokenPair.accessToken(), tokenPair.refreshToken()));
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.ok(TokenPairResponse.of(tokenPair.accessToken(), tokenPair.refreshToken()));
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     /**

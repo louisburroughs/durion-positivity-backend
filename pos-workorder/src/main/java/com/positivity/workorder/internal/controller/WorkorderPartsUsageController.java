@@ -2,7 +2,13 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.*;
+import com.positivity.workorder.internal.observability.BusinessSpanSupport;
 import com.positivity.workorder.service.WorkorderPartUsageService;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -32,6 +38,10 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/v1/workorders/{workorderId}/parts")
 @Tag(name = "Workorder Parts Usage", description = "Track parts issue, consumption, and returns")
 public class WorkorderPartsUsageController {
+
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-workorder");
+    private static final String DOMAIN = "work-order-execution";
+    private static final String TEAM = "workorder-eng";
 
     private final WorkorderPartUsageService usageService;
 
@@ -114,13 +124,25 @@ public class WorkorderPartsUsageController {
             @RequestBody @Valid @NonNull ConsumePartRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
 
-        try {
+        Span span = TRACER.spanBuilder("Consume Workorder Parts").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Consume Workorder Parts");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
             var event = usageService.consumePartQuantity(
                     workorderId, request.getWorkorderPartId(), request.getQuantity(), idempotencyKey);
 
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
             return ResponseEntity.status(HttpStatus.CREATED).body(WorkorderPartsUsageMapper.toResponse(event));
         } catch (IllegalArgumentException _) {
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.badRequest().build();
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
         }
     }
 

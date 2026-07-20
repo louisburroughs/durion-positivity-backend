@@ -15,8 +15,14 @@ import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
 import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
+import com.positivity.workorder.internal.observability.BusinessSpanSupport;
 import com.positivity.workorder.service.WorkorderInvoiceService;
 import com.positivity.workorder.service.WorkorderService;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -39,6 +45,9 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @Slf4j
 public class WorkorderController {
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-workorder");
+    private static final String DOMAIN = "work-order-execution";
+    private static final String TEAM = "workorder-eng";
     private static final String SYSTEM_USER_ID = "system";
 
     private final WorkorderService workorderService;
@@ -241,7 +250,12 @@ public class WorkorderController {
                     @PathVariable
                     UUID workorderId,
             @RequestBody CompleteWorkorderRequest request) {
-        try {
+        Span span = TRACER.spanBuilder("Complete Workorder").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Complete Workorder");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
             String previousStatus = workorderService.getCurrentWorkorderStatus(workorderId);
 
             // Complete the work order (this will also emit the event)
@@ -255,15 +269,23 @@ public class WorkorderController {
                     .message("Work order completed successfully")
                     .build();
 
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
             return ResponseEntity.ok(response);
         } catch (IllegalStateException e) {
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.badRequest()
                     .body(CompleteWorkorderResponse.builder()
                             .workorderId(workorderId)
                             .message(e.getMessage())
                             .build());
         } catch (IllegalArgumentException _) {
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.notFound().build();
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
         }
     }
 
@@ -296,10 +318,23 @@ public class WorkorderController {
                     @RequestHeader(value = "Idempotency-Key", required = false)
                     String idempotencyKey) {
 
-        InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, idempotencyKey);
-        return WorkorderInvoiceService.STATUS_PENDING.equals(response.getStatus())
-                ? ResponseEntity.accepted().body(response)
-                : ResponseEntity.ok(response);
+        Span span = TRACER.spanBuilder("Generate Workorder Invoice").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Generate Workorder Invoice");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, idempotencyKey);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return WorkorderInvoiceService.STATUS_PENDING.equals(response.getStatus())
+                    ? ResponseEntity.accepted().body(response)
+                    : ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @Operation(

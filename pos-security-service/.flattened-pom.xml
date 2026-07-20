@@ -157,6 +157,10 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
+      <groupId>io.opentelemetry</groupId>
+      <artifactId>opentelemetry-api</artifactId>
+    </dependency>
+    <dependency>
       <groupId>com.positivity</groupId>
       <artifactId>pos-shared-dtos</artifactId>
       <version>${project.version}</version>

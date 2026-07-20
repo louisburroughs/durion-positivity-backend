@@ -15,6 +15,7 @@ import com.positivity.catalog.internal.dto.ProductLifecycleUpdateRequest;
 import com.positivity.catalog.internal.dto.ProductReplacementRequest;
 import com.positivity.catalog.internal.dto.ProductUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ServiceDto;
+import com.positivity.catalog.internal.observability.BusinessSpanSupport;
 import com.positivity.catalog.service.CatalogService;
 import com.positivity.catalog.service.LocationPriceOverrideService;
 import com.positivity.catalog.service.ProductDetailService;
@@ -22,6 +23,11 @@ import com.positivity.catalog.service.ProductLifecycleService;
 import com.positivity.catalog.service.ProductMasterDataService;
 import com.positivity.catalog.service.ProductSearchService;
 import com.positivity.events.EmitEvent;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -53,6 +59,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/products")
 @Tag(name = "Products API", description = "API for products, lifecycle, and pricing")
 public class ProductController {
+
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-catalog");
+    private static final String DOMAIN = "catalog";
+    private static final String TEAM = "catalog-eng";
 
     private final CatalogService catalogService;
     private final ProductDetailService productDetailService;
@@ -126,7 +136,23 @@ public class ProductController {
     public ResponseEntity<EffectiveLocationPriceResponseDto> getEffectiveLocationPrice(
             @Parameter(description = "Location ID", required = true) @PathVariable UUID locationId,
             @Parameter(description = "Product ID", required = true) @PathVariable UUID productId) {
-        return ResponseEntity.ok(locationPriceOverrideService.getEffectivePrice(locationId, productId));
+        Span span = TRACER.spanBuilder("Resolve Effective Price").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Resolve Effective Price");
+        span.setAttribute("app.operation.type", "query");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            EffectiveLocationPriceResponseDto response =
+                    locationPriceOverrideService.getEffectivePrice(locationId, productId);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            BusinessSpanSupport.logWithTraceContext(log, "Resolved effective price for product {}", productId);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('pricing:override:approve')")
@@ -219,7 +245,23 @@ public class ProductController {
                                     "When true, enrich each row with lifecycle state, effective instant, and active MSRP")
                     @RequestParam(defaultValue = "false")
                     boolean detailed) {
-        return ResponseEntity.ok(productSearchService.searchProducts(q, brand, category, sku, cursor, limit, detailed));
+        Span span = TRACER.spanBuilder("Search Products").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Search Products");
+        span.setAttribute("app.operation.type", "query");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            CatalogSearchResultDto result =
+                    productSearchService.searchProducts(q, brand, category, sku, cursor, limit, detailed);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            BusinessSpanSupport.logWithTraceContext(log, "Searched catalog products");
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")

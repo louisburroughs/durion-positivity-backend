@@ -20,11 +20,17 @@ import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
+import com.positivity.customer.internal.observability.BusinessSpanSupport;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.service.AccountTierService;
 import com.positivity.customer.service.PartyService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.LogSanitizer;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -61,6 +67,9 @@ import org.springframework.web.bind.annotation.*;
 public class CrmAccountsController {
 
     private static final Logger log = LoggerFactory.getLogger(CrmAccountsController.class);
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-customer");
+    private static final String DOMAIN = "customer-crm";
+    private static final String TEAM = "customer-eng";
 
     private final PartyService partyService;
     private final AccountTierService accountTierService;
@@ -126,12 +135,24 @@ public class CrmAccountsController {
     public ResponseEntity<ResolveAccountTierResponse> resolveAccountTier(
             @Parameter(description = "Tier resolution request", required = true) @RequestBody
                     ResolveAccountTierRequest body) {
-        try {
+        Span span = TRACER.spanBuilder("Resolve Account Tier").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Resolve Account Tier");
+        span.setAttribute("app.operation.type", "query");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
             ResolveAccountTierResponse response = accountTierService.resolveAccountTier(body);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             log.warn("Account not found or invalid request: {}", e.getMessage());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_FAILURE);
             return ResponseEntity.notFound().build();
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
         }
     }
 
@@ -162,9 +183,22 @@ public class CrmAccountsController {
             @Parameter(description = "Commercial account creation request", required = false)
                     @RequestBody(required = false)
                     CreateCommercialAccountRequest body) {
-        log.info("createCommercialAccount");
-        CreateCommercialAccountResponse response = partyService.createCommercialAccount(body);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        Span span = TRACER.spanBuilder("Create Party").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Create Party");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            BusinessSpanSupport.logWithTraceContext(log, "createCommercialAccount");
+            CreateCommercialAccountResponse response = partyService.createCommercialAccount(body);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @Operation(summary = "Get party details", description = "Retrieve details for a specific party by ID")
@@ -307,8 +341,22 @@ public class CrmAccountsController {
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
     @EmitEvent(id = "CUSTOMER_PARTY_RESOLVE", apiVersion = "1")
     public ResponseEntity<List<PartyNameRef>> resolvePartyNames(@Valid @RequestBody PartyNameResolveRequest body) {
-        log.info("resolvePartyNames count={}", body.partyIds().size());
-        return ResponseEntity.ok(partyService.resolveNames(body.partyIds()));
+        Span span = TRACER.spanBuilder("Resolve Party").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Resolve Party");
+        span.setAttribute("app.operation.type", "query");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            BusinessSpanSupport.logWithTraceContext(log, "resolvePartyNames count={}", body.partyIds().size());
+            List<PartyNameRef> response = partyService.resolveNames(body.partyIds());
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @Operation(summary = "Merge parties", description = "Merge multiple parties into a single party record")

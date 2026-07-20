@@ -1,0 +1,23 @@
+version: "1.0"
+service:
+  name: durion-positivity-backend
+  team: TBD
+  tier: gold
+framework:
+  source: submodule
+  path: .sre
+outputs:
+  root: .
+context:
+  otel_destination:
+    target: local
+    otlp_endpoint: http://localhost:4318
+    otlp_protocol: http/protobuf
+    ui_url: http://localhost:3000
+  frontend: true
+  frontend_root: /Users/matthewlewis/Downloads/durion-positivity-frontend-master
+  genai_providers:
+    - langchain4j
+    - ollama
+overrides:
+  skip_phases: []

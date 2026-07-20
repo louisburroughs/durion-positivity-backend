@@ -6,7 +6,13 @@ import com.positivity.price.internal.dto.ApplyPromotionResponse;
 import com.positivity.price.internal.dto.CreatePromotionOfferRequest;
 import com.positivity.price.internal.dto.PromotionOfferMapper;
 import com.positivity.price.internal.dto.PromotionOfferResponse;
+import com.positivity.price.internal.observability.BusinessSpanSupport;
 import com.positivity.price.service.PromotionOfferService;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,6 +34,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/promotions/offers")
 @Tag(name = "Promotion Offers", description = "Promotion offer lifecycle operations")
 public class PromotionOfferController {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PromotionOfferController.class);
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-price");
+    private static final String DOMAIN = "pricing";
+    private static final String TEAM = "price-eng";
 
     private final PromotionOfferService promotionOfferService;
 
@@ -137,6 +148,21 @@ public class PromotionOfferController {
     @ApiResponse(responseCode = "404", description = "Promotion offer not found or not eligible.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
     public ResponseEntity<ApplyPromotionResponse> applyPromotion(@RequestBody @Valid ApplyPromotionRequest request) {
-        return ResponseEntity.ok(promotionOfferService.applyPromotion(request));
+        Span span = TRACER.spanBuilder("Apply Promotion Offer").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Apply Promotion Offer");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            ApplyPromotionResponse response = promotionOfferService.applyPromotion(request);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            BusinessSpanSupport.logWithTraceContext(log, "Applied promotion offer");
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 }

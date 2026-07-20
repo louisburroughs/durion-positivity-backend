@@ -5,9 +5,15 @@ import com.positivity.inventory.internal.dto.asn.AsnResponse;
 import com.positivity.inventory.internal.dto.asn.CreateAsnRequest;
 import com.positivity.inventory.internal.dto.asn.CreateGoodsReceiptRequest;
 import com.positivity.inventory.internal.dto.asn.GoodsReceiptResponse;
+import com.positivity.inventory.internal.observability.BusinessSpanSupport;
 import com.positivity.inventory.service.AsnService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -31,6 +37,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Tag(name = "ASN", description = "Advanced Shipping Notice and goods receipt endpoints")
 public class AsnController {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AsnController.class);
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("pos-inventory");
+    private static final String DOMAIN = "inventory";
+    private static final String TEAM = "inventory-eng";
 
     private final AsnService asnService;
 
@@ -141,16 +152,30 @@ public class AsnController {
                     @Valid
                     @RequestBody
                     CreateGoodsReceiptRequest request) {
-        // ADR-0018 deviation: actor resolved in controller following existing
-        // pos-inventory module convention.
-        // The module pattern extracts actorId in controllers and passes to service
-        // layer (see ReceivingController).
-        // Full service-layer resolution is tracked as a module-wide refactor for a
-        // future ADR update.
-        String actorUserId = SecurityContextHelper.getCurrentUsername()
-                .orElseThrow(() -> new IllegalStateException("No current user"));
-        GoodsReceiptResponse response = asnService.createGoodsReceipt(request, actorUserId);
-        return ResponseEntity.status(201).body(response);
+        Span span = TRACER.spanBuilder("Receive Goods").setSpanKind(SpanKind.INTERNAL).startSpan();
+        span.setAttribute("app.operation.name", "Receive Goods");
+        span.setAttribute("app.operation.type", "command");
+        span.setAttribute("app.domain", DOMAIN);
+        span.setAttribute("app.team", TEAM);
+        try (Scope scope = span.makeCurrent()) {
+            // ADR-0018 deviation: actor resolved in controller following existing
+            // pos-inventory module convention.
+            // The module pattern extracts actorId in controllers and passes to service
+            // layer (see ReceivingController).
+            // Full service-layer resolution is tracked as a module-wide refactor for a
+            // future ADR update.
+            String actorUserId = SecurityContextHelper.getCurrentUsername()
+                    .orElseThrow(() -> new IllegalStateException("No current user"));
+            GoodsReceiptResponse response = asnService.createGoodsReceipt(request, actorUserId);
+            span.setAttribute("app.operation.outcome", BusinessSpanSupport.OUTCOME_SUCCESS);
+            BusinessSpanSupport.logWithTraceContext(log, "Received goods for receipt {}", response.getReceiptId());
+            return ResponseEntity.status(201).body(response);
+        } catch (RuntimeException e) {
+            BusinessSpanSupport.recordFailure(span, e);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @GetMapping("/goods-receipts/{receiptId}")
