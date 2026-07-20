@@ -150,6 +150,17 @@ public class TaxCalculationResponse {
     private TaxCalculationType calculationType = TaxCalculationType.SALE;
 
     /**
+     * Reference to the original sale transaction, echoed from the request (story T4).
+     * <p>
+     * Populated only for {@link TaxCalculationType#REFUND} calculations so callers can tie the
+     * refund tax back to the sale it reverses; {@code null} for SALE.
+     */
+    @Schema(
+            description = "Original sale reference echoed on REFUND calculations; null for SALE.",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private UUID originalReferenceId;
+
+    /**
      * Nested class for line item tax breakdown.
      */
     @Data

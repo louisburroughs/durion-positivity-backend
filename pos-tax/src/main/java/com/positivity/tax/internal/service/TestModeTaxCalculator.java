@@ -139,6 +139,8 @@ public class TestModeTaxCalculator {
                 .referenceId(request.getReferenceId())
                 .referenceType(request.getReferenceType())
                 .calculationType(calculationType)
+                .originalReferenceId(
+                        calculationType == TaxCalculationType.REFUND ? request.getOriginalReferenceId() : null)
                 .build();
     }
 
