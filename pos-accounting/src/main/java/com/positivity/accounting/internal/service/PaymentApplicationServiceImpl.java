@@ -12,6 +12,7 @@ import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.enums.AllocationStrategy;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
+import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
@@ -329,7 +330,9 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                 continue;
             }
 
-            reversePaymentApplication(applicationId, reason);
+            // Whole-payment reversal reverses every application of each request as a unit, so it
+            // uses the core path directly and bypasses the single-application multi-app guard.
+            applyReversal(applicationId, reason);
             reversedCount++;
         }
 
@@ -352,14 +355,64 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
      * - Requires non-empty reason for audit
      * - Derives reversedBy from SecurityContext
      *
+     * <p>
+     * Single-application reversals are blocked when the application belongs to a
+     * multi-application apply request (story C2, PR #977 finding 3): the C1
+     * cash-receipt JE is batched per {@code applicationRequestId} and the C2
+     * reversing entry is keyed the same way, so reversing one application of a
+     * multi-invoice request would fully reverse the batched JE and desync the
+     * ledger. Such requests must be reversed as a whole via {@link
+     * #reversePayment(UUID, String)}, which reverses every application of the
+     * request (the batched JE is reversed once; the rest are idempotent no-ops).
+     *
      * @param paymentApplicationId application to reverse
      * @param reason               reversal reason (required)
      * @return reversal record
      * @throws ResponseStatusException with NOT_FOUND if application not found
      * @throws ResponseStatusException with CONFLICT if already reversed
+     * @throws MultiApplicationReversalException if the application is one of several
+     *                                           for the same apply request
      */
     public PaymentApplicationReversal reversePaymentApplication(
             @NonNull UUID paymentApplicationId, @NonNull String reason) {
+
+        // Already-reversed guard first (409), preserving the prior contract before the multi-application
+        // guard and the core reversal both re-check it.
+        if (reversalRepository.existsByOriginalPaymentApplication_PaymentApplicationId(paymentApplicationId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Payment application " + paymentApplicationId + " has already been reversed");
+        }
+
+        PaymentApplication original = paymentApplicationRepository
+                .findById(paymentApplicationId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Payment application not found: " + paymentApplicationId));
+
+        // Block single-application reversal of a multi-application apply request (finding 3): the C1
+        // cash-receipt JE and C2 reversing entry are both keyed per applicationRequestId, so reversing
+        // one application of the request would fully reverse the batched JE and desync the ledger.
+        String applicationRequestId = original.getApplicationRequestId();
+        if (applicationRequestId != null) {
+            long siblingCount = paymentApplicationRepository
+                    .findAllByApplicationRequestId(applicationRequestId)
+                    .size();
+            if (siblingCount > 1) {
+                throw new MultiApplicationReversalException("Payment application " + paymentApplicationId
+                        + " is one of " + siblingCount + " applications for apply request " + applicationRequestId
+                        + "; reverse the whole payment instead of a single application");
+            }
+        }
+        return applyReversal(paymentApplicationId, reason);
+    }
+
+    /**
+     * Core single-application reversal used by both the public single-application
+     * path (after the multi-application guard) and {@link #reversePayment(UUID,
+     * String)} (which reverses every application of a request as a unit, so it
+     * bypasses the guard). See {@link #reversePaymentApplication(UUID, String)} for
+     * the business rules.
+     */
+    private PaymentApplicationReversal applyReversal(@NonNull UUID paymentApplicationId, @NonNull String reason) {
 
         String reversedBy = getCurrentUser();
 
