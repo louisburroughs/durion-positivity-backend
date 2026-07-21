@@ -26,10 +26,10 @@ import reactor.core.publisher.Flux;
 
 class SpringAiStreamingPosAssistantTest {
 
-        @SuppressWarnings({"rawtypes", "unchecked"})
-        private static ArgumentCaptor<List<Message>> messageListCaptor() {
-                return (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
-        }
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static ArgumentCaptor<List<Message>> messageListCaptor() {
+        return (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
+    }
 
     @Test
     void chat_usesRagRetrieverAndPersistsMemoryIdOnStreamCompletion() {
