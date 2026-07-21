@@ -163,6 +163,14 @@ public class AvalaraTaxProvider implements TaxProviderClient {
     @NonNull
     private CreateTransactionModel buildCreateModel(
             @NonNull TaxCalculationRequest request, @NonNull String type, @Nullable String referenceCode) {
+        // #984: a committable calculation becomes a provider document that a later commit/void
+        // must resolve by code (== referenceId). A null id would let AvaTax auto-assign a code the
+        // caller can never reproduce, so reject it here rather than 404 at finalization. Read-only
+        // estimates (committable=false) may omit referenceId — AvaTax does not persist them.
+        if (request.isCommittable() && request.getReferenceId() == null) {
+            throw new TaxCalculationException(
+                    "referenceId is required for a committable tax calculation (it is the provider document code)");
+        }
         TaxProperties.Avalara avalara = properties.getAvalara();
         TaxCalculationRequest.TaxAddress dest = request.getDestinationAddress();
         AvalaraAddress shipTo = new AvalaraAddress(
@@ -237,8 +245,10 @@ public class AvalaraTaxProvider implements TaxProviderClient {
         BigDecimal totalTax = round(tx.totalTax() != null ? tx.totalTax() : BigDecimal.ZERO);
 
         Map<String, BigDecimal> requestSubtotals = new LinkedHashMap<>();
+        Map<String, TaxLineItem> requestLines = new LinkedHashMap<>();
         for (TaxLineItem item : request.getLineItems()) {
             requestSubtotals.put(item.getLineItemId(), round(item.getSubtotal()));
+            requestLines.put(item.getLineItemId(), item);
         }
 
         // Per-line tax breakdown + jurisdiction aggregation from AvaTax lines[].details[].
@@ -272,12 +282,14 @@ public class AvalaraTaxProvider implements TaxProviderClient {
 
             String lineId = avaLine.lineNumber();
             BigDecimal lineSubtotal = requestSubtotals.getOrDefault(lineId, round(safeAmount(avaLine.taxableAmount())));
+            TaxLineItem requestLine = lineId != null ? requestLines.get(lineId) : null;
+            boolean lineExempt = requestLine != null && requestLine.isTaxExempt();
             lineItemTaxes.add(LineItemTax.builder()
                     .lineItemId(lineId != null ? lineId : "")
                     .subtotal(lineSubtotal)
                     .taxAmount(round(lineTax))
                     .total(lineSubtotal.add(round(lineTax)))
-                    .taxExempt(false)
+                    .taxExempt(lineExempt)
                     .jurisdictions(lineJurisdictions)
                     .build());
         }
@@ -316,7 +328,13 @@ public class AvalaraTaxProvider implements TaxProviderClient {
                     .build());
         }
 
-        BigDecimal taxableBase = subtotal;
+        // Effective rate is tax over the TAXABLE base, not gross subtotal: exempt lines carry
+        // subtotal but contribute no tax, so including them would dilute the rate (#984). Prefer
+        // AvaTax's own taxable figure (it already nets out exempt/entity-use lines); fall back to
+        // the sum of non-exempt request subtotals when the provider omits it.
+        BigDecimal taxableBase = tx.totalTaxable() != null && tx.totalTaxable().signum() != 0
+                ? round(tx.totalTaxable())
+                : round(sumNonExemptSubtotals(request));
         BigDecimal effectiveRate = taxableBase.signum() == 0
                 ? BigDecimal.ZERO.setScale(MONEY_SCALE, RoundingMode.HALF_UP)
                 : totalTax.multiply(HUNDRED).divide(taxableBase, MONEY_SCALE, RoundingMode.HALF_UP);
@@ -342,6 +360,18 @@ public class AvalaraTaxProvider implements TaxProviderClient {
         BigDecimal sum = BigDecimal.ZERO;
         for (TaxLineItem item : request.getLineItems()) {
             sum = sum.add(item.getSubtotal());
+        }
+        return sum;
+    }
+
+    /** Taxable base for the effective-rate denominator: request subtotal excluding exempt lines (#984). */
+    @NonNull
+    private BigDecimal sumNonExemptSubtotals(@NonNull TaxCalculationRequest request) {
+        BigDecimal sum = BigDecimal.ZERO;
+        for (TaxLineItem item : request.getLineItems()) {
+            if (!item.isTaxExempt()) {
+                sum = sum.add(item.getSubtotal());
+            }
         }
         return sum;
     }

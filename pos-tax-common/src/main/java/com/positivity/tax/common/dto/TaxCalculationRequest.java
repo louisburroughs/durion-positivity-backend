@@ -173,6 +173,24 @@ public class TaxCalculationRequest {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private TaxReferenceType referenceType;
 
+    /**
+     * Whether this calculation will bind to the provider commit/void lifecycle (#984).
+     *
+     * <p>Defaults to {@code false} (a throwaway read-only estimate — a quote or workorder
+     * estimate that never finalizes). When {@code true} the result is destined to be finalized,
+     * so the provider document must be created under a caller-reproducible code: providers MUST
+     * reject a {@code null} {@link #referenceId} in that case, because commit-by-code (source
+     * document id == provider document code) is the idempotency contract and an auto-assigned
+     * code can never be resolved by a later {@code commit(referenceId)}/{@code void(referenceId)}.
+     */
+    @Schema(
+            description = "True when this calculation will be finalized (committed) rather than a throwaway estimate; "
+                    + "requires referenceId to be present",
+            example = "false",
+            defaultValue = "false",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private boolean committable;
+
     /** Convenience accessor used by internal tax logic. */
     public String getPostalCode() {
         if (destinationAddress == null) {
