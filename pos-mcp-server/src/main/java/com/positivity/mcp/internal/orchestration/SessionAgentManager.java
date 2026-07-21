@@ -40,6 +40,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -85,7 +86,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private final int rateLimitPerSession;
 
     public SessionAgentManager(
-            @NonNull ChatModel chatModel,
+            @Qualifier("chatModel") @NonNull ChatModel chatModel,
             @NonNull EmbeddingModel embeddingModel,
             @NonNull PgVectorStore embeddingStore,
             @NonNull MasterAgentRegistry toolRegistry,

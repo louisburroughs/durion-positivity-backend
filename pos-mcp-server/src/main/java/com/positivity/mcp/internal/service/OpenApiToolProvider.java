@@ -65,7 +65,8 @@ public class OpenApiToolProvider {
         if (!pathParams.isEmpty()) {
             pathParamsSchema.put("required", pathParams);
         }
-        Map<String, Object> schema = schemaObject("Parameters for the gateway operation named in the tool description.");
+        Map<String, Object> schema =
+                schemaObject("Parameters for the gateway operation named in the tool description.");
         @SuppressWarnings("unchecked")
         Map<String, Object> properties = (Map<String, Object>) schema.get("properties");
         properties.put("pathParams", pathParamsSchema);
@@ -218,8 +219,9 @@ public class OpenApiToolProvider {
                             .build(),
                     executor));
         }
-        userContext.recordDiscoveredOpenapiTools(
-                tools.stream().map(callback -> callback.getToolDefinition().name()).toList());
+        userContext.recordDiscoveredOpenapiTools(tools.stream()
+                .map(callback -> callback.getToolDefinition().name())
+                .toList());
         LOGGER.debug(
                 "MCP openapi tool provider role={} permissionCount={} discoveredTools={}",
                 caller.primaryRole(),
