@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
+import com.positivity.accounting.internal.dto.CustomerCreditIssuanceGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalGLPostingEvent;
 import com.positivity.accounting.internal.dto.SettlementGLPostingEvent;
@@ -65,7 +66,9 @@ public class OutboxProcessor {
             PaymentApplicationReversalGLPostingEvent.class.getName(),
             PaymentApplicationReversalGLPostingEvent.class,
             SettlementGLPostingEvent.class.getName(),
-            SettlementGLPostingEvent.class);
+            SettlementGLPostingEvent.class,
+            CustomerCreditIssuanceGLPostingEvent.class.getName(),
+            CustomerCreditIssuanceGLPostingEvent.class);
 
     /**
      * Scheduled task to process pending outbox events.

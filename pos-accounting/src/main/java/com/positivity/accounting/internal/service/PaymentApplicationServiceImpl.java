@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.CustomerCreditIssuanceGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
@@ -216,6 +217,22 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
             BigDecimal unappliedAfterApplication = payment.getUnappliedAmount();
 
             creditInfo = createCustomerCredit(payment, unappliedAfterApplication, applicationTimestamp);
+
+            // Enqueue the credit-issuance GL posting work item in the SAME
+            // transaction as the CustomerCredit insert (transactional outbox,
+            // issue #975). The async consumer posts Dr Undeposited Funds / Cr
+            // Customer Credit Liability for the excess, so the overpayment cash
+            // and the customer-credit liability both reach the ledger. Keyed on
+            // the application request id (namespaced for the credit leg), so a
+            // replay never double-posts; if this transaction rolls back, the work
+            // item rolls back with it.
+            enqueueCustomerCreditIssuanceGLPostingWorkItem(
+                    paymentId,
+                    request.getApplicationRequestId(),
+                    payment,
+                    creditInfo.getCreditId(),
+                    unappliedAfterApplication,
+                    applicationTimestamp);
 
             // Mark payment as fully applied by converting remaining balance to credit
             // This ensures payment status becomes FULLY_APPLIED
@@ -585,6 +602,49 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
     }
 
     /**
+     * Persist a {@link CustomerCreditIssuanceGLPostingEvent} work item to the
+     * transactional outbox (issue #975). Runs inside the surrounding application
+     * transaction ({@code saveToOutbox} uses MANDATORY propagation), guaranteeing
+     * the issuance ledger work item exists iff the {@code CustomerCredit}
+     * committed. The application request id travels on the event as the posting
+     * idempotency-key basis (namespaced for the credit leg); the credit id links
+     * the entry back to the subledger row it backs.
+     */
+    private void enqueueCustomerCreditIssuanceGLPostingWorkItem(
+            @NonNull UUID paymentId,
+            @NonNull String applicationRequestId,
+            @NonNull ReceivablePayment payment,
+            @NonNull UUID creditId,
+            @NonNull BigDecimal creditAmount,
+            @NonNull Instant applicationTimestamp) {
+        CustomerCreditIssuanceGLPostingEvent issuanceEvent = CustomerCreditIssuanceGLPostingEvent.builder()
+                .eventId(UUIDv7Generator.generate())
+                .applicationRequestId(applicationRequestId)
+                .creditId(creditId)
+                .paymentId(paymentId)
+                .customerId(payment.getCustomerId())
+                .currency(payment.getCurrency())
+                .creditAmount(creditAmount)
+                .applicationTimestamp(applicationTimestamp)
+                .build();
+
+        outboxService.saveToOutbox(
+                issuanceEvent.getEventId(),
+                "CustomerCreditIssuance",
+                paymentId,
+                issuanceEvent.getClass().getName(),
+                issuanceEvent);
+
+        log.info(
+                "Customer credit issuance GL posting work item persisted to outbox | applicationRequestId={} "
+                        + "| eventId={} | creditId={} | creditAmount={}",
+                applicationRequestId,
+                issuanceEvent.getEventId(),
+                creditId,
+                creditAmount);
+    }
+
+    /**
      * Validate an invoice application against the {@code ext_invoice} replica and accounting's
      * derived balance (ADR-0044, #842). The invoice must exist in the replica, be in an
      * AR-eligible lifecycle state (FINALIZED/POSTED), and still carry a positive balance. No
@@ -715,14 +775,25 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
     }
 
     /**
-     * Resolve the allocation iteration order per the request's effective strategy (Issue #955).
+     * Resolve the allocation iteration order per the request's effective strategy (Issue #955,
+     * refined by Issue #976).
      *
      * <p>{@code CALLER_ORDER} (including an absent strategy) returns the caller-supplied list
      * untouched, keeping behavior byte-identical to requests predating the field.
-     * {@code OLDEST_FIRST} returns a sorted copy ordered by ascending replica invoice date
-     * ({@link ExtInvoice#getInvoiceCreatedAt()}); invoices with no replica date sort last, and
-     * equal dates tie-break deterministically by ascending invoice id. Reordering affects
-     * allocation order only — validation, capping, and idempotency semantics are unchanged.
+     * {@code OLDEST_FIRST} returns a sorted copy ordered by ascending <em>issue/finalization
+     * date</em> ({@link ExtInvoice#getFinalizedAt()} — the point the invoice became an
+     * outstanding receivable), not by record-creation time; invoices with no finalization date
+     * sort last, and equal dates tie-break deterministically by ascending invoice id. Reordering
+     * affects allocation order only — validation, capping, and idempotency semantics are unchanged.
+     *
+     * <p><strong>Documented limitation (Issue #976, AC-4):</strong> true collections aging orders
+     * by the invoice's <em>due date</em>, which the {@code ext_invoice} replica does not yet carry
+     * (it has neither a due date nor payment terms). {@code finalizedAt} is the closest
+     * business-correct key present on the replica and matches Odoo-parity "oldest first"
+     * reconciliation, which orders by invoice date. If/when the replica and the
+     * {@code invoice.events.v1} projection are enriched with a due date (a separate story against
+     * the pos-invoice event contract, ADR-0044), {@code OLDEST_FIRST} should prefer due date and
+     * fall back to {@code finalizedAt}.
      *
      * @param request the application request (strategy resolved via
      *                {@link PaymentApplicationRequest#resolveAllocationStrategy()})
@@ -744,7 +815,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                         invoiceId,
                         invoiceBalanceCalculator
                                 .findInvoice(invoiceId)
-                                .map(ExtInvoice::getInvoiceCreatedAt)
+                                .map(ExtInvoice::getFinalizedAt)
                                 .orElse(null));
             }
         }

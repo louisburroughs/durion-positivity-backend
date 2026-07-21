@@ -117,6 +117,39 @@ public interface GLPostingService {
             @Nullable String overrideJustification);
 
     /**
+     * Post a customer-credit issuance (overpayment excess) to GL (parity-C1,
+     * issue #975): {@code Dr Undeposited Funds / Cr Customer Credit Liability}
+     * for the credit amount. Recognizes the overpayment cash as an asset and the
+     * matching obligation to the customer as a liability, so the excess is no
+     * longer a pure subledger row with no ledger linkage.
+     *
+     * @param sourceEventId              deterministic JE source id for the
+     *                                   issuance (namespaced per credit leg so it
+     *                                   never collides with the AR cash-receipt
+     *                                   entry sharing the same request id)
+     * @param undepositedFundsAccountId  GL account for Undeposited Funds (debit)
+     * @param creditLiabilityAccountId   GL account for Customer Credit Liability
+     *                                   (credit)
+     * @param amount                     credit (overpayment excess) amount
+     * @param transactionDate            business transaction date (the payment
+     *                                   application timestamp) used as the journal
+     *                                   entry date; must not be derived from
+     *                                   processing/clock time so outbox retries
+     *                                   post into the correct period
+     * @param description                entry description
+     * @param overrideJustification      optional CLOSED-period override justification
+     * @return posted journal entry
+     */
+    JournalEntry postCustomerCreditIssuance(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID undepositedFundsAccountId,
+            @NonNull UUID creditLiabilityAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification);
+
+    /**
      * Post the batched settlement journal entry (story F1c, issue #963, decision
      * D-13): {@code Dr Cash (net) / Dr Processor Fees (fee) / Cr Undeposited
      * Funds (matched gross) / Cr Settlement Suspense (unmatched gross)}. Zero

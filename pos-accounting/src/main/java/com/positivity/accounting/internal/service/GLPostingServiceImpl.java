@@ -240,6 +240,56 @@ public class GLPostingServiceImpl implements GLPostingService {
     }
 
     @Override
+    public JournalEntry postCustomerCreditIssuance(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID undepositedFundsAccountId,
+            @NonNull UUID creditLiabilityAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification) {
+
+        log.info(
+                "Posting customer credit issuance GL entry {}: debit undeposited funds {}, "
+                        + "credit customer credit liability {}",
+                sourceEventId,
+                amount,
+                amount);
+
+        JournalEntry entry = new JournalEntry();
+        entry.setTransactionDate(transactionDate);
+        entry.setDescription(description);
+        entry.setSourceEventId(sourceEventId);
+
+        List<JournalEntryLine> lines = new ArrayList<>();
+
+        // Debit: Undeposited Funds (the overpayment cash received).
+        JournalEntryLine cashLine = new JournalEntryLine();
+        cashLine.setGlAccountId(undepositedFundsAccountId);
+        cashLine.setDebitAmount(amount);
+        cashLine.setCreditAmount(BigDecimal.ZERO);
+        cashLine.setDescription("Overpayment Cash - Credit#" + sourceEventId);
+        lines.add(cashLine);
+
+        // Credit: Customer Credit Liability (obligation now owed to the customer).
+        JournalEntryLine liabilityLine = new JournalEntryLine();
+        liabilityLine.setGlAccountId(creditLiabilityAccountId);
+        liabilityLine.setDebitAmount(BigDecimal.ZERO);
+        liabilityLine.setCreditAmount(amount);
+        liabilityLine.setDescription("Customer Credit Issued - Credit#" + sourceEventId);
+        lines.add(liabilityLine);
+
+        entry.setLines(lines);
+
+        JournalEntry created = journalEntryService.createJournalEntry(entry);
+        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
+
+        log.info("Posted customer credit issuance GL entry: journal entry ID {}", posted.getJournalEntryId());
+
+        return posted;
+    }
+
+    @Override
     public JournalEntry postSettlement(@NonNull SettlementPostingCommand command) {
         log.info(
                 "Posting settlement GL entry {}: Dr Cash {}, Dr Fees {}, Cr Undeposited {}, Cr Suspense {}",
