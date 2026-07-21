@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
-import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.net.URI;
 import java.time.Duration;
@@ -47,12 +46,7 @@ class OpenApiOperationExecutorTest {
         OpenApiOperationExecutor executor =
                 new OpenApiOperationExecutor(proxyFactory, operation, new ObjectMapper(), TIMEOUT, null);
 
-        String result = executor.execute(
-                ToolExecutionRequest.builder()
-                        .name("accounting_listinvoices")
-                        .arguments("{}")
-                        .build(),
-                null);
+        String result = executor.execute("{}");
 
         assertThat(result).isEqualTo("[]");
         ArgumentCaptor<URI> uriCaptor = ArgumentCaptor.forClass(URI.class);
@@ -83,12 +77,7 @@ class OpenApiOperationExecutorTest {
         OpenApiOperationExecutor executor =
                 new OpenApiOperationExecutor(proxyFactory, operation, new ObjectMapper(), TIMEOUT, "Bearer test-token");
 
-        executor.execute(
-                ToolExecutionRequest.builder()
-                        .name("accounting_listinvoices")
-                        .arguments("{}")
-                        .build(),
-                null);
+        executor.execute("{}");
 
         assertThat(captured.get()).isNotNull();
         Object headers = captured.get().arguments().get("headers");
@@ -107,12 +96,7 @@ class OpenApiOperationExecutorTest {
         OpenApiOperationExecutor executor =
                 new OpenApiOperationExecutor(proxyFactory, operation, new ObjectMapper(), TIMEOUT, null);
 
-        String result = executor.execute(
-                ToolExecutionRequest.builder()
-                        .name("accounting_listinvoices")
-                        .arguments("{}")
-                        .build(),
-                null);
+        String result = executor.execute("{}");
 
         assertThat(result).startsWith("Error:");
         verifyNoInteractions(proxyFactory);

@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Chat endpoint that routes user messages through a per-user LangChain4j agent.
+ * Chat endpoint that routes user messages through a per-user assistant runtime agent.
  * The agent has role-specific tools, Exa web search, and RAG.
  */
 @RestController

@@ -10,9 +10,6 @@ import static org.mockito.Mockito.when;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.output.Response;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -22,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.embedding.EmbeddingModel;
 
 /**
  * Unit tests for {@link ToolRegistryService}: verifies candidate tool
@@ -83,7 +81,7 @@ class ToolRegistryServiceTest {
 
         when(repository.findEnabledByPermissionsAndWorkflow(CASHIER_PERMISSIONS, "IDLE"))
                 .thenReturn(List.of(SAMPLE_TOOL));
-        when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
+        when(embeddingModel.embed(anyString())).thenReturn(vector);
         when(repository.findTopKByEmbeddingForPermissions(eq(vector), anyInt(), eq(CASHIER_PERMISSIONS), eq("IDLE")))
                 .thenReturn(List.of(SAMPLE_TOOL));
 
@@ -129,7 +127,7 @@ class ToolRegistryServiceTest {
 
         when(repository.findEnabledByPermissionsAndWorkflow(CASHIER_PERMISSIONS, "IDLE"))
                 .thenReturn(List.of(SAMPLE_TOOL));
-        when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
+        when(embeddingModel.embed(anyString())).thenReturn(vector);
         // Gated ANN returns empty — simulates no embeddings for authorized tools
         when(repository.findTopKByEmbeddingForPermissions(
                         any(float[].class), anyInt(), eq(CASHIER_PERMISSIONS), eq("IDLE")))
@@ -152,7 +150,7 @@ class ToolRegistryServiceTest {
 
         when(repository.findEnabledByPermissionsAndWorkflow(CASHIER_PERMISSIONS, "IDLE"))
                 .thenReturn(List.of(SAMPLE_TOOL));
-        when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
+        when(embeddingModel.embed(anyString())).thenReturn(vector);
         // Gated ANN finds the authorized tool directly — no Java-filter step
         when(repository.findTopKByEmbeddingForPermissions(
                         any(float[].class), anyInt(), eq(CASHIER_PERMISSIONS), eq("IDLE")))
@@ -200,7 +198,7 @@ class ToolRegistryServiceTest {
 
         when(repository.findEnabledByPermissionsAndWorkflow(CASHIER_PERMISSIONS, "IDLE"))
                 .thenReturn(List.of(SAMPLE_TOOL));
-        when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
+        when(embeddingModel.embed(anyString())).thenReturn(vector);
         when(repository.findTopKByEmbeddingForPermissions(
                         any(float[].class), anyInt(), eq(CASHIER_PERMISSIONS), eq("IDLE")))
                 .thenReturn(List.of(SAMPLE_TOOL));
@@ -228,7 +226,7 @@ class ToolRegistryServiceTest {
                 .thenReturn(List.of());
         when(repository.findEnabledByPermissionsAndWorkflow(broadPermissions, "IDLE"))
                 .thenReturn(List.of(SAMPLE_TOOL));
-        when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(vector)));
+        when(embeddingModel.embed(anyString())).thenReturn(vector);
         when(repository.findTopKByEmbeddingForPermissions(
                         any(float[].class), anyInt(), eq(broadPermissions), eq("IDLE")))
                 .thenReturn(List.of(SAMPLE_TOOL));

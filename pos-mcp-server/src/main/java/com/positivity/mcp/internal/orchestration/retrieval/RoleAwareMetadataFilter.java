@@ -1,13 +1,12 @@
 package com.positivity.mcp.internal.orchestration.retrieval;
 
-import dev.langchain4j.rag.content.Content;
-import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.rag.query.Query;
+import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import java.util.List;
 import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.document.Document;
 
 /**
  * Tier 3: Role-aware RAG metadata filtering.
@@ -37,11 +36,11 @@ import org.slf4j.LoggerFactory;
  * <li>Falls back to unfiltered if metadata missing
  * </ul>
  */
-public class RoleAwareMetadataFilter implements ContentRetriever {
+public class RoleAwareMetadataFilter implements QueryDocumentRetriever {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RoleAwareMetadataFilter.class);
 
-    private final @NonNull ContentRetriever delegate;
+    private final @NonNull QueryDocumentRetriever delegate;
     private final @NonNull Set<String> userRoles;
 
     /**
@@ -51,7 +50,7 @@ public class RoleAwareMetadataFilter implements ContentRetriever {
      * @param userRoles User's assigned roles (e.g., ["ROLE_CASHIER",
      *                  "ROLE_POS_MANAGER"])
      */
-    public RoleAwareMetadataFilter(@NonNull ContentRetriever delegate, @NonNull Set<String> userRoles) {
+    public RoleAwareMetadataFilter(@NonNull QueryDocumentRetriever delegate, @NonNull Set<String> userRoles) {
         this.delegate = delegate;
         this.userRoles = userRoles;
     }
@@ -66,14 +65,14 @@ public class RoleAwareMetadataFilter implements ContentRetriever {
      * @return Filtered list of Content matching user's roles
      */
     @Override
-    public @NonNull List<Content> retrieve(@NonNull Query query) {
-        List<Content> candidates = delegate.retrieve(query);
+    public @NonNull List<Document> retrieve(@NonNull String queryText) {
+        List<Document> candidates = delegate.retrieve(queryText);
         if (candidates.isEmpty()) {
             LOGGER.debug("No candidates from delegate for query; returning empty");
             return candidates;
         }
 
-        List<Content> filtered =
+        List<Document> filtered =
                 candidates.stream().filter(this::isAccessibleByUserRoles).toList();
 
         int filteredOut = candidates.size() - filtered.size();
@@ -102,7 +101,7 @@ public class RoleAwareMetadataFilter implements ContentRetriever {
      * @param content Retrieved content
      * @return true if user can access, false if restricted
      */
-    private boolean isAccessibleByUserRoles(@NonNull Content ignored) {
+    private boolean isAccessibleByUserRoles(@NonNull Document ignored) {
         // Tier 3 MVP: Pass-through filtering
         // Future: Extract role metadata and filter accordingly
         LOGGER.trace("RoleAwareMetadataFilter pass-through enabled (metadata filtering deferred)");
@@ -116,7 +115,7 @@ public class RoleAwareMetadataFilter implements ContentRetriever {
      * @return Short text representation
      */
     @NonNull
-    private static String preview(@NonNull Content content) {
+    private static String preview(@NonNull Document content) {
         // Tier 3 MVP: Simplified preview (avoid calling text() which may not exist)
         return content.toString().substring(0, Math.min(50, content.toString().length()));
     }

@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,8 +29,8 @@ public class VehicleFacadeTool {
         this.customerVehiclesUriTemplate = customerVehiclesUriTemplate;
     }
 
-    @Tool("Get vehicle details by vehicle ID")
-    public String getVehicle(@P("The vehicle ID") @NonNull String vehicleId) {
+    @Tool(description = "Get vehicle details by vehicle ID")
+    public String getVehicle(@ToolParam(description = "The vehicle ID") @NonNull String vehicleId) {
         return restClient
                 .get()
                 .uri(vehicleUriTemplate, Map.of("vehicleId", vehicleId))
@@ -38,8 +38,8 @@ public class VehicleFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Search vehicles by VIN, make, model, year, or plate")
-    public String searchVehicles(@P("Search query for vehicles") @NonNull String query) {
+    @Tool(description = "Search vehicles by VIN, make, model, year, or plate")
+    public String searchVehicles(@ToolParam(description = "Search query for vehicles") @NonNull String query) {
         return restClient
                 .get()
                 .uri(vehicleSearchUriTemplate, Map.of("query", query))
@@ -47,8 +47,8 @@ public class VehicleFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Get all vehicles associated with a specific customer")
-    public String getVehiclesByCustomer(@P("The customer ID") @NonNull String customerId) {
+    @Tool(description = "Get all vehicles associated with a specific customer")
+    public String getVehiclesByCustomer(@ToolParam(description = "The customer ID") @NonNull String customerId) {
         return restClient
                 .get()
                 .uri(customerVehiclesUriTemplate, Map.of("customerId", customerId))

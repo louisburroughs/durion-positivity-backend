@@ -22,6 +22,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
+import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
@@ -32,10 +33,6 @@ import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
-import dev.langchain4j.model.chat.StreamingChatModel;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.lang.reflect.Member;
 import java.time.Clock;
 import java.time.Instant;
@@ -52,6 +49,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.chat.model.StreamingChatModel;
+import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClient;
 import reactor.core.publisher.Flux;
@@ -66,7 +66,7 @@ import reactor.core.publisher.Flux;
  *
  * <p>
  * A real {@link ExaWebSearchTool} instance (empty API key, never makes HTTP
- * calls) is used rather than a Mockito mock to avoid LangChain4j's
+ * calls) is used rather than a Mockito mock to avoid the assistant runtime's
  * "Duplicated definition for tool: webSearch" error caused by Mockito
  * subclasses
  * re-exposing the parent {@code @Tool} annotation.
@@ -91,7 +91,7 @@ class StreamingSessionAgentManagerTest {
     private EmbeddingModel embeddingModel;
 
     @Mock
-    private PgVectorEmbeddingStore embeddingStore;
+        private PgVectorStore embeddingStore;
 
     @Mock
     private MasterAgentRegistry toolRegistry;
@@ -150,7 +150,7 @@ class StreamingSessionAgentManagerTest {
                 "/order/v1/orders/{orderId}",
                 "/order/v1/orders/search?q={query}");
         sharedOrchestrationSupport = new SharedOrchestrationSupport();
-        ContentRetriever scopedRetriever = mock(ContentRetriever.class);
+        QueryDocumentRetriever scopedRetriever = mock(QueryDocumentRetriever.class);
         lenient().when(toolRegistry.sharedTools()).thenReturn(List.of());
         lenient()
                 .when(toolSelectionEngine.fullFallbackTools())

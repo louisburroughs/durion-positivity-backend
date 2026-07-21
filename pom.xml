@@ -27,6 +27,14 @@
 				<scope>import</scope>
 			</dependency>
 
+			<dependency>
+				<groupId>org.springframework.ai</groupId>
+				<artifactId>spring-ai-bom</artifactId>
+				<version>${spring-ai.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+
 			<!-- Internal Positivity artifacts -->
 			<dependency>
 				<groupId>com.positivity</groupId>
@@ -231,22 +239,6 @@
 				<version>${vavr.version}</version>
 			</dependency>
 
-			<!-- LangChain4j (orchestration + Ollama + pgvector) -->
-			<dependency>
-				<groupId>dev.langchain4j</groupId>
-				<artifactId>langchain4j-ollama-spring-boot4-starter</artifactId>
-				<version>${langchain4j.spring.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>dev.langchain4j</groupId>
-				<artifactId>langchain4j-pgvector</artifactId>
-				<version>${langchain4j.spring.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>dev.langchain4j</groupId>
-				<artifactId>langchain4j-spring-boot4-starter</artifactId>
-				<version>${langchain4j.spring.version}</version>
-			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
@@ -336,8 +328,7 @@
 		<!-- Resilience4j for Retry Patterns and Vavr for Functional Programming -->
 		<resilience4j.version>2.4.0</resilience4j.version>
 		<vavr.version>0.10.4</vavr.version>
-		<langchain4j.version>1.13.0</langchain4j.version>
-		<langchain4j.spring.version>1.13.0-beta23</langchain4j.spring.version>
+		<spring-ai.version>2.0.0</spring-ai.version>
 		<!-- Build Plugins -->
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
 		<jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>

@@ -3,8 +3,6 @@ package com.positivity.mcp.internal.discovery;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
-import dev.langchain4j.agent.tool.ToolExecutionRequest;
-import dev.langchain4j.service.tool.ToolExecutor;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.net.URI;
 import java.time.Duration;
@@ -19,12 +17,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpMethod;
 
 /**
- * Bridges an OpenAPI-discovered operation to a synchronous LangChain4j {@link ToolExecutor} (Gate 3).
+ * Bridges an OpenAPI-discovered operation to a synchronous Spring AI tool callback (Gate 3).
  * Built per request by {@link OpenApiToolProvider} from a {@link DiscoveredOperation}'s persisted
  * execution coordinates; invokes the reactive {@link OperationProxyFactory} handler and blocks for
  * the result. Failures render as a controlled error string — never a fabricated success.
  */
-public class OpenApiOperationExecutor implements ToolExecutor {
+public class OpenApiOperationExecutor {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenApiOperationExecutor.class);
 
@@ -50,10 +48,9 @@ public class OpenApiOperationExecutor implements ToolExecutor {
         this.authHeader = authHeader;
     }
 
-    @Override
-    public String execute(@NonNull ToolExecutionRequest request, @Nullable Object memoryId) {
+    public String execute(@Nullable String argumentsJson) {
         try {
-            Map<String, Object> arguments = withRelayedAuth(parseArguments(request.arguments()));
+            Map<String, Object> arguments = withRelayedAuth(parseArguments(argumentsJson));
             McpSchema.CallToolRequest call = new McpSchema.CallToolRequest(operation.name(), arguments);
             HttpMethod method = HttpMethod.valueOf(operation.httpMethod());
             // Route via the gateway base URI (service_id holds it), not the load-balancer: alpha's

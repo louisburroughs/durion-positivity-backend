@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,8 +29,8 @@ public class WorkorderFacadeTool {
         this.workorderStatusUriTemplate = workorderStatusUriTemplate;
     }
 
-    @Tool("Get full workorder details by workorder ID")
-    public String getWorkorder(@P("The workorder ID") @NonNull String workorderId) {
+    @Tool(description = "Get full workorder details by workorder ID")
+    public String getWorkorder(@ToolParam(description = "The workorder ID") @NonNull String workorderId) {
         return restClient
                 .get()
                 .uri(workorderUriTemplate, Map.of("workorderId", workorderId))
@@ -38,8 +38,8 @@ public class WorkorderFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Search workorders by customer, status, or vehicle criteria")
-    public String searchWorkorders(@P("Search query for workorders") @NonNull String query) {
+    @Tool(description = "Search workorders by customer, status, or vehicle criteria")
+    public String searchWorkorders(@ToolParam(description = "Search query for workorders") @NonNull String query) {
         return restClient
                 .get()
                 .uri(workorderSearchUriTemplate, Map.of("query", query))
@@ -47,8 +47,8 @@ public class WorkorderFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Get current lifecycle status for a workorder")
-    public String getWorkorderStatus(@P("The workorder ID") @NonNull String workorderId) {
+    @Tool(description = "Get current lifecycle status for a workorder")
+    public String getWorkorderStatus(@ToolParam(description = "The workorder ID") @NonNull String workorderId) {
         return restClient
                 .get()
                 .uri(workorderStatusUriTemplate, Map.of("workorderId", workorderId))

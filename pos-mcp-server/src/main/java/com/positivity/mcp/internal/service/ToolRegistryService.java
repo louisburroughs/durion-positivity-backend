@@ -3,7 +3,6 @@ package com.positivity.mcp.internal.service;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
-import dev.langchain4j.model.embedding.EmbeddingModel;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -13,6 +12,7 @@ import java.util.stream.IntStream;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
@@ -113,7 +113,7 @@ public class ToolRegistryService {
             return adminFastPathSelection;
         }
 
-        float[] embedding = embeddingModel.embed(context.userInput()).content().vector();
+        float[] embedding = embeddingModel.embed(context.userInput());
         int semanticLimit = Math.max(topK, 10);
 
         // Permission-gated ANN — only tools authorized for this caller's permissionCodes

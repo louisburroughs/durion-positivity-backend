@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -35,8 +35,8 @@ public class HrFacadeTool {
         this.scheduleUriTemplate = scheduleUriTemplate;
     }
 
-    @Tool("Get employee profile information by employee ID")
-    public String getEmployee(@P("The employee ID") @NonNull String employeeId) {
+    @Tool(description = "Get employee profile information by employee ID")
+    public String getEmployee(@ToolParam(description = "The employee ID") @NonNull String employeeId) {
         return employeeRestClient
                 .get()
                 .uri(employeeUriTemplate, Map.of("employeeId", employeeId))
@@ -44,8 +44,8 @@ public class HrFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Search employees by name, role, team, or availability")
-    public String searchEmployees(@P("Search query for employees") @NonNull String query) {
+    @Tool(description = "Search employees by name, role, team, or availability")
+    public String searchEmployees(@ToolParam(description = "Search query for employees") @NonNull String query) {
         return peopleRestClient
                 .get()
                 .uri(searchUriTemplate, Map.of("query", query))
@@ -53,8 +53,8 @@ public class HrFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Get current schedule details for a specific employee")
-    public String getEmployeeSchedule(@P("The employee ID") @NonNull String employeeId) {
+    @Tool(description = "Get current schedule details for a specific employee")
+    public String getEmployeeSchedule(@ToolParam(description = "The employee ID") @NonNull String employeeId) {
         return availabilityRestClient
                 .get()
                 .uri(scheduleUriTemplate, Map.of("employeeId", employeeId))

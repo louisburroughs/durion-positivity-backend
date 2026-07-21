@@ -8,12 +8,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.output.Response;
-import dev.langchain4j.store.embedding.filter.Filter;
-import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +17,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 
 /**
  * Unit tests for {@link DocumentEmbeddingIngestor}.
@@ -37,7 +35,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class DocumentIngestionServiceTest {
 
     @Mock
-    private PgVectorEmbeddingStore embeddingStore;
+    private PgVectorStore embeddingStore;
 
     @Mock
     private EmbeddingModel embeddingModel;
@@ -59,9 +57,9 @@ class DocumentIngestionServiceTest {
         service.ingestDocument("some text", Map.of("source", "test"));
 
         verify(embeddingModel, times(1))
-                .embedAll(argThat(segments ->
-                        segments.size() == 1 && segments.get(0).text().equals("some text")));
-        verify(embeddingStore, times(1)).addAll(any(), any());
+            .embed(argThat((List<String> segments) ->
+                segments.size() == 1 && segments.get(0).equals("some text")));
+        verify(embeddingStore, times(1)).add(any());
     }
 
     @Test
@@ -71,7 +69,7 @@ class DocumentIngestionServiceTest {
 
         service.ingestDocument("content", Map.of());
 
-        verify(embeddingStore, times(1)).addAll(any(), any());
+        verify(embeddingStore, times(1)).add(any());
     }
 
     @Test
@@ -82,15 +80,15 @@ class DocumentIngestionServiceTest {
         service.ingestDocuments(
                 List.of("doc0", "doc1", "doc2"), List.of(Map.of("i", 0), Map.of("i", 1), Map.of("i", 2)));
 
-        verify(embeddingStore, times(3)).addAll(any(), any());
+        verify(embeddingStore, times(3)).add(any());
     }
 
     @Test
     @DisplayName("ingestDocuments continues processing remaining docs when one embed fails")
     void ingestDocuments_singleFailure_doesNotAbortBatch() {
-        when(embeddingModel.embedAll(any())).thenAnswer(invocation -> {
-            List<TextSegment> segments = invocation.getArgument(0);
-            if (segments.get(0).text().equals("doc0")) {
+        when(embeddingModel.embed(org.mockito.ArgumentMatchers.<List<String>>any())).thenAnswer(invocation -> {
+            List<String> segments = invocation.getArgument(0);
+            if (segments.get(0).equals("doc0")) {
                 throw new RuntimeException("embed failed");
             }
             return embeddingsFor(segments);
@@ -100,8 +98,8 @@ class DocumentIngestionServiceTest {
                 List.of("doc0", "doc1", "doc2"), List.of(Map.of("i", 0), Map.of("i", 1), Map.of("i", 2)));
 
         // doc0 failed, so store should be called only twice
-        verify(embeddingStore, times(2)).addAll(any(), any());
-        verify(embeddingStore, never()).addAll(any(), argThat(segments -> containsText(segments, "doc0")));
+        verify(embeddingStore, times(2)).add(any());
+        verify(embeddingStore, never()).add(argThat(segments -> containsText(segments, "doc0")));
     }
 
     @Test
@@ -111,7 +109,7 @@ class DocumentIngestionServiceTest {
                 IllegalArgumentException.class,
                 () -> service.ingestDocuments(List.of("doc0", "doc1"), List.of(Map.of("i", 0))));
 
-        verify(embeddingStore, never()).addAll(any(), any());
+        verify(embeddingStore, never()).add(any());
     }
 
     @Test
@@ -125,24 +123,24 @@ class DocumentIngestionServiceTest {
                 Map.of("document_id", "policy-1", "source", "manual"));
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<TextSegment>> segmentsCaptor = ArgumentCaptor.forClass(List.class);
-        verify(embeddingStore).removeAll(any(Filter.class));
-        verify(embeddingStore).addAll(any(), segmentsCaptor.capture());
-        List<TextSegment> segments = segmentsCaptor.getValue();
+        ArgumentCaptor<List<Document>> segmentsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(embeddingStore).delete(any(Filter.Expression.class));
+        verify(embeddingStore).add(segmentsCaptor.capture());
+        List<Document> segments = segmentsCaptor.getValue();
 
         org.assertj.core.api.Assertions.assertThat(segments).hasSizeGreaterThan(1);
         for (int index = 0; index < segments.size(); index++) {
             org.assertj.core.api.Assertions.assertThat(
-                            segments.get(index).metadata().getString("document_id"))
+                        String.valueOf(segments.get(index).getMetadata().get("document_id")))
                     .isEqualTo("policy-1");
             org.assertj.core.api.Assertions.assertThat(
-                            segments.get(index).metadata().getString("source"))
+                        String.valueOf(segments.get(index).getMetadata().get("source")))
                     .isEqualTo("manual");
             org.assertj.core.api.Assertions.assertThat(
-                            segments.get(index).metadata().getInteger("chunk_index"))
+                        ((Number) segments.get(index).getMetadata().get("chunk_index")).intValue())
                     .isEqualTo(index);
             org.assertj.core.api.Assertions.assertThat(
-                            segments.get(index).metadata().getInteger("chunk_count"))
+                        ((Number) segments.get(index).getMetadata().get("chunk_count")).intValue())
                     .isEqualTo(segments.size());
         }
     }
@@ -154,8 +152,8 @@ class DocumentIngestionServiceTest {
 
         service.ingestDocument("replacement content", Map.of("document_id", "faq-123"));
 
-        verify(embeddingStore).removeAll(any(Filter.class));
-        verify(embeddingStore).addAll(any(), any());
+        verify(embeddingStore).delete(any(Filter.Expression.class));
+        verify(embeddingStore).add(any());
     }
 
     @Test
@@ -165,28 +163,27 @@ class DocumentIngestionServiceTest {
 
         service.ingestDocument("new content", Map.of("source", "manual"));
 
-        verify(embeddingStore, never()).removeAll(any(Filter.class));
+        verify(embeddingStore, never()).delete(any(Filter.Expression.class));
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<TextSegment>> segmentsCaptor = ArgumentCaptor.forClass(List.class);
-        verify(embeddingStore).addAll(any(), segmentsCaptor.capture());
+        ArgumentCaptor<List<Document>> segmentsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(embeddingStore).add(segmentsCaptor.capture());
         org.assertj.core.api.Assertions.assertThat(
-                        segmentsCaptor.getValue().get(0).metadata().getString("document_id"))
+                String.valueOf(segmentsCaptor.getValue().get(0).getMetadata().get("document_id")))
                 .isNotBlank();
     }
 
     private void mockEmbeddingsForAnySegments() {
-        when(embeddingModel.embedAll(any())).thenAnswer(invocation -> {
-            List<TextSegment> segments = invocation.getArgument(0);
+        when(embeddingModel.embed(org.mockito.ArgumentMatchers.<List<String>>any())).thenAnswer(invocation -> {
+            List<String> segments = invocation.getArgument(0);
             return embeddingsFor(segments);
         });
     }
 
-    private static Response<List<Embedding>> embeddingsFor(List<TextSegment> segments) {
-        return Response.from(
-                segments.stream().map(ignored -> Embedding.from(VECTOR)).toList());
+    private static List<float[]> embeddingsFor(List<String> segments) {
+        return segments.stream().map(ignored -> VECTOR).toList();
     }
 
-    private static boolean containsText(List<TextSegment> segments, String text) {
-        return segments.stream().anyMatch(segment -> segment.text().equals(text));
+    private static boolean containsText(List<Document> segments, String text) {
+        return segments.stream().anyMatch(segment -> text.equals(segment.getText()));
     }
 }

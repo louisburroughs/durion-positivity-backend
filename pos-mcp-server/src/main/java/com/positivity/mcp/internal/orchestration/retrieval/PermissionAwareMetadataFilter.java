@@ -1,9 +1,6 @@
 package com.positivity.mcp.internal.orchestration.retrieval;
 
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.rag.content.Content;
-import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.rag.query.Query;
+import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -11,6 +8,7 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.document.Document;
 
 /**
  * Gate 5 (G5.1): permission-aware RAG visibility filter. Wraps a {@link ContentRetriever} and keeps
@@ -27,28 +25,28 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Fail-closed for restricted docs: if the doc lists codes the caller lacks, it is dropped.
  */
-public class PermissionAwareMetadataFilter implements ContentRetriever {
+public class PermissionAwareMetadataFilter implements QueryDocumentRetriever {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PermissionAwareMetadataFilter.class);
     static final String REQUIRED_PERMISSIONS = "required_permissions";
     static final String AUTHENTICATED = "AUTHENTICATED";
 
-    private final ContentRetriever delegate;
+    private final QueryDocumentRetriever delegate;
     private final Set<String> callerPermissionCodes;
 
     public PermissionAwareMetadataFilter(
-            @NonNull ContentRetriever delegate, @NonNull Set<String> callerPermissionCodes) {
+            @NonNull QueryDocumentRetriever delegate, @NonNull Set<String> callerPermissionCodes) {
         this.delegate = delegate;
         this.callerPermissionCodes = Set.copyOf(callerPermissionCodes);
     }
 
     @Override
-    public @NonNull List<Content> retrieve(@NonNull Query query) {
-        List<Content> candidates = delegate.retrieve(query);
+    public @NonNull List<Document> retrieve(@NonNull String queryText) {
+        List<Document> candidates = delegate.retrieve(queryText);
         if (candidates.isEmpty()) {
             return candidates;
         }
-        List<Content> visible = candidates.stream().filter(this::isVisible).collect(Collectors.toList());
+        List<Document> visible = candidates.stream().filter(this::isVisible).collect(Collectors.toList());
         int dropped = candidates.size() - visible.size();
         if (dropped > 0) {
             LOGGER.debug(
@@ -61,8 +59,8 @@ public class PermissionAwareMetadataFilter implements ContentRetriever {
         return visible;
     }
 
-    private boolean isVisible(@NonNull Content content) {
-        Set<String> required = requiredPermissions(content);
+    private boolean isVisible(@NonNull Document document) {
+        Set<String> required = requiredPermissions(document);
         if (required.isEmpty()) {
             return true; // public / unrestricted
         }
@@ -75,12 +73,12 @@ public class PermissionAwareMetadataFilter implements ContentRetriever {
         return required.stream().anyMatch(callerPermissionCodes::contains);
     }
 
-    private static Set<String> requiredPermissions(@NonNull Content content) {
-        TextSegment segment = content.textSegment();
-        if (segment == null || !segment.metadata().containsKey(REQUIRED_PERMISSIONS)) {
+    private static Set<String> requiredPermissions(@NonNull Document document) {
+        Object rawValue = document.getMetadata().get(REQUIRED_PERMISSIONS);
+        if (rawValue == null) {
             return Set.of();
         }
-        String raw = segment.metadata().getString(REQUIRED_PERMISSIONS);
+        String raw = String.valueOf(rawValue);
         if (raw == null || raw.isBlank()) {
             return Set.of();
         }

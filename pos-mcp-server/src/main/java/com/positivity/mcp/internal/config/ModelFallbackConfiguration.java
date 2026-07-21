@@ -1,15 +1,18 @@
 package com.positivity.mcp.internal.config;
 
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.ollama.OllamaChatModel;
 import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.ollama.OllamaChatModel;
+import org.springframework.ai.ollama.api.OllamaApi;
+import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.RestClient;
 
 @Configuration
 @ConditionalOnProperty(name = "mcp.model.fallback.enabled", havingValue = "true")
@@ -23,16 +26,27 @@ public class ModelFallbackConfiguration {
             @Value("${mcp.model.fallback.secondary-model-name:gpt-oss:120b}") @NonNull String modelName,
             @Value("${OLLAMA_API_KEY:}") @NonNull String apiKey,
             @Value("${mcp.model.fallback.timeout:180s}") @NonNull Duration timeout) {
-        OllamaChatModel.OllamaChatModelBuilder builder = OllamaChatModel.builder()
-                .baseUrl(baseUrl)
-                .modelName(modelName)
-                .temperature(0.2)
-                .timeout(timeout);
+        int timeoutMillis = Math.toIntExact(timeout.toMillis());
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(timeoutMillis);
+        requestFactory.setReadTimeout(timeoutMillis);
+
+        RestClient.Builder restClientBuilder = RestClient.builder().requestFactory(requestFactory);
         if (!apiKey.isBlank()) {
-            Map<String, String> headers = new HashMap<>();
-            headers.put("Authorization", "Bearer " + apiKey);
-            builder.customHeaders(headers);
+            restClientBuilder.defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey);
         }
-        return builder.build();
+
+        OllamaApi ollamaApi = OllamaApi.builder()
+                .baseUrl(baseUrl)
+                .restClientBuilder(restClientBuilder)
+                .build();
+
+        return OllamaChatModel.builder()
+                .ollamaApi(ollamaApi)
+                .options(OllamaChatOptions.builder()
+                        .model(modelName)
+                        .temperature(0.2d)
+                        .build())
+                .build();
     }
 }

@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,8 +29,8 @@ public class InventoryFacadeTool {
         this.locationStockUriTemplate = locationStockUriTemplate;
     }
 
-    @Tool("Check current stock level for a product by SKU number")
-    public String checkStock(@P("The SKU number to look up") @NonNull String sku) {
+    @Tool(description = "Check current stock level for a product by SKU number")
+    public String checkStock(@ToolParam(description = "The SKU number to look up") @NonNull String sku) {
         return restClient
                 .get()
                 .uri(stockUriTemplate, Map.of("sku", sku))
@@ -38,8 +38,8 @@ public class InventoryFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Search inventory by product name or partial SKU")
-    public String searchInventory(@P("Search term: product name or partial SKU") @NonNull String query) {
+    @Tool(description = "Search inventory by product name or partial SKU")
+    public String searchInventory(@ToolParam(description = "Search term: product name or partial SKU") @NonNull String query) {
         return restClient
                 .get()
                 .uri(inventorySearchUriTemplate, Map.of("query", query))
@@ -47,8 +47,8 @@ public class InventoryFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Get stock levels for all products at a specific store location")
-    public String getLocationStock(@P("Store location ID") @NonNull String locationId) {
+    @Tool(description = "Get stock levels for all products at a specific store location")
+    public String getLocationStock(@ToolParam(description = "Store location ID") @NonNull String locationId) {
         return restClient
                 .get()
                 .uri(locationStockUriTemplate, Map.of("locationId", locationId))

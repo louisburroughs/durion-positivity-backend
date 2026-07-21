@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
+import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.PermissionCodes;
@@ -17,11 +18,6 @@ import com.positivity.mcp.service.RolePromptResolver;
 import com.positivity.mcp.service.RolePromptResolver.AssembledPrompt;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
-import dev.langchain4j.memory.ChatMemory;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
-import dev.langchain4j.model.chat.StreamingChatModel;
-import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.service.AiServices;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -34,6 +30,9 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -247,32 +246,24 @@ public class StreamingSessionAgentManager
         long startNanos = System.nanoTime();
         String ragScope = toolRegistry.resolveRagScopeForTools(tools);
         String promptName = SystemPromptDefaults.promptNameForRagScope(ragScope);
-        ContentRetriever semanticRetriever = scopedContentRetrieverFactory.create(ragScope, 10, 0.6);
-        ContentRetriever broadSemanticRetriever =
+        QueryDocumentRetriever semanticRetriever = scopedContentRetrieverFactory.create(ragScope, 10, 0.6);
+        QueryDocumentRetriever broadSemanticRetriever =
                 scopedContentRetrieverFactory.create(ragScope, TIER2_RETRIEVAL_CANDIDATES, 0.55);
-        ContentRetriever expandedRetriever = new QueryExpansionContentRetriever(
+        QueryDocumentRetriever expandedRetriever = new QueryExpansionContentRetriever(
                 broadSemanticRetriever, TIER2_EXPANDED_QUERY_LIMIT, TIER2_RETRIEVAL_CANDIDATES);
-        ContentRetriever hybridRetriever =
+        QueryDocumentRetriever hybridRetriever =
                 new HybridContentRetriever(List.of(semanticRetriever, expandedRetriever), TIER2_RETRIEVAL_CANDIDATES);
-        ContentRetriever rerankedRetriever = new RerankedContentRetriever(hybridRetriever, TIER2_FINAL_TOP_K);
-        ContentRetriever resilientContentRetriever =
+        QueryDocumentRetriever rerankedRetriever = new RerankedContentRetriever(hybridRetriever, TIER2_FINAL_TOP_K);
+        QueryDocumentRetriever resilientContentRetriever =
                 new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
 
-        // Prompt resolution is deferred per-message via systemMessageProvider so that
-        // database updates to prompts are visible immediately without agent rebuild.
-        var agentBuilder = AiServices.builder(StreamingPosAssistant.class)
-                .streamingChatModel(streamingChatModel)
-                .tools(tools)
-                .contentRetriever(resilientContentRetriever)
-                .systemMessageProvider(
-                        memoryId -> rolePromptResolver.assemble(role, ragScope).text())
-                .chatMemoryProvider(this::chatMemoryFor);
-        if (openApiToolProvider != null) {
-            // Discovered OpenAPI tools are surfaced per request; the caller context is published on
-            // the streaming thread in streamTokens (fail-closed when absent).
-            agentBuilder.toolProvider(openApiToolProvider);
-        }
-        StreamingPosAssistant agent = agentBuilder.build();
+        StreamingPosAssistant agent = new SpringAiStreamingPosAssistant(
+            streamingChatModel,
+            () -> rolePromptResolver.assemble(role, ragScope).text(),
+            tools,
+            resilientContentRetriever,
+            this::chatMemoryFor,
+            openApiToolProvider);
         LOGGER.debug(
                 "Built MCP streaming role agent role={} promptName={} ragScope={} toolNames={}",
                 role,
@@ -297,7 +288,7 @@ public class StreamingSessionAgentManager
             @NonNull CurrentUserContext currentUserContext,
             @Nullable String authorizationHeader,
             @NonNull FluxSink<String> emitter) {
-        // Publish the caller for OpenApiToolProvider.provideTools, which langchain4j invokes
+        // Publish the caller for OpenApiToolProvider.provideTools, which the tool callback resolver invokes
         // synchronously while building the request context inside start(). Cleared in finally on this
         // same thread — before any async token callback — so a pooled Reactor thread cannot leak the
         // caller to a later request; if provideTools ran after the clear it would just fail-closed.
@@ -306,14 +297,14 @@ public class StreamingSessionAgentManager
         }
         try {
             agent.chat(memoryId, message, userContext)
-                    .onPartialResponse(token -> {
+                    .doOnNext(token -> {
                         if (!emitter.isCancelled()) {
                             emitter.next(token);
                         }
                     })
-                    .onCompleteResponse(response -> emitter.complete())
-                    .onError(emitter::error)
-                    .start();
+                    .doOnComplete(emitter::complete)
+                    .doOnError(emitter::error)
+                    .subscribe();
         } finally {
             if (requestScopedUserContext != null) {
                 requestScopedUserContext.clear();
@@ -349,7 +340,8 @@ public class StreamingSessionAgentManager
 
     private @NonNull ChatMemory chatMemoryFor(@NonNull Object memoryId) {
         return chatMemoryCache.get(
-                String.valueOf(memoryId), ignored -> MessageWindowChatMemory.withMaxMessages(memoryMaxMessages));
+                String.valueOf(memoryId),
+                ignored -> MessageWindowChatMemory.builder().maxMessages(memoryMaxMessages).build());
     }
 
     private static @NonNull String memoryKey(@NonNull String userId, @NonNull String role) {

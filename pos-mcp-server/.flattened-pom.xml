@@ -156,16 +156,16 @@
       <artifactId>caffeine</artifactId>
     </dependency>
     <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-ollama-spring-boot4-starter</artifactId>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-starter-model-ollama</artifactId>
     </dependency>
     <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-pgvector</artifactId>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-starter-vector-store-pgvector</artifactId>
     </dependency>
     <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-spring-boot4-starter</artifactId>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-starter-model-chat-memory-repository-jdbc</artifactId>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>

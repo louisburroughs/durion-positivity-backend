@@ -1,41 +1,40 @@
 package com.positivity.mcp.internal.orchestration;
 
-import dev.langchain4j.rag.content.Content;
-import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.rag.query.Query;
+import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.document.Document;
 
 /**
  * Prevents supplemental RAG retrieval failures from aborting the primary chat
  * response.
  */
-final class ResilientContentRetriever implements ContentRetriever {
+final class ResilientContentRetriever implements QueryDocumentRetriever {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ResilientContentRetriever.class);
     private static final int MAX_LOG_PREVIEW_LENGTH = 160;
 
-    private final ContentRetriever delegate;
+    private final QueryDocumentRetriever delegate;
     private final String retrieverName;
 
-    ResilientContentRetriever(@NonNull ContentRetriever delegate, @NonNull String retrieverName) {
+    ResilientContentRetriever(@NonNull QueryDocumentRetriever delegate, @NonNull String retrieverName) {
         this.delegate = delegate;
         this.retrieverName = retrieverName;
     }
 
     @Override
-    public @NonNull List<Content> retrieve(@NonNull Query query) {
+    public @NonNull List<Document> retrieve(@NonNull String queryText) {
         long startNanos = System.nanoTime();
-        String queryPreview = preview(query.text());
+        String queryPreview = preview(queryText);
         LOGGER.debug(
                 "RAG retrieval starting retriever={} chars={} preview=\"{}\"",
                 retrieverName,
-                query.text().length(),
+                queryText.length(),
                 queryPreview);
         try {
-            List<Content> content = delegate.retrieve(query);
+            List<Document> content = delegate.retrieve(queryText);
             LOGGER.debug(
                     "RAG retrieval completed retriever={} contentItems={} elapsedMs={} preview=\"{}\"",
                     retrieverName,

@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -30,8 +30,8 @@ public class AccountingFacadeTool {
         this.financialSummaryUriTemplate = financialSummaryUriTemplate;
     }
 
-    @Tool("Get account balance information by account ID")
-    public String getAccountBalance(@P("The account ID") @NonNull String accountId) {
+    @Tool(description = "Get account balance information by account ID")
+    public String getAccountBalance(@ToolParam(description = "The account ID") @NonNull String accountId) {
         return restClient
                 .get()
                 .uri(accountBalanceUriTemplate, Map.of("accountId", accountId))
@@ -39,8 +39,8 @@ public class AccountingFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Search accounting journal entries using text or filter terms")
-    public String searchJournalEntries(@P("Search query for journal entries") @NonNull String query) {
+    @Tool(description = "Search accounting journal entries using text or filter terms")
+    public String searchJournalEntries(@ToolParam(description = "Search query for journal entries") @NonNull String query) {
         return restClient
                 .get()
                 .uri(journalEntriesSearchUriTemplate, Map.of("query", query))
@@ -48,8 +48,8 @@ public class AccountingFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Get a financial summary for a requested accounting period")
-    public String getFinancialSummary(@P("Accounting period identifier") @NonNull String period) {
+    @Tool(description = "Get a financial summary for a requested accounting period")
+    public String getFinancialSummary(@ToolParam(description = "Accounting period identifier") @NonNull String period) {
         return restClient
                 .get()
                 .uri(financialSummaryUriTemplate, Map.of("period", period))

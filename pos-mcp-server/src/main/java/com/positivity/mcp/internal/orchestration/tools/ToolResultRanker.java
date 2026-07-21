@@ -1,9 +1,5 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.output.structured.Description;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -11,6 +7,9 @@ import java.util.Locale;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.Prompt;
 
 /**
  * Tier 3: Tool output result re-ranking using LLM.
@@ -145,12 +144,10 @@ public class ToolResultRanker {
               Respond with a single decimal number (e.g., 0.85):
               """, userQuery, truncate(result, 500));
 
-            String scoreText = chatModel
-                    .chat(ChatRequest.builder()
-                            .messages(List.of(SystemMessage.from(prompt)))
-                            .build())
-                    .aiMessage()
-                    .text()
+                String scoreText = chatModel.call(new Prompt(new SystemMessage(prompt)))
+                    .getResult()
+                    .getOutput()
+                    .getText()
                     .trim();
             double score = parseScore(scoreText);
 
@@ -206,6 +203,5 @@ public class ToolResultRanker {
     /**
      * Internal record for ranked results.
      */
-    @Description("Ranked result with score and position")
     private record RankedResult(@NonNull String result, double score, int position) {}
 }
