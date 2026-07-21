@@ -23,7 +23,7 @@ public final class DownstreamPermissionCatalog {
      * {@code PermissionCode.CATALOG_VERSION}.
      * Updated automatically by {@code scripts/generate-permissions.py --sync}.
      */
-    public static final int CATALOG_VERSION = 25;
+    public static final int CATALOG_VERSION = 26;
 
     /**
      * Index-to-authority mapping. Entry at position N is the {@code PERM_*}-prefixed
