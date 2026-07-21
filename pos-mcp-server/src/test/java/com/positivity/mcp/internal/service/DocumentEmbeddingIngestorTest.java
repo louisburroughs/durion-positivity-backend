@@ -67,12 +67,9 @@ class DocumentEmbeddingIngestorTest {
         EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
         // With segment size 10 and configured overlap 9, effective overlap is capped to 5.
         when(embeddingModel.embed(anyList()))
-                .thenReturn(List.of(
-                        new float[] {1.0f},
-                        new float[] {1.0f},
-                        new float[] {1.0f},
-                        new float[] {1.0f},
-                        new float[] {1.0f}));
+                .thenAnswer(invocation -> ((List<String>) invocation.getArgument(0)).stream()
+                        .map(ignored -> new float[] {1.0f})
+                        .toList());
         DocumentEmbeddingIngestor ingestor =
                 new DocumentEmbeddingIngestor(embeddingStore, embeddingModel, true, 10, 9, 100);
 

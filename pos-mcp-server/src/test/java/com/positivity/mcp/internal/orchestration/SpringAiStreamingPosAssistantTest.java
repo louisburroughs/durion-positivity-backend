@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
+import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -54,7 +55,7 @@ class SpringAiStreamingPosAssistantTest {
         List<String> tokens = assistant
                 .chat("user-2::ROLE_TECH", "where is stock", "ctx:role=TECH")
                 .collectList()
-                .block();
+                .block(Duration.ofSeconds(5));
 
         assertThat(tokens).containsExactly("Hel", "lo");
         verify(ragRetriever).retrieve("where is stock");
@@ -72,18 +73,18 @@ class SpringAiStreamingPosAssistantTest {
                 .contains("Inventory doc");
         assertThat(promptMessages.get(2).getText()).isEqualTo("where is stock");
 
-                ArgumentCaptor<List<Message>> persistedCalls = messageListCaptor();
-                verify(chatMemory, times(2)).add(eq("user-2::ROLE_TECH"), persistedCalls.capture());
-                assertThat(persistedCalls.getAllValues()).hasSize(2);
+        ArgumentCaptor<List<Message>> persistedCalls = messageListCaptor();
+        verify(chatMemory, times(2)).add(eq("user-2::ROLE_TECH"), persistedCalls.capture());
+        assertThat(persistedCalls.getAllValues()).hasSize(2);
 
-                List<Message> firstCall = persistedCalls.getAllValues().getFirst();
-                assertThat(firstCall).hasSize(1);
-                assertThat(firstCall.getFirst().getText()).isEqualTo("where is stock");
+        List<Message> firstCall = persistedCalls.getAllValues().getFirst();
+        assertThat(firstCall).hasSize(1);
+        assertThat(firstCall.getFirst().getText()).isEqualTo("where is stock");
 
-                List<Message> secondCall = persistedCalls.getAllValues().get(1);
-                assertThat(secondCall).hasSize(1);
-                assertThat(secondCall.getFirst()).isInstanceOf(AssistantMessage.class);
-                assertThat(secondCall.getFirst().getText()).isEqualTo("Hello");
+        List<Message> secondCall = persistedCalls.getAllValues().get(1);
+        assertThat(secondCall).hasSize(1);
+        assertThat(secondCall.getFirst()).isInstanceOf(AssistantMessage.class);
+        assertThat(secondCall.getFirst().getText()).isEqualTo("Hello");
     }
 
     private static ChatResponse chatResponse(String token) {

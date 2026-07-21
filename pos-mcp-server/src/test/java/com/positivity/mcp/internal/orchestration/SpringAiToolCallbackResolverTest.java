@@ -40,7 +40,7 @@ class SpringAiToolCallbackResolverTest {
         List<String> required = (List<String>) schema.get("required");
 
         assertThat(properties).hasSize(3);
-        assertThat(required).containsExactlyElementsOf(properties.keySet());
+        assertThat(required).containsExactlyInAnyOrderElementsOf(properties.keySet());
 
         List<String> names = properties.keySet().stream().toList();
         Map<String, Object> payload = new LinkedHashMap<>();

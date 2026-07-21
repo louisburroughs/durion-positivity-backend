@@ -30,7 +30,7 @@ class SpringAiPosAssistantTest {
     }
 
     @Test
-    void chat_includesRagContextAndPersistsMemoryIdConversation() {
+    void chat_includesRagContextAndPersistsConversationMemory() {
         ChatModel chatModel = mock(ChatModel.class);
         QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
