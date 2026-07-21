@@ -16,6 +16,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -49,7 +50,9 @@ public class NltiRouter {
     private final TierSelector tierSelector;
 
     public NltiRouter(
-            @NonNull ChatModel chatModel, @NonNull ObjectMapper objectMapper, @NonNull TierSelector tierSelector) {
+            @Qualifier("chatModel") @NonNull ChatModel chatModel,
+            @NonNull ObjectMapper objectMapper,
+            @NonNull TierSelector tierSelector) {
         this.chatModel = chatModel;
         this.objectMapper = objectMapper;
         this.tierSelector = tierSelector;
