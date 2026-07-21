@@ -79,8 +79,14 @@ public class InvoiceEventPublisher {
 
     /**
      * Projects the persisted {@code invoice_line_tax} rows onto the additive event breakdown
-     * (story T5b). Returns {@code null} when there are no rows so downstream replicas leave any
-     * existing tax rows untouched (matches the accounting listener's null-tolerant contract).
+     * (story T5b).
+     *
+     * <p>Null-vs-empty contract (#982): this producer is authoritative over an invoice's tax
+     * rows, so it emits the <em>actual</em> row set — including an empty list when the invoice
+     * genuinely has none. The accounting listener treats an empty list as "clear the replica"
+     * and {@code null} as "leave existing rows untouched"; emitting empty (not null) is what
+     * lets a taxed&rarr;untaxed transition clear {@code ext_invoice_tax}. {@code null} is
+     * reserved for the one case where no set can be projected at all: a null {@code invoiceId}.
      */
     @Nullable
     private List<TaxBreakdownLine> buildTaxBreakdown(@Nullable UUID invoiceId) {
@@ -89,7 +95,8 @@ public class InvoiceEventPublisher {
         }
         List<InvoiceLineTax> rows = invoiceLineTaxRepository.findByInvoiceId(invoiceId);
         if (rows.isEmpty()) {
-            return null;
+            // Authoritative empty set → clears the accounting replica on taxed→untaxed (#982).
+            return List.of();
         }
         return rows.stream()
                 .map(r -> new TaxBreakdownLine(

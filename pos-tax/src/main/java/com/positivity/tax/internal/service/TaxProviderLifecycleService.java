@@ -8,7 +8,6 @@ import com.positivity.tax.service.TaxProviderClient;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -37,13 +36,16 @@ public class TaxProviderLifecycleService {
 
     private final TaxProviderSelector selector;
     private final TaxProviderTransactionRepository repository;
+    private final TaxProviderTransactionResolver resolver;
 
     public TaxProviderLifecycleService(
             TaxProviderSelector selector,
             TaxProviderTransactionRepository repository,
+            TaxProviderTransactionResolver resolver,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.selector = selector;
         this.repository = repository;
+        this.resolver = resolver;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         if (registry == null) {
             log.warn("No MeterRegistry available; tax provider PENDING_COMMIT backlog gauge not registered");
@@ -71,10 +73,12 @@ public class TaxProviderLifecycleService {
     @Transactional
     public TaxProviderTransactionResult commit(@NonNull UUID referenceId, @Nullable String referenceType) {
         TaxProviderClient provider = selector.select();
-        Optional<TaxProviderTransaction> existing = repository.findByReferenceId(referenceId);
+        // Isolate the find-or-insert so a concurrent-commit UNIQUE(reference_id) collision can
+        // never poison this transaction (#983).
+        UUID rowId = resolver.resolveId(referenceId, referenceType, provider.providerName());
+        TaxProviderTransaction tx = repository.findById(rowId).orElseThrow();
 
-        if (existing.isPresent() && existing.get().getStatus() == TaxProviderTransactionStatus.COMMITTED) {
-            TaxProviderTransaction tx = existing.get();
+        if (tx.getStatus() == TaxProviderTransactionStatus.COMMITTED) {
             return new TaxProviderTransactionResult(
                     referenceId,
                     TaxProviderTransactionStatus.COMMITTED,
@@ -82,7 +86,6 @@ public class TaxProviderLifecycleService {
                     "already committed");
         }
 
-        TaxProviderTransaction tx = existing.orElseGet(() -> newTransaction(referenceId, referenceType, provider));
         try {
             TaxProviderTransactionResult result = provider.commit(referenceId);
             tx.setStatus(TaxProviderTransactionStatus.COMMITTED);
@@ -117,8 +120,8 @@ public class TaxProviderLifecycleService {
     @Transactional
     public TaxProviderTransactionResult voidTransaction(@NonNull UUID referenceId) {
         TaxProviderClient provider = selector.select();
-        TaxProviderTransaction tx =
-                repository.findByReferenceId(referenceId).orElseGet(() -> newTransaction(referenceId, null, provider));
+        UUID rowId = resolver.resolveId(referenceId, null, provider.providerName());
+        TaxProviderTransaction tx = repository.findById(rowId).orElseThrow();
         try {
             TaxProviderTransactionResult result = provider.voidTransaction(referenceId);
             tx.setStatus(TaxProviderTransactionStatus.VOIDED);
@@ -182,18 +185,6 @@ public class TaxProviderLifecycleService {
      */
     public double pendingCommitBacklog() {
         return repository.countByStatus(TaxProviderTransactionStatus.PENDING_COMMIT);
-    }
-
-    @NonNull
-    private TaxProviderTransaction newTransaction(
-            @NonNull UUID referenceId, @Nullable String referenceType, @NonNull TaxProviderClient provider) {
-        return TaxProviderTransaction.builder()
-                .referenceId(referenceId)
-                .referenceType(referenceType)
-                .provider(provider.providerName())
-                .status(TaxProviderTransactionStatus.PENDING_COMMIT)
-                .attempts(0)
-                .build();
     }
 
     @Nullable

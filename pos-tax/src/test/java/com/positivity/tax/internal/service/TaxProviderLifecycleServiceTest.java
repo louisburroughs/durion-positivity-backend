@@ -61,7 +61,8 @@ class TaxProviderLifecycleServiceTest {
         when(selector.select()).thenReturn(provider);
         ObjectProvider<MeterRegistry> meterRegistry = mock(ObjectProvider.class);
         when(meterRegistry.getIfAvailable()).thenReturn(null);
-        service = new TaxProviderLifecycleService(selector, repository, meterRegistry);
+        TaxProviderTransactionResolver resolver = new TaxProviderTransactionResolver(repository);
+        service = new TaxProviderLifecycleService(selector, repository, resolver, meterRegistry);
     }
 
     @Test
