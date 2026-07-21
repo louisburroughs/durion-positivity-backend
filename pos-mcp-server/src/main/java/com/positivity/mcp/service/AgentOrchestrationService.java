@@ -3,7 +3,7 @@ package com.positivity.mcp.service;
 import org.jspecify.annotations.NonNull;
 
 /**
- * Public API for per-user LangChain4j agent session management.
+ * Public API for per-user assistant runtime session management.
  * Implementations maintain a per-user agent cache with role-aware tool sets.
  */
 public interface AgentOrchestrationService {

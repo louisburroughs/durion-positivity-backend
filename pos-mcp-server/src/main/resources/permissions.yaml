@@ -3,9 +3,9 @@ serviceName: pos-mcp-server
 version: "1.0"
 permissions:
   - name: "mcp:chat:execute"
-    description: "Execute a synchronous chat request via LangChain4j agent"
+    description: "Execute a synchronous chat request via Spring AI assistant runtime"
   - name: "mcp:chat:stream"
-    description: "Execute a streaming SSE chat request via LangChain4j agent"
+    description: "Execute a streaming SSE chat request via Spring AI assistant runtime"
   - name: "mcp:document:ingest"
     description: "Ingest a document into the RAG vector store"
   - name: "mcp:llm_api:create"

@@ -17,7 +17,7 @@ public class NltiObservabilityMetricsConfig {
     @Profile("alpha")
     public Gauge agentCacheSizeGauge(MeterRegistry registry, SessionAgentCacheMetrics sessionAgentMetrics) {
         return Gauge.builder("mcp.agent.cache.size", sessionAgentMetrics, SessionAgentCacheMetrics::getCacheSize)
-                .description("Current number of cached LangChain4j agent sessions")
+                .description("Current number of cached assistant runtime agent sessions")
                 .register(registry);
     }
 
@@ -29,7 +29,7 @@ public class NltiObservabilityMetricsConfig {
                         "mcp.streaming.agent.cache.size",
                         streamingSessionAgentMetrics,
                         StreamingSessionAgentCacheMetrics::getCacheSize)
-                .description("Current number of cached LangChain4j streaming agent sessions")
+                .description("Current number of cached assistant runtime streaming agent sessions")
                 .register(registry);
     }
 

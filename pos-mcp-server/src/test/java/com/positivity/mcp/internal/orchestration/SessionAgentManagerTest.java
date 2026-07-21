@@ -63,7 +63,7 @@ import org.springframework.web.client.RestClient;
  * never
  * instantiates it during slice tests. Here we construct it directly via
  * {@code new},
- * bypassing the profile gate, and supply Mockito mocks for all LangChain4j
+ * bypassing the profile gate, and supply Mockito mocks for all assistant runtime
  * dependencies.
  *
  * <p>
@@ -73,7 +73,7 @@ import org.springframework.web.client.RestClient;
  * {@link ExaWebSearchTool}
  * instance (empty API key, never makes HTTP calls) is used rather than a
  * Mockito mock.
- * Using a Mockito mock would trigger a LangChain4j "Duplicated definition for
+ * Using a Mockito mock would trigger an assistant runtime "Duplicated definition for
  * tool: webSearch"
  * error because Mockito subclasses inherit and re-expose the parent's
  * {@code @Tool} annotation.
@@ -112,7 +112,7 @@ class SessionAgentManagerTest {
     private NltiTelemetryEmitter telemetryEmitter;
 
     // Real instance required: Mockito subclasses cause @Tool duplicate registration
-    // in LangChain4j
+    // in the assistant runtime
     private ExaWebSearchTool exaWebSearchTool;
     private InventoryFacadeTool inventoryFacadeTool;
     private OrderFacadeTool orderFacadeTool;

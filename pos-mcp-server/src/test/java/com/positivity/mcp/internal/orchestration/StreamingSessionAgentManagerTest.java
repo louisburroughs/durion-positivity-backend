@@ -66,7 +66,7 @@ import reactor.core.publisher.Flux;
  *
  * <p>
  * A real {@link ExaWebSearchTool} instance (empty API key, never makes HTTP
- * calls) is used rather than a Mockito mock to avoid LangChain4j's
+ * calls) is used rather than a Mockito mock to avoid the assistant runtime's
  * "Duplicated definition for tool: webSearch" error caused by Mockito
  * subclasses
  * re-exposing the parent {@code @Tool} annotation.
