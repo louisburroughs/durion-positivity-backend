@@ -17,6 +17,46 @@
       "description": "Address-driven, effective-dated jurisdiction rate rules (story T7). Each rule matches on destination-address facets and carries its own rates, effective-from date, and optional per-category exemptions."
     },
     {
+      "name": "pos.tax.provider",
+      "type": "com.positivity.tax.internal.config.TaxProperties$Provider",
+      "description": "Concrete external tax provider used when test mode is disabled: AVALARA (real AvaTax adapter) or EXTERNAL (legacy stub). Default/unset (TEST_MODE) resolves to the legacy external stub, preserving prior behavior.",
+      "defaultValue": "TEST_MODE"
+    },
+    {
+      "name": "pos.tax.avalara.base-url",
+      "type": "java.lang.String",
+      "description": "Avalara AvaTax REST base URL. Sandbox https://sandbox-rest.avatax.com, production https://rest.avatax.com.",
+      "defaultValue": "https://sandbox-rest.avatax.com"
+    },
+    {
+      "name": "pos.tax.avalara.account-id",
+      "type": "java.lang.String",
+      "description": "Avalara account id (HTTP Basic username). Env-var driven; empty until configured."
+    },
+    {
+      "name": "pos.tax.avalara.license-key",
+      "type": "java.lang.String",
+      "description": "Avalara license key (HTTP Basic password). Secret, never logged. Env-var driven; empty until configured."
+    },
+    {
+      "name": "pos.tax.avalara.company-code",
+      "type": "java.lang.String",
+      "description": "AvaTax company code used as the document company on every transaction.",
+      "defaultValue": "DEFAULT"
+    },
+    {
+      "name": "pos.tax.avalara.connect-timeout",
+      "type": "java.lang.Integer",
+      "description": "Connection timeout for AvaTax calls in milliseconds.",
+      "defaultValue": 5000
+    },
+    {
+      "name": "pos.tax.avalara.read-timeout",
+      "type": "java.lang.Integer",
+      "description": "Read timeout for AvaTax calls in milliseconds.",
+      "defaultValue": 10000
+    },
+    {
       "name": "pos.tax.external-service.base-url",
       "type": "java.lang.String",
       "description": "Base URL for external tax provider API.",

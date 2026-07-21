@@ -64,7 +64,8 @@ class TaxCalculationServiceTest {
                 new com.positivity.tax.internal.service.TaxProviderSelector(
                         properties,
                         new com.positivity.tax.internal.service.TestModeTaxProvider(testCalculator),
-                        new com.positivity.tax.internal.service.ExternalTaxProvider(externalClient));
+                        new com.positivity.tax.internal.service.ExternalTaxProvider(externalClient),
+                        mock(com.positivity.tax.internal.service.AvalaraTaxProvider.class));
         service = new TaxCalculationServiceImpl(properties, selector);
     }
 

@@ -74,9 +74,21 @@ pos:
         STATE: 0.0725 # 7.25% state tax
         COUNTY: 0.01 # 1% county tax
         CITY: 0.0025 # 0.25% city tax
+    # Concrete external provider used when test-mode is disabled (story T6-external).
+    # TEST_MODE (default/unset) -> legacy external stub; AVALARA -> real AvaTax adapter; EXTERNAL -> stub.
+    provider: ${TAX_PROVIDER:TEST_MODE}
     external-service:
       base-url: ${TAX_SERVICE_URL:https://api.taxservice.example.com}
       api-key: ${TAX_SERVICE_API_KEY:}
+      connect-timeout: 5000
+      read-timeout: 10000
+    # Avalara AvaTax REST v2 adapter (story T6-external). Env-var driven; license key is a
+    # secret and is never logged. Sandbox base https://sandbox-rest.avatax.com, prod https://rest.avatax.com.
+    avalara:
+      base-url: ${AVALARA_BASE_URL:https://sandbox-rest.avatax.com}
+      account-id: ${AVALARA_ACCOUNT_ID:}
+      license-key: ${AVALARA_LICENSE_KEY:}
+      company-code: ${AVALARA_COMPANY_CODE:DEFAULT}
       connect-timeout: 5000
       read-timeout: 10000
     retry:

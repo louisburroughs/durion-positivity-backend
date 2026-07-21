@@ -1,5 +1,20 @@
 # Environment-specific runtime intentionally inherits env-driven base settings.
 
+# Story T6-external: to route tax to the real Avalara AvaTax adapter in staging, set
+# TAX_TEST_MODE=false and TAX_PROVIDER=AVALARA, then supply the (secret) AvaTax credentials
+# via env. Sample non-secret shape below; the license key must come from the secret store,
+# never committed and never logged.
+# pos:
+#   tax:
+#     test-mode:
+#       enabled: false
+#     provider: AVALARA
+#     avalara:
+#       base-url: https://sandbox-rest.avatax.com
+#       account-id: ${AVALARA_ACCOUNT_ID}
+#       license-key: ${AVALARA_LICENSE_KEY}   # secret — inject via env/secret store only
+#       company-code: ${AVALARA_COMPANY_CODE:DEFAULT}
+
 logging:
   level:
     # ADR-0046: deployed environments run INFO baseline; framework noise capped at WARN

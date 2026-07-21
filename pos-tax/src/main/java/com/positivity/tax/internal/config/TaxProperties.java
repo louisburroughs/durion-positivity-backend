@@ -26,9 +26,42 @@ public class TaxProperties {
     private TestMode testMode = new TestMode();
 
     /**
+     * Active external provider selection when test mode is disabled (story T6-external).
+     * <p>
+     * The {@code testMode.enabled} flag still wins: when it is {@code true} the internal
+     * test calculator is always used regardless of this value. When test mode is disabled
+     * this selects the concrete adapter — {@link Provider#AVALARA} for the real Avalara
+     * AvaTax REST v2 adapter, otherwise the legacy generic {@code EXTERNAL} stub.
+     * <p>
+     * Defaults to {@link Provider#TEST_MODE}, which — when the test-mode flag is off —
+     * resolves to the legacy external stub, preserving prior behavior when unset.
+     */
+    private Provider provider = Provider.TEST_MODE;
+
+    /**
      * External tax service configuration.
      */
     private ExternalService externalService = new ExternalService();
+
+    /**
+     * Avalara AvaTax REST v2 adapter configuration (story T6-external, decision R-T1).
+     */
+    private Avalara avalara = new Avalara();
+
+    /**
+     * Concrete external tax provider (story T6-external).
+     */
+    public enum Provider {
+        /**
+         * No explicit external provider selected. When test mode is disabled this resolves to
+         * the legacy {@link #EXTERNAL} stub, preserving prior behavior for existing deployments.
+         */
+        TEST_MODE,
+        /** Real Avalara AvaTax REST v2 adapter. */
+        AVALARA,
+        /** Legacy generic HTTP external stub. */
+        EXTERNAL
+    }
 
     /**
      * Retry configuration for external service calls.
@@ -162,6 +195,52 @@ public class TaxProperties {
          * API key for authentication.
          */
         private String apiKey;
+
+        /**
+         * Connection timeout in milliseconds.
+         */
+        private int connectTimeout = 5000;
+
+        /**
+         * Read timeout in milliseconds.
+         */
+        private int readTimeout = 10000;
+    }
+
+    /**
+     * Avalara AvaTax REST v2 adapter configuration (story T6-external).
+     * <p>
+     * Authenticates with HTTP Basic ({@code accountId:licenseKey}); the license key is a
+     * secret and is never logged. Env-var driven with empty defaults so the adapter is inert
+     * until configured. Sandbox base URL is {@code https://sandbox-rest.avatax.com}; production
+     * is {@code https://rest.avatax.com}.
+     * <p>
+     * <strong>D-T1 note (not built):</strong> Avalara CertCapture (ECM) could later become the
+     * system of record for the T3 exemption-certificate registry. For now the in-platform
+     * registry stays authoritative and no CertCapture integration exists in this story.
+     */
+    @Data
+    public static class Avalara {
+        /**
+         * AvaTax REST base URL. Sandbox {@code https://sandbox-rest.avatax.com},
+         * production {@code https://rest.avatax.com}.
+         */
+        private String baseUrl = "https://sandbox-rest.avatax.com";
+
+        /**
+         * Avalara account id (HTTP Basic username). Empty until configured.
+         */
+        private String accountId = "";
+
+        /**
+         * Avalara license key (HTTP Basic password) — secret, never logged. Empty until configured.
+         */
+        private String licenseKey = "";
+
+        /**
+         * AvaTax company code used as the document company on every transaction.
+         */
+        private String companyCode = "DEFAULT";
 
         /**
          * Connection timeout in milliseconds.
