@@ -34,7 +34,7 @@ public class TaxServiceClient {
     }
 
     /**
-     * Calculate tax for an invoice against the shop-location jurisdiction.
+     * Calculate tax for an invoice against the shop-location jurisdiction, returning the total.
      *
      * @param lineItems   the taxable line items
      * @param destination the tax jurisdiction address (shop location)
@@ -43,6 +43,25 @@ public class TaxServiceClient {
      */
     @NonNull
     public BigDecimal calculateTax(
+            @NonNull List<TaxLineItem> lineItems, @NonNull TaxAddress destination, @Nullable UUID referenceId) {
+        return safeMoney(
+                calculateTaxDetailed(lineItems, destination, referenceId).getTotalTax(), BigDecimal.ZERO);
+    }
+
+    /**
+     * Calculate tax and return the full {@link TaxCalculationResponse} — including the per-line ×
+     * per-jurisdiction breakdown ({@code LineItemTax.jurisdictions[]}) that story T5 persists.
+     *
+     * <p>Unlike {@link #calculateTax}, this does NOT truncate to the scalar total; callers that
+     * only need the rollup should prefer {@link #calculateTax}.
+     *
+     * @param lineItems   the taxable line items
+     * @param destination the tax jurisdiction address (shop location)
+     * @param referenceId the source invoice/workorder identifier, for traceability
+     * @return the full tax calculation response
+     */
+    @NonNull
+    public TaxCalculationResponse calculateTaxDetailed(
             @NonNull List<TaxLineItem> lineItems, @NonNull TaxAddress destination, @Nullable UUID referenceId) {
         if (log.isDebugEnabled()) {
             log.debug(
@@ -78,7 +97,7 @@ public class TaxServiceClient {
             throw new IllegalStateException("Tax service returned a null response for tax calculation");
         }
 
-        return safeMoney(response.getTotalTax(), BigDecimal.ZERO);
+        return response;
     }
 
     @NonNull

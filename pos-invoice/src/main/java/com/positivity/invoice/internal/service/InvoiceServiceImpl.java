@@ -20,6 +20,7 @@ import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
+import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxLineItem;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -49,6 +50,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final LocationReferenceService locationReferenceService;
     private final WorkorderReferenceService workorderReferenceService;
     private final InvoiceEventPublisher invoiceEventPublisher;
+    private final InvoiceTaxBreakdownWriter taxBreakdownWriter;
 
     /**
      * Self-reference (lazy to break the construction cycle) used so the public
@@ -69,6 +71,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             @NonNull LocationReferenceService locationReferenceService,
             @NonNull WorkorderReferenceService workorderReferenceService,
             @NonNull InvoiceEventPublisher invoiceEventPublisher,
+            @NonNull InvoiceTaxBreakdownWriter taxBreakdownWriter,
             Clock clock) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
@@ -76,6 +79,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         this.locationReferenceService = locationReferenceService;
         this.workorderReferenceService = workorderReferenceService;
         this.invoiceEventPublisher = invoiceEventPublisher;
+        this.taxBreakdownWriter = taxBreakdownWriter;
     }
 
     @Override
@@ -160,9 +164,12 @@ public class InvoiceServiceImpl implements InvoiceService {
         adjustment.setExternalReference(externalReference);
 
         invoice.addAdjustment(adjustment);
-        recalculateTotals(invoice);
+        TaxCalculationResponse taxResponse = recalculateTotals(invoice);
 
         Invoice saved = invoiceRepository.save(invoice);
+        // Rebuild the persisted breakdown wholesale, then publish it (freeze-after-finalize:
+        // reachable only while DRAFT, enforced by validateDraftState above and recalculateTotals).
+        taxBreakdownWriter.replace(Objects.requireNonNull(saved.getId(), "invoiceId is required"), taxResponse);
         invoiceEventPublisher.publishInvoiceUpdated(saved);
         InvoiceDetailsResponse response = toDetailsResponse(saved);
         response.setWorkorderNumber(resolveWorkorderNumber(saved.getWorkorderId()));
@@ -202,7 +209,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .setScale(4, RoundingMode.HALF_UP);
 
         invoice.setSubtotal(subtotal);
-        recalculateTotals(invoice);
+        TaxCalculationResponse taxResponse = recalculateTotals(invoice);
 
         Invoice saved = invoiceRepository.save(invoice);
         // Assign the invoice number at draft creation. The number is the invoice's stable
@@ -213,6 +220,9 @@ public class InvoiceServiceImpl implements InvoiceService {
             saved.setInvoiceNumber(generateInvoiceNumber(saved));
             saved = invoiceRepository.save(saved);
         }
+        // Persist the per-line jurisdiction breakdown once the id is assigned, before the event
+        // is built (the publisher reads these rows to populate taxBreakdown[]).
+        taxBreakdownWriter.replace(Objects.requireNonNull(saved.getId(), "invoiceId is required"), taxResponse);
         invoiceEventPublisher.publishInvoiceUpdated(saved);
         return toGenerationResponse(saved);
     }
@@ -241,7 +251,12 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
     }
 
-    private void recalculateTotals(@NonNull Invoice invoice) {
+    @Nullable
+    private TaxCalculationResponse recalculateTotals(@NonNull Invoice invoice) {
+        // Freeze-after-finalize (story T5a): tax and its persisted breakdown are immutable once
+        // the invoice leaves DRAFT. Reject any re-price/tax-write attempt on a finalized invoice.
+        assertRepricingAllowed(invoice);
+
         BigDecimal adjustmentTotal = invoice.getAdjustmentEntries().stream()
                 .map(this::toSignedAdjustmentAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
@@ -250,7 +265,10 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setAdjustments(adjustmentTotal);
         invoice.setAdjustmentsAmount(adjustmentTotal);
 
-        BigDecimal tax = calculateTax(invoice);
+        TaxCalculationResponse taxResponse = calculateTaxResponse(invoice);
+        BigDecimal tax = taxResponse == null
+                ? BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP)
+                : safeMoney(taxResponse.getTotalTax(), BigDecimal.ZERO);
         invoice.setTax(tax);
 
         BigDecimal total = invoice.getSubtotal().add(tax).add(adjustmentTotal).setScale(4, RoundingMode.HALF_UP);
@@ -260,21 +278,36 @@ public class InvoiceServiceImpl implements InvoiceService {
                     "invoice total cannot be negative; adjustments would require a credit memo");
         }
         invoice.setTotal(total);
+        return taxResponse;
     }
 
     /**
-     * Calculate tax for the invoice against its shop-location jurisdiction.
+     * Freeze-after-finalize guard (story T5a): the invoice's tax and persisted breakdown may only
+     * be (re)computed while DRAFT. A finalized/posted invoice's tax is immutable.
+     */
+    private void assertRepricingAllowed(@NonNull Invoice invoice) {
+        if (invoice.getStatus() != InvoiceStatus.DRAFT) {
+            throw new InvalidInvoiceStateException(
+                    Objects.requireNonNull(invoice.getId(), "invoiceId is required"),
+                    invoice.getStatus(),
+                    InvoiceStatus.DRAFT);
+        }
+    }
+
+    /**
+     * Calculate tax for the invoice against its shop-location jurisdiction, returning the full
+     * response (including the per-line jurisdiction breakdown story T5 persists).
      *
      * <p>Tax is computed on the invoice line items (the goods/services sold), matching the
      * estimate flow. Invoice-level adjustments (discounts/fees) are applied to the total
      * after tax and are not part of the taxable base. When there is nothing taxable the tax
-     * service is not called.
+     * service is not called and {@code null} is returned.
      */
-    @NonNull
-    private BigDecimal calculateTax(@NonNull Invoice invoice) {
+    @Nullable
+    private TaxCalculationResponse calculateTaxResponse(@NonNull Invoice invoice) {
         List<TaxLineItem> taxLineItems = buildTaxLineItems(invoice);
         if (taxLineItems.isEmpty()) {
-            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+            return null;
         }
 
         UUID locationId = invoice.getLocationId();
@@ -284,9 +317,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
 
         TaxAddress destination = locationReferenceService.resolveTaxAddress(locationId);
-        return taxServiceClient
-                .calculateTax(taxLineItems, destination, invoice.getWorkorderId())
-                .setScale(4, RoundingMode.HALF_UP);
+        return taxServiceClient.calculateTaxDetailed(taxLineItems, destination, invoice.getWorkorderId());
     }
 
     @NonNull

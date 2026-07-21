@@ -2,6 +2,7 @@ package com.positivity.domainevents.invoice;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -19,6 +20,13 @@ import org.jspecify.annotations.Nullable;
  * <p>{@code partyId} is a free-form string because pos-invoice stores it that way (usually a
  * commercial-party UUID). The envelope's {@code aggregateVersion} is the invoice row's JPA
  * optimistic-lock version, so consumers can drop stale out-of-order deliveries.
+ *
+ * <p>{@code taxBreakdown} (story T5b) is the additive per-line × per-jurisdiction tax matrix
+ * pos-invoice persists ({@code invoice_line_tax}). It stays within schema v1 (ADR-0044 §3:
+ * additive, consumers tolerate unknown/absent fields) — there is no {@code InvoiceUpdatedV2} and
+ * no dual-publish. It is {@code null} for producers/older events that carry no breakdown; the
+ * scalar {@code tax} above remains the denormalized rollup (decision D-T6), and where the
+ * breakdown is present {@code tax == Σ taxBreakdown.taxAmount} holds.
  */
 public record InvoiceUpdatedV1(
         @NonNull UUID invoiceId,
@@ -33,7 +41,8 @@ public record InvoiceUpdatedV1(
         @Nullable BigDecimal total,
         @Nullable BigDecimal adjustmentsAmount,
         @Nullable Instant createdAt,
-        @Nullable Instant finalizedAt) {
+        @Nullable Instant finalizedAt,
+        @Nullable List<TaxBreakdownLine> taxBreakdown) {
 
     public static final String EVENT_TYPE = "invoice.invoice.updated";
     public static final int SCHEMA_VERSION = 1;
