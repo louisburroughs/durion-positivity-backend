@@ -309,8 +309,13 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         // Note: RoleAwareMetadataFilter requires user roles from SecurityContext.
         // Currently applied at chat boundary where user context is available.
 
-        PosAssistant agent =
-                new SpringAiPosAssistant(chatModel, () -> rolePromptResolver.assemble(role, ragScope).text(), tools, openApiToolProvider);
+        PosAssistant agent = new SpringAiPosAssistant(
+            chatModel,
+            () -> rolePromptResolver.assemble(role, ragScope).text(),
+            tools,
+            resilientContentRetriever,
+            this::chatMemoryFor,
+            openApiToolProvider);
         LOGGER.debug(
                 "Built MCP role agent role={} promptName={} ragScope={} toolNames={}",
                 role,

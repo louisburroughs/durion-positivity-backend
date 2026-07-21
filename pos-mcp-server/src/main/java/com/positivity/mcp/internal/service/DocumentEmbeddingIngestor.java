@@ -23,26 +23,49 @@ public class DocumentEmbeddingIngestor {
 
     private static final String DOCUMENT_ID = "document_id";
     private static final String RAG_SCOPE = "rag_scope";
+    private static final double MAX_OVERLAP_RATIO = 0.5;
+    private static final int DEFAULT_MAX_CHUNKS_PER_DOCUMENT = 2_000;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DocumentEmbeddingIngestor.class);
 
-        private final PgVectorStore embeddingStore;
+    private final PgVectorStore embeddingStore;
     private final EmbeddingModel embeddingModel;
     private final boolean chunkingEnabled;
-        private final int maxSegmentSize;
-        private final int maxOverlapSize;
+    private final int maxSegmentSize;
+    private final int maxOverlapSize;
+    private final int segmentStepSize;
+    private final int maxChunksPerDocument;
 
     public DocumentEmbeddingIngestor(
             @NonNull PgVectorStore embeddingStore,
             @NonNull EmbeddingModel embeddingModel,
             @Value("${mcp.rag.chunking.enabled:true}") boolean chunkingEnabled,
             @Value("${mcp.rag.chunking.max-segment-size:2000}") int maxSegmentSize,
-            @Value("${mcp.rag.chunking.max-overlap-size:200}") int maxOverlapSize) {
+            @Value("${mcp.rag.chunking.max-overlap-size:200}") int maxOverlapSize,
+            @Value("${mcp.rag.chunking.max-chunks-per-document:2000}") int maxChunksPerDocument) {
         this.embeddingStore = embeddingStore;
         this.embeddingModel = embeddingModel;
         this.chunkingEnabled = chunkingEnabled;
         this.maxSegmentSize = Math.max(1, maxSegmentSize);
-        this.maxOverlapSize = Math.clamp(maxOverlapSize, 0, this.maxSegmentSize - 1);
+        int overlapCap = Math.max(0, Math.min(this.maxSegmentSize - 1, (int) (this.maxSegmentSize * MAX_OVERLAP_RATIO)));
+        this.maxOverlapSize = Math.clamp(maxOverlapSize, 0, overlapCap);
+        this.segmentStepSize = Math.max(1, this.maxSegmentSize - this.maxOverlapSize);
+        this.maxChunksPerDocument = Math.max(1, maxChunksPerDocument);
+    }
+
+    public DocumentEmbeddingIngestor(
+            @NonNull PgVectorStore embeddingStore,
+            @NonNull EmbeddingModel embeddingModel,
+            boolean chunkingEnabled,
+            int maxSegmentSize,
+            int maxOverlapSize) {
+        this(
+                embeddingStore,
+                embeddingModel,
+                chunkingEnabled,
+                maxSegmentSize,
+                maxOverlapSize,
+                DEFAULT_MAX_CHUNKS_PER_DOCUMENT);
     }
 
     public int ingestDocument(@NonNull String content, @NonNull Map<String, Object> metadata) {
@@ -72,13 +95,13 @@ public class DocumentEmbeddingIngestor {
             long storeStartNanos = System.nanoTime();
             if (replaceExisting) {
                 var filter = new FilterExpressionBuilder()
-                    .and(
-                        new FilterExpressionBuilder().eq(DOCUMENT_ID, documentId),
-                        new FilterExpressionBuilder().eq(RAG_SCOPE, normalizedMetadata.get(RAG_SCOPE)))
-                    .build();
+                        .and(
+                                new FilterExpressionBuilder().eq(DOCUMENT_ID, documentId),
+                                new FilterExpressionBuilder().eq(RAG_SCOPE, normalizedMetadata.get(RAG_SCOPE)))
+                        .build();
                 embeddingStore.delete(filter);
             }
-                embeddingStore.add(segments);
+            embeddingStore.add(segments);
             LOGGER.info(
                     "Stored RAG document {} with {} segments in {} ms",
                     documentId,
@@ -135,6 +158,11 @@ public class DocumentEmbeddingIngestor {
         int start = 0;
         int length = content.length();
         while (start < length) {
+            if (segments.size() >= maxChunksPerDocument) {
+                throw new IllegalArgumentException(
+                        "Document exceeds configured chunk limit: maxChunks=%d, segmentSize=%d, overlap=%d, contentLength=%d"
+                                .formatted(maxChunksPerDocument, maxSegmentSize, maxOverlapSize, length));
+            }
             int end = Math.min(length, start + maxSegmentSize);
             String segment = content.substring(start, end).trim();
             if (!segment.isEmpty()) {
@@ -143,7 +171,7 @@ public class DocumentEmbeddingIngestor {
             if (end >= length) {
                 break;
             }
-            start = Math.max(start + 1, end - maxOverlapSize);
+            start = start + segmentStepSize;
         }
         if (segments.isEmpty()) {
             segments.add(content);

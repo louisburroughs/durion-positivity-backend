@@ -7,6 +7,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,15 +55,17 @@ final class SpringAiToolCallbackResolver {
 
         private final Object target;
         private final Method method;
+        private final List<ParameterBinding> parameterBindings;
         private final ToolDefinition toolDefinition;
 
         private ReflectiveToolCallback(@NonNull Object target, @NonNull Method method, @NonNull String description) {
             this.target = target;
             this.method = method;
+            this.parameterBindings = parameterBindings(method);
             this.toolDefinition = DefaultToolDefinition.builder()
                     .name(method.getName())
                     .description(description)
-                    .inputSchema(buildInputSchema(method))
+                .inputSchema(buildInputSchema(parameterBindings, method.getName()))
                     .build();
         }
 
@@ -91,14 +94,25 @@ final class SpringAiToolCallbackResolver {
 
         private static Object[] resolveArguments(@NonNull Method method, @NonNull String toolInput) {
             Map<String, Object> arguments = parseArguments(toolInput);
+            List<ParameterBinding> bindings = parameterBindings(method);
             Parameter[] parameters = method.getParameters();
             Object[] resolved = new Object[parameters.length];
-            for (int i = 0; i < parameters.length; i++) {
-                Parameter parameter = parameters[i];
-                Object rawValue = arguments.get(parameter.getName());
-                resolved[i] = rawValue == null ? null : OBJECT_MAPPER.convertValue(rawValue, parameter.getType());
+            for (ParameterBinding binding : bindings) {
+                Object rawValue = firstPresent(arguments, binding.candidateNames());
+                resolved[binding.index()] =
+                        rawValue == null ? null : OBJECT_MAPPER.convertValue(rawValue, binding.parameterType());
             }
             return resolved;
+        }
+
+        private static @NonNull Object firstPresent(
+                @NonNull Map<String, Object> arguments, @NonNull List<String> candidateNames) {
+            for (String candidateName : candidateNames) {
+                if (arguments.containsKey(candidateName)) {
+                    return arguments.get(candidateName);
+                }
+            }
+            return null;
         }
 
         private static @NonNull Map<String, Object> parseArguments(@NonNull String toolInput) {
@@ -112,28 +126,82 @@ final class SpringAiToolCallbackResolver {
             }
         }
 
-        private static @NonNull String buildInputSchema(@NonNull Method method) {
+        private static @NonNull String buildInputSchema(
+                @NonNull List<ParameterBinding> parameterBindings, @NonNull String methodName) {
             Map<String, Object> schema = new LinkedHashMap<>();
             schema.put("type", "object");
             Map<String, Object> properties = new LinkedHashMap<>();
             List<String> required = new ArrayList<>();
-            for (Parameter parameter : method.getParameters()) {
+            for (ParameterBinding binding : parameterBindings) {
                 Map<String, Object> property = new LinkedHashMap<>();
-                property.put("type", jsonType(parameter.getType()));
-                ToolParam description = parameter.getAnnotation(ToolParam.class);
-                if (description != null && !description.description().isBlank()) {
-                    property.put("description", description.description());
+                property.put("type", jsonType(binding.parameterType()));
+                if (!binding.description().isBlank()) {
+                    property.put("description", binding.description());
                 }
-                properties.put(parameter.getName(), property);
-                required.add(parameter.getName());
+                properties.put(binding.schemaName(), property);
+                required.add(binding.schemaName());
             }
             schema.put("properties", properties);
             schema.put("required", required);
             try {
                 return OBJECT_MAPPER.writeValueAsString(schema);
             } catch (JsonProcessingException e) {
-                throw new IllegalStateException("Failed to serialize tool schema for " + method.getName(), e);
+                throw new IllegalStateException("Failed to serialize tool schema for " + methodName, e);
             }
+        }
+
+        private static @NonNull List<ParameterBinding> parameterBindings(@NonNull Method method) {
+            Parameter[] parameters = method.getParameters();
+            List<ParameterBinding> bindings = new ArrayList<>(parameters.length);
+            for (int index = 0; index < parameters.length; index++) {
+                Parameter parameter = parameters[index];
+                ToolParam toolParam = parameter.getAnnotation(ToolParam.class);
+                String schemaName = schemaName(parameter, toolParam, index);
+                String description = toolParam == null ? "" : toolParam.description();
+                List<String> candidateNames = new ArrayList<>();
+                candidateNames.add(schemaName);
+                if (parameter.isNamePresent()) {
+                    candidateNames.add(parameter.getName());
+                }
+                candidateNames.add("arg" + index);
+                bindings.add(new ParameterBinding(
+                        index,
+                        parameter.getType(),
+                        schemaName,
+                        description,
+                        List.copyOf(candidateNames)));
+            }
+            return List.copyOf(bindings);
+        }
+
+        private static @NonNull String schemaName(
+                @NonNull Parameter parameter, ToolParam toolParam, int parameterIndex) {
+            String explicitName = explicitToolParamName(toolParam);
+            if (!explicitName.isBlank()) {
+                return explicitName;
+            }
+            if (parameter.isNamePresent()) {
+                return parameter.getName();
+            }
+            return "param" + (parameterIndex + 1);
+        }
+
+        private static @NonNull String explicitToolParamName(ToolParam toolParam) {
+            if (toolParam == null) {
+                return "";
+            }
+            for (String candidateMethodName : List.of("name", "value")) {
+                try {
+                    Method accessor = toolParam.annotationType().getMethod(candidateMethodName);
+                    Object value = accessor.invoke(toolParam);
+                    if (value instanceof String stringValue && !stringValue.isBlank()) {
+                        return stringValue;
+                    }
+                } catch (ReflectiveOperationException ignored) {
+                    // ToolParam variants may not expose a parameter-name field.
+                }
+            }
+            return "";
         }
 
         private static @NonNull String jsonType(@NonNull Class<?> type) {
@@ -152,6 +220,17 @@ final class SpringAiToolCallbackResolver {
                 return "number";
             }
             return "string";
+        }
+
+        private record ParameterBinding(
+                int index,
+                @NonNull Class<?> parameterType,
+                @NonNull String schemaName,
+                @NonNull String description,
+                @NonNull List<String> candidateNames) {
+            private ParameterBinding {
+                candidateNames = Collections.unmodifiableList(candidateNames);
+            }
         }
     }
 }

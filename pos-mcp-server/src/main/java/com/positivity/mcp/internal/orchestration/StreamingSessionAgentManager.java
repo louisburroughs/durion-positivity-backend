@@ -258,7 +258,12 @@ public class StreamingSessionAgentManager
                 new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
 
         StreamingPosAssistant agent = new SpringAiStreamingPosAssistant(
-                streamingChatModel, () -> rolePromptResolver.assemble(role, ragScope).text(), tools, openApiToolProvider);
+            streamingChatModel,
+            () -> rolePromptResolver.assemble(role, ragScope).text(),
+            tools,
+            resilientContentRetriever,
+            this::chatMemoryFor,
+            openApiToolProvider);
         LOGGER.debug(
                 "Built MCP streaming role agent role={} promptName={} ragScope={} toolNames={}",
                 role,
