@@ -5,8 +5,10 @@ import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.CreditMemoResponse;
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.entity.ExtInvoice;
+import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.service.AccountingPeriodService;
 import com.positivity.accounting.service.CreditMemoService;
 import com.positivity.accounting.service.GLPostingService;
@@ -14,6 +16,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,6 +67,7 @@ public class CreditMemoServiceImpl implements CreditMemoService {
     private static final BigDecimal ZERO_TAX = new BigDecimal("0.00");
 
     private final CreditMemoRepository creditMemoRepository;
+    private final ExtInvoiceTaxRepository extInvoiceTaxRepository;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
     private final GLPostingService glPostingService;
     private final AccountingPeriodService periodService;
@@ -160,9 +164,17 @@ public class CreditMemoServiceImpl implements CreditMemoService {
     }
 
     /**
-     * Derive the tax to reverse from the invoice's STORED tax scalar (issue #953, Odoo parity
-     * decision D-4). Tax is frozen at invoice finalization and is never recomputed from rates at
-     * credit time (rate-drift protection).
+     * Derive the tax to reverse from the invoice's STORED, frozen tax (issue #953 interim scalar;
+     * D1 breakdown-upgrade, Odoo parity decision D-4). Tax is frozen at invoice finalization and is
+     * never recomputed from rates at credit time (rate-drift protection).
+     *
+     * <p>Source of the total tax (D1 upgrade): the authoritative per-line × per-jurisdiction
+     * {@code ext_invoice_tax} replica populated by tax-plan T5 ({@code Σ taxAmount} of its rows).
+     * When no replica rows exist — a pre-T5 invoice, or one whose breakdown was never emitted — it
+     * falls back to the scalar {@code ExtInvoice.tax} rollup (strictly better than the retired 10%
+     * heuristic, and equal to the breakdown sum by the T5 {@code scalar == Σ breakdown} invariant).
+     * Per D-4/D2 the GL posting still reverses a single sales-tax-payable account; the jurisdiction
+     * detail is report-time aggregation (tax-plan T8), not a per-jurisdiction credit posting.
      *
      * <p>The credit amount is the revenue (pre-tax) portion being reversed, so the pro-rating
      * ratio is {@code creditAmount / net} where {@code net = total − tax}, and
@@ -175,13 +187,12 @@ public class CreditMemoServiceImpl implements CreditMemoService {
      */
     @NonNull
     private BigDecimal calculateTaxReversed(@NonNull BigDecimal creditAmount, @NonNull ExtInvoice invoice) {
-        BigDecimal storedTax = invoice.getTax();
-        if (storedTax == null || storedTax.signum() <= 0) {
+        BigDecimal totalTax = resolveFrozenTax(invoice);
+        if (totalTax.signum() <= 0) {
             return ZERO_TAX;
         }
-        BigDecimal totalTax = storedTax.setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
         BigDecimal total = invoice.getTotal() == null ? BigDecimal.ZERO : invoice.getTotal();
-        BigDecimal netAmount = total.subtract(storedTax);
+        BigDecimal netAmount = total.subtract(totalTax);
 
         BigDecimal previouslyCreditedNet = creditMemoRepository.sumCreditAmountByInvoiceIdAndStatus(
                 invoice.getInvoiceId(), CreditMemoStatus.POSTED);
@@ -199,6 +210,26 @@ public class CreditMemoServiceImpl implements CreditMemoService {
         // remainingNet > creditAmount > 0 implies netAmount > 0: division is safe.
         BigDecimal creditRatio = creditAmount.divide(netAmount, RATIO_SCALE, RoundingMode.HALF_UP);
         return totalTax.multiply(creditRatio).setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * The frozen total tax to reverse, at currency scale (D1 breakdown-upgrade). Prefers the
+     * authoritative {@code ext_invoice_tax} replica ({@code Σ taxAmount}); falls back to the scalar
+     * {@code ExtInvoice.tax} rollup when the invoice has no breakdown rows (pre-T5 invoices). A
+     * non-positive result (untaxed / fully exempt / absent) reverses no tax.
+     */
+    @NonNull
+    private BigDecimal resolveFrozenTax(@NonNull ExtInvoice invoice) {
+        List<ExtInvoiceTax> breakdown = extInvoiceTaxRepository.findByInvoiceId(invoice.getInvoiceId());
+        if (breakdown != null && !breakdown.isEmpty()) {
+            return breakdown.stream()
+                    .map(ExtInvoiceTax::getTaxAmount)
+                    .filter(java.util.Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
+        }
+        BigDecimal storedTax = invoice.getTax();
+        return storedTax == null ? ZERO_TAX : storedTax.setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
     }
 
     private void validateCreditDoesNotExceedBalance(
