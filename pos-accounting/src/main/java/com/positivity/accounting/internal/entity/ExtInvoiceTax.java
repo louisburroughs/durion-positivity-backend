@@ -15,6 +15,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
@@ -75,6 +76,13 @@ public class ExtInvoiceTax {
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 
+    /**
+     * Last-modification timestamp (ADR-0024). Populated by Spring Data JPA auditing whose
+     * {@code auditingDateTimeProvider} is wired to the injected {@link java.time.Clock}
+     * ({@code JpaAuditingConfig}), so it matches the deterministic value the invoice-event
+     * listener sets from the same clock.
+     */
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }
