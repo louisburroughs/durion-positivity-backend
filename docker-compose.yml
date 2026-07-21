@@ -700,7 +700,9 @@ services:
 
   # Internal-only tax calculation service. Never routed through the gateway (ADR-0014);
   # reached directly over pos-network by pos-invoice at http://pos-tax:8091/v1/tax.
-  # Stateless: no datasource configured, so Spring Boot uses an embedded H2; Flyway off.
+  # Owns a Postgres schema (exemption_certificate V1, tax_provider_transaction V2); Flyway runs
+  # the migrations against pos_tax_db. Without SPRING_DATASOURCE_URL, Boot would fall back to
+  # embedded H2 (H2 is a runtime dep for local dev/test).
   pos-tax:
     build:
       context: ./pos-tax
@@ -712,10 +714,18 @@ services:
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8091
       MANAGEMENT_SERVER_PORT: 8091
-      SPRING_FLYWAY_ENABLED: "false"
+      # pos-tax owns a schema since Wave 2 (exemption_certificate V1, tax_provider_transaction V2);
+      # inject Postgres + run Flyway. Without SPRING_DATASOURCE_URL, Boot falls back to embedded H2.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_tax_db
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_FLYWAY_ENABLED: "true"
       # Use the built-in test tax calculator locally; no real external tax service exists yet.
       TAX_TEST_MODE: "true"
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
       pos-security-service:
