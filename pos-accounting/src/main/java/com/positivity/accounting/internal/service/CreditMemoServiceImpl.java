@@ -221,7 +221,7 @@ public class CreditMemoServiceImpl implements CreditMemoService {
     @NonNull
     private BigDecimal resolveFrozenTax(@NonNull ExtInvoice invoice) {
         List<ExtInvoiceTax> breakdown = extInvoiceTaxRepository.findByInvoiceId(invoice.getInvoiceId());
-        if (!breakdown.isEmpty()) {
+        if (breakdown != null && !breakdown.isEmpty()) {
             return breakdown.stream()
                     .map(ExtInvoiceTax::getTaxAmount)
                     .filter(java.util.Objects::nonNull)
