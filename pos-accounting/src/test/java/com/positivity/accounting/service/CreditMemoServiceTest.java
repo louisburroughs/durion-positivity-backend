@@ -14,8 +14,10 @@ import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.CreditMemoResponse;
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.entity.ExtInvoice;
+import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.service.AccountingPeriodServiceImpl;
 import com.positivity.accounting.internal.service.CreditMemoServiceImpl;
 import com.positivity.accounting.internal.service.GLPostingServiceImpl;
@@ -63,6 +65,9 @@ class CreditMemoServiceTest {
 
     @Mock
     private CreditMemoRepository creditMemoRepository;
+
+    @Mock
+    private ExtInvoiceTaxRepository extInvoiceTaxRepository;
 
     @Mock
     private InvoiceBalanceCalculator invoiceBalanceCalculator;
@@ -515,6 +520,44 @@ class CreditMemoServiceTest {
                         anyString(),
                         eq(false),
                         eq(null));
+    }
+
+    @Test
+    @DisplayName("D1 breakdown-upgrade: tax reversal sums the ext_invoice_tax replica, not the scalar rollup")
+    void testBreakdown_SourcedFromReplicaNotScalar() {
+        // Given - the scalar ExtInvoice.tax is ABSENT (null), but the authoritative
+        // ext_invoice_tax replica carries the frozen per-jurisdiction breakdown summing to 35.59
+        // (STATE 30.00 + COUNTY 5.59). If the code read the scalar it would reverse 0.00; sourcing
+        // from the breakdown reverses 35.59.
+        testInvoice = replicaInvoice("FINALIZED", "235.59", null, Instant.now(TEST_CLOCK));
+        stubReplica(testInvoice, "235.59");
+        stubSaveEcho();
+        when(extInvoiceTaxRepository.findByInvoiceId(testInvoiceId))
+                .thenReturn(List.of(breakdownRow("STATE", "30.00"), breakdownRow("COUNTY", "5.59")));
+        // Full-net credit → final-line residual reverses the entire frozen tax.
+        testRequest.setCreditAmount(new BigDecimal("200.00"));
+
+        // When
+        CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
+
+        // Then
+        assertThat(response.getTaxAmountReversed()).isEqualByComparingTo("35.59");
+        assertThat(response.getTotalAmount()).isEqualByComparingTo("235.59");
+    }
+
+    private ExtInvoiceTax breakdownRow(String jurisdictionType, String taxAmount) {
+        return ExtInvoiceTax.builder()
+                .invoiceId(testInvoiceId)
+                .lineItemId("1")
+                .jurisdictionType(jurisdictionType)
+                .jurisdictionCode(jurisdictionType)
+                .rate(new BigDecimal("0.0000"))
+                .taxableBase(new BigDecimal("0.00"))
+                .taxAmount(new BigDecimal(taxAmount))
+                .exempt(false)
+                .aggregateVersion(1L)
+                .updatedAt(Instant.now(TEST_CLOCK))
+                .build();
     }
 
     @Test
