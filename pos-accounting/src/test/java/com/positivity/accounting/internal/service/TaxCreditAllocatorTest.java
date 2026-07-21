@@ -86,12 +86,11 @@ class TaxCreditAllocatorTest {
     }
 
     @Test
-    @DisplayName("All-zero weights assign the full amount to the smallest key")
+    @DisplayName("All-zero weights yield an empty allocation (reversal left unattributed, like empty weights)")
     void zeroWeights() {
-        Map<String, BigDecimal> out = TaxCreditAllocator.allocate(new BigDecimal("10.00"), weights("Z", 0, "A", 0));
-
-        assertThat(out.get("A")).isEqualByComparingTo("10.00");
-        assertThat(out.get("Z")).isEqualByComparingTo("0.00");
-        assertThat(sum(out)).isEqualByComparingTo("10.00");
+        // Every jurisdiction collected zero tax: there is no collected-tax share to net against,
+        // so the reversal is left unattributed (caller logs a WARN and surfaces it as GL drift).
+        assertThat(TaxCreditAllocator.allocate(new BigDecimal("25.00"), weights("Z", 0, "A", 0)))
+                .isEmpty();
     }
 }

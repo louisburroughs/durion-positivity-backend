@@ -47,8 +47,8 @@ final class TaxCreditAllocator {
      *                {@code tax_amount})
      * @param <K>     the (comparable) jurisdiction key type
      * @return a map whose values sum exactly to {@code amount} rounded to currency scale;
-     *         empty when {@code weights} is empty (the caller then treats the amount as
-     *         unattributable)
+     *         empty when {@code weights} is empty <em>or</em> when the total weight is zero
+     *         (the caller then treats the amount as unattributable)
      */
     static <K extends Comparable<K>> Map<K, BigDecimal> allocate(BigDecimal amount, Map<K, BigDecimal> weights) {
         Map<K, BigDecimal> result = new LinkedHashMap<>();
@@ -59,13 +59,12 @@ final class TaxCreditAllocator {
         BigDecimal target = amount.setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
         BigDecimal totalWeight = weights.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Degenerate weights (all zero): the whole amount cannot be split by share, so
-        // assign it entirely to the deterministic winner (smallest key) and zero the rest.
+        // Degenerate weights (all zero): every jurisdiction collected zero tax, so there is no
+        // collected-tax share to allocate against. Treat this identically to empty weights —
+        // do NOT attribute the reversal to any jurisdiction (assigning it to an arbitrary key
+        // would silently net a credit against a jurisdiction that collected no tax and hide the
+        // mismatch). Return empty so the caller leaves the reversal unattributed (GL drift).
         if (totalWeight.signum() == 0) {
-            K winner = weights.keySet().stream().min(K::compareTo).orElseThrow();
-            for (K key : weights.keySet()) {
-                result.put(key, winner.equals(key) ? target : zero());
-            }
             return result;
         }
 
@@ -101,9 +100,5 @@ final class TaxCreditAllocator {
             }
         }
         return winner;
-    }
-
-    private static BigDecimal zero() {
-        return BigDecimal.ZERO.setScale(CURRENCY_SCALE);
     }
 }

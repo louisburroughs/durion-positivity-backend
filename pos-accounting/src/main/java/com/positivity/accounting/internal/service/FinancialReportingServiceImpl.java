@@ -879,6 +879,20 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         }
 
         Map<JurisdictionKey, BigDecimal> allocated = TaxCreditAllocator.allocate(reversed, weights);
+        if (allocated.isEmpty()) {
+            // Weights are non-empty but every replicated tax row has zero tax_amount (e.g. a
+            // fully-exempt original invoice), so the allocator cannot split the reversal by
+            // collected-tax share. Like the no-rows case, leave it unattributed rather than net
+            // a credit against a jurisdiction that collected no tax — it surfaces as GL drift.
+            log.warn(
+                    "Credit memo {} reverses tax {} but its original invoice {} has replicated tax rows that all "
+                            + "carry zero tax_amount; reversal cannot be attributed to a jurisdiction and is left "
+                            + "unattributed (will appear as GL drift)",
+                    credit.getCreditMemoId(),
+                    reversed,
+                    credit.getOriginalInvoiceId());
+            return;
+        }
         for (Map.Entry<JurisdictionKey, BigDecimal> entry : allocated.entrySet()) {
             byJurisdiction.get(entry.getKey()).creditsNetted =
                     byJurisdiction.get(entry.getKey()).creditsNetted.add(entry.getValue());
