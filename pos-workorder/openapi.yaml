@@ -3620,12 +3620,24 @@ paths:
       tags:
       - Workorder Search
       summary: Search workorders
-      description: Paginated free-text search for workorders matching customer name or workorder id.
+      description: Paginated free-text search for workorders matching customer name or workorder id, optionally filtered by exact customer and/or vehicle.
       operationId: searchWorkorders
       parameters:
       - name: q
         in: query
         description: Free-text query matching customer name or workorder id (optional)
+        required: false
+        schema:
+          type: string
+      - name: customerId
+        in: query
+        description: Exact customer id filter, combinable with q (optional)
+        required: false
+        schema:
+          type: string
+      - name: vehicleId
+        in: query
+        description: Exact vehicle id filter, combinable with q (optional)
         required: false
         schema:
           type: string
@@ -6334,6 +6346,11 @@ components:
           type: string
           description: Currency UOM ID
           example: USD
+        taxPending:
+          type: boolean
+          default: false
+          description: Whether tax is pending because the tax service was unavailable at calculation time (degraded estimate; no rate invented). Cleared by a successful recalculation.
+          example: false
         status:
           type: string
           description: Estimate status
@@ -7327,6 +7344,10 @@ components:
           type: number
           description: Line total from estimate
           example: 130.0
+        photoEvidenceUrl:
+          type: string
+          description: URL of photo evidence attached to the part line
+          example: https://cdn.example.com/evidence/part-550e8400.jpg
       required:
       - id
     WorkorderServiceResponse:

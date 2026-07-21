@@ -10,9 +10,195 @@ servers:
 - url: http://localhost:8086
   description: Generated server url
 tags:
+- name: Tax Exemption Certificates
+  description: Registry of customer tax exemption certificates
 - name: Tax
   description: Tax calculation API
 paths:
+  /v1/tax/exemption-certificates/{id}:
+    get:
+      tags:
+      - Tax Exemption Certificates
+      summary: Get an exemption certificate
+      description: Fetch a single certificate by id
+      operationId: get
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Certificate found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExemptionCertificateResponse'
+        '404':
+          description: Certificate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExemptionCertificateResponse'
+      security:
+      - bearerAuth:
+        - tax:exemption:view
+      x-required-permissions:
+      - tax:exemption:view
+    put:
+      tags:
+      - Tax Exemption Certificates
+      summary: Update an exemption certificate
+      description: Update an existing certificate
+      operationId: update
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExemptionCertificateRequest'
+        required: true
+      responses:
+        '200':
+          description: Certificate updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExemptionCertificateResponse'
+        '404':
+          description: Certificate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExemptionCertificateResponse'
+      security:
+      - bearerAuth:
+        - tax:exemption:manage
+      x-required-permissions:
+      - tax:exemption:manage
+  /v1/tax/transactions/{referenceId}/void:
+    post:
+      tags:
+      - Tax
+      summary: Void tax document
+      description: Void the provider tax document when its invoice reverts to DRAFT (InvoiceStatus has no CANCELLED/VOIDED; void hooks the revert transition).
+      operationId: voidTransaction
+      parameters:
+      - name: referenceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Void recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxProviderTransactionResult'
+      security:
+      - bearerAuth:
+        - tax:commit
+      x-required-permissions:
+      - tax:commit
+  /v1/tax/transactions/{referenceId}/commit:
+    post:
+      tags:
+      - Tax
+      summary: Commit tax document
+      description: Commit the provider tax document for a finalized invoice. Idempotent; never blocks on provider outage (records PENDING_COMMIT for the re-commit job).
+      operationId: commit
+      parameters:
+      - name: referenceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: referenceType
+        in: query
+        required: false
+        schema:
+          type: string
+          default: INVOICE
+      responses:
+        '200':
+          description: Commit recorded (COMMITTED or PENDING_COMMIT)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxProviderTransactionResult'
+      security:
+      - bearerAuth:
+        - tax:commit
+      x-required-permissions:
+      - tax:commit
+  /v1/tax/exemption-certificates:
+    get:
+      tags:
+      - Tax Exemption Certificates
+      summary: List exemption certificates
+      description: List certificates, optionally by customer
+      operationId: list
+      parameters:
+      - name: customerId
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Certificates listed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExemptionCertificateResponse'
+      security:
+      - bearerAuth:
+        - tax:exemption:view
+      x-required-permissions:
+      - tax:exemption:view
+    post:
+      tags:
+      - Tax Exemption Certificates
+      summary: Create an exemption certificate
+      description: Register a new certificate
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExemptionCertificateRequest'
+        required: true
+      responses:
+        '201':
+          description: Certificate created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExemptionCertificateResponse'
+        '400':
+          description: Invalid certificate payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExemptionCertificateResponse'
+      security:
+      - bearerAuth:
+        - tax:exemption:manage
+      x-required-permissions:
+      - tax:exemption:manage
   /v1/tax/calculate:
     post:
       tags:
@@ -92,6 +278,156 @@ paths:
       - tax:mode:view
 components:
   schemas:
+    ExemptionCertificateRequest:
+      type: object
+      description: Create or update a tax exemption certificate
+      properties:
+        customerId:
+          type: string
+          description: Customer this certificate belongs to
+          example: CUST-100234
+          minLength: 1
+        stateScope:
+          type: string
+          description: State/region scope (subdivision code); null applies to all states
+          example: CA
+        reasonCode:
+          type: string
+          description: Exemption reason (RESALE, GOVERNMENT, NONPROFIT, AGRICULTURAL, OTHER)
+          enum:
+          - RESALE
+          - GOVERNMENT
+          - NONPROFIT
+          - AGRICULTURAL
+          - OTHER
+          example: RESALE
+        certificateNumber:
+          type: string
+          description: Optional external/paper certificate number
+          example: RESALE-2026-0001
+        effectiveFrom:
+          type: string
+          format: date
+          description: Inclusive date the certificate becomes effective
+          example: 2026-01-01
+        expiresAt:
+          type: string
+          format: date
+          description: Inclusive expiry date; null means no expiry
+          example: 2027-12-31
+        status:
+          type: string
+          description: Lifecycle status; defaults to ACTIVE when omitted on create
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - REVOKED
+          example: ACTIVE
+      required:
+      - customerId
+      - effectiveFrom
+      - reasonCode
+    ExemptionCertificateResponse:
+      type: object
+      description: A tax exemption certificate
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Certificate identifier
+          example: 018f0000-0000-7000-8000-0000000000aa
+        customerId:
+          type: string
+          description: Owning customer
+          example: CUST-100234
+        stateScope:
+          type: string
+          description: State/region scope; null = all states
+          example: CA
+        reasonCode:
+          type: string
+          description: Exemption reason
+          enum:
+          - RESALE
+          - GOVERNMENT
+          - NONPROFIT
+          - AGRICULTURAL
+          - OTHER
+          example: RESALE
+        certificateNumber:
+          type: string
+          description: External/paper certificate number
+          example: RESALE-2026-0001
+        effectiveFrom:
+          type: string
+          format: date
+          description: Inclusive effective date
+          example: 2026-01-01
+        expiresAt:
+          type: string
+          format: date
+          description: Inclusive expiry date; null = no expiry
+          example: 2027-12-31
+        status:
+          type: string
+          description: Lifecycle status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - REVOKED
+          example: ACTIVE
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last-modification timestamp
+    TaxProviderTransactionResult:
+      type: object
+      description: Outcome of a provider tax-document lifecycle call
+      properties:
+        referenceId:
+          type: string
+          format: uuid
+          description: Document code / idempotency key (source invoice id)
+        status:
+          type: string
+          description: Recorded lifecycle status
+          enum:
+          - PENDING_COMMIT
+          - COMMITTED
+          - VOIDED
+          - FAILED
+        externalTransactionId:
+          type: string
+          description: Provider transaction id when known; null in test mode
+        message:
+          type: string
+          description: Short human-readable outcome note
+      required:
+      - referenceId
+      - status
+    CustomerExemption:
+      type: object
+      description: Transaction-level exemption claim applying to all lines
+      properties:
+        reasonCode:
+          type: string
+          description: Exemption reason (RESALE, GOVERNMENT, NONPROFIT, AGRICULTURAL, OTHER)
+          enum:
+          - RESALE
+          - GOVERNMENT
+          - NONPROFIT
+          - AGRICULTURAL
+          - OTHER
+          example: GOVERNMENT
+        certificateId:
+          type: string
+          format: uuid
+          description: Optional exemption-certificate identifier backing the claim
+          example: 018f0000-0000-7000-8000-0000000000aa
     TaxAddress:
       type: object
       description: International destination address
@@ -166,6 +502,20 @@ components:
           type: string
           description: Optional customer identifier for exemption and tax profile lookups
           example: CUST-100234
+        customerExemption:
+          $ref: '#/components/schemas/CustomerExemption'
+        calculationType:
+          type: string
+          description: 'Calculation direction: SALE (default) or REFUND. REFUND amounts are positive and priced at the supplied transactionDate (the original sale date); callers negate at posting. Finalized-invoice credits must use the stored breakdown, not REFUND recompute.'
+          enum:
+          - SALE
+          - REFUND
+          example: SALE
+        originalReferenceId:
+          type: string
+          format: uuid
+          description: Optional reference to the original sale transaction being refunded
+          example: 550e8400-e29b-41d4-a716-446655440000
         transactionDate:
           type: string
           description: Optional transaction date/time in ISO 8601 format
@@ -186,15 +536,20 @@ components:
           - PURCHASE_ORDER
           - OTHER
           example: ESTIMATE
+        committable:
+          type: boolean
+          default: false
+          description: True when this calculation will be finalized (committed) rather than a throwaway estimate; requires referenceId to be present
+          example: false
         address:
           type: string
         countryCode:
           type: string
         postalCode:
           type: string
-        stateCode:
-          type: string
         city:
+          type: string
+        stateCode:
           type: string
       required:
       - destinationAddress
@@ -233,6 +588,21 @@ components:
           type: boolean
           description: Whether this item is tax-exempt
           example: false
+        exemptionReasonCode:
+          type: string
+          description: Optional certificate-backed exemption reason for this line (RESALE, GOVERNMENT, NONPROFIT, AGRICULTURAL, OTHER)
+          enum:
+          - RESALE
+          - GOVERNMENT
+          - NONPROFIT
+          - AGRICULTURAL
+          - OTHER
+          example: RESALE
+        exemptionCertificateId:
+          type: string
+          format: uuid
+          description: Optional exemption-certificate identifier backing this line's exemption claim
+          example: 018f0000-0000-7000-8000-0000000000aa
       required:
       - description
       - lineItemId
@@ -267,6 +637,20 @@ components:
           type: number
           description: Tax amount calculated for this jurisdiction on this line item
           example: 6.53
+        exempt:
+          type: boolean
+          description: Whether this is a zero-rate exempt row (rate is the would-be jurisdiction rate, amount is zero)
+          example: false
+        exemptionReasonCode:
+          type: string
+          description: Exemption reason echoed onto a zero-rate exempt row
+          enum:
+          - RESALE
+          - GOVERNMENT
+          - NONPROFIT
+          - AGRICULTURAL
+          - OTHER
+          example: RESALE
       required:
       - amount
       - code
@@ -295,7 +679,21 @@ components:
           example: 110.0
         taxExempt:
           type: boolean
-          description: Whether this line item is tax exempt
+          description: Whether this line item is tax exempt (resolved exemption produced zero-rate rows)
+          example: false
+        exemptionReasonCode:
+          type: string
+          description: Resolved exemption reason echoed onto this line (honored or denied)
+          enum:
+          - RESALE
+          - GOVERNMENT
+          - NONPROFIT
+          - AGRICULTURAL
+          - OTHER
+          example: RESALE
+        exemptionDenied:
+          type: boolean
+          description: Whether a claimed exemption was denied (unbacked by a valid certificate) and the line taxed anyway
           example: false
         jurisdictions:
           type: array
@@ -367,6 +765,17 @@ components:
           type: string
           description: External tax provider transaction identifier
           example: tx_9f0d2c
+        calculationType:
+          type: string
+          description: 'Calculation direction echoed from the request: SALE or REFUND. REFUND amounts are positive; callers negate at posting.'
+          enum:
+          - SALE
+          - REFUND
+          example: SALE
+        originalReferenceId:
+          type: string
+          format: uuid
+          description: Original sale reference echoed on REFUND calculations; null for SALE.
       required:
       - calculatedAt
       - effectiveTaxRate

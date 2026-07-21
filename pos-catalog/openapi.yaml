@@ -1782,8 +1782,7 @@ paths:
         description: When true, enrich each row with lifecycle state, effective instant, and active MSRP
         required: false
         schema:
-          type: boolean
-          default: false
+          type: string
       responses:
         '200':
           description: Search results
@@ -4006,42 +4005,48 @@ components:
           description: Manufacturer brand name
           example: AcmePro
         lifecycleState:
-          type: string
+          type:
+          - string
+          - 'null'
           description: Lifecycle state; only populated for detailed search
           enum:
           - ACTIVE
           - INACTIVE
           - DISCONTINUED
           example: ACTIVE
-          nullable: true
         lifecycleStateEffectiveAt:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
           description: UTC instant the current lifecycle state took effect; only populated for detailed search
-          example: '2026-01-15T09:30:00Z'
-          nullable: true
+          example: 2026-01-15 09:30:00+00:00
         msrpAmount:
-          type: string
+          type:
+          - string
+          - 'null'
           description: Active MSRP amount; null when the product has no active MSRP or for lean search
           example: '99.99'
-          nullable: true
         msrpCurrency:
-          type: string
+          type:
+          - string
+          - 'null'
           description: Active MSRP ISO 4217 currency code; null when no active MSRP or for lean search
           example: USD
-          nullable: true
         msrpEffectiveStartDate:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date
           description: Start of the active MSRP effective window; null when no active MSRP or for lean search
           example: 2026-01-15
-          nullable: true
         msrpEffectiveEndDate:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date
           description: End of the active MSRP effective window; null for open-ended, no active MSRP, or lean search
           example: 2026-12-31
-          nullable: true
     EffectiveLocationPriceResponseDto:
       type: object
       description: Effective location-specific price for a product

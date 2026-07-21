@@ -4704,7 +4704,7 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-01-01T00:00:00Z
+        example: 2026-01-01 00:00:00+00:00
       - name: endDate
         in: query
         description: End date in ISO 8601 format
@@ -4712,7 +4712,7 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-01-28T23:59:59Z
+        example: 2026-01-28 23:59:59+00:00
       responses:
         '200':
           description: Audit entries retrieved successfully
@@ -4756,7 +4756,7 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-01-01T00:00:00Z
+        example: 2026-01-01 00:00:00+00:00
       - name: endDate
         in: query
         description: End date in ISO 8601 format
@@ -4764,7 +4764,7 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-01-28T23:59:59Z
+        example: 2026-01-28 23:59:59+00:00
       responses:
         '200':
           description: Audit entries retrieved successfully
@@ -4947,7 +4947,7 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-01-01T00:00:00Z
+        example: 2026-01-01 00:00:00+00:00
       - name: endDate
         in: query
         description: End date in ISO 8601 format
@@ -4955,7 +4955,7 @@ paths:
         schema:
           type: string
           format: date-time
-        example: 2026-01-28T23:59:59Z
+        example: 2026-01-28 23:59:59+00:00
       responses:
         '200':
           description: Audit entries retrieved successfully
@@ -5173,7 +5173,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the rule set was created (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         createdBy:
           type: string
           description: Identifier of the user who created the rule set
@@ -5182,7 +5182,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the rule set was last modified (ISO 8601)
-          example: 2026-06-18T09:30:00Z
+          example: 2026-06-18 09:30:00+00:00
         modifiedBy:
           type: string
           description: Identifier of the user who last modified the rule set
@@ -5226,7 +5226,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the version was created (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         createdBy:
           type: string
           description: Identifier of the user who created the version
@@ -5235,7 +5235,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the version was last modified (ISO 8601)
-          example: 2026-06-18T09:30:00Z
+          example: 2026-06-18 09:30:00+00:00
         modifiedBy:
           type: string
           description: Identifier of the user who last modified the version
@@ -5293,7 +5293,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the posting category was created (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         createdBy:
           type: string
           description: Identifier of the user who created the posting category
@@ -5302,7 +5302,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the posting category was last modified (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         modifiedBy:
           type: string
           description: Identifier of the user who last modified the posting category
@@ -5359,7 +5359,7 @@ components:
         timestamp:
           type: string
           description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17T14:30:00Z
+          example: 2026-03-17 14:30:00+00:00
         correlationId:
           type: string
           description: Unique correlation ID for distributed request tracing
@@ -5461,7 +5461,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the mapping key was created (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         createdBy:
           type: string
           description: Identifier of the user who created the mapping key
@@ -5470,7 +5470,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the mapping key was last modified (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         modifiedBy:
           type: string
           description: Identifier of the user who last modified the mapping key
@@ -5492,7 +5492,7 @@ components:
           type: string
           format: date-time
           description: Journal transaction date and time
-          example: 2026-01-15T10:30:00Z
+          example: 2026-01-15 10:30:00
         description:
           type: string
           description: Journal entry description
@@ -5637,7 +5637,7 @@ components:
           type: string
           format: date-time
           description: Transaction date and time
-          example: 2026-01-15T10:30:00Z
+          example: 2026-01-15 10:30:00
         description:
           type: string
           description: Journal entry description
@@ -5688,7 +5688,7 @@ components:
           type: string
           format: date-time
           description: Created timestamp
-          example: 2026-01-15T10:31:00Z
+          example: 2026-01-15 10:31:00+00:00
         createdBy:
           type: string
           description: Created by username
@@ -5697,7 +5697,7 @@ components:
           type: string
           format: date-time
           description: Last modified timestamp
-          example: 2026-01-15T10:32:00Z
+          example: 2026-01-15 10:32:00+00:00
         modifiedBy:
           type: string
           description: Last modified by username
@@ -5706,7 +5706,7 @@ components:
           type: string
           format: date-time
           description: Posted timestamp
-          example: 2026-01-15T10:40:00Z
+          example: 2026-01-15 10:40:00+00:00
         postedBy:
           type: string
           description: Posted by username
@@ -5715,7 +5715,7 @@ components:
           type: string
           format: date-time
           description: Reversed timestamp
-          example: 2026-01-16T08:20:00Z
+          example: 2026-01-16 08:20:00+00:00
     GLAccountUpdateRequest:
       type: object
       description: Request payload for updating mutable GL account fields
@@ -5814,12 +5814,12 @@ components:
           type: string
           format: date-time
           description: Date the account becomes active
-          example: 2026-01-15T10:30:00Z
+          example: 2026-01-15 10:30:00
         deactivationDate:
           type: string
           format: date-time
           description: Date the account becomes inactive
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00
         status:
           type: string
           description: Derived account status (ACTIVE, INACTIVE, NOT_YET_ACTIVE)
@@ -5832,7 +5832,7 @@ components:
           type: string
           format: date-time
           description: Created timestamp
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         createdBy:
           type: string
           description: Created by username
@@ -5841,7 +5841,7 @@ components:
           type: string
           format: date-time
           description: Last modified timestamp
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         modifiedBy:
           type: string
           description: Last modified by username
@@ -5949,7 +5949,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the mapping was created (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         createdBy:
           type: string
           description: Identifier of the user who created the mapping
@@ -5958,7 +5958,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the mapping was last modified (ISO 8601)
-          example: 2026-06-18T09:00:00Z
+          example: 2026-06-18 09:00:00+00:00
         modifiedBy:
           type: string
           description: Identifier of the user who last modified the mapping
@@ -6000,7 +6000,7 @@ components:
           type: string
           format: date-time
           description: Date goods were received
-          example: 2026-01-15T10:30:00Z
+          example: 2026-01-15 10:30:00
         lineItems:
           type: array
           description: Line items received
@@ -6079,12 +6079,12 @@ components:
           type: string
           format: date-time
           description: Bill date
-          example: 2026-01-15T00:00:00Z
+          example: 2026-01-15 00:00:00
         dueDate:
           type: string
           format: date-time
           description: Due date
-          example: 2026-02-14T00:00:00Z
+          example: 2026-02-14 00:00:00
         totalAmount:
           type: number
           description: Total bill amount
@@ -6123,7 +6123,7 @@ components:
           type: string
           format: date-time
           description: Created timestamp
-          example: 2026-01-15T10:30:00Z
+          example: 2026-01-15 10:30:00+00:00
         createdBy:
           type: string
           description: Created by user
@@ -6225,12 +6225,12 @@ components:
           type: string
           format: date-time
           description: Invoice date
-          example: 2026-01-16T00:00:00Z
+          example: 2026-01-16 00:00:00
         dueDate:
           type: string
           format: date-time
           description: Invoice due date
-          example: 2026-02-15T00:00:00Z
+          example: 2026-02-15 00:00:00
         lineItems:
           type: array
           description: Invoice line items
@@ -6423,12 +6423,12 @@ components:
           type: string
           format: date-time
           description: ISO-8601 timestamp when the export was requested
-          example: 2026-04-25T10:00:00Z
+          example: 2026-04-25 10:00:00+00:00
         completedAt:
           type: string
           format: date-time
           description: ISO-8601 timestamp when export completed (null if not finished)
-          example: 2026-04-25T10:00:05Z
+          example: 2026-04-25 10:00:05+00:00
         downloadUrl:
           type: string
           description: Download URL (only present when status is COMPLETED)
@@ -6910,7 +6910,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the credit was created (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
     PaymentApplicationResponse:
       type: object
       description: Result of applying a payment to one or more invoices
@@ -6952,7 +6952,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the payment was applied (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         applicationRequestId:
           type: string
           description: Idempotency key echoed from the application request
@@ -6982,12 +6982,12 @@ components:
           type: string
           format: date-time
           description: Inclusive start of the mapping's temporal validity
-          example: 2026-01-15T10:30:00Z
+          example: 2026-01-15 10:30:00
         effectiveEndDate:
           type: string
           format: date-time
           description: Exclusive end of the mapping's temporal validity (open-ended when null)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00
         dimensions:
           type: object
           additionalProperties:
@@ -7042,12 +7042,12 @@ components:
           type: string
           format: date-time
           description: Inclusive start of the mapping's temporal validity
-          example: 2026-01-15T10:30:00Z
+          example: 2026-01-15 10:30:00
         effectiveEndDate:
           type: string
           format: date-time
           description: Exclusive end of the mapping's temporal validity (open-ended when null)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00
         dimensions:
           type: object
           additionalProperties:
@@ -7064,7 +7064,7 @@ components:
           type: string
           format: date-time
           description: Created timestamp
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         createdBy:
           type: string
           description: Created by username
@@ -7089,7 +7089,7 @@ components:
           type: string
           format: date-time
           description: Transaction date used for temporal mapping resolution
-          example: 2026-01-15T10:30:00Z
+          example: 2026-01-15 10:30:00
       required:
       - externalCode
       - sourceSystem
@@ -7387,7 +7387,7 @@ components:
           type: string
           format: date-time
           description: Creation timestamp (UTC).
-          example: 2026-02-27T12:00:00Z
+          example: 2026-02-27 12:00:00+00:00
       required:
       - createdAt
       - invoiceId
@@ -7456,7 +7456,7 @@ components:
           type: string
           format: date-time
           description: Date and time the account becomes active (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00
       required:
       - accountCode
       - accountName
@@ -7514,14 +7514,14 @@ components:
           type: string
           format: date-time
           description: When the export was requested (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         completedAt:
           type:
           - string
           - 'null'
           format: date-time
           description: When the export completed (ISO 8601)
-          example: 2026-06-18T08:05:00Z
+          example: 2026-06-18 08:05:00+00:00
         downloadUrl:
           type:
           - string
@@ -7568,7 +7568,7 @@ components:
           type: string
           format: date-time
           description: Event transaction timestamp. If omitted, defaults to current time.
-          example: 2026-01-15T10:30:00Z
+          example: 2026-01-15 10:30:00
         payload:
           type: object
           description: Event-specific payload content
@@ -7602,7 +7602,7 @@ components:
           type: string
           format: date-time
           description: Business transaction timestamp
-          example: 2026-06-18T10:30:00Z
+          example: 2026-06-18 10:30:00
         payload:
           type: object
           description: Event-specific payload content
@@ -7629,12 +7629,12 @@ components:
           type: string
           format: date-time
           description: Timestamp when the event was received (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         processedAt:
           type: string
           format: date-time
           description: Timestamp when the event was processed (ISO 8601)
-          example: 2026-06-18T08:00:05Z
+          example: 2026-06-18 08:00:05+00:00
         sequenceNumber:
           type: integer
           format: int64
@@ -7790,12 +7790,12 @@ components:
           type: string
           format: date-time
           description: Timestamp when the credit memo was created (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         postedTimestamp:
           type: string
           format: date-time
           description: Timestamp when the credit memo was posted (ISO 8601)
-          example: 2026-06-18T09:00:00Z
+          example: 2026-06-18 09:00:00+00:00
         createdByUserId:
           type: string
           description: Identifier of the user who created the credit memo
@@ -7906,7 +7906,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the audit event occurred (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         reason:
           type: string
           description: Reason captured for the action
@@ -8294,7 +8294,7 @@ components:
           type: string
           format: date-time
           description: Gateway response timestamp
-          example: 2026-02-09T10:30:00Z
+          example: 2026-02-09 10:30:00+00:00
         glJournalEntryId:
           type: string
           format: uuid
@@ -8304,7 +8304,7 @@ components:
           type: string
           format: date-time
           description: GL posting timestamp
-          example: 2026-02-09T10:31:00Z
+          example: 2026-02-09 10:31:00+00:00
         glPostError:
           type: string
           description: GL posting error message (if failed)
@@ -8322,7 +8322,7 @@ components:
           type: string
           format: date-time
           description: Payment created timestamp
-          example: 2026-02-09T10:29:00Z
+          example: 2026-02-09 10:29:00+00:00
         createdBy:
           type: string
           description: User who initiated payment
@@ -8430,7 +8430,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the candidate record was created (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
       required:
       - candidateId
       - invoiceEventId
@@ -8586,7 +8586,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the report was generated (ISO 8601)
-          example: 2026-06-30T08:00:00Z
+          example: 2026-06-30 08:00:00+00:00
         rows:
           type: array
           description: Per-account trial balance rows ordered by account number; empty when no POSTED data exists
@@ -8700,7 +8700,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the report was generated (ISO 8601)
-          example: 2026-06-30T08:00:00Z
+          example: 2026-06-30 08:00:00+00:00
         rows:
           type: array
           description: Per-jurisdiction rows ordered by level (state/county/city/special) then code; empty when no in-period tax exists
@@ -8807,7 +8807,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the report was generated
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         lineItems:
           type: object
           additionalProperties:
@@ -8945,7 +8945,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the report was generated (ISO 8601)
-          example: 2026-06-30T08:00:00Z
+          example: 2026-06-30 08:00:00+00:00
         accounts:
           type: array
           description: Per-account sections ordered by account number; empty when no POSTED activity exists
@@ -9042,7 +9042,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the report was generated (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         lineItems:
           type: object
           additionalProperties:
@@ -9085,7 +9085,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the report was generated (ISO 8601)
-          example: 2026-06-30T08:00:00Z
+          example: 2026-06-30 08:00:00+00:00
         rows:
           type: array
           description: Per-customer aging rows ordered by customer name; empty when no open receivables exist
@@ -9181,7 +9181,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the report was generated (ISO 8601)
-          example: 2026-06-30T08:00:00Z
+          example: 2026-06-30 08:00:00+00:00
         rows:
           type: array
           description: Per-vendor aging rows ordered by vendor name; empty when no open payables exist
@@ -9651,7 +9651,7 @@ components:
           type: string
           format: date-time
           description: Last updated timestamp
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
       required:
       - invoiceId
       - status
@@ -9768,7 +9768,7 @@ components:
           type: string
           format: date-time
           description: Point in time the balance is computed as of (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
       required:
       - asOfDate
       - balance
@@ -9855,7 +9855,7 @@ components:
           type: string
           format: date-time
           description: Timestamp when the reprocessing was attempted (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         triggeredByUserId:
           type: string
           description: Identifier of the user who triggered the attempt
@@ -9891,7 +9891,7 @@ components:
           type: string
           format: date-time
           description: When this log entry was created (ISO 8601)
-          example: 2026-06-18T08:00:00Z
+          example: 2026-06-18 08:00:00+00:00
         severity:
           type: string
           description: 'Severity level: INFO, WARN, or ERROR'
@@ -10092,12 +10092,12 @@ components:
           type: string
           format: date-time
           description: Bill date
-          example: 2026-01-15T00:00:00Z
+          example: 2026-01-15 00:00:00
         dueDate:
           type: string
           format: date-time
           description: Due date
-          example: 2026-02-14T00:00:00Z
+          example: 2026-02-14 00:00:00
         totalAmount:
           type: number
           description: Total bill amount

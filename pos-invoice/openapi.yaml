@@ -96,6 +96,36 @@ paths:
         - invoice:billing-rules
       x-required-permissions:
       - invoice:billing-rules
+  /v1/refunds:
+    post:
+      tags:
+      - StandaloneRefund
+      summary: Record standalone refund for a customer party
+      description: Record a refund anchored to a customer party when no invoice exists in the system; the disbursement itself happens out of band
+      operationId: refundPartyStandalone
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartyStandaloneRefundRequest'
+        required: true
+      responses:
+        '201':
+          description: Refund recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundPaymentResponse'
+        '400':
+          description: Missing party anchor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundPaymentResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/invoices:
     post:
       tags:
@@ -154,6 +184,83 @@ paths:
       x-required-permissions:
       - invoice:manage
       - invoice:finalize
+  /v1/invoices/{invoiceId}/refunds:
+    get:
+      tags:
+      - PaymentReversal
+      summary: List refunds for an invoice
+      description: Return every refund record anchored to the invoice — payment-intent refunds whose intent belongs to the invoice and standalone invoice-anchored refunds alike — for warranty settlement reconciliation
+      operationId: listRefunds
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Refund records returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvoiceRefundResponse'
+        '404':
+          description: Invoice not found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvoiceRefundResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - invoice:manage
+    post:
+      tags:
+      - StandaloneRefund
+      summary: Record standalone refund for an invoice
+      description: Record a refund against an invoice whose original payment is not in the system; the disbursement itself happens out of band
+      operationId: refundInvoiceStandalone
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StandaloneRefundRequest'
+        required: true
+      responses:
+        '201':
+          description: Refund recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundPaymentResponse'
+        '404':
+          description: Invoice not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundPaymentResponse'
+        '422':
+          description: Insufficient refundable amount
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundPaymentResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/invoices/{invoiceId}/receipts:
     post:
       tags:
@@ -911,6 +1018,117 @@ components:
       - updatedAt
       - updatedBy
       - version
+    PartyStandaloneRefundRequest:
+      type: object
+      description: Request to record a standalone refund anchored to a customer party
+      properties:
+        partyId:
+          type: string
+          description: Customer party the refund is anchored to
+          example: party-000123
+          maxLength: 64
+          minLength: 0
+        amount:
+          type: number
+          description: Amount to refund
+          example: 25.0
+        reason:
+          type: string
+          description: Reason the refund is being issued
+          enum:
+          - CUSTOMER_RETURN
+          - SERVICE_ERROR
+          - OVERCHARGE
+          - DAMAGED_GOODS
+          - GOODWILL
+          - CHARGEBACK_AVOIDANCE
+          - FRAUD_PREVENTION
+          - MANAGER_DISCRETION
+          - OTHER
+          example: CUSTOMER_RETURN
+        notes:
+          type: string
+          description: Optional free-text notes explaining the refund
+          example: Vendor-paid warranty settlement, no invoice on file
+        externalReference:
+          type: string
+          description: Optional correlation id to an external record (e.g. a warranty claim settlement)
+          example: WC-2026-000042
+          maxLength: 64
+          minLength: 0
+      required:
+      - amount
+      - partyId
+      - reason
+    RefundPaymentResponse:
+      type: object
+      description: Result of processing a refund against an invoice payment
+      properties:
+        refundId:
+          type: string
+          format: uuid
+          description: Unique identifier of the refund
+          example: 01960003-0000-7000-8000-000000000070
+        invoiceId:
+          type: string
+          format: uuid
+          description: Identifier of the invoice being refunded; absent for party-anchored standalone refunds
+          example: 01960003-0000-7000-8000-000000000040
+        paymentIntentId:
+          type: string
+          format: uuid
+          description: Identifier of the originating payment intent; absent for standalone refunds
+          example: 01960003-0000-7000-8000-000000000020
+        partyId:
+          type: string
+          description: Customer party associated with the refund — the anchor for standalone refunds, derived from the invoice for invoice- and payment-anchored refunds
+          example: party-000123
+        amount:
+          type: number
+          description: Refunded amount
+          example: 50.0
+        reason:
+          type: string
+          description: Reason for the refund
+          enum:
+          - CUSTOMER_RETURN
+          - SERVICE_ERROR
+          - OVERCHARGE
+          - DAMAGED_GOODS
+          - GOODWILL
+          - CHARGEBACK_AVOIDANCE
+          - FRAUD_PREVENTION
+          - MANAGER_DISCRETION
+          - OTHER
+          example: CUSTOMER_REQUEST
+        notes:
+          type: string
+          description: Free-text notes accompanying the refund
+          example: Partial refund for unused service
+        status:
+          type: string
+          description: Current status of the refund
+          enum:
+          - PENDING
+          - COMPLETED
+          - FAILED
+          example: COMPLETED
+        gatewayReference:
+          type: string
+          description: Gateway reference identifier for the refund
+          example: re_3NXyZ2eZvKYlo2Ca
+        externalReference:
+          type: string
+          description: Optional correlation id to an external record (e.g. a warranty claim settlement)
+          example: WC-2026-000042
+        completedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the refund completed
+          example: 2026-01-17 10:15:00+00:00
+      required:
+      - refundId
+      - status
     InvoiceCreationRequest:
       type: object
       description: Internal service payload for creating invoice drafts.
@@ -1232,6 +1450,41 @@ components:
           type: string
           description: Line item type (e.g. PART, LABOR, FEE, TAX)
           example: LABOR
+    StandaloneRefundRequest:
+      type: object
+      description: Request to record a standalone refund against an invoice
+      properties:
+        amount:
+          type: number
+          description: Amount to refund
+          example: 25.0
+        reason:
+          type: string
+          description: Reason the refund is being issued
+          enum:
+          - CUSTOMER_RETURN
+          - SERVICE_ERROR
+          - OVERCHARGE
+          - DAMAGED_GOODS
+          - GOODWILL
+          - CHARGEBACK_AVOIDANCE
+          - FRAUD_PREVENTION
+          - MANAGER_DISCRETION
+          - OTHER
+          example: CUSTOMER_RETURN
+        notes:
+          type: string
+          description: Optional free-text notes explaining the refund
+          example: Walk-in warranty claim on a predecessor-system cash sale
+        externalReference:
+          type: string
+          description: Optional correlation id to an external record (e.g. a warranty claim settlement)
+          example: WC-2026-000042
+          maxLength: 64
+          minLength: 0
+      required:
+      - amount
+      - reason
     GenerateReceiptRequest:
       type: object
       description: Request to generate a receipt for an invoice payment
@@ -1457,72 +1710,6 @@ components:
       required:
       - amount
       - reason
-    RefundPaymentResponse:
-      type: object
-      description: Result of processing a refund against an invoice payment
-      properties:
-        refundId:
-          type: string
-          format: uuid
-          description: Unique identifier of the refund
-          example: 01960003-0000-7000-8000-000000000070
-        invoiceId:
-          type: string
-          format: uuid
-          description: Identifier of the invoice being refunded
-          example: 01960003-0000-7000-8000-000000000040
-        paymentIntentId:
-          type: string
-          format: uuid
-          description: Identifier of the originating payment intent
-          example: 01960003-0000-7000-8000-000000000020
-        amount:
-          type: number
-          description: Refunded amount
-          example: 50.0
-        reason:
-          type: string
-          description: Reason for the refund
-          enum:
-          - CUSTOMER_RETURN
-          - SERVICE_ERROR
-          - OVERCHARGE
-          - DAMAGED_GOODS
-          - GOODWILL
-          - CHARGEBACK_AVOIDANCE
-          - FRAUD_PREVENTION
-          - MANAGER_DISCRETION
-          - OTHER
-          example: CUSTOMER_REQUEST
-        notes:
-          type: string
-          description: Free-text notes accompanying the refund
-          example: Partial refund for unused service
-        status:
-          type: string
-          description: Current status of the refund
-          enum:
-          - PENDING
-          - COMPLETED
-          - FAILED
-          example: COMPLETED
-        gatewayReference:
-          type: string
-          description: Gateway reference identifier for the refund
-          example: re_3NXyZ2eZvKYlo2Ca
-        externalReference:
-          type: string
-          description: Optional correlation id to an external record (e.g. a warranty claim settlement)
-          example: WC-2026-000042
-        completedAt:
-          type: string
-          format: date-time
-          description: Timestamp when the refund completed
-          example: 2026-01-17 10:15:00+00:00
-      required:
-      - invoiceId
-      - refundId
-      - status
     CaptureAmountRequest:
       type: object
       description: Request to capture all or part of an authorized payment hold
@@ -1632,6 +1819,45 @@ components:
       required:
       - elevationToken
       - expiresAt
+    InvoiceRefundResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        paymentIntentId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        status:
+          type: string
+          enum:
+          - PENDING
+          - COMPLETED
+          - FAILED
+        reason:
+          type: string
+          enum:
+          - CUSTOMER_RETURN
+          - SERVICE_ERROR
+          - OVERCHARGE
+          - DAMAGED_GOODS
+          - GOODWILL
+          - CHARGEBACK_AVOIDANCE
+          - FRAUD_PREVENTION
+          - MANAGER_DISCRETION
+          - OTHER
+        externalReference:
+          type: string
+        gatewayReference:
+          type: string
+        requestedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
     InvoiceArtifact:
       type: object
       description: A downloadable document associated with an invoice

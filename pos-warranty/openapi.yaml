@@ -1263,6 +1263,26 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - warranty:claim:cancel
+  /v1/warranty/settlements/reconciliation:
+    get:
+      tags:
+      - Warranty Settlements
+      summary: Reconcile FAILED settlements against pos-invoice
+      description: 'Read-only worklist (issue #922): every FAILED adjustment/refund settlement checked against pos-invoice by its externalReference (the settlement id). Rows with committedOnInvoice=true are the double-pay risk — pos-invoice committed the money write even though warranty recorded the settlement as FAILED. Rows with checkStatus=UNKNOWN could not be verified (pos-invoice unreachable) and should be re-checked.'
+      operationId: reconcileSettlements
+      responses:
+        '200':
+          description: Reconciliation worklist.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SettlementReconciliationRow'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - warranty:claim:settle
   /v1/warranty/reimbursements:
     get:
       tags:
@@ -1793,6 +1813,9 @@ components:
         transferable:
           type: boolean
           description: Coverage survives vehicle/owner change; defaults to false
+        autoRegister:
+          type: boolean
+          description: Auto-create a registration when a listed product is sold (invoiced workorder); only effective with appliesToType=PRODUCT_LIST; defaults to false
         termsText:
           type: string
           description: Human-readable fine print
@@ -1879,6 +1902,8 @@ components:
         requiresPhotoEvidence:
           type: boolean
         transferable:
+          type: boolean
+        autoRegister:
           type: boolean
         termsText:
           type: string
@@ -2850,6 +2875,63 @@ components:
           description: Reason recorded in the claim status history
           maxLength: 10000
           minLength: 0
+    SettlementReconciliationRow:
+      type: object
+      description: FAILED settlement reconciled against pos-invoice — the double-pay-risk worklist
+      properties:
+        settlementId:
+          type: string
+          format: uuid
+        claimId:
+          type: string
+          format: uuid
+        settlementType:
+          type: string
+          enum:
+          - REPLACEMENT_WORKORDER
+          - INVOICE_CREDIT
+          - REFUND
+          - PRORATED_CREDIT
+          - GOODWILL
+          - NO_ACTION
+        settlementStatus:
+          type: string
+          description: Always FAILED in this worklist
+          enum:
+          - PENDING
+          - COMPLETED
+          - FAILED
+        invoiceId:
+          type: string
+          format: uuid
+        externalReference:
+          type: string
+          description: Idempotency key warranty sent to pos-invoice (the settlement id)
+        committedOnInvoice:
+          type: boolean
+          description: Whether pos-invoice committed the write; null when checkStatus is UNKNOWN
+        matchedAdjustmentId:
+          type: string
+          format: uuid
+        matchedRefundId:
+          type: string
+          format: uuid
+        checkStatus:
+          type: string
+          enum:
+          - CONFIRMED_COMMITTED
+          - CONFIRMED_ABSENT
+          - UNKNOWN
+        coveredAmount:
+          type: number
+        customerAmount:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     Pageable:
       type: object
       properties:
@@ -2959,14 +3041,14 @@ components:
           format: int64
         paged:
           type: boolean
+        sort:
+          $ref: '#/components/schemas/SortObject'
         pageNumber:
           type: integer
           format: int32
         pageSize:
           type: integer
           format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
     SortObject:
