@@ -33,6 +33,7 @@ import org.slf4j.MDC;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.StreamingChatModel;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -81,7 +82,7 @@ public class StreamingSessionAgentManager
     private final int rateLimitPerSession;
 
     public StreamingSessionAgentManager(
-            @NonNull StreamingChatModel streamingChatModel,
+            @Qualifier("streamingChatModel") @NonNull StreamingChatModel streamingChatModel,
             @NonNull MasterAgentRegistry toolRegistry,
             @NonNull SharedOrchestrationSupport sharedOrchestrationSupport,
             @NonNull ToolSelectionEngine toolSelectionEngine,
