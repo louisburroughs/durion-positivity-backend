@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 24")
+    @DisplayName("CATALOG_VERSION is 26")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(24);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(26);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 385")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 388")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1208,8 +1208,13 @@ class SecurityGatewayConfigTest {
         // catalog v24 (#963/wave-4): settlement reconciliation authorities appended (bits 384-385)
         assertThat(GatewayPermissionCatalog.authorityForBit(384)).isEqualTo("PERM_accounting:reconciliation:adjust");
         assertThat(GatewayPermissionCatalog.authorityForBit(385)).isEqualTo("PERM_accounting:reconciliation:view");
+        // catalog v25 (#981/wave-2): tax exemption authorities appended (bits 386-387)
+        assertThat(GatewayPermissionCatalog.authorityForBit(386)).isEqualTo("PERM_tax:exemption:manage");
+        assertThat(GatewayPermissionCatalog.authorityForBit(387)).isEqualTo("PERM_tax:exemption:view");
+        // catalog v26 (#983/wave-4): tax provider commit authority appended (bit 388)
+        assertThat(GatewayPermissionCatalog.authorityForBit(388)).isEqualTo("PERM_tax:commit");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(386)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(389)).isNull();
     }
 
     @Test

@@ -6265,11 +6265,6 @@ components:
           type: string
           description: Optional currency code; defaults when omitted
           example: USD
-        taxRegionId:
-          type: string
-          format: uuid
-          description: Optional tax region identifier; defaults when omitted
-          example: 01960003-0000-7000-8000-000000000004
         subtotal:
           type: number
           description: Optional subtotal amount before tax
@@ -6339,11 +6334,6 @@ components:
           type: string
           description: Currency UOM ID
           example: USD
-        taxRegionId:
-          type: string
-          format: uuid
-          description: Tax region ID
-          example: 550e8400-e29b-41d4-a716-446655440004
         status:
           type: string
           description: Estimate status

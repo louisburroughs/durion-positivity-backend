@@ -51,10 +51,11 @@ public class EstimateResponse {
     private String currencyUomId;
 
     @Schema(
-            description = "Tax region ID",
-            example = "550e8400-e29b-41d4-a716-446655440004",
+            description = "Whether tax is pending because the tax service was unavailable at calculation time"
+                    + " (degraded estimate; no rate invented). Cleared by a successful recalculation.",
+            example = "false",
             requiredMode = NOT_REQUIRED)
-    private UUID taxRegionId;
+    private boolean taxPending;
 
     @Schema(description = "Estimate status", example = "DRAFT", requiredMode = REQUIRED)
     @NotNull
@@ -167,7 +168,7 @@ public class EstimateResponse {
                 .vehicleId(entity.getVehicleId())
                 .locationId(entity.getLocationId())
                 .currencyUomId(entity.getCurrencyUomId())
-                .taxRegionId(entity.getTaxRegionId())
+                .taxPending(entity.isTaxPending())
                 .status(entity.getStatus() != null ? entity.getStatus().name() : null)
                 .createdByUserId(entity.getCreatedByUserId())
                 .createdAt(entity.getCreatedAt() != null ? entity.getCreatedAt().truncatedTo(ChronoUnit.MILLIS) : null)

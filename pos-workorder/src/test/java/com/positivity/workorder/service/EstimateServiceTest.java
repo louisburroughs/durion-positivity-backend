@@ -61,6 +61,15 @@ class EstimateServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private com.positivity.workorder.internal.repository.EstimateItemRepository estimateItemRepository;
+
+    @Mock
+    private com.positivity.workorder.internal.service.LocationReferenceService locationReferenceService;
+
+    @Mock
+    private com.positivity.workorder.internal.repository.WorkorderRepository workOrderRepository;
+
     @InjectMocks
     private EstimateServiceImpl estimateService;
 
@@ -99,6 +108,49 @@ class EstimateServiceTest {
                 .thenReturn(java.util.Optional.of(UUID.fromString("01960003-0000-7000-8000-000000000001")));
     }
 
+    /**
+     * Story T9 / decision D-T5: when the tax service is unavailable the estimate is
+     * flagged {@code taxPending} and continues — no fallback rate is invented, tax stays at
+     * zero, and testMode is NOT silently flipped (the old FALLBACK_TAX_RATE=8.25% bug).
+     */
+    @Test
+    void calculateEstimateTaxesAndTotals_taxServiceDown_flagsTaxPendingWithoutInventingRate() {
+        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-4466554400f1");
+        Estimate estimate = Estimate.builder()
+                .id(estimateId)
+                .status(EstimateStatus.DRAFT)
+                .customerId(UUID.fromString("550e8400-e29b-41d4-a716-4466554400f2"))
+                .locationId(UUID.fromString("550e8400-e29b-41d4-a716-4466554400f3"))
+                .build();
+        when(estimateRepository.findById(estimateId)).thenReturn(java.util.Optional.of(estimate));
+
+        com.positivity.workorder.internal.entity.EstimateItem item =
+                com.positivity.workorder.internal.entity.EstimateItem.builder()
+                        .id(UUID.fromString("550e8400-e29b-41d4-a716-4466554400f4"))
+                        .itemType(com.positivity.workorder.internal.entity.EstimateItemType.PART)
+                        .quantity(new java.math.BigDecimal("2"))
+                        .unitPrice(new java.math.BigDecimal("100.00"))
+                        .build();
+        when(estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId))
+                .thenReturn(List.of(item));
+        when(locationReferenceService.resolveTaxAddress(any()))
+                .thenReturn(com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress.builder()
+                        .countryCode("US")
+                        .regionCode("CA")
+                        .postalCode("90001")
+                        .build());
+        when(taxClient.calculateTax(any())).thenThrow(new RuntimeException("tax service unavailable"));
+        when(workOrderRepository.findAllByEstimate_Id(any())).thenReturn(List.of());
+        when(estimateRepository.save(any(Estimate.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        EstimateResponse result = estimateService.calculateEstimateTaxesAndTotals(estimateId, "advisor");
+
+        assertTrue(result.isTaxPending(), "estimate must be flagged taxPending when tax service is down");
+        assertEquals(0, new java.math.BigDecimal("200.00").compareTo(result.getSubtotal()));
+        assertEquals(
+                0, java.math.BigDecimal.ZERO.compareTo(result.getTaxAmount()), "no fallback tax rate may be invented");
+    }
+
     @Test
     void testCreateEstimate_Success() {
         // Given
@@ -110,7 +162,6 @@ class EstimateServiceTest {
                 .vehicleId(UUID.fromString("550e8400-e29b-41d4-a716-446655440012"))
                 .locationId(UUID.fromString("550e8400-e29b-41d4-a716-446655440013"))
                 .currencyUomId("USD")
-                .taxRegionId(UUID.fromString("550e8400-e29b-41d4-a716-446655440014"))
                 .status(EstimateStatus.DRAFT)
                 .createdByUserId(testUserId.toString())
                 .createdAt(Instant.now(TEST_CLOCK))
@@ -186,7 +237,6 @@ class EstimateServiceTest {
         assertNotNull(result);
         assertEquals("USD", result.getCurrencyUomId(), "Should use default currency");
         assertNotNull(result.getLocationId(), "Should have default location");
-        assertNotNull(result.getTaxRegionId(), "Should have default tax region");
     }
 
     @Test

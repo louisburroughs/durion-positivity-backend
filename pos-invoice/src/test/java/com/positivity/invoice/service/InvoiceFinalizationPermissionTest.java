@@ -75,6 +75,9 @@ class InvoiceFinalizationPermissionTest {
     @Mock
     private com.positivity.invoice.internal.config.InvoiceEventPublisher invoiceEventPublisher;
 
+    @Mock
+    private com.positivity.invoice.internal.client.TaxLifecycleClient taxLifecycleClient;
+
     @InjectMocks
     private InvoiceFinalizationServiceImpl service;
 

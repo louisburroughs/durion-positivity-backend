@@ -62,8 +62,23 @@ class InvoiceServiceImplTest {
     @Mock
     private com.positivity.invoice.internal.config.InvoiceEventPublisher invoiceEventPublisher;
 
+    @Mock
+    private InvoiceTaxBreakdownWriter taxBreakdownWriter;
+
     @InjectMocks
     private InvoiceServiceImpl invoiceService;
+
+    private static com.positivity.tax.common.dto.TaxCalculationResponse taxResponse(double totalTax) {
+        return com.positivity.tax.common.dto.TaxCalculationResponse.builder()
+                .subtotal(BigDecimal.ZERO)
+                .totalTax(BigDecimal.valueOf(totalTax))
+                .total(BigDecimal.valueOf(totalTax))
+                .effectiveTaxRate(BigDecimal.ZERO)
+                .jurisdictions(List.of())
+                .lineItemTaxes(List.of())
+                .calculatedAt(Instant.parse("2024-01-01T00:00:00Z"))
+                .build();
+    }
 
     private Invoice draftInvoice;
     private UUID invoiceId;
@@ -225,7 +240,7 @@ class InvoiceServiceImplTest {
 
         when(invoiceRepository.findByWorkorderId(workorderId)).thenReturn(Optional.empty());
         when(locationReferenceService.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
-        when(taxServiceClient.calculateTax(any(), any(), any())).thenReturn(BigDecimal.valueOf(5));
+        when(taxServiceClient.calculateTaxDetailed(any(), any(), any())).thenReturn(taxResponse(5));
         when(invoiceRepository.save(any())).thenReturn(draftInvoice);
 
         InvoiceGenerationResponse response = invoiceService.createInvoice(request);
@@ -435,7 +450,7 @@ class InvoiceServiceImplTest {
 
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
         when(locationReferenceService.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
-        when(taxServiceClient.calculateTax(any(), any(), any())).thenReturn(BigDecimal.valueOf(8));
+        when(taxServiceClient.calculateTaxDetailed(any(), any(), any())).thenReturn(taxResponse(8));
         when(invoiceRepository.save(any())).thenReturn(draftInvoice);
 
         InvoiceDetailsResponse result = invoiceService.applyAdjustment(invoiceId, request);

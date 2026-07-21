@@ -9,6 +9,7 @@ import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.internal.config.TaxProperties;
+import com.positivity.tax.internal.service.ExemptionResolver;
 import com.positivity.tax.internal.service.ExternalTaxServiceClient;
 import com.positivity.tax.internal.service.TaxCalculationServiceImpl;
 import com.positivity.tax.internal.service.TestModeTaxCalculator;
@@ -54,8 +55,18 @@ class TaxCalculationServiceTest {
         testMode.setDefaultRates(rates);
         properties.setTestMode(testMode);
 
-        TestModeTaxCalculator testCalculator = new TestModeTaxCalculator(properties, FIXED_CLOCK);
-        service = new TaxCalculationServiceImpl(properties, testCalculator, externalClient);
+        TestModeTaxCalculator testCalculator = new TestModeTaxCalculator(
+                properties,
+                FIXED_CLOCK,
+                new ExemptionResolver(
+                        (customerId, certificateId, stateScope, reason, date) -> java.util.Optional.empty()));
+        com.positivity.tax.internal.service.TaxProviderSelector selector =
+                new com.positivity.tax.internal.service.TaxProviderSelector(
+                        properties,
+                        new com.positivity.tax.internal.service.TestModeTaxProvider(testCalculator),
+                        new com.positivity.tax.internal.service.ExternalTaxProvider(externalClient),
+                        mock(com.positivity.tax.internal.service.AvalaraTaxProvider.class));
+        service = new TaxCalculationServiceImpl(properties, selector);
     }
 
     @Test

@@ -21,9 +21,24 @@ public final class EventTypes {
      * @return list of event type registrations
      */
     public static List<EventTypeRegistration> all() {
-        return List.of(EventTypeRegistration.write("TAX_CALCULATE", "Calculate tax for line items")
-                .description(
-                        "Calculates tax based on line items and location. Routes to external service in production or test calculator in test mode.")
-                .build());
+        return List.of(
+                EventTypeRegistration.write("TAX_CALCULATE", "Calculate tax for line items")
+                        .description(
+                                "Calculates tax based on line items and location. Routes to external service in production or test calculator in test mode.")
+                        .build(),
+                EventTypeRegistration.approval("TAX_EXEMPTION_CERT_CREATE", "Create tax exemption certificate")
+                        .description(
+                                "Registers a customer tax exemption certificate in the pos-tax exemption registry.")
+                        .build(),
+                EventTypeRegistration.approval("TAX_EXEMPTION_CERT_UPDATE", "Update tax exemption certificate")
+                        .description("Updates a customer tax exemption certificate in the pos-tax exemption registry.")
+                        .build(),
+                EventTypeRegistration.write("TAX_COMMIT", "Commit provider tax document")
+                        .description(
+                                "Commits the provider tax document for a finalized invoice (story T6). Idempotent; records PENDING_COMMIT on provider outage for the scheduled re-commit job.")
+                        .build(),
+                EventTypeRegistration.write("TAX_VOID", "Void provider tax document")
+                        .description("Voids the provider tax document when its invoice reverts to DRAFT (story T6).")
+                        .build());
     }
 }
