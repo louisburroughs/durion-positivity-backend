@@ -18,7 +18,9 @@ import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
+import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
@@ -77,6 +79,12 @@ class FinancialReportingG2ServiceTest {
     private ExtInvoiceRepository extInvoiceRepository;
 
     @Mock
+    private ExtInvoiceTaxRepository extInvoiceTaxRepository;
+
+    @Mock
+    private CreditMemoRepository creditMemoRepository;
+
+    @Mock
     private VendorBillRepository vendorBillRepository;
 
     @Mock
@@ -95,6 +103,8 @@ class FinancialReportingG2ServiceTest {
                 accountingSequenceRepository,
                 glAccountRepository,
                 extInvoiceRepository,
+                extInvoiceTaxRepository,
+                creditMemoRepository,
                 vendorBillRepository,
                 apPaymentAllocationRepository,
                 invoiceBalanceCalculator,

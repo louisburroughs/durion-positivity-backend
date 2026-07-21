@@ -3346,6 +3346,60 @@ paths:
         - reporting:view:financial-statements
       x-required-permissions:
       - reporting:view:financial-statements
+  /v1/accounting/reports/financial/tax-liability:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Generate Sales-Tax Liability report
+      description: 'Generate the reconciliation-grade sales-tax liability report for a date range: per-jurisdiction (state/county/city/special) taxable base, exempt base with reasons, gross tax collected, POSTED credit-memo reversals netted pro-rata, and net tax; plus a GL-drift column reconciling total net tax against the Sales-Tax Payable (2200) account activity. Accrual basis: invoice tax bucketed by finalization period, credits by posting period.'
+      operationId: generateTaxLiability
+      parameters:
+      - name: startDate
+        in: query
+        description: Period start date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-06-01
+      - name: endDate
+        in: query
+        description: Period end date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-06-30
+      responses:
+        '200':
+          description: Tax liability report generated successfully (rows empty when no in-period tax exists)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxLiabilityReport'
+        '400':
+          description: Invalid date range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reports/financial/income-statement:
     get:
       tags:
@@ -8598,6 +8652,143 @@ components:
       - balance
       - totalCredit
       - totalDebit
+    TaxLiabilityReconciliation:
+      type: object
+      description: Reconciliation of report net tax against the Sales-Tax Payable (2200) GL account period activity
+      properties:
+        taxPayableAccountCode:
+          type: string
+          description: Sales-Tax Payable GL account code being reconciled against
+          example: '2200'
+        glNetActivity:
+          type: number
+          description: Credit-normal net activity of account 2200 in the period (Σ credit - Σ debit of POSTED lines); zero when the account has no activity or is not seeded
+          example: 948.75
+        reportNetTax:
+          type: number
+          description: Report's total net tax across all jurisdictions (echoes report totals.netTax)
+          example: 948.75
+        drift:
+          type: number
+          description: 'GL drift: reportNetTax - glNetActivity. Zero on a clean ledger; non-zero flags a mismatch'
+          example: 0.0
+        reconciled:
+          type: boolean
+          description: True when |drift| is within the 0.01 reconciliation tolerance
+          example: true
+      required:
+      - drift
+      - glNetActivity
+      - reconciled
+      - reportNetTax
+      - taxPayableAccountCode
+    TaxLiabilityReport:
+      type: object
+      description: 'Sales-Tax Liability report: per-jurisdiction taxable/exempt base, gross, credits, net tax, and GL drift'
+      properties:
+        startDate:
+          type: string
+          format: date
+          description: Period start date (inclusive)
+          example: 2026-06-01
+        endDate:
+          type: string
+          format: date
+          description: Period end date (inclusive)
+          example: 2026-06-30
+        generatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the report was generated (ISO 8601)
+          example: 2026-06-30 08:00:00+00:00
+        rows:
+          type: array
+          description: Per-jurisdiction rows ordered by level (state/county/city/special) then code; empty when no in-period tax exists
+          items:
+            $ref: '#/components/schemas/TaxLiabilityRow'
+        totalTaxableBase:
+          type: number
+          description: Grand total taxable base across all jurisdictions
+          example: 12500.0
+        totalExemptBase:
+          type: number
+          description: Grand total exempt base across all jurisdictions
+          example: 1500.0
+        totalTaxCollectedGross:
+          type: number
+          description: Grand total gross tax collected across all jurisdictions
+          example: 1031.25
+        totalCreditsNetted:
+          type: number
+          description: Grand total credits netted across all jurisdictions
+          example: 82.5
+        totalNetTax:
+          type: number
+          description: Grand total net tax across all jurisdictions
+          example: 948.75
+        reconciliation:
+          $ref: '#/components/schemas/TaxLiabilityReconciliation'
+      required:
+      - endDate
+      - generatedAt
+      - reconciliation
+      - rows
+      - startDate
+      - totalCreditsNetted
+      - totalExemptBase
+      - totalNetTax
+      - totalTaxCollectedGross
+      - totalTaxableBase
+    TaxLiabilityRow:
+      type: object
+      description: Per-jurisdiction sales-tax liability row (taxable/exempt base, gross, credits netted, net tax)
+      properties:
+        jurisdictionType:
+          type: string
+          description: 'Jurisdiction level: STATE, COUNTY, CITY, or SPECIAL'
+          example: STATE
+        jurisdictionCode:
+          type: string
+          description: Jurisdiction code as reported by the tax engine
+          example: WA
+        jurisdictionName:
+          type: string
+          description: Human-readable jurisdiction name when available; null when the replica carries only the code
+          example: Washington
+        taxableBase:
+          type: number
+          description: Sum of taxable base for non-exempt lines in this jurisdiction
+          example: 12500.0
+        exemptBase:
+          type: number
+          description: Sum of taxable base for exempt / zero-rate lines in this jurisdiction
+          example: 1500.0
+        exemptionReasons:
+          type: array
+          description: Distinct exemption reason codes contributing to the exempt base (ascending); empty when none
+          items:
+            type: string
+        taxCollectedGross:
+          type: number
+          description: Gross tax collected (Σ tax_amount of non-exempt lines) before credits
+          example: 1031.25
+        creditsNetted:
+          type: number
+          description: Credit/refund tax netted against this jurisdiction — POSTED credit-memo reversals allocated pro-rata to collected tax
+          example: 82.5
+        netTax:
+          type: number
+          description: 'Net tax owed for this jurisdiction: taxCollectedGross - creditsNetted'
+          example: 948.75
+      required:
+      - creditsNetted
+      - exemptBase
+      - exemptionReasons
+      - jurisdictionCode
+      - jurisdictionType
+      - netTax
+      - taxCollectedGross
+      - taxableBase
     IncomeStatementReport:
       type: object
       description: Income statement (Profit & Loss) report built from POSTED journal entries
