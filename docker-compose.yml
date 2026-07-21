@@ -700,7 +700,9 @@ services:
 
   # Internal-only tax calculation service. Never routed through the gateway (ADR-0014);
   # reached directly over pos-network by pos-invoice at http://pos-tax:8091/v1/tax.
-  # Stateless: no datasource configured, so Spring Boot uses an embedded H2; Flyway off.
+  # Owns a Postgres schema (exemption_certificate V1, tax_provider_transaction V2); Flyway runs
+  # the migrations against pos_tax_db. Without SPRING_DATASOURCE_URL, Boot would fall back to
+  # embedded H2 (H2 is a runtime dep for local dev/test).
   pos-tax:
     build:
       context: ./pos-tax
