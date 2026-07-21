@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -21,6 +22,18 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
      * @return list of credit memos
      */
     List<CreditMemo> findByOriginalInvoiceId(UUID originalInvoiceId);
+
+    /**
+     * Find credit memos in a given status whose posting timestamp falls in the inclusive
+     * instant range. Used by the Sales-Tax Liability report (story T8, issue #966) to net
+     * POSTED credit-memo tax reversals by the credit's posting period (accrual basis).
+     *
+     * @param status the lifecycle status to include (normally {@code POSTED})
+     * @param start  inclusive lower bound (start-of-day of the period start, UTC)
+     * @param end    inclusive upper bound (end-of-day of the period end, UTC)
+     * @return matching credit memos (unordered)
+     */
+    List<CreditMemo> findByStatusAndPostedTimestampBetween(CreditMemoStatus status, Instant start, Instant end);
 
     /**
      * Find all credit memos for an invoice with pagination.

@@ -16,7 +16,8 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 81 event types (includes +10 from manual CSV bank reconciliation
+     * Total: 82 event types (includes +1 from the sales-tax liability report
+     * (Story T8, Issue #966): REPORT_TAX_LIABILITY_GENERATE, +10 from manual CSV bank reconciliation
      * (Story F2, Issue #965): ACCOUNTING_RECONCILIATION_IMPORT,
      * ACCOUNTING_RECONCILIATION_MATCH, ACCOUNTING_RECONCILIATION_UNMATCH,
      * ACCOUNTING_RECONCILIATION_ADJUSTMENT, ACCOUNTING_RECONCILIATION_FINALIZE,
@@ -167,6 +168,12 @@ public final class EventTypes {
                 EventTypeRegistration.search(
                                 "REPORT_AGED_PAYABLES_GENERATE",
                                 "Generate Aged Payables report (bucketed open vendor-bill balances)")
+                        .build(),
+
+                // FinancialReportingController sales-tax liability - 1 event (parity-T8, Issue #966)
+                EventTypeRegistration.search(
+                                "REPORT_TAX_LIABILITY_GENERATE",
+                                "Generate Sales-Tax Liability report (per-jurisdiction taxable/exempt base, net tax, GL drift)")
                         .build(),
 
                 // LaborOverheadReportController - 1 event (CAP-316)

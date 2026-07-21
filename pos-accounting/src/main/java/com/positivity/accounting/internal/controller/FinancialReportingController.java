@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.dto.BalanceSheetReport;
 import com.positivity.accounting.internal.dto.GeneralLedgerReport;
 import com.positivity.accounting.internal.dto.IncomeStatementReport;
 import com.positivity.accounting.internal.dto.JournalLineDrilldownResponse;
+import com.positivity.accounting.internal.dto.TaxLiabilityReport;
 import com.positivity.accounting.internal.dto.TrialBalanceReport;
 import com.positivity.accounting.service.FinancialReportingService;
 import com.positivity.events.EmitEvent;
@@ -426,6 +427,57 @@ public class FinancialReportingController {
         // here; the module's @RestControllerAdvice maps it to 400 Bad Request with the
         // accounting domain's standard ApiError format (ADR-0017).
         AgedPayablesReport report = financialReportingService.generateAgedPayables(asOfDate);
+        return ResponseEntity.ok(report);
+    }
+
+    /**
+     * Generate the Sales-Tax Liability report for a date range (Story T8, Issue
+     * #966).
+     */
+    @GetMapping(value = "/tax-liability", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @EmitEvent(id = "REPORT_TAX_LIABILITY_GENERATE", apiVersion = "1")
+    @Operation(
+            summary = "Generate Sales-Tax Liability report",
+            description =
+                    "Generate the reconciliation-grade sales-tax liability report for a date range: per-jurisdiction (state/county/city/special) taxable base, exempt base with reasons, gross tax collected, POSTED credit-memo reversals netted pro-rata, and net tax; plus a GL-drift column reconciling total net tax against the Sales-Tax Payable (2200) account activity. Accrual basis: invoice tax bucketed by finalization period, credits by posting period.",
+            tags = {"Financial Reporting"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Tax liability report generated successfully (rows empty when no in-period tax exists)",
+            content = @Content(schema = @Schema(implementation = TaxLiabilityReport.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid date range",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing reporting:view:financial-statements",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<TaxLiabilityReport> generateTaxLiability(
+            @Parameter(description = "Period start date (YYYY-MM-DD)", required = true, example = "2026-06-01")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    @NonNull
+                    LocalDate startDate,
+            @Parameter(description = "Period end date (YYYY-MM-DD)", required = true, example = "2026-06-30")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    @NonNull
+                    LocalDate endDate) {
+
+        // Use IllegalArgumentException for validation errors to leverage the module's
+        // @RestControllerAdvice (APPaymentExceptionHandler) which maps it to 400 Bad
+        // Request with the accounting domain's standard ApiError format (ADR-0017).
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("End date cannot be before start date");
+        }
+
+        TaxLiabilityReport report = financialReportingService.generateTaxLiability(startDate, endDate);
         return ResponseEntity.ok(report);
     }
 }

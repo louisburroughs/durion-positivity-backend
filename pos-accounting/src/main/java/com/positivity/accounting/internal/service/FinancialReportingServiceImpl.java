@@ -13,22 +13,30 @@ import com.positivity.accounting.internal.dto.GeneralLedgerLine;
 import com.positivity.accounting.internal.dto.GeneralLedgerReport;
 import com.positivity.accounting.internal.dto.IncomeStatementReport;
 import com.positivity.accounting.internal.dto.JournalLineDrilldownResponse;
+import com.positivity.accounting.internal.dto.TaxLiabilityReconciliation;
+import com.positivity.accounting.internal.dto.TaxLiabilityReport;
+import com.positivity.accounting.internal.dto.TaxLiabilityRow;
 import com.positivity.accounting.internal.dto.TrialBalanceAccountTotal;
 import com.positivity.accounting.internal.dto.TrialBalanceReport;
 import com.positivity.accounting.internal.dto.TrialBalanceRow;
 import com.positivity.accounting.internal.entity.AccountingSequence;
+import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.entity.ExtInvoice;
+import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
 import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
+import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
@@ -47,8 +55,10 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
@@ -96,11 +106,30 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     private static final Set<VendorBillStatus> OPEN_PAYABLE_STATUSES =
             Set.of(VendorBillStatus.PENDING_RECEIPT_MATCH, VendorBillStatus.MATCH_EXCEPTION, VendorBillStatus.APPROVED);
 
+    /**
+     * Chart-of-accounts code of the single Sales-Tax Payable account (D-4: one GL
+     * account, report-time jurisdiction aggregation). The T8 report reconciles its
+     * total net tax against this account's credit-normal period activity.
+     */
+    private static final String SALES_TAX_PAYABLE_ACCOUNT_CODE = "2200";
+
+    /** Reconciliation tolerance for the GL-drift flag (1 cent). */
+    private static final BigDecimal RECON_TOLERANCE = new BigDecimal("0.01");
+
+    /**
+     * Jurisdiction-level ordering for report rows and residual tie-breaks: state
+     * first, then county, city, special; unknown levels sort last.
+     */
+    private static final Map<String, Integer> JURISDICTION_TYPE_RANK =
+            Map.of("STATE", 0, "COUNTY", 1, "CITY", 2, "SPECIAL", 3);
+
     private final JournalEntryRepository journalEntryRepository;
     private final StatementLineMappingRepository statementLineMappingRepository;
     private final AccountingSequenceRepository accountingSequenceRepository;
     private final GLAccountRepository glAccountRepository;
     private final ExtInvoiceRepository extInvoiceRepository;
+    private final ExtInvoiceTaxRepository extInvoiceTaxRepository;
+    private final CreditMemoRepository creditMemoRepository;
     private final VendorBillRepository vendorBillRepository;
     private final APPaymentAllocationRepository apPaymentAllocationRepository;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
@@ -112,6 +141,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             AccountingSequenceRepository accountingSequenceRepository,
             GLAccountRepository glAccountRepository,
             ExtInvoiceRepository extInvoiceRepository,
+            ExtInvoiceTaxRepository extInvoiceTaxRepository,
+            CreditMemoRepository creditMemoRepository,
             VendorBillRepository vendorBillRepository,
             APPaymentAllocationRepository apPaymentAllocationRepository,
             InvoiceBalanceCalculator invoiceBalanceCalculator,
@@ -121,6 +152,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         this.accountingSequenceRepository = accountingSequenceRepository;
         this.glAccountRepository = glAccountRepository;
         this.extInvoiceRepository = extInvoiceRepository;
+        this.extInvoiceTaxRepository = extInvoiceTaxRepository;
+        this.creditMemoRepository = creditMemoRepository;
         this.vendorBillRepository = vendorBillRepository;
         this.apPaymentAllocationRepository = apPaymentAllocationRepository;
         this.invoiceBalanceCalculator = invoiceBalanceCalculator;
@@ -708,6 +741,256 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 .rows(rows)
                 .totals(totals)
                 .build();
+    }
+
+    // ========================================================================
+    // Story T8 (Issue #966) — Sales-Tax Liability report (reconciliation-grade).
+    // ========================================================================
+
+    @Override
+    public @NonNull TaxLiabilityReport generateTaxLiability(@NonNull LocalDate startDate, @NonNull LocalDate endDate) {
+
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("End date cannot be before start date");
+        }
+
+        log.info("Generating sales-tax liability report for period {} to {}", startDate, endDate);
+
+        LocalDateTime startDateTime = startDate.atStartOfDay();
+        LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
+        Instant startInstant = startDateTime.toInstant(ZoneOffset.UTC);
+        Instant endInstant = endDateTime.toInstant(ZoneOffset.UTC);
+
+        Map<JurisdictionKey, JurisdictionAccumulator> byJurisdiction = new HashMap<>();
+
+        // --- Invoice side (accrual): tax bucketed by the invoice's finalization period ---
+        List<ExtInvoice> invoices = extInvoiceRepository.findByFinalizedAtBetween(startInstant, endInstant);
+        List<UUID> invoiceIds =
+                invoices.stream().map(ExtInvoice::getInvoiceId).distinct().toList();
+        List<ExtInvoiceTax> invoiceTaxRows =
+                invoiceIds.isEmpty() ? List.of() : extInvoiceTaxRepository.findByInvoiceIdIn(invoiceIds);
+
+        for (ExtInvoiceTax row : invoiceTaxRows) {
+            JurisdictionAccumulator acc = accumulatorFor(byJurisdiction, row);
+            if (row.isExempt()) {
+                acc.exemptBase = acc.exemptBase.add(nullSafe(row.getTaxableBase()));
+                String reason = row.getExemptionReasonCode();
+                if (reason != null && !reason.isBlank()) {
+                    acc.exemptionReasons.add(reason);
+                }
+            } else {
+                acc.taxableBase = acc.taxableBase.add(nullSafe(row.getTaxableBase()));
+                acc.taxCollectedGross = acc.taxCollectedGross.add(nullSafe(row.getTaxAmount()));
+            }
+        }
+
+        // --- Credit side (accrual): POSTED reversals bucketed by the credit's posting
+        // period, allocated per jurisdiction pro-rata to the original invoice's collected tax ---
+        List<CreditMemo> credits = creditMemoRepository.findByStatusAndPostedTimestampBetween(
+                CreditMemoStatus.POSTED, startInstant, endInstant);
+        if (!credits.isEmpty()) {
+            List<UUID> originalInvoiceIds = credits.stream()
+                    .map(CreditMemo::getOriginalInvoiceId)
+                    .distinct()
+                    .toList();
+            Map<UUID, List<ExtInvoiceTax>> taxByOriginalInvoice =
+                    extInvoiceTaxRepository.findByInvoiceIdIn(originalInvoiceIds).stream()
+                            .collect(Collectors.groupingBy(ExtInvoiceTax::getInvoiceId));
+
+            for (CreditMemo credit : credits) {
+                netCreditAcrossJurisdictions(credit, taxByOriginalInvoice, byJurisdiction);
+            }
+        }
+
+        // --- Rows ordered state -> county -> city -> special, then by code ---
+        List<TaxLiabilityRow> rows = byJurisdiction.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> entry.getValue().toRow(entry.getKey()))
+                .toList();
+
+        BigDecimal totalTaxableBase = sum(rows, TaxLiabilityRow::getTaxableBase);
+        BigDecimal totalExemptBase = sum(rows, TaxLiabilityRow::getExemptBase);
+        BigDecimal totalGross = sum(rows, TaxLiabilityRow::getTaxCollectedGross);
+        BigDecimal totalCreditsNetted = sum(rows, TaxLiabilityRow::getCreditsNetted);
+        BigDecimal totalNetTax = sum(rows, TaxLiabilityRow::getNetTax);
+
+        TaxLiabilityReconciliation reconciliation = reconcileAgainstTaxPayable(totalNetTax, startDateTime, endDateTime);
+
+        log.info(
+                "Sales-tax liability generated for {}..{}: jurisdictions={}, gross={}, credits={}, netTax={}, glDrift={}",
+                startDate,
+                endDate,
+                rows.size(),
+                totalGross,
+                totalCreditsNetted,
+                totalNetTax,
+                reconciliation.getDrift());
+
+        return TaxLiabilityReport.builder()
+                .startDate(startDate)
+                .endDate(endDate)
+                .generatedAt(Instant.now(clock))
+                .rows(rows)
+                .totalTaxableBase(totalTaxableBase)
+                .totalExemptBase(totalExemptBase)
+                .totalTaxCollectedGross(totalGross)
+                .totalCreditsNetted(totalCreditsNetted)
+                .totalNetTax(totalNetTax)
+                .reconciliation(reconciliation)
+                .build();
+    }
+
+    /**
+     * Allocate one POSTED credit memo's {@code taxAmountReversed} across the
+     * jurisdictions of its original invoice, pro-rata to that invoice's per-jurisdiction
+     * collected tax, and add each allocated part to the matching jurisdiction's netted
+     * credits (creating the jurisdiction row if the invoice fell outside the period).
+     */
+    private void netCreditAcrossJurisdictions(
+            CreditMemo credit,
+            Map<UUID, List<ExtInvoiceTax>> taxByOriginalInvoice,
+            Map<JurisdictionKey, JurisdictionAccumulator> byJurisdiction) {
+
+        BigDecimal reversed = nullSafe(credit.getTaxAmountReversed());
+        if (reversed.signum() == 0) {
+            return;
+        }
+        List<ExtInvoiceTax> originalRows = taxByOriginalInvoice.getOrDefault(credit.getOriginalInvoiceId(), List.of());
+
+        // Weights are the original invoice's per-jurisdiction collected tax. Ensure every
+        // jurisdiction the credit touches has a row so its type/code is recoverable.
+        Map<JurisdictionKey, BigDecimal> weights = new LinkedHashMap<>();
+        for (ExtInvoiceTax row : originalRows) {
+            JurisdictionKey key = keyFor(row);
+            byJurisdiction.computeIfAbsent(key, JurisdictionAccumulator::new);
+            weights.merge(key, nullSafe(row.getTaxAmount()), BigDecimal::add);
+        }
+        if (weights.isEmpty()) {
+            // Original invoice has no replicated tax rows — the reversal cannot be attributed
+            // to a jurisdiction in this reconciliation-grade v1 (Phase-2: carry the breakdown
+            // on the credit itself). It is intentionally excluded so it surfaces as GL drift.
+            log.warn(
+                    "Credit memo {} reverses tax {} but its original invoice {} has no ext_invoice_tax rows; "
+                            + "reversal left unattributed (will appear as GL drift)",
+                    credit.getCreditMemoId(),
+                    reversed,
+                    credit.getOriginalInvoiceId());
+            return;
+        }
+
+        Map<JurisdictionKey, BigDecimal> allocated = TaxCreditAllocator.allocate(reversed, weights);
+        if (allocated.isEmpty()) {
+            // Weights are non-empty but every replicated tax row has zero tax_amount (e.g. a
+            // fully-exempt original invoice), so the allocator cannot split the reversal by
+            // collected-tax share. Like the no-rows case, leave it unattributed rather than net
+            // a credit against a jurisdiction that collected no tax — it surfaces as GL drift.
+            log.warn(
+                    "Credit memo {} reverses tax {} but its original invoice {} has replicated tax rows that all "
+                            + "carry zero tax_amount; reversal cannot be attributed to a jurisdiction and is left "
+                            + "unattributed (will appear as GL drift)",
+                    credit.getCreditMemoId(),
+                    reversed,
+                    credit.getOriginalInvoiceId());
+            return;
+        }
+        for (Map.Entry<JurisdictionKey, BigDecimal> entry : allocated.entrySet()) {
+            byJurisdiction.get(entry.getKey()).creditsNetted =
+                    byJurisdiction.get(entry.getKey()).creditsNetted.add(entry.getValue());
+        }
+    }
+
+    /**
+     * Reconcile the report's total net tax against the Sales-Tax Payable (2200) account's
+     * credit-normal period activity. {@code sumPostedBalanceForAccount} returns
+     * {@code Σdebit - Σcredit}; the credit-normal (liability) net owed is its negation.
+     * Invoice finalization posts {@code Cr 2200}, credit memos post {@code Dr 2200}, so on
+     * a clean ledger the 2200 net activity equals the report net tax and drift is zero.
+     */
+    private TaxLiabilityReconciliation reconcileAgainstTaxPayable(
+            BigDecimal reportNetTax, LocalDateTime startDateTime, LocalDateTime endDateTime) {
+
+        BigDecimal glNetActivity = glAccountRepository
+                .findByAccountCode(SALES_TAX_PAYABLE_ACCOUNT_CODE)
+                .map(account -> nullSafe(journalEntryRepository.sumPostedBalanceForAccount(
+                                account.getGlAccountId(), startDateTime, endDateTime))
+                        .negate())
+                .orElse(BigDecimal.ZERO);
+
+        BigDecimal drift = reportNetTax.subtract(glNetActivity);
+        boolean reconciled = drift.abs().compareTo(RECON_TOLERANCE) <= 0;
+
+        return TaxLiabilityReconciliation.builder()
+                .taxPayableAccountCode(SALES_TAX_PAYABLE_ACCOUNT_CODE)
+                .glNetActivity(glNetActivity)
+                .reportNetTax(reportNetTax)
+                .drift(drift)
+                .reconciled(reconciled)
+                .build();
+    }
+
+    private static JurisdictionKey keyFor(ExtInvoiceTax row) {
+        return new JurisdictionKey(row.getJurisdictionType(), row.getJurisdictionCode());
+    }
+
+    private static JurisdictionAccumulator accumulatorFor(
+            Map<JurisdictionKey, JurisdictionAccumulator> byJurisdiction, ExtInvoiceTax row) {
+        return byJurisdiction.computeIfAbsent(keyFor(row), JurisdictionAccumulator::new);
+    }
+
+    private static BigDecimal sum(
+            List<TaxLiabilityRow> rows, java.util.function.Function<TaxLiabilityRow, BigDecimal> extractor) {
+        return rows.stream().map(extractor).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Grouping key for a tax jurisdiction: level type + code. Ordering (state, county,
+     * city, special, then code) drives both report row order and the allocator's residual
+     * tie-break, so equal-share residuals land deterministically on the highest level.
+     */
+    private record JurisdictionKey(String type, String code) implements Comparable<JurisdictionKey> {
+        @Override
+        public int compareTo(JurisdictionKey other) {
+            int byRank = Integer.compare(rank(type), rank(other.type));
+            if (byRank != 0) {
+                return byRank;
+            }
+            int byType = type.compareToIgnoreCase(other.type);
+            if (byType != 0) {
+                return byType;
+            }
+            return code.compareTo(other.code);
+        }
+
+        private static int rank(String type) {
+            return JURISDICTION_TYPE_RANK.getOrDefault(type.toUpperCase(Locale.ROOT), 99);
+        }
+    }
+
+    /** Mutable per-jurisdiction accumulator, materialized into a {@link TaxLiabilityRow}. */
+    private static final class JurisdictionAccumulator {
+        private BigDecimal taxableBase = BigDecimal.ZERO;
+        private BigDecimal exemptBase = BigDecimal.ZERO;
+        private BigDecimal taxCollectedGross = BigDecimal.ZERO;
+        private BigDecimal creditsNetted = BigDecimal.ZERO;
+        private final TreeSet<String> exemptionReasons = new TreeSet<>();
+
+        JurisdictionAccumulator(JurisdictionKey key) {
+            // key retained implicitly by the map; fields default to zero
+        }
+
+        TaxLiabilityRow toRow(JurisdictionKey key) {
+            return TaxLiabilityRow.builder()
+                    .jurisdictionType(key.type())
+                    .jurisdictionCode(key.code())
+                    .jurisdictionName(null) // replica carries only the code
+                    .taxableBase(taxableBase)
+                    .exemptBase(exemptBase)
+                    .exemptionReasons(new ArrayList<>(exemptionReasons))
+                    .taxCollectedGross(taxCollectedGross)
+                    .creditsNetted(creditsNetted)
+                    .netTax(taxCollectedGross.subtract(creditsNetted))
+                    .build();
+        }
     }
 
     // ========== Story G2 Private Helpers ==========
