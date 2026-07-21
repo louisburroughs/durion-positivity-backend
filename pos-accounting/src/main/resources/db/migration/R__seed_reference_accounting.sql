@@ -290,7 +290,7 @@ ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system
 -- Adjustments post a real balanced JE: Dr/Cr the reconciled cash account against
 -- the adjustment type's mapped counter account, resolved through the
 -- BANK_RECONCILIATION posting category (one mapping key per adjustment type).
---   BANK_FEE         -> 6010 Bank Service Charges (expense)
+--   BANK_FEE         -> 6030 Bank Service Charges (expense)
 --   NSF_FEE          -> 6020 NSF Fees (expense)
 --   INTEREST_EARNED  -> 4920 Interest Income (revenue)
 --   OTHER            -> 2360 Bank Reconciliation Adjustments (liability clearing)
@@ -299,7 +299,7 @@ ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system
 -- ============================================================================
 
 INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
-VALUES ('5eed0acc-0000-4000-8000-000000006010'::uuid, '6010', 'Bank Service Charges', 'EXPENSE', 'OPERATING_EXPENSE', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+VALUES ('5eed0acc-0000-4000-8000-000000006030'::uuid, '6030', 'Bank Service Charges', 'EXPENSE', 'OPERATING_EXPENSE', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
 ON CONFLICT (account_code) DO UPDATE SET
     account_name = EXCLUDED.account_name, account_type = EXCLUDED.account_type, account_subtype = EXCLUDED.account_subtype,
     reconcilable = EXCLUDED.reconcilable, modified_at = NOW(), modified_by = 'seed-generator';
@@ -309,7 +309,7 @@ ON CONFLICT (account_code) DO UPDATE SET
     account_name = EXCLUDED.account_name, account_type = EXCLUDED.account_type, account_subtype = EXCLUDED.account_subtype,
     reconcilable = EXCLUDED.reconcilable, modified_at = NOW(), modified_by = 'seed-generator';
 INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
-VALUES ('5eed0acc-0000-4000-8000-000000004920'::uuid, '4920', 'Interest Income', 'REVENUE', 'REVENUE', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+VALUES ('5eed0acc-0000-4000-8000-000000004920'::uuid, '4920', 'Interest Income', 'REVENUE', 'OTHER', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
 ON CONFLICT (account_code) DO UPDATE SET
     account_name = EXCLUDED.account_name, account_type = EXCLUDED.account_type, account_subtype = EXCLUDED.account_subtype,
     reconcilable = EXCLUDED.reconcilable, modified_at = NOW(), modified_by = 'seed-generator';
@@ -342,14 +342,14 @@ ON CONFLICT (mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.postin
 
 -- GL mappings (fixed effective_start_date for idempotent re-runs).
 INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
-VALUES ('5eed0acc-0000-4000-8000-00000000d011'::uuid, 'ACCOUNTING', 'BANK_RECON_BANK_FEE', '5eed0acc-0000-4000-8000-00000000d001'::uuid, '5eed0acc-0000-4000-8000-00000000d002'::uuid, '5eed0acc-0000-4000-8000-000000006010'::uuid, TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+VALUES ('5eed0acc-0000-4000-8000-00000000d011'::uuid, 'ACCOUNTING', 'BANK_RECON_BANK_FEE', '5eed0acc-0000-4000-8000-00000000d001'::uuid, '5eed0acc-0000-4000-8000-00000000d002'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '6030'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
 ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
 INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
-VALUES ('5eed0acc-0000-4000-8000-00000000d012'::uuid, 'ACCOUNTING', 'BANK_RECON_NSF_FEE', '5eed0acc-0000-4000-8000-00000000d001'::uuid, '5eed0acc-0000-4000-8000-00000000d003'::uuid, '5eed0acc-0000-4000-8000-000000006020'::uuid, TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+VALUES ('5eed0acc-0000-4000-8000-00000000d012'::uuid, 'ACCOUNTING', 'BANK_RECON_NSF_FEE', '5eed0acc-0000-4000-8000-00000000d001'::uuid, '5eed0acc-0000-4000-8000-00000000d003'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '6020'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
 ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
 INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
-VALUES ('5eed0acc-0000-4000-8000-00000000d013'::uuid, 'ACCOUNTING', 'BANK_RECON_INTEREST_EARNED', '5eed0acc-0000-4000-8000-00000000d001'::uuid, '5eed0acc-0000-4000-8000-00000000d004'::uuid, '5eed0acc-0000-4000-8000-000000004920'::uuid, TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+VALUES ('5eed0acc-0000-4000-8000-00000000d013'::uuid, 'ACCOUNTING', 'BANK_RECON_INTEREST_EARNED', '5eed0acc-0000-4000-8000-00000000d001'::uuid, '5eed0acc-0000-4000-8000-00000000d004'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '4920'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
 ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
 INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
-VALUES ('5eed0acc-0000-4000-8000-00000000d015'::uuid, 'ACCOUNTING', 'BANK_RECON_OTHER', '5eed0acc-0000-4000-8000-00000000d001'::uuid, '5eed0acc-0000-4000-8000-00000000d006'::uuid, '5eed0acc-0000-4000-8000-000000002360'::uuid, TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+VALUES ('5eed0acc-0000-4000-8000-00000000d015'::uuid, 'ACCOUNTING', 'BANK_RECON_OTHER', '5eed0acc-0000-4000-8000-00000000d001'::uuid, '5eed0acc-0000-4000-8000-00000000d006'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '2360'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
 ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
