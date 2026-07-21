@@ -13,6 +13,7 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -36,6 +37,7 @@ public class DocumentEmbeddingIngestor {
     private final int segmentStepSize;
     private final int maxChunksPerDocument;
 
+    @Autowired
     public DocumentEmbeddingIngestor(
             @NonNull PgVectorStore embeddingStore,
             @NonNull EmbeddingModel embeddingModel,
