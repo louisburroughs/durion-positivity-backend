@@ -142,6 +142,7 @@ public interface GLPostingService {
      */
     JournalEntry postCustomerCreditIssuance(
             @NonNull UUID sourceEventId,
+            @NonNull UUID creditId,
             @NonNull UUID undepositedFundsAccountId,
             @NonNull UUID creditLiabilityAccountId,
             @NonNull BigDecimal amount,

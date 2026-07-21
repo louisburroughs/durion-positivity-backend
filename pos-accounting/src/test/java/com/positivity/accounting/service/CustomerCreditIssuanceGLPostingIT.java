@@ -188,7 +188,7 @@ class CustomerCreditIssuanceGLPostingIT {
         assertThat(journalEntryRepository.count()).isEqualTo(2);
 
         // AC-4: replaying the issuance work item is a no-op (no double-post).
-        CustomerCreditIssuanceGLPostingEvent issuance = issuanceEventFromEnqueued(requestId, invoiceId, paymentId);
+        CustomerCreditIssuanceGLPostingEvent issuance = issuanceEventFromEnqueued();
         issuanceHandler.onCustomerCreditIssuanceGLPosting(issuance);
         assertThat(journalEntryRepository.count())
                 .as("replay adds no second issuance entry")
@@ -256,8 +256,7 @@ class CustomerCreditIssuanceGLPostingIT {
         }
     }
 
-    private CustomerCreditIssuanceGLPostingEvent issuanceEventFromEnqueued(
-            String requestId, UUID invoiceId, UUID paymentId) {
+    private CustomerCreditIssuanceGLPostingEvent issuanceEventFromEnqueued() {
         return outboxRepository.findAll().stream()
                 .filter(o ->
                         CustomerCreditIssuanceGLPostingEvent.class.getName().equals(o.getEventType()))

@@ -121,6 +121,7 @@ public class CustomerCreditIssuanceGLPostingEventHandler {
 
             JournalEntry posted = glPostingService.postCustomerCreditIssuance(
                     sourceEventId,
+                    event.getCreditId(),
                     undepositedFundsAccountId,
                     creditLiabilityAccountId,
                     event.getCreditAmount(),

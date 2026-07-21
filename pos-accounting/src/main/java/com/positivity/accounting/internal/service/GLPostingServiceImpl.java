@@ -242,6 +242,7 @@ public class GLPostingServiceImpl implements GLPostingService {
     @Override
     public JournalEntry postCustomerCreditIssuance(
             @NonNull UUID sourceEventId,
+            @NonNull UUID creditId,
             @NonNull UUID undepositedFundsAccountId,
             @NonNull UUID creditLiabilityAccountId,
             @NonNull BigDecimal amount,
@@ -268,7 +269,7 @@ public class GLPostingServiceImpl implements GLPostingService {
         cashLine.setGlAccountId(undepositedFundsAccountId);
         cashLine.setDebitAmount(amount);
         cashLine.setCreditAmount(BigDecimal.ZERO);
-        cashLine.setDescription("Overpayment Cash - Credit#" + sourceEventId);
+        cashLine.setDescription("Overpayment Cash - Credit#" + creditId);
         lines.add(cashLine);
 
         // Credit: Customer Credit Liability (obligation now owed to the customer).
@@ -276,7 +277,7 @@ public class GLPostingServiceImpl implements GLPostingService {
         liabilityLine.setGlAccountId(creditLiabilityAccountId);
         liabilityLine.setDebitAmount(BigDecimal.ZERO);
         liabilityLine.setCreditAmount(amount);
-        liabilityLine.setDescription("Customer Credit Issued - Credit#" + sourceEventId);
+        liabilityLine.setDescription("Customer Credit Issued - Credit#" + creditId);
         lines.add(liabilityLine);
 
         entry.setLines(lines);
