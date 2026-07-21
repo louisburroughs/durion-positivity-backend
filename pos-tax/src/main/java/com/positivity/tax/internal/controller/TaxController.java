@@ -5,6 +5,8 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import com.positivity.events.EmitEvent;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
+import com.positivity.tax.common.dto.TaxProviderTransactionResult;
+import com.positivity.tax.internal.service.TaxProviderLifecycleService;
 import com.positivity.tax.service.TaxCalculationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -14,6 +16,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,9 +32,11 @@ import org.springframework.web.bind.annotation.*;
 public class TaxController {
 
     private final TaxCalculationService taxCalculationService;
+    private final TaxProviderLifecycleService lifecycleService;
 
-    public TaxController(TaxCalculationService taxCalculationService) {
+    public TaxController(TaxCalculationService taxCalculationService, TaxProviderLifecycleService lifecycleService) {
         this.taxCalculationService = taxCalculationService;
+        this.lifecycleService = lifecycleService;
     }
 
     /**
@@ -81,6 +86,56 @@ public class TaxController {
                 response.isTestMode());
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Commit the provider tax document for a finalized invoice (story T6, decision D-T3).
+     * <p>
+     * Idempotent on {@code referenceId}. When the provider is unavailable this still
+     * returns 200 with a {@code PENDING_COMMIT} status — the sale is never blocked and the
+     * scheduled re-commit job trues it up (estimate-and-true-up).
+     *
+     * @param referenceId   the document code (source invoice id)
+     * @param referenceType optional source transaction type label (defaults to {@code INVOICE})
+     * @return the recorded lifecycle outcome
+     */
+    @PostMapping("/transactions/{referenceId}/commit")
+    @PreAuthorize("hasAuthority('tax:commit')")
+    @EmitEvent(id = "TAX_COMMIT", apiVersion = "1")
+    @Operation(
+            summary = "Commit tax document",
+            description = "Commit the provider tax document for a finalized invoice. Idempotent; never blocks on"
+                    + " provider outage (records PENDING_COMMIT for the re-commit job).")
+    @ApiResponse(responseCode = "200", description = "Commit recorded (COMMITTED or PENDING_COMMIT)")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"tax:commit"})
+    public ResponseEntity<TaxProviderTransactionResult> commit(
+            @PathVariable UUID referenceId, @RequestParam(defaultValue = "INVOICE") String referenceType) {
+        log.info("Received tax commit request for reference {}", referenceId);
+        return ResponseEntity.ok(lifecycleService.commit(referenceId, referenceType));
+    }
+
+    /**
+     * Void the provider tax document for an invoice reverted to DRAFT (story T6, R-T2).
+     *
+     * @param referenceId the document code (source invoice id)
+     * @return the recorded lifecycle outcome
+     */
+    @PostMapping("/transactions/{referenceId}/void")
+    @PreAuthorize("hasAuthority('tax:commit')")
+    @EmitEvent(id = "TAX_VOID", apiVersion = "1")
+    @Operation(
+            summary = "Void tax document",
+            description = "Void the provider tax document when its invoice reverts to DRAFT (InvoiceStatus has no"
+                    + " CANCELLED/VOIDED; void hooks the revert transition).")
+    @ApiResponse(responseCode = "200", description = "Void recorded")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"tax:commit"})
+    public ResponseEntity<TaxProviderTransactionResult> voidTransaction(@PathVariable UUID referenceId) {
+        log.info("Received tax void request for reference {}", referenceId);
+        return ResponseEntity.ok(lifecycleService.voidTransaction(referenceId));
     }
 
     private String maskForLog(Object value) {

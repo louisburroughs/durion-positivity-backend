@@ -10,3 +10,5 @@ permissions:
     description: "View tax exemption certificates in the pos-tax exemption registry"
   - name: "tax:exemption:manage"
     description: "Create and update tax exemption certificates in the pos-tax exemption registry"
+  - name: "tax:commit"
+    description: "Commit or void provider tax documents in the tax document lifecycle (invoice finalize/revert)"

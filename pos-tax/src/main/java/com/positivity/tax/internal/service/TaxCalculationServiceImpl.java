@@ -19,14 +19,11 @@ import org.springframework.stereotype.Service;
 public class TaxCalculationServiceImpl implements TaxCalculationService {
 
     private final TaxProperties properties;
-    private final TestModeTaxCalculator testCalculator;
-    private final ExternalTaxServiceClient externalClient;
+    private final TaxProviderSelector providerSelector;
 
-    public TaxCalculationServiceImpl(
-            TaxProperties properties, TestModeTaxCalculator testCalculator, ExternalTaxServiceClient externalClient) {
+    public TaxCalculationServiceImpl(TaxProperties properties, TaxProviderSelector providerSelector) {
         this.properties = properties;
-        this.testCalculator = testCalculator;
-        this.externalClient = externalClient;
+        this.providerSelector = providerSelector;
     }
 
     @Override
@@ -34,13 +31,10 @@ public class TaxCalculationServiceImpl implements TaxCalculationService {
     public TaxCalculationResponse calculateTax(@NonNull TaxCalculationRequest request) {
         validateRequest(request);
 
-        if (isTestMode()) {
-            log.debug("Using test mode tax calculator");
-            return testCalculator.calculate(request);
-        } else {
-            log.debug("Using external tax service");
-            return externalClient.calculateTax(request);
-        }
+        // Provider abstraction (story T6): select the test-mode or external provider and
+        // delegate the uncommitted estimate. Commit/void document lifecycle is driven
+        // separately by TaxProviderLifecycleService at invoice finalization/revert.
+        return providerSelector.select().estimate(request);
     }
 
     @Override

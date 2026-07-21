@@ -58,12 +58,6 @@ public class CreateEstimateResponse {
     private String currencyUomId;
 
     @Schema(
-            description = "Tax region identifier",
-            example = "01960003-0000-7000-8000-000000000005",
-            requiredMode = NOT_REQUIRED)
-    private UUID taxRegionId;
-
-    @Schema(
             description = "Actor identifier that created the estimate",
             example = "advisor@shop.local",
             requiredMode = NOT_REQUIRED)
@@ -82,7 +76,6 @@ public class CreateEstimateResponse {
                 .vehicleId(estimate.getVehicleId())
                 .locationId(estimate.getLocationId())
                 .currencyUomId(estimate.getCurrencyUomId())
-                .taxRegionId(estimate.getTaxRegionId())
                 .createdByUserId(estimate.getCreatedByUserId())
                 .createdAt(estimate.getCreatedAt())
                 .build();

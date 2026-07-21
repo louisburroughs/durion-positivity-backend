@@ -45,12 +45,6 @@ public class CreateEstimateRequest {
     @Schema(description = "Optional currency code; defaults when omitted", example = "USD", requiredMode = NOT_REQUIRED)
     private String currencyUomId; // Optional - will use default if not provided
 
-    @Schema(
-            description = "Optional tax region identifier; defaults when omitted",
-            example = "01960003-0000-7000-8000-000000000004",
-            requiredMode = NOT_REQUIRED)
-    private UUID taxRegionId; // Optional - will use default if not provided
-
     @Schema(description = "Optional subtotal amount before tax", example = "500.00", requiredMode = NOT_REQUIRED)
     private BigDecimal subtotal;
 

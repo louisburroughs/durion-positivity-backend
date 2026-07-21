@@ -60,7 +60,12 @@ class TaxCalculationServiceTest {
                 FIXED_CLOCK,
                 new ExemptionResolver(
                         (customerId, certificateId, stateScope, reason, date) -> java.util.Optional.empty()));
-        service = new TaxCalculationServiceImpl(properties, testCalculator, externalClient);
+        com.positivity.tax.internal.service.TaxProviderSelector selector =
+                new com.positivity.tax.internal.service.TaxProviderSelector(
+                        properties,
+                        new com.positivity.tax.internal.service.TestModeTaxProvider(testCalculator),
+                        new com.positivity.tax.internal.service.ExternalTaxProvider(externalClient));
+        service = new TaxCalculationServiceImpl(properties, selector);
     }
 
     @Test

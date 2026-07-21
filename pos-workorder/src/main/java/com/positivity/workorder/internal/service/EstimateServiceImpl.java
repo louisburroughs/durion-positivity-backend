@@ -64,7 +64,6 @@ public class EstimateServiceImpl implements EstimateService {
     private final Clock clock;
 
     private static final String ESTIMATE_NOT_FOUND = "Estimate not found: ";
-    private static final BigDecimal FALLBACK_TAX_RATE = new BigDecimal("0.0825");
     private final EstimateRepository estimateRepository;
     private final EstimateItemRepository estimateItemRepository;
     private final EstimateSnapshotRepository estimateSnapshotRepository;
@@ -82,9 +81,6 @@ public class EstimateServiceImpl implements EstimateService {
 
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
-    private static final String DEFAULT_TAX_REGION_ID_PROPERTY = "workorder.estimate.default-tax-region-id";
-    private static final UUID DEFAULT_TAX_REGION_ID =
-            UUID.fromString(System.getProperty(DEFAULT_TAX_REGION_ID_PROPERTY, "00000000-0000-0000-0000-000000000001"));
 
     // Tax category constants
     private static final String TAX_CATEGORY_GOODS = "GOODS";
@@ -253,7 +249,6 @@ public class EstimateServiceImpl implements EstimateService {
                                 "locationId is required: none was provided and the current user has no primary "
                                         + "location assignment to derive one from"));
         String currencyUomId = request.getCurrencyUomId() != null ? request.getCurrencyUomId() : DEFAULT_CURRENCY;
-        UUID taxRegionId = request.getTaxRegionId() != null ? request.getTaxRegionId() : DEFAULT_TAX_REGION_ID;
 
         // Generate unique estimate number
         String estimateNumber = generateEstimateNumber(locationId);
@@ -270,7 +265,6 @@ public class EstimateServiceImpl implements EstimateService {
                 .vehicleId(request.getVehicleId())
                 .locationId(locationId)
                 .currencyUomId(currencyUomId)
-                .taxRegionId(taxRegionId)
                 .status(EstimateStatus.DRAFT)
                 .createdByUserId(resolvedUsername)
                 .createdById(userId)
@@ -772,7 +766,7 @@ public class EstimateServiceImpl implements EstimateService {
     public EstimateResponse updateEstimateFinancials(
             UUID estimateId, BigDecimal subtotal, BigDecimal taxAmount, BigDecimal total, String username) {
         return EstimateResponse.fromEntity(
-                updateEstimateFinancialsInternal(estimateId, subtotal, taxAmount, total, username));
+                updateEstimateFinancialsInternal(estimateId, subtotal, taxAmount, total, false, username));
     }
 
     /**
@@ -781,7 +775,12 @@ public class EstimateServiceImpl implements EstimateService {
      * Runs within the transaction context of the caller.
      */
     private Estimate updateEstimateFinancialsInternal(
-            UUID estimateId, BigDecimal subtotal, BigDecimal taxAmount, BigDecimal total, String username) {
+            UUID estimateId,
+            BigDecimal subtotal,
+            BigDecimal taxAmount,
+            BigDecimal total,
+            boolean taxPending,
+            String username) {
         Estimate estimate = estimateRepository
                 .findById(estimateId)
                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
@@ -793,6 +792,7 @@ public class EstimateServiceImpl implements EstimateService {
         estimate.setSubtotal(subtotal);
         estimate.setTaxAmount(taxAmount);
         estimate.setTotal(total);
+        estimate.setTaxPending(taxPending);
 
         // Check if total changed (financially significant)
         boolean totalChanged = (oldTotal == null && total != null) || (oldTotal != null && !oldTotal.equals(total));
@@ -1030,7 +1030,7 @@ public class EstimateServiceImpl implements EstimateService {
         if (items.isEmpty()) {
             log.warn("No line items found for estimate {}, setting totals to zero", estimateId);
             Estimate saved = updateEstimateFinancialsInternal(
-                    estimateId, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, username);
+                    estimateId, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, false, username);
             return EstimateResponse.fromEntity(saved);
         }
 
@@ -1041,7 +1041,7 @@ public class EstimateServiceImpl implements EstimateService {
         BigDecimal subtotal;
         BigDecimal taxAmount;
         BigDecimal total;
-        boolean testMode = false;
+        boolean taxPending = false;
 
         try {
             // Resolve the estimate's shop-location address from pos-location so tax is
@@ -1062,10 +1062,12 @@ public class EstimateServiceImpl implements EstimateService {
             subtotal = taxResponse.getSubtotal();
             taxAmount = taxResponse.getTotalTax();
             total = taxResponse.getTotal();
-            testMode = taxResponse.isTestMode();
         } catch (RuntimeException ex) {
-            // Preserve contract behavior when tax service is unavailable by using
-            // deterministic fallback math.
+            // Decision D-T5: flag-and-continue. The tax service is unavailable — do NOT invent
+            // a rate or silently flip to test mode (the old FALLBACK_TAX_RATE=8.25% bug). Compute
+            // the honest subtotal from the line items, leave tax at zero, and flag the estimate
+            // taxPending so the degraded state is surfaced. The estimate is never blocked; a
+            // later successful recalculation clears the flag.
             subtotal = items.stream()
                     .map(item -> {
                         BigDecimal unitPrice = item.getUnitPrice() == null ? BigDecimal.ZERO : item.getUnitPrice();
@@ -1074,33 +1076,25 @@ public class EstimateServiceImpl implements EstimateService {
                     })
                     .reduce(BigDecimal.ZERO, BigDecimal::add)
                     .setScale(2, java.math.RoundingMode.HALF_UP);
-            taxAmount = subtotal.multiply(FALLBACK_TAX_RATE).setScale(2, java.math.RoundingMode.HALF_UP);
-            total = subtotal.add(taxAmount).setScale(2, java.math.RoundingMode.HALF_UP);
-            testMode = true;
+            taxAmount = BigDecimal.ZERO.setScale(2, java.math.RoundingMode.HALF_UP);
+            total = subtotal;
+            taxPending = true;
             log.warn(
-                    "Tax service unavailable for estimate {}, using fallback tax rate {}",
+                    "Tax service unavailable for estimate {}; flagging taxPending (no fallback rate applied)",
                     estimateId,
-                    FALLBACK_TAX_RATE,
                     ex);
         }
 
         // Update estimate using internal helper (reuses transaction context)
-        Estimate saved = updateEstimateFinancialsInternal(estimateId, subtotal, taxAmount, total, username);
+        Estimate saved = updateEstimateFinancialsInternal(estimateId, subtotal, taxAmount, total, taxPending, username);
 
         log.info(
-                "Calculated totals for estimate {}: subtotal={}, tax={}, total={} (testMode={})",
+                "Calculated totals for estimate {}: subtotal={}, tax={}, total={} (taxPending={})",
                 estimateId,
                 subtotal,
                 taxAmount,
                 total,
-                testMode);
-
-        if (testMode) {
-            log.warn(
-                    "Tax calculation for estimate {} used TEST MODE. "
-                            + "Verify tax service configuration for production use.",
-                    estimateId);
-        }
+                taxPending);
 
         return EstimateResponse.fromEntity(saved);
     }
@@ -1159,9 +1153,24 @@ public class EstimateServiceImpl implements EstimateService {
                 .description(getDescriptionForTaxCalculation(item))
                 .quantity(item.getQuantity())
                 .unitPrice(item.getUnitPrice())
-                .taxCategory(mapItemTypeToTaxCategory(item.getItemType()))
+                // Story T9: forward the line's captured taxCode as the taxCategory (consumed by
+                // pos-tax after Wave-2 T7 per-category rules). Fall back to the item-type default
+                // when the line carries no explicit code.
+                .taxCategory(resolveTaxCategory(item))
                 .taxExempt(false)
                 .build();
+    }
+
+    /**
+     * Resolve the tax category sent to pos-tax: the line's explicit {@code taxCode} when
+     * present, otherwise the item-type default (PART→GOODS, LABOR→SERVICES).
+     */
+    private String resolveTaxCategory(EstimateItem item) {
+        String taxCode = item.getTaxCode();
+        if (taxCode != null && !taxCode.isBlank()) {
+            return taxCode.trim();
+        }
+        return mapItemTypeToTaxCategory(item.getItemType());
     }
 
     // ==================== ESTIMATE SUMMARY (CAP:002 Story #18)
