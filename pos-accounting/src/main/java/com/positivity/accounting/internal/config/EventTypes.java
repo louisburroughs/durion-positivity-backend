@@ -269,12 +269,15 @@ public final class EventTypes {
                                 "ACCOUNTING_STATUS_VIEW", "View current accounting status for an invoice")
                         .build(),
 
-                // ReportExportController — 3 events (PRD missing endpoints)
+                // ReportExportController — 4 events (PRD missing endpoints + issue #999 download)
                 EventTypeRegistration.write("ACCOUNTING_REPORT_EXPORT_REQUEST", "Request async report export")
                         .build(),
                 EventTypeRegistration.fastRead("ACCOUNTING_REPORT_EXPORT_STATUS", "Get report export status by ID")
                         .build(),
                 EventTypeRegistration.search("ACCOUNTING_REPORT_EXPORT_LIST", "List report export history")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_REPORT_EXPORT_DOWNLOAD", "Download rendered report export artifact")
                         .build(),
 
                 // TimekeepingExportController — 1 event (Wave 4 SDK migration)

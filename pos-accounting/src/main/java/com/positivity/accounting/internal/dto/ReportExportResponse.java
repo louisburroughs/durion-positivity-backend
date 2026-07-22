@@ -61,6 +61,15 @@ public class ReportExportResponse {
     @Schema(description = "Export format", example = "CSV", requiredMode = NOT_REQUIRED)
     private ExportFormat format;
 
+    /**
+     * Human-readable reason the export failed. Only set when status is FAILED.
+     */
+    @Schema(
+            description = "Failure reason (only present when status is FAILED)",
+            example = "Rendering is not supported for reportType 'INCOME_STATEMENT'",
+            requiredMode = NOT_REQUIRED)
+    private String failureReason;
+
     @Schema(description = "Report type that was exported", example = "JOURNAL_LINES", requiredMode = NOT_REQUIRED)
     private String reportType;
 }

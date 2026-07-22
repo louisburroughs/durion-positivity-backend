@@ -102,3 +102,5 @@ permissions:
     description: "Export report"
   - name: "accounting:tax-snapshot:freeze"
     description: "Freeze the sales-tax liability report for a closed accounting period"
+  - name: "reporting:view:financial-statements"
+    description: "View financial statements and download rendered report exports"
