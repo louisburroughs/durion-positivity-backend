@@ -43,9 +43,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/accounting/reports/financial/tax-liability/snapshots")
 @Tag(name = "Financial Reporting", description = "Period-close-aligned freeze of the Sales-Tax Liability report")
-@SecurityRequirement(
-        name = "bearerAuth",
-        scopes = {"reporting:view:financial-statements", "accounting:tax-snapshot:freeze"})
 @Validated
 public class TaxLiabilitySnapshotController {
 
@@ -58,6 +55,9 @@ public class TaxLiabilitySnapshotController {
     }
 
     @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:tax-snapshot:freeze"})
     @PreAuthorize("hasAuthority('accounting:tax-snapshot:freeze')")
     @EmitEvent(id = "TAX_LIABILITY_SNAPSHOT_FREEZE", apiVersion = "1")
     @Operation(
@@ -106,6 +106,9 @@ public class TaxLiabilitySnapshotController {
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"reporting:view:financial-statements"})
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "TAX_LIABILITY_SNAPSHOT_LIST", apiVersion = "1")
     @Operation(
@@ -136,6 +139,9 @@ public class TaxLiabilitySnapshotController {
     }
 
     @GetMapping(value = "/{snapshotId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"reporting:view:financial-statements"})
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "TAX_LIABILITY_SNAPSHOT_GET", apiVersion = "1")
     @Operation(
@@ -164,6 +170,9 @@ public class TaxLiabilitySnapshotController {
     }
 
     @PostMapping(value = "/{snapshotId}/verify", produces = MediaType.APPLICATION_JSON_VALUE)
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"reporting:view:financial-statements"})
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "TAX_LIABILITY_SNAPSHOT_VERIFY", apiVersion = "1")
     @Operation(

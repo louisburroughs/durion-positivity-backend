@@ -36,6 +36,8 @@ CREATE TABLE tax_liability_snapshot (
     CONSTRAINT tax_liability_snapshot_pkey PRIMARY KEY (snapshot_id),
     CONSTRAINT fk_tax_liability_snapshot_period
         FOREIGN KEY (period_id) REFERENCES accounting_period (period_id),
+    CONSTRAINT fk_tax_liability_snapshot_supersedes
+        FOREIGN KEY (supersedes_snapshot_id) REFERENCES tax_liability_snapshot (snapshot_id),
     CONSTRAINT tax_liability_snapshot_status_check
         CHECK ((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'SUPERSEDED'::character varying])::text[])),
     CONSTRAINT tax_liability_snapshot_date_check CHECK (start_date <= end_date)

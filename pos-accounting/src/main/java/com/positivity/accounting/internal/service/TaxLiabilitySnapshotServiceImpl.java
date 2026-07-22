@@ -28,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -128,7 +129,18 @@ public class TaxLiabilitySnapshotServiceImpl implements TaxLiabilitySnapshotServ
             snapshot.addRow(row);
         }
 
-        TaxLiabilitySnapshot saved = snapshotRepository.save(snapshot);
+        TaxLiabilitySnapshot saved;
+        try {
+            // Flush in-method so a concurrent freeze losing the one-ACTIVE-per-period partial
+            // unique index race surfaces here as a 409 conflict, not a 500 at commit.
+            saved = snapshotRepository.saveAndFlush(snapshot);
+        } catch (DataIntegrityViolationException e) {
+            throw new TaxSnapshotConflictException(
+                    null,
+                    "Period " + periodCode + " was frozen concurrently by another request;"
+                            + " re-freeze with supersede=true to replace the winning snapshot",
+                    e);
+        }
         log.info(
                 "Froze tax liability snapshot {} for period {} ({} rows, netTax={}, hash={})",
                 saved.getSnapshotId(),

@@ -504,13 +504,15 @@ public enum PermissionCode {
     TAX__EXEMPTION__MANAGE(386, "tax:exemption:manage"),
     TAX__EXEMPTION__VIEW(387, "tax:exemption:view"),
     // ── Tax provider lifecycle (new) ─────────────────────────────────────────────
-    TAX__COMMIT(388, "tax:commit");
+    TAX__COMMIT(388, "tax:commit"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
+    ACCOUNTING__TAX_SNAPSHOT__FREEZE(389, "accounting:tax-snapshot:freeze");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 26;
+    public static final int CATALOG_VERSION = 27;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

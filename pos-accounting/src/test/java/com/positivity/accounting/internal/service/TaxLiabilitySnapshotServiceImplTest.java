@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * Unit tests for the tax-liability freeze service (issue #998): close-gating, one-ACTIVE-per-period
@@ -79,7 +80,8 @@ class TaxLiabilitySnapshotServiceImplTest {
         when(snapshotRepository.findByPeriodIdAndStatus(period.getPeriodId(), TaxLiabilitySnapshotStatus.ACTIVE))
                 .thenReturn(Optional.empty());
         when(financialReportingService.generateTaxLiability(START, END)).thenReturn(report);
-        when(snapshotRepository.save(any(TaxLiabilitySnapshot.class))).thenAnswer(inv -> persisted(inv.getArgument(0)));
+        when(snapshotRepository.saveAndFlush(any(TaxLiabilitySnapshot.class)))
+                .thenAnswer(inv -> persisted(inv.getArgument(0)));
 
         TaxLiabilitySnapshotResponse response = service.freeze(PERIOD_CODE, false);
 
@@ -102,7 +104,7 @@ class TaxLiabilitySnapshotServiceImplTest {
 
         assertThatThrownBy(() -> service.freeze(PERIOD_CODE, false))
                 .isInstanceOf(AccountingPeriodNotFoundException.class);
-        verify(snapshotRepository, never()).save(any());
+        verify(snapshotRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -116,7 +118,7 @@ class TaxLiabilitySnapshotServiceImplTest {
                 .isInstanceOf(TaxSnapshotPeriodNotClosedException.class)
                 .hasMessageContaining("CLOSED");
         verify(financialReportingService, never()).generateTaxLiability(any(), any());
-        verify(snapshotRepository, never()).save(any());
+        verify(snapshotRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -134,7 +136,7 @@ class TaxLiabilitySnapshotServiceImplTest {
                 .isInstanceOf(TaxSnapshotConflictException.class)
                 .satisfies(ex -> assertThat(((TaxSnapshotConflictException) ex).getExistingSnapshotId())
                         .isEqualTo(existingId));
-        verify(snapshotRepository, never()).save(any());
+        verify(snapshotRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -150,8 +152,8 @@ class TaxLiabilitySnapshotServiceImplTest {
         when(snapshotRepository.findByPeriodIdAndStatus(period.getPeriodId(), TaxLiabilitySnapshotStatus.ACTIVE))
                 .thenReturn(Optional.of(existing));
         when(financialReportingService.generateTaxLiability(START, END)).thenReturn(report);
-        when(snapshotRepository.saveAndFlush(any(TaxLiabilitySnapshot.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(snapshotRepository.save(any(TaxLiabilitySnapshot.class))).thenAnswer(inv -> persisted(inv.getArgument(0)));
+        when(snapshotRepository.saveAndFlush(any(TaxLiabilitySnapshot.class)))
+                .thenAnswer(inv -> inv.getArgument(0) == existing ? existing : persisted(inv.getArgument(0)));
 
         TaxLiabilitySnapshotResponse response = service.freeze(PERIOD_CODE, true);
 
@@ -161,6 +163,23 @@ class TaxLiabilitySnapshotServiceImplTest {
         verify(snapshotRepository).saveAndFlush(existing);
         assertThat(response.getSupersedesSnapshotId()).isEqualTo(existingId);
         assertThat(response.getStatus()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("freeze: lost insert race (partial unique index violation) -> 409 conflict, not 500")
+    void freezeLostRaceMapsToConflict() {
+        AccountingPeriod period = closedPeriod();
+        TaxLiabilityReport report = report("230.00");
+        when(accountingPeriodRepository.findByPeriodCode(PERIOD_CODE)).thenReturn(Optional.of(period));
+        when(snapshotRepository.findByPeriodIdAndStatus(period.getPeriodId(), TaxLiabilitySnapshotStatus.ACTIVE))
+                .thenReturn(Optional.empty());
+        when(financialReportingService.generateTaxLiability(START, END)).thenReturn(report);
+        when(snapshotRepository.saveAndFlush(any(TaxLiabilitySnapshot.class)))
+                .thenThrow(new DataIntegrityViolationException("uq_tax_liability_snapshot_active"));
+
+        assertThatThrownBy(() -> service.freeze(PERIOD_CODE, false))
+                .isInstanceOf(TaxSnapshotConflictException.class)
+                .hasMessageContaining("concurrently");
     }
 
     @Test

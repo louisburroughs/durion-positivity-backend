@@ -912,7 +912,6 @@ paths:
       security:
       - bearerAuth:
         - reporting:view:financial-statements
-        - accounting:tax-snapshot:freeze
       x-required-permissions:
       - reporting:view:financial-statements
     post:
@@ -976,7 +975,6 @@ paths:
                 $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
-        - reporting:view:financial-statements
         - accounting:tax-snapshot:freeze
       x-required-permissions:
       - accounting:tax-snapshot:freeze
@@ -1023,7 +1021,6 @@ paths:
       security:
       - bearerAuth:
         - reporting:view:financial-statements
-        - accounting:tax-snapshot:freeze
       x-required-permissions:
       - reporting:view:financial-statements
   /v1/accounting/reports/export:
@@ -3599,7 +3596,6 @@ paths:
       security:
       - bearerAuth:
         - reporting:view:financial-statements
-        - accounting:tax-snapshot:freeze
       x-required-permissions:
       - reporting:view:financial-statements
   /v1/accounting/reports/financial/income-statement:
