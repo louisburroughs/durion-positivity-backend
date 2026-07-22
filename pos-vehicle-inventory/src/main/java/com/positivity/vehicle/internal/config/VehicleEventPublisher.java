@@ -7,6 +7,7 @@ import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -50,6 +51,11 @@ public class VehicleEventPublisher {
         // strictly increasing per vehicle (create=0, updates=1,2,...), which the consumer's
         // stale-event guard relies on.
         entityManager.flush();
+        VehicleRecord.OdometerReading odometer = vehicle.getOdometer();
+        Integer odometerValue = narrowOdometer(vehicle, odometer);
+        String odometerUnit = odometer == null || odometer.getUnit() == null
+                ? null
+                : odometer.getUnit().name();
         VehicleUpdatedV1 payload = new VehicleUpdatedV1(
                 vehicle.getVehicleId(),
                 vehicle.getAccountId(),
@@ -64,6 +70,8 @@ public class VehicleEventPublisher {
                 vehicle.getModel(),
                 vehicle.getTrim(),
                 Boolean.TRUE.equals(vehicle.getIsActive()),
+                odometerValue,
+                odometerUnit,
                 vehicle.getCreatedAt(),
                 vehicle.getUpdatedAt());
         DomainEventEnvelope<VehicleUpdatedV1> envelope = DomainEventEnvelope.of(
@@ -82,5 +90,27 @@ public class VehicleEventPublisher {
                 vehicle.getVehicleId(),
                 vehicle.getAccountId(),
                 vehicle.getIsActive());
+    }
+
+    /**
+     * Narrows the stored odometer reading to the event's nullable {@code Integer} field. A value
+     * beyond {@link Integer#MAX_VALUE} must not throw here: this runs inside the mutating registry
+     * transaction, so an {@link ArithmeticException} would roll back the vehicle update itself
+     * rather than merely the event emit (#1003 review, m1). Overflow degrades to {@code null} and
+     * is logged; the replica simply carries no odometer for that (implausibly large) reading.
+     */
+    private @Nullable Integer narrowOdometer(VehicleRecord vehicle, VehicleRecord.@Nullable OdometerReading odometer) {
+        if (odometer == null || odometer.getValue() == null) {
+            return null;
+        }
+        try {
+            return Math.toIntExact(odometer.getValue());
+        } catch (ArithmeticException ex) {
+            log.warn(
+                    "Odometer reading {} for vehicleId={} exceeds Integer range; emitting null odometer",
+                    odometer.getValue(),
+                    vehicle.getVehicleId());
+            return null;
+        }
     }
 }

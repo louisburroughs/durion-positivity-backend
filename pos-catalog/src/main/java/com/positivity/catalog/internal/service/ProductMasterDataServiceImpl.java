@@ -1,5 +1,6 @@
 package com.positivity.catalog.internal.service;
 
+import com.positivity.catalog.internal.config.CatalogFactPublisher;
 import com.positivity.catalog.internal.dto.CategoryDto;
 import com.positivity.catalog.internal.dto.ProductCreateRequestDto;
 import com.positivity.catalog.internal.dto.ProductDto;
@@ -31,6 +32,7 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ProductDetailCacheInvalidationPublisher productDetailCacheInvalidationPublisher;
+    private final CatalogFactPublisher catalogFactPublisher;
 
     @Override
     @Transactional
@@ -56,6 +58,7 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
 
         ProductEntity saved = productRepository.save(entity);
         productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
+        catalogFactPublisher.publishProductUpdated(saved);
         return toDto(saved);
     }
 
@@ -91,6 +94,7 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
 
         ProductEntity saved = productRepository.save(entity);
         productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
+        catalogFactPublisher.publishProductUpdated(saved);
         return toDto(saved);
     }
 
@@ -101,6 +105,7 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
         entity.setStatus(newStatus);
         ProductEntity saved = productRepository.save(entity);
         productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
+        catalogFactPublisher.publishProductUpdated(saved);
         return toDto(saved);
     }
 

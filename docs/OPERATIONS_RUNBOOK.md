@@ -369,8 +369,9 @@ public class PartyController {
 ## Domain Events (Kafka, ADR-0044)
 
 Module-to-module communication flows over Kafka domain topics (`{domain}.events.v1` facts,
-`{domain}.commands.v1` commands). Contracts live in `pos-domain-events`; the full policy is
-`docs/adr-0044-event-only-domain-walls.md`.
+`{domain}.commands.v1` commands). Contracts live in `pos-domain-events`; the full policy is the
+canonical ADR-0044 (`durion/docs/adr/0044-platform-event-only-domain-walls.adr.md`), enforced by
+`pos-archunit` `DomainWallsTest`.
 
 ### Local broker
 

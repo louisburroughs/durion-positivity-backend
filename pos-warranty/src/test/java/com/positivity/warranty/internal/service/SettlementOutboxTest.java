@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.warranty.WarrantyClaimSettledV1;
 import com.positivity.warranty.internal.client.InvoiceClient;
-import com.positivity.warranty.internal.client.WorkorderClient;
 import com.positivity.warranty.internal.config.OutboxEventWriter;
 import com.positivity.warranty.internal.dto.SettlementCreateRequest;
 import com.positivity.warranty.internal.entity.ClaimSettlement;
@@ -20,6 +19,7 @@ import com.positivity.warranty.internal.enums.SettlementType;
 import com.positivity.warranty.internal.repository.ClaimNoteRepository;
 import com.positivity.warranty.internal.repository.ClaimSettlementRepository;
 import com.positivity.warranty.internal.repository.ClaimStatusHistoryRepository;
+import com.positivity.warranty.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
@@ -68,7 +68,7 @@ class SettlementOutboxTest {
     private InvoiceClient invoiceClient;
 
     @Mock
-    private WorkorderClient workorderClient;
+    private ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
 
     @Mock
     private EntityManager entityManager;
@@ -92,7 +92,7 @@ class SettlementOutboxTest {
                 statusHistoryRepository,
                 noteRepository,
                 invoiceClient,
-                workorderClient,
+                extWorkorderReplicaRepository,
                 claimSnapshotPublisher,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 entityManager,

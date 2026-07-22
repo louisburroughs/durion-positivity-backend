@@ -5,25 +5,33 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
-import com.positivity.warranty.internal.client.CatalogClient;
-import com.positivity.warranty.internal.client.InvoiceClient;
-import com.positivity.warranty.internal.client.WorkorderClient;
 import com.positivity.warranty.internal.dto.CandidateLine;
+import com.positivity.warranty.internal.entity.ExtCatalogReplica;
+import com.positivity.warranty.internal.entity.ExtInvoiceLineReplica;
+import com.positivity.warranty.internal.entity.ExtInvoiceReplica;
+import com.positivity.warranty.internal.entity.ExtWorkorderLineReplica;
+import com.positivity.warranty.internal.entity.ExtWorkorderReplica;
 import com.positivity.warranty.internal.enums.LineSourceType;
+import com.positivity.warranty.internal.repository.ExtCatalogReplicaRepository;
+import com.positivity.warranty.internal.repository.ExtInvoiceLineReplicaRepository;
+import com.positivity.warranty.internal.repository.ExtInvoiceReplicaRepository;
+import com.positivity.warranty.internal.repository.ExtWorkorderLineReplicaRepository;
+import com.positivity.warranty.internal.repository.ExtWorkorderReplicaRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
 
 /**
- * Candidate origin-line search (PRD §7 step 2): combines invoice and workorder sources, filters
- * by SKU / product, and degrades gracefully (partial results) when a callee is down.
+ * Candidate origin-line search (PRD §7 step 2): combines invoice and workorder sources read from
+ * the event-fed {@code ext_*} replicas (ADR-0044 §6, #924), filters by SKU / product, and degrades
+ * gracefully (partial results) when a replica read fails.
  */
 @ExtendWith(MockitoExtension.class)
 class CandidateLineServiceImplTest {
@@ -40,70 +48,106 @@ class CandidateLineServiceImplTest {
     private static final Instant WORKORDER_AT = Instant.parse("2026-01-11T12:00:00Z");
 
     @Mock
-    private InvoiceClient invoiceClient;
+    private ExtInvoiceReplicaRepository extInvoiceReplicaRepository;
 
     @Mock
-    private WorkorderClient workorderClient;
+    private ExtInvoiceLineReplicaRepository extInvoiceLineReplicaRepository;
 
     @Mock
-    private CatalogClient catalogClient;
+    private ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
+
+    @Mock
+    private ExtWorkorderLineReplicaRepository extWorkorderLineReplicaRepository;
+
+    @Mock
+    private ExtCatalogReplicaRepository extCatalogReplicaRepository;
 
     private CandidateLineServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new CandidateLineServiceImpl(invoiceClient, workorderClient, catalogClient);
+        service = new CandidateLineServiceImpl(
+                extInvoiceReplicaRepository,
+                extInvoiceLineReplicaRepository,
+                extWorkorderReplicaRepository,
+                extWorkorderLineReplicaRepository,
+                extCatalogReplicaRepository);
     }
 
-    private static InvoiceClient.InvoiceLine invoiceLine(String description) {
-        return new InvoiceClient.InvoiceLine(
-                INVOICE_ID,
-                "INV-100",
-                INVOICE_ITEM_ID,
-                description,
-                new BigDecimal("2"),
-                new BigDecimal("100.00"),
-                new BigDecimal("200.00"),
-                null,
-                "PART",
-                "PAID",
-                INVOICE_AT);
+    private static ExtInvoiceReplica invoiceHeader() {
+        return ExtInvoiceReplica.builder()
+                .invoiceId(INVOICE_ID)
+                .invoiceNumber("INV-100")
+                .partyId(CUSTOMER_ID.toString())
+                .status("PAID")
+                .invoiceCreatedAt(INVOICE_AT)
+                .aggregateVersion(1L)
+                .updatedAt(INVOICE_AT)
+                .build();
     }
 
-    private static WorkorderClient.WorkorderSummary workorderSummary() {
-        return new WorkorderClient.WorkorderSummary(
-                WORKORDER_ID, "WO-200", "COMPLETED", CUSTOMER_ID, VEHICLE_ID, "1FTFW1ET5DFC12345", WORKORDER_AT);
+    private static ExtInvoiceLineReplica invoiceLine(String description) {
+        return ExtInvoiceLineReplica.builder()
+                .invoiceItemId(INVOICE_ITEM_ID)
+                .invoiceId(INVOICE_ID)
+                .description(description)
+                .quantity(new BigDecimal("2"))
+                .unitPrice(new BigDecimal("100.00"))
+                .amount(new BigDecimal("200.00"))
+                .itemType("PART")
+                .build();
     }
 
-    private static WorkorderClient.WorkorderDetail workorderDetail(UUID partProductId, String partDescription) {
-        return new WorkorderClient.WorkorderDetail(
-                WORKORDER_ID,
-                "WO-200",
-                CUSTOMER_ID,
-                VEHICLE_ID,
-                List.of(new WorkorderClient.ServiceLine(
-                        SERVICE_LINE_ID,
-                        "Mount and balance",
-                        new BigDecimal("1.5"),
-                        new BigDecimal("90.00"),
-                        new BigDecimal("135.00"))),
-                List.of(new WorkorderClient.PartLine(
-                        PART_LINE_ID,
-                        partProductId,
-                        partDescription,
-                        BigDecimal.ONE,
-                        new BigDecimal("150.00"),
-                        new BigDecimal("150.00"),
-                        "https://photos/part.jpg")));
+    private static ExtWorkorderReplica workorderHeader() {
+        return ExtWorkorderReplica.builder()
+                .workorderId(WORKORDER_ID)
+                .workorderNumber("WO-200")
+                .status("COMPLETED")
+                .customerId(CUSTOMER_ID)
+                .vehicleId(VEHICLE_ID)
+                .workorderCreatedAt(WORKORDER_AT)
+                .aggregateVersion(1L)
+                .updatedAt(WORKORDER_AT)
+                .build();
+    }
+
+    private static ExtWorkorderLineReplica partLine(UUID productId, String description) {
+        return ExtWorkorderLineReplica.builder()
+                .workorderLineId(PART_LINE_ID)
+                .workorderId(WORKORDER_ID)
+                .lineKind("PART")
+                .productEntityId(productId)
+                .description(description)
+                .quantity(BigDecimal.ONE)
+                .unitPrice(new BigDecimal("150.00"))
+                .lineTotal(new BigDecimal("150.00"))
+                .photoEvidenceUrl("https://photos/part.jpg")
+                .build();
+    }
+
+    private static ExtWorkorderLineReplica serviceLine() {
+        return ExtWorkorderLineReplica.builder()
+                .workorderLineId(SERVICE_LINE_ID)
+                .workorderId(WORKORDER_ID)
+                .lineKind("SERVICE")
+                .description("Mount and balance")
+                .quantity(new BigDecimal("1.5"))
+                .unitPrice(new BigDecimal("90.00"))
+                .lineTotal(new BigDecimal("135.00"))
+                .build();
     }
 
     @Test
     void combinesInvoiceAndWorkorderSources_whenUnfiltered() {
-        when(invoiceClient.searchInvoiceLines(eq(CUSTOMER_ID), any()))
+        when(extInvoiceReplicaRepository.findByPartyIdOrderByInvoiceIdDesc(
+                        eq(CUSTOMER_ID.toString()), any(Pageable.class)))
+                .thenReturn(List.of(invoiceHeader()));
+        when(extInvoiceLineReplicaRepository.findByInvoiceIdIn(any()))
                 .thenReturn(List.of(invoiceLine("SuperTire 225/45R17")));
-        when(workorderClient.searchWorkorders(CUSTOMER_ID, VEHICLE_ID)).thenReturn(List.of(workorderSummary()));
-        when(workorderClient.getWorkorderDetail(WORKORDER_ID))
-                .thenReturn(Optional.of(workorderDetail(PRODUCT_ID, "SuperTire 225/45R17")));
+        when(extWorkorderReplicaRepository.findByCustomerIdAndVehicleId(CUSTOMER_ID, VEHICLE_ID))
+                .thenReturn(List.of(workorderHeader()));
+        when(extWorkorderLineReplicaRepository.findByWorkorderId(WORKORDER_ID))
+                .thenReturn(List.of(partLine(PRODUCT_ID, "SuperTire 225/45R17"), serviceLine()));
 
         List<CandidateLine> results = service.findCandidateLines(CUSTOMER_ID, VEHICLE_ID, null, null);
 
@@ -144,14 +188,24 @@ class CandidateLineServiceImplTest {
 
     @Test
     void productFilter_matchesPartsByIdAndInvoiceLinesByCatalogTokens() {
-        when(catalogClient.getProduct(PRODUCT_ID))
-                .thenReturn(Optional.of(new CatalogClient.ProductInfo(
-                        PRODUCT_ID, "TIRE-1", "SuperTire", null, null, null, null, "Tires", null, null)));
-        when(invoiceClient.searchInvoiceLines(eq(CUSTOMER_ID), any()))
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID))
+                .thenReturn(java.util.Optional.of(ExtCatalogReplica.builder()
+                        .productId(PRODUCT_ID)
+                        .sku("TIRE-1")
+                        .name("SuperTire")
+                        .category("Tires")
+                        .active(true)
+                        .aggregateVersion(1L)
+                        .updatedAt(INVOICE_AT)
+                        .build()));
+        when(extInvoiceReplicaRepository.findByPartyIdOrderByInvoiceIdDesc(
+                        eq(CUSTOMER_ID.toString()), any(Pageable.class)))
+                .thenReturn(List.of(invoiceHeader()));
+        when(extInvoiceLineReplicaRepository.findByInvoiceIdIn(any()))
                 .thenReturn(List.of(invoiceLine("SuperTire 225/45R17"), invoiceLine("Oil change")));
-        when(workorderClient.searchWorkorders(CUSTOMER_ID, null)).thenReturn(List.of(workorderSummary()));
-        when(workorderClient.getWorkorderDetail(WORKORDER_ID))
-                .thenReturn(Optional.of(workorderDetail(PRODUCT_ID, "Brake pad set")));
+        when(extWorkorderReplicaRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(List.of(workorderHeader()));
+        when(extWorkorderLineReplicaRepository.findByWorkorderId(WORKORDER_ID))
+                .thenReturn(List.of(partLine(PRODUCT_ID, "Brake pad set"), serviceLine()));
 
         List<CandidateLine> results = service.findCandidateLines(CUSTOMER_ID, null, null, PRODUCT_ID);
 
@@ -170,9 +224,12 @@ class CandidateLineServiceImplTest {
 
     @Test
     void skuFilter_matchesDescriptionsCaseInsensitively() {
-        when(invoiceClient.searchInvoiceLines(eq(CUSTOMER_ID), any()))
+        when(extInvoiceReplicaRepository.findByPartyIdOrderByInvoiceIdDesc(
+                        eq(CUSTOMER_ID.toString()), any(Pageable.class)))
+                .thenReturn(List.of(invoiceHeader()));
+        when(extInvoiceLineReplicaRepository.findByInvoiceIdIn(any()))
                 .thenReturn(List.of(invoiceLine("Tire WX-100 all season"), invoiceLine("Wiper blades")));
-        when(workorderClient.searchWorkorders(CUSTOMER_ID, null)).thenReturn(List.of());
+        when(extWorkorderReplicaRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(List.of());
 
         List<CandidateLine> results = service.findCandidateLines(CUSTOMER_ID, null, "wx-100", null);
 
@@ -181,11 +238,14 @@ class CandidateLineServiceImplTest {
     }
 
     @Test
-    void degradesToPartialResults_whenWorkorderServiceIsDown() {
-        when(invoiceClient.searchInvoiceLines(eq(CUSTOMER_ID), any()))
+    void degradesToPartialResults_whenWorkorderReplicaReadFails() {
+        when(extInvoiceReplicaRepository.findByPartyIdOrderByInvoiceIdDesc(
+                        eq(CUSTOMER_ID.toString()), any(Pageable.class)))
+                .thenReturn(List.of(invoiceHeader()));
+        when(extInvoiceLineReplicaRepository.findByInvoiceIdIn(any()))
                 .thenReturn(List.of(invoiceLine("SuperTire 225/45R17")));
-        when(workorderClient.searchWorkorders(CUSTOMER_ID, VEHICLE_ID))
-                .thenThrow(new IllegalStateException("workorder service down"));
+        when(extWorkorderReplicaRepository.findByCustomerIdAndVehicleId(CUSTOMER_ID, VEHICLE_ID))
+                .thenThrow(new IllegalStateException("replica read failed"));
 
         List<CandidateLine> results = service.findCandidateLines(CUSTOMER_ID, VEHICLE_ID, null, null);
 
@@ -194,12 +254,13 @@ class CandidateLineServiceImplTest {
     }
 
     @Test
-    void degradesToPartialResults_whenInvoiceServiceIsDown() {
-        when(invoiceClient.searchInvoiceLines(eq(CUSTOMER_ID), any()))
-                .thenThrow(new IllegalStateException("invoice down"));
-        when(workorderClient.searchWorkorders(CUSTOMER_ID, null)).thenReturn(List.of(workorderSummary()));
-        when(workorderClient.getWorkorderDetail(any(UUID.class)))
-                .thenReturn(Optional.of(workorderDetail(PRODUCT_ID, "SuperTire")));
+    void degradesToPartialResults_whenInvoiceReplicaReadFails() {
+        when(extInvoiceReplicaRepository.findByPartyIdOrderByInvoiceIdDesc(
+                        eq(CUSTOMER_ID.toString()), any(Pageable.class)))
+                .thenThrow(new IllegalStateException("replica read failed"));
+        when(extWorkorderReplicaRepository.findByCustomerId(CUSTOMER_ID)).thenReturn(List.of(workorderHeader()));
+        when(extWorkorderLineReplicaRepository.findByWorkorderId(WORKORDER_ID))
+                .thenReturn(List.of(partLine(PRODUCT_ID, "SuperTire"), serviceLine()));
 
         List<CandidateLine> results = service.findCandidateLines(CUSTOMER_ID, null, null, null);
 

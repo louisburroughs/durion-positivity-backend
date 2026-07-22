@@ -7,6 +7,7 @@ import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
 import com.positivity.domainevents.invoice.TaxBreakdownLine;
 import com.positivity.invoice.internal.entity.BillingRules;
 import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.entity.InvoiceLineTax;
 import com.positivity.invoice.internal.repository.InvoiceLineTaxRepository;
 import jakarta.persistence.EntityManager;
@@ -62,7 +63,8 @@ public class InvoiceEventPublisher {
                 invoice.getAdjustmentsAmount(),
                 invoice.getCreatedAt(),
                 invoice.getFinalizedAt(),
-                buildTaxBreakdown(invoice.getId()));
+                buildTaxBreakdown(invoice.getId()),
+                buildLines(invoice));
         DomainEventEnvelope<InvoiceUpdatedV1> envelope = DomainEventEnvelope.of(
                 InvoiceUpdatedV1.EVENT_TYPE,
                 InvoiceUpdatedV1.SCHEMA_VERSION,
@@ -108,6 +110,28 @@ public class InvoiceEventPublisher {
                         r.getTaxAmount(),
                         r.isExempt(),
                         r.getExemptionReasonCode()))
+                .toList();
+    }
+
+    /**
+     * Projects the invoice's line items onto the additive event line detail (#924) that feeds
+     * pos-warranty's line-grained {@code ext_invoice} replica. Authoritative-empty vs. null,
+     * matching {@link #buildTaxBreakdown}: an empty list is a genuine no-line invoice.
+     */
+    private List<InvoiceUpdatedV1.InvoiceLine> buildLines(@NonNull Invoice invoice) {
+        List<InvoiceItem> items = invoice.getItems();
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream()
+                .map(item -> new InvoiceUpdatedV1.InvoiceLine(
+                        item.getId(),
+                        item.getDescription(),
+                        item.getQuantity(),
+                        item.getUnitPrice(),
+                        item.getLineTotal(),
+                        item.getWorkorderItemId(),
+                        item.getType()))
                 .toList();
     }
 

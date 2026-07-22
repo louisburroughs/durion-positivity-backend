@@ -51,36 +51,6 @@ public class InvoiceClientImpl implements InvoiceClient {
     }
 
     @Override
-    public @NonNull List<InvoiceLine> searchInvoiceLines(@NonNull UUID partyId, @Nullable String sku) {
-        try {
-            List<InvoiceLine> lines = restClient
-                    .get()
-                    .uri(uriBuilder -> {
-                        var builder =
-                                uriBuilder.path(basePath + "/items/search").queryParam("partyId", partyId);
-                        if (sku != null && !sku.isBlank()) {
-                            builder = builder.queryParam("q", sku.trim());
-                        }
-                        return builder.build();
-                    })
-                    .header("X-User", SERVICE_USER)
-                    .header("X-Authorities", AUTHORITIES)
-                    .retrieve()
-                    .body(new ParameterizedTypeReference<List<InvoiceLine>>() {});
-            return lines != null ? lines : List.of();
-        } catch (RestClientResponseException ex) {
-            log.warn(
-                    "Invoice line search failed for partyId={}: HTTP {}",
-                    partyId,
-                    ex.getStatusCode().value());
-            return List.of();
-        } catch (RestClientException ex) {
-            log.warn("pos-invoice unreachable for line search partyId={}: {}", partyId, ex.getMessage());
-            return List.of();
-        }
-    }
-
-    @Override
     public @NonNull Optional<InvoiceSummary> getInvoice(@NonNull UUID invoiceId) {
         try {
             InvoiceDetailsWire response = restClient

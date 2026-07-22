@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.vehicle.VehicleUpdatedV1;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
+import com.positivity.vehicle.internal.enums.OdometerUnit;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
@@ -82,6 +83,24 @@ class VehicleEventPublisherTest {
         assertThat(payload.accountId()).isEqualTo(ACCOUNT_ID);
         assertThat(payload.vin()).isEqualTo("1HGBH41JXMN109186");
         assertThat(payload.active()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Odometer beyond Integer range degrades to null instead of rolling back the update (#1003 m1)")
+    void odometerOverflowEmitsNull() {
+        when(writerProvider.getIfAvailable()).thenReturn(writer);
+        VehicleRecord vehicle = vehicle();
+        vehicle.setOdometer(new VehicleRecord.OdometerReading(
+                (long) Integer.MAX_VALUE + 1L, OdometerUnit.MILES, Instant.parse("2026-07-12T11:00:00Z")));
+
+        publisher.publishVehicleUpdated(vehicle);
+
+        @SuppressWarnings("rawtypes")
+        ArgumentCaptor<DomainEventEnvelope> envelope = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer).publish(any(), envelope.capture());
+        VehicleUpdatedV1 payload = (VehicleUpdatedV1) envelope.getValue().payload();
+        assertThat(payload.odometerValue()).isNull();
+        assertThat(payload.odometerUnit()).isEqualTo(OdometerUnit.MILES.name());
     }
 
     @Test

@@ -16,6 +16,7 @@ import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.internal.service.WorkorderFactPublisher;
 import java.math.BigDecimal;
 import java.util.List;
@@ -42,13 +43,15 @@ class WorkorderFactPublisherTest {
     private final OutboxEventWriter writer = mock(OutboxEventWriter.class);
     private final WorkorderRepository workorderRepository = mock(WorkorderRepository.class);
     private final WorkorderPartRepository workorderPartRepository = mock(WorkorderPartRepository.class);
+    private final WorkorderServiceRepository workorderServiceRepository = mock(WorkorderServiceRepository.class);
 
     private WorkorderFactPublisher publisher;
 
     @BeforeEach
     void setUp() {
         when(writerProvider.getIfAvailable()).thenReturn(writer);
-        publisher = new WorkorderFactPublisher(writerProvider, workorderRepository, workorderPartRepository);
+        publisher = new WorkorderFactPublisher(
+                writerProvider, workorderRepository, workorderPartRepository, workorderServiceRepository);
         TransactionSynchronizationManager.initSynchronization();
     }
 

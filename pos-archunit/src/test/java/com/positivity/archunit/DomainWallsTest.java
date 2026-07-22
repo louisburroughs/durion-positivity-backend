@@ -54,13 +54,17 @@ class DomainWallsTest {
      * utility whitelist — every entry requires an ADR-0044 amendment, and any other module (or any
      * other target) still fails.
      *
-     * <p>pos-warranty: ADR-0044 amendment 2026-07-16 + {@code docs/PRD-warranty-claims-module.md}
-     * §9.4 — warranty v1 candidate-line origin search and settlement execution are synchronous
-     * counter flows; migration to event-fed replicas is the planned v2 path.
+     * <p>pos-warranty: warranty v2 (#924) migrated its candidate-line/eligibility/vehicle-snapshot
+     * reads to event-fed {@code ext_*} replicas (ext_vehicle, ext_workorder, ext_invoice,
+     * ext_catalog) and pos-customer's dead client was deleted. The sole remaining synchronous target
+     * is pos-invoice: settlement adjustment/refund writes plus their reconciliation reads stay
+     * synchronous permanently per the <b>ADR-0044 amendment 2026-07-22</b> ("Pos-warranty settlement
+     * remains synchronous against pos-invoice") — a money-moving counter-flow that must fail loudly
+     * in the request path, with reconciliation reading authoritative post-write state. This edge is
+     * the permanent, narrowest exception; widening it requires a further ADR-0044 amendment.
      */
-    private static final Map<String, Set<String>> SCOPED_MODULE_EXCEPTIONS = Map.of(
-            "pos-warranty",
-            Set.of("pos-invoice", "pos-workorder", "pos-catalog", "pos-customer", "pos-vehicle-inventory"));
+    private static final Map<String, Set<String>> SCOPED_MODULE_EXCEPTIONS =
+            Map.of("pos-warranty", Set.of("pos-invoice"));
 
     /** Startup-infra classes exempt per ADR-0044 R2 (registration calls, best-effort at boot). */
     private static final Pattern EXEMPT_FILES =
