@@ -93,4 +93,45 @@ class TaxCreditAllocatorTest {
         assertThat(TaxCreditAllocator.allocate(new BigDecimal("25.00"), weights("Z", 0, "A", 0)))
                 .isEmpty();
     }
+
+    @Test
+    @DisplayName("Never emits a negative share when many jurisdictions each round up (issue #996 regression)")
+    void manyRoundingUps_produceNoNegativeShare() {
+        // Six equal weights sharing 0.03: each exact share is 0.005. Rounding HALF_UP gave every
+        // jurisdiction 0.01 (sum 0.06) and dumped the -0.03 residual on the anchor, leaving -0.02.
+        // Harmless at report time, but once #996 persisted this the CHECK
+        // chk_credit_memo_tax_reversed_non_negative aborted the whole credit-memo transaction.
+        Map<String, BigDecimal> weights =
+                weights("A", "1.00", "B", "1.00", "C", "1.00", "D", "1.00", "E", "1.00", "F", "1.00");
+
+        Map<String, BigDecimal> allocated = TaxCreditAllocator.allocate(new BigDecimal("0.03"), weights);
+
+        assertThat(allocated.values()).allSatisfy(v -> assertThat(v.signum()).isGreaterThanOrEqualTo(0));
+        assertThat(allocated.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo("0.03");
+        // Largest-remainder: exactly three jurisdictions get the cent.
+        assertThat(allocated.values().stream().filter(v -> v.signum() > 0).count())
+                .isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("Exact-sum and non-negativity hold across many awkward amount/jurisdiction combinations")
+    void exactSumAndNonNegativeAcrossCombinations() {
+        for (int jurisdictions = 1; jurisdictions <= 12; jurisdictions++) {
+            Map<String, BigDecimal> weights = new LinkedHashMap<>();
+            for (int j = 0; j < jurisdictions; j++) {
+                weights.put("J" + j, new BigDecimal(j + 1).movePointLeft(1).add(new BigDecimal("1.00")));
+            }
+            for (int cents = 0; cents <= 40; cents++) {
+                BigDecimal amount = BigDecimal.valueOf(cents).movePointLeft(2);
+                Map<String, BigDecimal> allocated = TaxCreditAllocator.allocate(amount, weights);
+                assertThat(allocated.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add))
+                        .as("sum for %s across %d jurisdictions", amount, jurisdictions)
+                        .isEqualByComparingTo(amount);
+                assertThat(allocated.values())
+                        .as("no negative share for %s across %d jurisdictions", amount, jurisdictions)
+                        .allSatisfy(v -> assertThat(v.signum()).isGreaterThanOrEqualTo(0));
+            }
+        }
+    }
 }

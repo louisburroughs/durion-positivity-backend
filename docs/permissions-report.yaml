@@ -1,9 +1,9 @@
-generatedAt: "2026-07-22T00:18:54.965186+00:00"
+generatedAt: "2026-07-22T10:32:53.935548+00:00"
 root: "/home/louis-burroughs/IdeaProjects/durion-positivity-backend"
 summary:
   manifestCount: 20
-  permissionCount: 355
-  uniquePermissionCount: 355
+  permissionCount: 358
+  uniquePermissionCount: 358
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -12,7 +12,7 @@ manifests:
     domain: "accounting"
     serviceName: "pos-accounting"
     version: "1.0"
-    permissionCount: 46
+    permissionCount: 49
     permissions:
       - name: "accounting:ap:pay"
         description: "Process payments"
@@ -30,6 +30,12 @@ manifests:
         description: "Create credit memo"
       - name: "accounting:credit-memo:read"
         description: "Read credit memo"
+      - name: "accounting:customer-credit:apply"
+        description: "Apply an open customer credit to an invoice"
+      - name: "accounting:customer-credit:refund"
+        description: "Refund an open customer credit to the customer"
+      - name: "accounting:customer-credit:view"
+        description: "View AR customer credits and their open amounts"
       - name: "accounting:default-mapping:create"
         description: "Create default mapping"
       - name: "accounting:default-mapping:delete"
@@ -902,6 +908,24 @@ permissions:
     source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:credit-memo:read"
     description: "Read credit memo"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:customer-credit:apply"
+    description: "Apply an open customer credit to an invoice"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:customer-credit:refund"
+    description: "Refund an open customer credit to the customer"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:customer-credit:view"
+    description: "View AR customer credits and their open amounts"
     domain: "accounting"
     serviceName: "pos-accounting"
     module: "pos-accounting"

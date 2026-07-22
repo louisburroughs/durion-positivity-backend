@@ -291,6 +291,59 @@ public class GLPostingServiceImpl implements GLPostingService {
     }
 
     @Override
+    public JournalEntry postCustomerCreditRelief(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID creditId,
+            @NonNull UUID creditLiabilityAccountId,
+            @NonNull UUID contraAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @NonNull String contraLineLabel,
+            @Nullable String overrideJustification) {
+
+        log.info(
+                "Posting customer credit relief GL entry {}: debit customer credit liability {}, credit {} {}",
+                sourceEventId,
+                amount,
+                contraLineLabel,
+                amount);
+
+        JournalEntry entry = new JournalEntry();
+        entry.setTransactionDate(transactionDate);
+        entry.setDescription(description);
+        entry.setSourceEventId(sourceEventId);
+
+        List<JournalEntryLine> lines = new ArrayList<>();
+
+        // Debit: Customer Credit Liability (the obligation being discharged).
+        JournalEntryLine liabilityLine = new JournalEntryLine();
+        liabilityLine.setGlAccountId(creditLiabilityAccountId);
+        liabilityLine.setDebitAmount(amount);
+        liabilityLine.setCreditAmount(BigDecimal.ZERO);
+        liabilityLine.setDescription("Customer Credit Relieved - Credit#" + creditId);
+        lines.add(liabilityLine);
+
+        // Credit: AR (application) or Undeposited Funds (refund) — chosen by the caller
+        // through posting-category configuration, never hardcoded here.
+        JournalEntryLine contraLine = new JournalEntryLine();
+        contraLine.setGlAccountId(contraAccountId);
+        contraLine.setDebitAmount(BigDecimal.ZERO);
+        contraLine.setCreditAmount(amount);
+        contraLine.setDescription(contraLineLabel + " - Credit#" + creditId);
+        lines.add(contraLine);
+
+        entry.setLines(lines);
+
+        JournalEntry created = journalEntryService.createJournalEntry(entry);
+        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
+
+        log.info("Posted customer credit relief GL entry: journal entry ID {}", posted.getJournalEntryId());
+
+        return posted;
+    }
+
+    @Override
     public JournalEntry postSettlement(@NonNull SettlementPostingCommand command) {
         log.info(
                 "Posting settlement GL entry {}: Dr Cash {}, Dr Fees {}, Cr Undeposited {}, Cr Suspense {}",

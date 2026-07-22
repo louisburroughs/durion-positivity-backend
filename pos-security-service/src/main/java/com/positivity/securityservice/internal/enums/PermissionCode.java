@@ -504,13 +504,17 @@ public enum PermissionCode {
     TAX__EXEMPTION__MANAGE(386, "tax:exemption:manage"),
     TAX__EXEMPTION__VIEW(387, "tax:exemption:view"),
     // ── Tax provider lifecycle (new) ─────────────────────────────────────────────
-    TAX__COMMIT(388, "tax:commit");
+    TAX__COMMIT(388, "tax:commit"),
+    // ── Accounting customer-credit lifecycle (issue #992) ────────────────────────
+    ACCOUNTING__CUSTOMER_CREDIT__VIEW(389, "accounting:customer-credit:view"),
+    ACCOUNTING__CUSTOMER_CREDIT__APPLY(390, "accounting:customer-credit:apply"),
+    ACCOUNTING__CUSTOMER_CREDIT__REFUND(391, "accounting:customer-credit:refund");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 26;
+    public static final int CATALOG_VERSION = 27;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

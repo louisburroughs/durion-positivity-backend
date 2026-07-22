@@ -40,6 +40,8 @@ tags:
   description: 'Processor settlement reconciliation review: list settlement lines, manually match an unmatched line to a receivable payment, and write off small unmatched lines.'
 - name: Vendor Directory API
   description: Vendor search and lookup endpoints for name-to-vendorId resolution (typeahead support)
+- name: Customer Credits
+  description: 'AR customer credits: balances, application to invoices, and refunds'
 - name: Location Cost Reporting
   description: Read-only location Labor & Overhead Cost Report (CAP-316)
 - name: AP Payments
@@ -2739,6 +2741,108 @@ paths:
         - accounting:default-mapping:create
       x-required-permissions:
       - accounting:default-mapping:create
+  /v1/accounting/customer-credits/{creditId}/refunds:
+    post:
+      tags:
+      - Customer Credits
+      summary: Refund customer credit
+      description: Refund an open customer credit as cash back to the customer. Posts Dr Customer Credit Liability / Cr Undeposited Funds for the refunded amount. Idempotent on requestId.
+      operationId: refundCustomerCredit
+      parameters:
+      - name: creditId
+        in: path
+        description: Credit identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerCreditRefundRequest'
+        required: true
+      responses:
+        '200':
+          description: Credit refunded (or the original refund replayed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerCreditTransactionResponse'
+        '400':
+          description: Amount missing or non-positive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Credit not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Insufficient open credit, accounting period not open, or the request id was already used for a different operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:customer-credit:refund
+      x-required-permissions:
+      - accounting:customer-credit:refund
+  /v1/accounting/customer-credits/{creditId}/applications:
+    post:
+      tags:
+      - Customer Credits
+      summary: Apply customer credit to an invoice
+      description: Draw an open customer credit down against an outstanding invoice. Posts Dr Customer Credit Liability / Cr Accounts Receivable for the applied amount. Idempotent on requestId.
+      operationId: applyCustomerCredit
+      parameters:
+      - name: creditId
+        in: path
+        description: Credit identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerCreditApplicationRequest'
+        required: true
+      responses:
+        '200':
+          description: Credit applied (or the original application replayed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerCreditTransactionResponse'
+        '400':
+          description: Amount missing or non-positive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Credit or invoice not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Insufficient open credit, invoice not AR-eligible, invoice belongs to another customer, amount exceeds the invoice balance, accounting period not open, or the request id was already used for a different operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:customer-credit:apply
+      x-required-permissions:
+      - accounting:customer-credit:apply
   /v1/accounting/credit-memos:
     get:
       tags:
@@ -4646,6 +4750,81 @@ paths:
         - accounting:default-mapping:view
       x-required-permissions:
       - accounting:default-mapping:view
+  /v1/accounting/customer-credits:
+    get:
+      tags:
+      - Customer Credits
+      summary: List customer credits
+      description: List AR customer credits with their remaining open amounts, optionally filtered by customer and consumption state.
+      operationId: listCustomerCredits
+      parameters:
+      - name: customerId
+        in: query
+        description: Filter by customer
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        description: Filter by consumption state
+        required: false
+        schema:
+          type: string
+          enum:
+          - AVAILABLE
+          - PARTIALLY_CONSUMED
+          - CONSUMED
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
+      responses:
+        '200':
+          description: Credits returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageCustomerCreditResponse'
+      security:
+      - bearerAuth:
+        - accounting:customer-credit:view
+      x-required-permissions:
+      - accounting:customer-credit:view
+  /v1/accounting/customer-credits/{creditId}:
+    get:
+      tags:
+      - Customer Credits
+      summary: Get customer credit
+      description: Fetch one AR customer credit with its applied/refunded totals and remaining open amount.
+      operationId: getCustomerCredit
+      parameters:
+      - name: creditId
+        in: path
+        description: Credit identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Credit returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerCreditResponse'
+        '404':
+          description: Credit not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:customer-credit:view
+      x-required-permissions:
+      - accounting:customer-credit:view
   /v1/accounting/credit-memos/{creditMemoId}:
     get:
       tags:
@@ -7708,6 +7887,100 @@ components:
           example: Mapping rules corrected after vendor GL update
       required:
       - triggeredByUserId
+    CustomerCreditRefundRequest:
+      type: object
+      description: Refund an open customer credit as cash back to the customer
+      properties:
+        requestId:
+          type: string
+          description: Caller-supplied idempotency key. Replaying the same key returns the original refund instead of relieving the credit liability twice
+          example: credit-refund-2026-07-22-0001
+          maxLength: 100
+          minLength: 0
+        amount:
+          type: number
+          description: Amount to refund. Must not exceed the credit's open amount
+          example: 50.0
+          minimum: 0.01
+        note:
+          type: string
+          description: Optional audit note explaining why the credit is being refunded
+          maxLength: 500
+          minLength: 0
+      required:
+      - amount
+      - requestId
+    CustomerCreditTransactionResponse:
+      type: object
+      description: A single customer-credit draw-down and the credit state it left behind
+      properties:
+        creditTransactionId:
+          type: string
+          format: uuid
+          description: Draw-down identifier
+        creditId:
+          type: string
+          format: uuid
+          description: Credit that was drawn down
+        transactionType:
+          type: string
+          description: Whether the credit settled an invoice or was refunded as cash
+          enum:
+          - APPLICATION
+          - REFUND
+        invoiceId:
+          type: string
+          format: uuid
+          description: Invoice settled by an APPLICATION; null for a REFUND
+        amount:
+          type: number
+          description: Amount drawn down
+          example: 20.0
+        currency:
+          type: string
+          description: Currency (ISO 4217)
+          example: USD
+        requestId:
+          type: string
+          description: Caller-supplied idempotency key this draw-down was recorded under
+        creditOpenAmountAfter:
+          type: number
+          description: Credit's remaining open amount after this draw-down
+          example: 30.0
+        invoiceBalanceAfter:
+          type: number
+          description: Invoice balance after the credit was applied; null for a REFUND
+          example: 80.0
+        createdAt:
+          type: string
+          format: date-time
+          description: When the draw-down was recorded
+        replayed:
+          type: boolean
+          description: True when this response replays an already-processed request id rather than recording a new draw-down
+    CustomerCreditApplicationRequest:
+      type: object
+      description: Apply an open customer credit to an outstanding invoice
+      properties:
+        requestId:
+          type: string
+          description: Caller-supplied idempotency key. Replaying the same key returns the original application instead of relieving the credit liability twice
+          example: credit-apply-2026-07-22-0001
+          maxLength: 100
+          minLength: 0
+        invoiceId:
+          type: string
+          format: uuid
+          description: Invoice the credit settles. Must exist in the invoice replica, be AR-eligible, and have a positive balance
+        amount:
+          type: number
+          description: Amount to apply. Must not exceed the credit's open amount, nor the invoice's remaining balance
+          example: 50.0
+          minimum: 0.01
+      required:
+      - amount
+      - invoiceId
+      - requestId
     CreateCreditMemoRequest:
       type: object
       description: Request to create a credit memo against a finalized invoice
@@ -8668,13 +8941,17 @@ components:
           type: number
           description: Report's total net tax across all jurisdictions (echoes report totals.netTax)
           example: 948.75
+        unattributedCredits:
+          type: number
+          description: Credit-memo tax that could not be attributed to any jurisdiction (the credit carries no frozen breakdown and its original invoice has no attributable tax rows). Excluded from the jurisdiction rows by design, so it accounts for exactly this much of the drift
+          example: 0.0
         drift:
           type: number
           description: 'GL drift: reportNetTax - glNetActivity. Zero on a clean ledger; non-zero flags a mismatch'
           example: 0.0
         reconciled:
           type: boolean
-          description: True when |drift| is within the 0.01 reconciliation tolerance
+          description: True when the UNEXPLAINED drift (drift - unattributedCredits) is within the 0.01 reconciliation tolerance. Unattributed credits inflate drift by exactly their own value, so that portion is explained and does not flag the ledger as out of balance
           example: true
       required:
       - drift
@@ -8682,6 +8959,7 @@ components:
       - reconciled
       - reportNetTax
       - taxPayableAccountCode
+      - unattributedCredits
     TaxLiabilityReport:
       type: object
       description: 'Sales-Tax Liability report: per-jurisdiction taxable/exempt base, gross, credits, net tax, and GL drift'
@@ -10002,6 +10280,85 @@ components:
       - size
       - totalElements
       - totalPages
+    CustomerCreditResponse:
+      type: object
+      description: AR customer credit with its remaining open amount
+      properties:
+        creditId:
+          type: string
+          format: uuid
+          description: Credit identifier
+        customerId:
+          type: string
+          format: uuid
+          description: Customer the credit belongs to
+        currency:
+          type: string
+          description: Currency (ISO 4217)
+          example: USD
+        amount:
+          type: number
+          description: Amount originally issued
+          example: 50.0
+        appliedAmount:
+          type: number
+          description: Cumulative amount applied against invoices
+          example: 20.0
+        refundedAmount:
+          type: number
+          description: Cumulative amount refunded to the customer
+          example: 0.0
+        openAmount:
+          type: number
+          description: Remaining credit owed to the customer (amount - applied - refunded); this is the credit's contribution to the Customer Credit Liability (2300) control account
+          example: 30.0
+        status:
+          type: string
+          description: Consumption state derived from the applied/refunded totals
+          enum:
+          - AVAILABLE
+          - PARTIALLY_CONSUMED
+          - CONSUMED
+        sourcePaymentId:
+          type: string
+          format: uuid
+          description: Payment whose overpayment created the credit
+        createdAt:
+          type: string
+          format: date-time
+          description: When the credit was issued
+    PageCustomerCreditResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerCreditResponse'
+        number:
+          type: integer
+          format: int32
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
     PageCreditMemoResponse:
       type: object
       properties:

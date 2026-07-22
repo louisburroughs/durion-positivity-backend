@@ -20,6 +20,7 @@ import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.service.AccountingPeriodServiceImpl;
 import com.positivity.accounting.internal.service.CreditMemoServiceImpl;
+import com.positivity.accounting.internal.service.CreditMemoTaxAttributionService;
 import com.positivity.accounting.internal.service.GLPostingServiceImpl;
 import com.positivity.accounting.internal.service.InvoiceBalanceCalculator;
 import java.math.BigDecimal;
@@ -68,6 +69,9 @@ class CreditMemoServiceTest {
 
     @Mock
     private ExtInvoiceTaxRepository extInvoiceTaxRepository;
+
+    @Mock
+    private CreditMemoTaxAttributionService creditMemoTaxAttributionService;
 
     @Mock
     private InvoiceBalanceCalculator invoiceBalanceCalculator;
