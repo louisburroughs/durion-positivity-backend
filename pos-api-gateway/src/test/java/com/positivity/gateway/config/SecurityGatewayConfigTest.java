@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 27")
+    @DisplayName("CATALOG_VERSION is 28")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(27);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(28);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 391")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 392")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1217,8 +1217,10 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(389)).isEqualTo("PERM_accounting:customer-credit:view");
         assertThat(GatewayPermissionCatalog.authorityForBit(390)).isEqualTo("PERM_accounting:customer-credit:apply");
         assertThat(GatewayPermissionCatalog.authorityForBit(391)).isEqualTo("PERM_accounting:customer-credit:refund");
+        // catalog v28 (#998): tax snapshot freeze authority appended (bit 392)
+        assertThat(GatewayPermissionCatalog.authorityForBit(392)).isEqualTo("PERM_accounting:tax-snapshot:freeze");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(392)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(393)).isNull();
     }
 
     @Test

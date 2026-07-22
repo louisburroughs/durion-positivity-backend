@@ -1,9 +1,9 @@
-generatedAt: "2026-07-22T10:32:53.935548+00:00"
-root: "/home/louis-burroughs/IdeaProjects/durion-positivity-backend"
+generatedAt: "2026-07-22T17:22:40.242373+00:00"
+root: "/home/runner/work/durion-positivity-backend/durion-positivity-backend"
 summary:
   manifestCount: 20
-  permissionCount: 358
-  uniquePermissionCount: 358
+  permissionCount: 359
+  uniquePermissionCount: 359
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -12,7 +12,7 @@ manifests:
     domain: "accounting"
     serviceName: "pos-accounting"
     version: "1.0"
-    permissionCount: 49
+    permissionCount: 50
     permissions:
       - name: "accounting:ap:pay"
         description: "Process payments"
@@ -112,6 +112,8 @@ manifests:
         description: "View processor settlements and reconciliation lines"
       - name: "accounting:report:export"
         description: "Export report"
+      - name: "accounting:tax-snapshot:freeze"
+        description: "Freeze the sales-tax liability report for a closed accounting period"
   - module: "pos-bulk-loader"
     path: "pos-bulk-loader/src/main/resources/permissions.yaml"
     domain: "bulk-import"
@@ -1154,6 +1156,12 @@ permissions:
     source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:report:export"
     description: "Export report"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:tax-snapshot:freeze"
+    description: "Freeze the sales-tax liability report for a closed accounting period"
     domain: "accounting"
     serviceName: "pos-accounting"
     module: "pos-accounting"

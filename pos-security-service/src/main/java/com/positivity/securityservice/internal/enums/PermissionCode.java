@@ -508,13 +508,15 @@ public enum PermissionCode {
     // ── Accounting customer-credit lifecycle (issue #992) ────────────────────────
     ACCOUNTING__CUSTOMER_CREDIT__VIEW(389, "accounting:customer-credit:view"),
     ACCOUNTING__CUSTOMER_CREDIT__APPLY(390, "accounting:customer-credit:apply"),
-    ACCOUNTING__CUSTOMER_CREDIT__REFUND(391, "accounting:customer-credit:refund");
+    ACCOUNTING__CUSTOMER_CREDIT__REFUND(391, "accounting:customer-credit:refund"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
+    ACCOUNTING__TAX_SNAPSHOT__FREEZE(392, "accounting:tax-snapshot:freeze");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 27;
+    public static final int CATALOG_VERSION = 28;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

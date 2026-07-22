@@ -54,6 +54,8 @@ tags:
   description: Manage default GL account mappings for event types without explicit posting rules
 - name: Accounting Events
   description: Ingest and manage accounting events for journal processing.
+- name: Financial Reporting
+  description: Period-close-aligned freeze of the Sales-Tax Liability report
 paths:
   /v1/accounting/posting-rules/{postingRuleSetId}:
     get:
@@ -872,6 +874,157 @@ paths:
         - accounting:reconciliation:adjust
       x-required-permissions:
       - accounting:reconciliation:adjust
+  /v1/accounting/reports/financial/tax-liability/snapshots:
+    get:
+      tags:
+      - Financial Reporting
+      summary: List Sales-Tax Liability snapshots
+      description: List snapshot summaries (no rows), newest freeze first, optionally filtered by period code.
+      operationId: listSnapshots
+      parameters:
+      - name: periodCode
+        in: query
+        description: Optional accounting period code filter (YYYY-MM)
+        required: false
+        schema:
+          type: string
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
+        example: 2026-06
+      responses:
+        '200':
+          description: Snapshot summaries (empty list when none exist)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaxLiabilitySnapshotSummary'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
+    post:
+      tags:
+      - Financial Reporting
+      summary: Freeze the Sales-Tax Liability report for a closed period
+      description: Generate the Sales-Tax Liability report over the accounting period's exact date range and persist it as an immutable snapshot with a canonical SHA-256 content hash. The period must be CLOSED. If an ACTIVE snapshot already exists for the period the request fails with 409 unless supersede=true, which demotes the prior snapshot to SUPERSEDED (reopen → adjust → re-close flow) and preserves history.
+      operationId: freezeSnapshot
+      parameters:
+      - name: periodCode
+        in: query
+        description: Accounting period code (YYYY-MM)
+        required: true
+        schema:
+          type: string
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
+        example: 2026-06
+      - name: supersede
+        in: query
+        description: Supersede an existing ACTIVE snapshot for the period
+        required: false
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '201':
+          description: Snapshot frozen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxLiabilitySnapshotResponse'
+        '400':
+          description: Invalid period code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing accounting:tax-snapshot:freeze
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Accounting period not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Period not CLOSED, or an ACTIVE snapshot exists and supersede was not set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:tax-snapshot:freeze
+      x-required-permissions:
+      - accounting:tax-snapshot:freeze
+  /v1/accounting/reports/financial/tax-liability/snapshots/{snapshotId}/verify:
+    post:
+      tags:
+      - Financial Reporting
+      summary: Verify a snapshot against live data
+      description: 'Re-derive the Sales-Tax Liability report for the snapshot''s period from the live replicas and compare canonical hashes. Read-only: the snapshot is never mutated. Inconsistency means underlying data moved after the freeze (e.g. postings into a reopened period); re-freeze with supersede=true once the period is closed again.'
+      operationId: verifySnapshot
+      parameters:
+      - name: snapshotId
+        in: path
+        description: Snapshot id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Verification result (consistent=true when hashes match)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxLiabilitySnapshotVerification'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Snapshot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reports/export:
     get:
       tags:
@@ -3495,6 +3648,51 @@ paths:
                 $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
+  /v1/accounting/reports/financial/tax-liability/snapshots/{snapshotId}:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Get a Sales-Tax Liability snapshot
+      description: Full frozen snapshot including per-jurisdiction rows, totals, reconciliation, and hash.
+      operationId: getSnapshot
+      parameters:
+      - name: snapshotId
+        in: path
+        description: Snapshot id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Snapshot found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxLiabilitySnapshotResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Snapshot not found
           content:
             application/json:
               schema:
@@ -6534,6 +6732,231 @@ components:
           example: 01936e5e-7890-7a3d-8b6e-4d5678901234
       required:
       - receivablePaymentId
+    TaxLiabilityReconciliation:
+      type: object
+      description: Reconciliation of report net tax against the Sales-Tax Payable (2200) GL account period activity
+      properties:
+        taxPayableAccountCode:
+          type: string
+          description: Sales-Tax Payable GL account code being reconciled against
+          example: '2200'
+        glNetActivity:
+          type: number
+          description: Credit-normal net activity of account 2200 in the period (Σ credit - Σ debit of POSTED lines); zero when the account has no activity or is not seeded
+          example: 948.75
+        reportNetTax:
+          type: number
+          description: Report's total net tax across all jurisdictions (echoes report totals.netTax)
+          example: 948.75
+        unattributedCredits:
+          type: number
+          description: Credit-memo tax that could not be attributed to any jurisdiction (the credit carries no frozen breakdown and its original invoice has no attributable tax rows). Excluded from the jurisdiction rows by design, so it accounts for exactly this much of the drift
+          example: 0.0
+        drift:
+          type: number
+          description: 'GL drift: reportNetTax - glNetActivity. Zero on a clean ledger; non-zero flags a mismatch'
+          example: 0.0
+        reconciled:
+          type: boolean
+          description: True when the UNEXPLAINED drift (drift - unattributedCredits) is within the 0.01 reconciliation tolerance. Unattributed credits inflate drift by exactly their own value, so that portion is explained and does not flag the ledger as out of balance
+          example: true
+      required:
+      - drift
+      - glNetActivity
+      - reconciled
+      - reportNetTax
+      - taxPayableAccountCode
+      - unattributedCredits
+    TaxLiabilityRow:
+      type: object
+      description: Per-jurisdiction sales-tax liability row (taxable/exempt base, gross, credits netted, net tax)
+      properties:
+        jurisdictionType:
+          type: string
+          description: 'Jurisdiction level: STATE, COUNTY, CITY, or SPECIAL'
+          example: STATE
+        jurisdictionCode:
+          type: string
+          description: Jurisdiction code as reported by the tax engine
+          example: WA
+        jurisdictionName:
+          type: string
+          description: Human-readable jurisdiction name when available; null when the replica carries only the code
+          example: Washington
+        taxableBase:
+          type: number
+          description: Sum of taxable base for non-exempt lines in this jurisdiction
+          example: 12500.0
+        exemptBase:
+          type: number
+          description: Sum of taxable base for exempt / zero-rate lines in this jurisdiction
+          example: 1500.0
+        exemptionReasons:
+          type: array
+          description: Distinct exemption reason codes contributing to the exempt base (ascending); empty when none
+          items:
+            type: string
+        taxCollectedGross:
+          type: number
+          description: Gross tax collected (Σ tax_amount of non-exempt lines) before credits
+          example: 1031.25
+        creditsNetted:
+          type: number
+          description: Credit/refund tax netted against this jurisdiction — POSTED credit-memo reversals allocated pro-rata to collected tax
+          example: 82.5
+        netTax:
+          type: number
+          description: 'Net tax owed for this jurisdiction: taxCollectedGross - creditsNetted'
+          example: 948.75
+      required:
+      - creditsNetted
+      - exemptBase
+      - exemptionReasons
+      - jurisdictionCode
+      - jurisdictionType
+      - netTax
+      - taxCollectedGross
+      - taxableBase
+    TaxLiabilitySnapshotResponse:
+      type: object
+      description: Frozen Sales-Tax Liability snapshot for a closed accounting period
+      properties:
+        snapshotId:
+          type: string
+          format: uuid
+          description: Snapshot id
+        periodId:
+          type: string
+          format: uuid
+          description: Accounting period id the snapshot freezes
+        periodCode:
+          type: string
+          description: Accounting period code (YYYY-MM)
+          example: 2026-06
+        startDate:
+          type: string
+          format: date
+          description: Period start date (inclusive)
+          example: 2026-06-01
+        endDate:
+          type: string
+          format: date
+          description: Period end date (inclusive)
+          example: 2026-06-30
+        status:
+          type: string
+          description: 'Snapshot lifecycle status: ACTIVE or SUPERSEDED'
+          example: ACTIVE
+        periodClosedAt:
+          type: string
+          format: date-time
+          description: The period's closedAt at freeze time
+        frozenAt:
+          type: string
+          format: date-time
+          description: Freeze timestamp
+        frozenBy:
+          type: string
+          description: User who froze the snapshot
+          example: controller
+        contentHash:
+          type: string
+          description: SHA-256 (lowercase hex) over the canonical report serialization
+        rows:
+          type: array
+          description: Frozen per-jurisdiction rows in report order
+          items:
+            $ref: '#/components/schemas/TaxLiabilityRow'
+        totalTaxableBase:
+          type: number
+          description: Grand total taxable base
+        totalExemptBase:
+          type: number
+          description: Grand total exempt base
+        totalTaxCollectedGross:
+          type: number
+          description: Grand total gross tax collected
+        totalCreditsNetted:
+          type: number
+          description: Grand total credits netted
+        totalNetTax:
+          type: number
+          description: Grand total net tax
+        reconciliation:
+          $ref: '#/components/schemas/TaxLiabilityReconciliation'
+        supersedesSnapshotId:
+          type: string
+          format: uuid
+          description: Id of the ACTIVE snapshot this one superseded at freeze time; null for a first freeze
+        supersededAt:
+          type: string
+          format: date-time
+          description: When this snapshot was superseded; null while ACTIVE
+        supersededBy:
+          type: string
+          description: User whose re-freeze superseded this snapshot; null while ACTIVE
+      required:
+      - contentHash
+      - endDate
+      - frozenAt
+      - frozenBy
+      - periodClosedAt
+      - periodCode
+      - periodId
+      - reconciliation
+      - rows
+      - snapshotId
+      - startDate
+      - status
+      - totalCreditsNetted
+      - totalExemptBase
+      - totalNetTax
+      - totalTaxCollectedGross
+      - totalTaxableBase
+    TaxLiabilitySnapshotVerification:
+      type: object
+      description: Re-derivation check of a frozen Sales-Tax Liability snapshot against live data
+      properties:
+        snapshotId:
+          type: string
+          format: uuid
+          description: Snapshot id verified
+        periodCode:
+          type: string
+          description: Accounting period code (YYYY-MM)
+          example: 2026-06
+        verifiedAt:
+          type: string
+          format: date-time
+          description: Verification timestamp
+        snapshotContentHash:
+          type: string
+          description: Canonical hash stored at freeze time
+        recomputedContentHash:
+          type: string
+          description: Canonical hash of the report re-derived from live data
+        consistent:
+          type: boolean
+          description: True when the re-derived report hashes identically to the frozen snapshot
+        frozenTotalNetTax:
+          type: number
+          description: Total net tax as frozen
+        recomputedTotalNetTax:
+          type: number
+          description: Total net tax re-derived from live data
+        netTaxDelta:
+          type: number
+          description: recomputedTotalNetTax - frozenTotalNetTax; zero when amounts agree even if row detail moved
+      required:
+      - consistent
+      - frozenTotalNetTax
+      - netTaxDelta
+      - periodCode
+      - recomputedContentHash
+      - recomputedTotalNetTax
+      - snapshotContentHash
+      - snapshotId
+      - verifiedAt
     ReportExportRequest:
       type: object
       description: Request payload for exporting a financial report
@@ -8925,41 +9348,6 @@ components:
       - balance
       - totalCredit
       - totalDebit
-    TaxLiabilityReconciliation:
-      type: object
-      description: Reconciliation of report net tax against the Sales-Tax Payable (2200) GL account period activity
-      properties:
-        taxPayableAccountCode:
-          type: string
-          description: Sales-Tax Payable GL account code being reconciled against
-          example: '2200'
-        glNetActivity:
-          type: number
-          description: Credit-normal net activity of account 2200 in the period (Σ credit - Σ debit of POSTED lines); zero when the account has no activity or is not seeded
-          example: 948.75
-        reportNetTax:
-          type: number
-          description: Report's total net tax across all jurisdictions (echoes report totals.netTax)
-          example: 948.75
-        unattributedCredits:
-          type: number
-          description: Credit-memo tax that could not be attributed to any jurisdiction (the credit carries no frozen breakdown and its original invoice has no attributable tax rows). Excluded from the jurisdiction rows by design, so it accounts for exactly this much of the drift
-          example: 0.0
-        drift:
-          type: number
-          description: 'GL drift: reportNetTax - glNetActivity. Zero on a clean ledger; non-zero flags a mismatch'
-          example: 0.0
-        reconciled:
-          type: boolean
-          description: True when the UNEXPLAINED drift (drift - unattributedCredits) is within the 0.01 reconciliation tolerance. Unattributed credits inflate drift by exactly their own value, so that portion is explained and does not flag the ledger as out of balance
-          example: true
-      required:
-      - drift
-      - glNetActivity
-      - reconciled
-      - reportNetTax
-      - taxPayableAccountCode
-      - unattributedCredits
     TaxLiabilityReport:
       type: object
       description: 'Sales-Tax Liability report: per-jurisdiction taxable/exempt base, gross, credits, net tax, and GL drift'
@@ -9017,56 +9405,48 @@ components:
       - totalNetTax
       - totalTaxCollectedGross
       - totalTaxableBase
-    TaxLiabilityRow:
+    TaxLiabilitySnapshotSummary:
       type: object
-      description: Per-jurisdiction sales-tax liability row (taxable/exempt base, gross, credits netted, net tax)
+      description: Sales-Tax Liability snapshot list item (no rows)
       properties:
-        jurisdictionType:
+        snapshotId:
           type: string
-          description: 'Jurisdiction level: STATE, COUNTY, CITY, or SPECIAL'
-          example: STATE
-        jurisdictionCode:
+          format: uuid
+          description: Snapshot id
+        periodCode:
           type: string
-          description: Jurisdiction code as reported by the tax engine
-          example: WA
-        jurisdictionName:
+          description: Accounting period code (YYYY-MM)
+          example: 2026-06
+        status:
           type: string
-          description: Human-readable jurisdiction name when available; null when the replica carries only the code
-          example: Washington
-        taxableBase:
+          description: 'Snapshot lifecycle status: ACTIVE or SUPERSEDED'
+          example: ACTIVE
+        frozenAt:
+          type: string
+          format: date-time
+          description: Freeze timestamp
+        frozenBy:
+          type: string
+          description: User who froze the snapshot
+          example: controller
+        totalNetTax:
           type: number
-          description: Sum of taxable base for non-exempt lines in this jurisdiction
-          example: 12500.0
-        exemptBase:
-          type: number
-          description: Sum of taxable base for exempt / zero-rate lines in this jurisdiction
-          example: 1500.0
-        exemptionReasons:
-          type: array
-          description: Distinct exemption reason codes contributing to the exempt base (ascending); empty when none
-          items:
-            type: string
-        taxCollectedGross:
-          type: number
-          description: Gross tax collected (Σ tax_amount of non-exempt lines) before credits
-          example: 1031.25
-        creditsNetted:
-          type: number
-          description: Credit/refund tax netted against this jurisdiction — POSTED credit-memo reversals allocated pro-rata to collected tax
-          example: 82.5
-        netTax:
-          type: number
-          description: 'Net tax owed for this jurisdiction: taxCollectedGross - creditsNetted'
-          example: 948.75
+          description: Grand total net tax as frozen
+        reconciled:
+          type: boolean
+          description: Whether GL drift was within tolerance at freeze time
+        contentHash:
+          type: string
+          description: SHA-256 canonical content hash
       required:
-      - creditsNetted
-      - exemptBase
-      - exemptionReasons
-      - jurisdictionCode
-      - jurisdictionType
-      - netTax
-      - taxCollectedGross
-      - taxableBase
+      - contentHash
+      - frozenAt
+      - frozenBy
+      - periodCode
+      - reconciled
+      - snapshotId
+      - status
+      - totalNetTax
     IncomeStatementReport:
       type: object
       description: Income statement (Profit & Loss) report built from POSTED journal entries
