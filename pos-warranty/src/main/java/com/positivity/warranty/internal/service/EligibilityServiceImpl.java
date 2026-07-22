@@ -1,8 +1,8 @@
 package com.positivity.warranty.internal.service;
 
-import com.positivity.warranty.internal.client.CatalogClient;
 import com.positivity.warranty.internal.dto.EligibilityEvaluation;
 import com.positivity.warranty.internal.dto.ProrationOutcome;
+import com.positivity.warranty.internal.entity.ExtCatalogReplica;
 import com.positivity.warranty.internal.entity.WarrantyClaim;
 import com.positivity.warranty.internal.entity.WarrantyClaimLine;
 import com.positivity.warranty.internal.entity.WarrantyPolicy;
@@ -13,6 +13,7 @@ import com.positivity.warranty.internal.enums.EligibilityResult;
 import com.positivity.warranty.internal.enums.ProrationMethod;
 import com.positivity.warranty.internal.enums.RegistrationStatus;
 import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
+import com.positivity.warranty.internal.repository.ExtCatalogReplicaRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
 import com.positivity.warranty.internal.repository.WarrantyPolicyRepository;
 import com.positivity.warranty.internal.repository.WarrantyRegistrationRepository;
@@ -54,7 +55,7 @@ public class EligibilityServiceImpl implements EligibilityService {
     private final WarrantyClaimRepository claimRepository;
     private final WarrantyPolicyRepository policyRepository;
     private final WarrantyRegistrationRepository registrationRepository;
-    private final CatalogClient catalogClient;
+    private final ExtCatalogReplicaRepository extCatalogReplicaRepository;
     private final ProrationService prorationService;
 
     @Override
@@ -358,21 +359,24 @@ public class EligibilityServiceImpl implements EligibilityService {
         Set<UUID> manufacturerIds = new HashSet<>();
         Set<UUID> categoryIds = new HashSet<>();
         boolean incomplete = false;
-        Map<UUID, Optional<CatalogClient.ProductInfo>> cache = new HashMap<>();
+        Map<UUID, Optional<ExtCatalogReplica>> cache = new HashMap<>();
         for (WarrantyClaimLine line : claim.getLines()) {
             UUID productEntityId = line.getProductEntityId();
             if (productEntityId == null) {
                 continue;
             }
             productIds.add(productEntityId);
-            Optional<CatalogClient.ProductInfo> product =
-                    cache.computeIfAbsent(productEntityId, catalogClient::getProduct);
+            // Resolved from the event-fed ext_catalog replica (ADR-0044 §6, #924). A product not yet
+            // in the replica leaves manufacturer/category facts incomplete — the eligibility scope
+            // matcher treats that as it did a failed CatalogClient read.
+            Optional<ExtCatalogReplica> product =
+                    cache.computeIfAbsent(productEntityId, extCatalogReplicaRepository::findById);
             if (product.isPresent()) {
-                if (product.get().manufacturerId() != null) {
-                    manufacturerIds.add(product.get().manufacturerId());
+                if (product.get().getManufacturerId() != null) {
+                    manufacturerIds.add(product.get().getManufacturerId());
                 }
-                if (product.get().categoryId() != null) {
-                    categoryIds.add(product.get().categoryId());
+                if (product.get().getCategoryId() != null) {
+                    categoryIds.add(product.get().getCategoryId());
                 }
             } else {
                 incomplete = true;

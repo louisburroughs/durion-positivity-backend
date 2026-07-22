@@ -81,6 +81,9 @@ pos:
       # ext_invoice read-replica feed (issue #924) — replaces InvoiceClient.searchInvoiceLines
       invoice-events-topic: ${POS_WARRANTY_INVOICE_EVENTS_TOPIC:invoice.events.v1}
       invoice-events-consumer-group: ${POS_WARRANTY_INVOICE_EVENTS_CONSUMER_GROUP:pos-warranty-invoice-events}
+      # ext_catalog read-replica feed (issue #924) — replaces the sync CatalogClient
+      catalog-events-topic: ${POS_WARRANTY_CATALOG_EVENTS_TOPIC:catalog.events.v1}
+      catalog-events-consumer-group: ${POS_WARRANTY_CATALOG_EVENTS_CONSUMER_GROUP:pos-warranty-catalog-events}
   events:
     base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}
     api-secret: ${POS_EVENTS_API_SECRET:}
@@ -94,6 +97,4 @@ pos:
     service-id: invoice
     base-path: /v1/invoices
   # workorder reads migrated to the event-fed ext_workorder replica (#924).
-  catalog:
-    service-id: catalog
-    base-path: /v1/products
+  # catalog reads migrated to the event-fed ext_catalog replica (#924).

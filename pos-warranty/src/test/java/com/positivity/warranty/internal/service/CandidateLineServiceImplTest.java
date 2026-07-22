@@ -3,13 +3,14 @@ package com.positivity.warranty.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import com.positivity.warranty.internal.client.CatalogClient;
 import com.positivity.warranty.internal.dto.CandidateLine;
+import com.positivity.warranty.internal.entity.ExtCatalogReplica;
 import com.positivity.warranty.internal.entity.ExtInvoiceLineReplica;
 import com.positivity.warranty.internal.entity.ExtInvoiceReplica;
 import com.positivity.warranty.internal.entity.ExtWorkorderLineReplica;
 import com.positivity.warranty.internal.entity.ExtWorkorderReplica;
 import com.positivity.warranty.internal.enums.LineSourceType;
+import com.positivity.warranty.internal.repository.ExtCatalogReplicaRepository;
 import com.positivity.warranty.internal.repository.ExtInvoiceLineReplicaRepository;
 import com.positivity.warranty.internal.repository.ExtInvoiceReplicaRepository;
 import com.positivity.warranty.internal.repository.ExtWorkorderLineReplicaRepository;
@@ -56,7 +57,7 @@ class CandidateLineServiceImplTest {
     private ExtWorkorderLineReplicaRepository extWorkorderLineReplicaRepository;
 
     @Mock
-    private CatalogClient catalogClient;
+    private ExtCatalogReplicaRepository extCatalogReplicaRepository;
 
     private CandidateLineServiceImpl service;
 
@@ -67,7 +68,7 @@ class CandidateLineServiceImplTest {
                 extInvoiceLineReplicaRepository,
                 extWorkorderReplicaRepository,
                 extWorkorderLineReplicaRepository,
-                catalogClient);
+                extCatalogReplicaRepository);
     }
 
     private static ExtInvoiceReplica invoiceHeader() {
@@ -182,9 +183,16 @@ class CandidateLineServiceImplTest {
 
     @Test
     void productFilter_matchesPartsByIdAndInvoiceLinesByCatalogTokens() {
-        when(catalogClient.getProduct(PRODUCT_ID))
-                .thenReturn(java.util.Optional.of(new CatalogClient.ProductInfo(
-                        PRODUCT_ID, "TIRE-1", "SuperTire", null, null, null, null, "Tires", null, null)));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID))
+                .thenReturn(java.util.Optional.of(ExtCatalogReplica.builder()
+                        .productId(PRODUCT_ID)
+                        .sku("TIRE-1")
+                        .name("SuperTire")
+                        .category("Tires")
+                        .active(true)
+                        .aggregateVersion(1L)
+                        .updatedAt(INVOICE_AT)
+                        .build()));
         when(extInvoiceReplicaRepository.findByPartyId(CUSTOMER_ID.toString())).thenReturn(List.of(invoiceHeader()));
         when(extInvoiceLineReplicaRepository.findByInvoiceId(INVOICE_ID))
                 .thenReturn(List.of(invoiceLine("SuperTire 225/45R17"), invoiceLine("Oil change")));

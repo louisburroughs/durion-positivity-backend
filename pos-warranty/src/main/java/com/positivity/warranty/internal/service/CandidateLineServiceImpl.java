@@ -1,12 +1,13 @@
 package com.positivity.warranty.internal.service;
 
-import com.positivity.warranty.internal.client.CatalogClient;
 import com.positivity.warranty.internal.dto.CandidateLine;
+import com.positivity.warranty.internal.entity.ExtCatalogReplica;
 import com.positivity.warranty.internal.entity.ExtInvoiceLineReplica;
 import com.positivity.warranty.internal.entity.ExtInvoiceReplica;
 import com.positivity.warranty.internal.entity.ExtWorkorderLineReplica;
 import com.positivity.warranty.internal.entity.ExtWorkorderReplica;
 import com.positivity.warranty.internal.enums.LineSourceType;
+import com.positivity.warranty.internal.repository.ExtCatalogReplicaRepository;
 import com.positivity.warranty.internal.repository.ExtInvoiceLineReplicaRepository;
 import com.positivity.warranty.internal.repository.ExtInvoiceReplicaRepository;
 import com.positivity.warranty.internal.repository.ExtWorkorderLineReplicaRepository;
@@ -43,14 +44,14 @@ public class CandidateLineServiceImpl implements CandidateLineService {
     private final ExtInvoiceLineReplicaRepository extInvoiceLineReplicaRepository;
     private final ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
     private final ExtWorkorderLineReplicaRepository extWorkorderLineReplicaRepository;
-    private final CatalogClient catalogClient;
+    private final ExtCatalogReplicaRepository extCatalogReplicaRepository;
 
     @Override
     @NonNull
     public List<CandidateLine> findCandidateLines(
             @NonNull UUID customerId, @Nullable UUID vehicleId, @Nullable String sku, @Nullable UUID productEntityId) {
         boolean filtered = sku != null || productEntityId != null;
-        CatalogClient.ProductInfo product = resolveProduct(productEntityId);
+        ExtCatalogReplica product = resolveProduct(productEntityId);
         Set<String> textTokens = textTokens(sku, product);
 
         List<CandidateLine> results = new ArrayList<>();
@@ -103,7 +104,7 @@ public class CandidateLineServiceImpl implements CandidateLineService {
             boolean filtered,
             @Nullable UUID productEntityId,
             Set<String> textTokens,
-            CatalogClient.@Nullable ProductInfo product) {
+            @Nullable ExtCatalogReplica product) {
         List<CandidateLine> results = new ArrayList<>();
         try {
             List<ExtWorkorderReplica> workorders = vehicleId == null
@@ -132,13 +133,15 @@ public class CandidateLineServiceImpl implements CandidateLineService {
             boolean filtered,
             @Nullable UUID productEntityId,
             Set<String> textTokens,
-            CatalogClient.@Nullable ProductInfo product,
+            @Nullable ExtCatalogReplica product,
             List<CandidateLine> results) {
         if ("PART".equals(line.getLineKind())) {
             if (filtered && !matchesPart(line, productEntityId, textTokens)) {
                 return;
             }
-            String partSku = product != null && product.id().equals(line.getProductEntityId()) ? product.sku() : null;
+            String partSku = product != null && product.getProductId().equals(line.getProductEntityId())
+                    ? product.getSku()
+                    : null;
             results.add(new CandidateLine(
                     LineSourceType.WORKORDER_PART,
                     workorder.getWorkorderId(),
@@ -194,25 +197,25 @@ public class CandidateLineServiceImpl implements CandidateLineService {
         return tokens.stream().anyMatch(haystack::contains);
     }
 
-    private CatalogClient.@Nullable ProductInfo resolveProduct(@Nullable UUID productEntityId) {
+    private @Nullable ExtCatalogReplica resolveProduct(@Nullable UUID productEntityId) {
         if (productEntityId == null) {
             return null;
         }
-        return catalogClient.getProduct(productEntityId).orElse(null);
+        return extCatalogReplicaRepository.findById(productEntityId).orElse(null);
     }
 
     /** Tokens used for description matching: the requested SKU plus the catalog SKU and name. */
-    private static Set<String> textTokens(@Nullable String sku, CatalogClient.@Nullable ProductInfo product) {
+    private static Set<String> textTokens(@Nullable String sku, @Nullable ExtCatalogReplica product) {
         Set<String> tokens = new LinkedHashSet<>();
         if (sku != null && !sku.isBlank()) {
             tokens.add(sku.toLowerCase(Locale.ROOT).trim());
         }
         if (product != null) {
-            if (product.sku() != null && !product.sku().isBlank()) {
-                tokens.add(product.sku().toLowerCase(Locale.ROOT).trim());
+            if (product.getSku() != null && !product.getSku().isBlank()) {
+                tokens.add(product.getSku().toLowerCase(Locale.ROOT).trim());
             }
-            if (product.name() != null && !product.name().isBlank()) {
-                tokens.add(product.name().toLowerCase(Locale.ROOT).trim());
+            if (product.getName() != null && !product.getName().isBlank()) {
+                tokens.add(product.getName().toLowerCase(Locale.ROOT).trim());
             }
         }
         return tokens;

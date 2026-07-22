@@ -6,8 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.warranty.internal.client.CatalogClient;
 import com.positivity.warranty.internal.dto.EligibilityEvaluation;
+import com.positivity.warranty.internal.entity.ExtCatalogReplica;
 import com.positivity.warranty.internal.entity.WarrantyClaim;
 import com.positivity.warranty.internal.entity.WarrantyClaimLine;
 import com.positivity.warranty.internal.entity.WarrantyPolicy;
@@ -19,6 +19,7 @@ import com.positivity.warranty.internal.enums.EligibilityResult;
 import com.positivity.warranty.internal.enums.ProrationMethod;
 import com.positivity.warranty.internal.enums.RegistrationStatus;
 import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
+import com.positivity.warranty.internal.repository.ExtCatalogReplicaRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
 import com.positivity.warranty.internal.repository.WarrantyPolicyRepository;
 import com.positivity.warranty.internal.repository.WarrantyRegistrationRepository;
@@ -63,14 +64,18 @@ class EligibilityServiceImplTest {
     private WarrantyRegistrationRepository registrationRepository;
 
     @Mock
-    private CatalogClient catalogClient;
+    private ExtCatalogReplicaRepository extCatalogReplicaRepository;
 
     private EligibilityServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new EligibilityServiceImpl(
-                claimRepository, policyRepository, registrationRepository, catalogClient, new ProrationService());
+                claimRepository,
+                policyRepository,
+                registrationRepository,
+                extCatalogReplicaRepository,
+                new ProrationService());
     }
 
     // -----------------------------------------------------------------------------------------
@@ -126,18 +131,20 @@ class EligibilityServiceImplTest {
                 .build();
     }
 
-    private static CatalogClient.ProductInfo product() {
-        return new CatalogClient.ProductInfo(
-                PRODUCT_ID,
-                "TIRE-1",
-                "SuperTire 225",
-                MANUFACTURER_ID,
-                "Michelin",
-                "Michelin",
-                CATEGORY_ID,
-                "Tires",
-                null,
-                null);
+    private static ExtCatalogReplica product() {
+        return ExtCatalogReplica.builder()
+                .productId(PRODUCT_ID)
+                .sku("TIRE-1")
+                .name("SuperTire 225")
+                .manufacturerId(MANUFACTURER_ID)
+                .manufacturerName("Michelin")
+                .manufacturerBrand("Michelin")
+                .categoryId(CATEGORY_ID)
+                .category("Tires")
+                .active(true)
+                .aggregateVersion(1L)
+                .updatedAt(java.time.Instant.EPOCH)
+                .build();
     }
 
     private void stubClaim(WarrantyClaim claim) {
@@ -154,7 +161,7 @@ class EligibilityServiceImplTest {
         WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
         WarrantyPolicy policy = manufacturerTreadPolicy();
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(policy));
 
         EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
@@ -195,7 +202,7 @@ class EligibilityServiceImplTest {
         WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
         claim.getLines().get(0).setMeasuredTreadDepth(2); // not > pull point 2
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(manufacturerTreadPolicy()));
 
         EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
@@ -212,7 +219,7 @@ class EligibilityServiceImplTest {
         WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
         claim.getLines().get(0).setMeasuredTreadDepth(null);
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(manufacturerTreadPolicy()));
 
         EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
@@ -228,7 +235,7 @@ class EligibilityServiceImplTest {
         WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
         claim.setFailureDate(SALE_DATE.plusMonths(30)); // past 24-month duration
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(manufacturerTreadPolicy()));
 
         EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
@@ -246,7 +253,7 @@ class EligibilityServiceImplTest {
         WarrantyPolicy policy = manufacturerTreadPolicy();
         policy.setMileageLimit(40000);
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(policy));
 
         EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
@@ -261,7 +268,7 @@ class EligibilityServiceImplTest {
     void noMatchingPolicy_isIneligible() {
         WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of());
 
         EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
@@ -276,7 +283,7 @@ class EligibilityServiceImplTest {
     void rerunWithoutMatchingPolicy_clearsPreviouslySelectedCoverageAndProration() {
         WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE))
                 .thenReturn(List.of(manufacturerTreadPolicy()))
                 .thenReturn(List.of()); // second run: nothing matches (e.g. claimType corrected)
@@ -316,7 +323,7 @@ class EligibilityServiceImplTest {
         WarrantyPolicy broad =
                 allFreeReplacementPolicy("Catch-all", UUID.fromString("018f0000-0000-7000-8000-000000000051"));
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(broad, categoryPolicy));
 
         service.evaluate(CLAIM_ID);
@@ -339,7 +346,7 @@ class EligibilityServiceImplTest {
                 .build();
         WarrantyPolicy manufacturer = manufacturerTreadPolicy();
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(categoryPolicy, manufacturer));
 
         service.evaluate(CLAIM_ID);
@@ -361,7 +368,7 @@ class EligibilityServiceImplTest {
                 .prorationMethod(ProrationMethod.NONE)
                 .build();
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(otherCategory));
 
         EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
@@ -374,7 +381,7 @@ class EligibilityServiceImplTest {
     void noMatchingPolicy_withCatalogDown_isIndeterminate() {
         WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.empty());
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.empty());
         // the manufacturer-scoped policy cannot match without product facts
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(manufacturerTreadPolicy()));
 
@@ -390,7 +397,7 @@ class EligibilityServiceImplTest {
     void catalogDown_withMoreSpecificScopedPolicyAndAllFallback_isIndeterminateNotSilentDowngrade() {
         WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.empty());
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.empty());
         // With catalog facts missing the manufacturer policy cannot be evaluated; the ALL
         // fallback must NOT silently win — the winner may be the wrong policy.
         when(policyRepository.findEffectiveOn(SALE_DATE))
@@ -416,7 +423,7 @@ class EligibilityServiceImplTest {
         WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
         claim.setFailureDate(SALE_DATE.plusMonths(24).plusDays(1));
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(manufacturerTreadPolicy()));
 
         assertThat(service.evaluate(CLAIM_ID).result()).isEqualTo(EligibilityResult.INELIGIBLE);
@@ -433,7 +440,7 @@ class EligibilityServiceImplTest {
         WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
         claim.setOriginUnverified(true);
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE))
                 .thenReturn(List.of(allFreeReplacementPolicy(
                         "Store guarantee", UUID.fromString("018f0000-0000-7000-8000-000000000011"))));
@@ -455,7 +462,7 @@ class EligibilityServiceImplTest {
         WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
         claim.setOriginSaleDate(null);
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
 
         EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
 
@@ -473,7 +480,7 @@ class EligibilityServiceImplTest {
         WarrantyPolicy policy = manufacturerTreadPolicy();
         policy.setCoverageType(CoverageType.ROAD_HAZARD);
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(policy));
         when(registrationRepository.findByCustomerIdAndStatus(CUSTOMER_ID, RegistrationStatus.ACTIVE))
                 .thenReturn(List.of());
@@ -499,7 +506,7 @@ class EligibilityServiceImplTest {
                 .status(RegistrationStatus.ACTIVE)
                 .build();
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(policy));
         when(registrationRepository.findByCustomerIdAndStatus(CUSTOMER_ID, RegistrationStatus.ACTIVE))
                 .thenReturn(List.of(registration));
@@ -526,7 +533,7 @@ class EligibilityServiceImplTest {
         WarrantyPolicy broad =
                 allFreeReplacementPolicy("Catch-all", UUID.fromString("018f0000-0000-7000-8000-000000000031"));
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(broad, specific));
 
         service.evaluate(CLAIM_ID);
@@ -542,7 +549,7 @@ class EligibilityServiceImplTest {
         WarrantyPolicy second =
                 allFreeReplacementPolicy("Plan B", UUID.fromString("018f0000-0000-7000-8000-000000000041"));
         stubClaim(claim);
-        when(catalogClient.getProduct(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
         when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(first, second));
 
         EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
