@@ -13,8 +13,11 @@ import com.positivity.security.common.LogSanitizer;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.NonNull;
@@ -49,6 +52,13 @@ public class ReportExportServiceImpl implements ReportExportService {
 
     private static final String PDF_TEMPLATE_ID = "DEFAULT_STANDARD_TEMPLATE";
 
+    /**
+     * Maximum rendered artifacts held in memory until object storage lands (issue
+     * #999 follow-up). Oldest artifacts are evicted first; downloading an evicted
+     * export returns 404.
+     */
+    static final int MAX_ARTIFACTS = 100;
+
     private final Clock clock;
     private final FinancialReportingService financialReportingService;
     private final TaxLiabilityCsvRenderer csvRenderer;
@@ -60,7 +70,12 @@ public class ReportExportServiceImpl implements ReportExportService {
      */
     private final ConcurrentHashMap<UUID, ReportExportResponse> exportStore = new ConcurrentHashMap<>();
 
-    private final ConcurrentHashMap<UUID, ReportExportArtifact> artifactStore = new ConcurrentHashMap<>();
+    /**
+     * Bounded LRU store for rendered artifact bytes so full CSV/PDF payloads cannot
+     * accumulate without limit (memory-pressure/DoS guard until object storage lands).
+     */
+    private final Map<UUID, ReportExportArtifact> artifactStore =
+            Collections.synchronizedMap(new BoundedLruMap<>(MAX_ARTIFACTS));
 
     public ReportExportServiceImpl(
             Clock clock,
@@ -123,24 +138,34 @@ public class ReportExportServiceImpl implements ReportExportService {
                     .downloadUrl("/v1/accounting/reports/export/" + exportId + "/download")
                     .build();
         } catch (RuntimeException e) {
-            log.warn("Report export rendering failed: exportId={} reason={}", exportId, e.getMessage());
+            log.warn("Report export rendering failed: exportId={}", exportId, e);
             return builder.status(ExportStatus.FAILED)
                     .completedAt(Instant.now(clock))
-                    .failureReason("Rendering failed: " + e.getMessage())
+                    .failureReason("Rendering failed; see service logs for exportId " + exportId)
                     .build();
         }
     }
 
     private ReportExportArtifact toArtifact(ReportExportRequest request, String csv) {
-        String baseName =
+        String baseName = sanitizeFilename(
                 (request.getFilename() != null && !request.getFilename().isBlank())
                         ? request.getFilename()
-                        : "tax-liability-" + request.getStartDate() + "-" + request.getEndDate();
+                        : "tax-liability-" + request.getStartDate() + "-" + request.getEndDate());
         if (request.getFormat() == ExportFormat.CSV) {
             return new ReportExportArtifact(csv.getBytes(StandardCharsets.UTF_8), "text/csv", baseName + ".csv");
         }
         byte[] pdf = documentRenderClient.renderPdfFromCsv(PDF_TEMPLATE_ID, csv);
         return new ReportExportArtifact(pdf, "application/pdf", baseName + ".pdf");
+    }
+
+    /**
+     * Restrict the (potentially caller-supplied) download filename to a safe character
+     * set so it can never carry CR/LF, quotes, or path separators into the
+     * {@code Content-Disposition} header.
+     */
+    private static String sanitizeFilename(String name) {
+        String cleaned = name.replaceAll("[^A-Za-z0-9._-]", "_");
+        return cleaned.isBlank() ? "report-export" : cleaned;
     }
 
     @Override
@@ -203,5 +228,27 @@ public class ReportExportServiceImpl implements ReportExportService {
         int end = Math.toIntExact(Math.min(offset + pageable.getPageSize(), total));
         var page = all.subList(start, end);
         return new PageImpl<>(page, pageable, total);
+    }
+
+    /**
+     * Access-order LRU map that evicts the eldest entry once {@code maxEntries} is
+     * exceeded. Wrapped in {@link Collections#synchronizedMap} by the caller for
+     * thread safety.
+     */
+    private static final class BoundedLruMap<K, V> extends LinkedHashMap<K, V> {
+
+        private static final long serialVersionUID = 1L;
+
+        private final int maxEntries;
+
+        BoundedLruMap(int maxEntries) {
+            super(16, 0.75f, true);
+            this.maxEntries = maxEntries;
+        }
+
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
+            return size() > maxEntries;
+        }
     }
 }

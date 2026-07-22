@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.positivity.accounting.internal.dto.TaxLiabilityReconciliation;
 import com.positivity.accounting.internal.dto.TaxLiabilityReport;
@@ -49,6 +50,19 @@ class TaxLiabilityCsvRendererTest {
         second.setGeneratedAt(Instant.parse("2030-01-01T00:00:00Z"));
 
         assertEquals(renderer.render(first), renderer.render(second));
+    }
+
+    @Test
+    @DisplayName("Fields containing CR, LF, or quotes are quoted and quote-escaped")
+    void escapesCarriageReturnsLineFeedsAndQuotes() {
+        TaxLiabilityReport report = report();
+        report.getRows().getFirst().setJurisdictionName("Wash\r\nington \"Evergreen\"");
+
+        String csv = renderer.render(report);
+
+        assertTrue(
+                csv.contains("STATE,WA,\"Wash\r\nington \"\"Evergreen\"\"\",3000.00"),
+                "CR/LF and quotes must be contained inside a quoted, quote-escaped field");
     }
 
     private static TaxLiabilityReport report() {

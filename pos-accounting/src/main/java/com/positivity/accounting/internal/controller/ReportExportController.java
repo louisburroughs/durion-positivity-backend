@@ -19,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -134,8 +135,12 @@ public class ReportExportController {
             @Parameter(description = "Export job UUID", required = true) @PathVariable UUID exportId) {
 
         ReportExportArtifact artifact = reportExportService.downloadExport(exportId);
+        // The filename is sanitized to a safe character set when the artifact is created;
+        // ContentDisposition additionally quotes/escapes it, preventing header injection.
         return ResponseEntity.ok()
-                .header("Content-Disposition", "attachment; filename=\"" + artifact.filename() + "\"")
+                .headers(headers -> headers.setContentDisposition(ContentDisposition.attachment()
+                        .filename(artifact.filename())
+                        .build()))
                 .contentType(MediaType.parseMediaType(artifact.contentType()))
                 .body(artifact.content());
     }

@@ -33,6 +33,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -136,14 +138,14 @@ class TaxLiabilityReportContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Figures match the JSON report assertions in taxLiabilityReconciles() to the cent.
         assertCsvRow(lines[4], "STATE", "WA", "3000.00", "500.00", "RESALE", "195.00", "13.00", "182.00");
-        String[] county = lines[5].split(",", -1);
+        String[] county = splitCsv(lines[5]);
         assertEquals("COUNTY", county[0]);
         assertEquals(0, new BigDecimal("28.00").compareTo(new BigDecimal(county[8])));
-        String[] city = lines[6].split(",", -1);
+        String[] city = splitCsv(lines[6]);
         assertEquals("CITY", city[0]);
         assertEquals(0, new BigDecimal("20.00").compareTo(new BigDecimal(city[8])));
 
-        String[] total = lines[7].split(",", -1);
+        String[] total = splitCsv(lines[7]);
         assertEquals("TOTAL", total[0]);
         assertEquals(0, new BigDecimal("255.00").compareTo(new BigDecimal(total[6])));
         assertEquals(0, new BigDecimal("25.00").compareTo(new BigDecimal(total[7])));
@@ -151,7 +153,7 @@ class TaxLiabilityReportContractBehaviorIT extends BaseContractIntegrationTest {
 
         assertEquals(
                 "Tax Payable Account,GL Net Activity,Report Net Tax,Unattributed Credits,Drift,Reconciled", lines[9]);
-        String[] reconciliation = lines[10].split(",", -1);
+        String[] reconciliation = splitCsv(lines[10]);
         assertEquals("2200", reconciliation[0]);
         assertEquals(0, new BigDecimal("230.00").compareTo(new BigDecimal(reconciliation[1])));
         assertEquals(0, BigDecimal.ZERO.compareTo(new BigDecimal(reconciliation[4])));
@@ -288,7 +290,7 @@ class TaxLiabilityReportContractBehaviorIT extends BaseContractIntegrationTest {
             String gross,
             String credits,
             String net) {
-        String[] parts = line.split(",", -1);
+        String[] parts = splitCsv(line);
         assertEquals(type, parts[0]);
         assertEquals(code, parts[1]);
         assertEquals(0, new BigDecimal(taxableBase).compareTo(new BigDecimal(parts[3])));
@@ -297,6 +299,40 @@ class TaxLiabilityReportContractBehaviorIT extends BaseContractIntegrationTest {
         assertEquals(0, new BigDecimal(gross).compareTo(new BigDecimal(parts[6])));
         assertEquals(0, new BigDecimal(credits).compareTo(new BigDecimal(parts[7])));
         assertEquals(0, new BigDecimal(net).compareTo(new BigDecimal(parts[8])));
+    }
+
+    /**
+     * CSV-aware single-line field split: honors RFC-4180 quoting so fields containing
+     * commas or escaped quotes are not broken apart (unlike {@code String.split(",")}).
+     */
+    private static String[] splitCsv(String line) {
+        List<String> fields = new ArrayList<>();
+        StringBuilder field = new StringBuilder();
+        boolean inQuotes = false;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (inQuotes) {
+                if (c == '"') {
+                    if (i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                        field.append('"');
+                        i++;
+                    } else {
+                        inQuotes = false;
+                    }
+                } else {
+                    field.append(c);
+                }
+            } else if (c == '"') {
+                inQuotes = true;
+            } else if (c == ',') {
+                fields.add(field.toString());
+                field.setLength(0);
+            } else {
+                field.append(c);
+            }
+        }
+        fields.add(field.toString());
+        return fields.toArray(new String[0]);
     }
 
     // ===== fixtures =====
