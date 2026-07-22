@@ -1,6 +1,6 @@
 package com.positivity.warranty.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -57,6 +57,6 @@ public class ExtWorkorderLineReplica {
     /** Explicit dependency hook for the ArchUnit UUIDv7 rule (ADR-0013): PK is a UUIDv7 verbatim. */
     @Transient
     public Class<?> uuidv7Dependency() {
-        return UUIDv7Id.class;
+        return UUIDv7Generator.class;
     }
 }
