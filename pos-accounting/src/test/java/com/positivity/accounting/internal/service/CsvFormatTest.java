@@ -23,6 +23,15 @@ class CsvFormatTest {
     }
 
     @Test
+    @DisplayName("A leading space-run does not bypass neutralization — spreadsheets trim it on import")
+    void neutralizesFormulaBehindLeadingSpaces() {
+        assertEquals("' =2+5", CsvFormat.escapeText(" =2+5"));
+        assertEquals("'   +1234567", CsvFormat.escapeText("   +1234567"));
+        assertEquals("   ", CsvFormat.escapeText("   "));
+        assertEquals(" Washington", CsvFormat.escapeText(" Washington"));
+    }
+
+    @Test
     @DisplayName("Text cells starting with tab or CR are neutralized per OWASP guidance")
     void neutralizesTabAndCarriageReturn() {
         assertEquals("'\tpadded", CsvFormat.escapeText("\tpadded"));

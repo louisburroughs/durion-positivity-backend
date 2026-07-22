@@ -11,7 +11,8 @@ import java.math.BigDecimal;
  * LF are quoted and quote-escaped per RFC 4180.
  *
  * <p>Text fields are additionally neutralized against spreadsheet formula
- * injection (CWE-1236): a cell whose first character is {@code =}, {@code +},
+ * injection (CWE-1236): a cell whose first character (ignoring a leading
+ * space-run, which spreadsheets trim on import) is {@code =}, {@code +},
  * {@code -}, {@code @}, tab, or CR is prefixed with a single quote {@code '}
  * per OWASP CSV Injection guidance, so Excel/LibreOffice treat it as text
  * instead of evaluating it. The prefix is part of the rendered bytes and is
@@ -51,10 +52,16 @@ final class CsvFormat {
     }
 
     private static boolean startsWithFormulaCharacter(String value) {
-        if (value.isEmpty()) {
+        // Skip a leading space-run: spreadsheets trim it on import, so " =2+5"
+        // would still evaluate as a formula.
+        int i = 0;
+        while (i < value.length() && value.charAt(i) == ' ') {
+            i++;
+        }
+        if (i == value.length()) {
             return false;
         }
-        char first = value.charAt(0);
+        char first = value.charAt(i);
         return first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r';
     }
 }
