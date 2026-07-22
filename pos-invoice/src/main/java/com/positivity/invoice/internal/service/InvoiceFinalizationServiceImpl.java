@@ -15,7 +15,9 @@ import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.service.InvoiceFinalizationService;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.tax.common.dto.TaxCalculationResponse;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,6 +25,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -76,6 +79,8 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     private final InvoiceEventPublisher invoiceEventPublisher;
     private final TaxLifecycleClient taxLifecycleClient;
     private final InvoiceDueDateService invoiceDueDateService;
+    private final InvoiceTaxCalculator invoiceTaxCalculator;
+    private final InvoiceTaxBreakdownWriter taxBreakdownWriter;
 
     public InvoiceFinalizationServiceImpl(
             InvoiceRepository invoiceRepository,
@@ -84,7 +89,9 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             ElevationTokenService elevationTokenService,
             InvoiceEventPublisher invoiceEventPublisher,
             TaxLifecycleClient taxLifecycleClient,
-            InvoiceDueDateService invoiceDueDateService) {
+            InvoiceDueDateService invoiceDueDateService,
+            InvoiceTaxCalculator invoiceTaxCalculator,
+            InvoiceTaxBreakdownWriter taxBreakdownWriter) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.eventPublisher = eventPublisher;
@@ -92,6 +99,8 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         this.invoiceEventPublisher = invoiceEventPublisher;
         this.taxLifecycleClient = taxLifecycleClient;
         this.invoiceDueDateService = invoiceDueDateService;
+        this.invoiceTaxCalculator = invoiceTaxCalculator;
+        this.taxBreakdownWriter = taxBreakdownWriter;
     }
 
     /**
@@ -167,8 +176,30 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
                 .map(inv -> inv.getTotal() != null ? inv.getTotal() : BigDecimal.ZERO)
                 .orElse(BigDecimal.ZERO);
 
-        // AC3: Permission matrix enforcement — role derived from SecurityContext
+        // AC3: Permission matrix enforcement — role derived from SecurityContext.
+        // PR #1020 review: enforced BEFORE the committable tax calculation below so an
+        // unauthorized/unapproved request never triggers the provider-persisting call
+        // (no orphan AvaTax document from a rejected finalization). The manager-approval
+        // matrix therefore gates on the STORED total as it stands when finalization is
+        // requested (the last draft re-price), not on the recalculated one.
         enforcePermissions(request, invoiceId, invoiceTotal);
+
+        TaxCalculationResponse committableTax = null;
+        if (existingOpt.isPresent()) {
+            Invoice existing = existingOpt.get();
+            // #985 (story T6, Option A): while the invoice is still DRAFT, run the COMMITTABLE
+            // tax calculation (committable=true, referenceId == invoiceId). The provider then
+            // persists an uncommitted SalesInvoice document under code == invoiceId, so the
+            // lifecycle commit below — and the PENDING_COMMIT re-commit job on provider outage —
+            // resolve by that code. A calculation failure propagates and blocks finalization
+            // (per D-T5; the estimate-and-true-up leniency of D-T3 applies to the COMMIT step,
+            // not to document creation — a PENDING_COMMIT row without a provider document could
+            // never converge). The invoice stays DRAFT and finalization can be retried. A null
+            // result means nothing is taxable: no provider document exists, the lifecycle
+            // commit is skipped, and any previously frozen tax is zeroed (stale-tax guard).
+            committableTax = invoiceTaxCalculator.calculateCommittable(existing);
+            applyCommittableTax(invoiceId, existing, committableTax);
+        }
 
         // AC4: Transition DRAFT → FINALIZED
         Instant now = Instant.now(clock);
@@ -195,7 +226,13 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             // Story T6 / D-T3: commit the provider tax document for the finalized invoice.
             // Synchronous utility call; never blocks the sale (the client swallows failures and
             // pos-tax records PENDING_COMMIT for the scheduled re-commit job on provider outage).
-            taxLifecycleClient.commit(saved.getId());
+            // #985: only when the committable calculation above created a provider document —
+            // with nothing taxable there is no document and a commit could never resolve.
+            if (committableTax != null) {
+                taxLifecycleClient.commit(saved.getId());
+            } else {
+                log.debug("Invoice {} has no taxable lines; skipping provider tax commit", saved.getId());
+            }
 
             return toDetailsResponse(saved);
         } else {
@@ -282,6 +319,31 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * #985: adopt the finalization-time committable calculation as the invoice's frozen tax.
+     * Runs while the invoice is still DRAFT (before the freeze-after-finalize boundary, story
+     * T5a): sets tax, recomputes the total ({@code subtotal + adjustments + tax}, matching the
+     * draft re-price formula) and refreshes the persisted per-line breakdown so the frozen
+     * figures exactly match the provider document that will be committed.
+     *
+     * <p>A {@code null} response means nothing is taxable at finalization time: the frozen tax
+     * is ZERO and the persisted breakdown is cleared — a previously computed (now stale) draft
+     * tax must not survive into the FINALIZED invoice when no provider document exists.
+     */
+    private void applyCommittableTax(
+            @NonNull UUID invoiceId, @NonNull Invoice invoice, @Nullable TaxCalculationResponse taxResponse) {
+        BigDecimal tax = (taxResponse != null && taxResponse.getTotalTax() != null
+                        ? taxResponse.getTotalTax()
+                        : BigDecimal.ZERO)
+                .setScale(4, RoundingMode.HALF_UP);
+        BigDecimal subtotal = invoice.getSubtotal() != null ? invoice.getSubtotal() : BigDecimal.ZERO;
+        BigDecimal adjustments =
+                invoice.getAdjustmentsAmount() != null ? invoice.getAdjustmentsAmount() : BigDecimal.ZERO;
+        invoice.setTax(tax);
+        invoice.setTotal(subtotal.add(adjustments).add(tax).setScale(4, RoundingMode.HALF_UP));
+        taxBreakdownWriter.replace(invoiceId, taxResponse);
+    }
 
     /**
      * True when the current actor may finalize/revert without a manager approval

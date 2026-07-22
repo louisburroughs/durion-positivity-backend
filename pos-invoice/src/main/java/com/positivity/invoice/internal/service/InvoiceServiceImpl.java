@@ -1,6 +1,5 @@
 package com.positivity.invoice.internal.service;
 
-import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.config.InvoiceEventPublisher;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
@@ -19,9 +18,7 @@ import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
 import com.positivity.shared.id.UUIDv7Generator;
-import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
-import com.positivity.tax.common.dto.TaxLineItem;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -46,8 +43,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final Clock clock;
 
     private final InvoiceRepository invoiceRepository;
-    private final TaxServiceClient taxServiceClient;
-    private final LocationReferenceService locationReferenceService;
+    private final InvoiceTaxCalculator invoiceTaxCalculator;
     private final WorkorderReferenceService workorderReferenceService;
     private final InvoiceEventPublisher invoiceEventPublisher;
     private final InvoiceTaxBreakdownWriter taxBreakdownWriter;
@@ -67,16 +63,14 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     public InvoiceServiceImpl(
             @NonNull InvoiceRepository invoiceRepository,
-            @NonNull TaxServiceClient taxServiceClient,
-            @NonNull LocationReferenceService locationReferenceService,
+            @NonNull InvoiceTaxCalculator invoiceTaxCalculator,
             @NonNull WorkorderReferenceService workorderReferenceService,
             @NonNull InvoiceEventPublisher invoiceEventPublisher,
             @NonNull InvoiceTaxBreakdownWriter taxBreakdownWriter,
             Clock clock) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
-        this.taxServiceClient = taxServiceClient;
-        this.locationReferenceService = locationReferenceService;
+        this.invoiceTaxCalculator = invoiceTaxCalculator;
         this.workorderReferenceService = workorderReferenceService;
         this.invoiceEventPublisher = invoiceEventPublisher;
         this.taxBreakdownWriter = taxBreakdownWriter;
@@ -296,51 +290,14 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     /**
      * Calculate tax for the invoice against its shop-location jurisdiction, returning the full
-     * response (including the per-line jurisdiction breakdown story T5 persists).
-     *
-     * <p>Tax is computed on the invoice line items (the goods/services sold), matching the
-     * estimate flow. Invoice-level adjustments (discounts/fees) are applied to the total
-     * after tax and are not part of the taxable base. When there is nothing taxable the tax
-     * service is not called and {@code null} is returned.
+     * response (including the per-line jurisdiction breakdown story T5 persists). Delegates to
+     * {@link InvoiceTaxCalculator#calculateDraft(Invoice)} — a read-only re-price
+     * ({@code committable=false}); the finalization-time committable calculation lives in
+     * {@code InvoiceFinalizationServiceImpl} (#985).
      */
     @Nullable
     private TaxCalculationResponse calculateTaxResponse(@NonNull Invoice invoice) {
-        List<TaxLineItem> taxLineItems = buildTaxLineItems(invoice);
-        if (taxLineItems.isEmpty()) {
-            return null;
-        }
-
-        UUID locationId = invoice.getLocationId();
-        if (locationId == null) {
-            throw new IllegalStateException(
-                    "invoice has taxable line items but no locationId to resolve the tax jurisdiction");
-        }
-
-        TaxAddress destination = locationReferenceService.resolveTaxAddress(locationId);
-        return taxServiceClient.calculateTaxDetailed(taxLineItems, destination, invoice.getWorkorderId());
-    }
-
-    @NonNull
-    private List<TaxLineItem> buildTaxLineItems(@NonNull Invoice invoice) {
-        List<TaxLineItem> taxLineItems = new ArrayList<>();
-        int index = 0;
-        for (InvoiceItem item : invoice.getItems()) {
-            BigDecimal quantity = safeMoney(item.getQuantity(), BigDecimal.ONE);
-            BigDecimal unitPrice = safeMoney(item.getUnitPrice(), BigDecimal.ZERO);
-            // pos-tax requires positive quantity and unit price; non-positive lines contribute
-            // no tax, so skip them rather than tripping bean validation (400) on the request.
-            if (quantity.signum() <= 0 || unitPrice.signum() <= 0) {
-                continue;
-            }
-            taxLineItems.add(TaxLineItem.builder()
-                    .lineItemId(String.valueOf(++index))
-                    .description(item.getDescription())
-                    .quantity(quantity)
-                    .unitPrice(unitPrice)
-                    .taxExempt(false)
-                    .build());
-        }
-        return taxLineItems;
+        return invoiceTaxCalculator.calculateDraft(invoice);
     }
 
     @NonNull
