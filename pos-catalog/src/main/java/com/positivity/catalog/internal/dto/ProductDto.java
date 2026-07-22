@@ -6,6 +6,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import com.positivity.catalog.internal.entity.ProductCodeType;
 import com.positivity.catalog.internal.entity.ProductLifecycleState;
 import com.positivity.catalog.internal.entity.ProductStatus;
+import com.positivity.catalog.internal.entity.ProductTrackingLevel;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -85,6 +86,13 @@ public class ProductDto {
             implementation = ProductStatus.class,
             requiredMode = NOT_REQUIRED)
     private ProductStatus status;
+
+    @Schema(
+            description = "Stock tracking level",
+            example = "NONE",
+            implementation = ProductTrackingLevel.class,
+            requiredMode = NOT_REQUIRED)
+    private ProductTrackingLevel trackingLevel;
 
     @Schema(description = "Product code", example = "012345678905", requiredMode = NOT_REQUIRED)
     private String productCode;

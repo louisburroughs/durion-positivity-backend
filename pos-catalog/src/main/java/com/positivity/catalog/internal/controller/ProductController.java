@@ -13,6 +13,7 @@ import com.positivity.catalog.internal.dto.ProductDto;
 import com.positivity.catalog.internal.dto.ProductLifecycleResponse;
 import com.positivity.catalog.internal.dto.ProductLifecycleUpdateRequest;
 import com.positivity.catalog.internal.dto.ProductReplacementRequest;
+import com.positivity.catalog.internal.dto.ProductTrackingLevelUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ProductUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ServiceDto;
 import com.positivity.catalog.service.CatalogService;
@@ -261,6 +262,28 @@ public class ProductController {
             @Parameter(description = "ID of the product to update", required = true) @PathVariable UUID productId,
             @Valid @RequestBody ProductUpdateRequestDto request) {
         return ResponseEntity.ok(productMasterDataService.updateProduct(productId, request));
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+    @PutMapping("/{productId}/tracking-level")
+    @Operation(
+            summary = "Set product tracking level",
+            description = "Sets the product's stock tracking level (NONE, LOT, or SERIAL; default NONE) and"
+                    + " re-emits the product contract event for downstream replicas.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Tracking level updated",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
+    @ApiResponse(responseCode = "400", description = "Validation error")
+    @ApiResponse(responseCode = "404", description = "Product not found")
+    @EmitEvent(id = "CATALOG_PRODUCT_TRACKING_LEVEL_UPDATE", apiVersion = "1")
+    public ResponseEntity<ProductDto> updateTrackingLevel(
+            @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
+            @Valid @RequestBody ProductTrackingLevelUpdateRequestDto request) {
+        return ResponseEntity.ok(productMasterDataService.updateTrackingLevel(productId, request));
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
