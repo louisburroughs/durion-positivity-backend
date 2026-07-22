@@ -3127,19 +3127,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreditMemoResponse'
+                $ref: '#/components/schemas/ApiError'
         '404':
           description: Credit memo not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreditMemoResponse'
+                $ref: '#/components/schemas/ApiError'
         '409':
           description: Credit memo is not in POSTED status
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreditMemoResponse'
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - accounting:credit-memo:void
@@ -4210,12 +4210,12 @@ paths:
           format: uuid
       responses:
         '200':
-          description: Rendered artifact returned
+          description: Rendered artifact returned (content type matches the export format, e.g. text/csv or application/pdf)
           content:
-            application/json:
+            application/octet-stream:
               schema:
                 type: string
-                format: byte
+                format: binary
         '401':
           description: Unauthorized
           content:

@@ -746,7 +746,8 @@ class CreditMemoServiceTest {
     @Test
     @DisplayName("void: POSTED memo flips to VOIDED and posts the mirror GL entry")
     void voidPostedMemo() {
-        when(creditMemoRepository.findById(testCreditMemoId)).thenReturn(java.util.Optional.of(testCreditMemo));
+        when(creditMemoRepository.findWithLockByCreditMemoId(testCreditMemoId))
+                .thenReturn(java.util.Optional.of(testCreditMemo));
         when(creditMemoRepository.save(any(CreditMemo.class))).thenAnswer(inv -> inv.getArgument(0));
         when(invoiceBalanceCalculator.findInvoice(testInvoiceId)).thenReturn(java.util.Optional.of(testInvoice));
         when(invoiceBalanceCalculator.balanceDue(testInvoice)).thenReturn(new BigDecimal("110.00"));
@@ -774,7 +775,8 @@ class CreditMemoServiceTest {
     @DisplayName("void: APPLIED memo is rejected 409 (consumed), nothing saved or posted")
     void voidAppliedMemoRejected() {
         testCreditMemo.setStatus(CreditMemoStatus.APPLIED);
-        when(creditMemoRepository.findById(testCreditMemoId)).thenReturn(java.util.Optional.of(testCreditMemo));
+        when(creditMemoRepository.findWithLockByCreditMemoId(testCreditMemoId))
+                .thenReturn(java.util.Optional.of(testCreditMemo));
 
         assertThatThrownBy(() -> service.voidCreditMemo(testCreditMemoId, "reason", "void-user"))
                 .isInstanceOf(ResponseStatusException.class)
@@ -790,7 +792,8 @@ class CreditMemoServiceTest {
     @DisplayName("void: already-VOIDED memo is rejected 409 (terminal)")
     void voidVoidedMemoRejected() {
         testCreditMemo.setStatus(CreditMemoStatus.VOIDED);
-        when(creditMemoRepository.findById(testCreditMemoId)).thenReturn(java.util.Optional.of(testCreditMemo));
+        when(creditMemoRepository.findWithLockByCreditMemoId(testCreditMemoId))
+                .thenReturn(java.util.Optional.of(testCreditMemo));
 
         assertThatThrownBy(() -> service.voidCreditMemo(testCreditMemoId, "reason", "void-user"))
                 .isInstanceOf(ResponseStatusException.class)
@@ -802,7 +805,7 @@ class CreditMemoServiceTest {
     @Test
     @DisplayName("void: unknown memo -> 404")
     void voidUnknownMemo() {
-        when(creditMemoRepository.findById(testCreditMemoId)).thenReturn(java.util.Optional.empty());
+        when(creditMemoRepository.findWithLockByCreditMemoId(testCreditMemoId)).thenReturn(java.util.Optional.empty());
 
         assertThatThrownBy(() -> service.voidCreditMemo(testCreditMemoId, "reason", "void-user"))
                 .isInstanceOf(ResponseStatusException.class)

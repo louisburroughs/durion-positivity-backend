@@ -21,7 +21,9 @@ public class VoidCreditMemoRequest {
     @Schema(
             description = "Reason the memo is being voided (audit trail)",
             example = "Issued against the wrong invoice",
-            requiredMode = REQUIRED)
+            requiredMode = REQUIRED,
+            minLength = 1,
+            maxLength = 1000)
     @NotBlank(message = "voidReason is required")
     @Size(max = 1000, message = "voidReason must not exceed 1000 characters")
     private String voidReason;

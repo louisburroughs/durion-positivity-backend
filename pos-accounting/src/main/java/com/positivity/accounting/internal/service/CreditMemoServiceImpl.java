@@ -421,8 +421,10 @@ public class CreditMemoServiceImpl implements CreditMemoService {
     public CreditMemoResponse voidCreditMemo(
             @NonNull UUID creditMemoId, @NonNull String voidReason, @NonNull String currentUser) {
 
+        // Locked read (SELECT ... FOR UPDATE): two concurrent voids serialize here, so the
+        // second sees VOIDED and gets the 409 instead of double-posting the mirror GL entry.
         CreditMemo creditMemo = creditMemoRepository
-                .findById(creditMemoId)
+                .findWithLockByCreditMemoId(creditMemoId)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "Credit Memo not found: " + creditMemoId));
 
@@ -455,8 +457,11 @@ public class CreditMemoServiceImpl implements CreditMemoService {
                     creditMemo.getCreditMemoId(),
                     e.getMessage(),
                     e);
+            // Generic message only — the cause is logged above; raw exception text can leak
+            // internal details (DB messages, class names) to API callers.
             throw new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR, "Failed to post void GL entries: " + e.getMessage());
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to post void GL entries for credit memo " + creditMemo.getCreditMemoId());
         }
 
         BigDecimal balanceAfter = invoiceBalanceCalculator

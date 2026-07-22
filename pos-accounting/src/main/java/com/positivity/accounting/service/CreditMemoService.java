@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.CreditMemoResponse;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.server.ResponseStatusException;
@@ -66,5 +67,6 @@ public interface CreditMemoService {
      * @return Voided Credit Memo details
      * @throws ResponseStatusException 404 if not found; 409 if not POSTED
      */
-    CreditMemoResponse voidCreditMemo(UUID creditMemoId, String voidReason, String currentUser);
+    CreditMemoResponse voidCreditMemo(
+            @NonNull UUID creditMemoId, @NonNull String voidReason, @NonNull String currentUser);
 }

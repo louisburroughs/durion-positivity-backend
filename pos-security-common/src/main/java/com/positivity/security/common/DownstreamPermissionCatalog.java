@@ -467,10 +467,10 @@ public final class DownstreamPermissionCatalog {
         "PERM_accounting:customer-credit:refund", // 391
 
         // ── New batch (bits 392–392) ──────────────────────────────────────────
-        "PERM_accounting:tax-snapshot:freeze",               // 392
+        "PERM_accounting:tax-snapshot:freeze", // 392
 
         // ── New batch (bits 393–393) ──────────────────────────────────────────
-        "PERM_accounting:credit-memo:void"                  // 393
+        "PERM_accounting:credit-memo:void" // 393
     };
 
     public static String authorityForBit(int bitIndex) {

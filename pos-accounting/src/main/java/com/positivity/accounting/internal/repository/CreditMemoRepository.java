@@ -2,12 +2,15 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 
 /**
  * Repository for CreditMemo entity.
@@ -59,6 +62,15 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
      * @return matching credit memos (unordered)
      */
     List<CreditMemo> findByStatusAndVoidedTimestampBetween(CreditMemoStatus status, Instant start, Instant end);
+
+    /**
+     * Locked variant ({@code SELECT ... FOR UPDATE}) for the void transition (issue #997
+     * symmetry): concurrent voids of the same memo serialize on the row, so exactly one posts
+     * the mirror GL entry and the loser sees VOIDED (409). Must run inside an active
+     * transaction.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<CreditMemo> findWithLockByCreditMemoId(UUID creditMemoId);
 
     /**
      * Find all credit memos for an invoice with pagination.

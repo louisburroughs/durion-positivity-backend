@@ -7,8 +7,11 @@ import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.service.CreditMemoService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -125,10 +128,22 @@ public class CreditMemoController {
                     + " reversed tax in the void's period. Only POSTED memos are voidable — APPLIED memos have been"
                     + " consumed and VOIDED is terminal.",
             tags = {"Credit Memos"})
-    @ApiResponse(responseCode = "200", description = "Credit memo voided")
-    @ApiResponse(responseCode = "400", description = "Missing or invalid void reason")
-    @ApiResponse(responseCode = "404", description = "Credit memo not found")
-    @ApiResponse(responseCode = "409", description = "Credit memo is not in POSTED status")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Credit memo voided",
+            content = @Content(schema = @Schema(implementation = CreditMemoResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing or invalid void reason",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Credit memo not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Credit memo is not in POSTED status",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_CREDIT_MEMO_VOID", apiVersion = "1")
     public ResponseEntity<CreditMemoResponse> voidCreditMemo(
             @Parameter(description = "Credit Memo id", required = true) @PathVariable UUID creditMemoId,
