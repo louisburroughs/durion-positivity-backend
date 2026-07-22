@@ -7,7 +7,6 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
@@ -47,42 +46,6 @@ class InvoiceClientTest {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         client = new InvoiceClientImpl(builder, "invoice", "/v1/invoices");
-    }
-
-    @Test
-    void searchInvoiceLinesMapsRowsAndSendsServiceHeaders() {
-        server.expect(requestTo(BASE + "/items/search?partyId=" + PARTY_ID))
-                .andExpect(method(HttpMethod.GET))
-                .andExpect(header("X-User", "pos-warranty-service"))
-                .andExpect(header("X-Authorities", "invoice:manage"))
-                .andRespond(withSuccess(
-                        "[{\"invoiceId\":\"" + INVOICE_ID + "\",\"invoiceNumber\":\"INV-100\","
-                                + "\"description\":\"Alternator\",\"amount\":199.99}]",
-                        MediaType.APPLICATION_JSON));
-
-        var lines = client.searchInvoiceLines(PARTY_ID, null);
-
-        assertThat(lines).hasSize(1);
-        assertThat(lines.getFirst().invoiceId()).isEqualTo(INVOICE_ID);
-        assertThat(lines.getFirst().invoiceNumber()).isEqualTo("INV-100");
-        server.verify();
-    }
-
-    @Test
-    void searchInvoiceLinesDegradesToEmptyListOnHttpError() {
-        server.expect(requestTo(BASE + "/items/search?partyId=" + PARTY_ID)).andRespond(withServerError());
-
-        assertThat(client.searchInvoiceLines(PARTY_ID, null)).isEmpty();
-        server.verify();
-    }
-
-    @Test
-    void searchInvoiceLinesDegradesToEmptyListWhenServiceUnreachable() {
-        server.expect(requestTo(BASE + "/items/search?partyId=" + PARTY_ID))
-                .andRespond(withException(new IOException("connection refused")));
-
-        assertThat(client.searchInvoiceLines(PARTY_ID, null)).isEmpty();
-        server.verify();
     }
 
     @Test

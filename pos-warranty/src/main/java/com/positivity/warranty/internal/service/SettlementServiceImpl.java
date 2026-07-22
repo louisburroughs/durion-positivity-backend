@@ -5,7 +5,6 @@ import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.warranty.WarrantyClaimSettledV1;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.warranty.internal.client.InvoiceClient;
-import com.positivity.warranty.internal.client.WorkorderClient;
 import com.positivity.warranty.internal.config.OutboxEventWriter;
 import com.positivity.warranty.internal.domain.ClaimStateMachine;
 import com.positivity.warranty.internal.dto.SettlementCreateRequest;
@@ -23,6 +22,7 @@ import com.positivity.warranty.internal.exception.WarrantyUnprocessableException
 import com.positivity.warranty.internal.repository.ClaimNoteRepository;
 import com.positivity.warranty.internal.repository.ClaimSettlementRepository;
 import com.positivity.warranty.internal.repository.ClaimStatusHistoryRepository;
+import com.positivity.warranty.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -71,7 +71,7 @@ public class SettlementServiceImpl implements SettlementService {
     private final ClaimStatusHistoryRepository statusHistoryRepository;
     private final ClaimNoteRepository noteRepository;
     private final InvoiceClient invoiceClient;
-    private final WorkorderClient workorderClient;
+    private final ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
     private final ClaimSnapshotPublisher claimSnapshotPublisher;
     private final Clock clock;
     private final EntityManager entityManager;
@@ -143,11 +143,15 @@ public class SettlementServiceImpl implements SettlementService {
         UUID workorderId = require(
                 request.replacementWorkorderId(),
                 "replacementWorkorderId is required for REPLACEMENT_WORKORDER settlements");
-        workorderClient
-                .getWorkorderDetail(workorderId)
-                .orElseThrow(() -> new WarrantyUnprocessableException(
-                        WORKORDER_NOT_FOUND_CODE,
-                        "Replacement workorder '" + workorderId + "' could not be resolved in pos-workorder"));
+        // Existence check via the event-fed ext_workorder replica (ADR-0044 §6, #924). The replica
+        // is eventually consistent: a workorder created moments earlier may not have arrived yet, in
+        // which case the clerk retries once the fact lands — the same manual-fallback posture the
+        // other candidate-line reads take.
+        if (!extWorkorderReplicaRepository.existsById(workorderId)) {
+            throw new WarrantyUnprocessableException(
+                    WORKORDER_NOT_FOUND_CODE,
+                    "Replacement workorder '" + workorderId + "' could not be resolved in pos-workorder");
+        }
         settlement.setReplacementWorkorderId(workorderId);
         settlement.setStatus(SettlementStatus.COMPLETED);
     }

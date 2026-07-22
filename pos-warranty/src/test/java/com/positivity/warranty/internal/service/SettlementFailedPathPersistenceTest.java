@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.positivity.warranty.internal.client.InvoiceClient;
-import com.positivity.warranty.internal.client.WorkorderClient;
 import com.positivity.warranty.internal.config.JpaConfig;
 import com.positivity.warranty.internal.dto.SettlementCreateRequest;
 import com.positivity.warranty.internal.entity.ClaimSettlement;
@@ -17,6 +16,7 @@ import com.positivity.warranty.internal.enums.SettlementStatus;
 import com.positivity.warranty.internal.enums.SettlementType;
 import com.positivity.warranty.internal.exception.WarrantyIntegrationException;
 import com.positivity.warranty.internal.repository.ClaimSettlementRepository;
+import com.positivity.warranty.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -85,7 +85,7 @@ class SettlementFailedPathPersistenceTest {
     private InvoiceClient invoiceClient;
 
     @MockitoBean
-    private WorkorderClient workorderClient;
+    private ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
 
     @MockitoBean
     private ClaimSnapshotPublisher claimSnapshotPublisher;

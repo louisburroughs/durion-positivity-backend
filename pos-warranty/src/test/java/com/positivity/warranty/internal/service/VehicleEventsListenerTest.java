@@ -53,8 +53,7 @@ class VehicleEventsListenerTest {
                             "vinNormalized":"1HGCM82633A004352","active":true,
                             "odometerValue":42000,"odometerUnit":"MILES",
                             "createdAt":"2026-07-01T09:00:00Z","updatedAt":"2026-07-10T23:30:00Z"}}
-                """
-                .formatted(eventId, VEHICLE_ID, aggregateVersion, VEHICLE_ID, ACCOUNT_ID);
+                """.formatted(eventId, VEHICLE_ID, aggregateVersion, VEHICLE_ID, ACCOUNT_ID);
     }
 
     @Test

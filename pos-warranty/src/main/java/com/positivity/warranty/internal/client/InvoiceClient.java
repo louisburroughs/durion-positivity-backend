@@ -20,14 +20,6 @@ import org.jspecify.annotations.Nullable;
 public interface InvoiceClient {
 
     /**
-     * Search invoice line items by customer party id, optionally narrowed by a SKU /
-     * description term applied server-side
-     * ({@code GET /v1/invoices/items/search?partyId=&q=}).
-     */
-    @NonNull
-    List<InvoiceLine> searchInvoiceLines(@NonNull UUID partyId, @Nullable String sku);
-
-    /**
      * Fetch an invoice with its line items ({@code GET /v1/invoices/{invoiceId}}).
      */
     @NonNull
@@ -90,20 +82,6 @@ public interface InvoiceClient {
             @NonNull BigDecimal amount,
             @Nullable String notes,
             @Nullable String externalReference);
-
-    /** Mirrors pos-invoice {@code InvoiceLineSearchResult}. */
-    record InvoiceLine(
-            UUID invoiceId,
-            String invoiceNumber,
-            UUID invoiceItemId,
-            String description,
-            BigDecimal quantity,
-            BigDecimal unitPrice,
-            BigDecimal amount,
-            UUID workorderItemId,
-            String itemType,
-            String invoiceStatus,
-            Instant invoiceCreatedAt) {}
 
     /** Condensed view of pos-invoice {@code InvoiceDetailsResponse}. */
     record InvoiceSummary(
