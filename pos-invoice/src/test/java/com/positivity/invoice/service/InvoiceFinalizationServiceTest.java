@@ -605,6 +605,55 @@ class InvoiceFinalizationServiceTest {
     }
 
     /**
+     * PR #1020 review (Copilot): permission enforcement must strictly precede the committable
+     * tax calculation — a rejected finalization (advisor above the $500 cap, no approval code)
+     * must NOT trigger the provider-persisting call, or an unauthorized request would leave an
+     * orphan uncommitted AvaTax document behind. The matrix gates on the STORED total.
+     */
+    @Test
+    void finalize_enforcesPermissions_beforeCommittableTaxCalculation() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000c9");
+        Invoice draft = draftInvoice(UUID.fromString("00000000-0000-0000-0000-0000000000ca"), new BigDecimal("750.00"));
+        draft.setId(invoiceId);
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+        // SERVICE_ADVISOR context (default), > $500, no approval code → rejected.
+
+        assertThatThrownBy(() -> service.completeInvoice(invoiceId, serviceAdvisorRequest(null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageMatching("(?i).*approval.*");
+
+        assertThat(draft.getStatus()).isEqualTo(InvoiceStatus.DRAFT);
+        org.mockito.Mockito.verifyNoInteractions(invoiceTaxCalculator, taxBreakdownWriter, taxLifecycleClient);
+        verify(invoiceRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    /**
+     * PR #1020 review (F2): a previously-taxed invoice whose lines are no longer taxable at
+     * finalization must not freeze the stale draft tax — the null committable result zeroes
+     * the tax, recomputes the total and clears the persisted breakdown (no provider document
+     * exists, so no lifecycle commit either).
+     */
+    @Test
+    void finalize_zeroesStaleTax_whenNothingTaxableAtFinalization() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000cb");
+        Invoice draft = draftInvoice(UUID.fromString("00000000-0000-0000-0000-0000000000cc"), new BigDecimal("107.42"));
+        draft.setId(invoiceId);
+        draft.setSubtotal(new BigDecimal("100.00"));
+        draft.setTax(new BigDecimal("7.42")); // stale draft tax from an earlier re-price
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(invoiceTaxCalculator.calculateCommittable(draft)).thenReturn(null);
+
+        InvoiceDetailsResponse response = service.completeInvoice(invoiceId, shopManagerRequest());
+
+        assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
+        assertThat(draft.getTax()).isEqualByComparingTo("0");
+        assertThat(draft.getTotal()).isEqualByComparingTo("100.00");
+        verify(taxBreakdownWriter).replace(invoiceId, null);
+        org.mockito.Mockito.verifyNoInteractions(taxLifecycleClient);
+    }
+
+    /**
      * #985: a failed committable calculation blocks finalization (D-T5) — without the persisted
      * provider document the later commit could never resolve. The invoice stays DRAFT.
      */

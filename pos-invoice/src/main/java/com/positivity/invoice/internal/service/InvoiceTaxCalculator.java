@@ -42,7 +42,8 @@ public class InvoiceTaxCalculator {
     private final TaxServiceClient taxServiceClient;
     private final LocationReferenceService locationReferenceService;
 
-    public InvoiceTaxCalculator(TaxServiceClient taxServiceClient, LocationReferenceService locationReferenceService) {
+    public InvoiceTaxCalculator(
+            @NonNull TaxServiceClient taxServiceClient, @NonNull LocationReferenceService locationReferenceService) {
         this.taxServiceClient = taxServiceClient;
         this.locationReferenceService = locationReferenceService;
     }

@@ -22,10 +22,10 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -155,7 +155,6 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         // AC4: only DRAFT invoices are eligible for finalization.
         // Reject any non-DRAFT state (e.g., FINALIZED, POSTED, ERROR) with conflict.
         Optional<Invoice> existingOpt = invoiceRepository.findById(invoiceId);
-        TaxCalculationResponse committableTax = null;
         if (existingOpt.isPresent()) {
             Invoice existing = existingOpt.get();
             if (existing.getStatus() != InvoiceStatus.DRAFT) {
@@ -170,6 +169,24 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
                 throw new IllegalStateException(
                         "Invoice " + invoiceId + " cannot be finalized: tax has not been calculated");
             }
+        }
+
+        // Total from the stored invoice; ZERO when no invoice found (in-memory path)
+        BigDecimal invoiceTotal = existingOpt
+                .map(inv -> inv.getTotal() != null ? inv.getTotal() : BigDecimal.ZERO)
+                .orElse(BigDecimal.ZERO);
+
+        // AC3: Permission matrix enforcement — role derived from SecurityContext.
+        // PR #1020 review: enforced BEFORE the committable tax calculation below so an
+        // unauthorized/unapproved request never triggers the provider-persisting call
+        // (no orphan AvaTax document from a rejected finalization). The manager-approval
+        // matrix therefore gates on the STORED total as it stands when finalization is
+        // requested (the last draft re-price), not on the recalculated one.
+        enforcePermissions(request, invoiceId, invoiceTotal);
+
+        TaxCalculationResponse committableTax = null;
+        if (existingOpt.isPresent()) {
+            Invoice existing = existingOpt.get();
             // #985 (story T6, Option A): while the invoice is still DRAFT, run the COMMITTABLE
             // tax calculation (committable=true, referenceId == invoiceId). The provider then
             // persists an uncommitted SalesInvoice document under code == invoiceId, so the
@@ -178,21 +195,11 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             // (per D-T5; the estimate-and-true-up leniency of D-T3 applies to the COMMIT step,
             // not to document creation — a PENDING_COMMIT row without a provider document could
             // never converge). The invoice stays DRAFT and finalization can be retried. A null
-            // result means nothing is taxable: no provider document exists and the lifecycle
-            // commit is skipped.
+            // result means nothing is taxable: no provider document exists, the lifecycle
+            // commit is skipped, and any previously frozen tax is zeroed (stale-tax guard).
             committableTax = invoiceTaxCalculator.calculateCommittable(existing);
-            if (committableTax != null) {
-                applyCommittableTax(existing, committableTax);
-            }
+            applyCommittableTax(invoiceId, existing, committableTax);
         }
-
-        // Total from the stored invoice; ZERO when no invoice found (in-memory path)
-        BigDecimal invoiceTotal = existingOpt
-                .map(inv -> inv.getTotal() != null ? inv.getTotal() : BigDecimal.ZERO)
-                .orElse(BigDecimal.ZERO);
-
-        // AC3: Permission matrix enforcement — role derived from SecurityContext
-        enforcePermissions(request, invoiceId, invoiceTotal);
 
         // AC4: Transition DRAFT → FINALIZED
         Instant now = Instant.now(clock);
@@ -319,16 +326,23 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
      * T5a): sets tax, recomputes the total ({@code subtotal + adjustments + tax}, matching the
      * draft re-price formula) and refreshes the persisted per-line breakdown so the frozen
      * figures exactly match the provider document that will be committed.
+     *
+     * <p>A {@code null} response means nothing is taxable at finalization time: the frozen tax
+     * is ZERO and the persisted breakdown is cleared — a previously computed (now stale) draft
+     * tax must not survive into the FINALIZED invoice when no provider document exists.
      */
-    private void applyCommittableTax(@NonNull Invoice invoice, @NonNull TaxCalculationResponse taxResponse) {
-        BigDecimal tax = (taxResponse.getTotalTax() != null ? taxResponse.getTotalTax() : BigDecimal.ZERO)
+    private void applyCommittableTax(
+            @NonNull UUID invoiceId, @NonNull Invoice invoice, @Nullable TaxCalculationResponse taxResponse) {
+        BigDecimal tax = (taxResponse != null && taxResponse.getTotalTax() != null
+                        ? taxResponse.getTotalTax()
+                        : BigDecimal.ZERO)
                 .setScale(4, RoundingMode.HALF_UP);
         BigDecimal subtotal = invoice.getSubtotal() != null ? invoice.getSubtotal() : BigDecimal.ZERO;
         BigDecimal adjustments =
                 invoice.getAdjustmentsAmount() != null ? invoice.getAdjustmentsAmount() : BigDecimal.ZERO;
         invoice.setTax(tax);
         invoice.setTotal(subtotal.add(adjustments).add(tax).setScale(4, RoundingMode.HALF_UP));
-        taxBreakdownWriter.replace(Objects.requireNonNull(invoice.getId(), "invoiceId is required"), taxResponse);
+        taxBreakdownWriter.replace(invoiceId, taxResponse);
     }
 
     /**
