@@ -100,3 +100,5 @@ permissions:
     description: "View processor settlements and reconciliation lines"
   - name: "accounting:report:export"
     description: "Export report"
+  - name: "reporting:view:financial-statements"
+    description: "View financial statements and download rendered report exports"

@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.controller;
 
+import com.positivity.accounting.internal.dto.ReportExportArtifact;
 import com.positivity.accounting.internal.dto.ReportExportRequest;
 import com.positivity.accounting.internal.dto.ReportExportResponse;
 import com.positivity.accounting.service.ReportExportService;
@@ -18,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -107,6 +109,40 @@ public class ReportExportController {
 
         ReportExportResponse response = reportExportService.getExportStatus(exportId);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Download the rendered artifact of a completed export.
+     *
+     * <p>
+     * Guarded by {@code reporting:view:financial-statements} (in addition to the
+     * export permission on the submit/status endpoints) because the artifact
+     * carries the actual financial-statement figures.
+     */
+    @GetMapping(value = "/{exportId}/download")
+    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @EmitEvent(id = "ACCOUNTING_REPORT_EXPORT_DOWNLOAD", apiVersion = "1")
+    @Operation(
+            summary = "Download rendered export artifact",
+            description = "Download the rendered CSV or PDF artifact of a COMPLETED export job.",
+            tags = {"Financial Reporting"})
+    @ApiResponse(responseCode = "200", description = "Rendered artifact returned")
+    @ApiResponse(responseCode = "401", description = "Unauthorized")
+    @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements")
+    @ApiResponse(responseCode = "404", description = "Export job or artifact not found")
+    @ApiResponse(responseCode = "409", description = "Export job is not COMPLETED")
+    public ResponseEntity<byte[]> downloadExport(
+            @Parameter(description = "Export job UUID", required = true) @PathVariable UUID exportId) {
+
+        ReportExportArtifact artifact = reportExportService.downloadExport(exportId);
+        // The filename is sanitized to a safe character set when the artifact is created;
+        // ContentDisposition additionally quotes/escapes it, preventing header injection.
+        return ResponseEntity.ok()
+                .headers(headers -> headers.setContentDisposition(ContentDisposition.attachment()
+                        .filename(artifact.filename())
+                        .build()))
+                .contentType(MediaType.parseMediaType(artifact.contentType()))
+                .body(artifact.content());
     }
 
     /**

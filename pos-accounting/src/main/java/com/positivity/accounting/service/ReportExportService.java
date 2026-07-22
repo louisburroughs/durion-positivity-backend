@@ -1,5 +1,6 @@
 package com.positivity.accounting.service;
 
+import com.positivity.accounting.internal.dto.ReportExportArtifact;
 import com.positivity.accounting.internal.dto.ReportExportRequest;
 import com.positivity.accounting.internal.dto.ReportExportResponse;
 import java.util.UUID;
@@ -48,4 +49,20 @@ public interface ReportExportService {
      */
     @NonNull
     Page<ReportExportResponse> getExportHistory(@NonNull Pageable pageable);
+
+    /**
+     * Download the rendered artifact of a completed export.
+     *
+     * @param exportId export job UUID
+     * @return rendered artifact (content bytes, content type, filename)
+     * @throws org.springframework.web.server.ResponseStatusException with HTTP 404
+     *                                                                when no export
+     *                                                                exists for the
+     *                                                                given ID, or
+     *                                                                HTTP 409 when
+     *                                                                the export is
+     *                                                                not COMPLETED
+     */
+    @NonNull
+    ReportExportArtifact downloadExport(@NonNull UUID exportId);
 }
