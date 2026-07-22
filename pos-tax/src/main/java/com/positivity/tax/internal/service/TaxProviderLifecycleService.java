@@ -26,6 +26,13 @@ import org.springframework.transaction.annotation.Transactional;
  * propagates — it records a {@link TaxProviderTransactionStatus#PENDING_COMMIT} row for the
  * re-commit job. The PENDING_COMMIT backlog is exposed as a Micrometer gauge so true-up lag
  * is visible.
+ * <p>
+ * #985: a PENDING_COMMIT row presupposes the provider document already EXISTS under
+ * {@code code == referenceId} — {@code commit()} only promotes it. That precondition is
+ * guaranteed by the caller: invoice finalization first runs a {@code committable=true}
+ * calculation (which persists an uncommitted {@code SalesInvoice} document, and whose
+ * failure blocks finalization) before invoking commit. The re-commit job therefore always
+ * retries against an existing document and converges once the provider recovers.
  */
 @Slf4j
 @Service

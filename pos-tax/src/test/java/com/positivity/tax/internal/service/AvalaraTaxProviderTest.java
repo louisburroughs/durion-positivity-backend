@@ -333,6 +333,59 @@ class AvalaraTaxProviderTest {
     }
 
     @Test
+    @DisplayName("#985: a committable calculation creates a PERSISTED SalesInvoice (uncommitted) via createoradjust,"
+            + " keyed by code == referenceId")
+    void committableEstimateCreatesPersistedSalesInvoice() {
+        Fixture f = fixture();
+        f.server()
+                .expect(once(), requestTo(BASE_URL + "/api/v2/transactions/createoradjust"))
+                .andExpect(method(HttpMethod.POST))
+                // SalesInvoice (persisted document), NOT SalesOrder (throwaway estimate).
+                .andExpect(jsonPath("$.createTransactionModel.type").value("SalesInvoice"))
+                // Option A: still uncommitted — the lifecycle commit() promotes it.
+                .andExpect(jsonPath("$.createTransactionModel.commit").value(false))
+                .andExpect(jsonPath("$.createTransactionModel.code").value("550e8400-e29b-41d4-a716-446655440000"))
+                .andExpect(jsonPath("$.createTransactionModel.companyCode").value("DEFAULT"))
+                .andRespond(withSuccess(estimateResponseJson(), MediaType.APPLICATION_JSON));
+
+        TaxCalculationRequest request = sampleRequest();
+        request.setCommittable(true);
+        TaxCalculationResponse response = f.provider().estimate(request);
+        f.server().verify();
+
+        assertThat(response.getTotalTax()).isEqualByComparingTo("10.88");
+        assertThat(response.getCalculationType()).isEqualTo(TaxCalculationType.SALE);
+    }
+
+    @Test
+    @DisplayName("#985 behavioral contract: create-then-commit resolves by the same document code")
+    void createThenCommitResolvesByCode() {
+        Fixture f = fixture();
+        UUID ref = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        // 1) Finalization-time committable calculation persists the document under code == ref.
+        f.server()
+                .expect(once(), requestTo(BASE_URL + "/api/v2/transactions/createoradjust"))
+                .andExpect(jsonPath("$.createTransactionModel.code").value(ref.toString()))
+                .andRespond(withSuccess(estimateResponseJson(), MediaType.APPLICATION_JSON));
+        // 2) The lifecycle commit resolves that document BY CODE (path variable == ref).
+        f.server()
+                .expect(once(), requestTo(containsString("/api/v2/companies/DEFAULT/transactions/" + ref + "/commit")))
+                .andExpect(jsonPath("$.commit").value(true))
+                .andRespond(withSuccess(
+                        "{\"id\":987654321,\"code\":\"" + ref + "\",\"status\":\"Committed\"}",
+                        MediaType.APPLICATION_JSON));
+
+        TaxCalculationRequest request = sampleRequest();
+        request.setCommittable(true);
+        f.provider().estimate(request);
+        TaxProviderTransactionResult result = f.provider().commit(ref);
+        f.server().verify();
+
+        assertThat(result.status()).isEqualTo(TaxProviderTransactionStatus.COMMITTED);
+        assertThat(result.referenceId()).isEqualTo(ref);
+    }
+
+    @Test
     @DisplayName("#984b: a read-only estimate (committable=false) still permits a null referenceId")
     void estimatePermitsNullReferenceId() {
         Fixture f = fixture();

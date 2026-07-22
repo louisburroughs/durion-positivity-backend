@@ -81,6 +81,12 @@ class InvoiceFinalizationPermissionTest {
     @Mock
     private com.positivity.invoice.internal.service.InvoiceDueDateService invoiceDueDateService;
 
+    @Mock
+    private com.positivity.invoice.internal.service.InvoiceTaxCalculator invoiceTaxCalculator;
+
+    @Mock
+    private com.positivity.invoice.internal.service.InvoiceTaxBreakdownWriter taxBreakdownWriter;
+
     @InjectMocks
     private InvoiceFinalizationServiceImpl service;
 

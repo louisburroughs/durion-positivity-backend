@@ -63,6 +63,30 @@ public class TaxServiceClient {
     @NonNull
     public TaxCalculationResponse calculateTaxDetailed(
             @NonNull List<TaxLineItem> lineItems, @NonNull TaxAddress destination, @Nullable UUID referenceId) {
+        return calculateTaxDetailed(lineItems, destination, referenceId, false);
+    }
+
+    /**
+     * Calculate tax with an explicit lifecycle intent (#985).
+     *
+     * <p>{@code committable=true} marks the calculation as destined for the provider commit/void
+     * lifecycle: pos-tax then creates a PERSISTED provider document (AvaTax {@code SalesInvoice},
+     * uncommitted) under {@code code == referenceId}, so the later
+     * {@code /transactions/{referenceId}/commit} resolves. A committable call therefore REQUIRES
+     * a non-null {@code referenceId} (the invoice id) — pos-tax rejects it otherwise.
+     *
+     * @param lineItems   the taxable line items
+     * @param destination the tax jurisdiction address (shop location)
+     * @param referenceId the source invoice identifier (the provider document code)
+     * @param committable whether this calculation binds to the provider commit/void lifecycle
+     * @return the full tax calculation response
+     */
+    @NonNull
+    public TaxCalculationResponse calculateTaxDetailed(
+            @NonNull List<TaxLineItem> lineItems,
+            @NonNull TaxAddress destination,
+            @Nullable UUID referenceId,
+            boolean committable) {
         if (log.isDebugEnabled()) {
             log.debug(
                     "Calculating tax for {} line item(s) in jurisdiction {}/{}",
@@ -77,6 +101,7 @@ public class TaxServiceClient {
                 .currencyCode(DEFAULT_CURRENCY)
                 .referenceId(referenceId)
                 .referenceType(TaxReferenceType.INVOICE)
+                .committable(committable)
                 .build();
 
         TaxCalculationResponse response = restClient

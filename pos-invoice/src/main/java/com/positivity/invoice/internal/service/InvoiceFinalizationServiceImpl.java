@@ -15,11 +15,14 @@ import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.service.InvoiceFinalizationService;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.tax.common.dto.TaxCalculationResponse;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -76,6 +79,8 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     private final InvoiceEventPublisher invoiceEventPublisher;
     private final TaxLifecycleClient taxLifecycleClient;
     private final InvoiceDueDateService invoiceDueDateService;
+    private final InvoiceTaxCalculator invoiceTaxCalculator;
+    private final InvoiceTaxBreakdownWriter taxBreakdownWriter;
 
     public InvoiceFinalizationServiceImpl(
             InvoiceRepository invoiceRepository,
@@ -84,7 +89,9 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             ElevationTokenService elevationTokenService,
             InvoiceEventPublisher invoiceEventPublisher,
             TaxLifecycleClient taxLifecycleClient,
-            InvoiceDueDateService invoiceDueDateService) {
+            InvoiceDueDateService invoiceDueDateService,
+            InvoiceTaxCalculator invoiceTaxCalculator,
+            InvoiceTaxBreakdownWriter taxBreakdownWriter) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.eventPublisher = eventPublisher;
@@ -92,6 +99,8 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         this.invoiceEventPublisher = invoiceEventPublisher;
         this.taxLifecycleClient = taxLifecycleClient;
         this.invoiceDueDateService = invoiceDueDateService;
+        this.invoiceTaxCalculator = invoiceTaxCalculator;
+        this.taxBreakdownWriter = taxBreakdownWriter;
     }
 
     /**
@@ -146,6 +155,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         // AC4: only DRAFT invoices are eligible for finalization.
         // Reject any non-DRAFT state (e.g., FINALIZED, POSTED, ERROR) with conflict.
         Optional<Invoice> existingOpt = invoiceRepository.findById(invoiceId);
+        TaxCalculationResponse committableTax = null;
         if (existingOpt.isPresent()) {
             Invoice existing = existingOpt.get();
             if (existing.getStatus() != InvoiceStatus.DRAFT) {
@@ -159,6 +169,20 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             if (existing.getTax() == null) {
                 throw new IllegalStateException(
                         "Invoice " + invoiceId + " cannot be finalized: tax has not been calculated");
+            }
+            // #985 (story T6, Option A): while the invoice is still DRAFT, run the COMMITTABLE
+            // tax calculation (committable=true, referenceId == invoiceId). The provider then
+            // persists an uncommitted SalesInvoice document under code == invoiceId, so the
+            // lifecycle commit below — and the PENDING_COMMIT re-commit job on provider outage —
+            // resolve by that code. A calculation failure propagates and blocks finalization
+            // (per D-T5; the estimate-and-true-up leniency of D-T3 applies to the COMMIT step,
+            // not to document creation — a PENDING_COMMIT row without a provider document could
+            // never converge). The invoice stays DRAFT and finalization can be retried. A null
+            // result means nothing is taxable: no provider document exists and the lifecycle
+            // commit is skipped.
+            committableTax = invoiceTaxCalculator.calculateCommittable(existing);
+            if (committableTax != null) {
+                applyCommittableTax(existing, committableTax);
             }
         }
 
@@ -195,7 +219,13 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             // Story T6 / D-T3: commit the provider tax document for the finalized invoice.
             // Synchronous utility call; never blocks the sale (the client swallows failures and
             // pos-tax records PENDING_COMMIT for the scheduled re-commit job on provider outage).
-            taxLifecycleClient.commit(saved.getId());
+            // #985: only when the committable calculation above created a provider document —
+            // with nothing taxable there is no document and a commit could never resolve.
+            if (committableTax != null) {
+                taxLifecycleClient.commit(saved.getId());
+            } else {
+                log.debug("Invoice {} has no taxable lines; skipping provider tax commit", saved.getId());
+            }
 
             return toDetailsResponse(saved);
         } else {
@@ -282,6 +312,24 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * #985: adopt the finalization-time committable calculation as the invoice's frozen tax.
+     * Runs while the invoice is still DRAFT (before the freeze-after-finalize boundary, story
+     * T5a): sets tax, recomputes the total ({@code subtotal + adjustments + tax}, matching the
+     * draft re-price formula) and refreshes the persisted per-line breakdown so the frozen
+     * figures exactly match the provider document that will be committed.
+     */
+    private void applyCommittableTax(@NonNull Invoice invoice, @NonNull TaxCalculationResponse taxResponse) {
+        BigDecimal tax = (taxResponse.getTotalTax() != null ? taxResponse.getTotalTax() : BigDecimal.ZERO)
+                .setScale(4, RoundingMode.HALF_UP);
+        BigDecimal subtotal = invoice.getSubtotal() != null ? invoice.getSubtotal() : BigDecimal.ZERO;
+        BigDecimal adjustments =
+                invoice.getAdjustmentsAmount() != null ? invoice.getAdjustmentsAmount() : BigDecimal.ZERO;
+        invoice.setTax(tax);
+        invoice.setTotal(subtotal.add(adjustments).add(tax).setScale(4, RoundingMode.HALF_UP));
+        taxBreakdownWriter.replace(Objects.requireNonNull(invoice.getId(), "invoiceId is required"), taxResponse);
+    }
 
     /**
      * True when the current actor may finalize/revert without a manager approval

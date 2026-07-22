@@ -86,6 +86,12 @@ class InvoiceFinalizationServiceTest {
     @Mock
     private com.positivity.invoice.internal.service.InvoiceDueDateService invoiceDueDateService;
 
+    @Mock
+    private com.positivity.invoice.internal.service.InvoiceTaxCalculator invoiceTaxCalculator;
+
+    @Mock
+    private com.positivity.invoice.internal.service.InvoiceTaxBreakdownWriter taxBreakdownWriter;
+
     @InjectMocks
     private InvoiceFinalizationServiceImpl service;
 
@@ -535,8 +541,9 @@ class InvoiceFinalizationServiceTest {
     }
 
     /**
-     * Story T6 / D-T3: finalization commits the provider tax document for the finalized
-     * invoice (synchronous utility call; never blocks the sale).
+     * Story T6 / D-T3 + #985: finalization first runs the COMMITTABLE tax calculation (which
+     * persists the provider SalesInvoice document under {@code code == invoiceId}) and only then
+     * commits the provider tax document for the finalized invoice.
      */
     @Test
     void finalize_commitsProviderTaxDocument() {
@@ -546,10 +553,88 @@ class InvoiceFinalizationServiceTest {
         draft.setId(invoiceId);
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
         when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(invoiceTaxCalculator.calculateCommittable(draft)).thenReturn(taxResponse(new BigDecimal("7.42")));
 
         service.completeInvoice(invoiceId, shopManagerRequest());
 
-        verify(taxLifecycleClient).commit(invoiceId);
+        // #985: document creation (committable calc) strictly precedes the lifecycle commit.
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(invoiceTaxCalculator, taxLifecycleClient);
+        inOrder.verify(invoiceTaxCalculator).calculateCommittable(draft);
+        inOrder.verify(taxLifecycleClient).commit(invoiceId);
+    }
+
+    /**
+     * #985: the committable calculation is the invoice's frozen tax — the entity's tax/total and
+     * the persisted breakdown are refreshed from it before the DRAFT → FINALIZED transition.
+     */
+    @Test
+    void finalize_adoptsCommittableTaxAsFrozenTax() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000c3");
+        Invoice draft = draftInvoice(UUID.fromString("00000000-0000-0000-0000-0000000000c4"), BigDecimal.ZERO);
+        draft.setId(invoiceId);
+        draft.setSubtotal(new BigDecimal("100.00"));
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        var response = taxResponse(new BigDecimal("8.25"));
+        when(invoiceTaxCalculator.calculateCommittable(draft)).thenReturn(response);
+
+        service.completeInvoice(invoiceId, shopManagerRequest());
+
+        assertThat(draft.getTax()).isEqualByComparingTo("8.25");
+        assertThat(draft.getTotal()).isEqualByComparingTo("108.25");
+        verify(taxBreakdownWriter).replace(invoiceId, response);
+    }
+
+    /**
+     * #985: with nothing taxable there is no provider document, so no lifecycle commit must be
+     * attempted (a commit could never resolve and would poison the PENDING_COMMIT backlog).
+     */
+    @Test
+    void finalize_skipsProviderCommit_whenNothingTaxable() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000c5");
+        Invoice draft = draftInvoice(UUID.fromString("00000000-0000-0000-0000-0000000000c6"), BigDecimal.ZERO);
+        draft.setId(invoiceId);
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(invoiceTaxCalculator.calculateCommittable(draft)).thenReturn(null);
+
+        InvoiceDetailsResponse response = service.completeInvoice(invoiceId, shopManagerRequest());
+
+        assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
+        org.mockito.Mockito.verifyNoInteractions(taxLifecycleClient);
+    }
+
+    /**
+     * #985: a failed committable calculation blocks finalization (D-T5) — without the persisted
+     * provider document the later commit could never resolve. The invoice stays DRAFT.
+     */
+    @Test
+    void finalize_propagates_whenCommittableTaxCalculationFails() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000c7");
+        Invoice draft = draftInvoice(UUID.fromString("00000000-0000-0000-0000-0000000000c8"), BigDecimal.ZERO);
+        draft.setId(invoiceId);
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+        when(invoiceTaxCalculator.calculateCommittable(draft))
+                .thenThrow(new IllegalStateException("Tax service returned a null response for tax calculation"));
+
+        assertThatThrownBy(() -> service.completeInvoice(invoiceId, shopManagerRequest()))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(draft.getStatus()).isEqualTo(InvoiceStatus.DRAFT);
+        verify(invoiceRepository, org.mockito.Mockito.never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(taxLifecycleClient);
+    }
+
+    private static com.positivity.tax.common.dto.TaxCalculationResponse taxResponse(BigDecimal totalTax) {
+        return com.positivity.tax.common.dto.TaxCalculationResponse.builder()
+                .subtotal(BigDecimal.ZERO)
+                .totalTax(totalTax)
+                .total(totalTax)
+                .effectiveTaxRate(BigDecimal.ZERO)
+                .jurisdictions(List.of())
+                .lineItemTaxes(List.of())
+                .calculatedAt(TEST_CLOCK.instant())
+                .build();
     }
 
     /**

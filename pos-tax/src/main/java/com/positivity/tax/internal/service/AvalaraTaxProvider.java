@@ -39,8 +39,15 @@ import org.springframework.web.client.RestClient;
  *
  * <h2>AvaTax method mapping</h2>
  * <ul>
- *   <li><b>estimate</b> &rarr; {@code POST /api/v2/transactions/create} with
- *       {@code type=SalesOrder, commit=false} — an uncommitted, non-persisted estimate.</li>
+ *   <li><b>estimate</b> (read-only, {@code committable=false}) &rarr;
+ *       {@code POST /api/v2/transactions/create} with {@code type=SalesOrder, commit=false} —
+ *       an uncommitted, non-persisted estimate.</li>
+ *   <li><b>estimate</b> ({@code committable=true}, #985) &rarr;
+ *       {@code POST /api/v2/transactions/createoradjust} with
+ *       {@code type=SalesInvoice, commit=false, code=referenceId} — a PERSISTED, uncommitted
+ *       document that the later {@code commit(referenceId)} promotes (Option A of #985).
+ *       {@code createoradjust} (not {@code create}) so a retried finalization adjusts the
+ *       existing document instead of failing on a duplicate code.</li>
  *   <li><b>refund</b> &rarr; {@code POST /api/v2/transactions/create} with
  *       {@code type=ReturnInvoice}, {@code referenceCode=originalReferenceId}, positive
  *       amounts (platform convention: callers negate at posting, story T4).</li>
@@ -83,6 +90,7 @@ public class AvalaraTaxProvider implements TaxProviderClient {
     private static final int MONEY_SCALE = 2;
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
     private static final String CREATE_URI = "/api/v2/transactions/create";
+    private static final String CREATE_OR_ADJUST_URI = "/api/v2/transactions/createoradjust";
     private static final String COMMIT_URI = "/api/v2/companies/{companyCode}/transactions/{code}/commit";
     private static final String VOID_URI = "/api/v2/companies/{companyCode}/transactions/{code}/void";
     private static final String SHIP_TO = "ShipTo";
@@ -110,6 +118,22 @@ public class AvalaraTaxProvider implements TaxProviderClient {
     @Override
     @NonNull
     public TaxCalculationResponse estimate(@NonNull TaxCalculationRequest request) {
+        // #985 Option A: a committable calculation must leave a PERSISTED provider document
+        // behind under code == referenceId, or the later commit(referenceId) resolves nothing
+        // (AvaTax never persists a SalesOrder). SalesInvoice + commit=false is that persisted,
+        // still-uncommitted document; TaxProviderLifecycleService.commit() promotes it.
+        if (request.isCommittable()) {
+            CreateTransactionModel model = buildCreateModel(request, "SalesInvoice", null);
+            // createoradjust: re-running finalization for the same invoice adjusts the existing
+            // document rather than erroring on a duplicate code — keeps the call idempotent.
+            TransactionModel tx = call(() -> restClient
+                    .post()
+                    .uri(CREATE_OR_ADJUST_URI)
+                    .body(new CreateOrAdjustTransactionModel(model))
+                    .retrieve()
+                    .body(TransactionModel.class));
+            return mapResponse(request, tx, TaxCalculationType.SALE);
+        }
         CreateTransactionModel model = buildCreateModel(request, "SalesOrder", null);
         TransactionModel tx = call(
                 () -> restClient.post().uri(CREATE_URI).body(model).retrieve().body(TransactionModel.class));
@@ -479,6 +503,9 @@ public class AvalaraTaxProvider implements TaxProviderClient {
             String taxCode,
             String description,
             String entityUseCode) {}
+
+    /** AvaTax {@code CreateOrAdjustTransactionModel} wrapper (#985 committable path). */
+    record CreateOrAdjustTransactionModel(CreateTransactionModel createTransactionModel) {}
 
     /** AvaTax {@code CommitTransactionModel}. */
     record CommitTransactionModel(boolean commit) {}
