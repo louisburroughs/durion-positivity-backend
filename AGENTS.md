@@ -245,8 +245,9 @@ Modules using `@EmitEvent` MUST include pos-events dependency in pom.xml:
 Module-to-module communication is **events-only** — synchronous REST between domain modules is
 prohibited; only the utility modules (gateway, security-service, documents, image, tax,
 event-receiver, price) may be called synchronously. The `@EmitEvent`/pos-event-receiver pipeline
-above is **audit-only** and is not a module-to-module channel. See
-`docs/adr-0044-event-only-domain-walls.md` for the full rules.
+above is **audit-only** and is not a module-to-module channel. See the canonical ADR-0044
+(`durion/docs/adr/0044-platform-event-only-domain-walls.adr.md`) for the full rules; enforcement
+lives in `pos-archunit` `DomainWallsTest`.
 
 - **Contracts live in `pos-domain-events`** (importable by every module): the
   `DomainEventEnvelope<T>` record and `DomainTopics` naming helpers. Payload DTOs are versioned
