@@ -35,6 +35,14 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1credit-memos
   /v1/accounting/credit-memos/{creditMemoId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1credit-memos~1{creditMemoId}
+  /v1/accounting/customer-credits:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1customer-credits
+  /v1/accounting/customer-credits/{creditId}:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1customer-credits~1{creditId}
+  /v1/accounting/customer-credits/{creditId}/applications:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1customer-credits~1{creditId}~1applications
+  /v1/accounting/customer-credits/{creditId}/refunds:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1customer-credits~1{creditId}~1refunds
   /v1/accounting/default-mappings:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1default-mappings
   /v1/accounting/default-mappings/global:
@@ -177,6 +185,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1general-ledger
   /v1/accounting/reports/financial/income-statement:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1income-statement
+  /v1/accounting/reports/financial/tax-liability:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1tax-liability
   /v1/accounting/reports/financial/trial-balance:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1trial-balance
   /v1/accounting/reports/location/labor-overhead:
@@ -585,8 +595,12 @@ paths:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1receipts~1{receiptId}~1print
   /v1/invoices/{invoiceId}/receipts/{receiptId}/reprint:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1receipts~1{receiptId}~1reprint
+  /v1/invoices/{invoiceId}/refunds:
+    $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1refunds
   /v1/invoices/{invoiceId}/revert:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1revert
+  /v1/refunds:
+    $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1refunds
   /v1/locations:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations
   /v1/locations/bulk-ingest:
@@ -989,8 +1003,16 @@ paths:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop~1audit~1{id}
   /v1/tax/calculate:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1calculate
+  /v1/tax/exemption-certificates:
+    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1exemption-certificates
+  /v1/tax/exemption-certificates/{id}:
+    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1exemption-certificates~1{id}
   /v1/tax/mode:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1mode
+  /v1/tax/transactions/{referenceId}/commit:
+    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1transactions~1{referenceId}~1commit
+  /v1/tax/transactions/{referenceId}/void:
+    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1transactions~1{referenceId}~1void
   /v1/fitments/bulk-ingest:
     $ref: ../../pos-vehicle-fitment/openapi.yaml#/paths/~1v1~1fitments~1bulk-ingest
   /v1/vehicle-fitment/hints:
@@ -1081,6 +1103,8 @@ paths:
     $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1registrations~1{id}
   /v1/warranty/reimbursements:
     $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1reimbursements
+  /v1/warranty/settlements/reconciliation:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1settlements~1reconciliation
   /v1/workexec:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workexec
   /v1/workexec/approvalConfigurations:

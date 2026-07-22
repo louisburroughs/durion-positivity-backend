@@ -387,3 +387,60 @@ ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system
 INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
 VALUES ('5eed0acc-0000-4000-8000-00000000cc05'::uuid, 'ACCOUNTING', 'CUSTOMER_CREDIT_ISSUANCE_CUSTOMER_CREDIT_LIABILITY', '5eed0acc-0000-4000-8000-00000000cc01'::uuid, '5eed0acc-0000-4000-8000-00000000cc03'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '2300'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
 ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+
+-- ============================================================================
+-- Parity-C1 follow-on (Issue #992): customer-credit liability RELIEF posting.
+-- The issuance category above only recognizes the 2300 liability. Drawing the
+-- credit down must discharge it, so each relief flavour gets its own posting
+-- category; they share the CUSTOMER_CREDIT_LIABILITY debit key and differ only
+-- in the contra account:
+--   CUSTOMER_CREDIT_APPLICATION : Dr 2300 / Cr Accounts Receivable (1200)
+--   CUSTOMER_CREDIT_REFUND      : Dr 2300 / Cr Undeposited Funds   (1090)
+-- Accounts resolve through posting category + mapping key — never hardcoded.
+-- gl_mapping.gl_account_id is resolved by account_code SELECT (not a hardcoded
+-- UUID) so the FK always binds to whichever id won the ON CONFLICT
+-- (account_code) upsert, matching the issuance / bank-rec (F2) pattern.
+-- 1090, 1200 and 2300 are all seeded above.
+-- ============================================================================
+
+-- Posting categories.
+INSERT INTO posting_category (posting_category_id, category_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000cc10'::uuid, 'CUSTOMER_CREDIT_APPLICATION', 'Customer credit applied to an invoice (Dr Customer Credit Liability / Cr Accounts Receivable, issue #992)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (posting_category_id) DO UPDATE SET
+    category_name = EXCLUDED.category_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active,
+    modified_at = NOW(), modified_by = 'seed-generator';
+INSERT INTO posting_category (posting_category_id, category_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000cc20'::uuid, 'CUSTOMER_CREDIT_REFUND', 'Customer credit refunded to the customer (Dr Customer Credit Liability / Cr Undeposited Funds, issue #992)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (posting_category_id) DO UPDATE SET
+    category_name = EXCLUDED.category_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active,
+    modified_at = NOW(), modified_by = 'seed-generator';
+
+-- Mapping keys for CUSTOMER_CREDIT_APPLICATION: CUSTOMER_CREDIT_LIABILITY (debit) + ACCOUNTS_RECEIVABLE (credit).
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000cc11'::uuid, '5eed0acc-0000-4000-8000-00000000cc10'::uuid, 'CUSTOMER_CREDIT_LIABILITY', 'Debit side of a credit application (obligation discharged)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000cc12'::uuid, '5eed0acc-0000-4000-8000-00000000cc10'::uuid, 'ACCOUNTS_RECEIVABLE', 'Credit side of a credit application (receivable settled)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+
+-- Mapping keys for CUSTOMER_CREDIT_REFUND: CUSTOMER_CREDIT_LIABILITY (debit) + UNDEPOSITED_FUNDS (credit).
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000cc21'::uuid, '5eed0acc-0000-4000-8000-00000000cc20'::uuid, 'CUSTOMER_CREDIT_LIABILITY', 'Debit side of a credit refund (obligation discharged)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000cc22'::uuid, '5eed0acc-0000-4000-8000-00000000cc20'::uuid, 'UNDEPOSITED_FUNDS', 'Credit side of a credit refund (cash paid back to the customer)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+
+-- GL mappings (fixed effective_start_date for idempotent re-runs; FK by account_code).
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000cc13'::uuid, 'ACCOUNTING', 'CUSTOMER_CREDIT_APPLICATION_CUSTOMER_CREDIT_LIABILITY', '5eed0acc-0000-4000-8000-00000000cc10'::uuid, '5eed0acc-0000-4000-8000-00000000cc11'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '2300'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000cc14'::uuid, 'ACCOUNTING', 'CUSTOMER_CREDIT_APPLICATION_ACCOUNTS_RECEIVABLE', '5eed0acc-0000-4000-8000-00000000cc10'::uuid, '5eed0acc-0000-4000-8000-00000000cc12'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '1200'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000cc23'::uuid, 'ACCOUNTING', 'CUSTOMER_CREDIT_REFUND_CUSTOMER_CREDIT_LIABILITY', '5eed0acc-0000-4000-8000-00000000cc20'::uuid, '5eed0acc-0000-4000-8000-00000000cc21'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '2300'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000cc24'::uuid, 'ACCOUNTING', 'CUSTOMER_CREDIT_REFUND_UNDEPOSITED_FUNDS', '5eed0acc-0000-4000-8000-00000000cc20'::uuid, '5eed0acc-0000-4000-8000-00000000cc22'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '1090'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';

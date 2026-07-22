@@ -87,6 +87,33 @@ class InvoiceEventsListenerTest {
     }
 
     @Test
+    @DisplayName("Materializes the due-date facts into the replica (#993) and tolerates their absence")
+    void projectsDueDate() {
+        when(processedEvents.existsById("e-due")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        String withDueDate = """
+                {"eventId":"e-due","eventType":"invoice.invoice.updated","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":6,
+                 "payload":{"invoiceId":"%s","workorderId":"%s","status":"FINALIZED",
+                            "total":216.00,"dueDate":"2026-08-19","paymentTermsCode":"NET_30"}}
+                """.formatted(INVOICE_ID, INVOICE_ID, WORKORDER_ID);
+
+        listener.onInvoiceEvent(withDueDate);
+
+        ArgumentCaptor<ExtInvoice> saved = ArgumentCaptor.forClass(ExtInvoice.class);
+        verify(replica).save(saved.capture());
+        assertThat(saved.getValue().getDueDate()).isEqualTo(java.time.LocalDate.parse("2026-08-19"));
+
+        // Pre-#993 events carry no dueDate: the replica column stays null (fallback ordering).
+        when(processedEvents.existsById("e-nodue")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        listener.onInvoiceEvent(event("e-nodue", 7));
+        ArgumentCaptor<ExtInvoice> savedLegacy = ArgumentCaptor.forClass(ExtInvoice.class);
+        verify(replica, org.mockito.Mockito.times(2)).save(savedLegacy.capture());
+        assertThat(savedLegacy.getAllValues().get(1).getDueDate()).isNull();
+    }
+
+    @Test
     @DisplayName("Materializes the tax breakdown into ext_invoice_tax matching the scalar to the cent")
     void materializesTaxBreakdown() {
         when(processedEvents.existsById("e-tb")).thenReturn(false);

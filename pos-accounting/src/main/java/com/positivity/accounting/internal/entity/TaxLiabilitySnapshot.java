@@ -109,6 +109,9 @@ public class TaxLiabilitySnapshot {
     @Column(name = "gl_net_activity", nullable = false, precision = 19, scale = 4)
     private BigDecimal glNetActivity;
 
+    @Column(name = "unattributed_credits", nullable = false, precision = 19, scale = 4)
+    private BigDecimal unattributedCredits;
+
     @Column(name = "gl_drift", nullable = false, precision = 19, scale = 4)
     private BigDecimal glDrift;
 

@@ -34,6 +34,7 @@ import com.positivity.accounting.internal.service.PaymentApplicationServiceImpl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -1297,6 +1298,66 @@ class PaymentApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("OLDEST_FIRST ages by due date, not finalizedAt, when the two orders differ (Issue #993)")
+    void testApplyPaymentToInvoices_OldestFirst_OrdersByDueDateNotFinalizedAt() {
+        // Issue #993 worked example: A finalized Jan 1 on NET_60 (due Mar 2); B finalized Feb 1
+        // net-0 (due Feb 1). By finalizedAt, A is older; by due date, B is more overdue.
+        // Collections "oldest first" must allocate to B before A.
+        UUID invoiceA = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+        UUID invoiceB = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId,
+                List.of(createInvoiceApplication(invoiceA, "300.00"), createInvoiceApplication(invoiceB, "400.00")));
+        request.setAllocationStrategy(AllocationStrategy.OLDEST_FIRST);
+
+        stubAppliableRequest();
+        stubInvoiceWithDueDate(
+                invoiceA, "1000.00", Instant.parse("2023-01-01T00:00:00Z"), LocalDate.parse("2023-03-02"));
+        stubInvoiceWithDueDate(
+                invoiceB, "1000.00", Instant.parse("2023-02-01T00:00:00Z"), LocalDate.parse("2023-02-01"));
+
+        // Act
+        service.applyPaymentToInvoices(testPaymentId, request);
+
+        // Assert: allocation follows due date (B before A), the opposite of finalizedAt order.
+        verify(paymentApplicationRepository, times(2)).save(paymentApplicationCaptor.capture());
+        assertThat(paymentApplicationCaptor.getAllValues())
+                .extracting(PaymentApplication::getInvoiceId)
+                .containsExactly(invoiceB, invoiceA);
+    }
+
+    @Test
+    @DisplayName("OLDEST_FIRST falls back to finalizedAt for a replica without a due date (Issue #993, defensive)")
+    void testApplyPaymentToInvoices_OldestFirst_MixedDueDatePresence_FallsBackToFinalizedAt() {
+        // Defensive edge case (greenfield: every finalized invoice carries a due date; a missing
+        // one means a producer bug or a pre-enrichment event). The bare invoice competes on its
+        // finalizedAt, compared on the same axis as due dates at UTC start-of-day.
+        UUID withDueDate = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+        UUID withoutDueDate = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId,
+                List.of(
+                        createInvoiceApplication(withDueDate, "300.00"),
+                        createInvoiceApplication(withoutDueDate, "400.00")));
+        request.setAllocationStrategy(AllocationStrategy.OLDEST_FIRST);
+
+        stubAppliableRequest();
+        // Due date Jun 1 vs bare finalizedAt Feb 1: the bare invoice is the older receivable.
+        stubInvoiceWithDueDate(
+                withDueDate, "1000.00", Instant.parse("2023-01-01T00:00:00Z"), LocalDate.parse("2023-06-01"));
+        stubInvoice(withoutDueDate, "1000.00", Instant.parse("2023-02-01T00:00:00Z"));
+
+        // Act
+        service.applyPaymentToInvoices(testPaymentId, request);
+
+        // Assert
+        verify(paymentApplicationRepository, times(2)).save(paymentApplicationCaptor.capture());
+        assertThat(paymentApplicationCaptor.getAllValues())
+                .extracting(PaymentApplication::getInvoiceId)
+                .containsExactly(withoutDueDate, withDueDate);
+    }
+
+    @Test
     @DisplayName("Should keep unappliedAmount math unchanged for OLDEST_FIRST partial allocation")
     void testApplyPaymentToInvoices_OldestFirst_PartialAllocation_UnappliedMathUnchanged() {
         // Arrange: 700.00 requested of 1000.00 available, caller order [newer, older]
@@ -1389,10 +1450,32 @@ class PaymentApplicationServiceTest {
             @NonNull String balanceDue,
             @Nullable Instant invoiceCreatedAt,
             @Nullable Instant finalizedAt) {
+        stubInvoice(invoiceId, balanceDue, invoiceCreatedAt, finalizedAt, null);
+    }
+
+    /**
+     * Stub variant that also sets the replica due date (Issue #993), so allocation-ordering tests
+     * can prove {@code OLDEST_FIRST} prefers the due date over {@code finalizedAt}.
+     */
+    private void stubInvoiceWithDueDate(
+            @NonNull UUID invoiceId,
+            @NonNull String balanceDue,
+            @Nullable Instant finalizedAt,
+            @Nullable LocalDate dueDate) {
+        stubInvoice(invoiceId, balanceDue, finalizedAt, finalizedAt, dueDate);
+    }
+
+    private void stubInvoice(
+            @NonNull UUID invoiceId,
+            @NonNull String balanceDue,
+            @Nullable Instant invoiceCreatedAt,
+            @Nullable Instant finalizedAt,
+            @Nullable LocalDate dueDate) {
         ExtInvoice invoice = ExtInvoice.builder()
                 .invoiceId(invoiceId)
                 .invoiceCreatedAt(invoiceCreatedAt)
                 .finalizedAt(finalizedAt)
+                .dueDate(dueDate)
                 .workorderId(UUID.fromString("00000000-0000-0000-0000-0000000000ff"))
                 .partyId(testCustomerId.toString())
                 .status("FINALIZED")

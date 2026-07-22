@@ -68,6 +68,7 @@ public class CreditMemoServiceImpl implements CreditMemoService {
 
     private final CreditMemoRepository creditMemoRepository;
     private final ExtInvoiceTaxRepository extInvoiceTaxRepository;
+    private final CreditMemoTaxAttributionService creditMemoTaxAttributionService;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
     private final GLPostingService glPostingService;
     private final AccountingPeriodService periodService;
@@ -116,6 +117,15 @@ public class CreditMemoServiceImpl implements CreditMemoService {
                 creditMemo.getCreditMemoId(),
                 creditMemo.calculateTotalAmount());
 
+        // Freeze the per-jurisdiction attribution of the reversed tax alongside the memo
+        // (issue #996), so the T8 liability report reads an actual credit-side breakdown
+        // instead of re-deriving a pro-rata approximation on every run.
+        creditMemoTaxAttributionService.attribute(
+                creditMemo.getCreditMemoId(),
+                invoice.getInvoiceId(),
+                creditCalculation.taxReversed(),
+                creditCalculation.finalCredit());
+
         postGlEntries(creditMemo, request, creditCalculation.taxReversed(), priorPeriodInfo);
 
         // The balance is derived from accounting's own records (ADR-0044 R6): the POSTED memo
@@ -158,9 +168,9 @@ public class CreditMemoServiceImpl implements CreditMemoService {
     }
 
     private CreditAmountCalculation calculateCreditAmounts(CreateCreditMemoRequest request, ExtInvoice invoice) {
-        BigDecimal taxReversed = calculateTaxReversed(request.getCreditAmount(), invoice);
-        BigDecimal totalCreditAmount = request.getCreditAmount().add(taxReversed);
-        return new CreditAmountCalculation(taxReversed, totalCreditAmount);
+        TaxReversal reversal = calculateTaxReversed(request.getCreditAmount(), invoice);
+        BigDecimal totalCreditAmount = request.getCreditAmount().add(reversal.amount());
+        return new CreditAmountCalculation(reversal.amount(), totalCreditAmount, reversal.finalCredit());
     }
 
     /**
@@ -186,10 +196,10 @@ public class CreditMemoServiceImpl implements CreditMemoService {
      * split 50/50 posts 17.80 then 17.79).
      */
     @NonNull
-    private BigDecimal calculateTaxReversed(@NonNull BigDecimal creditAmount, @NonNull ExtInvoice invoice) {
+    private TaxReversal calculateTaxReversed(@NonNull BigDecimal creditAmount, @NonNull ExtInvoice invoice) {
         BigDecimal totalTax = resolveFrozenTax(invoice);
         if (totalTax.signum() <= 0) {
-            return ZERO_TAX;
+            return new TaxReversal(ZERO_TAX, false);
         }
         BigDecimal total = invoice.getTotal() == null ? BigDecimal.ZERO : invoice.getTotal();
         BigDecimal netAmount = total.subtract(totalTax);
@@ -204,12 +214,15 @@ public class CreditMemoServiceImpl implements CreditMemoService {
             BigDecimal previouslyReversed = creditMemoRepository.sumTaxReversedAmountByInvoiceIdAndStatus(
                     invoice.getInvoiceId(), CreditMemoStatus.POSTED);
             BigDecimal residual = totalTax.subtract(previouslyReversed);
-            return residual.signum() > 0 ? residual : ZERO_TAX;
+            // The final-credit flag drives the per-jurisdiction residual correction in
+            // CreditMemoTaxAttributionService (issue #996) — the jurisdiction-level
+            // counterpart of the scalar residual computed here.
+            return new TaxReversal(residual.signum() > 0 ? residual : ZERO_TAX, true);
         }
 
         // remainingNet > creditAmount > 0 implies netAmount > 0: division is safe.
         BigDecimal creditRatio = creditAmount.divide(netAmount, RATIO_SCALE, RoundingMode.HALF_UP);
-        return totalTax.multiply(creditRatio).setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
+        return new TaxReversal(totalTax.multiply(creditRatio).setScale(CURRENCY_SCALE, RoundingMode.HALF_UP), false);
     }
 
     /**
@@ -421,7 +434,19 @@ public class CreditMemoServiceImpl implements CreditMemoService {
         return response;
     }
 
-    public record CreditAmountCalculation(BigDecimal taxReversed, BigDecimal totalCreditAmount) {}
+    /**
+     * The credit's monetary split.
+     *
+     * @param taxReversed       tax reversed by this credit (frozen, never recomputed from rates)
+     * @param totalCreditAmount revenue credited + tax reversed
+     * @param finalCredit       true when this credit consumes the invoice's remaining net amount,
+     *                          so both the scalar and the per-jurisdiction reversal (#996) carry
+     *                          the residual rather than a pro-rata share
+     */
+    public record CreditAmountCalculation(BigDecimal taxReversed, BigDecimal totalCreditAmount, boolean finalCredit) {}
+
+    /** Result of the frozen-tax reversal calculation: the amount plus whether it is the final credit. */
+    private record TaxReversal(BigDecimal amount, boolean finalCredit) {}
 
     public record PriorPeriodInfo(boolean priorPeriod, String originalPeriodId) {}
 }

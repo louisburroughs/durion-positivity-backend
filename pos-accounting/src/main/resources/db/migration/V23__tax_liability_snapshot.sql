@@ -26,6 +26,7 @@ CREATE TABLE tax_liability_snapshot (
     total_net_tax numeric(19, 4) NOT NULL,
     tax_payable_account_code character varying(20) NOT NULL,
     gl_net_activity numeric(19, 4) NOT NULL,
+    unattributed_credits numeric(19, 4) NOT NULL,
     gl_drift numeric(19, 4) NOT NULL,
     reconciled boolean NOT NULL,
     supersedes_snapshot_id uuid,

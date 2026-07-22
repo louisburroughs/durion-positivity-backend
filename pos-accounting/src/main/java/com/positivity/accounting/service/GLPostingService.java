@@ -151,6 +151,56 @@ public interface GLPostingService {
             @Nullable String overrideJustification);
 
     /**
+     * Post a customer-credit <em>relief</em> to GL (parity-C1 follow-on, issue
+     * #992): {@code Dr Customer Credit Liability / Cr <contra>} for the drawn-down
+     * amount. This is the mirror of {@link #postCustomerCreditIssuance}, which only
+     * recognizes the liability; the contra account is what distinguishes the two
+     * relief flavours:
+     *
+     * <ul>
+     *   <li><b>application</b> — contra = Accounts Receivable: the credit settles a
+     *       later invoice, so liability and receivable both go down;</li>
+     *   <li><b>refund</b> — contra = Undeposited Funds: the liability goes down and
+     *       cash goes out.</li>
+     * </ul>
+     *
+     * <p>Both accounts are resolved by the caller through posting-category /
+     * mapping-key configuration, never hardcoded. Across issuance → relief the
+     * Customer Credit Liability control account nets to zero for a fully-consumed
+     * credit.
+     *
+     * @param sourceEventId            deterministic JE source id for this relief
+     *                                 (namespaced per relief type so it never
+     *                                 collides with any other entry deriving from
+     *                                 the same request id)
+     * @param creditId                 the customer credit being relieved (audit
+     *                                 label on the entry lines)
+     * @param creditLiabilityAccountId GL account for Customer Credit Liability (debit)
+     * @param contraAccountId          GL account credited — Accounts Receivable for an
+     *                                 application, Undeposited Funds for a refund
+     * @param amount                   drawn-down amount
+     * @param transactionDate          business transaction date (the draw-down
+     *                                 timestamp) used as the journal entry date; must
+     *                                 not be derived from processing/clock time so
+     *                                 outbox retries post into the correct period
+     * @param description              entry description
+     * @param contraLineLabel          audit label for the credited line (e.g.
+     *                                 {@code "AR Reduction"} / {@code "Credit Refund"})
+     * @param overrideJustification    optional CLOSED-period override justification
+     * @return posted journal entry
+     */
+    JournalEntry postCustomerCreditRelief(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID creditId,
+            @NonNull UUID creditLiabilityAccountId,
+            @NonNull UUID contraAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @NonNull String contraLineLabel,
+            @Nullable String overrideJustification);
+
+    /**
      * Post the batched settlement journal entry (story F1c, issue #963, decision
      * D-13): {@code Dr Cash (net) / Dr Processor Fees (fee) / Cr Undeposited
      * Funds (matched gross) / Cr Settlement Suspense (unmatched gross)}. Zero

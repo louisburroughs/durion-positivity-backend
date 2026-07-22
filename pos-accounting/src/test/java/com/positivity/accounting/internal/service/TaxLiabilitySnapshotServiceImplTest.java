@@ -270,6 +270,7 @@ class TaxLiabilitySnapshotServiceImplTest {
                         .taxPayableAccountCode("2200")
                         .glNetActivity(amount)
                         .reportNetTax(amount)
+                        .unattributedCredits(BigDecimal.ZERO)
                         .drift(new BigDecimal("0.00"))
                         .reconciled(true)
                         .build())

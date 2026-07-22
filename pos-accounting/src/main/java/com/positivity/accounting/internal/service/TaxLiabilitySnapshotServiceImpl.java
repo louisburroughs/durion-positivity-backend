@@ -112,6 +112,7 @@ public class TaxLiabilitySnapshotServiceImpl implements TaxLiabilitySnapshotServ
         snapshot.setTotalNetTax(report.getTotalNetTax());
         snapshot.setTaxPayableAccountCode(report.getReconciliation().getTaxPayableAccountCode());
         snapshot.setGlNetActivity(report.getReconciliation().getGlNetActivity());
+        snapshot.setUnattributedCredits(report.getReconciliation().getUnattributedCredits());
         snapshot.setGlDrift(report.getReconciliation().getDrift());
         snapshot.setReconciled(Boolean.TRUE.equals(report.getReconciliation().getReconciled()));
         snapshot.setSupersedesSnapshotId(supersededId);
@@ -233,6 +234,7 @@ public class TaxLiabilitySnapshotServiceImpl implements TaxLiabilitySnapshotServ
                         .taxPayableAccountCode(snapshot.getTaxPayableAccountCode())
                         .glNetActivity(snapshot.getGlNetActivity())
                         .reportNetTax(snapshot.getTotalNetTax())
+                        .unattributedCredits(snapshot.getUnattributedCredits())
                         .drift(snapshot.getGlDrift())
                         .reconciled(snapshot.isReconciled())
                         .build())

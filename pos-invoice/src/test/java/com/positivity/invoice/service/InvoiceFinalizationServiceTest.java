@@ -83,12 +83,21 @@ class InvoiceFinalizationServiceTest {
     @Mock
     private com.positivity.invoice.internal.client.TaxLifecycleClient taxLifecycleClient;
 
+    @Mock
+    private com.positivity.invoice.internal.service.InvoiceDueDateService invoiceDueDateService;
+
     @InjectMocks
     private InvoiceFinalizationServiceImpl service;
 
     @BeforeEach
     void setUpSecurityContext() {
         withServiceAdvisorContext();
+        // #993: finalization freezes the due-date facts; individual default (due on receipt).
+        org.mockito.Mockito.lenient()
+                .when(invoiceDueDateService.resolve(any(), any()))
+                .thenAnswer(inv -> new com.positivity.invoice.internal.service.InvoiceDueDateService.DueTerms(
+                        com.positivity.invoice.internal.enums.PaymentTerms.DUE_ON_RECEIPT,
+                        java.time.LocalDate.ofInstant(TEST_CLOCK.instant(), ZoneOffset.UTC)));
     }
 
     @AfterEach
@@ -231,6 +240,9 @@ class InvoiceFinalizationServiceTest {
         assertThat(response.getFinalizedAt()).isNotNull();
         // ADR-0018: actor from SecurityContext
         assertThat(response.getFinalizedBy()).isEqualTo("advisor-001");
+        // #993: the due-date facts are frozen on the entity at finalization.
+        assertThat(draft.getDueDate()).isEqualTo(java.time.LocalDate.ofInstant(TEST_CLOCK.instant(), ZoneOffset.UTC));
+        assertThat(draft.getPaymentTermsCode()).isEqualTo("DUE_ON_RECEIPT");
     }
 
     /**

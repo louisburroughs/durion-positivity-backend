@@ -61,6 +61,10 @@ public class ExtLocationReplica {
     @Column(name = "country")
     private String country;
 
+    /** IANA timezone id from the owner (#993) — drives the business-date anchor for due-date computation. */
+    @Column(name = "timezone", length = 64)
+    private String timezone;
+
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 

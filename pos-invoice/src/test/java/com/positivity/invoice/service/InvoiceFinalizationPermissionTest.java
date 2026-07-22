@@ -78,12 +78,22 @@ class InvoiceFinalizationPermissionTest {
     @Mock
     private com.positivity.invoice.internal.client.TaxLifecycleClient taxLifecycleClient;
 
+    @Mock
+    private com.positivity.invoice.internal.service.InvoiceDueDateService invoiceDueDateService;
+
     @InjectMocks
     private InvoiceFinalizationServiceImpl service;
 
     @BeforeEach
     void setUpSecurityContext() {
         withServiceAdvisorContext();
+        // #993: finalization freezes the due-date facts; individual default (due on receipt).
+        org.mockito.Mockito.lenient()
+                .when(invoiceDueDateService.resolve(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(inv -> new com.positivity.invoice.internal.service.InvoiceDueDateService.DueTerms(
+                        com.positivity.invoice.internal.enums.PaymentTerms.DUE_ON_RECEIPT,
+                        java.time.LocalDate.ofInstant(TEST_CLOCK.instant(), ZoneOffset.UTC)));
     }
 
     @AfterEach

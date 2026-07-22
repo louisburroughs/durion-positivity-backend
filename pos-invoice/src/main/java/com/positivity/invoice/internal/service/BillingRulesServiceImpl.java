@@ -5,6 +5,7 @@ import com.positivity.invoice.internal.dto.BillingRulesDTO;
 import com.positivity.invoice.internal.entity.BillingRules;
 import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
 import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
+import com.positivity.invoice.internal.enums.PaymentTerms;
 import com.positivity.invoice.internal.repository.BillingRulesRepository;
 import com.positivity.invoice.service.BillingRulesService;
 import com.positivity.security.common.SecurityContextHelper;
@@ -76,7 +77,7 @@ public class BillingRulesServiceImpl implements BillingRulesService {
         }
 
         billingRules.setPurchaseOrderRequired(billingRulesDTO.isPurchaseOrderRequired());
-        billingRules.setPaymentTermsCode(billingRulesDTO.getPaymentTermsCode());
+        billingRules.setPaymentTermsCode(validatedTermsCode(billingRulesDTO.getPaymentTermsCode()));
         billingRules.setInvoiceDeliveryMethod(billingRulesDTO.getInvoiceDeliveryMethod());
         billingRules.setInvoiceGroupingStrategy(billingRulesDTO.getInvoiceGroupingStrategy());
         billingRules.setUpdatedBy(updatedBy);
@@ -103,7 +104,7 @@ public class BillingRulesServiceImpl implements BillingRulesService {
         BillingRules billingRules = new BillingRules();
         billingRules.setPartyId(partyId);
         billingRules.setPurchaseOrderRequired(defaultPurchaseOrderRequired);
-        billingRules.setPaymentTermsCode(defaultPaymentTermsCode);
+        billingRules.setPaymentTermsCode(validatedTermsCode(defaultPaymentTermsCode));
         billingRules.setInvoiceDeliveryMethod(InvoiceDeliveryMethod.valueOf(defaultInvoiceDeliveryMethod));
         billingRules.setInvoiceGroupingStrategy(InvoiceGroupingStrategy.valueOf(defaultInvoiceGroupingStrategy));
         billingRules.setUpdatedBy(SYSTEM_USER);
@@ -117,6 +118,18 @@ public class BillingRulesServiceImpl implements BillingRulesService {
     @NonNull
     public String getCurrentUsername() {
         return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER);
+    }
+
+    /**
+     * #993: {@code paymentTermsCode} is a validated vocabulary ({@link PaymentTerms}), not a
+     * free-form string — the due-date rule engine depends on it. Mirrors the DB CHECK constraint.
+     */
+    @NonNull
+    private String validatedTermsCode(@NonNull String code) {
+        return PaymentTerms.fromCode(code)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown paymentTermsCode '" + code
+                        + "' — expected one of DUE_ON_RECEIPT, NET_10, NET_15," + " NET_30, NET_45, NET_60"))
+                .name();
     }
 
     private String maskForLog(Object value) {

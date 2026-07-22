@@ -50,6 +50,14 @@ public class TaxLiabilityReconciliation {
     private BigDecimal reportNetTax;
 
     @Schema(
+            description =
+                    "Credit-memo tax that could not be attributed to any jurisdiction (the credit carries no frozen breakdown and its original invoice has no attributable tax rows). Excluded from the jurisdiction rows by design, so it accounts for exactly this much of the drift",
+            example = "0.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    private BigDecimal unattributedCredits;
+
+    @Schema(
             description = "GL drift: reportNetTax - glNetActivity. Zero on a clean ledger; non-zero flags a mismatch",
             example = "0.00",
             requiredMode = REQUIRED)
@@ -57,7 +65,8 @@ public class TaxLiabilityReconciliation {
     private BigDecimal drift;
 
     @Schema(
-            description = "True when |drift| is within the 0.01 reconciliation tolerance",
+            description =
+                    "True when the UNEXPLAINED drift (drift - unattributedCredits) is within the 0.01 reconciliation tolerance. Unattributed credits inflate drift by exactly their own value, so that portion is explained and does not flag the ledger as out of balance",
             example = "true",
             requiredMode = REQUIRED)
     @NonNull

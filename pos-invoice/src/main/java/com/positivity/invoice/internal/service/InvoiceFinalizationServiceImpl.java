@@ -75,6 +75,7 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     private final ElevationTokenService elevationTokenService;
     private final InvoiceEventPublisher invoiceEventPublisher;
     private final TaxLifecycleClient taxLifecycleClient;
+    private final InvoiceDueDateService invoiceDueDateService;
 
     public InvoiceFinalizationServiceImpl(
             InvoiceRepository invoiceRepository,
@@ -82,13 +83,15 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             Clock clock,
             ElevationTokenService elevationTokenService,
             InvoiceEventPublisher invoiceEventPublisher,
-            TaxLifecycleClient taxLifecycleClient) {
+            TaxLifecycleClient taxLifecycleClient,
+            InvoiceDueDateService invoiceDueDateService) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
         this.eventPublisher = eventPublisher;
         this.elevationTokenService = elevationTokenService;
         this.invoiceEventPublisher = invoiceEventPublisher;
         this.taxLifecycleClient = taxLifecycleClient;
+        this.invoiceDueDateService = invoiceDueDateService;
     }
 
     /**
@@ -177,6 +180,12 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             invoice.setStatus(InvoiceStatus.FINALIZED);
             invoice.setFinalizedAt(now);
             invoice.setFinalizedBy(finalizedBy);
+            // #993: freeze the collections-aging facts at finalization. The due date is a
+            // per-invoice computed fact (party terms rule over the finalization business date);
+            // later BillingRules changes never move it.
+            InvoiceDueDateService.DueTerms dueTerms = invoiceDueDateService.resolve(invoice, now);
+            invoice.setPaymentTermsCode(dueTerms.paymentTerms().name());
+            invoice.setDueDate(dueTerms.dueDate());
             Invoice saved = invoiceRepository.save(invoice);
             invoiceEventPublisher.publishInvoiceUpdated(saved);
 

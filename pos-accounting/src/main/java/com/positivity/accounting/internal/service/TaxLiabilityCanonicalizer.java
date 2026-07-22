@@ -107,6 +107,8 @@ public final class TaxLiabilityCanonicalizer {
                 .append(FIELD_SEP)
                 .append(decimal(rec.getReportNetTax()))
                 .append(FIELD_SEP)
+                .append(decimal(rec.getUnattributedCredits()))
+                .append(FIELD_SEP)
                 .append(decimal(rec.getDrift()))
                 .append(FIELD_SEP)
                 .append(rec.getReconciled());

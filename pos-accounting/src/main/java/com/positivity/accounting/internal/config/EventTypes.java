@@ -362,6 +362,23 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_RECONCILIATION_ADJUSTMENT_TYPES_LIST",
                                 "List the supported reconciliation adjustment types (decision D-6)")
+                        .build(),
+
+                // Customer credit lifecycle (issue #992) - 4 events
+                EventTypeRegistration.search(
+                                "ACCOUNTING_CUSTOMER_CREDIT_LIST",
+                                "List AR customer credits with their remaining open amounts")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_CUSTOMER_CREDIT_GET", "Get one AR customer credit and its open amount")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_CUSTOMER_CREDIT_APPLY",
+                                "Apply an open customer credit to an invoice (Dr credit liability / Cr AR)")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_CUSTOMER_CREDIT_REFUND",
+                                "Refund an open customer credit to the customer (Dr credit liability / Cr cash)")
                         .build());
     }
 }

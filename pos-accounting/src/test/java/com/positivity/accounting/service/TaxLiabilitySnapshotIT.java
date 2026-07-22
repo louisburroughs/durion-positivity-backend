@@ -40,7 +40,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Real-Postgres IT for the tax-liability period-close freeze (issue #998, Phase-2 scope item 2).
- * Runs the full Flyway chain (validating the V20 snapshot tables and the one-ACTIVE-per-period
+ * Runs the full Flyway chain (validating the V23 snapshot tables and the one-ACTIVE-per-period
  * partial unique index) on a Testcontainers Postgres. Exercises: close-gated freeze, frozen
  * figures matching the live report, hash-based verify (consistent, then inconsistent after
  * post-freeze data movement), and the conflict/supersede flow.
@@ -65,7 +65,7 @@ class TaxLiabilitySnapshotIT {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
-        // Schema comes from the real Flyway chain (incl. V20), not Hibernate DDL.
+        // Schema comes from the real Flyway chain (incl. V23), not Hibernate DDL.
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "none");
         registry.add("spring.flyway.enabled", () -> "true");
     }
@@ -113,7 +113,7 @@ class TaxLiabilitySnapshotIT {
         assertThat(frozen.getPeriodClosedAt()).isNotNull();
         assertThat(frozen.getFrozenBy()).isNotNull();
 
-        // Round-trip through the repository (JPA mapping against the real V20 schema).
+        // Round-trip through the repository (JPA mapping against the real V23 schema).
         TaxLiabilitySnapshotResponse reloaded = snapshotService.get(frozen.getSnapshotId());
         assertThat(reloaded.getContentHash()).isEqualTo(frozen.getContentHash());
         assertThat(reloaded.getRows()).hasSize(1);
@@ -207,6 +207,7 @@ class TaxLiabilitySnapshotIT {
         snapshot.setTotalNetTax(BigDecimal.ZERO);
         snapshot.setTaxPayableAccountCode("2200");
         snapshot.setGlNetActivity(BigDecimal.ZERO);
+        snapshot.setUnattributedCredits(BigDecimal.ZERO);
         snapshot.setGlDrift(BigDecimal.ZERO);
         snapshot.setReconciled(true);
         return snapshot;
