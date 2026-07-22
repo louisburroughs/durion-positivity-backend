@@ -43,6 +43,53 @@ public interface InventoryLedgerEntryRepository
 
     Optional<InventoryLedgerEntry> findByAdjustmentId(UUID adjustmentId);
 
+    // ─── Cycle-count conflict window queries (odoo-parity I2, issue #1026) ────
+
+    /**
+     * Interfering movements for a cycle-count task: on-hand-affecting entries
+     * for the task's SKU recorded after the task snapshot was taken.
+     */
+    List<InventoryLedgerEntry> findByStockItemIdAndEventTypeInAndTimestampGreaterThanOrderByTimestampAsc(
+            String stockItemId, Collection<InventoryLedgerEventType> eventTypes, java.time.Instant after);
+
+    /** Location-scoped variant of the interfering-movement listing. */
+    List<InventoryLedgerEntry> findByStockItemIdAndLocationIdAndEventTypeInAndTimestampGreaterThanOrderByTimestampAsc(
+            String stockItemId,
+            UUID locationId,
+            Collection<InventoryLedgerEventType> eventTypes,
+            java.time.Instant after);
+
+    /**
+     * Net on-hand delta for one SKU since a point in time — non-zero means
+     * movements interfered with a count window (odoo-parity I2).
+     */
+    @Query("""
+                        SELECT COALESCE(SUM(e.changeInQuantity), 0)
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.eventType IN :eventTypes
+                          AND e.timestamp > :after
+                        """)
+    Integer sumChangeForStockItemSince(
+            @Param("stockItemId") String stockItemId,
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
+            @Param("after") java.time.Instant after);
+
+    /** Location-scoped variant of {@link #sumChangeForStockItemSince}. */
+    @Query("""
+                        SELECT COALESCE(SUM(e.changeInQuantity), 0)
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.locationId = :locationId
+                          AND e.eventType IN :eventTypes
+                          AND e.timestamp > :after
+                        """)
+    Integer sumChangeForStockItemAtLocationSince(
+            @Param("stockItemId") String stockItemId,
+            @Param("locationId") UUID locationId,
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
+            @Param("after") java.time.Instant after);
+
     default Integer calculateOnHandQuantity(UUID stockItemId) {
         return calculateOnHandQuantityForEventTypes(
                 stockItemId.toString(), InventoryLedgerEventType.onHandAffectingTypes());

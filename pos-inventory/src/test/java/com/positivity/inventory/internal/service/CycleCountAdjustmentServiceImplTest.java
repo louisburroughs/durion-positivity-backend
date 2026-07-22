@@ -57,6 +57,12 @@ class CycleCountAdjustmentServiceImplTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private com.positivity.inventory.internal.repository.CycleCountTaskRepository taskRepository;
+
+    @Mock
+    private CycleCountConflictDetector conflictDetector;
+
     private CycleCountAdjustmentServiceImpl service;
     private Clock fixedClock = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
@@ -68,7 +74,9 @@ class CycleCountAdjustmentServiceImplTest {
                 ledgerPostingService,
                 thresholdEvaluator,
                 eventPublisher,
-                fixedClock);
+                fixedClock,
+                taskRepository,
+                conflictDetector);
     }
 
     @AfterEach

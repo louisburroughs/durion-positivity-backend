@@ -434,6 +434,37 @@ class CycleCountContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$[0].auditorId").value("auditor-target"));
     }
 
+    // ─── I2 (#1026): interfering movements listing ───────────────────────────
+
+    @Test
+    @DisplayName("I2: GET /cycleCount/task/{id}/interfering-movements returns 200 with an array for a clean window")
+    void getInterferingMovements_cleanWindow_returns200WithEmptyArray() throws Exception {
+        CycleCountTask task = cycleCountTaskRepository.save(CycleCountTask.builder()
+                .binLocation("BIN-I2-CONTRACT")
+                .itemSku("SKU-I2-CONTRACT")
+                .itemDescription("I2 contract test item")
+                .expectedQuantity(10)
+                .auditorId("auditor-i2")
+                .status(TaskStatus.ASSIGNED)
+                .countEntriesCount(0)
+                .build());
+
+        mockMvc.perform(withGatewayAuth(
+                        get("/v1/inventory/cycleCount/task/{taskId}/interfering-movements", task.getTaskId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    @DisplayName("I2: GET /cycleCount/task/{id}/interfering-movements for unknown task returns 404")
+    void getInterferingMovements_unknownTask_returns404() throws Exception {
+        mockMvc.perform(withGatewayAuth(get(
+                        "/v1/inventory/cycleCount/task/{taskId}/interfering-movements",
+                        UUID.fromString("00000000-0000-0000-0000-00000000dead"))))
+                .andExpect(status().isNotFound());
+    }
+
     // ─── Private request body records (inline serialization) ────────────────
 
     private record SubmitCountBody(UUID taskId, String auditorId, Integer actualQuantity) {}

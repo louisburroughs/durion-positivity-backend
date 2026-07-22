@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
+import com.positivity.inventory.internal.exception.CycleCountConflictException;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
 import com.positivity.inventory.internal.exception.InsufficientAtpException;
@@ -153,6 +154,13 @@ public class InventoryGlobalExceptionHandler {
         // odoo-parity K1 (#1027): deterministic per-case code from the exception
         // (NEGATIVE_STOCK_OVERRIDE_REQUIRED / NEGATIVE_STOCK_FLOOR_VIOLATION).
         return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(CycleCountConflictException.class)
+    public ResponseEntity<ApiError> handleCycleCountConflict(CycleCountConflictException ex) {
+        // odoo-parity I2 (#1026): approval rejected — task flagged CONFLICT,
+        // reviewer must explicitly choose recount or recomputed approval.
+        return build(HttpStatus.CONFLICT, "CYCLE_COUNT_CONFLICT", ex.getMessage());
     }
 
     @ExceptionHandler(RecountLimitExceededException.class)
