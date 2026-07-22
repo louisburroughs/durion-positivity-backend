@@ -134,8 +134,7 @@ public class CustomerCreditServiceImpl implements CustomerCreditService {
                 invoice.getInvoiceId(),
                 amount,
                 request.getRequestId(),
-                currentUser,
-                now);
+                currentUser);
 
         credit.setAppliedAmount(nullSafe(credit.getAppliedAmount()).add(amount));
         CustomerCredit saved = persistWithDerivedStatus(credit);
@@ -186,7 +185,7 @@ public class CustomerCreditServiceImpl implements CustomerCreditService {
         Instant now = Instant.now(clock);
         requirePostablePeriod(now);
         CustomerCreditTransaction transaction = recordDrawDown(
-                credit, CustomerCreditTransactionType.REFUND, null, amount, request.getRequestId(), currentUser, now);
+                credit, CustomerCreditTransactionType.REFUND, null, amount, request.getRequestId(), currentUser);
 
         credit.setRefundedAmount(nullSafe(credit.getRefundedAmount()).add(amount));
         CustomerCredit saved = persistWithDerivedStatus(credit);
@@ -250,13 +249,6 @@ public class CustomerCreditServiceImpl implements CustomerCreditService {
                 .findById(creditId)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer credit not found: " + creditId));
-    }
-
-    private ExtInvoice fetchInvoice(UUID invoiceId) {
-        return invoiceBalanceCalculator
-                .findInvoice(invoiceId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Invoice " + invoiceId + " not found in the invoice replica"));
     }
 
     /**
@@ -389,7 +381,7 @@ public class CustomerCreditServiceImpl implements CustomerCreditService {
         }
         try {
             return UUID.fromString(partyId.trim());
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Invoice " + invoice.getInvoiceId() + " has a non-UUID party reference: " + partyId);
@@ -402,8 +394,7 @@ public class CustomerCreditServiceImpl implements CustomerCreditService {
             @Nullable UUID invoiceId,
             BigDecimal amount,
             String requestId,
-            String currentUser,
-            Instant timestamp) {
+            String currentUser) {
 
         return creditTransactionRepository.save(CustomerCreditTransaction.builder()
                 .creditId(credit.getCreditId())
