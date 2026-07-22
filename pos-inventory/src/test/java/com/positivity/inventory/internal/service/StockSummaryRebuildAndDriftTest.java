@@ -69,6 +69,9 @@ class StockSummaryRebuildAndDriftTest {
         post(skuA, loc1, InventoryLedgerEventType.ALLOCATION_CREATED, 15);
         post(skuA, loc2, InventoryLedgerEventType.TRANSFER_IN, 7);
         post(skuB, loc1, InventoryLedgerEventType.GOODS_RECEIPT, 3);
+        // K1 (#1027): consumption may not drive on-hand negative — seed the
+        // null-location key before consuming from it.
+        post(skuB, null, InventoryLedgerEventType.GOODS_RECEIPT, 6);
         post(skuB, null, InventoryLedgerEventType.WORKORDER_CONSUMPTION, -2);
         post(skuB, loc1, InventoryLedgerEventType.RESERVATION_CREATED, 1);
 

@@ -120,12 +120,23 @@ class InventoryLocationServiceImplTest {
         return new LedgerPostingService() {
             @Override
             public InventoryLedgerEntry post(InventoryLedgerEntry entry) {
+                return post(entry, false);
+            }
+
+            @Override
+            public InventoryLedgerEntry post(InventoryLedgerEntry entry, boolean negativeStockOverride) {
                 persistedEntries.add(entry);
                 return entry;
             }
 
             @Override
             public List<InventoryLedgerEntry> postAll(List<InventoryLedgerEntry> entries) {
+                return postAll(entries, false);
+            }
+
+            @Override
+            public List<InventoryLedgerEntry> postAll(
+                    List<InventoryLedgerEntry> entries, boolean negativeStockOverride) {
                 persistedEntries.addAll(entries);
                 return entries;
             }

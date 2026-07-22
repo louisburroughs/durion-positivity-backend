@@ -113,12 +113,15 @@ class LedgerPostingServiceImplTest {
     void post_nullLocationEntry_aggregatesOnNullLocationRow() {
         String sku = uniqueSku();
 
+        // K1 (#1027): consumption may no longer drive on-hand negative, so seed
+        // the null-location row before consuming from it.
+        ledgerPostingService.post(entry(sku, null, InventoryLedgerEventType.GOODS_RECEIPT, 5));
         ledgerPostingService.post(entry(sku, null, InventoryLedgerEventType.WORKORDER_CONSUMPTION, -3));
         ledgerPostingService.post(entry(sku, null, InventoryLedgerEventType.RETURN_TO_STOCK, 1));
 
         InventoryStockSummary summary =
                 summaryRepository.findByStockItemIdAndLocationIdIsNull(sku).orElseThrow();
-        assertThat(summary.getOnHand()).isEqualTo(-2);
+        assertThat(summary.getOnHand()).isEqualTo(3);
     }
 
     @Test
@@ -127,18 +130,21 @@ class LedgerPostingServiceImplTest {
         UUID locationA = UUID.randomUUID();
         UUID locationB = UUID.randomUUID();
 
+        // K1 (#1027): TRANSFER_OUT is blocked below zero, so the batch seeds
+        // location A before dispatching from it (exactly-to-zero is allowed).
         List<InventoryLedgerEntry> saved = ledgerPostingService.postAll(List.of(
+                entry(sku, locationA, InventoryLedgerEventType.GOODS_RECEIPT, 5),
                 entry(sku, locationA, InventoryLedgerEventType.TRANSFER_OUT, -5),
                 entry(sku, locationB, InventoryLedgerEventType.TRANSFER_IN, 5),
                 entry(sku, locationB, InventoryLedgerEventType.GOODS_RECEIPT, 2)));
 
-        assertThat(saved).hasSize(3);
+        assertThat(saved).hasSize(4);
         assertThat(saved.getFirst().getLedgerEntryId()).isNotNull();
         assertThat(summaryRepository
                         .findByStockItemIdAndLocationId(sku, locationA)
                         .orElseThrow()
                         .getOnHand())
-                .isEqualTo(-5);
+                .isZero();
         assertThat(summaryRepository
                         .findByStockItemIdAndLocationId(sku, locationB)
                         .orElseThrow()
