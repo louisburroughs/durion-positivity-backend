@@ -65,6 +65,31 @@ public interface GLPostingService {
             @Nullable String overrideJustification);
 
     /**
+     * Post the mirror of a Credit Memo reversal when the memo is voided (issue #997 symmetry):
+     * {@code Dr AR (creditAmount + taxReversed) / Cr Revenue (creditAmount) + Cr Sales-Tax
+     * Payable (taxReversed)}, dated at void time in the current open period (period gate
+     * applies). Together with the T8 report's void-period restoration term this keeps GL drift
+     * at zero across the POSTED → VOIDED transition without restating the posting period.
+     *
+     * @param creditMemoId       Voided credit memo id (source event)
+     * @param revenueAccountId   Revenue account (credit side of the void)
+     * @param taxPayableAccountId Sales-Tax Payable account (credit side of the void)
+     * @param arAccountId        Accounts Receivable account (debit side of the void)
+     * @param creditAmount       Revenue portion originally credited
+     * @param taxReversed        Tax portion originally reversed
+     * @param description        Journal entry description
+     * @return Posted journal entry
+     */
+    JournalEntry postCreditMemoVoid(
+            @NonNull UUID creditMemoId,
+            @NonNull UUID revenueAccountId,
+            @NonNull UUID taxPayableAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal creditAmount,
+            @NonNull BigDecimal taxReversed,
+            @NonNull String description);
+
+    /**
      * Post a payment application (AR cash receipt) to GL.
      *
      * Creates journal entry with:

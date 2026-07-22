@@ -807,7 +807,36 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
             for (CreditMemo credit : credits) {
                 unattributedCredits = unattributedCredits.add(netCreditAcrossJurisdictions(
-                        credit, attributionByCredit, taxByOriginalInvoice, byJurisdiction));
+                        credit, attributionByCredit, taxByOriginalInvoice, byJurisdiction, false));
+            }
+        }
+
+        // --- Void side (issue #997 symmetry): a void posts a reversing Cr 2200 entry in the
+        // period it happens, so the report restores the reversed tax per jurisdiction in that
+        // same period (negative creditsNetted). The memo's original posting-period contribution
+        // above is untouched — no retroactive restatement; a memo posted and voided in the same
+        // period contributes net zero. ---
+        List<CreditMemo> voids = creditMemoRepository.findByStatusAndVoidedTimestampBetween(
+                CreditMemoStatus.VOIDED, startInstant, endInstant);
+        if (!voids.isEmpty()) {
+            List<UUID> voidInvoiceIds = voids.stream()
+                    .map(CreditMemo::getOriginalInvoiceId)
+                    .distinct()
+                    .toList();
+            Map<UUID, List<ExtInvoiceTax>> taxByVoidInvoice =
+                    extInvoiceTaxRepository.findByInvoiceIdIn(voidInvoiceIds).stream()
+                            .collect(Collectors.groupingBy(ExtInvoiceTax::getInvoiceId));
+            Map<UUID, List<CreditMemoTax>> attributionByVoid =
+                    creditMemoTaxRepository
+                            .findByCreditMemoIdIn(voids.stream()
+                                    .map(CreditMemo::getCreditMemoId)
+                                    .toList())
+                            .stream()
+                            .collect(Collectors.groupingBy(CreditMemoTax::getCreditMemoId));
+
+            for (CreditMemo voided : voids) {
+                unattributedCredits = unattributedCredits.subtract(netCreditAcrossJurisdictions(
+                        voided, attributionByVoid, taxByVoidInvoice, byJurisdiction, true));
             }
         }
 
@@ -864,20 +893,28 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
      *       per-jurisdiction collected tax.</li>
      * </ol>
      *
+     * @param restore when true (issue #997 void symmetry) every attributed amount is applied with
+     *                the opposite sign — the void-period restoration of a previously netted
+     *                reversal — using the identical attribution source, so restore amounts mirror
+     *                the netted ones jurisdiction-for-jurisdiction
      * @return the portion of this credit's reversed tax that could <em>not</em> be attributed
      *         to any jurisdiction (zero in the normal case). Surfacing it in the reconciliation
-     *         block explains the resulting GL drift instead of leaving it phantom.
+     *         block explains the resulting GL drift instead of leaving it phantom. Callers on the
+     *         restore path subtract this value so an unattributed void cancels its unattributed
+     *         posting symmetrically.
      */
     private BigDecimal netCreditAcrossJurisdictions(
             CreditMemo credit,
             Map<UUID, List<CreditMemoTax>> attributionByCredit,
             Map<UUID, List<ExtInvoiceTax>> taxByOriginalInvoice,
-            Map<JurisdictionKey, JurisdictionAccumulator> byJurisdiction) {
+            Map<JurisdictionKey, JurisdictionAccumulator> byJurisdiction,
+            boolean restore) {
 
         BigDecimal reversed = nullSafe(credit.getTaxAmountReversed());
         if (reversed.signum() == 0) {
             return BigDecimal.ZERO;
         }
+        BigDecimal sign = restore ? BigDecimal.ONE.negate() : BigDecimal.ONE;
 
         // (1) Preferred: the credit's own frozen per-jurisdiction attribution.
         List<CreditMemoTax> attribution = attributionByCredit.get(credit.getCreditMemoId());
@@ -885,7 +922,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             for (CreditMemoTax row : attribution) {
                 JurisdictionKey key = new JurisdictionKey(row.getJurisdictionType(), row.getJurisdictionCode());
                 JurisdictionAccumulator acc = byJurisdiction.computeIfAbsent(key, JurisdictionAccumulator::new);
-                acc.creditsNetted = acc.creditsNetted.add(nullSafe(row.getTaxAmountReversed()));
+                acc.creditsNetted = acc.creditsNetted.add(
+                        nullSafe(row.getTaxAmountReversed()).multiply(sign));
             }
             return BigDecimal.ZERO;
         }
@@ -921,7 +959,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         }
         for (Map.Entry<JurisdictionKey, BigDecimal> entry : allocated.entrySet()) {
             JurisdictionAccumulator acc = byJurisdiction.computeIfAbsent(entry.getKey(), JurisdictionAccumulator::new);
-            acc.creditsNetted = acc.creditsNetted.add(entry.getValue());
+            acc.creditsNetted = acc.creditsNetted.add(entry.getValue().multiply(sign));
         }
         return BigDecimal.ZERO;
     }

@@ -1,9 +1,9 @@
-generatedAt: "2026-07-22T17:22:40.242373+00:00"
-root: "/home/runner/work/durion-positivity-backend/durion-positivity-backend"
+generatedAt: "2026-07-22T18:36:28.032791+00:00"
+root: "."
 summary:
   manifestCount: 20
-  permissionCount: 359
-  uniquePermissionCount: 359
+  permissionCount: 361
+  uniquePermissionCount: 361
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -12,7 +12,7 @@ manifests:
     domain: "accounting"
     serviceName: "pos-accounting"
     version: "1.0"
-    permissionCount: 50
+    permissionCount: 52
     permissions:
       - name: "accounting:ap:pay"
         description: "Process payments"
@@ -30,6 +30,8 @@ manifests:
         description: "Create credit memo"
       - name: "accounting:credit-memo:read"
         description: "Read credit memo"
+      - name: "accounting:credit-memo:void"
+        description: "Void a posted credit memo, restoring AR and the reversed tax liability"
       - name: "accounting:customer-credit:apply"
         description: "Apply an open customer credit to an invoice"
       - name: "accounting:customer-credit:refund"
@@ -114,6 +116,8 @@ manifests:
         description: "Export report"
       - name: "accounting:tax-snapshot:freeze"
         description: "Freeze the sales-tax liability report for a closed accounting period"
+      - name: "reporting:view:financial-statements"
+        description: "View financial statements and download rendered report exports"
   - module: "pos-bulk-loader"
     path: "pos-bulk-loader/src/main/resources/permissions.yaml"
     domain: "bulk-import"
@@ -910,6 +914,12 @@ permissions:
     source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:credit-memo:read"
     description: "Read credit memo"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:credit-memo:void"
+    description: "Void a posted credit memo, restoring AR and the reversed tax liability"
     domain: "accounting"
     serviceName: "pos-accounting"
     module: "pos-accounting"
@@ -2342,6 +2352,12 @@ permissions:
     serviceName: "pos-catalog"
     module: "pos-catalog"
     source: "pos-catalog/src/main/resources/permissions.yaml"
+  - name: "reporting:view:financial-statements"
+    description: "View financial statements and download rendered report exports"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "security:audit:create"
     description: "Create audit events and pricing snapshots"
     domain: "security"

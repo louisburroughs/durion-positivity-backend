@@ -120,13 +120,23 @@ public class ReportExportController {
      * carries the actual financial-statement figures.
      */
     @GetMapping(value = "/{exportId}/download")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"reporting:view:financial-statements"})
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "ACCOUNTING_REPORT_EXPORT_DOWNLOAD", apiVersion = "1")
     @Operation(
             summary = "Download rendered export artifact",
             description = "Download the rendered CSV or PDF artifact of a COMPLETED export job.",
             tags = {"Financial Reporting"})
-    @ApiResponse(responseCode = "200", description = "Rendered artifact returned")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Rendered artifact returned (content type matches the export format, e.g. text/csv or"
+                    + " application/pdf)",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_OCTET_STREAM_VALUE,
+                            schema = @Schema(type = "string", format = "binary")))
     @ApiResponse(responseCode = "401", description = "Unauthorized")
     @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements")
     @ApiResponse(responseCode = "404", description = "Export job or artifact not found")

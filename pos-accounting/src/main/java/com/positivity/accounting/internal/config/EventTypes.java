@@ -16,7 +16,11 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 86 event types (includes +4 from the tax-liability period-close freeze
+     * Total: 92 event types (includes +1 from the credit-memo void (issue #997
+     * symmetry): ACCOUNTING_CREDIT_MEMO_VOID, +4 from the customer-credit lifecycle
+     * (PR #1004): ACCOUNTING_CUSTOMER_CREDIT_LIST, ACCOUNTING_CUSTOMER_CREDIT_GET,
+     * ACCOUNTING_CUSTOMER_CREDIT_APPLY, ACCOUNTING_CUSTOMER_CREDIT_REFUND,
+     * +4 from the tax-liability period-close freeze
      * (Issue #998 Phase-2 item 2): TAX_LIABILITY_SNAPSHOT_FREEZE,
      * TAX_LIABILITY_SNAPSHOT_LIST, TAX_LIABILITY_SNAPSHOT_GET,
      * TAX_LIABILITY_SNAPSHOT_VERIFY, +1 from the sales-tax liability report
@@ -130,9 +134,13 @@ public final class EventTypes {
                 EventTypeRegistration.write("ACCOUNTING_AUDIT_CANCELLATION", "Record an order or invoice cancellation")
                         .build(),
 
-                // CreditMemoController - 3 events (CAP-052)
+                // CreditMemoController - 4 events (CAP-052; +1 void, issue #997 symmetry)
                 EventTypeRegistration.write(
                                 "ACCOUNTING_CREDIT_MEMO_CREATE", "Create a credit memo to reverse invoice charges")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_CREDIT_MEMO_VOID",
+                                "Void a posted credit memo, restoring AR and the reversed tax liability")
                         .build(),
                 EventTypeRegistration.fastRead("ACCOUNTING_CREDIT_MEMO_LIST", "List credit memos with optional filters")
                         .build(),

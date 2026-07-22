@@ -18,6 +18,8 @@ permissions:
     description: "Create credit memo"
   - name: "accounting:credit-memo:read"
     description: "Read credit memo"
+  - name: "accounting:credit-memo:void"
+    description: "Void a posted credit memo, restoring AR and the reversed tax liability"
   - name: "accounting:customer-credit:apply"
     description: "Apply an open customer credit to an invoice"
   - name: "accounting:customer-credit:refund"

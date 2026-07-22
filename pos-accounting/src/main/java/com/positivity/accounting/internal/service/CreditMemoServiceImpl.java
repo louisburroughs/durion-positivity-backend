@@ -411,6 +411,75 @@ public class CreditMemoServiceImpl implements CreditMemoService {
     }
 
     /**
+     * Void a POSTED Credit Memo (issue #997 symmetry). The memo's posting-period T8 contribution
+     * and its original journal entry are never touched; the void posts the mirror entry
+     * ({@code Dr AR / Cr Revenue + Cr Sales-Tax Payable}) dated now, and the T8 report restores
+     * the reversed tax in the void's period. Invoice balance restoration is automatic: every
+     * balance sum counts POSTED memos only.
+     */
+    @Override
+    public CreditMemoResponse voidCreditMemo(
+            @NonNull UUID creditMemoId, @NonNull String voidReason, @NonNull String currentUser) {
+
+        // Locked read (SELECT ... FOR UPDATE): two concurrent voids serialize here, so the
+        // second sees VOIDED and gets the 409 instead of double-posting the mirror GL entry.
+        CreditMemo creditMemo = creditMemoRepository
+                .findWithLockByCreditMemoId(creditMemoId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Credit Memo not found: " + creditMemoId));
+
+        if (creditMemo.getStatus() != CreditMemoStatus.POSTED) {
+            String detail = creditMemo.getStatus() == CreditMemoStatus.APPLIED
+                    ? "it has been consumed (APPLIED); handle through the customer-credit lifecycle"
+                    : "current status is " + creditMemo.getStatus();
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Credit Memo " + creditMemoId + " cannot be voided: " + detail);
+        }
+
+        creditMemo.setStatus(CreditMemoStatus.VOIDED);
+        creditMemo.setVoidedTimestamp(Instant.now(clock));
+        creditMemo.setVoidedByUserId(currentUser);
+        creditMemo.setVoidReason(voidReason);
+        creditMemoRepository.save(creditMemo);
+
+        try {
+            glPostingService.postCreditMemoVoid(
+                    creditMemo.getCreditMemoId(),
+                    glConfig.getRevenueAccountId(),
+                    glConfig.getTaxPayableAccountId(),
+                    glConfig.getArAccountId(),
+                    creditMemo.getCreditAmount(),
+                    creditMemo.getTaxAmountReversed(),
+                    "Void Credit Memo " + creditMemo.getCreditMemoId() + " - " + voidReason);
+        } catch (Exception e) {
+            log.error(
+                    "Failed to post VOID GL entries for Credit Memo {}: {}",
+                    creditMemo.getCreditMemoId(),
+                    e.getMessage(),
+                    e);
+            // Generic message only — the cause is logged above; raw exception text can leak
+            // internal details (DB messages, class names) to API callers.
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to post void GL entries for credit memo " + creditMemo.getCreditMemoId());
+        }
+
+        BigDecimal balanceAfter = invoiceBalanceCalculator
+                .findInvoice(creditMemo.getOriginalInvoiceId())
+                .map(invoiceBalanceCalculator::balanceDue)
+                .orElse(BigDecimal.ZERO);
+
+        log.info(
+                "Voided Credit Memo {} (invoice {}): AR restored by {}, tax liability restored by {}",
+                creditMemo.getCreditMemoId(),
+                creditMemo.getOriginalInvoiceId(),
+                creditMemo.calculateTotalAmount(),
+                creditMemo.getTaxAmountReversed());
+
+        return buildResponse(creditMemo, balanceAfter);
+    }
+
+    /**
      * Build CreditMemoResponse from entity.
      */
     private CreditMemoResponse buildResponse(CreditMemo creditMemo, BigDecimal invoiceBalanceAfter) {
@@ -430,6 +499,9 @@ public class CreditMemoServiceImpl implements CreditMemoService {
         response.setPriorPeriodAdjustment(creditMemo.isPriorPeriodAdjustment());
         response.setOriginalPeriodId(creditMemo.getOriginalPeriodId());
         response.setCurrency(creditMemo.getCurrency());
+        response.setVoidedTimestamp(creditMemo.getVoidedTimestamp());
+        response.setVoidedByUserId(creditMemo.getVoidedByUserId());
+        response.setVoidReason(creditMemo.getVoidReason());
         response.setInvoiceBalanceAfter(invoiceBalanceAfter);
         return response;
     }
