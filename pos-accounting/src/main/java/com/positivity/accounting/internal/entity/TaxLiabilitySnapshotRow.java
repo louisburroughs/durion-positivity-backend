@@ -70,7 +70,11 @@ public class TaxLiabilitySnapshotRow {
     @Column(name = "exempt_base", nullable = false, precision = 19, scale = 4)
     private BigDecimal exemptBase;
 
-    @Column(name = "exemption_reasons", length = 1000, nullable = false)
+    /**
+     * Escaped comma-joined reason codes (TaxLiabilityCanonicalizer.joinReasons). Unbounded
+     * {@code text} in the real (Flyway) schema; the JPA length below only shapes H2 DDL for tests.
+     */
+    @Column(name = "exemption_reasons", length = 100000, nullable = false)
     private String exemptionReasons = "";
 
     @Column(name = "tax_collected_gross", nullable = false, precision = 19, scale = 4)

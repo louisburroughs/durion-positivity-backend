@@ -76,7 +76,7 @@ class TaxLiabilitySnapshotServiceImplTest {
     void freezeHappyPath() {
         AccountingPeriod period = closedPeriod();
         TaxLiabilityReport report = report("230.00");
-        when(accountingPeriodRepository.findByPeriodCode(PERIOD_CODE)).thenReturn(Optional.of(period));
+        when(accountingPeriodRepository.findWithLockByPeriodCode(PERIOD_CODE)).thenReturn(Optional.of(period));
         when(snapshotRepository.findByPeriodIdAndStatus(period.getPeriodId(), TaxLiabilitySnapshotStatus.ACTIVE))
                 .thenReturn(Optional.empty());
         when(financialReportingService.generateTaxLiability(START, END)).thenReturn(report);
@@ -100,7 +100,7 @@ class TaxLiabilitySnapshotServiceImplTest {
     @Test
     @DisplayName("freeze: unknown period -> AccountingPeriodNotFoundException")
     void freezeUnknownPeriod() {
-        when(accountingPeriodRepository.findByPeriodCode(PERIOD_CODE)).thenReturn(Optional.empty());
+        when(accountingPeriodRepository.findWithLockByPeriodCode(PERIOD_CODE)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.freeze(PERIOD_CODE, false))
                 .isInstanceOf(AccountingPeriodNotFoundException.class);
@@ -112,7 +112,7 @@ class TaxLiabilitySnapshotServiceImplTest {
     void freezeOpenPeriodRejected() {
         AccountingPeriod period = closedPeriod();
         period.setStatus(AccountingPeriodStatus.OPEN);
-        when(accountingPeriodRepository.findByPeriodCode(PERIOD_CODE)).thenReturn(Optional.of(period));
+        when(accountingPeriodRepository.findWithLockByPeriodCode(PERIOD_CODE)).thenReturn(Optional.of(period));
 
         assertThatThrownBy(() -> service.freeze(PERIOD_CODE, false))
                 .isInstanceOf(TaxSnapshotPeriodNotClosedException.class)
@@ -128,7 +128,7 @@ class TaxLiabilitySnapshotServiceImplTest {
         TaxLiabilitySnapshot existing = new TaxLiabilitySnapshot();
         UUID existingId = UUID.randomUUID();
         existing.setSnapshotId(existingId);
-        when(accountingPeriodRepository.findByPeriodCode(PERIOD_CODE)).thenReturn(Optional.of(period));
+        when(accountingPeriodRepository.findWithLockByPeriodCode(PERIOD_CODE)).thenReturn(Optional.of(period));
         when(snapshotRepository.findByPeriodIdAndStatus(period.getPeriodId(), TaxLiabilitySnapshotStatus.ACTIVE))
                 .thenReturn(Optional.of(existing));
 
@@ -148,7 +148,7 @@ class TaxLiabilitySnapshotServiceImplTest {
         existing.setSnapshotId(existingId);
         existing.setStatus(TaxLiabilitySnapshotStatus.ACTIVE);
         TaxLiabilityReport report = report("230.00");
-        when(accountingPeriodRepository.findByPeriodCode(PERIOD_CODE)).thenReturn(Optional.of(period));
+        when(accountingPeriodRepository.findWithLockByPeriodCode(PERIOD_CODE)).thenReturn(Optional.of(period));
         when(snapshotRepository.findByPeriodIdAndStatus(period.getPeriodId(), TaxLiabilitySnapshotStatus.ACTIVE))
                 .thenReturn(Optional.of(existing));
         when(financialReportingService.generateTaxLiability(START, END)).thenReturn(report);
@@ -170,7 +170,7 @@ class TaxLiabilitySnapshotServiceImplTest {
     void freezeLostRaceMapsToConflict() {
         AccountingPeriod period = closedPeriod();
         TaxLiabilityReport report = report("230.00");
-        when(accountingPeriodRepository.findByPeriodCode(PERIOD_CODE)).thenReturn(Optional.of(period));
+        when(accountingPeriodRepository.findWithLockByPeriodCode(PERIOD_CODE)).thenReturn(Optional.of(period));
         when(snapshotRepository.findByPeriodIdAndStatus(period.getPeriodId(), TaxLiabilitySnapshotStatus.ACTIVE))
                 .thenReturn(Optional.empty());
         when(financialReportingService.generateTaxLiability(START, END)).thenReturn(report);

@@ -58,7 +58,9 @@ CREATE TABLE tax_liability_snapshot_row (
     jurisdiction_name character varying(255),
     taxable_base numeric(19, 4) NOT NULL,
     exempt_base numeric(19, 4) NOT NULL,
-    exemption_reasons character varying(1000) NOT NULL DEFAULT '',
+    -- Frozen blob, not a filter key: unbounded text, since the per-period distinct reason set has
+    -- no upper bound and truncating a freeze would corrupt the audit record.
+    exemption_reasons text NOT NULL DEFAULT '',
     tax_collected_gross numeric(19, 4) NOT NULL,
     credits_netted numeric(19, 4) NOT NULL,
     net_tax numeric(19, 4) NOT NULL,

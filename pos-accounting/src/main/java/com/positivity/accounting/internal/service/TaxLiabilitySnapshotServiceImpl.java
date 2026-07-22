@@ -57,8 +57,11 @@ public class TaxLiabilitySnapshotServiceImpl implements TaxLiabilitySnapshotServ
     @Override
     @Transactional
     public @NonNull TaxLiabilitySnapshotResponse freeze(@NonNull String periodCode, boolean supersede) {
+        // Locked read (SELECT ... FOR UPDATE, same pattern as AccountingPeriodGate): a concurrent
+        // reopenPeriod updates this row and therefore serializes against the freeze, so the
+        // CLOSED status checked here still holds when the snapshot commits.
         AccountingPeriod period = accountingPeriodRepository
-                .findByPeriodCode(periodCode)
+                .findWithLockByPeriodCode(periodCode)
                 .orElseThrow(() -> new AccountingPeriodNotFoundException(
                         periodCode, "Accounting period " + periodCode + " does not exist"));
 
@@ -122,7 +125,7 @@ public class TaxLiabilitySnapshotServiceImpl implements TaxLiabilitySnapshotServ
             row.setJurisdictionName(reportRow.getJurisdictionName());
             row.setTaxableBase(reportRow.getTaxableBase());
             row.setExemptBase(reportRow.getExemptBase());
-            row.setExemptionReasons(TaxLiabilityCanonicalizer.reasons(reportRow.getExemptionReasons()));
+            row.setExemptionReasons(TaxLiabilityCanonicalizer.joinReasons(reportRow.getExemptionReasons()));
             row.setTaxCollectedGross(reportRow.getTaxCollectedGross());
             row.setCreditsNetted(reportRow.getCreditsNetted());
             row.setNetTax(reportRow.getNetTax());
@@ -246,10 +249,7 @@ public class TaxLiabilitySnapshotServiceImpl implements TaxLiabilitySnapshotServ
                 .jurisdictionName(row.getJurisdictionName())
                 .taxableBase(row.getTaxableBase())
                 .exemptBase(row.getExemptBase())
-                .exemptionReasons(
-                        row.getExemptionReasons().isEmpty()
-                                ? List.of()
-                                : List.of(row.getExemptionReasons().split(",")))
+                .exemptionReasons(TaxLiabilityCanonicalizer.splitReasons(row.getExemptionReasons()))
                 .taxCollectedGross(row.getTaxCollectedGross())
                 .creditsNetted(row.getCreditsNetted())
                 .netTax(row.getNetTax())

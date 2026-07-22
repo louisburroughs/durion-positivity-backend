@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
@@ -24,11 +25,20 @@ import org.jspecify.annotations.Nullable;
  * deterministic (state → county → city → special, then code). A re-derived report over the same
  * underlying data therefore yields the same hash, which is what the snapshot verify endpoint
  * checks.
+ *
+ * <p><strong>Injectivity:</strong> free-text fields (jurisdiction type/code/name, exemption reason
+ * codes, account code) arrive verbatim from upstream events and may contain the separator
+ * characters, so every such field is backslash-escaped ({@code \} {@code |} {@code ,} and newline)
+ * before concatenation. Without this, two semantically different reports (e.g. reasons
+ * {@code ["A,B"]} vs {@code ["A","B"]}) would canonicalize identically and verify would return a
+ * false {@code consistent=true}. The same escaping backs the {@link #joinReasons}/
+ * {@link #splitReasons} pair used to persist snapshot-row reason lists losslessly.
  */
 public final class TaxLiabilityCanonicalizer {
 
     private static final String FIELD_SEP = "|";
     private static final String ROW_SEP = "\n";
+    private static final char ESCAPE = '\\';
 
     private TaxLiabilityCanonicalizer() {
         // Utility class
@@ -46,7 +56,7 @@ public final class TaxLiabilityCanonicalizer {
         }
     }
 
-    /** Deterministic canonical string of the report (excluding {@code generatedAt}). */
+    /** Deterministic, injective canonical string of the report (excluding {@code generatedAt}). */
     @NonNull
     public static String canonicalize(@NonNull TaxLiabilityReport report) {
         StringBuilder sb = new StringBuilder();
@@ -55,17 +65,17 @@ public final class TaxLiabilityCanonicalizer {
         sb.append(report.getEndDate()).append(ROW_SEP);
 
         for (TaxLiabilityRow row : report.getRows()) {
-            sb.append(row.getJurisdictionType())
+            sb.append(escape(row.getJurisdictionType()))
                     .append(FIELD_SEP)
-                    .append(row.getJurisdictionCode())
+                    .append(escape(row.getJurisdictionCode()))
                     .append(FIELD_SEP)
-                    .append(nullSafe(row.getJurisdictionName()))
+                    .append(escape(nullSafe(row.getJurisdictionName())))
                     .append(FIELD_SEP)
                     .append(decimal(row.getTaxableBase()))
                     .append(FIELD_SEP)
                     .append(decimal(row.getExemptBase()))
                     .append(FIELD_SEP)
-                    .append(reasons(row.getExemptionReasons()))
+                    .append(joinReasons(row.getExemptionReasons()))
                     .append(FIELD_SEP)
                     .append(decimal(row.getTaxCollectedGross()))
                     .append(FIELD_SEP)
@@ -91,7 +101,7 @@ public final class TaxLiabilityCanonicalizer {
         TaxLiabilityReconciliation rec = report.getReconciliation();
         sb.append("reconciliation")
                 .append(FIELD_SEP)
-                .append(rec.getTaxPayableAccountCode())
+                .append(escape(rec.getTaxPayableAccountCode()))
                 .append(FIELD_SEP)
                 .append(decimal(rec.getGlNetActivity()))
                 .append(FIELD_SEP)
@@ -103,10 +113,65 @@ public final class TaxLiabilityCanonicalizer {
         return sb.toString();
     }
 
-    /** Comma-joined reason codes; the report already emits them distinct + ascending. */
+    /**
+     * Comma-join reason codes with each element escaped, so codes containing commas (or any
+     * separator character) survive losslessly. Inverse of {@link #splitReasons}. The report
+     * already emits reasons distinct + ascending, so the join is deterministic.
+     */
     @NonNull
-    public static String reasons(@Nullable List<String> exemptionReasons) {
-        return exemptionReasons == null ? "" : String.join(",", exemptionReasons);
+    public static String joinReasons(@Nullable List<String> exemptionReasons) {
+        if (exemptionReasons == null || exemptionReasons.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < exemptionReasons.size(); i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append(escape(exemptionReasons.get(i)));
+        }
+        return sb.toString();
+    }
+
+    /** Inverse of {@link #joinReasons}: split on unescaped commas and unescape each element. */
+    @NonNull
+    public static List<String> splitReasons(@NonNull String joined) {
+        if (joined.isEmpty()) {
+            return List.of();
+        }
+        List<String> reasons = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        for (int i = 0; i < joined.length(); i++) {
+            char c = joined.charAt(i);
+            if (c == ESCAPE && i + 1 < joined.length()) {
+                char next = joined.charAt(++i);
+                current.append(next == 'n' ? '\n' : next);
+            } else if (c == ',') {
+                reasons.add(current.toString());
+                current.setLength(0);
+            } else {
+                current.append(c);
+            }
+        }
+        reasons.add(current.toString());
+        return List.copyOf(reasons);
+    }
+
+    /** Backslash-escape the canonical separator characters so field concatenation is injective. */
+    @NonNull
+    private static String escape(@NonNull String value) {
+        StringBuilder sb = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case ESCAPE -> sb.append(ESCAPE).append(ESCAPE);
+                case '|' -> sb.append(ESCAPE).append('|');
+                case ',' -> sb.append(ESCAPE).append(',');
+                case '\n' -> sb.append(ESCAPE).append('n');
+                default -> sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 
     @NonNull

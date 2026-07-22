@@ -9,7 +9,9 @@ import com.positivity.accounting.internal.dto.TaxLiabilitySnapshotVerification;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
+import com.positivity.accounting.internal.entity.TaxLiabilitySnapshot;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
+import com.positivity.accounting.internal.enums.TaxLiabilitySnapshotStatus;
 import com.positivity.accounting.internal.exception.TaxSnapshotConflictException;
 import com.positivity.accounting.internal.exception.TaxSnapshotPeriodNotClosedException;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
@@ -26,9 +28,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -154,6 +158,58 @@ class TaxLiabilitySnapshotIT {
 
         assertThatThrownBy(() -> snapshotService.freeze(PERIOD_CODE, false))
                 .isInstanceOf(TaxSnapshotPeriodNotClosedException.class);
+    }
+
+    /**
+     * SQL-level guarantee behind the app-level conflict check: the partial unique index
+     * {@code uq_tax_liability_snapshot_active} must reject a second ACTIVE row for the same
+     * period. Runs non-transactionally (each repository call commits) so the index is actually
+     * exercised — inside the class-level rolled-back transaction it never would be.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @DisplayName("Partial unique index rejects a second ACTIVE snapshot per period at the SQL level")
+    void activePartialUniqueIndexEnforcedInDatabase() {
+        AccountingPeriod period = new AccountingPeriod();
+        period.setPeriodCode("2026-05");
+        period.setStartDate(LocalDate.of(2026, 5, 1));
+        period.setEndDate(LocalDate.of(2026, 5, 31));
+        period.setStatus(AccountingPeriodStatus.CLOSED);
+        period.setClosedAt(Instant.parse("2026-06-01T05:00:00Z"));
+        period.setClosedBy("it-controller");
+        AccountingPeriod savedPeriod = accountingPeriodRepository.save(period);
+
+        TaxLiabilitySnapshot first = minimalSnapshot(savedPeriod);
+        TaxLiabilitySnapshot second = minimalSnapshot(savedPeriod);
+        try {
+            snapshotRepository.save(first);
+            assertThatThrownBy(() -> snapshotRepository.save(second))
+                    .isInstanceOf(DataIntegrityViolationException.class);
+        } finally {
+            snapshotRepository.deleteAll(snapshotRepository.findByPeriodCodeOrderByFrozenAtDesc("2026-05"));
+            accountingPeriodRepository.delete(savedPeriod);
+        }
+    }
+
+    private static TaxLiabilitySnapshot minimalSnapshot(AccountingPeriod period) {
+        TaxLiabilitySnapshot snapshot = new TaxLiabilitySnapshot();
+        snapshot.setPeriodId(period.getPeriodId());
+        snapshot.setPeriodCode(period.getPeriodCode());
+        snapshot.setStartDate(period.getStartDate());
+        snapshot.setEndDate(period.getEndDate());
+        snapshot.setStatus(TaxLiabilitySnapshotStatus.ACTIVE);
+        snapshot.setPeriodClosedAt(period.getClosedAt());
+        snapshot.setContentHash("0".repeat(64));
+        snapshot.setTotalTaxableBase(BigDecimal.ZERO);
+        snapshot.setTotalExemptBase(BigDecimal.ZERO);
+        snapshot.setTotalTaxCollectedGross(BigDecimal.ZERO);
+        snapshot.setTotalCreditsNetted(BigDecimal.ZERO);
+        snapshot.setTotalNetTax(BigDecimal.ZERO);
+        snapshot.setTaxPayableAccountCode("2200");
+        snapshot.setGlNetActivity(BigDecimal.ZERO);
+        snapshot.setGlDrift(BigDecimal.ZERO);
+        snapshot.setReconciled(true);
+        return snapshot;
     }
 
     // ===== fixtures =====
