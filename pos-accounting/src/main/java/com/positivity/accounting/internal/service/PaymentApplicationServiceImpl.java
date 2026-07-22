@@ -24,6 +24,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -33,6 +34,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -776,24 +778,18 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
 
     /**
      * Resolve the allocation iteration order per the request's effective strategy (Issue #955,
-     * refined by Issue #976).
+     * refined by Issues #976 and #993).
      *
      * <p>{@code CALLER_ORDER} (including an absent strategy) returns the caller-supplied list
      * untouched, keeping behavior byte-identical to requests predating the field.
-     * {@code OLDEST_FIRST} returns a sorted copy ordered by ascending <em>issue/finalization
-     * date</em> ({@link ExtInvoice#getFinalizedAt()} — the point the invoice became an
-     * outstanding receivable), not by record-creation time; invoices with no finalization date
-     * sort last, and equal dates tie-break deterministically by ascending invoice id. Reordering
-     * affects allocation order only — validation, capping, and idempotency semantics are unchanged.
-     *
-     * <p><strong>Documented limitation (Issue #976, AC-4):</strong> true collections aging orders
-     * by the invoice's <em>due date</em>, which the {@code ext_invoice} replica does not yet carry
-     * (it has neither a due date nor payment terms). {@code finalizedAt} is the closest
-     * business-correct key present on the replica and matches Odoo-parity "oldest first"
-     * reconciliation, which orders by invoice date. If/when the replica and the
-     * {@code invoice.events.v1} projection are enriched with a due date (a separate story against
-     * the pos-invoice event contract, ADR-0044), {@code OLDEST_FIRST} should prefer due date and
-     * fall back to {@code finalizedAt}.
+     * {@code OLDEST_FIRST} returns a sorted copy ordered by ascending <em>due date</em>
+     * ({@link ExtInvoice#getDueDate()} — the collections-aging key frozen at finalization by
+     * pos-invoice, #993). An invoice whose replica carries no due date (defensive: a producer
+     * bug or an event predating the enrichment) falls back to its <em>issue/finalization
+     * instant</em> ({@link ExtInvoice#getFinalizedAt()}, the #976 behavior), compared on the
+     * same axis as due dates taken at UTC start-of-day. Invoices with neither key sort last,
+     * and equal keys tie-break deterministically by ascending invoice id. Reordering affects
+     * allocation order only — validation, capping, and idempotency semantics are unchanged.
      *
      * @param request the application request (strategy resolved via
      *                {@link PaymentApplicationRequest#resolveAllocationStrategy()})
@@ -807,24 +803,37 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
             return applications;
         }
 
-        Map<UUID, Instant> invoiceDates = new HashMap<>();
+        Map<UUID, Instant> agingKeys = new HashMap<>();
         for (PaymentApplicationRequest.InvoiceApplication invoiceApp : applications) {
             UUID invoiceId = invoiceApp.getInvoiceId();
-            if (!invoiceDates.containsKey(invoiceId)) {
-                invoiceDates.put(
+            if (!agingKeys.containsKey(invoiceId)) {
+                agingKeys.put(
                         invoiceId,
                         invoiceBalanceCalculator
                                 .findInvoice(invoiceId)
-                                .map(ExtInvoice::getFinalizedAt)
+                                .map(PaymentApplicationServiceImpl::agingKey)
                                 .orElse(null));
             }
         }
 
-        Comparator<PaymentApplicationRequest.InvoiceApplication> byInvoiceDateThenId = Comparator.comparing(
-                        (PaymentApplicationRequest.InvoiceApplication app) -> invoiceDates.get(app.getInvoiceId()),
+        Comparator<PaymentApplicationRequest.InvoiceApplication> byAgingKeyThenId = Comparator.comparing(
+                        (PaymentApplicationRequest.InvoiceApplication app) -> agingKeys.get(app.getInvoiceId()),
                         Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(PaymentApplicationRequest.InvoiceApplication::getInvoiceId);
-        return applications.stream().sorted(byInvoiceDateThenId).toList();
+        return applications.stream().sorted(byAgingKeyThenId).toList();
+    }
+
+    /**
+     * The {@code OLDEST_FIRST} aging key (#993): the due date (as UTC start-of-day, aging is
+     * calendar-based) when present, else the finalization instant — cheap defense against a
+     * producer that projected no due date, not a transition mechanism.
+     */
+    @Nullable
+    private static Instant agingKey(@NonNull ExtInvoice invoice) {
+        if (invoice.getDueDate() != null) {
+            return invoice.getDueDate().atStartOfDay(ZoneOffset.UTC).toInstant();
+        }
+        return invoice.getFinalizedAt();
     }
 
     private void applySingleInvoiceApplication(

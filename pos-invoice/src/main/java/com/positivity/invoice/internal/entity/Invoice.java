@@ -18,6 +18,7 @@ import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -86,6 +87,18 @@ public class Invoice {
 
     @Column(name = "finalized_by", length = 64)
     private String finalizedBy;
+
+    /**
+     * Collections-aging due date (#993): computed from {@code finalizedAt} (in the location's
+     * timezone) + the bill-to party's payment terms, frozen at finalization. Null on drafts;
+     * later {@code BillingRules} changes never move it.
+     */
+    @Column(name = "due_date")
+    private LocalDate dueDate;
+
+    /** The payment-terms rule (validated {@link com.positivity.invoice.internal.enums.PaymentTerms} code) frozen with {@link #dueDate}. */
+    @Column(name = "payment_terms_code", length = 20)
+    private String paymentTermsCode;
 
     // Pending Flyway migration: keep these fields transient until DB columns exist.
     @Transient

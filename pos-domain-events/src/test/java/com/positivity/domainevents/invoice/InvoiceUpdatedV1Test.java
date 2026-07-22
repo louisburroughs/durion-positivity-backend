@@ -81,6 +81,46 @@ class InvoiceUpdatedV1Test {
     }
 
     @Test
+    void roundTripPreservesDueDateFacts() {
+        // #993: additive collections-aging facts frozen at finalization.
+        InvoiceUpdatedV1 evt = new InvoiceUpdatedV1(
+                INVOICE_ID,
+                "INV-2026-000123",
+                WORKORDER_ID,
+                null,
+                null,
+                "party-1",
+                "FINALIZED",
+                new BigDecimal("200.00"),
+                new BigDecimal("16.53"),
+                new BigDecimal("216.53"),
+                BigDecimal.ZERO,
+                Instant.parse("2026-07-20T10:00:00Z"),
+                Instant.parse("2026-07-20T10:05:00Z"),
+                null,
+                null,
+                java.time.LocalDate.parse("2026-08-19"),
+                "NET_30");
+
+        InvoiceUpdatedV1 read = MAPPER.readValue(MAPPER.writeValueAsString(evt), InvoiceUpdatedV1.class);
+
+        assertThat(read).isEqualTo(evt);
+        assertThat(read.dueDate()).isEqualTo(java.time.LocalDate.parse("2026-08-19"));
+        assertThat(read.paymentTermsCode()).isEqualTo("NET_30");
+    }
+
+    @Test
+    void toleratesAbsentDueDateFacts() {
+        // Pre-#993 producers emit neither field; consumers must read them as null.
+        String legacyJson = MAPPER.writeValueAsString(event(null));
+        assertThat(legacyJson).doesNotContain("dueDate\":\"");
+
+        InvoiceUpdatedV1 read = MAPPER.readValue(legacyJson, InvoiceUpdatedV1.class);
+        assertThat(read.dueDate()).isNull();
+        assertThat(read.paymentTermsCode()).isNull();
+    }
+
+    @Test
     void schemaStaysAtVersionOne() {
         assertThat(InvoiceUpdatedV1.SCHEMA_VERSION).isEqualTo(1);
         assertThat(InvoiceUpdatedV1.EVENT_TYPE).isEqualTo("invoice.invoice.updated");

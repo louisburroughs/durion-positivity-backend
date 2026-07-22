@@ -16,6 +16,10 @@ CREATE TABLE ext_invoice (
     adjustments_amount numeric(19, 4),
     invoice_created_at timestamp(6) with time zone,
     finalized_at timestamp(6) with time zone,
+    -- #993: collections-aging due date frozen at finalization by pos-invoice; null on
+    -- drafts and on events predating the enrichment. OLDEST_FIRST ages by this, falling
+    -- back to finalized_at.
+    due_date date,
     aggregate_version bigint NOT NULL DEFAULT 0,
     updated_at timestamp(6) with time zone NOT NULL,
     CONSTRAINT ext_invoice_pkey PRIMARY KEY (invoice_id)
