@@ -54,12 +54,14 @@ class DomainWallsTest {
      * utility whitelist — every entry requires an ADR-0044 amendment, and any other module (or any
      * other target) still fails.
      *
-     * <p>pos-warranty: ADR-0044 amendment 2026-07-16 + {@code docs/PRD-warranty-claims-module.md}
-     * §9.4 — warranty v2 (#924) migrated its candidate-line/eligibility/vehicle-snapshot reads to
-     * event-fed {@code ext_*} replicas (ext_vehicle, ext_workorder, ext_invoice, ext_catalog);
-     * pos-customer's dead client was deleted. The sole remaining synchronous target is pos-invoice:
-     * settlement adjustment/refund writes plus their reconciliation reads stay synchronous pending a
-     * further ADR-0044 amendment on settlement-write direction (command event vs. sync).
+     * <p>pos-warranty: warranty v2 (#924) migrated its candidate-line/eligibility/vehicle-snapshot
+     * reads to event-fed {@code ext_*} replicas (ext_vehicle, ext_workorder, ext_invoice,
+     * ext_catalog) and pos-customer's dead client was deleted. The sole remaining synchronous target
+     * is pos-invoice: settlement adjustment/refund writes plus their reconciliation reads stay
+     * synchronous permanently per the <b>ADR-0044 amendment 2026-07-22</b> ("Pos-warranty settlement
+     * remains synchronous against pos-invoice") — a money-moving counter-flow that must fail loudly
+     * in the request path, with reconciliation reading authoritative post-write state. This edge is
+     * the permanent, narrowest exception; widening it requires a further ADR-0044 amendment.
      */
     private static final Map<String, Set<String>> SCOPED_MODULE_EXCEPTIONS =
             Map.of("pos-warranty", Set.of("pos-invoice"));

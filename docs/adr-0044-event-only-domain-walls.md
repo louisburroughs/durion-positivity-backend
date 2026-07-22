@@ -3,7 +3,8 @@
 - Status: **Accepted** (2026-07-08 — issue [#823](https://github.com/louisburroughs/durion-positivity-backend/issues/823));
   **enforcement live since 2026-07-14** — the Phase 5.6 flip (#902) made the `pos-archunit`
   `DomainWallsTest` build-failing with an empty violation list;
-  **amended 2026-07-16** (scoped pos-warranty v1 exception — see §Amendments)
+  **amended 2026-07-16** (scoped pos-warranty v1 exception) and **2026-07-22** (warranty v2 narrows
+  the exception to the pos-invoice settlement edge — see §Amendments)
 - Date: 2026-07-08
 - Supersedes: the domain-to-domain portions of the service-discovery client policy
   (`docs/service-discovery-migration/client-policy-matrix.md`) and the javadoc-only
@@ -215,6 +216,27 @@ pos-invoice are inherently synchronous counter flows.
   still fails the build. Widening the map requires a further amendment to this ADR.
 - **Evolution.** Migration to event-fed read-only replicas (R3) remains the target pattern for
   these reads, as the PRD itself names; it MUST accompany any warranty v2.
+
+### 2026-07-22 — Pos-warranty settlement remains synchronous against pos-invoice
+
+Following #924, `pos-warranty` v2 retires its synchronous read clients in favor of event-fed
+`ext_*` replicas for candidate-line search and reference lookups. The final exception is narrowed to
+`pos-invoice` only for settlement execution and authoritative reconciliation.
+
+- **Decision.** `InvoiceClient.createAdjustment` and `InvoiceClient.createRefund` remain synchronous
+  calls from `com.positivity.warranty.internal.client` to `pos-invoice`. The matching reconciliation
+  reads, `getInvoiceAdjustments` and `getInvoiceRefunds`, also remain synchronous.
+- **Rationale.** Warranty settlement is a money-moving counter-flow that must fail loudly in the
+  initiating request path. Replacing it with a Kafka command topic would force a pending/confirmation
+  state machine for customer-visible refunds and weaken the current "not refunded unless invoice
+  accepted it" guarantee. The reconciliation reads must check the authoritative invoice state
+  immediately after the write; an event-fed replica can lag and falsely report drift.
+- **Enforcement.** `DomainWallsTest` narrows `SCOPED_MODULE_EXCEPTIONS` to the permanent
+  `pos-warranty` → `pos-invoice` settlement edge only. The exception does not reopen any other
+  synchronous domain reads or writes, and widening it still requires a further amendment to this ADR.
+- **Boundaries.** Warranty settlement requests to `pos-invoice` MUST carry strong idempotency keys so
+  retries remain safe. Result events from `pos-invoice` remain useful for audit, analytics, and
+  downstream consumers, but they are not the settlement authority for warranty.
 
 ## Changes required in other ADRs
 
