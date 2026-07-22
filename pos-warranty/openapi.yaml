@@ -3039,16 +3039,16 @@ components:
         offset:
           type: integer
           format: int64
-        paged:
-          type: boolean
-        sort:
-          $ref: '#/components/schemas/SortObject'
         pageNumber:
           type: integer
           format: int32
         pageSize:
           type: integer
           format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        paged:
+          type: boolean
         unpaged:
           type: boolean
     SortObject:

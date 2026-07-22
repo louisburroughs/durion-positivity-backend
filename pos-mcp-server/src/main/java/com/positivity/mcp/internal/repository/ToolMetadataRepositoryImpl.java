@@ -16,7 +16,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
-@Profile("!test")
+@Profile({ "!test", "openapi" })
 public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
 
     private final JdbcTemplate jdbcTemplate;
@@ -54,9 +54,12 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 this::mapRow);
     }
 
-    // Gate 2B / #780: findAllRoleNames() and findEnabledByRoleAndWorkflow() removed — the legacy
-    // mcp_role / mcp_tool_role tables are no longer queried at runtime. Candidate gating runs
-    // solely through findTopKByEmbeddingForPermissions (permission codes + workflow state).
+    // Gate 2B / #780: findAllRoleNames() and findEnabledByRoleAndWorkflow() removed
+    // — the legacy
+    // mcp_role / mcp_tool_role tables are no longer queried at runtime. Candidate
+    // gating runs
+    // solely through findTopKByEmbeddingForPermissions (permission codes + workflow
+    // state).
 
     @Override
     public @NonNull List<ToolMetadata> findEnabledByWorkflow(@NonNull String workflowState) {
@@ -150,9 +153,12 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
 
     @Override
     public @NonNull UUID upsertDiscoveredOperation(@NonNull DiscoveredOperation operation, @NonNull String domain) {
-        // Embedding is intentionally NOT written here: it is owned by ToolEmbeddingInitializer, which
-        // backfills rows WHERE embedding IS NULL. ON CONFLICT preserves any existing embedding so
-        // re-discovery on restart does not clear it (and does not re-embed ~hundreds of ops each boot).
+        // Embedding is intentionally NOT written here: it is owned by
+        // ToolEmbeddingInitializer, which
+        // backfills rows WHERE embedding IS NULL. ON CONFLICT preserves any existing
+        // embedding so
+        // re-discovery on restart does not clear it (and does not re-embed ~hundreds of
+        // ops each boot).
         String sql = """
                 INSERT INTO mcp_tool (name, display_name, description, domain, source,
                                       http_method, http_path, service_id, input_schema, enabled)

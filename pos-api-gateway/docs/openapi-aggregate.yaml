@@ -35,6 +35,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1credit-memos
   /v1/accounting/credit-memos/{creditMemoId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1credit-memos~1{creditMemoId}
+  /v1/accounting/credit-memos/{creditMemoId}/void:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1credit-memos~1{creditMemoId}~1void
   /v1/accounting/customer-credits:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1customer-credits
   /v1/accounting/customer-credits/{creditId}:
@@ -171,6 +173,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1export
   /v1/accounting/reports/export/{exportId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1export~1{exportId}
+  /v1/accounting/reports/export/{exportId}/download:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1export~1{exportId}~1download
   /v1/accounting/reports/financial/aged-payables:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1aged-payables
   /v1/accounting/reports/financial/aged-receivables:
@@ -187,6 +191,12 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1income-statement
   /v1/accounting/reports/financial/tax-liability:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1tax-liability
+  /v1/accounting/reports/financial/tax-liability/snapshots:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1tax-liability~1snapshots
+  /v1/accounting/reports/financial/tax-liability/snapshots/{snapshotId}:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1tax-liability~1snapshots~1{snapshotId}
+  /v1/accounting/reports/financial/tax-liability/snapshots/{snapshotId}/verify:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1tax-liability~1snapshots~1{snapshotId}~1verify
   /v1/accounting/reports/financial/trial-balance:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1trial-balance
   /v1/accounting/reports/location/labor-overhead:

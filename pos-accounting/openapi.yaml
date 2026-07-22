@@ -7079,8 +7079,8 @@ components:
           example: CSV
         reportType:
           type: string
-          description: Report type key
-          example: JOURNAL_LINES
+          description: 'Report type key. Renderable types: TAX_LIABILITY, INCOME_STATEMENT, BALANCE_SHEET, TRIAL_BALANCE, GENERAL_LEDGER, AGED_RECEIVABLES, AGED_PAYABLES.'
+          example: INCOME_STATEMENT
           maxLength: 100
           minLength: 0
         startDate:
@@ -7091,13 +7091,18 @@ components:
         endDate:
           type: string
           format: date
-          description: Period end date (inclusive, YYYY-MM-DD)
+          description: Period end date (inclusive, YYYY-MM-DD). For the as-of reports (BALANCE_SHEET, TRIAL_BALANCE, AGED_RECEIVABLES, AGED_PAYABLES) this date is used as the as-of date.
           example: 2026-03-31
         organizationId:
           type: string
           format: uuid
           description: Organization UUID to scope the export
           example: d10217f9-3ec6-46b9-9c87-e7066c100c24
+        accountId:
+          type: string
+          format: uuid
+          description: Optional GL account UUID filter, honored by GENERAL_LEDGER exports only; null spans all accounts
+          example: 123e4567-e89b-12d3-a456-426614174000
         filename:
           type: string
           description: Optional output filename without extension

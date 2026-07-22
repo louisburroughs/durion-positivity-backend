@@ -237,7 +237,7 @@
                   <useTestClasspath>true</useTestClasspath>
                   <arguments>
                     <argument>--server.port=8086</argument>
-                    <argument>--spring.profiles.active=test</argument>
+                    <argument>--spring.profiles.active=test,openapi</argument>
                     <argument>--spring.main.lazy-initialization=true</argument>
                     <argument>--spring.flyway.enabled=false</argument>
                     <argument>--eureka.client.enabled=false</argument>
