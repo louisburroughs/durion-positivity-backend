@@ -49,6 +49,18 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
             CreditMemoStatus excludedStatus, Instant start, Instant end);
 
     /**
+     * Credit memos voided within the window — the T8 report's void-period restoration term
+     * (issue #997 symmetry): a void posts a reversing {@code Cr 2200} entry when it happens, so
+     * the report restores the reversed tax in that same period.
+     *
+     * @param status always {@code VOIDED}
+     * @param start  inclusive lower bound (start-of-day of the period start, UTC)
+     * @param end    inclusive upper bound (end-of-day of the period end, UTC)
+     * @return matching credit memos (unordered)
+     */
+    List<CreditMemo> findByStatusAndVoidedTimestampBetween(CreditMemoStatus status, Instant start, Instant end);
+
+    /**
      * Find all credit memos for an invoice with pagination.
      *
      * @param originalInvoiceId invoice identifier

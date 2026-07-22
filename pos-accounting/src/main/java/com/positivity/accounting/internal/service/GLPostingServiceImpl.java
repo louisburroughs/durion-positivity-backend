@@ -156,6 +156,67 @@ public class GLPostingServiceImpl implements GLPostingService {
         return posted;
     }
 
+    @Override
+    public JournalEntry postCreditMemoVoid(
+            @NonNull UUID creditMemoId,
+            @NonNull UUID revenueAccountId,
+            @NonNull UUID taxPayableAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal creditAmount,
+            @NonNull BigDecimal taxReversed,
+            @NonNull String description) {
+
+        BigDecimal totalAmount = creditAmount.add(taxReversed);
+
+        log.info(
+                "Posting Credit Memo VOID GL entry {}: debit AR {}, credit revenue {}, credit tax {}",
+                creditMemoId,
+                totalAmount,
+                creditAmount,
+                taxReversed);
+
+        JournalEntry entry = new JournalEntry();
+        entry.setTransactionDate(LocalDateTime.now(clock));
+        entry.setDescription(description);
+        entry.setSourceEventId(creditMemoId);
+
+        List<JournalEntryLine> lines = new ArrayList<>();
+
+        // Line 1: Debit AR (restore the receivable the memo had reduced)
+        JournalEntryLine arLine = new JournalEntryLine();
+        arLine.setGlAccountId(arAccountId);
+        arLine.setDebitAmount(totalAmount);
+        arLine.setCreditAmount(BigDecimal.ZERO);
+        arLine.setDescription("AR Restoration - CM VOID#" + creditMemoId);
+        lines.add(arLine);
+
+        // Line 2: Credit Revenue (re-recognize the reversed revenue)
+        JournalEntryLine revenueLine = new JournalEntryLine();
+        revenueLine.setGlAccountId(revenueAccountId);
+        revenueLine.setDebitAmount(BigDecimal.ZERO);
+        revenueLine.setCreditAmount(creditAmount);
+        revenueLine.setDescription("Revenue Restoration - CM VOID#" + creditMemoId);
+        lines.add(revenueLine);
+
+        // Line 3: Credit Sales-Tax Payable (restore the reversed tax liability)
+        JournalEntryLine taxLine = new JournalEntryLine();
+        taxLine.setGlAccountId(taxPayableAccountId);
+        taxLine.setDebitAmount(BigDecimal.ZERO);
+        taxLine.setCreditAmount(taxReversed);
+        taxLine.setDescription("Tax Restoration - CM VOID#" + creditMemoId);
+        lines.add(taxLine);
+
+        entry.setLines(lines);
+
+        // Create and post entry (period gate applies inside post — voids land in an open period)
+        JournalEntry created = journalEntryService.createJournalEntry(entry);
+        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), null);
+
+        log.info("Posted Credit Memo VOID GL entry: journal entry ID {}", posted.getJournalEntryId());
+
+        return posted;
+    }
+
     /**
      * Post a payment application (AR cash receipt) to GL.
      *

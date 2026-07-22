@@ -98,6 +98,15 @@ public class CreditMemoResponse {
     @Schema(description = "ISO 4217 currency code", example = "USD", requiredMode = NOT_REQUIRED)
     private String currency;
 
+    @Schema(description = "When the memo was voided; null unless status is VOIDED", requiredMode = NOT_REQUIRED)
+    private Instant voidedTimestamp;
+
+    @Schema(description = "User who voided the memo; null unless status is VOIDED", requiredMode = NOT_REQUIRED)
+    private String voidedByUserId;
+
+    @Schema(description = "Reason the memo was voided; null unless status is VOIDED", requiredMode = NOT_REQUIRED)
+    private String voidReason;
+
     @Schema(
             description = "Invoice outstanding balance after the credit was applied",
             example = "0.00",

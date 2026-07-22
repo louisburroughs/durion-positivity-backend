@@ -47,4 +47,24 @@ public interface CreditMemoService {
      * @throws ResponseStatusException 404 if Credit Memo not found
      */
     CreditMemoResponse getCreditMemo(UUID creditMemoId);
+
+    /**
+     * Void a POSTED Credit Memo (issue #997 symmetry).
+     *
+     * <p>The void is a new economic event in the period it happens: the memo keeps its original
+     * posting-period contribution to the T8 liability report (no retroactive restatement of
+     * closed/frozen periods), and the void posts the mirror journal entry ({@code Dr AR / Cr
+     * Revenue + Cr Sales-Tax Payable}) dated now, in an open period. The invoice's outstanding
+     * balance is restored automatically (balance sums count POSTED memos only).
+     *
+     * <p>Only POSTED memos are voidable: an APPLIED memo has been consumed and must be handled
+     * through the customer-credit lifecycle; a VOIDED memo is terminal.
+     *
+     * @param creditMemoId Credit Memo identifier
+     * @param voidReason   Mandatory reason for the audit trail
+     * @param currentUser  User voiding the Credit Memo
+     * @return Voided Credit Memo details
+     * @throws ResponseStatusException 404 if not found; 409 if not POSTED
+     */
+    CreditMemoResponse voidCreditMemo(UUID creditMemoId, String voidReason, String currentUser);
 }

@@ -740,4 +740,74 @@ class CreditMemoServiceTest {
             return memo;
         });
     }
+
+    // ===== Void (issue #997 symmetry) =====
+
+    @Test
+    @DisplayName("void: POSTED memo flips to VOIDED and posts the mirror GL entry")
+    void voidPostedMemo() {
+        when(creditMemoRepository.findById(testCreditMemoId)).thenReturn(java.util.Optional.of(testCreditMemo));
+        when(creditMemoRepository.save(any(CreditMemo.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(invoiceBalanceCalculator.findInvoice(testInvoiceId)).thenReturn(java.util.Optional.of(testInvoice));
+        when(invoiceBalanceCalculator.balanceDue(testInvoice)).thenReturn(new BigDecimal("110.00"));
+
+        CreditMemoResponse response = service.voidCreditMemo(testCreditMemoId, "Wrong invoice", "void-user");
+
+        assertThat(response.getStatus()).isEqualTo(CreditMemoStatus.VOIDED);
+        assertThat(response.getVoidedTimestamp()).isEqualTo(Instant.now(TEST_CLOCK));
+        assertThat(response.getVoidedByUserId()).isEqualTo("void-user");
+        assertThat(response.getVoidReason()).isEqualTo("Wrong invoice");
+        assertThat(response.getInvoiceBalanceAfter()).isEqualByComparingTo("110.00");
+        // Mirror entry: Dr AR total / Cr Revenue creditAmount + Cr Tax taxReversed.
+        verify(glPostingService)
+                .postCreditMemoVoid(
+                        eq(testCreditMemoId),
+                        eq(testRevenueAccountId),
+                        eq(testTaxAccountId),
+                        eq(testArAccountId),
+                        eq(new BigDecimal("50.00")),
+                        eq(new BigDecimal("5.00")),
+                        anyString());
+    }
+
+    @Test
+    @DisplayName("void: APPLIED memo is rejected 409 (consumed), nothing saved or posted")
+    void voidAppliedMemoRejected() {
+        testCreditMemo.setStatus(CreditMemoStatus.APPLIED);
+        when(creditMemoRepository.findById(testCreditMemoId)).thenReturn(java.util.Optional.of(testCreditMemo));
+
+        assertThatThrownBy(() -> service.voidCreditMemo(testCreditMemoId, "reason", "void-user"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(
+                                ((ResponseStatusException) ex).getStatusCode().value())
+                        .isEqualTo(409));
+        verify(creditMemoRepository, org.mockito.Mockito.never()).save(any());
+        verify(glPostingService, org.mockito.Mockito.never())
+                .postCreditMemoVoid(any(), any(), any(), any(), any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("void: already-VOIDED memo is rejected 409 (terminal)")
+    void voidVoidedMemoRejected() {
+        testCreditMemo.setStatus(CreditMemoStatus.VOIDED);
+        when(creditMemoRepository.findById(testCreditMemoId)).thenReturn(java.util.Optional.of(testCreditMemo));
+
+        assertThatThrownBy(() -> service.voidCreditMemo(testCreditMemoId, "reason", "void-user"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(
+                                ((ResponseStatusException) ex).getStatusCode().value())
+                        .isEqualTo(409));
+    }
+
+    @Test
+    @DisplayName("void: unknown memo -> 404")
+    void voidUnknownMemo() {
+        when(creditMemoRepository.findById(testCreditMemoId)).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> service.voidCreditMemo(testCreditMemoId, "reason", "void-user"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(
+                                ((ResponseStatusException) ex).getStatusCode().value())
+                        .isEqualTo(404));
+    }
 }

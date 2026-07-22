@@ -3094,6 +3094,57 @@ paths:
         - accounting:credit-memo:create
       x-required-permissions:
       - accounting:credit-memo:create
+  /v1/accounting/credit-memos/{creditMemoId}/void:
+    post:
+      tags:
+      - Credit Memos
+      summary: Void a posted credit memo
+      description: 'Void a POSTED Credit Memo: posts the mirror GL entry (Dr AR / Cr Revenue + Cr Sales-Tax Payable) dated at void time and restores the invoice''s outstanding balance. The memo''s original posting-period figures are never restated; the tax-liability report restores the reversed tax in the void''s period. Only POSTED memos are voidable — APPLIED memos have been consumed and VOIDED is terminal.'
+      operationId: voidCreditMemo
+      parameters:
+      - name: creditMemoId
+        in: path
+        description: Credit Memo id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoidCreditMemoRequest'
+        required: true
+      responses:
+        '200':
+          description: Credit memo voided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditMemoResponse'
+        '400':
+          description: Missing or invalid void reason
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditMemoResponse'
+        '404':
+          description: Credit memo not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditMemoResponse'
+        '409':
+          description: Credit memo is not in POSTED status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditMemoResponse'
+      security:
+      - bearerAuth:
+        - accounting:credit-memo:void
+      x-required-permissions:
+      - accounting:credit-memo:void
   /v1/accounting/audit/refund:
     post:
       tags:
@@ -4142,6 +4193,62 @@ paths:
         - accounting:report:export
       x-required-permissions:
       - accounting:report:export
+  /v1/accounting/reports/export/{exportId}/download:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Download rendered export artifact
+      description: Download the rendered CSV or PDF artifact of a COMPLETED export job.
+      operationId: downloadExport
+      parameters:
+      - name: exportId
+        in: path
+        description: Export job UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Rendered artifact returned
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+        '404':
+          description: Export job or artifact not found
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+        '409':
+          description: Export job is not COMPLETED
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+      security:
+      - bearerAuth:
+        - accounting:report:export
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reconciliations:
     get:
       tags:
@@ -7044,6 +7151,10 @@ components:
           - XLSX
           - JSON
           example: CSV
+        failureReason:
+          type: string
+          description: Failure reason (only present when status is FAILED)
+          example: Rendering is not supported for reportType 'INCOME_STATEMENT'
         reportType:
           type: string
           description: Report type that was exported
@@ -8508,6 +8619,16 @@ components:
           type: string
           description: ISO 4217 currency code
           example: USD
+        voidedTimestamp:
+          type: string
+          format: date-time
+          description: When the memo was voided; null unless status is VOIDED
+        voidedByUserId:
+          type: string
+          description: User who voided the memo; null unless status is VOIDED
+        voidReason:
+          type: string
+          description: Reason the memo was voided; null unless status is VOIDED
         invoiceBalanceAfter:
           type: number
           description: Invoice outstanding balance after the credit was applied
@@ -8518,6 +8639,18 @@ components:
       - creditMemoId
       - originalInvoiceId
       - status
+    VoidCreditMemoRequest:
+      type: object
+      description: Void a POSTED credit memo, restoring AR and the reversed tax liability
+      properties:
+        voidReason:
+          type: string
+          description: Reason the memo is being voided (audit trail)
+          example: Issued against the wrong invoice
+          maxLength: 1000
+          minLength: 0
+      required:
+      - voidReason
     RefundRequest:
       type: object
       description: Request to record a refund audit event

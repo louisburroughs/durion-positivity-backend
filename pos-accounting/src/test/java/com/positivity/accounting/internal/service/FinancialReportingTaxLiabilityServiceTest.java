@@ -375,6 +375,73 @@ class FinancialReportingTaxLiabilityServiceTest {
                 .build();
     }
 
+    @Test
+    @DisplayName("#997 void symmetry: a credit voided in-period restores its reversed tax in the void's period")
+    void creditVoidedInPeriod_restoresReversedTax() {
+        // Invoice side: 65.00 collected in-period.
+        when(extInvoiceRepository.findByFinalizedAtBetween(any(), any())).thenReturn(List.of(invoiceFinalized(INV1)));
+        List<ExtInvoiceTax> master = List.of(taxRow(INV1, "STATE", "WA", "1000.00", "65.00", false, null));
+        when(extInvoiceTaxRepository.findByInvoiceIdIn(anyCollection())).thenAnswer(call -> {
+            Collection<UUID> ids = call.getArgument(0);
+            return master.stream().filter(r -> ids.contains(r.getInvoiceId())).toList();
+        });
+
+        // The credit posted in a PRIOR period (not selected by the posted-credit query), was
+        // voided in THIS period. Its void reversal (Cr 2200 25.00) is on this period's ledger,
+        // so the report must restore 25.00 here: creditsNetted -25, net tax 65 + 25 = 90.
+        CreditMemo voided = creditMemo(INV1, "25.00");
+        voided.setStatus(CreditMemoStatus.VOIDED);
+        voided.setPostedTimestamp(Instant.parse("2026-05-15T00:00:00Z"));
+        voided.setVoidedTimestamp(Instant.parse("2026-06-20T00:00:00Z"));
+        when(creditMemoRepository.findByStatusNotAndPostedTimestampBetween(eq(CreditMemoStatus.DRAFT), any(), any()))
+                .thenReturn(List.of());
+        when(creditMemoRepository.findByStatusAndVoidedTimestampBetween(eq(CreditMemoStatus.VOIDED), any(), any()))
+                .thenReturn(List.of(voided));
+        when(creditMemoTaxRepository.findByCreditMemoIdIn(anyList()))
+                .thenReturn(List.of(attribution(voided.getCreditMemoId(), "STATE", "WA", "25.00")));
+        // Ledger: Cr 2200 65.00 (invoice) + Cr 2200 25.00 (void restoration) = 90.00 net.
+        stubTaxPayableActivity("-90.00");
+
+        TaxLiabilityReport report = service.generateTaxLiability(START, END);
+
+        assertThat(report.getRows().get(0).getCreditsNetted()).isEqualByComparingTo("-25.00");
+        assertThat(report.getRows().get(0).getNetTax()).isEqualByComparingTo("90.00");
+        assertThat(report.getTotalNetTax()).isEqualByComparingTo("90.00");
+        assertThat(report.getReconciliation().getUnattributedCredits()).isEqualByComparingTo("0");
+        assertThat(report.getReconciliation().getDrift()).isEqualByComparingTo("0.00");
+        assertThat(report.getReconciliation().getReconciled()).isTrue();
+    }
+
+    @Test
+    @DisplayName("#997 void symmetry: posted and voided in the same period nets to zero credit contribution")
+    void creditPostedAndVoidedSamePeriod_netsToZero() {
+        when(extInvoiceRepository.findByFinalizedAtBetween(any(), any())).thenReturn(List.of(invoiceFinalized(INV1)));
+        List<ExtInvoiceTax> master = List.of(taxRow(INV1, "STATE", "WA", "1000.00", "65.00", false, null));
+        when(extInvoiceTaxRepository.findByInvoiceIdIn(anyCollection())).thenAnswer(call -> {
+            Collection<UUID> ids = call.getArgument(0);
+            return master.stream().filter(r -> ids.contains(r.getInvoiceId())).toList();
+        });
+
+        CreditMemo voided = creditMemo(INV1, "25.00");
+        voided.setStatus(CreditMemoStatus.VOIDED);
+        voided.setVoidedTimestamp(Instant.parse("2026-06-25T00:00:00Z"));
+        // Selected by BOTH queries: posted in-period (status != DRAFT) and voided in-period.
+        when(creditMemoRepository.findByStatusNotAndPostedTimestampBetween(eq(CreditMemoStatus.DRAFT), any(), any()))
+                .thenReturn(List.of(voided));
+        when(creditMemoRepository.findByStatusAndVoidedTimestampBetween(eq(CreditMemoStatus.VOIDED), any(), any()))
+                .thenReturn(List.of(voided));
+        when(creditMemoTaxRepository.findByCreditMemoIdIn(anyList()))
+                .thenReturn(List.of(attribution(voided.getCreditMemoId(), "STATE", "WA", "25.00")));
+        // Ledger: Cr 65 (invoice) + Dr 25 (posting) + Cr 25 (void) = 65 net.
+        stubTaxPayableActivity("-65.00");
+
+        TaxLiabilityReport report = service.generateTaxLiability(START, END);
+
+        assertThat(report.getRows().get(0).getCreditsNetted()).isEqualByComparingTo("0.00");
+        assertThat(report.getTotalNetTax()).isEqualByComparingTo("65.00");
+        assertThat(report.getReconciliation().getDrift()).isEqualByComparingTo("0.00");
+    }
+
     private static CreditMemo creditMemo(UUID originalInvoiceId, String taxReversed) {
         CreditMemo credit = new CreditMemo();
         credit.setCreditMemoId(UUID.randomUUID());
