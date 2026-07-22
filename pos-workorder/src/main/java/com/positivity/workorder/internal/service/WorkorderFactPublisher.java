@@ -4,8 +4,10 @@ import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
 import com.positivity.workorder.internal.config.OutboxEventWriter;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
+import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -38,6 +40,7 @@ public class WorkorderFactPublisher {
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
     private final WorkorderRepository workorderRepository;
     private final WorkorderPartRepository workorderPartRepository;
+    private final WorkorderServiceRepository workorderServiceRepository;
 
     /** Mark a workorder as changed in the current transaction; one fact is emitted at commit. */
     public void markChanged(@NonNull UUID workorderId) {
@@ -83,14 +86,20 @@ public class WorkorderFactPublisher {
             List<WorkorderUpdatedV1.PartLine> parts = workorderPartRepository.findByWorkorderId(workorderId).stream()
                     .map(WorkorderFactPublisher::toPartLine)
                     .toList();
+            List<WorkorderUpdatedV1.ServiceLine> services =
+                    workorderServiceRepository.findByWorkOrder_Id(workorderId).stream()
+                            .map(WorkorderFactPublisher::toServiceLine)
+                            .toList();
             WorkorderUpdatedV1 payload = new WorkorderUpdatedV1(
                     workorder.getId(),
                     workorder.getWorkorderNumber(),
                     workorder.getStatus() != null ? workorder.getStatus().name() : null,
                     workorder.getShopId(),
                     workorder.getCustomerId(),
+                    workorder.getVehicleId(),
                     workorder.getInvoiceId(),
                     parts,
+                    services,
                     workorder.getCreatedAt(),
                     workorder.getUpdatedAt());
             writer.publish(WorkorderUpdatedV1.EVENT_TYPE, workorderId.toString(), payload);
@@ -98,6 +107,23 @@ public class WorkorderFactPublisher {
     }
 
     private static WorkorderUpdatedV1.PartLine toPartLine(@NonNull WorkorderPart part) {
-        return new WorkorderUpdatedV1.PartLine(part.getId(), part.getProductEntityId(), part.getQuantity());
+        return new WorkorderUpdatedV1.PartLine(
+                part.getId(),
+                part.getProductEntityId(),
+                part.getDescription(),
+                part.getQuantity(),
+                part.getUnitPrice(),
+                part.getLineTotal(),
+                part.getPhotoEvidenceUrl());
+    }
+
+    private static WorkorderUpdatedV1.ServiceLine toServiceLine(@NonNull WorkorderServiceLine service) {
+        return new WorkorderUpdatedV1.ServiceLine(
+                service.getId(),
+                service.getDescription(),
+                service.getQuantity(),
+                service.getUnitPrice(),
+                service.getLineTotal(),
+                service.getPhotoEvidenceUrl());
     }
 }
