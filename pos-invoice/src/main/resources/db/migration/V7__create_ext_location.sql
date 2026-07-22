@@ -12,7 +12,6 @@ CREATE TABLE ext_location (
     region varchar(64),
     postal_code varchar(32),
     country varchar(8),
-    timezone varchar(64),
     aggregate_version bigint NOT NULL,
     updated_at timestamp(6) with time zone NOT NULL,
     CONSTRAINT ext_location_pkey PRIMARY KEY (location_id)
