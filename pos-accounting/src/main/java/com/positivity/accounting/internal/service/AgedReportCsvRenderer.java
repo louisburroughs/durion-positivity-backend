@@ -17,9 +17,10 @@ import org.springframework.stereotype.Component;
  * covers both; only the report key and the party column headers differ.
  *
  * <p>Column and row order are fixed: metadata block (the export request's
- * {@code endDate} is used as the as-of date), per-party rows in report order
- * (ordered by party name) with the aging-bucket columns defined by the report
- * DTOs (current / 31-60 / 61-90 / 90+), each row's total, and a grand-total row.
+ * {@code endDate} is used as the as-of date), per-party rows in the
+ * deterministic order produced by the report DTO, with the aging-bucket columns
+ * defined by the report DTOs (current / 31-60 / 61-90 / 90+), each row's total,
+ * and a grand-total row.
  * All figures are emitted with {@link BigDecimal#toPlainString()} so the CSV
  * matches the JSON report to the cent. The volatile {@code generatedAt}
  * timestamp is intentionally excluded so identical report data always renders

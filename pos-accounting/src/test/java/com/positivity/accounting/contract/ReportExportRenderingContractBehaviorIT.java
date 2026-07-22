@@ -171,7 +171,24 @@ class ReportExportRenderingContractBehaviorIT extends BaseContractIntegrationTes
         JsonNode json =
                 fetchJson(get("/v1/accounting/reports/financial/balance-sheet").param("asOfDate", END.toString()));
 
-        String csv = exportCsv("BALANCE_SHEET");
+        String created = requestExport("BALANCE_SHEET", "CSV", "")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String id = objectMapper.readTree(created).get("exportId").asText();
+        // As-of default filename carries only the as-of date, not a period range.
+        String csv = mockMvc.perform(withAuth(
+                        get("/v1/accounting/reports/export/{exportId}/download", id),
+                        "reporting:view:financial-statements"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                                "Content-Disposition",
+                                org.hamcrest.Matchers.containsString("balance-sheet-" + END + ".csv")))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
         String[] lines = csv.split("\n", -1);
 
         assertEquals("Report,As-Of Date", lines[0]);

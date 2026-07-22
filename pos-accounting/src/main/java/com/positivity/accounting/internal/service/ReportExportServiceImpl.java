@@ -75,6 +75,12 @@ public class ReportExportServiceImpl implements ReportExportService {
             AGED_RECEIVABLES,
             AGED_PAYABLES);
 
+    /**
+     * As-of report types: rendering uses the request's {@code endDate} as the
+     * as-of date, so default filenames carry only that date.
+     */
+    static final Set<String> AS_OF_REPORT_TYPES = Set.of(BALANCE_SHEET, TRIAL_BALANCE, AGED_RECEIVABLES, AGED_PAYABLES);
+
     private static final String PDF_TEMPLATE_ID = "DEFAULT_STANDARD_TEMPLATE";
 
     /**
@@ -235,9 +241,11 @@ public class ReportExportServiceImpl implements ReportExportService {
     }
 
     private static String defaultBaseName(ReportExportRequest request) {
-        return request.getReportType().toLowerCase(Locale.ROOT).replace('_', '-')
-                + "-" + request.getStartDate()
-                + "-" + request.getEndDate();
+        String key = request.getReportType().toLowerCase(Locale.ROOT).replace('_', '-');
+        if (AS_OF_REPORT_TYPES.contains(request.getReportType())) {
+            return key + "-" + request.getEndDate();
+        }
+        return key + "-" + request.getStartDate() + "-" + request.getEndDate();
     }
 
     /**
