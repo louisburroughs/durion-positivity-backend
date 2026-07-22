@@ -50,6 +50,12 @@ public class VehicleEventPublisher {
         // strictly increasing per vehicle (create=0, updates=1,2,...), which the consumer's
         // stale-event guard relies on.
         entityManager.flush();
+        VehicleRecord.OdometerReading odometer = vehicle.getOdometer();
+        Integer odometerValue =
+                odometer == null || odometer.getValue() == null ? null : Math.toIntExact(odometer.getValue());
+        String odometerUnit = odometer == null || odometer.getUnit() == null
+                ? null
+                : odometer.getUnit().name();
         VehicleUpdatedV1 payload = new VehicleUpdatedV1(
                 vehicle.getVehicleId(),
                 vehicle.getAccountId(),
@@ -64,6 +70,8 @@ public class VehicleEventPublisher {
                 vehicle.getModel(),
                 vehicle.getTrim(),
                 Boolean.TRUE.equals(vehicle.getIsActive()),
+                odometerValue,
+                odometerUnit,
                 vehicle.getCreatedAt(),
                 vehicle.getUpdatedAt());
         DomainEventEnvelope<VehicleUpdatedV1> envelope = DomainEventEnvelope.of(

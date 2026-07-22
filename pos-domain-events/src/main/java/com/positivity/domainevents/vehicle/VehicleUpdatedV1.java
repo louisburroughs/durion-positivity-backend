@@ -20,6 +20,12 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>The envelope's {@code aggregateVersion} is the vehicle row's JPA optimistic-lock version,
  * so consumers can drop stale out-of-order deliveries.
+ *
+ * <p>{@code odometerValue}/{@code odometerUnit} are the registry's last-recorded odometer reading
+ * (additive within schema v1, ADR-0044 §3 — null for producers/older events that carry none).
+ * {@code odometerUnit} is the {@code OdometerUnit} name ({@code MILES}/{@code KILOMETERS}). They
+ * feed pos-warranty's {@code ext_vehicle} replica, which froze the VIN + odometer onto a claim
+ * that the retired synchronous {@code VehicleInventoryClient} previously supplied (#924).
  */
 public record VehicleUpdatedV1(
         @NonNull UUID vehicleId,
@@ -35,6 +41,8 @@ public record VehicleUpdatedV1(
         @Nullable String model,
         @Nullable String trim,
         boolean active,
+        @Nullable Integer odometerValue,
+        @Nullable String odometerUnit,
         @Nullable Instant createdAt,
         @Nullable Instant updatedAt) {
 
