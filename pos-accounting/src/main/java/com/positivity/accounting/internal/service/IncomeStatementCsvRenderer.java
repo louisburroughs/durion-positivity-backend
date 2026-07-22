@@ -39,7 +39,7 @@ public class IncomeStatementCsvRenderer {
 
         csv.append("Line Item,Amount\n");
         for (Map.Entry<String, BigDecimal> line : report.getLineItems().entrySet()) {
-            csv.append(CsvFormat.escape(line.getKey()))
+            csv.append(CsvFormat.escapeText(line.getKey()))
                     .append(',')
                     .append(CsvFormat.amount(line.getValue()))
                     .append('\n');

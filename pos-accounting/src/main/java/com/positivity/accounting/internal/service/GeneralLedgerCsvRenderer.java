@@ -43,13 +43,13 @@ public class GeneralLedgerCsvRenderer {
                 .append(',')
                 .append(report.getEndDate())
                 .append(',')
-                .append(report.getAccountId() == null ? "ALL" : CsvFormat.escape(report.getAccountId()))
+                .append(report.getAccountId() == null ? "ALL" : CsvFormat.escapeText(report.getAccountId()))
                 .append("\n\n");
 
         csv.append(ROW_HEADER).append('\n');
         for (GeneralLedgerAccountSection section : report.getAccounts()) {
-            String number = CsvFormat.escape(section.getAccountNumber());
-            String name = CsvFormat.escape(section.getAccountName());
+            String number = CsvFormat.escapeText(section.getAccountNumber());
+            String name = CsvFormat.escapeText(section.getAccountName());
 
             csv.append(number)
                     .append(',')
@@ -62,11 +62,11 @@ public class GeneralLedgerCsvRenderer {
                         .append(',')
                         .append(name)
                         .append(',')
-                        .append(CsvFormat.escape(line.getEntryNumber()))
+                        .append(CsvFormat.escapeText(line.getEntryNumber()))
                         .append(',')
                         .append(line.getTransactionDate())
                         .append(',')
-                        .append(CsvFormat.escape(line.getDescription()))
+                        .append(CsvFormat.escapeText(line.getDescription()))
                         .append(',')
                         .append(amount(line.getDebitAmount()))
                         .append(',')

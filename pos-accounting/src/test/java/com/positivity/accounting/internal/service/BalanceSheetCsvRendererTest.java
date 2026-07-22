@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.positivity.accounting.internal.dto.BalanceSheetReport;
 import java.math.BigDecimal;
@@ -47,6 +48,25 @@ class BalanceSheetCsvRendererTest {
         second.setGeneratedAt(Instant.parse("2030-01-01T00:00:00Z"));
 
         assertEquals(renderer.render(first), renderer.render(second));
+    }
+
+    @Test
+    @DisplayName("Line codes starting with =, +, or @ are neutralized; negative amounts stay plain")
+    void neutralizesFormulaLeadingLineCodes() {
+        BalanceSheetReport report = report();
+        Map<String, BigDecimal> lineItems = new LinkedHashMap<>();
+        lineItems.put("=2+5", new BigDecimal("1.00"));
+        lineItems.put("+ASSET", new BigDecimal("2.00"));
+        lineItems.put("@EQUITY", new BigDecimal("3.00"));
+        report.setLineItems(lineItems);
+        report.setTotalEquity(new BigDecimal("-123.45"));
+
+        String csv = renderer.render(report);
+
+        assertTrue(csv.contains("'=2+5,1.00"));
+        assertTrue(csv.contains("'+ASSET,2.00"));
+        assertTrue(csv.contains("'@EQUITY,3.00"));
+        assertTrue(csv.contains("TOTAL_EQUITY,-123.45"), "negative figures must stay plain, not neutralized");
     }
 
     private static BalanceSheetReport report() {

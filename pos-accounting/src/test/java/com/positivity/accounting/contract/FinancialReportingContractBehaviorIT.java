@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.accounting.BaseContractIntegrationTest;
+import com.positivity.accounting.internal.dto.IncomeStatementReport;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
 import com.positivity.accounting.internal.enums.AccountType;
@@ -14,6 +15,10 @@ import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
+import com.positivity.accounting.internal.service.IncomeStatementCsvRenderer;
+import com.positivity.accounting.service.FinancialReportingService;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,6 +51,12 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private GLAccountRepository glAccountRepository;
+
+    @Autowired
+    private FinancialReportingService financialReportingService;
+
+    @Autowired
+    private IncomeStatementCsvRenderer incomeStatementCsvRenderer;
 
     // Fixed UUIDs for deterministic testing
     private static final UUID REVENUE_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
@@ -223,6 +234,41 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
         assertThat(json2).contains("\"startDate\":\"2024-01-01\"");
         assertThat(json1).contains("\"endDate\":\"2024-12-31\"");
         assertThat(json2).contains("\"endDate\":\"2024-12-31\"");
+    }
+
+    @Test
+    @DisplayName("Statement-line ordering is deterministic under displayOrder ties (issue #1018)")
+    void testStatementLineOrderingDeterministicUnderDisplayOrderTies() {
+        // Two extra income-statement lines sharing EXPENSE_COGS's displayOrder (20),
+        // saved in reverse-alphabetical order so insertion order cannot masquerade
+        // as the deterministic order.
+        saveIncomeStatementMapping("00000000-0000-0000-0000-000000000006", "EXPENSE_ZZ_TIE", 20);
+        saveIncomeStatementMapping("00000000-0000-0000-0000-000000000007", "EXPENSE_AA_TIE", 20);
+
+        IncomeStatementReport first =
+                financialReportingService.generateIncomeStatement(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 12, 31));
+        IncomeStatementReport second =
+                financialReportingService.generateIncomeStatement(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 12, 31));
+
+        // displayOrder ascending, statementLineCode ascending within the tie
+        assertThat(first.getLineItems().keySet())
+                .containsExactly("REVENUE_SALES", "EXPENSE_AA_TIE", "EXPENSE_COGS", "EXPENSE_ZZ_TIE");
+        assertThat(List.copyOf(second.getLineItems().keySet()))
+                .isEqualTo(List.copyOf(first.getLineItems().keySet()));
+        assertThat(incomeStatementCsvRenderer.render(second)).isEqualTo(incomeStatementCsvRenderer.render(first));
+    }
+
+    private void saveIncomeStatementMapping(String mappingId, String lineCode, int displayOrder) {
+        statementLineMappingRepository.save(StatementLineMapping.builder()
+                .mappingId(UUID.fromString(mappingId))
+                .glAccount(new GLAccount(COGS_ACCOUNT_ID))
+                .accountName("Cost of Goods Sold")
+                .statementType(StatementType.INCOME_STATEMENT)
+                .statementLineCode(lineCode)
+                .lineDescription("Tie-break test line")
+                .displayOrder(displayOrder)
+                .operation(OperationType.SUM)
+                .build());
     }
 
     // ========== Test Data Setup ==========

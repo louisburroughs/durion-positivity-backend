@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.positivity.accounting.internal.dto.EntryNumberGapCheck;
 import com.positivity.accounting.internal.dto.TrialBalanceReport;
@@ -59,6 +60,20 @@ class TrialBalanceCsvRendererTest {
         second.setGeneratedAt(Instant.parse("2030-01-01T00:00:00Z"));
 
         assertEquals(renderer.render(first), renderer.render(second));
+    }
+
+    @Test
+    @DisplayName("Account names starting with =, +, or @ are neutralized; negative amounts stay plain")
+    void neutralizesFormulaLeadingAccountNames() {
+        TrialBalanceReport report = report();
+        report.getRows().get(0).setAccountName("=HYPERLINK(\"http://evil\",\"click\")");
+        report.getRows().get(1).setAccountName("+Accounts @Payable");
+
+        String csv = renderer.render(report);
+
+        assertTrue(csv.contains("1000,\"'=HYPERLINK(\"\"http://evil\"\",\"\"click\"\")\",125000.00"));
+        assertTrue(csv.contains("2000,'+Accounts @Payable,10000.00"));
+        assertTrue(csv.contains(",-80000.00\n"), "negative figures must stay plain, not neutralized");
     }
 
     private static TrialBalanceReport report() {
