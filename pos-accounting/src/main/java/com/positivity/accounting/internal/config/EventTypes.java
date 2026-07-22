@@ -16,7 +16,10 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 82 event types (includes +1 from the sales-tax liability report
+     * Total: 86 event types (includes +4 from the tax-liability period-close freeze
+     * (Issue #998 Phase-2 item 2): TAX_LIABILITY_SNAPSHOT_FREEZE,
+     * TAX_LIABILITY_SNAPSHOT_LIST, TAX_LIABILITY_SNAPSHOT_GET,
+     * TAX_LIABILITY_SNAPSHOT_VERIFY, +1 from the sales-tax liability report
      * (Story T8, Issue #966): REPORT_TAX_LIABILITY_GENERATE, +10 from manual CSV bank reconciliation
      * (Story F2, Issue #965): ACCOUNTING_RECONCILIATION_IMPORT,
      * ACCOUNTING_RECONCILIATION_MATCH, ACCOUNTING_RECONCILIATION_UNMATCH,
@@ -174,6 +177,21 @@ public final class EventTypes {
                 EventTypeRegistration.search(
                                 "REPORT_TAX_LIABILITY_GENERATE",
                                 "Generate Sales-Tax Liability report (per-jurisdiction taxable/exempt base, net tax, GL drift)")
+                        .build(),
+
+                // TaxLiabilitySnapshotController - 4 events (Issue #998 Phase-2 item 2)
+                EventTypeRegistration.write(
+                                "TAX_LIABILITY_SNAPSHOT_FREEZE",
+                                "Freeze the Sales-Tax Liability report for a closed accounting period")
+                        .build(),
+                EventTypeRegistration.search("TAX_LIABILITY_SNAPSHOT_LIST", "List frozen Sales-Tax Liability snapshots")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "TAX_LIABILITY_SNAPSHOT_GET", "Get a frozen Sales-Tax Liability snapshot by id")
+                        .build(),
+                EventTypeRegistration.search(
+                                "TAX_LIABILITY_SNAPSHOT_VERIFY",
+                                "Re-derive a frozen Sales-Tax Liability snapshot from live data and compare hashes")
                         .build(),
 
                 // LaborOverheadReportController - 1 event (CAP-316)

@@ -94,3 +94,5 @@ permissions:
     description: "View processor settlements and reconciliation lines"
   - name: "accounting:report:export"
     description: "Export report"
+  - name: "accounting:tax-snapshot:freeze"
+    description: "Freeze the sales-tax liability report for a closed accounting period"
