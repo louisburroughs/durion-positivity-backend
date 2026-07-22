@@ -2,8 +2,10 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
+import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
+import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
@@ -23,7 +25,12 @@ import org.springframework.stereotype.Component;
  * happens to the receivable afterwards — payment applications, reversals, credit memos — so the
  * balance due is computed here, never fetched from another service:
  *
- * <pre>balanceDue = total − (applied − reversed) − postedCredits</pre>
+ * <pre>balanceDue = total − (applied − reversed) − postedCreditMemos − appliedCustomerCredits</pre>
+ *
+ * <p>The last term is the customer-credit draw-down (issue #992): applying an open credit posts
+ * {@code Dr Customer Credit Liability / Cr AR}, so the receivable really is settled and the
+ * balance must reflect it — otherwise a credit-settled invoice would still read as outstanding
+ * and could be paid or credited twice.
  */
 @Component
 @RequiredArgsConstructor
@@ -36,6 +43,7 @@ public class InvoiceBalanceCalculator {
     private final PaymentApplicationRepository paymentApplicationRepository;
     private final PaymentApplicationReversalRepository reversalRepository;
     private final CreditMemoRepository creditMemoRepository;
+    private final CustomerCreditTransactionRepository creditTransactionRepository;
 
     public Optional<ExtInvoice> findInvoice(@NonNull UUID invoiceId) {
         return extInvoiceRepository.findById(invoiceId);
@@ -55,7 +63,9 @@ public class InvoiceBalanceCalculator {
         BigDecimal reversed = reversalRepository.sumReversedAmountByInvoiceId(invoiceId);
         BigDecimal credited =
                 creditMemoRepository.sumCreditedAmountByInvoiceIdAndStatus(invoiceId, CreditMemoStatus.POSTED);
-        return total.subtract(applied).add(reversed).subtract(credited);
+        BigDecimal creditApplied = creditTransactionRepository.sumAmountByInvoiceIdAndType(
+                invoiceId, CustomerCreditTransactionType.APPLICATION);
+        return total.subtract(applied).add(reversed).subtract(credited).subtract(creditApplied);
     }
 
     /**

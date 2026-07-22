@@ -1,12 +1,15 @@
 package com.positivity.accounting.internal.entity;
 
+import com.positivity.accounting.internal.enums.CustomerCreditStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
@@ -15,9 +18,11 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * Business Rules:
  * - Created when payment amount exceeds invoice application total
  * - Represents remaining payment value as explicit AR credit
- * - Can be applied to future invoices (not implemented in CAP:051)
  * - Once created, payment.unappliedAmount should be 0 (credit is the
  * representation)
+ * - Can be drawn down against a future invoice or refunded (issue #992); each
+ * draw-down is recorded as a {@link CustomerCreditTransaction} and relieves the
+ * Customer Credit Liability (2300) recognized at issuance
  *
  * Example:
  * - Payment: $150
@@ -27,6 +32,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/114">Issue
  *      #114 - Overpayment Policy</a>
+ * @see <a href=
+ *      "https://github.com/louisburroughs/durion-positivity-backend/issues/992">Issue
+ *      #992 - Credit lifecycle liability relief</a>
  */
 @Getter
 @Setter
@@ -41,9 +49,13 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         indexes = {
             @Index(name = "idx_customer_credit_customer", columnList = "customer_id"),
             @Index(name = "idx_customer_credit_payment", columnList = "source_payment_id"),
-            @Index(name = "idx_customer_credit_created_at", columnList = "created_at")
+            @Index(name = "idx_customer_credit_created_at", columnList = "created_at"),
+            @Index(name = "idx_customer_credit_status", columnList = "status")
         })
 public class CustomerCredit {
+
+    /** Currency scale used for the derived open-amount arithmetic. */
+    private static final int CURRENCY_SCALE = 2;
 
     @EqualsAndHashCode.Include
     @Id
@@ -67,6 +79,30 @@ public class CustomerCredit {
     @Column(name = "trace_id", length = 100)
     private String traceId;
 
+    /**
+     * Consumption state derived from {@link #appliedAmount} / {@link #refundedAmount}
+     * (issue #992). Maintained by the service on every draw-down; never set directly.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private CustomerCreditStatus status = CustomerCreditStatus.AVAILABLE;
+
+    /** Cumulative amount applied against invoices (issue #992). */
+    @Column(name = "applied_amount", precision = 19, scale = 4, nullable = false)
+    private BigDecimal appliedAmount = BigDecimal.ZERO;
+
+    /** Cumulative amount refunded to the customer (issue #992). */
+    @Column(name = "refunded_amount", precision = 19, scale = 4, nullable = false)
+    private BigDecimal refundedAmount = BigDecimal.ZERO;
+
+    /**
+     * Optimistic lock (issue #992): two concurrent apply/refund requests must not both
+     * pass the remaining-amount check and over-draw the 2300 liability.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     // Audit fields (immutable)
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -74,4 +110,27 @@ public class CustomerCredit {
 
     @Column(name = "created_by", length = 50, updatable = false)
     private String createdBy;
+
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private Instant updatedAt;
+
+    /**
+     * The credit still owed to the customer: {@code amount − applied − refunded}. This is
+     * the credit's contribution to the Customer Credit Liability (2300) control account, so
+     * {@code Σ openAmount} over all credits is exactly what #975 AC-7 reconciles against.
+     *
+     * @return remaining open amount, at currency scale
+     */
+    @Transient
+    public BigDecimal getOpenAmount() {
+        BigDecimal issued = amount == null ? BigDecimal.ZERO : amount;
+        return issued.subtract(nullSafe(appliedAmount))
+                .subtract(nullSafe(refundedAmount))
+                .setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal nullSafe(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
 }

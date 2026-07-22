@@ -10,7 +10,8 @@ General-ledger accounting service for the Durion Positivity ETSMS platform. Mana
 - Evaluate posting rule sets to drive automated GL posting
 - Enforce accounting-period state (closed periods, hard lock, override) on every posting path
 - Apply payments to invoices and record AP payments
-- Issue credit memos with configurable GL account targets
+- Issue credit memos with configurable GL account targets, freezing their per-jurisdiction tax reversal
+- Apply or refund AR customer credits, relieving the customer-credit liability recognized at issuance
 - Manage monthly accounting periods (list, close, reopen)
 - Produce financial reports (income statement, balance sheet)
 - Ingest domain events from Kafka via the event ingestion pipeline
@@ -62,6 +63,22 @@ General-ledger accounting service for the Durion Positivity ETSMS platform. Mana
 - `POST /v1/accounting/reconciliations/{id}/adjustments` — record an adjustment; posts a real balanced JE via posting categories, respecting period locks (permission `accounting:reconciliation:adjust`)
 - `POST /v1/accounting/reconciliations/{id}/finalize` — finalize only when statement vs GL ending balance agree within ±0.01 (permission `accounting:reconciliation:adjust`)
 - `GET /v1/accounting/reconciliations/{id}/report` · `/audit` — reconciliation report / audit trail (permission `accounting:reconciliation:view`)
+- `GET /v1/accounting/reports/financial/tax-liability` — sales-tax liability by jurisdiction with GL drift (permission `reporting:view:financial-statements`, story T8)
+- `GET /v1/accounting/customer-credits` · `/{creditId}` — list / get AR customer credits with their remaining open amount (permission `accounting:customer-credit:view`, issue #992)
+- `POST /v1/accounting/customer-credits/{creditId}/applications` — apply an open credit to an invoice; posts Dr Customer Credit Liability (2300) / Cr AR, idempotent on `requestId` (permission `accounting:customer-credit:apply`, issue #992)
+- `POST /v1/accounting/customer-credits/{creditId}/refunds` — refund an open credit as cash; posts Dr 2300 / Cr Undeposited Funds (1090), idempotent on `requestId` (permission `accounting:customer-credit:refund`, issue #992)
+
+### Customer-credit lifecycle (issue #992)
+
+Overpayment issuance (#975) recognizes the customer-credit liability but never relieves it, so the
+2300 control account only ever grew. Applying or refunding a credit now posts the mirror entry, and
+across the full lifecycle a fully-consumed credit nets 2300 back to zero. `customer_credit` carries
+the running `applied_amount` / `refunded_amount` and a derived status
+(`AVAILABLE → PARTIALLY_CONSUMED → CONSUMED`); each draw-down is a `customer_credit_transaction` row
+holding its own posting lifecycle (`gl_journal_entry_id` / `gl_posted_at`), because one credit can be
+relieved many times and each relief must be independently idempotent and traceable. The invoice
+balance derivation subtracts applied credits, so a credit-settled invoice is no longer shown as
+outstanding.
 
 ## Chart of Accounts
 
@@ -200,6 +217,9 @@ Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`:
 - `V13__je_entry_number_sequence.sql` — `accounting_sequence` per-month counter table + nullable unique `entry_number` on `journal_entry` (no backfill)
 - `V14__accounting_configuration_hard_lock.sql` — `accounting_configuration` key/value table backing the org-level `HARD_LOCK_DATE`
 - `V15__accounting_period_version.sql` — optimistic-locking `version` column on `accounting_period`
+- `V19__create_ext_invoice_tax.sql` — read-only replica of pos-invoice's per-line × per-jurisdiction tax breakdown (story T5c)
+- `V20__create_credit_memo_tax.sql` — per-jurisdiction attribution of a credit memo's reversed tax, frozen at creation (issue #996)
+- `V21__customer_credit_lifecycle.sql` — customer-credit consumption model: status + applied/refunded totals + `customer_credit_transaction` draw-downs (issue #992)
 - `R__seed_reference_accounting.sql` — repeatable seed for reference data, including the 9-account COA
 
 ## Development

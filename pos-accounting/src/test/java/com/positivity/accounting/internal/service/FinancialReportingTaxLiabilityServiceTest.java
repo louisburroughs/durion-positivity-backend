@@ -3,12 +3,14 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.TaxLiabilityReport;
 import com.positivity.accounting.internal.dto.TaxLiabilityRow;
 import com.positivity.accounting.internal.entity.CreditMemo;
+import com.positivity.accounting.internal.entity.CreditMemoTax;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.entity.GLAccount;
@@ -16,6 +18,7 @@ import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
+import com.positivity.accounting.internal.repository.CreditMemoTaxRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
@@ -76,6 +79,9 @@ class FinancialReportingTaxLiabilityServiceTest {
     private CreditMemoRepository creditMemoRepository;
 
     @Mock
+    private CreditMemoTaxRepository creditMemoTaxRepository;
+
+    @Mock
     private VendorBillRepository vendorBillRepository;
 
     @Mock
@@ -96,6 +102,7 @@ class FinancialReportingTaxLiabilityServiceTest {
                 extInvoiceRepository,
                 extInvoiceTaxRepository,
                 creditMemoRepository,
+                creditMemoTaxRepository,
                 vendorBillRepository,
                 apPaymentAllocationRepository,
                 invoiceBalanceCalculator,
@@ -123,7 +130,7 @@ class FinancialReportingTaxLiabilityServiceTest {
         });
 
         // One POSTED credit against INV1 reversing 25.00 of tax, posted in-period.
-        when(creditMemoRepository.findByStatusAndPostedTimestampBetween(eq(CreditMemoStatus.POSTED), any(), any()))
+        when(creditMemoRepository.findByStatusNotAndPostedTimestampBetween(eq(CreditMemoStatus.DRAFT), any(), any()))
                 .thenReturn(List.of(creditMemo(INV1, "25.00")));
 
         // GL 2200: Σdebit - Σcredit. Clean ledger -> equals -(report net tax) = -230.00,
@@ -186,7 +193,7 @@ class FinancialReportingTaxLiabilityServiceTest {
     @DisplayName("Empty period yields no rows, zero totals, and a zero-drift reconciliation")
     void emptyPeriod() {
         when(extInvoiceRepository.findByFinalizedAtBetween(any(), any())).thenReturn(List.of());
-        when(creditMemoRepository.findByStatusAndPostedTimestampBetween(eq(CreditMemoStatus.POSTED), any(), any()))
+        when(creditMemoRepository.findByStatusNotAndPostedTimestampBetween(eq(CreditMemoStatus.DRAFT), any(), any()))
                 .thenReturn(List.of());
         when(glAccountRepository.findByAccountCode("2200")).thenReturn(Optional.empty());
 
@@ -206,7 +213,114 @@ class FinancialReportingTaxLiabilityServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    @DisplayName("#996: a credit's frozen per-jurisdiction breakdown is used verbatim, not the pro-rata split")
+    void frozenAttribution_overridesProRata() {
+        when(extInvoiceRepository.findByFinalizedAtBetween(any(), any())).thenReturn(List.of(invoiceFinalized(INV1)));
+
+        // Invoice collected 65 STATE / 35 COUNTY: a pro-rata split of 25.00 would be 16.25 / 8.75.
+        List<ExtInvoiceTax> master = List.of(
+                taxRow(INV1, "STATE", "WA", "1000.00", "65.00", false, null),
+                taxRow(INV1, "COUNTY", "KING", "1000.00", "35.00", false, null));
+        when(extInvoiceTaxRepository.findByInvoiceIdIn(anyCollection())).thenAnswer(call -> {
+            Collection<UUID> ids = call.getArgument(0);
+            return master.stream().filter(r -> ids.contains(r.getInvoiceId())).toList();
+        });
+
+        CreditMemo credit = creditMemo(INV1, "25.00");
+        when(creditMemoRepository.findByStatusNotAndPostedTimestampBetween(eq(CreditMemoStatus.DRAFT), any(), any()))
+                .thenReturn(List.of(credit));
+        // ...but the credit itself froze a deliberately non-pro-rata 20/5 attribution.
+        when(creditMemoTaxRepository.findByCreditMemoIdIn(anyList()))
+                .thenReturn(List.of(
+                        attribution(credit.getCreditMemoId(), "STATE", "WA", "20.00"),
+                        attribution(credit.getCreditMemoId(), "COUNTY", "KING", "5.00")));
+        stubTaxPayableActivity("-75.00");
+
+        TaxLiabilityReport report = service.generateTaxLiability(START, END);
+
+        assertThat(report.getRows().get(0).getCreditsNetted()).isEqualByComparingTo("20.00");
+        assertThat(report.getRows().get(1).getCreditsNetted()).isEqualByComparingTo("5.00");
+        assertThat(report.getTotalNetTax()).isEqualByComparingTo("75.00");
+        assertThat(report.getReconciliation().getUnattributedCredits()).isEqualByComparingTo("0");
+        assertThat(report.getReconciliation().getDrift()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @DisplayName("#997: a credit that transitioned POSTED -> APPLIED still nets in the period it posted")
+    void creditAppliedAfterPosting_stillNets() {
+        when(extInvoiceRepository.findByFinalizedAtBetween(any(), any())).thenReturn(List.of(invoiceFinalized(INV1)));
+        List<ExtInvoiceTax> master = List.of(taxRow(INV1, "STATE", "WA", "1000.00", "65.00", false, null));
+        when(extInvoiceTaxRepository.findByInvoiceIdIn(anyCollection())).thenAnswer(call -> {
+            Collection<UUID> ids = call.getArgument(0);
+            return master.stream().filter(r -> ids.contains(r.getInvoiceId())).toList();
+        });
+
+        // The credit posted Dr 2200 = 25.00 and has since been consumed against another invoice.
+        // Its ledger entry is still there, so the report must still count it.
+        CreditMemo applied = creditMemo(INV1, "25.00");
+        applied.setStatus(CreditMemoStatus.APPLIED);
+        when(creditMemoRepository.findByStatusNotAndPostedTimestampBetween(eq(CreditMemoStatus.DRAFT), any(), any()))
+                .thenReturn(List.of(applied));
+        when(creditMemoTaxRepository.findByCreditMemoIdIn(anyList())).thenReturn(List.of());
+        stubTaxPayableActivity("-40.00");
+
+        TaxLiabilityReport report = service.generateTaxLiability(START, END);
+
+        assertThat(report.getTotalCreditsNetted()).isEqualByComparingTo("25.00");
+        assertThat(report.getTotalNetTax()).isEqualByComparingTo("40.00");
+        assertThat(report.getReconciliation().getDrift()).isEqualByComparingTo("0.00");
+        assertThat(report.getReconciliation().getReconciled()).isTrue();
+    }
+
+    @Test
+    @DisplayName("#996: an unattributable credit is reported as unattributed rather than left as phantom drift")
+    void unattributableCredit_isReportedExplicitly() {
+        when(extInvoiceRepository.findByFinalizedAtBetween(any(), any())).thenReturn(List.of(invoiceFinalized(INV1)));
+        List<ExtInvoiceTax> master = List.of(taxRow(INV1, "STATE", "WA", "1000.00", "65.00", false, null));
+        when(extInvoiceTaxRepository.findByInvoiceIdIn(anyCollection())).thenAnswer(call -> {
+            Collection<UUID> ids = call.getArgument(0);
+            return master.stream().filter(r -> ids.contains(r.getInvoiceId())).toList();
+        });
+
+        // Credit against an invoice with no replicated breakdown and no frozen attribution.
+        when(creditMemoRepository.findByStatusNotAndPostedTimestampBetween(eq(CreditMemoStatus.DRAFT), any(), any()))
+                .thenReturn(List.of(creditMemo(INV2, "12.00")));
+        when(creditMemoTaxRepository.findByCreditMemoIdIn(anyList())).thenReturn(List.of());
+        stubTaxPayableActivity("-53.00");
+
+        TaxLiabilityReport report = service.generateTaxLiability(START, END);
+
+        assertThat(report.getTotalCreditsNetted()).isEqualByComparingTo("0");
+        assertThat(report.getTotalNetTax()).isEqualByComparingTo("65.00");
+        // The unattributed 12.00 is exactly the drift, and is now named rather than mysterious.
+        assertThat(report.getReconciliation().getUnattributedCredits()).isEqualByComparingTo("12.00");
+        assertThat(report.getReconciliation().getDrift()).isEqualByComparingTo("12.00");
+        assertThat(report.getReconciliation().getReconciled()).isFalse();
+    }
+
     // ===== fixtures =====
+
+    private void stubTaxPayableActivity(String postedBalance) {
+        GLAccount taxPayable = new GLAccount();
+        taxPayable.setGlAccountId(TAX_ACCT);
+        taxPayable.setAccountCode("2200");
+        taxPayable.setAccountName("Sales Tax Payable");
+        when(glAccountRepository.findByAccountCode("2200")).thenReturn(Optional.of(taxPayable));
+        when(journalEntryRepository.sumPostedBalanceForAccount(eq(TAX_ACCT), any(), any()))
+                .thenReturn(new BigDecimal(postedBalance));
+    }
+
+    private static CreditMemoTax attribution(UUID creditMemoId, String type, String code, String reversed) {
+        return CreditMemoTax.builder()
+                .id(UUID.randomUUID())
+                .creditMemoId(creditMemoId)
+                .jurisdictionType(type)
+                .jurisdictionCode(code)
+                .taxAmountReversed(new BigDecimal(reversed))
+                .createdAt(FIXED_NOW)
+                .build();
+    }
 
     private static ExtInvoice invoiceFinalized(UUID id) {
         return ExtInvoice.builder()

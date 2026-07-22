@@ -1,0 +1,407 @@
+package com.positivity.accounting.internal.service;
+
+import com.positivity.accounting.internal.dto.CustomerCreditApplicationRequest;
+import com.positivity.accounting.internal.dto.CustomerCreditRefundRequest;
+import com.positivity.accounting.internal.dto.CustomerCreditReliefGLPostingEvent;
+import com.positivity.accounting.internal.dto.CustomerCreditResponse;
+import com.positivity.accounting.internal.dto.CustomerCreditTransactionResponse;
+import com.positivity.accounting.internal.entity.CustomerCredit;
+import com.positivity.accounting.internal.entity.CustomerCreditTransaction;
+import com.positivity.accounting.internal.entity.ExtInvoice;
+import com.positivity.accounting.internal.enums.CustomerCreditStatus;
+import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
+import com.positivity.accounting.internal.repository.CustomerCreditRepository;
+import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
+import com.positivity.accounting.service.CustomerCreditService;
+import com.positivity.accounting.service.OutboxService;
+import com.positivity.shared.id.UUIDv7Generator;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+/**
+ * Customer-credit draw-down and GL liability relief (story parity-C1 follow-on, issue #992).
+ *
+ * <p><b>Why this exists.</b> Overpayment issuance (#975) posts {@code Dr Undeposited Funds /
+ * Cr Customer Credit Liability (2300)}, which only ever <em>recognizes</em> the obligation. With
+ * no consumption path the 2300 control account grew monotonically and the #975 AC-7 invariant
+ * (Σ open customer credits == the 2300 balance) held only while credits sat unused. This service
+ * supplies the missing half:
+ *
+ * <ul>
+ *   <li><b>Application</b> — the credit settles a later invoice:
+ *       {@code Dr 2300 / Cr Accounts Receivable}. Liability down, receivable down.</li>
+ *   <li><b>Refund</b> — cash goes back to the customer:
+ *       {@code Dr 2300 / Cr Undeposited Funds}. Liability down, cash out.</li>
+ * </ul>
+ *
+ * <p>Across issuance → application/refund the 2300 balance nets to zero for a fully-consumed
+ * credit, and partial draw-downs leave a residual liability matching the credit's residual open
+ * amount — which is exactly the AC-7 reconciliation.
+ *
+ * <p><b>Guarantees</b>, mirroring the issuance leg:
+ *
+ * <ul>
+ *   <li><b>Same-transaction outbox</b> — the relief work item is enqueued with MANDATORY
+ *       propagation inside this transaction, so the ledger work item exists iff the draw-down
+ *       committed.</li>
+ *   <li><b>Idempotent</b> — the caller's {@code requestId} is unique on
+ *       {@code customer_credit_transaction}; a replay returns the original draw-down and enqueues
+ *       nothing. The handler additionally guards the posting with its own idempotency key.</li>
+ *   <li><b>Period-gated</b> — the posting handler surfaces the Wave 2 period-gate exceptions, so a
+ *       relief into a CLOSED or hard-locked period fails the work item and retries after reopen
+ *       rather than silently posting.</li>
+ *   <li><b>Concurrency-safe</b> — {@code CustomerCredit} carries a {@code @Version}, so two
+ *       concurrent draw-downs cannot both pass the open-amount check and over-relieve the
+ *       liability.</li>
+ * </ul>
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class CustomerCreditServiceImpl implements CustomerCreditService {
+
+    private final Clock clock;
+    private final CustomerCreditRepository customerCreditRepository;
+    private final CustomerCreditTransactionRepository creditTransactionRepository;
+    private final InvoiceBalanceCalculator invoiceBalanceCalculator;
+    private final OutboxService outboxService;
+
+    @Override
+    @NonNull
+    public CustomerCreditTransactionResponse applyCreditToInvoice(
+            @NonNull UUID creditId, @NonNull CustomerCreditApplicationRequest request, @NonNull String currentUser) {
+
+        CustomerCreditTransaction replay = creditTransactionRepository
+                .findByRequestId(request.getRequestId())
+                .orElse(null);
+        if (replay != null) {
+            return replayResponse(replay, "application");
+        }
+
+        CustomerCredit credit = fetchCredit(creditId);
+        BigDecimal amount = request.getAmount();
+        validateOpenAmount(credit, amount);
+
+        ExtInvoice invoice = fetchInvoice(request.getInvoiceId());
+        if (!invoiceBalanceCalculator.isArEligible(invoice)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Customer credits cannot be applied to " + invoice.getStatus() + " invoices");
+        }
+        if (!credit.getCustomerId().equals(resolveCustomerId(invoice))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Credit " + creditId + " belongs to a different customer than invoice " + invoice.getInvoiceId());
+        }
+
+        BigDecimal balanceDue = invoiceBalanceCalculator.balanceDue(invoice);
+        if (amount.compareTo(balanceDue) > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Applied amount " + amount + " exceeds invoice " + invoice.getInvoiceId() + " balance due "
+                            + balanceDue);
+        }
+
+        Instant now = Instant.now(clock);
+        CustomerCreditTransaction transaction = recordDrawDown(
+                credit,
+                CustomerCreditTransactionType.APPLICATION,
+                invoice.getInvoiceId(),
+                amount,
+                request.getRequestId(),
+                currentUser,
+                now);
+
+        credit.setAppliedAmount(nullSafe(credit.getAppliedAmount()).add(amount));
+        CustomerCredit saved = persistWithDerivedStatus(credit);
+
+        enqueueReliefWorkItem(saved, transaction, now);
+
+        log.info(
+                "Applied customer credit {} to invoice {} | amount={} | openAmountAfter={} | requestId={}",
+                creditId,
+                invoice.getInvoiceId(),
+                amount,
+                saved.getOpenAmount(),
+                request.getRequestId());
+
+        return CustomerCreditTransactionResponse.builder()
+                .creditTransactionId(transaction.getCreditTransactionId())
+                .creditId(creditId)
+                .transactionType(CustomerCreditTransactionType.APPLICATION)
+                .invoiceId(invoice.getInvoiceId())
+                .amount(amount)
+                .currency(transaction.getCurrency())
+                .requestId(request.getRequestId())
+                .creditOpenAmountAfter(saved.getOpenAmount())
+                .invoiceBalanceAfter(balanceDue.subtract(amount))
+                .createdAt(now)
+                .replayed(false)
+                .build();
+    }
+
+    @Override
+    @NonNull
+    public CustomerCreditTransactionResponse refundCredit(
+            @NonNull UUID creditId, @NonNull CustomerCreditRefundRequest request, @NonNull String currentUser) {
+
+        CustomerCreditTransaction replay = creditTransactionRepository
+                .findByRequestId(request.getRequestId())
+                .orElse(null);
+        if (replay != null) {
+            return replayResponse(replay, "refund");
+        }
+
+        CustomerCredit credit = fetchCredit(creditId);
+        BigDecimal amount = request.getAmount();
+        validateOpenAmount(credit, amount);
+
+        Instant now = Instant.now(clock);
+        CustomerCreditTransaction transaction = recordDrawDown(
+                credit, CustomerCreditTransactionType.REFUND, null, amount, request.getRequestId(), currentUser, now);
+
+        credit.setRefundedAmount(nullSafe(credit.getRefundedAmount()).add(amount));
+        CustomerCredit saved = persistWithDerivedStatus(credit);
+
+        enqueueReliefWorkItem(saved, transaction, now);
+
+        log.info(
+                "Refunded customer credit {} | amount={} | openAmountAfter={} | requestId={}",
+                creditId,
+                amount,
+                saved.getOpenAmount(),
+                request.getRequestId());
+
+        return CustomerCreditTransactionResponse.builder()
+                .creditTransactionId(transaction.getCreditTransactionId())
+                .creditId(creditId)
+                .transactionType(CustomerCreditTransactionType.REFUND)
+                .invoiceId(null)
+                .amount(amount)
+                .currency(transaction.getCurrency())
+                .requestId(request.getRequestId())
+                .creditOpenAmountAfter(saved.getOpenAmount())
+                .invoiceBalanceAfter(null)
+                .createdAt(now)
+                .replayed(false)
+                .build();
+    }
+
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public CustomerCreditResponse getCredit(@NonNull UUID creditId) {
+        return toResponse(fetchCredit(creditId));
+    }
+
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public Page<CustomerCreditResponse> listCredits(
+            @Nullable UUID customerId, @Nullable CustomerCreditStatus status, @NonNull Pageable pageable) {
+
+        Page<CustomerCredit> credits;
+        if (customerId != null && status != null) {
+            credits = customerCreditRepository.findByCustomerIdAndStatus(customerId, status, pageable);
+        } else if (customerId != null) {
+            credits = customerCreditRepository.findByCustomerId(customerId, pageable);
+        } else if (status != null) {
+            credits = customerCreditRepository.findByStatus(status, pageable);
+        } else {
+            credits = customerCreditRepository.findAll(pageable);
+        }
+        return credits.map(this::toResponse);
+    }
+
+    // ------------------------------------------------------------------------
+    // Internals
+    // ------------------------------------------------------------------------
+
+    private CustomerCredit fetchCredit(UUID creditId) {
+        return customerCreditRepository
+                .findById(creditId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer credit not found: " + creditId));
+    }
+
+    private ExtInvoice fetchInvoice(UUID invoiceId) {
+        return invoiceBalanceCalculator
+                .findInvoice(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Invoice " + invoiceId + " not found in the invoice replica"));
+    }
+
+    /**
+     * A credit can only be drawn down for what it still owes. Rejecting here (rather than
+     * letting the DB CHECK fire) keeps over-draw a 409 with an explanatory message, and the
+     * {@code @Version} on the credit closes the read-check-write race between concurrent
+     * draw-downs.
+     */
+    private void validateOpenAmount(CustomerCredit credit, BigDecimal amount) {
+        BigDecimal open = credit.getOpenAmount();
+        if (amount.compareTo(open) > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Amount " + amount + " exceeds the open amount " + open + " of credit " + credit.getCreditId());
+        }
+    }
+
+    /**
+     * The replica's partyId is a free-form string (pos-invoice stores it that way); AR records
+     * require a customer UUID. Mirrors {@code CreditMemoServiceImpl.resolveCustomerId}.
+     */
+    private UUID resolveCustomerId(ExtInvoice invoice) {
+        String partyId = invoice.getPartyId();
+        if (partyId == null || partyId.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Invoice " + invoice.getInvoiceId() + " has no billed party; cannot apply a customer credit");
+        }
+        try {
+            return UUID.fromString(partyId.trim());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Invoice " + invoice.getInvoiceId() + " has a non-UUID party reference: " + partyId);
+        }
+    }
+
+    private CustomerCreditTransaction recordDrawDown(
+            CustomerCredit credit,
+            CustomerCreditTransactionType type,
+            @Nullable UUID invoiceId,
+            BigDecimal amount,
+            String requestId,
+            String currentUser,
+            Instant timestamp) {
+
+        return creditTransactionRepository.save(CustomerCreditTransaction.builder()
+                .creditId(credit.getCreditId())
+                .transactionType(type)
+                .invoiceId(invoiceId)
+                .amount(amount)
+                .currency(credit.getCurrency())
+                .requestId(requestId)
+                .traceId(credit.getTraceId())
+                .createdAt(timestamp)
+                .createdBy(currentUser)
+                .build());
+    }
+
+    /** Recompute the consumption state from the running totals, then persist. */
+    private CustomerCredit persistWithDerivedStatus(CustomerCredit credit) {
+        BigDecimal open = credit.getOpenAmount();
+        BigDecimal consumed = nullSafe(credit.getAppliedAmount()).add(nullSafe(credit.getRefundedAmount()));
+        if (open.signum() <= 0) {
+            credit.setStatus(CustomerCreditStatus.CONSUMED);
+        } else if (consumed.signum() > 0) {
+            credit.setStatus(CustomerCreditStatus.PARTIALLY_CONSUMED);
+        } else {
+            credit.setStatus(CustomerCreditStatus.AVAILABLE);
+        }
+        return customerCreditRepository.save(credit);
+    }
+
+    /**
+     * Enqueue the relieving GL work item inside this transaction ({@code saveToOutbox} uses
+     * MANDATORY propagation), so the ledger entry is enqueued iff the draw-down committed.
+     */
+    private void enqueueReliefWorkItem(
+            CustomerCredit credit, CustomerCreditTransaction transaction, Instant reliefTimestamp) {
+
+        CustomerCreditReliefGLPostingEvent event = CustomerCreditReliefGLPostingEvent.builder()
+                .eventId(UUIDv7Generator.generate())
+                .requestId(transaction.getRequestId())
+                .creditTransactionId(transaction.getCreditTransactionId())
+                .creditId(credit.getCreditId())
+                .transactionType(transaction.getTransactionType())
+                .invoiceId(transaction.getInvoiceId())
+                .customerId(credit.getCustomerId())
+                .currency(transaction.getCurrency())
+                .amount(transaction.getAmount())
+                .reliefTimestamp(reliefTimestamp)
+                .build();
+
+        outboxService.saveToOutbox(
+                event.getEventId(),
+                "CustomerCreditRelief",
+                credit.getCreditId(),
+                event.getClass().getName(),
+                event);
+
+        log.info(
+                "Customer credit relief GL posting work item persisted to outbox | requestId={} | eventId={} "
+                        + "| creditId={} | type={} | amount={}",
+                transaction.getRequestId(),
+                event.getEventId(),
+                credit.getCreditId(),
+                transaction.getTransactionType(),
+                transaction.getAmount());
+    }
+
+    /**
+     * Idempotent replay: the request id was already processed, so return the original draw-down
+     * with the credit's <em>current</em> open amount and enqueue nothing. Relieving again would
+     * double-debit the 2300 liability.
+     */
+    private CustomerCreditTransactionResponse replayResponse(CustomerCreditTransaction existing, String operation) {
+        log.info(
+                "Customer credit {} replay for already-processed requestId={} | creditTransactionId={}",
+                operation,
+                existing.getRequestId(),
+                existing.getCreditTransactionId());
+
+        CustomerCredit credit = fetchCredit(existing.getCreditId());
+        BigDecimal invoiceBalanceAfter = existing.getInvoiceId() == null
+                ? null
+                : invoiceBalanceCalculator
+                        .findInvoice(existing.getInvoiceId())
+                        .map(invoiceBalanceCalculator::balanceDue)
+                        .orElse(null);
+
+        return CustomerCreditTransactionResponse.builder()
+                .creditTransactionId(existing.getCreditTransactionId())
+                .creditId(existing.getCreditId())
+                .transactionType(existing.getTransactionType())
+                .invoiceId(existing.getInvoiceId())
+                .amount(existing.getAmount())
+                .currency(existing.getCurrency())
+                .requestId(existing.getRequestId())
+                .creditOpenAmountAfter(credit.getOpenAmount())
+                .invoiceBalanceAfter(invoiceBalanceAfter)
+                .createdAt(existing.getCreatedAt())
+                .replayed(true)
+                .build();
+    }
+
+    private CustomerCreditResponse toResponse(CustomerCredit credit) {
+        return CustomerCreditResponse.builder()
+                .creditId(credit.getCreditId())
+                .customerId(credit.getCustomerId())
+                .currency(credit.getCurrency())
+                .amount(credit.getAmount())
+                .appliedAmount(nullSafe(credit.getAppliedAmount()))
+                .refundedAmount(nullSafe(credit.getRefundedAmount()))
+                .openAmount(credit.getOpenAmount())
+                .status(credit.getStatus())
+                .sourcePaymentId(credit.getSourcePaymentId())
+                .createdAt(credit.getCreatedAt())
+                .build();
+    }
+
+    private static BigDecimal nullSafe(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+}

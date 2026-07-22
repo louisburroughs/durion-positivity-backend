@@ -68,6 +68,9 @@ class FinancialReportingServiceImplTest {
     private com.positivity.accounting.internal.repository.CreditMemoRepository creditMemoRepository;
 
     @Mock
+    private com.positivity.accounting.internal.repository.CreditMemoTaxRepository creditMemoTaxRepository;
+
+    @Mock
     private com.positivity.accounting.internal.repository.VendorBillRepository vendorBillRepository;
 
     @Mock
@@ -88,6 +91,7 @@ class FinancialReportingServiceImplTest {
                 extInvoiceRepository,
                 extInvoiceTaxRepository,
                 creditMemoRepository,
+                creditMemoTaxRepository,
                 vendorBillRepository,
                 apPaymentAllocationRepository,
                 invoiceBalanceCalculator,

@@ -24,16 +24,29 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
     List<CreditMemo> findByOriginalInvoiceId(UUID originalInvoiceId);
 
     /**
-     * Find credit memos in a given status whose posting timestamp falls in the inclusive
-     * instant range. Used by the Sales-Tax Liability report (story T8, issue #966) to net
-     * POSTED credit-memo tax reversals by the credit's posting period (accrual basis).
+     * Find every credit memo that <em>posted</em> within the inclusive instant range,
+     * whatever lifecycle status it currently carries. Used by the Sales-Tax Liability
+     * report (story T8, issue #966) to net credit-memo tax reversals by the credit's
+     * posting period (accrual basis).
      *
-     * @param status the lifecycle status to include (normally {@code POSTED})
-     * @param start  inclusive lower bound (start-of-day of the period start, UTC)
-     * @param end    inclusive upper bound (end-of-day of the period end, UTC)
+     * <p><b>Why not filter on {@code POSTED} (issue #997).</b> Posting a credit memo
+     * writes a {@code Dr 2200} journal entry that stays on the ledger permanently. A
+     * later lifecycle transition ({@code POSTED → APPLIED} when the credit is consumed
+     * against another invoice, or {@code → VOIDED}) does not remove that entry, so
+     * selecting on the <em>current</em> status would silently drop the credit from the
+     * period it posted in and surface as GL drift on an otherwise-clean ledger. The
+     * accounting ruling is therefore: a credit counts toward the period it posted in,
+     * regardless of where it ends up. A void that should reverse the tax must post its
+     * own reversing entry (which then nets in the period of the reversal).
+     *
+     * @param excludedStatus the status to exclude — always {@code DRAFT}, which by
+     *                       definition has never posted to the ledger
+     * @param start          inclusive lower bound (start-of-day of the period start, UTC)
+     * @param end            inclusive upper bound (end-of-day of the period end, UTC)
      * @return matching credit memos (unordered)
      */
-    List<CreditMemo> findByStatusAndPostedTimestampBetween(CreditMemoStatus status, Instant start, Instant end);
+    List<CreditMemo> findByStatusNotAndPostedTimestampBetween(
+            CreditMemoStatus excludedStatus, Instant start, Instant end);
 
     /**
      * Find all credit memos for an invoice with pagination.
