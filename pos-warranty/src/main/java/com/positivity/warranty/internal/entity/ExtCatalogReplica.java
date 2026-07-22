@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -73,9 +74,14 @@ public class ExtCatalogReplica {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    /** Explicit dependency hook for the ArchUnit UUIDv7 rule (ADR-0013): PK is a UUIDv7 verbatim. */
+    /**
+     * Explicit dependency hooks for the ArchUnit UUIDv7 rules (ADR-0013): the PK is a UUIDv7 copied
+     * verbatim from the owning aggregate's event, so the replica generates no identifier of its own.
+     * References both {@link UUIDv7Id} (module ArchitectureTest) and {@link UUIDv7Generator}
+     * (cross-module EntityStandards) so both identifier-standard rules recognise the replica.
+     */
     @Transient
-    public Class<?> uuidv7Dependency() {
-        return UUIDv7Generator.class;
+    public Class<?>[] uuidv7Dependency() {
+        return new Class<?>[] {UUIDv7Id.class, UUIDv7Generator.class};
     }
 }

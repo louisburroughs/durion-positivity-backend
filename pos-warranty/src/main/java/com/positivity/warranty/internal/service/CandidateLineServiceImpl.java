@@ -13,15 +13,18 @@ import com.positivity.warranty.internal.repository.ExtInvoiceReplicaRepository;
 import com.positivity.warranty.internal.repository.ExtWorkorderLineReplicaRepository;
 import com.positivity.warranty.internal.repository.ExtWorkorderReplicaRepository;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 /**
@@ -39,6 +42,9 @@ public class CandidateLineServiceImpl implements CandidateLineService {
 
     /** Upper bound on workorder fan-out per search, to keep the endpoint snappy. */
     private static final int MAX_WORKORDERS = 25;
+
+    /** Upper bound on invoice-header fan-out per search, mirroring {@link #MAX_WORKORDERS} (#1003 review, M1). */
+    private static final int MAX_INVOICES = 25;
 
     private final ExtInvoiceReplicaRepository extInvoiceReplicaRepository;
     private final ExtInvoiceLineReplicaRepository extInvoiceLineReplicaRepository;
@@ -67,26 +73,39 @@ public class CandidateLineServiceImpl implements CandidateLineService {
     private List<CandidateLine> invoiceCandidates(UUID customerId, boolean filtered, Set<String> textTokens) {
         List<CandidateLine> results = new ArrayList<>();
         try {
-            for (ExtInvoiceReplica invoice : extInvoiceReplicaRepository.findByPartyId(customerId.toString())) {
-                for (ExtInvoiceLineReplica line :
-                        extInvoiceLineReplicaRepository.findByInvoiceId(invoice.getInvoiceId())) {
-                    if (filtered && !matchesText(line.getDescription(), textTokens)) {
-                        continue;
-                    }
-                    results.add(new CandidateLine(
-                            LineSourceType.INVOICE_LINE,
-                            invoice.getInvoiceId(),
-                            line.getInvoiceItemId(),
-                            invoice.getInvoiceNumber(),
-                            null,
-                            null,
-                            line.getDescription(),
-                            line.getQuantity(),
-                            line.getUnitPrice(),
-                            line.getAmount(),
-                            invoice.getInvoiceCreatedAt(),
-                            null));
+            // Bounded, newest-first header page (#1003 review, M1): cap the fan-out for long-lived
+            // parties, then collapse the old per-invoice N+1 into a single bulk line fetch.
+            List<ExtInvoiceReplica> invoices = extInvoiceReplicaRepository.findByPartyIdOrderByInvoiceIdDesc(
+                    customerId.toString(), PageRequest.of(0, MAX_INVOICES));
+            if (invoices.isEmpty()) {
+                return results;
+            }
+            Map<UUID, ExtInvoiceReplica> invoicesById = new LinkedHashMap<>();
+            for (ExtInvoiceReplica invoice : invoices) {
+                invoicesById.put(invoice.getInvoiceId(), invoice);
+            }
+            for (ExtInvoiceLineReplica line :
+                    extInvoiceLineReplicaRepository.findByInvoiceIdIn(invoicesById.keySet())) {
+                if (filtered && !matchesText(line.getDescription(), textTokens)) {
+                    continue;
                 }
+                ExtInvoiceReplica invoice = invoicesById.get(line.getInvoiceId());
+                if (invoice == null) {
+                    continue;
+                }
+                results.add(new CandidateLine(
+                        LineSourceType.INVOICE_LINE,
+                        invoice.getInvoiceId(),
+                        line.getInvoiceItemId(),
+                        invoice.getInvoiceNumber(),
+                        null,
+                        null,
+                        line.getDescription(),
+                        line.getQuantity(),
+                        line.getUnitPrice(),
+                        line.getAmount(),
+                        invoice.getInvoiceCreatedAt(),
+                        null));
             }
         } catch (RuntimeException ex) {
             log.warn("Candidate-line invoice search degraded for customerId={}: {}", customerId, ex.getMessage());
