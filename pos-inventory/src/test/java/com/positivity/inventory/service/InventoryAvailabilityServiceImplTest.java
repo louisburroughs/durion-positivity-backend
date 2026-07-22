@@ -2,20 +2,19 @@ package com.positivity.inventory.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
-import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.service.InventoryAvailabilityServiceImpl;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,13 +22,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class InventoryAvailabilityServiceImplTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     private static final UUID LOC_1 = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID LOC_2 = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID SLOC_A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+
+    @Mock
+    private InventoryStockSummaryRepository stockSummaryRepository;
 
     @Mock
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
@@ -38,29 +41,25 @@ class InventoryAvailabilityServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new InventoryAvailabilityServiceImpl(inventoryLedgerEntryRepository);
+        service = new InventoryAvailabilityServiceImpl(stockSummaryRepository, inventoryLedgerEntryRepository);
     }
 
     @Test
-    void getAvailabilityByProduct_returnsEmptyWhenNoEntriesExist() {
+    void getAvailabilityByProduct_returnsEmptyWhenNoSummaryRowsExist() {
         UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
-                .thenReturn(List.of());
+        when(stockSummaryRepository.findByStockItemId(productId.toString())).thenReturn(List.of());
 
         List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
 
         assertThat(result).isEmpty();
-        verify(inventoryLedgerEntryRepository).findByStockItemIdOrderByTimestampAsc(productId.toString());
+        verify(stockSummaryRepository).findByStockItemId(productId.toString());
     }
 
     @Test
-    void getAvailabilityByProduct_skipsEntryWhenLocationIsMissing() {
+    void getAvailabilityByProduct_skipsNullLocationRow() {
         UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        InventoryLedgerEntry onHandEntry =
-                ledgerEntry(productId.toString(), InventoryLedgerEventType.GOODS_RECEIPT, 5, null);
-
-        when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
-                .thenReturn(List.of(onHandEntry));
+        when(stockSummaryRepository.findByStockItemId(productId.toString()))
+                .thenReturn(List.of(summary(productId.toString(), null, 5, 0, 0)));
 
         List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
 
@@ -70,13 +69,8 @@ class InventoryAvailabilityServiceImplTest {
     @Test
     void getAvailabilityByProduct_allowsNegativeAtpWhenReservationsExceedOnHand() {
         UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        InventoryLedgerEntry onHandEntry =
-                ledgerEntry(productId.toString(), InventoryLedgerEventType.GOODS_RECEIPT, 2, LOC_1);
-        InventoryLedgerEntry reservationEntry =
-                ledgerEntry(productId.toString(), InventoryLedgerEventType.RESERVATION_CREATED, 5, LOC_1);
-
-        when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
-                .thenReturn(List.of(onHandEntry, reservationEntry));
+        when(stockSummaryRepository.findByStockItemId(productId.toString()))
+                .thenReturn(List.of(summary(productId.toString(), LOC_1, 2, 0, 5)));
 
         List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
 
@@ -84,6 +78,23 @@ class InventoryAvailabilityServiceImplTest {
         assertThat(result.getFirst().getLocationId()).isEqualTo(LOC_1);
         assertThat(result.getFirst().getOnHandQuantity()).isEqualTo(2);
         assertThat(result.getFirst().getAvailableToPromiseQuantity()).isEqualTo(-3);
+    }
+
+    @Test
+    void getAvailabilityByProduct_sortsRowsByLocationId() {
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(stockSummaryRepository.findByStockItemId(productId.toString()))
+                .thenReturn(List.of(
+                        summary(productId.toString(), LOC_2, 60, 0, 0),
+                        summary(productId.toString(), LOC_1, 40, 0, 0)));
+
+        List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getLocationId()).isEqualTo(LOC_1);
+        assertThat(result.get(0).getOnHandQuantity()).isEqualTo(40);
+        assertThat(result.get(1).getLocationId()).isEqualTo(LOC_2);
+        assertThat(result.get(1).getOnHandQuantity()).isEqualTo(60);
     }
 
     @Test
@@ -96,8 +107,7 @@ class InventoryAvailabilityServiceImplTest {
     @Test
     void getAvailabilityByProduct_wrapsRepositoryErrors() {
         UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
-                .thenThrow(new RuntimeException("db down"));
+        when(stockSummaryRepository.findByStockItemId(productId.toString())).thenThrow(new RuntimeException("db down"));
 
         assertThatThrownBy(() -> service.getAvailabilityByProduct(productId))
                 .isInstanceOf(IllegalStateException.class)
@@ -105,97 +115,21 @@ class InventoryAvailabilityServiceImplTest {
     }
 
     @Test
-    void getAvailabilityByProduct_skipsNullQuantityEntries() {
+    void getAvailabilityByProduct_subtractsAllocationsAndReservationsFromAtp() {
         UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        InventoryLedgerEntry invalidEntry =
-                ledgerEntry(productId.toString(), InventoryLedgerEventType.GOODS_RECEIPT, 1, LOC_1);
-        invalidEntry.setChangeInQuantity(null);
-
-        when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
-                .thenReturn(List.of(invalidEntry));
-
-        List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    void getAvailabilityByProduct_skipsNullLedgerEntry() {
-        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
-                .thenReturn(java.util.Arrays.asList(
-                        ledgerEntry(productId.toString(), InventoryLedgerEventType.GOODS_RECEIPT, 1, LOC_1), null));
-
-        List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getOnHandQuantity()).isEqualTo(1);
-    }
-
-    @Test
-    void getAvailabilityByProduct_handlesNullEventType() {
-        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        InventoryLedgerEntry entry = ledgerEntry(productId.toString(), null, 5, LOC_1);
-        when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
-                .thenReturn(List.of(entry));
+        when(stockSummaryRepository.findByStockItemId(productId.toString()))
+                .thenReturn(List.of(summary(productId.toString(), LOC_1, 100, 20, 30)));
 
         List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).getOnHandQuantity()).isZero();
-        assertThat(result.get(0).getAvailableToPromiseQuantity()).isZero();
+        assertThat(result.getFirst().getOnHandQuantity()).isEqualTo(100);
+        assertThat(result.getFirst().getAvailableToPromiseQuantity()).isEqualTo(50);
     }
 
     @Test
-    void queryAvailability_handlesNullChangeInQuantity() {
-        String productSku = "SKU-123";
-        UUID locationId = LOC_1;
-        InventoryLedgerEntry entry = ledgerEntry(productSku, InventoryLedgerEventType.GOODS_RECEIPT, 10, locationId);
-        entry.setChangeInQuantity(null);
-
-        when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productSku))
-                .thenReturn(List.of(entry));
-        when(inventoryLedgerEntryRepository.findByStockItemIdAndLocationIdOrderByTimestampAsc(productSku, locationId))
-                .thenReturn(List.of(entry));
-
-        AvailabilityView result = service.queryAvailability(productSku, locationId, null, null);
-
-        assertThat(result.getOnHandQuantity()).isZero();
-        assertThat(result.getAllocatedQuantity()).isZero();
-        assertThat(result.getAvailableToPromiseQuantity()).isZero();
-    }
-
-    @Test
-    void getAvailabilityByProduct_handlesReservationReleased() {
-        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        InventoryLedgerEntry reservationEntry =
-                ledgerEntry(productId.toString(), InventoryLedgerEventType.RESERVATION_RELEASED, 5, LOC_1);
-
-        when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
-                .thenReturn(List.of(reservationEntry));
-
-        List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
-
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().getAvailableToPromiseQuantity()).isEqualTo(5);
-    }
-
-    @Test
-    void getAvailabilityByProduct_handlesNullQuantityInSafeQuantity() {
-        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        InventoryLedgerEntry entry =
-                ledgerEntry(productId.toString(), InventoryLedgerEventType.RESERVATION_CREATED, 1, LOC_1);
-        entry.setChangeInQuantity(null);
-
-        when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
-                .thenReturn(List.of(entry));
-
-        List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    void queryAvailability_throwsProductNotFoundException_whenNoEntriesExist() {
-        when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc("SKU-123"))
-                .thenReturn(List.of());
+    void queryAvailability_throwsProductNotFoundException_whenNoSummaryRowsExist() {
+        when(stockSummaryRepository.findByStockItemId("SKU-123")).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.queryAvailability("SKU-123", LOC_1, null, null))
                 .isInstanceOf(ProductNotFoundException.class)
@@ -205,64 +139,83 @@ class InventoryAvailabilityServiceImplTest {
     @Test
     void queryAvailability_calculatesCorrectly_withLocationAndStorageLocation() {
         String productSku = "SKU-123";
-        UUID locationId = LOC_1;
-        UUID storageLocationId = SLOC_A;
+        when(stockSummaryRepository.findByStockItemId(productSku))
+                .thenReturn(List.of(summary(productSku, LOC_1, 10, 0, 0), summary(productSku, SLOC_A, 5, 2, 0)));
+        when(inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItemAtLocation(
+                        eq(productSku), eq(SLOC_A), any(Pageable.class)))
+                .thenReturn(List.of());
 
-        List<InventoryLedgerEntry> productEntries =
-                List.of(ledgerEntry(productSku, InventoryLedgerEventType.GOODS_RECEIPT, 10, locationId));
-        List<InventoryLedgerEntry> locationEntries = List.of(
-                ledgerEntry(productSku, InventoryLedgerEventType.GOODS_RECEIPT, 5, storageLocationId),
-                ledgerEntry(productSku, InventoryLedgerEventType.ALLOCATION_CREATED, 2, storageLocationId));
-
-        when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productSku))
-                .thenReturn(productEntries);
-        when(inventoryLedgerEntryRepository.findByStockItemIdAndLocationIdOrderByTimestampAsc(
-                        productSku, storageLocationId))
-                .thenReturn(locationEntries);
-
-        AvailabilityView result = service.queryAvailability(productSku, locationId, storageLocationId, null);
+        AvailabilityView result = service.queryAvailability(productSku, LOC_1, SLOC_A, null);
 
         assertThat(result.getOnHandQuantity()).isEqualTo(5);
         assertThat(result.getAllocatedQuantity()).isEqualTo(2);
         assertThat(result.getAvailableToPromiseQuantity()).isEqualTo(3);
-        assertThat(result.getStorageLocationId()).isEqualTo(storageLocationId);
+        assertThat(result.getStorageLocationId()).isEqualTo(SLOC_A);
+        assertThat(result.getUnitOfMeasure()).isEqualTo("EACH");
     }
 
     @Test
     void queryAvailability_calculatesCorrectly_withOnlyLocationId() {
         String productSku = "SKU-123";
-        UUID locationId = LOC_1;
+        when(stockSummaryRepository.findByStockItemId(productSku))
+                .thenReturn(List.of(summary(productSku, LOC_1, 10, 2, 7)));
+        when(inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItemAtLocation(
+                        eq(productSku), eq(LOC_1), any(Pageable.class)))
+                .thenReturn(List.of("EA"));
 
-        List<InventoryLedgerEntry> productEntries =
-                List.of(ledgerEntry(productSku, InventoryLedgerEventType.GOODS_RECEIPT, 10, locationId));
-        List<InventoryLedgerEntry> locationEntries = List.of(
-                ledgerEntry(productSku, InventoryLedgerEventType.GOODS_RECEIPT, 10, locationId),
-                ledgerEntry(productSku, InventoryLedgerEventType.ALLOCATION_CREATED, 3, locationId),
-                ledgerEntry(productSku, InventoryLedgerEventType.ALLOCATION_RELEASED, 1, locationId));
-
-        when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productSku))
-                .thenReturn(productEntries);
-        when(inventoryLedgerEntryRepository.findByStockItemIdAndLocationIdOrderByTimestampAsc(productSku, locationId))
-                .thenReturn(locationEntries);
-
-        AvailabilityView result = service.queryAvailability(productSku, locationId, null, null);
+        AvailabilityView result = service.queryAvailability(productSku, LOC_1, null, null);
 
         assertThat(result.getOnHandQuantity()).isEqualTo(10);
-        assertThat(result.getAllocatedQuantity()).isEqualTo(2); // 3 created - 1 released
+        // Per ADR-0001, allocatedQuantity counts hard allocations only, never reservations.
+        assertThat(result.getAllocatedQuantity()).isEqualTo(2);
         assertThat(result.getAvailableToPromiseQuantity()).isEqualTo(8);
         assertThat(result.getStorageLocationId()).isNull();
+        assertThat(result.getUnitOfMeasure()).isEqualTo("EA");
     }
 
-    private InventoryLedgerEntry ledgerEntry(
-            String stockItemId, InventoryLedgerEventType eventType, int changeInQuantity, UUID locationId) {
-        return InventoryLedgerEntry.builder()
+    @Test
+    void queryAvailability_sumsAllRowsIncludingNullLocation_whenUnscoped() {
+        String productSku = "SKU-123";
+        when(stockSummaryRepository.findByStockItemId(productSku))
+                .thenReturn(List.of(
+                        summary(productSku, LOC_1, 10, 1, 0),
+                        summary(productSku, LOC_2, 5, 2, 0),
+                        summary(productSku, null, -3, 0, 0)));
+        when(inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItem(eq(productSku), any(Pageable.class)))
+                .thenReturn(List.of());
+
+        AvailabilityView result = service.queryAvailability(productSku, null, null, null);
+
+        assertThat(result.getOnHandQuantity()).isEqualTo(12);
+        assertThat(result.getAllocatedQuantity()).isEqualTo(3);
+        assertThat(result.getAvailableToPromiseQuantity()).isEqualTo(9);
+    }
+
+    @Test
+    void queryAvailability_returnsZeroes_whenScopedLocationHasNoRow() {
+        String productSku = "SKU-123";
+        when(stockSummaryRepository.findByStockItemId(productSku))
+                .thenReturn(List.of(summary(productSku, LOC_1, 10, 0, 0)));
+        when(inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItemAtLocation(
+                        eq(productSku), eq(LOC_2), any(Pageable.class)))
+                .thenReturn(List.of());
+
+        AvailabilityView result = service.queryAvailability(productSku, LOC_2, null, null);
+
+        assertThat(result.getOnHandQuantity()).isZero();
+        assertThat(result.getAllocatedQuantity()).isZero();
+        assertThat(result.getAvailableToPromiseQuantity()).isZero();
+    }
+
+    private InventoryStockSummary summary(
+            String stockItemId, UUID locationId, long onHand, long allocated, long reserved) {
+        return InventoryStockSummary.builder()
                 .stockItemId(stockItemId)
-                .eventType(eventType)
-                .changeInQuantity(changeInQuantity)
-                .quantityAfter(0)
-                .transactionUserId("test-user")
-                .timestamp(Instant.now(TEST_CLOCK))
                 .locationId(locationId)
+                .onHand(onHand)
+                .allocated(allocated)
+                .reserved(reserved)
+                .atp(onHand - allocated)
                 .build();
     }
 }

@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -60,6 +61,9 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
     @Autowired
+    private InventoryStockSummaryRepository inventoryStockSummaryRepository;
+
+    @Autowired
     private InventoryAdjustmentRequestRepository inventoryAdjustmentRequestRepository;
 
     @Autowired
@@ -69,6 +73,7 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
     void setUp() {
         inventoryAdjustmentRequestRepository.deleteAll();
         inventoryLedgerEntryRepository.deleteAll();
+        inventoryStockSummaryRepository.deleteAll();
     }
 
     // Issue CAP-215: AC-1 — RECEIVE movement records a GOODS_RECEIPT ledger entry

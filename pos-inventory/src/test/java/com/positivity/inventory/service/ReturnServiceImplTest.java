@@ -19,6 +19,7 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryReturnRepository;
+import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.ReturnServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
@@ -68,6 +69,9 @@ class ReturnServiceImplTest {
     @Mock
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
+    @Mock
+    private LedgerPostingService ledgerPostingService;
+
     @Captor
     private ArgumentCaptor<InventoryReturnEntity> entityCaptor;
 
@@ -84,6 +88,7 @@ class ReturnServiceImplTest {
         return new ReturnServiceImpl(
                 inventoryReturnRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 clock);
     }
@@ -92,6 +97,7 @@ class ReturnServiceImplTest {
         return new ReturnServiceImpl(
                 inventoryReturnRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 clock);
     }
@@ -125,7 +131,7 @@ class ReturnServiceImplTest {
                         eq(workorderId.toString())))
                 .thenReturn(List.of(
                         InventoryLedgerEntry.builder().changeInQuantity(-100).build()));
-        when(inventoryLedgerEntryRepository.saveAll(anyList()))
+        when(ledgerPostingService.postAll(anyList()))
                 .thenReturn(List.of(InventoryLedgerEntry.builder()
                         .ledgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                         .build()));
@@ -211,7 +217,7 @@ class ReturnServiceImplTest {
                         anyString(), any(), anyString()))
                 .thenReturn(List.of(
                         InventoryLedgerEntry.builder().changeInQuantity(-100).build()));
-        when(inventoryLedgerEntryRepository.saveAll(anyList()))
+        when(ledgerPostingService.postAll(anyList()))
                 .thenReturn(List.of(
                         InventoryLedgerEntry.builder()
                                 .ledgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -317,7 +323,7 @@ class ReturnServiceImplTest {
                 InventoryLedgerEntry.builder().ledgerEntryId(firstLedgerId).build();
         InventoryLedgerEntry savedLedgerTwo =
                 InventoryLedgerEntry.builder().ledgerEntryId(null).build();
-        when(inventoryLedgerEntryRepository.saveAll(anyList())).thenReturn(List.of(savedLedgerOne, savedLedgerTwo));
+        when(ledgerPostingService.postAll(anyList())).thenReturn(List.of(savedLedgerOne, savedLedgerTwo));
 
         ReturnResponse result = serviceWithLedgerRepository().returnItemsToStock(request);
 

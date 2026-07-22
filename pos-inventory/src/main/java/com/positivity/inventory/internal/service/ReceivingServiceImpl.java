@@ -61,6 +61,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final ReceivingSessionRepository receivingSessionRepository;
     private final InventoryVarianceRepository inventoryVarianceRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final SourceDocumentStubClient sourceDocumentStubClient;
     private final SiteDefaultsService siteDefaultsService;
@@ -245,7 +246,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .notes("Cross-dock GOODS_RECEIPT for workorder " + workorderId)
                 .build();
 
-        InventoryLedgerEntry savedReceiptEntry = inventoryLedgerEntryRepository.save(receiptEntry);
+        InventoryLedgerEntry savedReceiptEntry = ledgerPostingService.post(receiptEntry);
         inventoryFactPublisher.markEntry(savedReceiptEntry);
         int issueQuantityAfter = calculateQuantityAfter(line.getProductId(), crossDockLocationId, -quantityDelta);
 
@@ -261,7 +262,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .notes("Cross-dock GOODS_ISSUE to workorder " + workorderId)
                 .build();
 
-        InventoryLedgerEntry savedIssueEntry = inventoryLedgerEntryRepository.save(issueEntry);
+        InventoryLedgerEntry savedIssueEntry = ledgerPostingService.post(issueEntry);
         inventoryFactPublisher.markEntry(savedIssueEntry);
 
         line.setWorkorderId(workorderId);
@@ -334,7 +335,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .notes("Receiving session " + sessionId + " line " + lineId)
                 .build();
 
-        inventoryLedgerEntryRepository.save(entry);
+        ledgerPostingService.post(entry);
         inventoryFactPublisher.markEntry(entry);
     }
 

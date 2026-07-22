@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.service.InventoryLocationServiceImpl;
+import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.StorageLocationValidationService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -43,7 +44,8 @@ class InventoryLocationServiceImplTest {
         validations.put(sourceLocationId.toString(), validation(sourceLocationId, siteId, true, true));
 
         InventoryLocationServiceImpl service = new InventoryLocationServiceImpl(
-                stubLedgerRepository(List.of(), Map.of(), persistedEntries),
+                stubLedgerRepository(List.of(), Map.of()),
+                stubLedgerPostingService(persistedEntries),
                 new StubStorageLocationValidationService(validations),
                 eventPublisher(publishedEvents),
                 new SimpleMeterRegistry(),
@@ -76,9 +78,8 @@ class InventoryLocationServiceImplTest {
             validations.put(destinationLocationId.toString(), validation(destinationLocationId, siteId, true, true));
             InventoryLocationServiceImpl service = new InventoryLocationServiceImpl(
                     stubLedgerRepository(
-                            List.of(onHand("SKU-001", 5L)),
-                            Map.of(stockKey("SKU-001", destinationLocationId), 3),
-                            persistedEntries),
+                            List.of(onHand("SKU-001", 5L)), Map.of(stockKey("SKU-001", destinationLocationId), 3)),
+                    stubLedgerPostingService(persistedEntries),
                     new StubStorageLocationValidationService(validations),
                     eventPublisher(new ArrayList<>()),
                     new SimpleMeterRegistry(),
@@ -102,9 +103,7 @@ class InventoryLocationServiceImplTest {
     }
 
     private InventoryLedgerEntryRepository stubLedgerRepository(
-            List<InventoryLedgerEntryRepository.LocationOnHand> sourceRows,
-            Map<String, Integer> destinationOnHand,
-            List<InventoryLedgerEntry> persistedEntries) {
+            List<InventoryLedgerEntryRepository.LocationOnHand> sourceRows, Map<String, Integer> destinationOnHand) {
         return (InventoryLedgerEntryRepository) Proxy.newProxyInstance(
                 InventoryLedgerEntryRepository.class.getClassLoader(),
                 new Class[] {InventoryLedgerEntryRepository.class},
@@ -112,15 +111,25 @@ class InventoryLocationServiceImplTest {
                     case "findPositiveOnHandByLocation" -> sourceRows;
                     case "calculateOnHandQuantityAtLocation" ->
                         destinationOnHand.getOrDefault(stockKey((String) args[0], (UUID) args[1]), 0);
-                    case "saveAll" -> {
-                        for (Object entry : (Iterable<?>) args[0]) {
-                            persistedEntries.add((InventoryLedgerEntry) entry);
-                        }
-                        yield args[0];
-                    }
                     case "toString" -> "InventoryLedgerEntryRepositoryStub";
                     default -> defaultValue(method.getReturnType());
                 });
+    }
+
+    private LedgerPostingService stubLedgerPostingService(List<InventoryLedgerEntry> persistedEntries) {
+        return new LedgerPostingService() {
+            @Override
+            public InventoryLedgerEntry post(InventoryLedgerEntry entry) {
+                persistedEntries.add(entry);
+                return entry;
+            }
+
+            @Override
+            public List<InventoryLedgerEntry> postAll(List<InventoryLedgerEntry> entries) {
+                persistedEntries.addAll(entries);
+                return entries;
+            }
+        };
     }
 
     private ApplicationEventPublisher eventPublisher(List<Object> events) {

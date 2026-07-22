@@ -27,6 +27,7 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
     private static final String LOCATION_TRANSFER_REASON = "LOCATION_DEACTIVATION_TRANSFER";
 
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final LedgerPostingService ledgerPostingService;
     private final StorageLocationValidationService storageLocationValidationService;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final MeterRegistry meterRegistry;
@@ -35,12 +36,14 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
 
     public InventoryLocationServiceImpl(
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
+            LedgerPostingService ledgerPostingService,
             StorageLocationValidationService storageLocationValidationService,
             ApplicationEventPublisher applicationEventPublisher,
             MeterRegistry meterRegistry,
             InventoryFactPublisher inventoryFactPublisher,
             Clock clock) {
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
+        this.ledgerPostingService = ledgerPostingService;
         this.inventoryFactPublisher = inventoryFactPublisher;
         this.storageLocationValidationService = storageLocationValidationService;
         this.applicationEventPublisher = applicationEventPublisher;
@@ -185,7 +188,7 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
         }
 
         if (!transferEntries.isEmpty()) {
-            inventoryLedgerEntryRepository.saveAll(transferEntries);
+            ledgerPostingService.postAll(transferEntries);
             inventoryFactPublisher.markEntries(transferEntries);
         }
         return movedItems;

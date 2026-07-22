@@ -18,6 +18,7 @@ import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.service.CycleCountAdjustmentServiceImpl;
+import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -55,6 +56,9 @@ class CycleCountAdjustmentServiceImplTest {
     private InventoryLedgerEntryRepository ledgerRepository;
 
     @Mock
+    private LedgerPostingService ledgerPostingService;
+
+    @Mock
     private ApprovalThresholdEvaluator thresholdEvaluator;
 
     @Mock
@@ -70,7 +74,12 @@ class CycleCountAdjustmentServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new CycleCountAdjustmentServiceImpl(
-                adjustmentRepository, ledgerRepository, thresholdEvaluator, eventPublisher, clock);
+                adjustmentRepository,
+                ledgerRepository,
+                ledgerPostingService,
+                thresholdEvaluator,
+                eventPublisher,
+                clock);
     }
 
     @AfterEach
@@ -111,7 +120,7 @@ class CycleCountAdjustmentServiceImplTest {
             return adj;
         });
         when(ledgerRepository.calculateOnHandQuantity(STOCK_ITEM_ID)).thenReturn(10);
-        when(ledgerRepository.save(any(InventoryLedgerEntry.class))).thenAnswer(inv -> {
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(inv -> {
             InventoryLedgerEntry entry = inv.getArgument(0);
             entry.setLedgerEntryId(ledgerId);
             return entry;
@@ -122,7 +131,7 @@ class CycleCountAdjustmentServiceImplTest {
         assertThat(response.getStatus()).isEqualTo(AdjustmentStatus.POSTED);
         assertThat(response.getApprovedByUserId()).isEqualTo("SYSTEM");
         assertThat(response.getLedgerEntryId()).isEqualTo(ledgerId);
-        verify(ledgerRepository).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -144,7 +153,7 @@ class CycleCountAdjustmentServiceImplTest {
 
         assertThat(response.getStatus()).isEqualTo(AdjustmentStatus.PENDING_APPROVAL);
         assertThat(response.getRequiredApprovalTier()).isEqualTo(ApprovalTier.TIER_1_MANAGER);
-        verify(ledgerRepository, never()).save(any());
+        verify(ledgerPostingService, never()).post(any());
         verify(ledgerRepository, never()).calculateOnHandQuantity(any(UUID.class));
     }
 
@@ -162,7 +171,7 @@ class CycleCountAdjustmentServiceImplTest {
         when(adjustmentRepository.findById(adjustmentId)).thenReturn(Optional.of(adjustment));
         when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerRepository.calculateOnHandQuantity(STOCK_ITEM_ID)).thenReturn(10);
-        when(ledgerRepository.save(any(InventoryLedgerEntry.class))).thenAnswer(inv -> {
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(inv -> {
             InventoryLedgerEntry entry = inv.getArgument(0);
             entry.setLedgerEntryId(ledgerId);
             return entry;
@@ -174,7 +183,7 @@ class CycleCountAdjustmentServiceImplTest {
 
         assertThat(response.getStatus()).isEqualTo(AdjustmentStatus.POSTED);
         assertThat(response.getApprovedByUserId()).isEqualTo(ACTOR_USERNAME);
-        verify(ledgerRepository).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
         verify(eventPublisher).publishEvent(any(Object.class));
     }
 
@@ -214,7 +223,7 @@ class CycleCountAdjustmentServiceImplTest {
         assertThat(response.getStatus()).isEqualTo(AdjustmentStatus.REJECTED);
         assertThat(response.getRejectedByUserId()).isEqualTo("mgr-001");
         assertThat(response.getRejectionReason()).isEqualTo("Count value seems incorrect");
-        verify(ledgerRepository, never()).save(any());
+        verify(ledgerPostingService, never()).post(any());
     }
 
     @Test

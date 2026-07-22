@@ -2,27 +2,30 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
-import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.enums.InventorySourceType;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.service.InventoryAvailabilityService;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Inventory availability service implementation backed by inventory ledger
- * entries.
+ * Inventory availability service implementation backed by the
+ * {@code inventory_stock_summary} read model (issue #1024, A1). Quantities
+ * come from the stored summary maintained by {@code LedgerPostingService};
+ * only the derived unit of measure still consults the ledger (single-row
+ * lookup). Response shapes are unchanged from the ledger-aggregation era.
  *
  * Issue: CAP-170 (#48)
  */
@@ -30,9 +33,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class InventoryAvailabilityServiceImpl implements InventoryAvailabilityService {
 
+    private static final Pageable FIRST_ONLY = PageRequest.of(0, 1);
+    private static final String DEFAULT_UOM = "EACH";
+
+    private final InventoryStockSummaryRepository stockSummaryRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
-    public InventoryAvailabilityServiceImpl(InventoryLedgerEntryRepository inventoryLedgerEntryRepository) {
+    public InventoryAvailabilityServiceImpl(
+            InventoryStockSummaryRepository stockSummaryRepository,
+            InventoryLedgerEntryRepository inventoryLedgerEntryRepository) {
+        this.stockSummaryRepository = stockSummaryRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
     }
 
@@ -43,27 +53,18 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
             throw new InvalidInventoryAvailabilityRequestException("Product ID is required");
         }
 
-        // Issue #48: Resolve per-location on-hand and ATP from ledger entries.
-        List<InventoryLedgerEntry> ledgerEntries;
+        List<InventoryStockSummary> summaryRows;
         try {
-            ledgerEntries = inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString());
+            summaryRows = stockSummaryRepository.findByStockItemId(productId.toString());
         } catch (Exception ex) {
-            log.error("Failed retrieving inventory availability ledger entries for product {}", productId, ex);
+            log.error("Failed retrieving inventory availability summary for product {}", productId, ex);
             throw new IllegalStateException("Unable to retrieve inventory availability at this time", ex);
         }
 
-        if (ledgerEntries.isEmpty()) {
-            return List.of();
-        }
-
-        Map<UUID, List<InventoryLedgerEntry>> entriesByLocation = ledgerEntries.stream()
-                .filter(this::isProcessableEntry)
-                .filter(ledgerEntry -> ledgerEntry.getLocationId() != null)
-                .collect(Collectors.groupingBy(this::resolveLocationId));
-
-        return entriesByLocation.entrySet().stream()
-                .map(entry -> toLocationAvailability(entry.getKey(), entry.getValue()))
-                .sorted(Comparator.comparing(LocationAvailabilityDto::getLocationId))
+        return summaryRows.stream()
+                .filter(row -> row.getLocationId() != null)
+                .sorted(Comparator.comparing(InventoryStockSummary::getLocationId))
+                .map(this::toLocationAvailability)
                 .toList();
     }
 
@@ -74,106 +75,59 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
             @Nullable UUID locationId,
             @Nullable UUID storageLocationId,
             @Nullable InventorySourceType sourceType) {
-        List<InventoryLedgerEntry> allProductEntries =
-                inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productSku);
-        if (allProductEntries.isEmpty()) {
+        List<InventoryStockSummary> productRows = stockSummaryRepository.findByStockItemId(productSku);
+        if (productRows.isEmpty()) {
             throw new ProductNotFoundException(productSku);
         }
 
         UUID scopeLocationId = storageLocationId != null ? storageLocationId : locationId;
-        List<InventoryLedgerEntry> scopedEntries = scopeLocationId == null
-                ? allProductEntries
-                : inventoryLedgerEntryRepository.findByStockItemIdAndLocationIdOrderByTimestampAsc(
-                        productSku, scopeLocationId);
-
-        int onHand = scopedEntries.stream()
-                .filter(e -> e.getEventType() != null && e.getEventType().affectsOnHand())
-                .mapToInt(e -> e.getChangeInQuantity() != null ? e.getChangeInQuantity() : 0)
-                .sum();
-
-        int allocationCreated = scopedEntries.stream()
-                .filter(e -> e.getEventType() == InventoryLedgerEventType.ALLOCATION_CREATED)
-                .mapToInt(e -> e.getChangeInQuantity() != null ? e.getChangeInQuantity() : 0)
-                .sum();
-        int allocationReleased = scopedEntries.stream()
-                .filter(e -> e.getEventType() == InventoryLedgerEventType.ALLOCATION_RELEASED)
-                .mapToInt(e -> e.getChangeInQuantity() != null ? e.getChangeInQuantity() : 0)
-                .sum();
-        int allocatedQty = allocationCreated - allocationReleased;
-
-        String derivedUom = scopedEntries.stream()
-                .map(InventoryLedgerEntry::getUnitOfMeasure)
-                .filter(uom -> uom != null && !uom.isBlank())
-                .findFirst()
-                .orElse("EACH");
+        long onHand;
+        long allocated;
+        if (scopeLocationId == null) {
+            onHand = productRows.stream()
+                    .mapToLong(InventoryStockSummary::getOnHand)
+                    .sum();
+            allocated = productRows.stream()
+                    .mapToLong(InventoryStockSummary::getAllocated)
+                    .sum();
+        } else {
+            InventoryStockSummary scoped = productRows.stream()
+                    .filter(row -> scopeLocationId.equals(row.getLocationId()))
+                    .findFirst()
+                    .orElse(null);
+            onHand = scoped == null ? 0L : scoped.getOnHand();
+            allocated = scoped == null ? 0L : scoped.getAllocated();
+        }
 
         return AvailabilityView.builder()
                 .productSku(productSku)
                 .locationId(locationId)
                 .storageLocationId(storageLocationId)
-                .onHandQuantity(onHand)
-                .allocatedQuantity(allocatedQty)
-                .availableToPromiseQuantity(onHand - allocatedQty)
-                .unitOfMeasure(derivedUom)
+                .onHandQuantity(Math.toIntExact(onHand))
+                .allocatedQuantity(Math.toIntExact(allocated))
+                .availableToPromiseQuantity(Math.toIntExact(onHand - allocated))
+                .unitOfMeasure(deriveUnitOfMeasure(productSku, scopeLocationId))
                 .build();
     }
 
-    private boolean isProcessableEntry(InventoryLedgerEntry ledgerEntry) {
-        if (ledgerEntry == null) {
-            log.warn("Skipping null inventory ledger entry while computing availability");
-            return false;
-        }
-        if (ledgerEntry.getChangeInQuantity() == null) {
-            log.warn("Skipping inventory ledger entry {} with null changeInQuantity", ledgerEntry.getLedgerEntryId());
-            return false;
-        }
-        return true;
+    private String deriveUnitOfMeasure(String productSku, @Nullable UUID scopeLocationId) {
+        List<String> units = scopeLocationId == null
+                ? inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItem(productSku, FIRST_ONLY)
+                : inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItemAtLocation(
+                        productSku, scopeLocationId, FIRST_ONLY);
+        return units.isEmpty() ? DEFAULT_UOM : units.getFirst();
     }
 
-    private UUID resolveLocationId(InventoryLedgerEntry ledgerEntry) {
-        return ledgerEntry.getLocationId();
-    }
-
-    private LocationAvailabilityDto toLocationAvailability(UUID locationId, List<InventoryLedgerEntry> entries) {
-        int onHandQuantity = entries.stream()
-                .filter(ledgerEntry -> ledgerEntry.getEventType() != null
-                        && ledgerEntry.getEventType().affectsOnHand())
-                .mapToInt(ledgerEntry ->
-                        ledgerEntry.getChangeInQuantity() != null ? ledgerEntry.getChangeInQuantity() : 0)
-                .sum();
-
-        int activeReservations =
-                entries.stream().mapToInt(this::reservationDelta).sum();
-
-        int atpQuantity = onHandQuantity - activeReservations;
-
+    private LocationAvailabilityDto toLocationAvailability(InventoryStockSummary row) {
+        // Pre-#1024 behavior: this per-location list subtracts BOTH hard
+        // allocations and soft reservations from ATP (unlike queryAvailability,
+        // which per ADR-0001 subtracts allocations only).
+        long atpWithReservations = row.getOnHand() - row.getAllocated() - row.getReserved();
         return LocationAvailabilityDto.builder()
-                .locationId(locationId)
-                .locationName(locationId.toString())
-                .onHandQuantity(onHandQuantity)
-                .availableToPromiseQuantity(atpQuantity)
+                .locationId(row.getLocationId())
+                .locationName(row.getLocationId().toString())
+                .onHandQuantity(Math.toIntExact(row.getOnHand()))
+                .availableToPromiseQuantity(Math.toIntExact(atpWithReservations))
                 .build();
-    }
-
-    private int reservationDelta(InventoryLedgerEntry ledgerEntry) {
-        InventoryLedgerEventType eventType = ledgerEntry.getEventType();
-        if (eventType == null) {
-            return 0;
-        }
-
-        return switch (eventType) {
-            case RESERVATION_CREATED, ALLOCATION_CREATED -> safeQuantity(ledgerEntry);
-            case RESERVATION_RELEASED, ALLOCATION_RELEASED -> -safeQuantity(ledgerEntry);
-            default -> 0;
-        };
-    }
-
-    private int safeQuantity(InventoryLedgerEntry ledgerEntry) {
-        Integer quantity = ledgerEntry.getChangeInQuantity();
-        if (quantity == null) {
-            log.warn("Ledger entry {} has null changeInQuantity; treating as 0", ledgerEntry.getLedgerEntryId());
-            return 0;
-        }
-        return quantity;
     }
 }

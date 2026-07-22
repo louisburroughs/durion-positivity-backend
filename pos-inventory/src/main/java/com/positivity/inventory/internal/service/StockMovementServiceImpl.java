@@ -32,14 +32,17 @@ public class StockMovementServiceImpl implements StockMovementService {
 
     private final InventoryLedgerEntryRepository ledgerRepository;
     private final InventoryAdjustmentRequestRepository adjustmentRepository;
+    private final LedgerPostingService ledgerPostingService;
     private final Clock clock;
 
     public StockMovementServiceImpl(
             InventoryLedgerEntryRepository ledgerRepository,
             InventoryAdjustmentRequestRepository adjustmentRepository,
+            LedgerPostingService ledgerPostingService,
             Clock clock) {
         this.ledgerRepository = ledgerRepository;
         this.adjustmentRepository = adjustmentRepository;
+        this.ledgerPostingService = ledgerPostingService;
         this.clock = clock;
     }
 
@@ -77,7 +80,7 @@ public class StockMovementServiceImpl implements StockMovementService {
                     .transactionUserId(actorUserId)
                     .timestamp(Instant.now(clock))
                     .build();
-            ledgerRepository.save(transferInEntry);
+            ledgerPostingService.post(transferInEntry);
         }
 
         InventoryLedgerEventType eventType = mapMovementTypeToEventType(movementType);
@@ -106,7 +109,7 @@ public class StockMovementServiceImpl implements StockMovementService {
 
         log.debug(
                 "Recorded stock movement type={} sku={} actor={}", movementType, request.getProductSku(), actorUserId);
-        InventoryLedgerEntry savedEntry = ledgerRepository.save(entry);
+        InventoryLedgerEntry savedEntry = ledgerPostingService.post(entry);
         return toResponse(savedEntry);
     }
 
@@ -172,7 +175,7 @@ public class StockMovementServiceImpl implements StockMovementService {
         adjustmentRequest.setApprovedAt(Instant.now(clock));
         adjustmentRepository.save(adjustmentRequest);
 
-        return ledgerRepository.save(entry);
+        return ledgerPostingService.post(entry);
     }
 
     private InventoryLedgerEventType mapMovementTypeToEventType(MovementType movementType) {

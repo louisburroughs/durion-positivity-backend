@@ -55,6 +55,7 @@ public class AsnServiceImpl implements AsnService {
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderLineRepository purchaseOrderLineRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -240,7 +241,7 @@ public class AsnServiceImpl implements AsnService {
                     .sourceTransactionId(persistedReceipt.getReceiptId().toString())
                     .notes("Goods receipt " + persistedReceipt.getReceiptNumber())
                     .build();
-            inventoryLedgerEntryRepository.save(entry);
+            ledgerPostingService.post(entry);
             inventoryFactPublisher.markEntry(entry);
         }
 

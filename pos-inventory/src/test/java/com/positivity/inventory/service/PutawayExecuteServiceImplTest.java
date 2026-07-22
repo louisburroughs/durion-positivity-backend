@@ -22,6 +22,7 @@ import com.positivity.inventory.internal.exception.PutawayValidationException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
+import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.PutawayExecuteServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
@@ -46,6 +47,9 @@ class PutawayExecuteServiceImplTest {
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
     @Mock
+    private LedgerPostingService ledgerPostingService;
+
+    @Mock
     private PutawayValidationService putawayValidationService;
 
     private PutawayExecuteServiceImpl putawayExecuteService;
@@ -64,6 +68,7 @@ class PutawayExecuteServiceImplTest {
         putawayExecuteService = new PutawayExecuteServiceImpl(
                 putawayTaskRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 putawayValidationService,
                 fixedClock);
@@ -88,17 +93,16 @@ class PutawayExecuteServiceImplTest {
                 .thenReturn(50);
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("sku-abc", destinationLocationId))
                 .thenReturn(5);
-        when(inventoryLedgerEntryRepository.save(any(InventoryLedgerEntry.class)))
-                .thenAnswer(invocation -> {
-                    InventoryLedgerEntry entry = invocation.getArgument(0);
-                    entry.setLedgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-                    return entry;
-                });
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(invocation -> {
+            InventoryLedgerEntry entry = invocation.getArgument(0);
+            entry.setLedgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+            return entry;
+        });
 
         PutawayExecutionResponse response = putawayExecuteService.executePutaway(taskId.toString(), request);
 
         ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
-        verify(inventoryLedgerEntryRepository, times(2)).save(ledgerCaptor.capture());
+        verify(ledgerPostingService, times(2)).post(ledgerCaptor.capture());
         List<InventoryLedgerEntry> allCaptured = ledgerCaptor.getAllValues();
 
         InventoryLedgerEntry sourceEntry = allCaptured.stream()
@@ -193,7 +197,7 @@ class PutawayExecuteServiceImplTest {
         assertThrows(
                 PutawayValidationException.class,
                 () -> putawayExecuteService.executePutaway(taskId.toString(), request));
-        verify(inventoryLedgerEntryRepository, never()).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService, never()).post(any(InventoryLedgerEntry.class));
         verify(putawayTaskRepository, never()).save(any(PutawayTask.class));
     }
 }

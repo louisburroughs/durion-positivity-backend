@@ -36,6 +36,7 @@ public class ReturnServiceImpl implements ReturnService {
 
     private final InventoryReturnRepository inventoryReturnRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final Clock clock;
 
@@ -112,7 +113,7 @@ public class ReturnServiceImpl implements ReturnService {
             ledgerEntries.add(buildReturnLedgerEntry(request, item));
         }
 
-        List<InventoryLedgerEntry> savedLedgerEntries = inventoryLedgerEntryRepository.saveAll(ledgerEntries);
+        List<InventoryLedgerEntry> savedLedgerEntries = ledgerPostingService.postAll(ledgerEntries);
         inventoryFactPublisher.markEntries(savedLedgerEntries);
         List<UUID> ledgerEntryIds = savedLedgerEntries.stream()
                 .map(InventoryLedgerEntry::getLedgerEntryId)

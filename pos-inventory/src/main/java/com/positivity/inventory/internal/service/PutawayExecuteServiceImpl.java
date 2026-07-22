@@ -28,6 +28,7 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
 
     private final PutawayTaskRepository putawayTaskRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final PutawayValidationService putawayValidationService;
     private final Clock clock;
@@ -68,7 +69,7 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
                 .timestamp(now)
                 .build();
 
-        InventoryLedgerEntry savedSourceLedgerEntry = inventoryLedgerEntryRepository.save(sourceLedgerEntry);
+        InventoryLedgerEntry savedSourceLedgerEntry = ledgerPostingService.post(sourceLedgerEntry);
         inventoryFactPublisher.markEntry(savedSourceLedgerEntry);
 
         InventoryLedgerEntry destinationLedgerEntry = InventoryLedgerEntry.builder()
@@ -82,7 +83,7 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
                         + request.getDestinationLocationId())
                 .timestamp(now)
                 .build();
-        inventoryLedgerEntryRepository.save(destinationLedgerEntry);
+        ledgerPostingService.post(destinationLedgerEntry);
         inventoryFactPublisher.markEntry(destinationLedgerEntry);
 
         task.setStatus(PutawayTaskStatus.COMPLETED);

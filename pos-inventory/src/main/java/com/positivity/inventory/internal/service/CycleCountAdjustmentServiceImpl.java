@@ -45,6 +45,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
 
     private final CycleCountAdjustmentRepository adjustmentRepository;
     private final InventoryLedgerEntryRepository ledgerRepository;
+    private final LedgerPostingService ledgerPostingService;
     private final ApprovalThresholdEvaluator thresholdEvaluator;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
@@ -202,7 +203,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                     .notes(String.format("Cycle count adjustment: %s", adjustment.getReasonCode()))
                     .build();
 
-            ledgerEntry = ledgerRepository.save(ledgerEntry);
+            ledgerEntry = ledgerPostingService.post(ledgerEntry);
             adjustment.setLedgerEntryId(ledgerEntry.getLedgerEntryId());
             adjustment.setStatus(AdjustmentStatus.POSTED);
             adjustment.setPostedAt(Instant.now(clock));
