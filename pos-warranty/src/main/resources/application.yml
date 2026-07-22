@@ -94,6 +94,3 @@ pos:
   catalog:
     service-id: catalog
     base-path: /v1/products
-  customer:
-    service-id: customer
-    base-path: /v1/crm

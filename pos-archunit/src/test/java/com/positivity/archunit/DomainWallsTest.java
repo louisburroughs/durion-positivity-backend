@@ -55,12 +55,14 @@ class DomainWallsTest {
      * other target) still fails.
      *
      * <p>pos-warranty: ADR-0044 amendment 2026-07-16 + {@code docs/PRD-warranty-claims-module.md}
-     * §9.4 — warranty v1 candidate-line origin search and settlement execution are synchronous
-     * counter flows; migration to event-fed replicas is the planned v2 path.
+     * §9.4 — warranty v2 (#924) is migrating these sync {@code internal.client} reads to event-fed
+     * {@code ext_*} replicas. Already migrated and removed from this allowance: pos-vehicle-inventory
+     * (ext_vehicle) and pos-customer (dead client deleted). Remaining: pos-invoice (settlement
+     * adjustment/refund writes + reconciliation reads stay synchronous pending a further ADR
+     * amendment), pos-workorder, and pos-catalog.
      */
-    private static final Map<String, Set<String>> SCOPED_MODULE_EXCEPTIONS = Map.of(
-            "pos-warranty",
-            Set.of("pos-invoice", "pos-workorder", "pos-catalog", "pos-customer", "pos-vehicle-inventory"));
+    private static final Map<String, Set<String>> SCOPED_MODULE_EXCEPTIONS =
+            Map.of("pos-warranty", Set.of("pos-invoice", "pos-workorder", "pos-catalog"));
 
     /** Startup-infra classes exempt per ADR-0044 R2 (registration calls, best-effort at boot). */
     private static final Pattern EXEMPT_FILES =
