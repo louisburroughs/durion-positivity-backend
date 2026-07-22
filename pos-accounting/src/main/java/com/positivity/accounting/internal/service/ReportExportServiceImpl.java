@@ -4,7 +4,6 @@ import com.positivity.accounting.internal.client.DocumentRenderClient;
 import com.positivity.accounting.internal.dto.ReportExportArtifact;
 import com.positivity.accounting.internal.dto.ReportExportRequest;
 import com.positivity.accounting.internal.dto.ReportExportResponse;
-import com.positivity.accounting.internal.dto.TaxLiabilityReport;
 import com.positivity.accounting.internal.enums.ExportFormat;
 import com.positivity.accounting.internal.enums.ExportStatus;
 import com.positivity.accounting.service.FinancialReportingService;
@@ -13,11 +12,14 @@ import com.positivity.security.common.LogSanitizer;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.NonNull;
@@ -29,26 +31,49 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Implementation of {@link ReportExportService} with real rendering (issue #999).
+ * Implementation of {@link ReportExportService} with real rendering (issues #999,
+ * #1011-#1015).
  *
- * <p>Exports render synchronously at request time: CSV is produced locally by
- * {@link TaxLiabilityCsvRenderer} (deterministic column/row order, figures matching
- * the JSON report to the cent) and PDF is produced by the pos-documents service per
+ * <p>Exports render synchronously at request time: CSV is produced locally by the
+ * per-report-type renderers (deterministic column/row order, figures matching the
+ * JSON report to the cent) and PDF is produced by the pos-documents service per
  * ADR-0020 (the deterministic CSV is sent as render content). Successful renders
  * complete immediately with a download URL; failures are recorded as FAILED with a
  * reason. Job state and artifacts are persisted in-memory (JPA entity + object
  * storage deferred to a future capability sprint).
+ *
+ * <p><b>As-of-date mapping.</b> The export request carries {@code startDate} and
+ * {@code endDate}; for the as-of reports (BALANCE_SHEET, TRIAL_BALANCE,
+ * AGED_RECEIVABLES, AGED_PAYABLES) the request's {@code endDate} is used as the
+ * as-of date (decision recorded on issues #1012/#1013/#1015 and documented in the
+ * {@link ReportExportRequest} OpenAPI description).
  */
 @Service
 public class ReportExportServiceImpl implements ReportExportService {
 
     private static final Logger log = LoggerFactory.getLogger(ReportExportServiceImpl.class);
 
-    /** The only report type with rendering support so far (story T8). */
     static final String TAX_LIABILITY = "TAX_LIABILITY";
+    static final String INCOME_STATEMENT = "INCOME_STATEMENT";
+    static final String BALANCE_SHEET = "BALANCE_SHEET";
+    static final String TRIAL_BALANCE = "TRIAL_BALANCE";
+    static final String GENERAL_LEDGER = "GENERAL_LEDGER";
+    static final String AGED_RECEIVABLES = "AGED_RECEIVABLES";
+    static final String AGED_PAYABLES = "AGED_PAYABLES";
+
+    /** Report types with rendering support (stories T8 #999 and #1011-#1015). */
+    static final Set<String> SUPPORTED_REPORT_TYPES = Set.of(
+            TAX_LIABILITY,
+            INCOME_STATEMENT,
+            BALANCE_SHEET,
+            TRIAL_BALANCE,
+            GENERAL_LEDGER,
+            AGED_RECEIVABLES,
+            AGED_PAYABLES);
 
     private static final String PDF_TEMPLATE_ID = "DEFAULT_STANDARD_TEMPLATE";
 
@@ -61,7 +86,12 @@ public class ReportExportServiceImpl implements ReportExportService {
 
     private final Clock clock;
     private final FinancialReportingService financialReportingService;
-    private final TaxLiabilityCsvRenderer csvRenderer;
+    private final TaxLiabilityCsvRenderer taxLiabilityCsvRenderer;
+    private final IncomeStatementCsvRenderer incomeStatementCsvRenderer;
+    private final BalanceSheetCsvRenderer balanceSheetCsvRenderer;
+    private final TrialBalanceCsvRenderer trialBalanceCsvRenderer;
+    private final GeneralLedgerCsvRenderer generalLedgerCsvRenderer;
+    private final AgedReportCsvRenderer agedReportCsvRenderer;
     private final DocumentRenderClient documentRenderClient;
 
     /**
@@ -80,11 +110,21 @@ public class ReportExportServiceImpl implements ReportExportService {
     public ReportExportServiceImpl(
             Clock clock,
             FinancialReportingService financialReportingService,
-            TaxLiabilityCsvRenderer csvRenderer,
+            TaxLiabilityCsvRenderer taxLiabilityCsvRenderer,
+            IncomeStatementCsvRenderer incomeStatementCsvRenderer,
+            BalanceSheetCsvRenderer balanceSheetCsvRenderer,
+            TrialBalanceCsvRenderer trialBalanceCsvRenderer,
+            GeneralLedgerCsvRenderer generalLedgerCsvRenderer,
+            AgedReportCsvRenderer agedReportCsvRenderer,
             DocumentRenderClient documentRenderClient) {
         this.clock = clock;
         this.financialReportingService = financialReportingService;
-        this.csvRenderer = csvRenderer;
+        this.taxLiabilityCsvRenderer = taxLiabilityCsvRenderer;
+        this.incomeStatementCsvRenderer = incomeStatementCsvRenderer;
+        this.balanceSheetCsvRenderer = balanceSheetCsvRenderer;
+        this.trialBalanceCsvRenderer = trialBalanceCsvRenderer;
+        this.generalLedgerCsvRenderer = generalLedgerCsvRenderer;
+        this.agedReportCsvRenderer = agedReportCsvRenderer;
         this.documentRenderClient = documentRenderClient;
     }
 
@@ -114,7 +154,7 @@ public class ReportExportServiceImpl implements ReportExportService {
                 .format(request.getFormat())
                 .reportType(request.getReportType());
 
-        if (!TAX_LIABILITY.equals(request.getReportType())) {
+        if (!SUPPORTED_REPORT_TYPES.contains(request.getReportType())) {
             return builder.status(ExportStatus.FAILED)
                     .completedAt(Instant.now(clock))
                     .failureReason("Rendering is not supported for reportType '" + request.getReportType() + "'")
@@ -128,14 +168,21 @@ public class ReportExportServiceImpl implements ReportExportService {
         }
 
         try {
-            TaxLiabilityReport report =
-                    financialReportingService.generateTaxLiability(request.getStartDate(), request.getEndDate());
-            String csv = csvRenderer.render(report);
+            String csv = renderCsv(request);
             ReportExportArtifact artifact = toArtifact(request, csv);
             artifactStore.put(exportId, artifact);
             return builder.status(ExportStatus.COMPLETED)
                     .completedAt(Instant.now(clock))
                     .downloadUrl("/v1/accounting/reports/export/" + exportId + "/download")
+                    .build();
+        } catch (RestClientResponseException e) {
+            // pos-documents rejected the render (e.g. payload over its configured
+            // max-input-characters / max-table-rows limits) — fail cleanly, no 500.
+            log.warn("Report export PDF rendering rejected by pos-documents: exportId={}", exportId, e);
+            return builder.status(ExportStatus.FAILED)
+                    .completedAt(Instant.now(clock))
+                    .failureReason("PDF rendering failed (pos-documents returned "
+                            + e.getStatusCode().value() + "); see service logs for exportId " + exportId)
                     .build();
         } catch (RuntimeException e) {
             log.warn("Report export rendering failed: exportId={}", exportId, e);
@@ -146,16 +193,51 @@ public class ReportExportServiceImpl implements ReportExportService {
         }
     }
 
+    /**
+     * Generate the requested report and render it to deterministic CSV. As-of
+     * reports use the request's {@code endDate} as the as-of date; the general
+     * ledger honors the optional {@code accountId} filter.
+     */
+    private String renderCsv(ReportExportRequest request) {
+        LocalDate start = request.getStartDate();
+        LocalDate end = request.getEndDate();
+        return switch (request.getReportType()) {
+            case TAX_LIABILITY ->
+                taxLiabilityCsvRenderer.render(financialReportingService.generateTaxLiability(start, end));
+            case INCOME_STATEMENT ->
+                incomeStatementCsvRenderer.render(financialReportingService.generateIncomeStatement(start, end));
+            case BALANCE_SHEET -> balanceSheetCsvRenderer.render(financialReportingService.generateBalanceSheet(end));
+            case TRIAL_BALANCE -> trialBalanceCsvRenderer.render(financialReportingService.generateTrialBalance(end));
+            case GENERAL_LEDGER ->
+                generalLedgerCsvRenderer.render(financialReportingService.generateGeneralLedger(
+                        request.getAccountId() == null
+                                ? null
+                                : request.getAccountId().toString(),
+                        start,
+                        end));
+            case AGED_RECEIVABLES ->
+                agedReportCsvRenderer.render(financialReportingService.generateAgedReceivables(end));
+            case AGED_PAYABLES -> agedReportCsvRenderer.render(financialReportingService.generateAgedPayables(end));
+            default -> throw new IllegalStateException("Unexpected reportType '" + request.getReportType() + "'");
+        };
+    }
+
     private ReportExportArtifact toArtifact(ReportExportRequest request, String csv) {
         String baseName = sanitizeFilename(
                 (request.getFilename() != null && !request.getFilename().isBlank())
                         ? request.getFilename()
-                        : "tax-liability-" + request.getStartDate() + "-" + request.getEndDate());
+                        : defaultBaseName(request));
         if (request.getFormat() == ExportFormat.CSV) {
             return new ReportExportArtifact(csv.getBytes(StandardCharsets.UTF_8), "text/csv", baseName + ".csv");
         }
         byte[] pdf = documentRenderClient.renderPdfFromCsv(PDF_TEMPLATE_ID, csv);
         return new ReportExportArtifact(pdf, "application/pdf", baseName + ".pdf");
+    }
+
+    private static String defaultBaseName(ReportExportRequest request) {
+        return request.getReportType().toLowerCase(Locale.ROOT).replace('_', '-')
+                + "-" + request.getStartDate()
+                + "-" + request.getEndDate();
     }
 
     /**

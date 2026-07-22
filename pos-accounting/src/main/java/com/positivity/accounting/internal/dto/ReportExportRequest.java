@@ -32,11 +32,15 @@ public class ReportExportRequest {
     private ExportFormat format;
 
     /**
-     * Report type to export (e.g. JOURNAL_LINES, INCOME_STATEMENT).
+     * Report type to export.
      */
     @NotBlank(message = "reportType is required")
     @Size(max = 100, message = "reportType must not exceed 100 characters")
-    @Schema(description = "Report type key", example = "JOURNAL_LINES", requiredMode = REQUIRED)
+    @Schema(
+            description = "Report type key. Renderable types: TAX_LIABILITY, INCOME_STATEMENT, BALANCE_SHEET, "
+                    + "TRIAL_BALANCE, GENERAL_LEDGER, AGED_RECEIVABLES, AGED_PAYABLES.",
+            example = "INCOME_STATEMENT",
+            requiredMode = REQUIRED)
     private String reportType;
 
     /**
@@ -47,10 +51,14 @@ public class ReportExportRequest {
     private LocalDate startDate;
 
     /**
-     * Period end date (inclusive).
+     * Period end date (inclusive). For as-of reports this date is the as-of date.
      */
     @NotNull(message = "endDate is required")
-    @Schema(description = "Period end date (inclusive, YYYY-MM-DD)", example = "2026-03-31", requiredMode = REQUIRED)
+    @Schema(
+            description = "Period end date (inclusive, YYYY-MM-DD). For the as-of reports (BALANCE_SHEET, "
+                    + "TRIAL_BALANCE, AGED_RECEIVABLES, AGED_PAYABLES) this date is used as the as-of date.",
+            example = "2026-03-31",
+            requiredMode = REQUIRED)
     private LocalDate endDate;
 
     /**
@@ -62,6 +70,16 @@ public class ReportExportRequest {
             example = "d10217f9-3ec6-46b9-9c87-e7066c100c24",
             requiredMode = REQUIRED)
     private UUID organizationId;
+
+    /**
+     * Optional GL account filter for GENERAL_LEDGER exports.
+     */
+    @Schema(
+            description = "Optional GL account UUID filter, honored by GENERAL_LEDGER exports only; "
+                    + "null spans all accounts",
+            example = "123e4567-e89b-12d3-a456-426614174000",
+            requiredMode = NOT_REQUIRED)
+    private UUID accountId;
 
     /**
      * Optional filename (without extension).
