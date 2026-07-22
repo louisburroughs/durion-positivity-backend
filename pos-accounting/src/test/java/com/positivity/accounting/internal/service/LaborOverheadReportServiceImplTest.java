@@ -58,7 +58,8 @@ class LaborOverheadReportServiceImplTest {
     }
 
     private void mappings(StatementLineMapping... mappings) {
-        when(statementLineMappingRepository.findByStatementTypeOrderByDisplayOrder(eq(StatementType.LABOR_OVERHEAD)))
+        when(statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(
+                        eq(StatementType.LABOR_OVERHEAD)))
                 .thenReturn(List.of(mappings));
     }
 
@@ -187,7 +188,7 @@ class LaborOverheadReportServiceImplTest {
 
     @Test
     void generate_withNoMappings_returnsFullLayoutAllZero() {
-        when(statementLineMappingRepository.findByStatementTypeOrderByDisplayOrder(any()))
+        when(statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(any()))
                 .thenReturn(List.of());
 
         LaborOverheadCostReport report = service.generate(LOCATION, FISCAL_YEAR, 12);
@@ -200,7 +201,7 @@ class LaborOverheadReportServiceImplTest {
 
     @Test
     void generate_populatesUsPlantCurrencyContext() {
-        when(statementLineMappingRepository.findByStatementTypeOrderByDisplayOrder(any()))
+        when(statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(any()))
                 .thenReturn(List.of());
 
         LaborOverheadCostReport report = service.generate(LOCATION, FISCAL_YEAR, null);
@@ -303,7 +304,7 @@ class LaborOverheadReportServiceImplTest {
 
     @Test
     void generate_flagsUsdOnlyOnLine2_11_4() {
-        when(statementLineMappingRepository.findByStatementTypeOrderByDisplayOrder(any()))
+        when(statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(any()))
                 .thenReturn(List.of());
 
         LaborOverheadCostReport report = service.generate(LOCATION, FISCAL_YEAR, 12);

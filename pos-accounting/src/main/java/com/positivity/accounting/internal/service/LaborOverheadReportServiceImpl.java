@@ -96,7 +96,7 @@ public class LaborOverheadReportServiceImpl implements LaborOverheadReportServic
     private Map<String, Set<UUID>> resolveLeafToAccounts() {
         Map<String, Set<UUID>> leafToAccounts = new HashMap<>();
         statementLineMappingRepository
-                .findByStatementTypeOrderByDisplayOrder(StatementType.LABOR_OVERHEAD)
+                .findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(StatementType.LABOR_OVERHEAD)
                 .forEach(mapping -> {
                     UUID accountId = mapping.getGlAccountId();
                     if (accountId != null && mapping.getStatementLineCode() != null) {

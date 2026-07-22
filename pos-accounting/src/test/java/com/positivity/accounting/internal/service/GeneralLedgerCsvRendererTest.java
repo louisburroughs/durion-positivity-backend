@@ -61,6 +61,24 @@ class GeneralLedgerCsvRendererTest {
         assertEquals(renderer.render(first), renderer.render(second));
     }
 
+    @Test
+    @DisplayName("Descriptions and names starting with =, +, or @ are neutralized; negative amounts stay plain")
+    void neutralizesFormulaLeadingText() {
+        GeneralLedgerReport report = report(null);
+        GeneralLedgerAccountSection section = report.getAccounts().getFirst();
+        section.setAccountName("=HYPERLINK(\"http://evil\",\"click\")");
+        section.getLines().getFirst().setDescription("+Customer payment");
+        section.getLines().get(1).setDescription("@Rent");
+        section.setClosingBalance(new BigDecimal("-123.45"));
+
+        String csv = renderer.render(report);
+
+        assertTrue(csv.contains("1000,\"'=HYPERLINK(\"\"http://evil\"\",\"\"click\"\")\",OPENING BALANCE"));
+        assertTrue(csv.contains(",'+Customer payment,"));
+        assertTrue(csv.contains(",'@Rent,"));
+        assertTrue(csv.contains(",-123.45\n"), "negative figures must stay plain, not neutralized");
+    }
+
     private static GeneralLedgerReport report(String accountId) {
         return GeneralLedgerReport.builder()
                 .accountId(accountId)

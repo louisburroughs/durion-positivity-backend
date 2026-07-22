@@ -172,7 +172,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         // Load all income statement mappings (ordered by display order)
         List<StatementLineMapping> mappings =
-                statementLineMappingRepository.findByStatementTypeOrderByDisplayOrder(StatementType.INCOME_STATEMENT);
+                statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(
+                        StatementType.INCOME_STATEMENT);
 
         if (mappings.isEmpty()) {
             log.warn("No statement line mappings configured for INCOME_STATEMENT");
@@ -252,7 +253,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         // Load all balance sheet mappings (ordered by display order)
         List<StatementLineMapping> mappings =
-                statementLineMappingRepository.findByStatementTypeOrderByDisplayOrder(StatementType.BALANCE_SHEET);
+                statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(
+                        StatementType.BALANCE_SHEET);
 
         if (mappings.isEmpty()) {
             log.warn("No statement line mappings configured for BALANCE_SHEET");

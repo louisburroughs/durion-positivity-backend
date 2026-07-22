@@ -65,6 +65,21 @@ class TaxLiabilityCsvRendererTest {
                 "CR/LF and quotes must be contained inside a quoted, quote-escaped field");
     }
 
+    @Test
+    @DisplayName("Names and reason codes starting with =, +, or @ are neutralized; negative amounts stay plain")
+    void neutralizesFormulaLeadingText() {
+        TaxLiabilityReport report = report();
+        report.getRows().getFirst().setJurisdictionName("=HYPERLINK(\"http://evil\",\"click\")");
+        report.getRows().getFirst().setExemptionReasons(List.of("+RESALE", "@GOVT"));
+        report.getRows().getFirst().setNetTax(new BigDecimal("-123.45"));
+
+        String csv = renderer.render(report);
+
+        assertTrue(csv.contains(",\"'=HYPERLINK(\"\"http://evil\"\",\"\"click\"\")\","));
+        assertTrue(csv.contains(",'+RESALE|@GOVT,"), "only the leading character of the joined cell is neutralized");
+        assertTrue(csv.contains(",-123.45\n"), "negative figures must stay plain, not neutralized");
+    }
+
     private static TaxLiabilityReport report() {
         return TaxLiabilityReport.builder()
                 .startDate(LocalDate.of(2026, 6, 1))

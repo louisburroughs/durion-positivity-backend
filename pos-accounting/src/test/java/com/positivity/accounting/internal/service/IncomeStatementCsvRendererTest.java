@@ -63,6 +63,25 @@ class IncomeStatementCsvRendererTest {
                 "commas and quotes must be contained inside a quoted, quote-escaped field");
     }
 
+    @Test
+    @DisplayName("Line codes starting with =, +, or @ are neutralized; negative amounts stay plain")
+    void neutralizesFormulaLeadingLineCodes() {
+        IncomeStatementReport report = report();
+        Map<String, BigDecimal> lineItems = new LinkedHashMap<>();
+        lineItems.put("=HYPERLINK(\"http://evil\",\"click\")", new BigDecimal("1.00"));
+        lineItems.put("+REVENUE", new BigDecimal("2.00"));
+        lineItems.put("@ADJUSTMENT", new BigDecimal("3.00"));
+        report.setLineItems(lineItems);
+        report.setNetIncome(new BigDecimal("-123.45"));
+
+        String csv = renderer.render(report);
+
+        assertTrue(csv.contains("\"'=HYPERLINK(\"\"http://evil\"\",\"\"click\"\")\",1.00"));
+        assertTrue(csv.contains("'+REVENUE,2.00"));
+        assertTrue(csv.contains("'@ADJUSTMENT,3.00"));
+        assertTrue(csv.contains("NET_INCOME,-123.45"), "negative figures must stay plain, not neutralized");
+    }
+
     private static IncomeStatementReport report() {
         Map<String, BigDecimal> lineItems = new LinkedHashMap<>();
         lineItems.put("REVENUE_SALES", new BigDecimal("1250.00"));

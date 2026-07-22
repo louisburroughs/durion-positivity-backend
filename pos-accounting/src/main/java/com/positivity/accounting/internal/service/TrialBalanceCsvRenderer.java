@@ -41,9 +41,9 @@ public class TrialBalanceCsvRenderer {
 
         csv.append(ROW_HEADER).append('\n');
         for (TrialBalanceRow row : report.getRows()) {
-            csv.append(CsvFormat.escape(row.getAccountNumber()))
+            csv.append(CsvFormat.escapeText(row.getAccountNumber()))
                     .append(',')
-                    .append(CsvFormat.escape(row.getAccountName()))
+                    .append(CsvFormat.escapeText(row.getAccountName()))
                     .append(',')
                     .append(amount(row.getTotalDebit()))
                     .append(',')
@@ -61,9 +61,9 @@ public class TrialBalanceCsvRenderer {
 
         csv.append(GAP_HEADER).append('\n');
         for (EntryNumberGapCheck gap : report.getEntryNumberGaps()) {
-            csv.append(CsvFormat.escape(gap.getScopeKey()))
+            csv.append(CsvFormat.escapeText(gap.getScopeKey()))
                     .append(',')
-                    .append(CsvFormat.escape(gap.getMissingNumbers().stream()
+                    .append(CsvFormat.escapeText(gap.getMissingNumbers().stream()
                             .map(String::valueOf)
                             .collect(Collectors.joining("|"))))
                     .append('\n');

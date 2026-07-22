@@ -80,6 +80,22 @@ class AgedReportCsvRendererTest {
         assertEquals(renderer.render(first), renderer.render(second));
     }
 
+    @Test
+    @DisplayName("Party names starting with =, +, or @ are neutralized; negative amounts stay plain")
+    void neutralizesFormulaLeadingPartyNames() {
+        AgedReceivablesReport receivables = receivables();
+        receivables.getRows().getFirst().setCustomerName("=HYPERLINK(\"http://evil\",\"click\")");
+        receivables.getRows().getFirst().setCurrent(new BigDecimal("-123.45"));
+        AgedPayablesReport payables = payables();
+        payables.getRows().getFirst().setVendorName("+Global @Parts");
+
+        String arCsv = renderer.render(receivables);
+        String apCsv = renderer.render(payables);
+
+        assertTrue(arCsv.contains(",\"'=HYPERLINK(\"\"http://evil\"\",\"\"click\"\")\",-123.45"));
+        assertTrue(apCsv.contains(",'+Global @Parts,3200.00"));
+    }
+
     private static AgedReceivablesReport receivables() {
         return AgedReceivablesReport.builder()
                 .asOfDate(LocalDate.of(2026, 6, 30))

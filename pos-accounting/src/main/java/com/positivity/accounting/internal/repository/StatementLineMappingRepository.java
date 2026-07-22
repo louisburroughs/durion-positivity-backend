@@ -13,13 +13,18 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface StatementLineMappingRepository extends JpaRepository<StatementLineMapping, UUID> {
 
     /**
-     * Find all mappings for a specific statement type, ordered by display order.
+     * Find all mappings for a specific statement type, ordered by display order
+     * with the statement line code as a deterministic tiebreak (issue #1018) —
+     * two mappings sharing a display order would otherwise come back in
+     * database-dependent relative order, breaking report {@code lineItems}
+     * ordering and the byte-identical CSV rendering guarantee.
      *
      * @param statementType the statement type (INCOME_STATEMENT or BALANCE_SHEET)
-     * @return list of mappings sorted by display order
+     * @return list of mappings sorted by display order, then statement line code
      */
     @NonNull
-    List<StatementLineMapping> findByStatementTypeOrderByDisplayOrder(@NonNull StatementType statementType);
+    List<StatementLineMapping> findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(
+            @NonNull StatementType statementType);
 
     /**
      * Find all mappings for a specific statement line code.

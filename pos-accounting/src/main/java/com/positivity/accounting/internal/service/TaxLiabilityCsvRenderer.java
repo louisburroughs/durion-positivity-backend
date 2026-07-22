@@ -45,17 +45,17 @@ public class TaxLiabilityCsvRenderer {
 
         csv.append(ROW_HEADER).append('\n');
         for (TaxLiabilityRow row : report.getRows()) {
-            csv.append(escape(row.getJurisdictionType()))
+            csv.append(escapeText(row.getJurisdictionType()))
                     .append(',')
-                    .append(escape(row.getJurisdictionCode()))
+                    .append(escapeText(row.getJurisdictionCode()))
                     .append(',')
-                    .append(escape(row.getJurisdictionName()))
+                    .append(escapeText(row.getJurisdictionName()))
                     .append(',')
                     .append(amount(row.getTaxableBase()))
                     .append(',')
                     .append(amount(row.getExemptBase()))
                     .append(',')
-                    .append(escape(joinReasons(row.getExemptionReasons())))
+                    .append(escapeText(joinReasons(row.getExemptionReasons())))
                     .append(',')
                     .append(amount(row.getTaxCollectedGross()))
                     .append(',')
@@ -78,7 +78,7 @@ public class TaxLiabilityCsvRenderer {
 
         TaxLiabilityReconciliation reconciliation = report.getReconciliation();
         csv.append(RECONCILIATION_HEADER).append('\n');
-        csv.append(escape(reconciliation.getTaxPayableAccountCode()))
+        csv.append(escapeText(reconciliation.getTaxPayableAccountCode()))
                 .append(',')
                 .append(amount(reconciliation.getGlNetActivity()))
                 .append(',')
@@ -102,7 +102,7 @@ public class TaxLiabilityCsvRenderer {
         return (reasons == null || reasons.isEmpty()) ? "" : String.join("|", reasons);
     }
 
-    private static String escape(String value) {
-        return CsvFormat.escape(value);
+    private static String escapeText(String value) {
+        return CsvFormat.escapeText(value);
     }
 }

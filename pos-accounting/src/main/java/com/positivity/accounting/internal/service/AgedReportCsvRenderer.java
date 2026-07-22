@@ -89,9 +89,9 @@ public class AgedReportCsvRenderer {
 
         csv.append(partyHeader).append(',').append(BUCKET_COLUMNS).append('\n');
         for (PartyAgingRow row : rows) {
-            csv.append(CsvFormat.escape(row.partyId()))
+            csv.append(CsvFormat.escapeText(row.partyId()))
                     .append(',')
-                    .append(CsvFormat.escape(row.partyName()))
+                    .append(CsvFormat.escapeText(row.partyName()))
                     .append(',')
                     .append(amount(row.current()))
                     .append(',')
