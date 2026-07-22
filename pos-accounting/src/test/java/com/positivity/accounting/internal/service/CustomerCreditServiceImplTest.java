@@ -19,6 +19,8 @@ import com.positivity.accounting.internal.enums.CustomerCreditStatus;
 import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.service.AccountingPeriodService;
 import com.positivity.accounting.service.OutboxService;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -61,7 +63,13 @@ class CustomerCreditServiceImplTest {
     private CustomerCreditTransactionRepository creditTransactionRepository;
 
     @Mock
+    private ExtInvoiceRepository extInvoiceRepository;
+
+    @Mock
     private InvoiceBalanceCalculator invoiceBalanceCalculator;
+
+    @Mock
+    private AccountingPeriodService periodService;
 
     @Mock
     private OutboxService outboxService;
@@ -74,7 +82,9 @@ class CustomerCreditServiceImplTest {
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
                 customerCreditRepository,
                 creditTransactionRepository,
+                extInvoiceRepository,
                 invoiceBalanceCalculator,
+                periodService,
                 outboxService);
 
         when(creditTransactionRepository.findByRequestId(any())).thenReturn(Optional.empty());
@@ -84,6 +94,7 @@ class CustomerCreditServiceImplTest {
             return saved;
         });
         when(customerCreditRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(periodService.isPeriodOpen(any(java.time.LocalDate.class))).thenReturn(true);
     }
 
     @Test
@@ -164,7 +175,7 @@ class CustomerCreditServiceImplTest {
         stubCredit(credit(new BigDecimal("600.00")));
         ExtInvoice invoice = invoice(new BigDecimal("1000.00"));
         invoice.setStatus("DRAFT");
-        when(invoiceBalanceCalculator.findInvoice(INVOICE_ID)).thenReturn(Optional.of(invoice));
+        when(extInvoiceRepository.findByIdForUpdate(INVOICE_ID)).thenReturn(Optional.of(invoice));
         when(invoiceBalanceCalculator.isArEligible(invoice)).thenReturn(false);
 
         assertThatThrownBy(() -> service.applyCreditToInvoice(
@@ -179,7 +190,7 @@ class CustomerCreditServiceImplTest {
         stubCredit(credit(new BigDecimal("600.00")));
         ExtInvoice invoice = invoice(new BigDecimal("1000.00"));
         invoice.setPartyId(UUID.randomUUID().toString());
-        when(invoiceBalanceCalculator.findInvoice(INVOICE_ID)).thenReturn(Optional.of(invoice));
+        when(extInvoiceRepository.findByIdForUpdate(INVOICE_ID)).thenReturn(Optional.of(invoice));
         when(invoiceBalanceCalculator.isArEligible(invoice)).thenReturn(true);
 
         assertThatThrownBy(() -> service.applyCreditToInvoice(
@@ -248,6 +259,123 @@ class CustomerCreditServiceImplTest {
                 .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
+    // ===== regression coverage for the PR-review findings =====
+
+    @Test
+    @DisplayName("Reusing a requestId for a different credit is a 409, not a silent replay")
+    void replayedRequestIdForDifferentCredit_isConflict() {
+        stubCredit(credit(new BigDecimal("600.00")));
+
+        // Same request id, but it was recorded against a completely different credit.
+        CustomerCreditTransaction other = CustomerCreditTransaction.builder()
+                .creditTransactionId(UUID.randomUUID())
+                .creditId(UUID.randomUUID())
+                .transactionType(CustomerCreditTransactionType.REFUND)
+                .amount(new BigDecimal("10.00"))
+                .currency("USD")
+                .requestId("shared-key")
+                .createdAt(FIXED_NOW)
+                .build();
+        when(creditTransactionRepository.findByRequestId("shared-key")).thenReturn(Optional.of(other));
+
+        assertThatThrownBy(() ->
+                        service.refundCredit(CREDIT_ID, refundRequest("shared-key", new BigDecimal("10.00")), USER))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("already used for a different customer-credit operation")
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+
+        verify(creditTransactionRepository, never()).save(any());
+        verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Reusing an application's requestId for a refund is a 409")
+    void replayedRequestIdAcrossOperationTypes_isConflict() {
+        stubCredit(credit(new BigDecimal("600.00")));
+
+        CustomerCreditTransaction application = CustomerCreditTransaction.builder()
+                .creditTransactionId(UUID.randomUUID())
+                .creditId(CREDIT_ID)
+                .transactionType(CustomerCreditTransactionType.APPLICATION)
+                .invoiceId(INVOICE_ID)
+                .amount(new BigDecimal("25.00"))
+                .currency("USD")
+                .requestId("dual-use")
+                .createdAt(FIXED_NOW)
+                .build();
+        when(creditTransactionRepository.findByRequestId("dual-use")).thenReturn(Optional.of(application));
+
+        assertThatThrownBy(
+                        () -> service.refundCredit(CREDIT_ID, refundRequest("dual-use", new BigDecimal("25.00")), USER))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    @DisplayName("A non-positive or missing amount is a 400 before anything is read or enqueued")
+    void nonPositiveAmount_isBadRequest() {
+        for (BigDecimal bad : new BigDecimal[] {new BigDecimal("-50.00"), BigDecimal.ZERO, null}) {
+            assertThatThrownBy(() -> service.refundCredit(CREDIT_ID, refundRequest("amt-" + bad, bad), USER))
+                    .as("amount %s must be rejected", bad)
+                    .isInstanceOf(ResponseStatusException.class)
+                    .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                    .isEqualTo(HttpStatus.BAD_REQUEST);
+        }
+        verify(creditTransactionRepository, never()).save(any());
+        verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("A draw-down into a non-open period is refused, so no relief can be stranded")
+    void closedPeriod_refusesDrawDown() {
+        stubCredit(credit(new BigDecimal("600.00")));
+        when(periodService.isPeriodOpen(any(java.time.LocalDate.class))).thenReturn(false);
+
+        assertThatThrownBy(
+                        () -> service.refundCredit(CREDIT_ID, refundRequest("closed", new BigDecimal("10.00")), USER))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("is not open")
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+
+        verify(creditTransactionRepository, never()).save(any());
+        verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Sub-cent open amounts round DOWN, so the gate never admits more than the credit holds")
+    void subCentOpenAmount_roundsDown() {
+        // numeric(19,4) column: 100.0050 issued. HALF_UP would report 100.01 open and let an
+        // application of 100.01 through, which then violates the consumed-within-amount CHECK.
+        CustomerCredit credit = credit(new BigDecimal("100.0050"));
+        stubCredit(credit);
+        stubInvoice(new BigDecimal("1000.00"));
+
+        assertThat(credit.getOpenAmount()).isEqualByComparingTo("100.00");
+
+        assertThatThrownBy(() -> service.applyCreditToInvoice(
+                        CREDIT_ID, applicationRequest("subcent", new BigDecimal("100.01")), USER))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    @DisplayName("A sub-cent residual keeps the credit PARTIALLY_CONSUMED, matching the unrounded reconciliation query")
+    void subCentResidual_doesNotReadAsConsumed() {
+        CustomerCredit credit = credit(new BigDecimal("100.0049"));
+        stubCredit(credit);
+        stubInvoice(new BigDecimal("1000.00"));
+
+        service.applyCreditToInvoice(CREDIT_ID, applicationRequest("residual", new BigDecimal("100.00")), USER);
+
+        // 0.0049 is still owed, and sumOpenAmount() is unrounded — so the status must not say CONSUMED.
+        assertThat(credit.getExactOpenAmount()).isEqualByComparingTo("0.0049");
+        assertThat(credit.getStatus()).isEqualTo(CustomerCreditStatus.PARTIALLY_CONSUMED);
+    }
+
     // ===== helpers =====
 
     private CustomerCreditReliefGLPostingEvent capturedReliefEvent() {
@@ -262,6 +390,7 @@ class CustomerCreditServiceImplTest {
 
     private void stubInvoice(BigDecimal balanceDue) {
         ExtInvoice invoice = invoice(balanceDue);
+        when(extInvoiceRepository.findByIdForUpdate(INVOICE_ID)).thenReturn(Optional.of(invoice));
         when(invoiceBalanceCalculator.findInvoice(INVOICE_ID)).thenReturn(Optional.of(invoice));
         when(invoiceBalanceCalculator.isArEligible(invoice)).thenReturn(true);
         when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(balanceDue);

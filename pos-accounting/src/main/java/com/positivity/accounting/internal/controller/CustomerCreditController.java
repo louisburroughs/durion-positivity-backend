@@ -8,8 +8,11 @@ import com.positivity.accounting.internal.enums.CustomerCreditStatus;
 import com.positivity.accounting.service.CustomerCreditService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -89,7 +92,10 @@ public class CustomerCreditController {
             description = "Fetch one AR customer credit with its applied/refunded totals and remaining open amount.",
             tags = {"Customer Credits"})
     @ApiResponse(responseCode = "200", description = "Credit returned")
-    @ApiResponse(responseCode = "404", description = "Credit not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Credit not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_CUSTOMER_CREDIT_GET", apiVersion = "1")
     public ResponseEntity<CustomerCreditResponse> getCustomerCredit(
             @Parameter(description = "Credit identifier") @PathVariable UUID creditId) {
@@ -108,10 +114,20 @@ public class CustomerCreditController {
                     + "on requestId.",
             tags = {"Customer Credits"})
     @ApiResponse(responseCode = "200", description = "Credit applied (or the original application replayed)")
-    @ApiResponse(responseCode = "404", description = "Credit or invoice not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Amount missing or non-positive",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Credit or invoice not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Insufficient open credit, invoice not AR-eligible, or amount exceeds the invoice balance")
+            description = "Insufficient open credit, invoice not AR-eligible, invoice belongs to another customer, "
+                    + "amount exceeds the invoice balance, accounting period not open, or the request id was already "
+                    + "used for a different operation",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_CUSTOMER_CREDIT_APPLY", apiVersion = "1")
     public ResponseEntity<CustomerCreditTransactionResponse> applyCustomerCredit(
             @Parameter(description = "Credit identifier") @PathVariable UUID creditId,
@@ -132,8 +148,19 @@ public class CustomerCreditController {
                     + "on requestId.",
             tags = {"Customer Credits"})
     @ApiResponse(responseCode = "200", description = "Credit refunded (or the original refund replayed)")
-    @ApiResponse(responseCode = "404", description = "Credit not found")
-    @ApiResponse(responseCode = "409", description = "Insufficient open credit")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Amount missing or non-positive",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Credit not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Insufficient open credit, accounting period not open, or the request id was already used "
+                    + "for a different operation",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_CUSTOMER_CREDIT_REFUND", apiVersion = "1")
     public ResponseEntity<CustomerCreditTransactionResponse> refundCustomerCredit(
             @Parameter(description = "Credit identifier") @PathVariable UUID creditId,

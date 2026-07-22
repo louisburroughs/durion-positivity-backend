@@ -11,17 +11,20 @@ import com.positivity.accounting.internal.dto.CustomerCreditReliefGLPostingEvent
 import com.positivity.accounting.internal.dto.CustomerCreditTransactionResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
+import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.CustomerCreditStatus;
 import com.positivity.accounting.internal.handler.CustomerCreditIssuanceGLPostingEventHandler;
 import com.positivity.accounting.internal.handler.CustomerCreditReliefGLPostingEventHandler;
 import com.positivity.accounting.internal.handler.PaymentApplicationGLPostingEventHandler;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
+import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
@@ -134,6 +137,9 @@ class CustomerCreditLifecycleGLPostingIT {
     private CustomerCreditTransactionRepository creditTransactionRepository;
 
     @Autowired
+    private CreditMemoRepository creditMemoRepository;
+
+    @Autowired
     private EventOutboxRepository outboxRepository;
 
     @Autowired
@@ -157,6 +163,7 @@ class CustomerCreditLifecycleGLPostingIT {
         sequenceRepository.deleteAll();
         outboxRepository.deleteAll();
         idempotencyKeyRepository.deleteAll();
+        creditMemoRepository.deleteAll();
         creditTransactionRepository.deleteAll();
         customerCreditRepository.deleteAll();
         paymentApplicationRepository.deleteAll();
@@ -288,6 +295,42 @@ class CustomerCreditLifecycleGLPostingIT {
         reliefHandler.onCustomerCreditReliefGLPosting(reliefEventFromEnqueued());
         assertThat(journalEntryRepository.count()).isEqualTo(entriesBefore);
         assertThat(netLiability()).isEqualByComparingTo("400.00");
+    }
+
+    @Test
+    @DisplayName("#997: the T8 credit query returns every memo that posted in-period except DRAFT")
+    void t8CreditSelection_includesEveryPostedStatus() {
+        // The unit test for #997 stubs this repository method, so it would pass even if the derived
+        // query resolved wrongly. Exercise the real query against Postgres: a credit's Dr 2200 is
+        // permanent, so POSTED / APPLIED / VOIDED must all count toward the period they posted in,
+        // and only DRAFT (which never posted) is excluded.
+        Instant inPeriod = Instant.parse("2026-06-15T00:00:00Z");
+        Instant outOfPeriod = Instant.parse("2026-05-15T00:00:00Z");
+
+        UUID posted = seedCreditMemo(CreditMemoStatus.POSTED, inPeriod);
+        UUID applied = seedCreditMemo(CreditMemoStatus.APPLIED, inPeriod);
+        UUID voided = seedCreditMemo(CreditMemoStatus.VOIDED, inPeriod);
+        seedCreditMemo(CreditMemoStatus.DRAFT, inPeriod);
+        seedCreditMemo(CreditMemoStatus.POSTED, outOfPeriod);
+
+        List<CreditMemo> selected = creditMemoRepository.findByStatusNotAndPostedTimestampBetween(
+                CreditMemoStatus.DRAFT, Instant.parse("2026-06-01T00:00:00Z"), Instant.parse("2026-06-30T23:59:59Z"));
+
+        assertThat(selected).extracting(CreditMemo::getCreditMemoId).containsExactlyInAnyOrder(posted, applied, voided);
+    }
+
+    private UUID seedCreditMemo(CreditMemoStatus status, Instant postedAt) {
+        CreditMemo memo = new CreditMemo();
+        memo.setOriginalInvoiceId(UUID.randomUUID());
+        memo.setCustomerId(UUID.randomUUID());
+        memo.setCreditAmount(new BigDecimal("100.00"));
+        memo.setTaxAmountReversed(new BigDecimal("8.00"));
+        memo.setReasonCode("RETURN");
+        memo.setStatus(status);
+        memo.setPostedTimestamp(postedAt);
+        memo.setCreatedByUserId(USER);
+        memo.setCurrency("USD");
+        return creditMemoRepository.save(memo).getCreditMemoId();
     }
 
     // ===== helpers =====

@@ -293,9 +293,33 @@ class FinancialReportingTaxLiabilityServiceTest {
 
         assertThat(report.getTotalCreditsNetted()).isEqualByComparingTo("0");
         assertThat(report.getTotalNetTax()).isEqualByComparingTo("65.00");
-        // The unattributed 12.00 is exactly the drift, and is now named rather than mysterious.
+        // The unattributed 12.00 accounts for the drift exactly, so it is named rather than
+        // mysterious — and because it is fully explained, the ledger still reads reconciled
+        // (issue #996 AC-3: this edge case must not manufacture phantom drift).
         assertThat(report.getReconciliation().getUnattributedCredits()).isEqualByComparingTo("12.00");
         assertThat(report.getReconciliation().getDrift()).isEqualByComparingTo("12.00");
+        assertThat(report.getReconciliation().getReconciled()).isTrue();
+    }
+
+    @Test
+    @DisplayName("#996: drift beyond the unattributed portion still flags the ledger as unreconciled")
+    void unexplainedDrift_stillFlagsUnreconciled() {
+        when(extInvoiceRepository.findByFinalizedAtBetween(any(), any())).thenReturn(List.of(invoiceFinalized(INV1)));
+        List<ExtInvoiceTax> master = List.of(taxRow(INV1, "STATE", "WA", "1000.00", "65.00", false, null));
+        when(extInvoiceTaxRepository.findByInvoiceIdIn(anyCollection())).thenAnswer(call -> {
+            Collection<UUID> ids = call.getArgument(0);
+            return master.stream().filter(r -> ids.contains(r.getInvoiceId())).toList();
+        });
+        when(creditMemoRepository.findByStatusNotAndPostedTimestampBetween(eq(CreditMemoStatus.DRAFT), any(), any()))
+                .thenReturn(List.of(creditMemo(INV2, "12.00")));
+        when(creditMemoTaxRepository.findByCreditMemoIdIn(anyList())).thenReturn(List.of());
+        // GL activity is 5.00 short of what even the unattributed credit explains.
+        stubTaxPayableActivity("-48.00");
+
+        TaxLiabilityReport report = service.generateTaxLiability(START, END);
+
+        assertThat(report.getReconciliation().getUnattributedCredits()).isEqualByComparingTo("12.00");
+        assertThat(report.getReconciliation().getDrift()).isEqualByComparingTo("17.00");
         assertThat(report.getReconciliation().getReconciled()).isFalse();
     }
 

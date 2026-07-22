@@ -120,14 +120,37 @@ public class CustomerCredit {
      * the credit's contribution to the Customer Credit Liability (2300) control account, so
      * {@code Σ openAmount} over all credits is exactly what #975 AC-7 reconciles against.
      *
-     * @return remaining open amount, at currency scale
+     * <p><b>Rounds DOWN, deliberately.</b> The underlying columns are {@code numeric(19,4)} and
+     * the request DTOs accept four decimals, so this value can carry sub-cent precision. Rounding
+     * HALF_UP would <em>invent</em> open credit: a credit of {@code 100.0050} would report
+     * {@code 100.01} open, the over-draw gate would admit an application of {@code 100.01}, and
+     * the flush would then violate {@code chk_customer_credit_consumed_within_amount} — a 500
+     * with no {@code ApiError} envelope instead of a clean 409. Rounding DOWN can only ever
+     * understate what may be drawn, which is the safe direction for a liability.
+     *
+     * @return remaining open amount, at currency scale, never rounded upward
      */
     @Transient
     public BigDecimal getOpenAmount() {
         BigDecimal issued = amount == null ? BigDecimal.ZERO : amount;
         return issued.subtract(nullSafe(appliedAmount))
                 .subtract(nullSafe(refundedAmount))
-                .setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
+                .setScale(CURRENCY_SCALE, RoundingMode.DOWN);
+    }
+
+    /**
+     * Unrounded remaining amount, used to derive the lifecycle status so it agrees with the
+     * {@code sumOpenAmount()} reconciliation query (which is likewise unrounded). Using the
+     * cent-rounded {@link #getOpenAmount()} here would mark a credit with a {@code 0.0049}
+     * residual as CONSUMED while the reconciliation still counted that residual against the
+     * 2300 control account.
+     *
+     * @return {@code amount − applied − refunded} at full column precision
+     */
+    @Transient
+    public BigDecimal getExactOpenAmount() {
+        BigDecimal issued = amount == null ? BigDecimal.ZERO : amount;
+        return issued.subtract(nullSafe(appliedAmount)).subtract(nullSafe(refundedAmount));
     }
 
     private static BigDecimal nullSafe(BigDecimal value) {

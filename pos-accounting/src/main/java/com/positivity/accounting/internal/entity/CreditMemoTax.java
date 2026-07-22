@@ -14,6 +14,7 @@ import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -37,6 +38,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Data
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -45,6 +47,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         indexes = {@Index(name = "idx_credit_memo_tax_memo", columnList = "credit_memo_id")})
 public class CreditMemoTax {
 
+    @EqualsAndHashCode.Include
     @Id
     @GeneratedValue
     @UUIDv7Id

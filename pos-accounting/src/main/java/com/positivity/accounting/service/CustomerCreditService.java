@@ -29,13 +29,19 @@ public interface CustomerCreditService {
      * amount, enqueued in the same transaction as the draw-down record and gated by the
      * accounting period.
      *
+     * <p>The draw-down copies the credit's own currency verbatim: the {@code ext_invoice} replica
+     * carries no currency (pos-invoice is single-currency), so there is nothing to compare against
+     * and no currency check is performed.
+     *
      * @param creditId    credit to draw down
      * @param request     invoice, amount, and idempotency key
      * @param currentUser user recording the application
      * @return the recorded draw-down, including the credit's remaining open amount
-     * @throws org.springframework.web.server.ResponseStatusException 404 when the credit or
-     *         invoice is unknown; 409 when the credit lacks the open amount, the currencies
-     *         differ, the invoice is not AR-eligible, or the amount exceeds the invoice balance
+     * @throws org.springframework.web.server.ResponseStatusException 400 when the amount is
+     *         missing or non-positive; 404 when the credit or invoice is unknown; 409 when the
+     *         credit lacks the open amount, the invoice is not AR-eligible, the invoice belongs to
+     *         another customer, the amount exceeds the invoice balance, the accounting period is
+     *         not open, or the request id was already used for a different operation
      */
     @NonNull
     CustomerCreditTransactionResponse applyCreditToInvoice(
@@ -51,8 +57,10 @@ public interface CustomerCreditService {
      * @param request     amount, optional note, and idempotency key
      * @param currentUser user recording the refund
      * @return the recorded draw-down, including the credit's remaining open amount
-     * @throws org.springframework.web.server.ResponseStatusException 404 when the credit is
-     *         unknown; 409 when it lacks the open amount
+     * @throws org.springframework.web.server.ResponseStatusException 400 when the amount is
+     *         missing or non-positive; 404 when the credit is unknown; 409 when it lacks the open
+     *         amount, the accounting period is not open, or the request id was already used for a
+     *         different operation
      */
     @NonNull
     CustomerCreditTransactionResponse refundCredit(

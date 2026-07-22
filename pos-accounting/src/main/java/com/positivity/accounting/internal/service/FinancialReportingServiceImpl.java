@@ -895,11 +895,13 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         // Weights are the original invoice's per-jurisdiction collected tax. Ensure every
         // jurisdiction the credit touches has a row so its type/code is recoverable.
+        // Build the weights first and only materialize accumulator rows once the allocation has
+        // actually produced a share. Creating them up front left all-zero phantom jurisdiction rows
+        // in the report whenever attribution turned out to be impossible (a fully-exempt original
+        // invoice, say) — jurisdictions the period never collected or credited a cent in.
         Map<JurisdictionKey, BigDecimal> weights = new LinkedHashMap<>();
         for (ExtInvoiceTax row : originalRows) {
-            JurisdictionKey key = keyFor(row);
-            byJurisdiction.computeIfAbsent(key, JurisdictionAccumulator::new);
-            weights.merge(key, nullSafe(row.getTaxAmount()), BigDecimal::add);
+            weights.merge(keyFor(row), nullSafe(row.getTaxAmount()), BigDecimal::add);
         }
 
         Map<JurisdictionKey, BigDecimal> allocated =
@@ -918,8 +920,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             return reversed;
         }
         for (Map.Entry<JurisdictionKey, BigDecimal> entry : allocated.entrySet()) {
-            byJurisdiction.get(entry.getKey()).creditsNetted =
-                    byJurisdiction.get(entry.getKey()).creditsNetted.add(entry.getValue());
+            JurisdictionAccumulator acc = byJurisdiction.computeIfAbsent(entry.getKey(), JurisdictionAccumulator::new);
+            acc.creditsNetted = acc.creditsNetted.add(entry.getValue());
         }
         return BigDecimal.ZERO;
     }
@@ -950,7 +952,14 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 .orElse(BigDecimal.ZERO);
 
         BigDecimal drift = reportNetTax.subtract(glNetActivity);
-        boolean reconciled = drift.abs().compareTo(RECON_TOLERANCE) <= 0;
+        // Unattributed credits are excluded from the jurisdiction rows by construction, so they
+        // inflate reportNetTax by exactly their own value while the GL still carries the matching
+        // Dr 2200. That component of the drift is therefore fully explained. `reconciled` flags
+        // the *unexplained* remainder, so a ledger whose only discrepancy is a credit we could not
+        // attribute still reads reconciled (issue #996 AC-3) — the amount stays visible in
+        // `unattributedCredits` rather than being silently folded away.
+        BigDecimal unexplainedDrift = drift.subtract(unattributedCredits);
+        boolean reconciled = unexplainedDrift.abs().compareTo(RECON_TOLERANCE) <= 0;
 
         return TaxLiabilityReconciliation.builder()
                 .taxPayableAccountCode(SALES_TAX_PAYABLE_ACCOUNT_CODE)

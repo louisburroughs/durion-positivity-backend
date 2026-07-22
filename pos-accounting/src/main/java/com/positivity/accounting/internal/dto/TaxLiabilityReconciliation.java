@@ -65,7 +65,8 @@ public class TaxLiabilityReconciliation {
     private BigDecimal drift;
 
     @Schema(
-            description = "True when |drift| is within the 0.01 reconciliation tolerance",
+            description =
+                    "True when the UNEXPLAINED drift (drift - unattributedCredits) is within the 0.01 reconciliation tolerance. Unattributed credits inflate drift by exactly their own value, so that portion is explained and does not flag the ledger as out of balance",
             example = "true",
             requiredMode = REQUIRED)
     @NonNull

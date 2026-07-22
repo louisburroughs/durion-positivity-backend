@@ -147,64 +147,73 @@ public class CreditMemoTaxAttributionService {
 
     /**
      * Final-credit split: each jurisdiction reverses what it has left
-     * ({@code collected − alreadyReversed}), clamped at zero. Because the caller only
-     * flags {@code finalCredit} when the credit reverses the invoice's residual tax, the
-     * clamped parts already sum to {@code target} in the normal case; any difference left
-     * by clamping (possible only if an earlier partial credit over-allocated a jurisdiction
-     * by a rounding cent) is pushed onto the largest-weight jurisdiction so the exact-sum
-     * guarantee holds regardless.
+     * ({@code collected − alreadyReversed}), clamped at zero, with any leftover distributed
+     * across the jurisdictions that still have headroom.
+     *
+     * <p>In the ordinary case the clamped parts already sum to {@code target}, because the caller
+     * only flags {@code finalCredit} when the credit reverses the invoice's residual tax.
+     *
+     * <p><b>The mixed pre-/post-#996 case.</b> {@code alreadyReversed} can only see
+     * {@code credit_memo_tax} rows, but the scalar residual the caller computed sums
+     * {@code credit_memo.tax_amount_reversed} across <em>all</em> POSTED memos. For an invoice
+     * partially credited before this table existed (or whose {@code ext_invoice_tax} rows arrived
+     * after its first credit memo), the per-jurisdiction view reads zero already-reversed while the
+     * scalar does not — so {@code running} exceeds {@code target} and the correction is negative.
+     * Distributing that shortfall proportionally across jurisdictions with headroom keeps every
+     * part non-negative and never reverses more than a jurisdiction actually collected, which the
+     * old "dump it all on the largest weight" correction could not promise.
      */
     private Map<JurisdictionKey, BigDecimal> residualSplit(
             UUID originalInvoiceId, Map<JurisdictionKey, BigDecimal> weights, BigDecimal target) {
 
-        Map<JurisdictionKey, BigDecimal> split = new LinkedHashMap<>();
+        Map<JurisdictionKey, BigDecimal> headroom = new LinkedHashMap<>();
         BigDecimal running = BigDecimal.ZERO;
         for (Map.Entry<JurisdictionKey, BigDecimal> entry : weights.entrySet()) {
             JurisdictionKey key = entry.getKey();
             BigDecimal alreadyReversed = nullSafe(creditMemoTaxRepository.sumReversedForInvoiceJurisdiction(
                     originalInvoiceId, key.type(), key.code()));
             BigDecimal remaining =
-                    entry.getValue().subtract(alreadyReversed).setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
+                    entry.getValue().subtract(alreadyReversed).setScale(CURRENCY_SCALE, RoundingMode.DOWN);
             BigDecimal clamped = remaining.signum() > 0 ? remaining : BigDecimal.ZERO.setScale(CURRENCY_SCALE);
-            split.put(key, clamped);
+            headroom.put(key, clamped);
             running = running.add(clamped);
         }
 
-        BigDecimal correction = target.subtract(running);
-        if (correction.signum() != 0) {
-            JurisdictionKey anchor = largestWeightKey(weights);
-            BigDecimal corrected = split.get(anchor).add(correction);
-            // Never write a negative reversal: if the correction would push the anchor
-            // below zero the earlier allocations are irreconcilable with this invoice's
-            // breakdown, so fall back to a clean pro-rata split of the whole residual.
-            if (corrected.signum() < 0) {
-                log.warn(
-                        "Final-credit residual for invoice {} could not be reconciled per jurisdiction "
-                                + "(target={}, residualSum={}); falling back to a pro-rata split",
-                        originalInvoiceId,
-                        target,
-                        running);
-                return TaxCreditAllocator.allocate(target, weights);
-            }
-            split.put(anchor, corrected);
+        if (running.compareTo(target) == 0) {
+            return headroom;
+        }
+
+        if (running.compareTo(target) > 0) {
+            // Less to reverse than the jurisdictions have headroom for: allocate the target across
+            // the headroom itself, so no jurisdiction is pushed past its collected tax.
+            log.warn(
+                    "Final-credit residual for invoice {} exceeds the scalar reversal "
+                            + "(perJurisdictionHeadroom={}, target={}); allocating across headroom. This normally "
+                            + "means the invoice was partially credited before credit_memo_tax existed",
+                    running,
+                    target,
+                    originalInvoiceId);
+            return TaxCreditAllocator.allocate(target, headroom);
+        }
+
+        // More to reverse than the frozen breakdown accounts for — the invoice's replicated tax is
+        // smaller than the scalar it was credited against. Put the excess where tax was actually
+        // collected rather than inventing a jurisdiction.
+        BigDecimal excess = target.subtract(running);
+        log.warn(
+                "Final-credit residual for invoice {} falls short of the scalar reversal by {} "
+                        + "(perJurisdictionHeadroom={}, target={}); distributing the excess pro-rata across "
+                        + "collected tax",
+                originalInvoiceId,
+                excess,
+                running,
+                target);
+        Map<JurisdictionKey, BigDecimal> split = new LinkedHashMap<>(headroom);
+        for (Map.Entry<JurisdictionKey, BigDecimal> extra :
+                TaxCreditAllocator.allocate(excess, weights).entrySet()) {
+            split.merge(extra.getKey(), extra.getValue(), BigDecimal::add);
         }
         return split;
-    }
-
-    /** Largest weight, ties broken by {@link JurisdictionKey} order — mirrors the allocator. */
-    private static JurisdictionKey largestWeightKey(Map<JurisdictionKey, BigDecimal> weights) {
-        JurisdictionKey winner = null;
-        BigDecimal best = null;
-        for (Map.Entry<JurisdictionKey, BigDecimal> entry : weights.entrySet()) {
-            BigDecimal weight = entry.getValue();
-            if (best == null
-                    || weight.compareTo(best) > 0
-                    || (weight.compareTo(best) == 0 && entry.getKey().compareTo(winner) < 0)) {
-                best = weight;
-                winner = entry.getKey();
-            }
-        }
-        return winner;
     }
 
     private static BigDecimal nullSafe(BigDecimal value) {

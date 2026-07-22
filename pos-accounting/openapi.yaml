@@ -2769,18 +2769,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CustomerCreditTransactionResponse'
+        '400':
+          description: Amount missing or non-positive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '404':
           description: Credit not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerCreditTransactionResponse'
+                $ref: '#/components/schemas/ApiError'
         '409':
-          description: Insufficient open credit
+          description: Insufficient open credit, accounting period not open, or the request id was already used for a different operation
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerCreditTransactionResponse'
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - accounting:customer-credit:refund
@@ -2814,18 +2820,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CustomerCreditTransactionResponse'
+        '400':
+          description: Amount missing or non-positive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '404':
           description: Credit or invoice not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerCreditTransactionResponse'
+                $ref: '#/components/schemas/ApiError'
         '409':
-          description: Insufficient open credit, invoice not AR-eligible, or amount exceeds the invoice balance
+          description: Insufficient open credit, invoice not AR-eligible, invoice belongs to another customer, amount exceeds the invoice balance, accounting period not open, or the request id was already used for a different operation
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerCreditTransactionResponse'
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - accounting:customer-credit:apply
@@ -4807,7 +4819,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerCreditResponse'
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - accounting:customer-credit:view
@@ -8939,7 +8951,7 @@ components:
           example: 0.0
         reconciled:
           type: boolean
-          description: True when |drift| is within the 0.01 reconciliation tolerance
+          description: True when the UNEXPLAINED drift (drift - unattributedCredits) is within the 0.01 reconciliation tolerance. Unattributed credits inflate drift by exactly their own value, so that portion is explained and does not flag the ledger as out of balance
           example: true
       required:
       - drift

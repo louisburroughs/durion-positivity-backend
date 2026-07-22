@@ -12,12 +12,15 @@ import com.positivity.accounting.internal.enums.CustomerCreditStatus;
 import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.service.AccountingPeriodService;
 import com.positivity.accounting.service.CustomerCreditService;
 import com.positivity.accounting.service.OutboxService;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,14 +60,18 @@ import org.springframework.web.server.ResponseStatusException;
  *       propagation inside this transaction, so the ledger work item exists iff the draw-down
  *       committed.</li>
  *   <li><b>Idempotent</b> — the caller's {@code requestId} is unique on
- *       {@code customer_credit_transaction}; a replay returns the original draw-down and enqueues
- *       nothing. The handler additionally guards the posting with its own idempotency key.</li>
- *   <li><b>Period-gated</b> — the posting handler surfaces the Wave 2 period-gate exceptions, so a
- *       relief into a CLOSED or hard-locked period fails the work item and retries after reopen
- *       rather than silently posting.</li>
- *   <li><b>Concurrency-safe</b> — {@code CustomerCredit} carries a {@code @Version}, so two
- *       concurrent draw-downs cannot both pass the open-amount check and over-relieve the
- *       liability.</li>
+ *       {@code customer_credit_transaction}; a replay of the <em>same</em> operation returns the
+ *       original draw-down and enqueues nothing, while reusing the key for a different credit,
+ *       operation, invoice, or amount is a 409 rather than a silent no-op. The handler
+ *       additionally guards the posting with its own idempotency key.</li>
+ *   <li><b>Period-gated twice</b> — the draw-down is refused up front when the target period is
+ *       not open, so a relief can never be stranded behind a closed period while the subledger
+ *       already reads consumed; the posting handler still surfaces the Wave 2 period-gate
+ *       exceptions for a period that closes between enqueue and posting.</li>
+ *   <li><b>Concurrency-safe on both axes</b> — {@code CustomerCredit} carries a {@code @Version},
+ *       so two draw-downs of the same credit cannot both pass the open-amount check; and the
+ *       target invoice is loaded {@code FOR UPDATE}, so two draw-downs of <em>different</em>
+ *       credits cannot both pass the balance-due check and over-credit one receivable.</li>
  * </ul>
  */
 @Slf4j
@@ -76,7 +83,9 @@ public class CustomerCreditServiceImpl implements CustomerCreditService {
     private final Clock clock;
     private final CustomerCreditRepository customerCreditRepository;
     private final CustomerCreditTransactionRepository creditTransactionRepository;
+    private final ExtInvoiceRepository extInvoiceRepository;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
+    private final AccountingPeriodService periodService;
     private final OutboxService outboxService;
 
     @Override
@@ -84,18 +93,21 @@ public class CustomerCreditServiceImpl implements CustomerCreditService {
     public CustomerCreditTransactionResponse applyCreditToInvoice(
             @NonNull UUID creditId, @NonNull CustomerCreditApplicationRequest request, @NonNull String currentUser) {
 
+        BigDecimal amount = validateAmount(request.getAmount());
+
         CustomerCreditTransaction replay = creditTransactionRepository
                 .findByRequestId(request.getRequestId())
                 .orElse(null);
         if (replay != null) {
+            requireReplayMatches(
+                    replay, creditId, CustomerCreditTransactionType.APPLICATION, request.getInvoiceId(), amount);
             return replayResponse(replay, "application");
         }
 
         CustomerCredit credit = fetchCredit(creditId);
-        BigDecimal amount = request.getAmount();
         validateOpenAmount(credit, amount);
 
-        ExtInvoice invoice = fetchInvoice(request.getInvoiceId());
+        ExtInvoice invoice = fetchInvoiceForUpdate(request.getInvoiceId());
         if (!invoiceBalanceCalculator.isArEligible(invoice)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "Customer credits cannot be applied to " + invoice.getStatus() + " invoices");
@@ -115,6 +127,7 @@ public class CustomerCreditServiceImpl implements CustomerCreditService {
         }
 
         Instant now = Instant.now(clock);
+        requirePostablePeriod(now);
         CustomerCreditTransaction transaction = recordDrawDown(
                 credit,
                 CustomerCreditTransactionType.APPLICATION,
@@ -157,18 +170,21 @@ public class CustomerCreditServiceImpl implements CustomerCreditService {
     public CustomerCreditTransactionResponse refundCredit(
             @NonNull UUID creditId, @NonNull CustomerCreditRefundRequest request, @NonNull String currentUser) {
 
+        BigDecimal amount = validateAmount(request.getAmount());
+
         CustomerCreditTransaction replay = creditTransactionRepository
                 .findByRequestId(request.getRequestId())
                 .orElse(null);
         if (replay != null) {
+            requireReplayMatches(replay, creditId, CustomerCreditTransactionType.REFUND, null, amount);
             return replayResponse(replay, "refund");
         }
 
         CustomerCredit credit = fetchCredit(creditId);
-        BigDecimal amount = request.getAmount();
         validateOpenAmount(credit, amount);
 
         Instant now = Instant.now(clock);
+        requirePostablePeriod(now);
         CustomerCreditTransaction transaction = recordDrawDown(
                 credit, CustomerCreditTransactionType.REFUND, null, amount, request.getRequestId(), currentUser, now);
 
@@ -244,10 +260,55 @@ public class CustomerCreditServiceImpl implements CustomerCreditService {
     }
 
     /**
+     * Load the invoice under a row-level write lock for the duration of this transaction.
+     *
+     * <p><b>Why a lock and not just the credit's {@code @Version}.</b> The version on
+     * {@link CustomerCredit} serializes two draw-downs of the <em>same</em> credit; it does
+     * nothing about two <em>different</em> credits drawn against the <em>same</em> invoice.
+     * Without this lock, two concurrent applications of 100.00 against a 100.00 invoice both
+     * read {@code balanceDue == 100.00} (neither sees the other's uncommitted draw-down),
+     * both pass the balance gate, and both commit — each within its own credit's CHECK — so
+     * AR is credited 200.00 against a 100.00 receivable and the invoice balance goes
+     * negative. There is no reversal path for a credit application, so that is permanent.
+     * Locking the invoice row makes the balance read and the draw-down insert atomic per
+     * invoice.
+     *
+     * <p>Scope note: payment application and credit-memo issuance read the same derived
+     * balance and are not yet serialized this way. That is a pre-existing exposure this
+     * change does not widen (it adds the third writer, already guarded); tightening the
+     * other two paths is tracked separately.
+     */
+    private ExtInvoice fetchInvoiceForUpdate(UUID invoiceId) {
+        return extInvoiceRepository
+                .findByIdForUpdate(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Invoice " + invoiceId + " not found in the invoice replica"));
+    }
+
+    /**
+     * Reject a missing or non-positive amount before anything else runs.
+     *
+     * <p>HTTP callers are already covered by {@code @NotNull} + {@code @DecimalMin("0.01")} on
+     * the request DTOs, but {@link com.positivity.accounting.service.CustomerCreditService} is
+     * in the module's public {@code service} package, so an in-process caller reaches this
+     * method with bean validation never having run. A negative amount would otherwise pass the
+     * open-amount gate ({@code -50 <= 100}), *increase* the credit's open amount, and enqueue a
+     * relief work item that posts a negative debit — the exact shape
+     * {@code chk_journal_entry_line_debit_xor_credit} rejects, surfacing as a 500 from the
+     * outbox rather than a clean rejection here.
+     */
+    private BigDecimal validateAmount(@Nullable BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount must be a positive value; got " + amount);
+        }
+        return amount;
+    }
+
+    /**
      * A credit can only be drawn down for what it still owes. Rejecting here (rather than
      * letting the DB CHECK fire) keeps over-draw a 409 with an explanatory message, and the
      * {@code @Version} on the credit closes the read-check-write race between concurrent
-     * draw-downs.
+     * draw-downs of the same credit.
      */
     private void validateOpenAmount(CustomerCredit credit, BigDecimal amount) {
         BigDecimal open = credit.getOpenAmount();
@@ -255,6 +316,63 @@ public class CustomerCreditServiceImpl implements CustomerCreditService {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Amount " + amount + " exceeds the open amount " + open + " of credit " + credit.getCreditId());
+        }
+    }
+
+    /**
+     * Refuse to record a draw-down whose relief cannot post.
+     *
+     * <p>The relief work item carries the draw-down's business timestamp and reuses it as the
+     * journal-entry transaction date on every retry — correct for period placement, but it
+     * means a relief aimed at a CLOSED or hard-locked period retries against that same period
+     * forever. The draw-down, meanwhile, has already committed: the credit reads consumed and
+     * {@code InvoiceBalanceCalculator} already subtracts the application, while 2300 is never
+     * debited. That is a permanent break of the very {@code Σ open credits == 2300 balance}
+     * invariant this feature exists to establish.
+     *
+     * <p>So gate synchronously, mirroring {@code CreditMemoServiceImpl}, which posts inline and
+     * therefore rejects a bad period before the memo is created. Callers get a 409 they can act
+     * on instead of a silently stuck outbox row.
+     */
+    private void requirePostablePeriod(Instant drawDownAt) {
+        if (!periodService.isPeriodOpen(LocalDate.ofInstant(drawDownAt, clock.getZone()))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Accounting period for " + LocalDate.ofInstant(drawDownAt, clock.getZone())
+                            + " is not open; the customer-credit relief could not be posted, so the draw-down was "
+                            + "not recorded");
+        }
+    }
+
+    /**
+     * A replayed {@code requestId} must describe the <em>same</em> operation it originally
+     * recorded.
+     *
+     * <p>{@code request_id} is globally unique on {@code customer_credit_transaction}, not
+     * scoped per credit or per operation. Without this check, reusing a key for a genuinely
+     * different draw-down returns {@code 200} carrying the *original* transaction — so the
+     * caller books a refund (or another credit's application) as complete when nothing was
+     * recorded, no work item was enqueued, and no entry was posted, while also disclosing the
+     * other credit's identifiers and amount. Treat a mismatch as the client error it is.
+     */
+    private void requireReplayMatches(
+            CustomerCreditTransaction existing,
+            UUID creditId,
+            CustomerCreditTransactionType type,
+            @Nullable UUID invoiceId,
+            BigDecimal amount) {
+
+        boolean matches = existing.getCreditId().equals(creditId)
+                && existing.getTransactionType() == type
+                && java.util.Objects.equals(existing.getInvoiceId(), invoiceId)
+                && existing.getAmount().compareTo(amount) == 0;
+        if (!matches) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Request id " + existing.getRequestId() + " was already used for a different customer-credit "
+                            + "operation (credit " + existing.getCreditId() + ", " + existing.getTransactionType()
+                            + ", amount " + existing.getAmount() + "); reusing it for a different draw-down is not "
+                            + "an idempotent replay");
         }
     }
 
@@ -295,14 +413,22 @@ public class CustomerCreditServiceImpl implements CustomerCreditService {
                 .currency(credit.getCurrency())
                 .requestId(requestId)
                 .traceId(credit.getTraceId())
-                .createdAt(timestamp)
+                // createdAt is owned by @CreatedDate auditing (wired to the same injected Clock),
+                // so setting it here would be silently overwritten on flush.
                 .createdBy(currentUser)
                 .build());
     }
 
-    /** Recompute the consumption state from the running totals, then persist. */
+    /**
+     * Recompute the consumption state from the running totals, then persist.
+     *
+     * <p>Uses the <em>unrounded</em> residual so the status agrees with
+     * {@code CustomerCreditRepository.sumOpenAmount()}, the query the AC-4 subledger↔GL invariant
+     * is asserted on. Deriving from the cent-rounded value would let a credit with a sub-cent
+     * residual read CONSUMED while the reconciliation still counted that residual.
+     */
     private CustomerCredit persistWithDerivedStatus(CustomerCredit credit) {
-        BigDecimal open = credit.getOpenAmount();
+        BigDecimal open = credit.getExactOpenAmount();
         BigDecimal consumed = nullSafe(credit.getAppliedAmount()).add(nullSafe(credit.getRefundedAmount()));
         if (open.signum() <= 0) {
             credit.setStatus(CustomerCreditStatus.CONSUMED);
