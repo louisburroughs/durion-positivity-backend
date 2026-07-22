@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.inventory.internal.dto.replenishment.CreateReplenishmentPolicyRequest;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentPolicyResponse;
+import com.positivity.inventory.internal.dto.replenishment.ReplenishmentScanResultResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentTaskResponse;
 import com.positivity.inventory.service.ReplenishmentService;
 import java.time.Clock;
@@ -202,6 +203,64 @@ class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ─── F1 (#1025): POST /replenishment/scan + inventory:replenishment:manage ─
+
+    /**
+     * Verifies that the manual batch scan endpoint returns 200 with the scan
+     * summary when the caller holds {@code inventory:replenishment:manage}.
+     *
+     * Issue: #1025
+     */
+    @Test
+    @DisplayName("F1: POST /replenishment/scan with manage permission returns 200 with scan summary")
+    void runReplenishmentScan_withManagePermission_returns200WithSummary() throws Exception {
+        when(replenishmentService.runBatchReplenishmentScan())
+                .thenReturn(ReplenishmentScanResultResponse.builder()
+                        .policiesEvaluated(4)
+                        .policiesBelowMinimum(2)
+                        .tasksCreated(1)
+                        .tasksRefreshed(1)
+                        .scanAt(Instant.now(TEST_CLOCK).toString())
+                        .build());
+
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/replenishment/scan")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.policiesEvaluated").value(4))
+                .andExpect(jsonPath("$.tasksCreated").value(1));
+    }
+
+    /**
+     * Verifies that the scan endpoint is denied (403) without
+     * {@code inventory:replenishment:manage} — even for a caller holding the
+     * legacy {@code inventory:adjustment:create} authority.
+     *
+     * Issue: #1025
+     */
+    @Test
+    @DisplayName("F1: POST /replenishment/scan without manage permission returns 403")
+    void runReplenishmentScan_withoutManagePermission_returns403() throws Exception {
+        mockMvc.perform(withCreateOnlyAuth(post("/v1/inventory/replenishment/scan")))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Verifies that policy creation migrated off {@code inventory:adjustment:create}
+     * onto {@code inventory:replenishment:manage}: the legacy authority alone is
+     * now rejected with 403.
+     *
+     * Issue: #1025
+     */
+    @Test
+    @DisplayName("F1: POST /replenishment/policies with only legacy adjustment:create returns 403")
+    void createReplenishmentPolicy_withLegacyAdjustmentCreateOnly_returns403() throws Exception {
+        String requestBody = buildCreatePolicyRequestBody("00000000-0000-0000-0000-000000000001", "SKU-NUT-M5", 10, 50);
+
+        mockMvc.perform(withCreateOnlyAuth(post("/v1/inventory/replenishment/policies"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isForbidden());
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

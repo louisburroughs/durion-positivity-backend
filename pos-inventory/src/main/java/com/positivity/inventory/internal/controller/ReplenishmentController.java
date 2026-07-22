@@ -3,7 +3,9 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.replenishment.CreateReplenishmentPolicyRequest;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentPolicyResponse;
+import com.positivity.inventory.internal.dto.replenishment.ReplenishmentScanResultResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentTaskResponse;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.ReplenishmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -86,8 +88,8 @@ public class ReplenishmentController {
     @EmitEvent(id = "INVENTORY_REPLENISHMENT_POLICY_CREATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"inventory:adjustment:create"})
-    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
+            scopes = {"inventory:replenishment:manage"})
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.REPLENISHMENT_MANAGE + "')")
     @Operation(
             operationId = "createReplenishmentPolicy",
             summary = "Create replenishment policy",
@@ -104,5 +106,30 @@ public class ReplenishmentController {
     public ResponseEntity<ReplenishmentPolicyResponse> createReplenishmentPolicy(
             @Valid @RequestBody CreateReplenishmentPolicyRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(replenishmentService.createReplenishmentPolicy(request));
+    }
+
+    @PostMapping("/scan")
+    @EmitEvent(id = "INVENTORY_REPLENISHMENT_SCAN_RUN", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:replenishment:manage"})
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.REPLENISHMENT_MANAGE + "')")
+    @Operation(
+            operationId = "runReplenishmentScan",
+            summary = "Run the batch replenishment scan",
+            description = "Evaluates every replenishment policy against current on-hand and creates or refreshes"
+                    + " batch-triggered replenishment tasks for below-minimum pick faces. Idempotent per"
+                    + " (policy, day): repeated runs on the same day never create duplicate open tasks."
+                    + " Returns a summary of the scan run.",
+            tags = {"Replenishment"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Scan completed; summary returned",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ReplenishmentScanResultResponse.class)))
+    public ResponseEntity<ReplenishmentScanResultResponse> runReplenishmentScan() {
+        return ResponseEntity.ok(replenishmentService.runBatchReplenishmentScan());
     }
 }

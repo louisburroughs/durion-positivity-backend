@@ -136,6 +136,14 @@ public class InventoryPermissionRegistry {
      */
     public static final String CYCLE_COUNT_COMPLETE = "inventory:cycle_count:complete";
 
+    // ==================== REPLENISHMENT PERMISSIONS ====================
+
+    /**
+     * Manage replenishment: create/maintain replenishment policies and run the
+     * batch replenishment scan (CAP-217 / odoo-parity F1, issue #1025).
+     */
+    public static final String REPLENISHMENT_MANAGE = "inventory:replenishment:manage";
+
     // ==================== INVENTORY VIEW PERMISSIONS ====================
 
     /**
@@ -234,6 +242,13 @@ public class InventoryPermissionRegistry {
                 permission(CYCLE_COUNT_VIEW, "View cycle count tasks and results", "LOW"),
                 permission(CYCLE_COUNT_COMPLETE, "Complete and submit cycle count results", "MEDIUM"),
 
+                // Replenishment permissions (1)
+                permission(
+                        REPLENISHMENT_MANAGE,
+                        "Manage replenishment policies and run the batch replenishment scan",
+                        "MEDIUM",
+                        "Issue #1025"),
+
                 // Inventory view permissions (2)
                 permission(INVENTORY_VIEW, "View on-hand inventory levels at locations", "LOW"),
                 permission(INVENTORY_SEARCH, "Search inventory across multiple locations", "LOW"));
@@ -316,5 +331,12 @@ public class InventoryPermissionRegistry {
      */
     public static List<String> inventoryViewPermissions() {
         return Arrays.asList(INVENTORY_VIEW, INVENTORY_SEARCH);
+    }
+
+    /**
+     * Replenishment permissions
+     */
+    public static List<String> replenishmentPermissions() {
+        return Arrays.asList(REPLENISHMENT_MANAGE);
     }
 }

@@ -81,10 +81,14 @@ public final class EventTypes {
                 EventTypeRegistration.write("INVENTORY_PUTAWAY_TASK_CLAIM", "Claim a putaway task for execution")
                         .build(),
 
-                // ReplenishmentController - 1 event
+                // ReplenishmentController - 2 events
                 EventTypeRegistration.write(
                                 "INVENTORY_REPLENISHMENT_POLICY_CREATE",
                                 "Create replenishment policy used for task generation")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_REPLENISHMENT_SCAN_RUN",
+                                "Run the batch replenishment scan over all replenishment policies")
                         .build(),
 
                 // StockMovementController - 3 events

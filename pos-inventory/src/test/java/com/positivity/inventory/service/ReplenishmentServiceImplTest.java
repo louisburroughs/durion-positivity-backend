@@ -8,10 +8,15 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.dto.replenishment.CreateReplenishmentPolicyRequest;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentPolicyResponse;
+import com.positivity.inventory.internal.dto.replenishment.ReplenishmentScanResultResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentTaskResponse;
+import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.entity.ReplenishmentPolicy;
 import com.positivity.inventory.internal.entity.ReplenishmentTask;
+import com.positivity.inventory.internal.enums.ReplenishmentDecisionReason;
 import com.positivity.inventory.internal.enums.ReplenishmentStatus;
+import com.positivity.inventory.internal.enums.ReplenishmentTriggerType;
+import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentTaskRepository;
 import com.positivity.inventory.internal.service.ReplenishmentServiceImpl;
@@ -53,6 +58,9 @@ class ReplenishmentServiceImplTest {
 
     @Mock
     private ReplenishmentPolicyRepository replenishmentPolicyRepository;
+
+    @Mock
+    private InventoryStockSummaryRepository stockSummaryRepository;
 
     @Test
     void getReplenishmentTasks_shouldReturnMappedTasks() {
@@ -216,12 +224,151 @@ class ReplenishmentServiceImplTest {
         assertEquals("TASK_ALREADY_QUEUED", response.getStatus());
     }
 
-    @Test
-    void runBatchReplenishmentScan_shouldReturnEmptyList() {
-        // When
-        List<ReplenishmentTaskResponse> responses = replenishmentService.runBatchReplenishmentScan();
+    // ─── runBatchReplenishmentScan (CAP-217 / odoo-parity F1, issue #1025) ────
 
-        // Then
-        assertTrue(responses.isEmpty());
+    private ReplenishmentPolicy policy(UUID locationId, String sku, int min, int max) {
+        return ReplenishmentPolicy.builder()
+                .policyId(UUID.fromString("00000000-0000-0000-0000-00000000000f"))
+                .locationId(locationId)
+                .itemSKU(sku)
+                .minimumQuantity(min)
+                .maximumQuantity(max)
+                .build();
+    }
+
+    private void givenOnHand(String sku, UUID locationId, long onHand) {
+        when(stockSummaryRepository.findByStockItemIdAndLocationId(sku, locationId))
+                .thenReturn(java.util.Optional.of(InventoryStockSummary.builder()
+                        .stockItemId(sku)
+                        .locationId(locationId)
+                        .onHand(onHand)
+                        .build()));
+    }
+
+    @Test
+    void runBatchReplenishmentScan_withNoPolicies_reportsZeroActivity() {
+        when(replenishmentPolicyRepository.findAll()).thenReturn(Collections.emptyList());
+
+        ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
+
+        assertEquals(0, result.getPoliciesEvaluated());
+        assertEquals(0, result.getTasksCreated());
+        assertEquals(0, result.getTasksRefreshed());
+    }
+
+    @Test
+    void runBatchReplenishmentScan_belowMinimum_createsBatchTaskToMaximum() {
+        ReplenishmentPolicy policy = policy(LOC_01, "SKU-LOW", 5, 20);
+        when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
+        givenOnHand("SKU-LOW", LOC_01, 3);
+        when(replenishmentTaskRepository.findFirstByItemSKUAndDestinationLocationIdAndStatusInOrderByCreatedAtAsc(
+                        any(), any(), any()))
+                .thenReturn(java.util.Optional.empty());
+        when(replenishmentTaskRepository
+                        .existsByItemSKUAndDestinationLocationIdAndTriggerTypeAndCreatedAtGreaterThanEqual(
+                                any(), any(), any(), any()))
+                .thenReturn(false);
+
+        ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
+
+        assertEquals(1, result.getPoliciesEvaluated());
+        assertEquals(1, result.getPoliciesBelowMinimum());
+        assertEquals(1, result.getTasksCreated());
+
+        org.mockito.ArgumentCaptor<ReplenishmentTask> captor =
+                org.mockito.ArgumentCaptor.forClass(ReplenishmentTask.class);
+        org.mockito.Mockito.verify(replenishmentTaskRepository).save(captor.capture());
+        ReplenishmentTask saved = captor.getValue();
+        assertEquals("SKU-LOW", saved.getItemSKU());
+        assertEquals(17, saved.getQuantity()); // max 20 - onHand 3
+        assertEquals(LOC_01, saved.getDestinationLocationId());
+        assertEquals(ReplenishmentStatus.PENDING, saved.getStatus());
+        assertEquals(ReplenishmentTriggerType.BATCH, saved.getTriggerType());
+        assertEquals(ReplenishmentDecisionReason.BELOW_MIN, saved.getDecisionReason());
+    }
+
+    @Test
+    void runBatchReplenishmentScan_atOrAboveMinimum_createsNothing() {
+        ReplenishmentPolicy policy = policy(LOC_01, "SKU-OK", 5, 20);
+        when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
+        givenOnHand("SKU-OK", LOC_01, 5); // exactly at minimum → not below
+
+        ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
+
+        assertEquals(1, result.getPoliciesEvaluated());
+        assertEquals(0, result.getPoliciesBelowMinimum());
+        assertEquals(0, result.getTasksCreated());
+        org.mockito.Mockito.verify(replenishmentTaskRepository, org.mockito.Mockito.never())
+                .save(any());
+    }
+
+    @Test
+    void runBatchReplenishmentScan_missingSummaryRow_treatedAsZeroOnHand() {
+        ReplenishmentPolicy policy = policy(LOC_01, "SKU-NEW", 5, 20);
+        when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
+        when(stockSummaryRepository.findByStockItemIdAndLocationId("SKU-NEW", LOC_01))
+                .thenReturn(java.util.Optional.empty());
+        when(replenishmentTaskRepository.findFirstByItemSKUAndDestinationLocationIdAndStatusInOrderByCreatedAtAsc(
+                        any(), any(), any()))
+                .thenReturn(java.util.Optional.empty());
+        when(replenishmentTaskRepository
+                        .existsByItemSKUAndDestinationLocationIdAndTriggerTypeAndCreatedAtGreaterThanEqual(
+                                any(), any(), any(), any()))
+                .thenReturn(false);
+
+        ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
+
+        assertEquals(1, result.getTasksCreated());
+        org.mockito.ArgumentCaptor<ReplenishmentTask> captor =
+                org.mockito.ArgumentCaptor.forClass(ReplenishmentTask.class);
+        org.mockito.Mockito.verify(replenishmentTaskRepository).save(captor.capture());
+        assertEquals(20, captor.getValue().getQuantity()); // max 20 - onHand 0
+    }
+
+    @Test
+    void runBatchReplenishmentScan_openTaskExists_refreshesQuantityInsteadOfDuplicating() {
+        ReplenishmentPolicy policy = policy(LOC_01, "SKU-LOW", 5, 20);
+        when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
+        givenOnHand("SKU-LOW", LOC_01, 2);
+        ReplenishmentTask openTask = ReplenishmentTask.builder()
+                .taskId(UUID.fromString("00000000-0000-0000-0000-0000000000aa"))
+                .itemSKU("SKU-LOW")
+                .quantity(15)
+                .sourceLocationId(LOC_01)
+                .destinationLocationId(LOC_01)
+                .status(ReplenishmentStatus.PENDING)
+                .triggerType(ReplenishmentTriggerType.BATCH)
+                .build();
+        when(replenishmentTaskRepository.findFirstByItemSKUAndDestinationLocationIdAndStatusInOrderByCreatedAtAsc(
+                        any(), any(), any()))
+                .thenReturn(java.util.Optional.of(openTask));
+
+        ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
+
+        assertEquals(0, result.getTasksCreated());
+        assertEquals(1, result.getTasksRefreshed());
+        assertEquals(18, openTask.getQuantity()); // refreshed to max 20 - onHand 2
+        org.mockito.Mockito.verify(replenishmentTaskRepository).save(openTask);
+    }
+
+    @Test
+    void runBatchReplenishmentScan_taskAlreadyCreatedToday_skipsCreation() {
+        ReplenishmentPolicy policy = policy(LOC_01, "SKU-LOW", 5, 20);
+        when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
+        givenOnHand("SKU-LOW", LOC_01, 2);
+        when(replenishmentTaskRepository.findFirstByItemSKUAndDestinationLocationIdAndStatusInOrderByCreatedAtAsc(
+                        any(), any(), any()))
+                .thenReturn(java.util.Optional.empty());
+        when(replenishmentTaskRepository
+                        .existsByItemSKUAndDestinationLocationIdAndTriggerTypeAndCreatedAtGreaterThanEqual(
+                                any(), any(), any(), any()))
+                .thenReturn(true);
+
+        ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
+
+        assertEquals(1, result.getPoliciesBelowMinimum());
+        assertEquals(0, result.getTasksCreated());
+        org.mockito.Mockito.verify(replenishmentTaskRepository, org.mockito.Mockito.never())
+                .save(any());
     }
 }
