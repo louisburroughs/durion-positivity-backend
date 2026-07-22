@@ -64,7 +64,9 @@ public class InvoiceEventPublisher {
                 invoice.getCreatedAt(),
                 invoice.getFinalizedAt(),
                 buildTaxBreakdown(invoice.getId()),
-                buildLines(invoice));
+                buildLines(invoice),
+                invoice.getDueDate(),
+                invoice.getPaymentTermsCode());
         DomainEventEnvelope<InvoiceUpdatedV1> envelope = DomainEventEnvelope.of(
                 InvoiceUpdatedV1.EVENT_TYPE,
                 InvoiceUpdatedV1.SCHEMA_VERSION,

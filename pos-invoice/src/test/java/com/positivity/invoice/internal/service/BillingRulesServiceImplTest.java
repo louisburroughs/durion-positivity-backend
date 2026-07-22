@@ -61,6 +61,32 @@ class BillingRulesServiceImplTest {
         existingRules.setUpdatedBy("system");
     }
 
+    // ---- payment-terms vocabulary (#993) ----
+
+    @Test
+    void saveBillingRules_shouldRejectOutOfVocabularyPaymentTermsCode() {
+        when(billingRulesRepository.findByPartyId(partyId)).thenReturn(Optional.of(existingRules));
+        BillingRulesDTO dto = new BillingRulesDTO(
+                partyId, false, "2/10 Net 30", InvoiceDeliveryMethod.EMAIL, InvoiceGroupingStrategy.PER_WORKORDER);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> billingRulesService.saveBillingRules(dto, "tester"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("paymentTermsCode");
+    }
+
+    @Test
+    void saveBillingRules_shouldAcceptEveryVocabularyCode() {
+        when(billingRulesRepository.findByPartyId(partyId)).thenReturn(Optional.of(existingRules));
+        when(billingRulesRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        for (String code : new String[] {"DUE_ON_RECEIPT", "NET_10", "NET_15", "NET_30", "NET_45", "NET_60"}) {
+            BillingRulesDTO dto = new BillingRulesDTO(
+                    partyId, false, code, InvoiceDeliveryMethod.EMAIL, InvoiceGroupingStrategy.PER_WORKORDER);
+            assertThat(billingRulesService.saveBillingRules(dto, "tester").getPaymentTermsCode())
+                    .isEqualTo(code);
+        }
+    }
+
     // ---- getBillingRules ----
 
     @Test
