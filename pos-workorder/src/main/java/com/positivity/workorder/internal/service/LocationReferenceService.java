@@ -11,15 +11,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Resolves the shop-location address used as the tax jurisdiction (the place where the sale is
- * made) for estimate tax calculation, served from the {@code ext_location} replica (ADR-0044 §6,
- * #892). Replaces the retired synchronous {@code LocationClient}; tax flows still run
- * ADR-0021 address validation — country and postal code are required for jurisdiction
+ * Resolves the shop-location address used as the tax jurisdiction (the place
+ * where the sale is
+ * made) for estimate tax calculation, served from the {@code ext_location}
+ * replica (ADR-0044 §6,
+ * #892). Replaces the retired synchronous {@code LocationClient}; tax flows
+ * still run
+ * ADR-0021 address validation — country and postal code are required for
+ * jurisdiction
  * determination — now against replica data.
  */
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
+@Transactional(readOnly = true, noRollbackFor = IllegalStateException.class)
 public class LocationReferenceService {
 
     private final ExtLocationReplicaRepository extLocationReplicaRepository;
@@ -29,8 +33,10 @@ public class LocationReferenceService {
      *
      * @param locationId the shop location backing the estimate
      * @return the destination address for tax calculation
-     * @throws IllegalStateException if the location is not in the replica or lacks the
-     *     country/postal code required for tax jurisdiction determination
+     * @throws IllegalStateException if the location is not in the replica or lacks
+     *                               the
+     *                               country/postal code required for tax
+     *                               jurisdiction determination
      */
     @NonNull
     public TaxAddress resolveTaxAddress(@NonNull UUID locationId) {
