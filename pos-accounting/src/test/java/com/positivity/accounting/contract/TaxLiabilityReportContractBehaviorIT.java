@@ -1,11 +1,19 @@
 package com.positivity.accounting.contract;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.accounting.BaseContractIntegrationTest;
+import com.positivity.accounting.internal.client.DocumentRenderClient;
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
@@ -21,14 +29,17 @@ import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -54,6 +65,9 @@ class TaxLiabilityReportContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private CreditMemoRepository creditMemoRepository;
 
+    @MockitoBean
+    private DocumentRenderClient documentRenderClient;
+
     private static final UUID AR_ID = UUID.fromString("50000000-0000-7000-8000-000000001200");
     private static final UUID TAX_ID = UUID.fromString("50000000-0000-7000-8000-000000002200");
 
@@ -63,23 +77,7 @@ class TaxLiabilityReportContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("tax-liability returns per-jurisdiction totals with reasons, netted credits, and zero GL drift")
     void taxLiabilityReconciles() throws Exception {
-        GLAccount ar = saveAccount(AR_ID, "1200", "Accounts Receivable", AccountType.ASSET);
-        GLAccount tax = saveAccount(TAX_ID, "2200", "Sales Tax Payable", AccountType.LIABILITY);
-
-        UUID inv1 = UUID.randomUUID();
-        UUID inv2 = UUID.randomUUID();
-        saveInvoice(inv1);
-        saveInvoice(inv2);
-        saveTax(inv1, "STATE", "WA", "1000.00", "65.00", false, null);
-        saveTax(inv1, "COUNTY", "KING", "1000.00", "35.00", false, null);
-        saveTax(inv1, "CITY", "SEATTLE", "1000.00", "25.00", false, null);
-        saveTax(inv1, "STATE", "WA", "500.00", "0.00", true, "RESALE");
-        saveTax(inv2, "STATE", "WA", "2000.00", "130.00", false, null);
-        saveCredit(inv1, "25.00");
-
-        // Balanced GL so the 2200 credit-normal activity (230) matches report net tax.
-        postBalancedEntry("JE-T8C-INV", LocalDateTime.of(2026, 6, 15, 0, 0), ar, tax, new BigDecimal("255.00"));
-        postBalancedEntry("JE-T8C-CRD", LocalDateTime.of(2026, 6, 20, 0, 0), tax, ar, new BigDecimal("25.00"));
+        seedJune2026TaxData();
 
         mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/tax-liability"))
                         .param("startDate", START.toString())
@@ -122,47 +120,206 @@ class TaxLiabilityReportContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Export round-trip: TAX_LIABILITY flows through CSV and PDF export requests identically")
-    void exportRoundTripForTaxLiability() throws Exception {
-        for (String format : new String[] {"CSV", "PDF"}) {
-            String body = """
-                    {
-                      "format": "%s",
-                      "reportType": "TAX_LIABILITY",
-                      "startDate": "2026-06-01",
-                      "endDate": "2026-06-30",
-                      "organizationId": "d10217f9-3ec6-46b9-9c87-e7066c100c24"
-                    }
-                    """.formatted(format);
+    @DisplayName("CSV export renders real rows matching the JSON report to the cent, deterministically")
+    void exportRendersCsv() throws Exception {
+        seedJune2026TaxData();
 
-            var created = mockMvc.perform(withAuth(post("/v1/accounting/reports/export"), "accounting:report:export")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(body)
-                            .accept(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isCreated())
-                    .andExpect(jsonPath("$.exportId").exists())
-                    .andExpect(jsonPath("$.status").value("PENDING"))
-                    .andExpect(jsonPath("$.format").value(format))
-                    .andExpect(jsonPath("$.reportType").value("TAX_LIABILITY"))
-                    .andReturn();
+        String firstCsv = requestExportAndDownload("CSV", "text/csv");
+        String[] lines = firstCsv.split("\n");
 
-            String exportId = objectMapper
-                    .readTree(created.getResponse().getContentAsString())
-                    .get("exportId")
-                    .asText();
+        assertEquals("Report,Start Date,End Date", lines[0]);
+        assertEquals("TAX_LIABILITY,2026-06-01,2026-06-30", lines[1]);
+        assertEquals(
+                "Jurisdiction Type,Jurisdiction Code,Jurisdiction Name,Taxable Base,Exempt Base,"
+                        + "Exemption Reasons,Tax Collected Gross,Credits Netted,Net Tax",
+                lines[3]);
 
-            mockMvc.perform(withAuth(
-                                    get("/v1/accounting/reports/export/{exportId}", exportId),
-                                    "accounting:report:export")
-                            .accept(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.exportId").value(exportId))
-                    .andExpect(jsonPath("$.format").value(format))
-                    .andExpect(jsonPath("$.reportType").value("TAX_LIABILITY"));
-        }
+        // Figures match the JSON report assertions in taxLiabilityReconciles() to the cent.
+        assertCsvRow(lines[4], "STATE", "WA", "3000.00", "500.00", "RESALE", "195.00", "13.00", "182.00");
+        String[] county = lines[5].split(",", -1);
+        assertEquals("COUNTY", county[0]);
+        assertEquals(0, new BigDecimal("28.00").compareTo(new BigDecimal(county[8])));
+        String[] city = lines[6].split(",", -1);
+        assertEquals("CITY", city[0]);
+        assertEquals(0, new BigDecimal("20.00").compareTo(new BigDecimal(city[8])));
+
+        String[] total = lines[7].split(",", -1);
+        assertEquals("TOTAL", total[0]);
+        assertEquals(0, new BigDecimal("255.00").compareTo(new BigDecimal(total[6])));
+        assertEquals(0, new BigDecimal("25.00").compareTo(new BigDecimal(total[7])));
+        assertEquals(0, new BigDecimal("230.00").compareTo(new BigDecimal(total[8])));
+
+        assertEquals(
+                "Tax Payable Account,GL Net Activity,Report Net Tax,Unattributed Credits,Drift,Reconciled", lines[9]);
+        String[] reconciliation = lines[10].split(",", -1);
+        assertEquals("2200", reconciliation[0]);
+        assertEquals(0, new BigDecimal("230.00").compareTo(new BigDecimal(reconciliation[1])));
+        assertEquals(0, BigDecimal.ZERO.compareTo(new BigDecimal(reconciliation[4])));
+        assertEquals("true", reconciliation[5]);
+
+        // Determinism: a second export of the same period renders byte-identical CSV.
+        assertEquals(firstCsv, requestExportAndDownload("CSV", "text/csv"));
+    }
+
+    @Test
+    @DisplayName("PDF export renders a non-empty PDF via pos-documents from the deterministic CSV")
+    void exportRendersPdf() throws Exception {
+        seedJune2026TaxData();
+        byte[] fakePdf = "%PDF-1.4 t8-rendered".getBytes(StandardCharsets.UTF_8);
+        when(documentRenderClient.renderPdfFromCsv(anyString(), anyString())).thenReturn(fakePdf);
+
+        String exportId = requestExport("PDF")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.downloadUrl").exists())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String id = objectMapper.readTree(exportId).get("exportId").asText();
+
+        byte[] pdf = mockMvc.perform(withAuth(
+                        get("/v1/accounting/reports/export/{exportId}/download", id),
+                        "reporting:view:financial-statements"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "application/pdf"))
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+        assertTrue(pdf.length > 0);
+        assertArrayEquals(fakePdf, pdf);
+
+        // The CSV sent to pos-documents carries the real report figures.
+        ArgumentCaptor<String> csvCaptor = ArgumentCaptor.forClass(String.class);
+        verify(documentRenderClient).renderPdfFromCsv(anyString(), csvCaptor.capture());
+        assertTrue(csvCaptor.getValue().contains("STATE,WA"));
+    }
+
+    @Test
+    @DisplayName("Download requires reporting:view:financial-statements")
+    void downloadForbiddenWithoutViewPermission() throws Exception {
+        seedJune2026TaxData();
+        String created = requestExport("CSV")
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String id = objectMapper.readTree(created).get("exportId").asText();
+
+        mockMvc.perform(withAuth(
+                        get("/v1/accounting/reports/export/{exportId}/download", id), "accounting:report:export"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Unsupported report type fails the export with a reason instead of pretending PENDING")
+    void unsupportedReportTypeFails() throws Exception {
+        String body = """
+                {
+                  "format": "CSV",
+                  "reportType": "INCOME_STATEMENT",
+                  "startDate": "2026-06-01",
+                  "endDate": "2026-06-30",
+                  "organizationId": "d10217f9-3ec6-46b9-9c87-e7066c100c24"
+                }
+                """;
+        mockMvc.perform(withAuth(post("/v1/accounting/reports/export"), "accounting:report:export")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.failureReason").exists());
+    }
+
+    // ===== export helpers =====
+
+    private org.springframework.test.web.servlet.ResultActions requestExport(String format) throws Exception {
+        String body = """
+                {
+                  "format": "%s",
+                  "reportType": "TAX_LIABILITY",
+                  "startDate": "2026-06-01",
+                  "endDate": "2026-06-30",
+                  "organizationId": "d10217f9-3ec6-46b9-9c87-e7066c100c24"
+                }
+                """.formatted(format);
+        return mockMvc.perform(withAuth(post("/v1/accounting/reports/export"), "accounting:report:export")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .accept(MediaType.APPLICATION_JSON));
+    }
+
+    private String requestExportAndDownload(String format, String expectedContentType) throws Exception {
+        String created = requestExport(format)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.exportId").exists())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.format").value(format))
+                .andExpect(jsonPath("$.reportType").value("TAX_LIABILITY"))
+                .andExpect(jsonPath("$.downloadUrl").exists())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String id = objectMapper.readTree(created).get("exportId").asText();
+
+        mockMvc.perform(withAuth(get("/v1/accounting/reports/export/{exportId}", id), "accounting:report:export")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.exportId").value(id))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+
+        return mockMvc.perform(withAuth(
+                        get("/v1/accounting/reports/export/{exportId}/download", id),
+                        "reporting:view:financial-statements"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", expectedContentType))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+    }
+
+    private void assertCsvRow(
+            String line,
+            String type,
+            String code,
+            String taxableBase,
+            String exemptBase,
+            String reasons,
+            String gross,
+            String credits,
+            String net) {
+        String[] parts = line.split(",", -1);
+        assertEquals(type, parts[0]);
+        assertEquals(code, parts[1]);
+        assertEquals(0, new BigDecimal(taxableBase).compareTo(new BigDecimal(parts[3])));
+        assertEquals(0, new BigDecimal(exemptBase).compareTo(new BigDecimal(parts[4])));
+        assertEquals(reasons, parts[5]);
+        assertEquals(0, new BigDecimal(gross).compareTo(new BigDecimal(parts[6])));
+        assertEquals(0, new BigDecimal(credits).compareTo(new BigDecimal(parts[7])));
+        assertEquals(0, new BigDecimal(net).compareTo(new BigDecimal(parts[8])));
     }
 
     // ===== fixtures =====
+
+    private void seedJune2026TaxData() {
+        GLAccount ar = saveAccount(AR_ID, "1200", "Accounts Receivable", AccountType.ASSET);
+        GLAccount tax = saveAccount(TAX_ID, "2200", "Sales Tax Payable", AccountType.LIABILITY);
+
+        UUID inv1 = UUID.randomUUID();
+        UUID inv2 = UUID.randomUUID();
+        saveInvoice(inv1);
+        saveInvoice(inv2);
+        saveTax(inv1, "STATE", "WA", "1000.00", "65.00", false, null);
+        saveTax(inv1, "COUNTY", "KING", "1000.00", "35.00", false, null);
+        saveTax(inv1, "CITY", "SEATTLE", "1000.00", "25.00", false, null);
+        saveTax(inv1, "STATE", "WA", "500.00", "0.00", true, "RESALE");
+        saveTax(inv2, "STATE", "WA", "2000.00", "130.00", false, null);
+        saveCredit(inv1, "25.00");
+
+        // Balanced GL so the 2200 credit-normal activity (230) matches report net tax.
+        postBalancedEntry("JE-T8C-INV", LocalDateTime.of(2026, 6, 15, 0, 0), ar, tax, new BigDecimal("255.00"));
+        postBalancedEntry("JE-T8C-CRD", LocalDateTime.of(2026, 6, 20, 0, 0), tax, ar, new BigDecimal("25.00"));
+    }
 
     private GLAccount saveAccount(UUID id, String code, String name, AccountType type) {
         GLAccount account = new GLAccount();

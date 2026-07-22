@@ -1,10 +1,16 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.client.DocumentRenderClient;
+import com.positivity.accounting.internal.dto.ReportExportArtifact;
 import com.positivity.accounting.internal.dto.ReportExportRequest;
 import com.positivity.accounting.internal.dto.ReportExportResponse;
+import com.positivity.accounting.internal.dto.TaxLiabilityReport;
+import com.positivity.accounting.internal.enums.ExportFormat;
 import com.positivity.accounting.internal.enums.ExportStatus;
+import com.positivity.accounting.service.FinancialReportingService;
 import com.positivity.accounting.service.ReportExportService;
 import com.positivity.security.common.LogSanitizer;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
@@ -23,27 +29,48 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Stub implementation of {@link ReportExportService}.
+ * Implementation of {@link ReportExportService} with real rendering (issue #999).
  *
- * <p>
- * Creates export jobs with PENDING status and persists them in-memory.
- * Actual async processing (S3 upload, job queue) is deferred to a future
- * capability sprint.
+ * <p>Exports render synchronously at request time: CSV is produced locally by
+ * {@link TaxLiabilityCsvRenderer} (deterministic column/row order, figures matching
+ * the JSON report to the cent) and PDF is produced by the pos-documents service per
+ * ADR-0020 (the deterministic CSV is sent as render content). Successful renders
+ * complete immediately with a download URL; failures are recorded as FAILED with a
+ * reason. Job state and artifacts are persisted in-memory (JPA entity + object
+ * storage deferred to a future capability sprint).
  */
 @Service
 public class ReportExportServiceImpl implements ReportExportService {
 
     private static final Logger log = LoggerFactory.getLogger(ReportExportServiceImpl.class);
 
+    /** The only report type with rendering support so far (story T8). */
+    static final String TAX_LIABILITY = "TAX_LIABILITY";
+
+    private static final String PDF_TEMPLATE_ID = "DEFAULT_STANDARD_TEMPLATE";
+
     private final Clock clock;
+    private final FinancialReportingService financialReportingService;
+    private final TaxLiabilityCsvRenderer csvRenderer;
+    private final DocumentRenderClient documentRenderClient;
 
     /**
-     * In-memory store for export jobs (replaced by JPA entity in a future sprint).
+     * In-memory stores for export jobs and rendered artifacts (replaced by JPA
+     * entity + object storage in a future sprint).
      */
     private final ConcurrentHashMap<UUID, ReportExportResponse> exportStore = new ConcurrentHashMap<>();
 
-    public ReportExportServiceImpl(Clock clock) {
+    private final ConcurrentHashMap<UUID, ReportExportArtifact> artifactStore = new ConcurrentHashMap<>();
+
+    public ReportExportServiceImpl(
+            Clock clock,
+            FinancialReportingService financialReportingService,
+            TaxLiabilityCsvRenderer csvRenderer,
+            DocumentRenderClient documentRenderClient) {
         this.clock = clock;
+        this.financialReportingService = financialReportingService;
+        this.csvRenderer = csvRenderer;
+        this.documentRenderClient = documentRenderClient;
     }
 
     @Override
@@ -52,21 +79,68 @@ public class ReportExportServiceImpl implements ReportExportService {
         UUID exportId = UUID.randomUUID();
         Instant now = Instant.now(clock);
 
-        ReportExportResponse response = ReportExportResponse.builder()
-                .exportId(exportId)
-                .status(ExportStatus.PENDING)
-                .requestedAt(now)
-                .format(request.getFormat())
-                .reportType(request.getReportType())
-                .build();
+        ReportExportResponse response = render(exportId, request, now);
 
         exportStore.put(exportId, response);
         log.info(
-                "Report export requested: exportId={} reportType={} operator={}",
+                "Report export requested: exportId={} reportType={} format={} status={} operator={}",
                 exportId,
                 LogSanitizer.forLog(request.getReportType()),
+                request.getFormat(),
+                response.getStatus(),
                 LogSanitizer.forLog(operatorId));
         return response;
+    }
+
+    private ReportExportResponse render(UUID exportId, ReportExportRequest request, Instant requestedAt) {
+        ReportExportResponse.ReportExportResponseBuilder builder = ReportExportResponse.builder()
+                .exportId(exportId)
+                .requestedAt(requestedAt)
+                .format(request.getFormat())
+                .reportType(request.getReportType());
+
+        if (!TAX_LIABILITY.equals(request.getReportType())) {
+            return builder.status(ExportStatus.FAILED)
+                    .completedAt(Instant.now(clock))
+                    .failureReason("Rendering is not supported for reportType '" + request.getReportType() + "'")
+                    .build();
+        }
+        if (request.getFormat() != ExportFormat.CSV && request.getFormat() != ExportFormat.PDF) {
+            return builder.status(ExportStatus.FAILED)
+                    .completedAt(Instant.now(clock))
+                    .failureReason("Rendering is not supported for format '" + request.getFormat() + "'")
+                    .build();
+        }
+
+        try {
+            TaxLiabilityReport report =
+                    financialReportingService.generateTaxLiability(request.getStartDate(), request.getEndDate());
+            String csv = csvRenderer.render(report);
+            ReportExportArtifact artifact = toArtifact(request, csv);
+            artifactStore.put(exportId, artifact);
+            return builder.status(ExportStatus.COMPLETED)
+                    .completedAt(Instant.now(clock))
+                    .downloadUrl("/v1/accounting/reports/export/" + exportId + "/download")
+                    .build();
+        } catch (RuntimeException e) {
+            log.warn("Report export rendering failed: exportId={} reason={}", exportId, e.getMessage());
+            return builder.status(ExportStatus.FAILED)
+                    .completedAt(Instant.now(clock))
+                    .failureReason("Rendering failed: " + e.getMessage())
+                    .build();
+        }
+    }
+
+    private ReportExportArtifact toArtifact(ReportExportRequest request, String csv) {
+        String baseName =
+                (request.getFilename() != null && !request.getFilename().isBlank())
+                        ? request.getFilename()
+                        : "tax-liability-" + request.getStartDate() + "-" + request.getEndDate();
+        if (request.getFormat() == ExportFormat.CSV) {
+            return new ReportExportArtifact(csv.getBytes(StandardCharsets.UTF_8), "text/csv", baseName + ".csv");
+        }
+        byte[] pdf = documentRenderClient.renderPdfFromCsv(PDF_TEMPLATE_ID, csv);
+        return new ReportExportArtifact(pdf, "application/pdf", baseName + ".pdf");
     }
 
     @Override
@@ -77,6 +151,26 @@ public class ReportExportServiceImpl implements ReportExportService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No export found with ID: " + exportId);
         }
         return response;
+    }
+
+    @Override
+    @NonNull
+    public ReportExportArtifact downloadExport(@NonNull UUID exportId) {
+        ReportExportResponse response = exportStore.get(exportId);
+        if (response == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No export found with ID: " + exportId);
+        }
+        if (response.getStatus() != ExportStatus.COMPLETED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Export " + exportId + " is not COMPLETED (status: " + response.getStatus()
+                            + "); no artifact is available");
+        }
+        ReportExportArtifact artifact = artifactStore.get(exportId);
+        if (artifact == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No artifact found for export ID: " + exportId);
+        }
+        return artifact;
     }
 
     @Override
