@@ -218,7 +218,7 @@ class TaxLiabilityReportContractBehaviorIT extends BaseContractIntegrationTest {
         String body = """
                 {
                   "format": "CSV",
-                  "reportType": "INCOME_STATEMENT",
+                  "reportType": "JOURNAL_LINES",
                   "startDate": "2026-06-01",
                   "endDate": "2026-06-30",
                   "organizationId": "d10217f9-3ec6-46b9-9c87-e7066c100c24"

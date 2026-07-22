@@ -95,7 +95,7 @@ public class TaxLiabilityCsvRenderer {
     }
 
     private static String amount(BigDecimal value) {
-        return value == null ? "" : value.toPlainString();
+        return CsvFormat.amount(value);
     }
 
     private static String joinReasons(List<String> reasons) {
@@ -103,12 +103,6 @@ public class TaxLiabilityCsvRenderer {
     }
 
     private static String escape(String value) {
-        if (value == null) {
-            return "";
-        }
-        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
-            return '"' + value.replace("\"", "\"\"") + '"';
-        }
-        return value;
+        return CsvFormat.escape(value);
     }
 }
