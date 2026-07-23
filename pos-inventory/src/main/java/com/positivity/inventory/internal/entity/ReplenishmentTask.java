@@ -64,6 +64,15 @@ public class ReplenishmentTask {
     @Enumerated(EnumType.STRING)
     private ReplenishmentSourcingReason sourcingReason;
 
+    /**
+     * Cross-site {@link TransferOrder} that materializes this need's internal sourcing
+     * (odoo-parity F5, issue #1045); set only when the sourcing engine resolved the need to a
+     * WS-C transfer. {@code null} for same-site bin-move tasks and for BACKSTOCK_UNAVAILABLE
+     * tasks. Advisory linkage — no cross-table FK (module convention).
+     */
+    @Column(name = "source_transfer_order_id")
+    private UUID sourceTransferOrderId;
+
     private String assignedTo;
 
     /**

@@ -673,8 +673,11 @@ public class TransferOrderServiceImpl implements TransferOrderService {
     }
 
     String currentActor() {
-        return SecurityContextHelper.getCurrentUsername()
-                .orElseThrow(() -> new IllegalStateException("No current user"));
+        // Falls back to the "system" actor for automated callers with no user context
+        // (odoo-parity F5 replenishment sourcing creates transfers from the scheduled scan) —
+        // module convention for system-initiated writes. User-facing endpoints are
+        // permission-gated at the controller, so a real username is always present for them.
+        return SecurityContextHelper.getCurrentUsernameOrDefault("system");
     }
 
     TransferOrderResponse toResponse(TransferOrder order) {

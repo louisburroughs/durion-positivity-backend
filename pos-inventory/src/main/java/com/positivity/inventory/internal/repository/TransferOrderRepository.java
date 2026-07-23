@@ -33,4 +33,23 @@ public interface TransferOrderRepository
             @Param("sku") String sku,
             @Param("statuses") Collection<TransferOrderStatus> statuses,
             @Param("siteId") UUID siteId);
+
+    /**
+     * Re-sourcing idempotency guard (odoo-parity F5, issue #1045): true when an OPEN source
+     * transfer (a DRAFT/APPROVED/DISPATCHED/PARTIALLY_RECEIVED order the given statuses
+     * enumerate) already carries a line for {@code sku} inbound to {@code destinationSiteId}.
+     * A DRAFT transfer is not yet in-transit (so the forecast does not net it), so this
+     * explicit guard prevents the scan from re-sourcing the same need on the next pass.
+     */
+    @Query("""
+                        SELECT COUNT(l) > 0
+                        FROM TransferOrderLine l
+                        WHERE l.sku = :sku
+                          AND l.transferOrder.destinationLocationId = :destinationSiteId
+                          AND l.transferOrder.status IN :statuses
+                        """)
+    boolean existsOpenSourceTransferForSku(
+            @Param("destinationSiteId") UUID destinationSiteId,
+            @Param("sku") String sku,
+            @Param("statuses") Collection<TransferOrderStatus> statuses);
 }

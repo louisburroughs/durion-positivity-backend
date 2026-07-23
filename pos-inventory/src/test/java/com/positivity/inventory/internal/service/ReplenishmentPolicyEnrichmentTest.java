@@ -179,6 +179,11 @@ class ReplenishmentPolicyEnrichmentTest {
         seedFeedRow(skuId, 5, 1);
         ReplenishmentPolicy policy = seedPolicy(sku, location, 5, 20);
         policy.setLeadTimeDaysOverride(0);
+        // Pin to INTERNAL_TRANSFER so this lead-time-precedence vector always materializes a
+        // task: the seeded feed row (present only to supply a vendor lead time) would otherwise
+        // make the default EITHER policy route to an F5 purchase suggestion (issue #1045),
+        // which is exercised separately in ReplenishmentSourcingScanTest.
+        policy.setPreferredSourceType(ReplenishmentSourceType.INTERNAL_TRANSFER);
         policyRepository.save(policy);
         receive(sku, location, 3);
         savePo(

@@ -56,6 +56,7 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
     private final LeadTimeResolver leadTimeResolver;
     private final StockoutDeadlineCalculator stockoutDeadlineCalculator;
     private final PurchaseSuggestionCreationService purchaseSuggestionCreationService;
+    private final ReplenishmentSourcingService replenishmentSourcingService;
     private final Clock clock;
 
     @Override
@@ -233,6 +234,15 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                     .build();
         }
 
+        // F5 (#1045): an open source TransferOrder already covers this SKU→site need — do not
+        // re-source (a DRAFT transfer is not yet netted by the forecast).
+        if (replenishmentSourcingService.hasOpenSourceTransfer(policy.get())) {
+            return ReplenishmentTaskResponse.builder()
+                    .taskId(null)
+                    .status("SOURCING_IN_PROGRESS")
+                    .build();
+        }
+
         if (hasOpenTask(productId, pickFaceLocationId)) {
             return ReplenishmentTaskResponse.builder()
                     .taskId(null)
@@ -256,9 +266,21 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                     .build();
         }
 
-        ReplenishmentTask saved = replenishmentTaskRepository.save(
-                newTask(policy.get(), quantityNeeded, ReplenishmentTriggerType.EVENT, deadlineFor(projection)));
-        logDecision("created", ReplenishmentTriggerType.EVENT, policy.get(), projection, quantityNeeded);
+        // F5 (#1045): resolve real sourcing. EITHER with no internal surplus but a selectable
+        // vendor routes to a purchase suggestion instead of a task.
+        ReplenishmentSourcingService.SourcingResolution resolution =
+                replenishmentSourcingService.resolve(policy.get(), quantityNeeded);
+        if (resolution.kind() == ReplenishmentSourcingService.Kind.PURCHASE_FALLBACK) {
+            SuggestionOutcome outcome = evaluatePurchaseSuggestion(policy.get(), projection, null);
+            return ReplenishmentTaskResponse.builder()
+                    .taskId(null)
+                    .status(outcome == SuggestionOutcome.NONE ? "NO_ACTION" : "PURCHASE_SUGGESTED")
+                    .build();
+        }
+
+        ReplenishmentTask saved = replenishmentTaskRepository.save(newTask(
+                policy.get(), quantityNeeded, ReplenishmentTriggerType.EVENT, deadlineFor(projection), resolution));
+        logDecision("created", ReplenishmentTriggerType.EVENT, policy.get(), projection, quantityNeeded, resolution);
         return toTaskResponse(saved);
     }
 
@@ -321,6 +343,16 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                 continue;
             }
 
+            // F5 (#1045): an open source TransferOrder already covers this SKU→site need — do
+            // not re-source it (a DRAFT transfer is not yet netted by the forecast).
+            if (replenishmentSourcingService.hasOpenSourceTransfer(policy)) {
+                log.debug(
+                        "Batch scan skip (open source transfer covers the need): sku={} locationId={}",
+                        policy.getItemSKU(),
+                        policy.getLocationId());
+                continue;
+            }
+
             Optional<ReplenishmentTask> openTask =
                     replenishmentTaskRepository
                             .findFirstByItemSKUAndDestinationLocationIdAndStatusInOrderByCreatedAtAsc(
@@ -332,7 +364,7 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                 int quantityNeeded =
                         quantityToReplenish(policy, projection, openTask.get().getTaskId());
                 if (quantityNeeded > 0 && refreshOpenTask(openTask.get(), quantityNeeded, deadlineFor(projection))) {
-                    logDecision("refreshed", ReplenishmentTriggerType.BATCH, policy, projection, quantityNeeded);
+                    logRefresh(policy, projection, quantityNeeded, openTask.get());
                     tasksRefreshed++;
                 }
                 continue;
@@ -362,9 +394,26 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                 continue;
             }
 
-            replenishmentTaskRepository.save(
-                    newTask(policy, quantityNeeded, ReplenishmentTriggerType.BATCH, deadlineFor(projection)));
-            logDecision("created", ReplenishmentTriggerType.BATCH, policy, projection, quantityNeeded);
+            // F5 (#1045): resolve real sourcing. A triggered EITHER policy with no internal
+            // surplus but a selectable vendor routes to a purchase suggestion (F4) instead of
+            // a task; everything else materializes a task (same-site bin move, cross-site
+            // transfer, or BACKSTOCK_UNAVAILABLE).
+            ReplenishmentSourcingService.SourcingResolution resolution =
+                    replenishmentSourcingService.resolve(policy, quantityNeeded);
+            if (resolution.kind() == ReplenishmentSourcingService.Kind.PURCHASE_FALLBACK) {
+                switch (evaluatePurchaseSuggestion(policy, projection, startOfDayUtc)) {
+                    case CREATED -> suggestionsCreated++;
+                    case REFRESHED -> suggestionsRefreshed++;
+                    case NONE -> {
+                        /* covered by in-progress supply or same-day guard */
+                    }
+                }
+                continue;
+            }
+
+            replenishmentTaskRepository.save(newTask(
+                    policy, quantityNeeded, ReplenishmentTriggerType.BATCH, deadlineFor(projection), resolution));
+            logDecision("created", ReplenishmentTriggerType.BATCH, policy, projection, quantityNeeded, resolution);
             tasksCreated++;
         }
 
@@ -659,14 +708,19 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
             ReplenishmentTriggerType triggerType,
             ReplenishmentPolicy policy,
             Projection projection,
-            int quantityNeeded) {
+            int quantityNeeded,
+            ReplenishmentSourcingService.SourcingResolution resolution) {
         log.info(
-                "Replenishment task {}: triggerType={} decisionReason={} sku={} locationId={} onHand={}"
-                        + " projectedAvailable={} leadHorizon={} leadTimeDays={} leadTimeSource={} min={} max={}"
-                        + " quantity={}",
+                "Replenishment task {}: triggerType={} decisionReason={} sourcingReason={} sourceTransferOrderId={}"
+                        + " sku={} locationId={} onHand={} projectedAvailable={} leadHorizon={} leadTimeDays={}"
+                        + " leadTimeSource={} min={} max={} quantity={}",
                 action,
                 triggerType,
-                ReplenishmentDecisionReason.BELOW_MIN,
+                resolution.decisionReason() != null
+                        ? resolution.decisionReason()
+                        : ReplenishmentDecisionReason.BELOW_MIN,
+                resolution.sourcingReason(),
+                resolution.transferOrderId(),
                 policy.getItemSKU(),
                 policy.getLocationId(),
                 projection.onHand(),
@@ -674,6 +728,25 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                 projection.leadHorizon(),
                 projection.leadTime().days(),
                 projection.leadTime().source(),
+                policy.getMinimumQuantity(),
+                policy.getMaximumQuantity(),
+                quantityNeeded);
+    }
+
+    /** Refresh-path logging: the task keeps its original sourcing decision, only quantity moves. */
+    private void logRefresh(
+            ReplenishmentPolicy policy, Projection projection, int quantityNeeded, ReplenishmentTask task) {
+        log.info(
+                "Replenishment task refreshed: triggerType={} decisionReason={} sourcingReason={} sku={}"
+                        + " locationId={} onHand={} projectedAvailable={} leadHorizon={} min={} max={} quantity={}",
+                ReplenishmentTriggerType.BATCH,
+                task.getDecisionReason(),
+                task.getSourcingReason(),
+                policy.getItemSKU(),
+                policy.getLocationId(),
+                projection.onHand(),
+                projection.projectedAvailable(),
+                projection.leadHorizon(),
                 policy.getMinimumQuantity(),
                 policy.getMaximumQuantity(),
                 quantityNeeded);
@@ -720,22 +793,33 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
         return true;
     }
 
+    /**
+     * Materializes a task from the F5 sourcing resolution (odoo-parity F5, issue #1045). The
+     * source location, decision reason, sourcing reason, and cross-site transfer link all come
+     * from {@link ReplenishmentSourcingService}; the task's destination is always the policy's
+     * pick face.
+     */
     private ReplenishmentTask newTask(
             ReplenishmentPolicy policy,
             int quantityNeeded,
             ReplenishmentTriggerType triggerType,
-            @Nullable LocalDate deadlineDate) {
-        // Source selection is a placeholder until odoo-parity F5 (internal
-        // sourcing): the policy's own location stands in for the backstock
-        // source because the column is non-null and no sourcing engine exists yet.
+            @Nullable LocalDate deadlineDate,
+            ReplenishmentSourcingService.SourcingResolution resolution) {
+        UUID sourceLocationId =
+                resolution.sourceLocationId() != null ? resolution.sourceLocationId() : policy.getLocationId();
+        ReplenishmentDecisionReason decisionReason = resolution.decisionReason() != null
+                ? resolution.decisionReason()
+                : ReplenishmentDecisionReason.BELOW_MIN;
         return ReplenishmentTask.builder()
                 .itemSKU(policy.getItemSKU())
                 .quantity(quantityNeeded)
-                .sourceLocationId(policy.getLocationId())
+                .sourceLocationId(sourceLocationId)
                 .destinationLocationId(policy.getLocationId())
                 .status(ReplenishmentStatus.PENDING)
                 .triggerType(triggerType)
-                .decisionReason(ReplenishmentDecisionReason.BELOW_MIN)
+                .decisionReason(decisionReason)
+                .sourcingReason(resolution.sourcingReason())
+                .sourceTransferOrderId(resolution.transferOrderId())
                 .deadlineDate(deadlineDate)
                 .build();
     }
