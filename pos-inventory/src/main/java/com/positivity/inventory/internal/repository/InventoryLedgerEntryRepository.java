@@ -33,6 +33,9 @@ public interface InventoryLedgerEntryRepository
     List<InventoryLedgerEntry> findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
             String stockItemId, InventoryLedgerEventType eventType, String notesFragment);
 
+    /** Per-line idempotency guard for event-driven postings (order parity story H2, #1079). */
+    boolean existsByEventTypeAndSourceTransactionId(InventoryLedgerEventType eventType, String sourceTransactionId);
+
     List<InventoryLedgerEntry> findByStockItemIdOrderByTimestampDesc(String stockItemId);
 
     List<InventoryLedgerEntry> findByStockItemIdOrderByTimestampAsc(String stockItemId);

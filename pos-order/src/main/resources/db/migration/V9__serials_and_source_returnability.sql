@@ -5,7 +5,9 @@ CREATE TABLE order_line_serial (
   order_line_id UUID NOT NULL,
   serial_index INTEGER NOT NULL,
   serial_number VARCHAR(128) NOT NULL,
-  PRIMARY KEY (order_line_id, serial_index)
+  PRIMARY KEY (order_line_id, serial_index),
+  CONSTRAINT fk_order_line_serial_line FOREIGN KEY (order_line_id)
+    REFERENCES sales_order_line (order_line_id) ON DELETE CASCADE
 );
 
 -- E1 (#1077): explicit returnable flag imported from the source document (resolved Q6);

@@ -390,8 +390,10 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         if (key == null) {
             throw new IllegalArgumentException("Idempotency-Key is required for checkout");
         }
-        boolean onAccount = "ON_ACCOUNT".equalsIgnoreCase(normalizeBlank(tenderType));
-        if (!onAccount && normalizeBlank(tenderType) != null && !"DEFAULT".equalsIgnoreCase(tenderType.trim())) {
+        String tender =
+                normalizeBlank(tenderType) == null ? null : tenderType.trim().toUpperCase(java.util.Locale.ROOT);
+        boolean onAccount = "ON_ACCOUNT".equals(tender);
+        if (!onAccount && tender != null && !"DEFAULT".equals(tender)) {
             throw new IllegalArgumentException("Unsupported tenderType: " + tenderType);
         }
         SalesOrder order =
