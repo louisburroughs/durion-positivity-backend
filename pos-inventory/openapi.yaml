@@ -351,6 +351,25 @@ paths:
         - inventory:adjustment:create
       x-required-permissions:
       - inventory:adjustment:create
+  /v1/inventory/replenishment/scan:
+    post:
+      tags:
+      - Replenishment
+      summary: Run the batch replenishment scan
+      description: 'Evaluates every replenishment policy against current on-hand and creates or refreshes batch-triggered replenishment tasks for below-minimum pick faces. Idempotent per (policy, day): repeated runs on the same day never create duplicate open tasks. Returns a summary of the scan run.'
+      operationId: runReplenishmentScan
+      responses:
+        '200':
+          description: Scan completed; summary returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplenishmentScanResultResponse'
+      security:
+      - bearerAuth:
+        - inventory:replenishment:manage
+      x-required-permissions:
+      - inventory:replenishment:manage
   /v1/inventory/replenishment/policies:
     get:
       tags:
@@ -411,9 +430,9 @@ paths:
                 $ref: '#/components/schemas/ReplenishmentPolicyResponse'
       security:
       - bearerAuth:
-        - inventory:adjustment:create
+        - inventory:replenishment:manage
       x-required-permissions:
-      - inventory:adjustment:create
+      - inventory:replenishment:manage
   /v1/inventory/receiving/sessions:
     post:
       tags:
@@ -3225,6 +3244,42 @@ paths:
         - inventory:cycle_count:view
       x-required-permissions:
       - inventory:cycle_count:view
+  /v1/inventory/cycleCount/task/{taskId}/interfering-movements:
+    get:
+      tags:
+      - Cycle Count Query
+      - Cycle Count API
+      summary: List interfering movements for a cycle count task
+      description: 'Returns the on-hand-affecting ledger entries for the task''s SKU/location recorded between task creation and now — the movements that make the task''s expected-quantity snapshot stale (CONFLICT). Design note: freezing stock movements during counts was rejected as it contradicts continuous shop operation; conflict detection with this listing replaces freezing.'
+      operationId: getInterferingMovements
+      parameters:
+      - name: taskId
+        in: path
+        description: Task ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Interfering movements retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterferingMovementResponse'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InterferingMovementResponse'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:view
+      x-required-permissions:
+      - inventory:cycle_count:view
   /v1/inventory/cycleCount/task/{taskId}/history:
     get:
       tags:
@@ -3919,6 +3974,40 @@ components:
           example: Reserved for scheduled workorder pick
       required:
       - storageLocationId
+    ReplenishmentScanResultResponse:
+      type: object
+      description: Summary of a batch replenishment scan run over all replenishment policies
+      properties:
+        policiesEvaluated:
+          type: integer
+          format: int32
+          description: Number of replenishment policies evaluated by the scan
+          example: 42
+        policiesBelowMinimum:
+          type: integer
+          format: int32
+          description: Number of policies whose on-hand quantity was below the configured minimum
+          example: 5
+        tasksCreated:
+          type: integer
+          format: int32
+          description: Number of new replenishment tasks created by the scan
+          example: 3
+        tasksRefreshed:
+          type: integer
+          format: int32
+          description: Number of already-open replenishment tasks whose quantity was refreshed to the current need
+          example: 2
+        scanAt:
+          type: string
+          description: Timestamp at which the scan ran
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - policiesBelowMinimum
+      - policiesEvaluated
+      - scanAt
+      - tasksCreated
+      - tasksRefreshed
     CreateReplenishmentPolicyRequest:
       type: object
       description: Request to create a replenishment policy defining min/max stock thresholds for an item at a location
@@ -5424,6 +5513,11 @@ components:
           format: uuid
           description: Identifier of the stock item being adjusted
           example: 01960003-0000-7000-8000-000000000001
+        taskId:
+          type: string
+          format: uuid
+          description: Cycle count task this adjustment settles, if created from a task. Enables approval-time conflict detection and variance recomputation against current on-hand.
+          example: 01960003-0000-7000-8000-000000000009
         reasonCode:
           type: string
           description: Reason code explaining why the adjustment is being made
@@ -5461,6 +5555,11 @@ components:
       type: object
       description: Result of a cycle count inventory adjustment, including approval state and posting outcome
       properties:
+        taskId:
+          type: string
+          format: uuid
+          description: Cycle count task this adjustment settles, if created from a task
+          example: 01960003-0000-7000-8000-000000000009
         adjustmentId:
           type: string
           format: uuid
@@ -5674,6 +5773,7 @@ components:
           enum:
           - ASSIGNED
           - COUNTED_PENDING_REVIEW
+          - CONFLICT
           - REQUIRES_INVESTIGATION
           - APPROVED
           - REJECTED
@@ -6968,6 +7068,7 @@ components:
           enum:
           - ASSIGNED
           - COUNTED_PENDING_REVIEW
+          - CONFLICT
           - REQUIRES_INVESTIGATION
           - APPROVED
           - REJECTED
@@ -7001,6 +7102,73 @@ components:
       - status
       - taskId
       - updatedAt
+    InterferingMovementResponse:
+      type: object
+      description: Ledger movement recorded between cycle-count task creation and now for the task's SKU/location
+      properties:
+        ledgerEntryId:
+          type: string
+          format: uuid
+          description: Unique identifier of the ledger entry
+          example: 01960003-0000-7000-8000-000000000001
+        eventType:
+          type: string
+          description: Type of inventory ledger event recorded
+          enum:
+          - GOODS_RECEIPT
+          - TRANSFER_IN
+          - PUTAWAY
+          - RETURN_TO_STOCK
+          - ADJUSTMENT_IN
+          - COUNT_VARIANCE_IN
+          - GOODS_ISSUE
+          - WORKORDER_CONSUMPTION
+          - TRANSFER_OUT
+          - SCRAP_OUT
+          - ADJUSTMENT_OUT
+          - COUNT_VARIANCE_OUT
+          - ADJUST_CYCLE_COUNT
+          - RESERVATION_CREATED
+          - RESERVATION_RELEASED
+          - ALLOCATION_CREATED
+          - ALLOCATION_RELEASED
+          - BACKORDER_CREATED
+          - BACKORDER_RESOLVED
+          - PICK_TASK_CREATED
+          - PICK_TASK_COMPLETED
+          example: GOODS_ISSUE
+        changeInQuantity:
+          type: integer
+          format: int32
+          description: Signed change in quantity applied by this entry (positive inbound, negative outbound)
+          example: -3
+        quantityAfter:
+          type: integer
+          format: int32
+          description: Running quantity after this entry was applied
+          example: 7
+        locationId:
+          type: string
+          format: uuid
+          description: Location the entry applies to
+          example: 01960003-0000-7000-8000-000000000004
+        timestamp:
+          type: string
+          format: date-time
+          description: Business timestamp of the inventory event
+          example: 2026-01-15 09:30:00+00:00
+        transactionUserId:
+          type: string
+          description: Identifier of the user who initiated the transaction
+          example: user-10042
+        notes:
+          type: string
+          description: Free-text notes recorded with the entry
+      required:
+      - changeInQuantity
+      - eventType
+      - ledgerEntryId
+      - timestamp
     CountEntryResponse:
       type: object
       description: A single recorded count entry in a cycle count task's history

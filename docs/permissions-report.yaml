@@ -1,9 +1,9 @@
-generatedAt: "2026-07-22T21:26:02.054013+00:00"
+generatedAt: "2026-07-23T00:00:01.978745+00:00"
 root: "."
 summary:
   manifestCount: 20
-  permissionCount: 361
-  uniquePermissionCount: 361
+  permissionCount: 362
+  uniquePermissionCount: 362
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -271,7 +271,7 @@ manifests:
     domain: "inventory"
     serviceName: "pos-inventory"
     version: "1.0"
-    permissionCount: 41
+    permissionCount: 42
     permissions:
       - name: "inventory:adjustment:create"
         description: "Create an adjustment request (draft/pending), capture reason code, quantity, and supporting notes"
@@ -355,6 +355,8 @@ manifests:
         description: "Submit inventory returns to stock"
       - name: "inventory:shortage:view"
         description: "View shortage resolution options"
+      - name: "inventory:replenishment:manage"
+        description: "Manage replenishment policies and run the batch replenishment scan"
   - module: "pos-invoice"
     path: "pos-invoice/src/main/resources/permissions.yaml"
     domain: "invoice"
@@ -1760,6 +1762,12 @@ permissions:
     source: "pos-inventory/src/main/resources/permissions.yaml"
   - name: "inventory:receiving:view"
     description: "View receiving sessions and their lines"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:replenishment:manage"
+    description: "Manage replenishment policies and run the batch replenishment scan"
     domain: "inventory"
     serviceName: "pos-inventory"
     module: "pos-inventory"

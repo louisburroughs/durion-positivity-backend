@@ -1022,11 +1022,8 @@ paths:
             application/json:
               schema:
                 type: array
-                additionalProperties: {}
-                contains: {}
                 items:
                   $ref: '#/components/schemas/ProductUomDto'
-                unevaluatedItems: {}
         '404':
           description: Product not found
           content:
@@ -1259,11 +1256,8 @@ paths:
             application/json:
               schema:
                 type: array
-                additionalProperties: {}
-                contains: {}
                 items:
                   $ref: '#/components/schemas/UomConversionDto'
-                unevaluatedItems: {}
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1354,11 +1348,8 @@ paths:
             application/json:
               schema:
                 type: array
-                additionalProperties: {}
-                contains: {}
                 items:
                   $ref: '#/components/schemas/SubstitutionGroupDto'
-                unevaluatedItems: {}
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -2093,11 +2084,8 @@ paths:
             application/json:
               schema:
                 type: array
-                additionalProperties: {}
-                contains: {}
                 items:
                   $ref: '#/components/schemas/ServiceDto'
-                unevaluatedItems: {}
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -4865,13 +4853,13 @@ components:
         pageNumber:
           type: integer
           format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        paged:
+          type: boolean
         pageSize:
           type: integer
           format: int32
-        paged:
-          type: boolean
-        sort:
-          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
     SortObject:
