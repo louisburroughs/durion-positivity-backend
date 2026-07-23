@@ -8,10 +8,11 @@ import org.jspecify.annotations.NonNull;
 
 /**
  * SPI hook that feeds lot-expiry data into the FEFO sourcing strategy
- * (odoo-parity H1, issue #1037). Lots do not exist yet — they arrive with
- * odoo-parity E1/E2/E3. Until a lot-aware implementation is registered (as
- * the {@code @Primary} bean, replacing {@link NoOpLotExpiryProvider}), FEFO
- * configurations fall back to FIFO ordering in the engine.
+ * (odoo-parity H1, issue #1037). The lot master exists (E1) but expiry dates
+ * are not populated until odoo-parity E3. Until a lot-aware implementation is
+ * registered (as the {@code @Primary} bean, replacing
+ * {@link NoOpLotExpiryProvider}), FEFO configurations fall back to FIFO
+ * ordering in the engine.
  */
 public interface LotExpiryProvider {
 

@@ -179,6 +179,10 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.fastRead("INVENTORY_PURCHASE_ORDER_LIST", "List purchase orders")
                         .build(),
+                EventTypeRegistration.fastRead("INVENTORY_LOT_LIST", "List inventory lots")
+                        .build(),
+                EventTypeRegistration.fastRead("INVENTORY_LOT_GET", "Get an inventory lot with per-location on-hand")
+                        .build(),
                 EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_APPROVE", "Approve a purchase order")
                         .build(),
                 EventTypeRegistration.approval(

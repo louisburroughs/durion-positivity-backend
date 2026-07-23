@@ -1,16 +1,14 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.entity.InventoryLot;
-import com.positivity.inventory.internal.enums.InventoryLotStatus;
 import com.positivity.inventory.internal.enums.ProductTrackingLevel;
 import com.positivity.inventory.internal.exception.LotNumberRequiredException;
 import com.positivity.inventory.internal.repository.InventoryLotRepository;
-import java.time.Clock;
-import java.time.Instant;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -30,10 +28,12 @@ import org.springframework.stereotype.Component;
  *       story; demanding a lot number here would mismodel serialized stock.</li>
  * </ul>
  *
- * <p>Runs inside the caller's posting transaction so a failed posting rolls the lot row back
- * with it. Concurrent first receipts of the same new (stockItemId, lotNumber) race on the
- * unique constraint; the loser's transaction fails and is safe to retry — receipt volume makes
- * this a non-issue, unlike the summary-row hot path with its {@code REQUIRES_NEW} initializer.
+ * <p>Lot creation runs in its own {@code REQUIRES_NEW} transaction ({@link InventoryLotCreator},
+ * mirroring the A1 summary-row initializer): a concurrent first receipt of the same new
+ * (stockItemId, lotNumber) loses the unique-constraint race in the inner transaction only, and
+ * this service re-reads the winner's row deterministically instead of surfacing a 500. The
+ * trade-off is that a created lot row survives a rolled-back posting — harmless, the master row
+ * is idempotent and carries no quantity.
  */
 @Component
 @Slf4j
@@ -41,13 +41,15 @@ public class InventoryLotCaptureService {
 
     private final InventoryLotRepository lotRepository;
     private final ProductTrackingLevelService trackingLevelService;
-    private final Clock clock;
+    private final InventoryLotCreator lotCreator;
 
     public InventoryLotCaptureService(
-            InventoryLotRepository lotRepository, ProductTrackingLevelService trackingLevelService, Clock clock) {
+            InventoryLotRepository lotRepository,
+            ProductTrackingLevelService trackingLevelService,
+            InventoryLotCreator lotCreator) {
         this.lotRepository = lotRepository;
         this.trackingLevelService = trackingLevelService;
-        this.clock = clock;
+        this.lotCreator = lotCreator;
     }
 
     /**
@@ -69,23 +71,22 @@ public class InventoryLotCaptureService {
             throw new LotNumberRequiredException(stockItemId);
         }
         String normalizedLotNumber = lotNumber.trim();
-        InventoryLot lot = lotRepository
+        InventoryLot existing = lotRepository
                 .findByStockItemIdAndLotNumber(stockItemId, normalizedLotNumber)
-                .orElseGet(() -> {
-                    InventoryLot created = lotRepository.save(InventoryLot.builder()
-                            .stockItemId(stockItemId)
-                            .lotNumber(normalizedLotNumber)
-                            .receivedAt(Instant.now(clock))
-                            .vendorId(vendorId)
-                            .status(InventoryLotStatus.ACTIVE)
-                            .build());
-                    log.info(
-                            "Created inventory lot {} for stockItemId={} lotNumber={}",
-                            created.getLotId(),
-                            stockItemId,
-                            normalizedLotNumber);
-                    return created;
-                });
-        return lot.getLotId();
+                .orElse(null);
+        if (existing != null) {
+            return existing.getLotId();
+        }
+        try {
+            return lotCreator.create(stockItemId, normalizedLotNumber, vendorId).getLotId();
+        } catch (DataIntegrityViolationException raced) {
+            // Concurrent first receipt of the same (stockItemId, lotNumber): the creator's
+            // REQUIRES_NEW transaction lost the unique-constraint race and rolled back alone —
+            // the winner's committed row is the lot.
+            return lotRepository
+                    .findByStockItemIdAndLotNumber(stockItemId, normalizedLotNumber)
+                    .orElseThrow(() -> raced)
+                    .getLotId();
+        }
     }
 }

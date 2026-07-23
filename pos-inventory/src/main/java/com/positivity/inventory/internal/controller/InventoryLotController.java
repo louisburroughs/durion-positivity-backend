@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.lot.LotDetailResponse;
 import com.positivity.inventory.internal.dto.lot.LotResponse;
 import com.positivity.inventory.internal.enums.InventoryLotStatus;
@@ -49,6 +50,7 @@ public class InventoryLotController {
      * @return matching lots
      */
     @GetMapping
+    @EmitEvent(id = "INVENTORY_LOT_LIST", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:on_hand:view"})
@@ -88,6 +90,7 @@ public class InventoryLotController {
      * @return the lot detail
      */
     @GetMapping("/{lotId}")
+    @EmitEvent(id = "INVENTORY_LOT_GET", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:on_hand:view"})

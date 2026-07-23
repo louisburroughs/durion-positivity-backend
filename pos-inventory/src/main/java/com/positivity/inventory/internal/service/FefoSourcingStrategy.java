@@ -17,12 +17,12 @@ import org.springframework.stereotype.Component;
  * the SKU's earliest lot expiry at each location, earliest first, fed by the
  * {@link LotExpiryProvider} SPI.
  *
- * <p>Lots do not exist yet (odoo-parity E1): with the default
- * {@link NoOpLotExpiryProvider} the engine never dispatches here — a
- * configured FEFO strategy falls back to FIFO ordering in
- * {@code SourcingStrategyServiceImpl} until a lot-aware provider reports
- * expiry data for the SKU. E2/E3 plug in the real provider; this ordering
- * activates without further engine changes.
+ * <p>The lot master exists (odoo-parity E1) but expiry dates are not
+ * populated until E3: with the default {@link NoOpLotExpiryProvider} the
+ * engine never dispatches here — a configured FEFO strategy falls back to
+ * FIFO ordering in {@code SourcingStrategyServiceImpl} until a lot-aware
+ * provider reports expiry data for the SKU. E2/E3 plug in the real provider;
+ * this ordering activates without further engine changes.
  *
  * <p>Tie-breakers (deterministic): locations without expiring lots sort last;
  * equal expiries order by ascending location id.
