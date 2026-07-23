@@ -33,6 +33,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -60,7 +61,7 @@ import org.springframework.transaction.annotation.Transactional;
  * mirroring the putaway source-on-hand rule.
  */
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = @Autowired)
 @Slf4j
 public class ScrapServiceImpl implements ScrapService {
 
@@ -76,6 +77,32 @@ public class ScrapServiceImpl implements ScrapService {
     private final InventoryFactPublisher inventoryFactPublisher;
     private final ReplenishmentService replenishmentService;
     private final Clock clock;
+    private final @Nullable InventoryLotOutboundService lotOutboundService;
+
+    /**
+     * Lot-gate-less constructor kept for the pre-E2 unit-test fixtures: without an
+     * {@link InventoryLotOutboundService} every SKU behaves untracked (no lot validation,
+     * lot-null postings) — identical to the service's behavior for NONE-tracked products
+     * (odoo-parity E2, issue #1042).
+     */
+    public ScrapServiceImpl(
+            ScrapRecordRepository scrapRepository,
+            InventoryLedgerEntryRepository ledgerRepository,
+            LedgerPostingService ledgerPostingService,
+            ApprovalThresholdEvaluator thresholdEvaluator,
+            InventoryFactPublisher inventoryFactPublisher,
+            ReplenishmentService replenishmentService,
+            Clock clock) {
+        this(
+                scrapRepository,
+                ledgerRepository,
+                ledgerPostingService,
+                thresholdEvaluator,
+                inventoryFactPublisher,
+                replenishmentService,
+                clock,
+                null);
+    }
 
     @Override
     @Transactional
@@ -88,6 +115,15 @@ public class ScrapServiceImpl implements ScrapService {
         String actor = currentActor();
         CostSnapshot costSnapshot = snapshotCost(request.getStockItemId());
 
+        // odoo-parity E2 (#1042): LOT-tracked SKUs must key the lot being written off
+        // (422 LOT_NUMBER_REQUIRED / LOT_UNKNOWN / LOT_NOT_AVAILABLE); the resolved lot rides
+        // on the D1-reserved ScrapRecord.lotId column and stamps the SCRAP_OUT posting —
+        // including the approval path, which posts later from the stored record. Untracked
+        // SKUs resolve to null, byte-identical to pre-E2.
+        UUID lotId = lotOutboundService == null
+                ? null
+                : lotOutboundService.resolveOutboundLot(request.getStockItemId(), request.getLotNumber());
+
         ScrapRecord scrap = ScrapRecord.builder()
                 .stockItemId(request.getStockItemId())
                 .quantity(request.getQuantity())
@@ -96,6 +132,7 @@ public class ScrapServiceImpl implements ScrapService {
                 .reasonCode(request.getReasonCode())
                 .notes(request.getNotes())
                 .workorderId(request.getWorkorderId())
+                .lotId(lotId)
                 .attachmentReference(request.getAttachmentReference())
                 .unitCostSnapshot(costSnapshot.unitCost())
                 .costSource(costSnapshot.source())
@@ -264,6 +301,7 @@ public class ScrapServiceImpl implements ScrapService {
                 .quantityAfter(currentOnHand - scrap.getQuantity())
                 .unitCost(scrap.getUnitCostSnapshot())
                 .locationId(postingLocationId)
+                .lotId(scrap.getLotId())
                 .reasonCode(scrap.getReasonCode().name())
                 .sourceTransactionId(scrap.getScrapId().toString())
                 .transactionUserId(scrap.getApprovedBy() != null ? scrap.getApprovedBy() : scrap.getCreatedBy())
@@ -371,6 +409,7 @@ public class ScrapServiceImpl implements ScrapService {
                 .reasonCode(scrap.getReasonCode())
                 .notes(scrap.getNotes())
                 .workorderId(scrap.getWorkorderId())
+                .lotId(scrap.getLotId())
                 .attachmentReference(scrap.getAttachmentReference())
                 .unitCostSnapshot(scrap.getUnitCostSnapshot())
                 .costSource(scrap.getCostSource())

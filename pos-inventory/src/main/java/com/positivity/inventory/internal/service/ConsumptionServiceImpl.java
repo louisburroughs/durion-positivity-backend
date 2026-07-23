@@ -13,6 +13,7 @@ import com.positivity.inventory.internal.enums.AllocationStatus;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.PickTaskStatus;
 import com.positivity.inventory.internal.enums.SourcingStrategy;
+import com.positivity.inventory.internal.exception.LotNumberRequiredException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
 import com.positivity.inventory.internal.repository.AllocationRepository;
@@ -72,6 +73,7 @@ public class ConsumptionServiceImpl implements ConsumptionService {
     private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final @Nullable SourcingStrategyService sourcingStrategyService;
+    private final @Nullable InventoryLotOutboundService lotOutboundService;
 
     @Autowired
     public ConsumptionServiceImpl(
@@ -82,7 +84,8 @@ public class ConsumptionServiceImpl implements ConsumptionService {
             LedgerPostingService ledgerPostingService,
             InventoryFactPublisher inventoryFactPublisher,
             Clock clock,
-            SourcingStrategyService sourcingStrategyService) {
+            SourcingStrategyService sourcingStrategyService,
+            InventoryLotOutboundService lotOutboundService) {
         this.clock = clock;
         this.inventoryFactPublisher = inventoryFactPublisher;
         this.pickTaskRepository = pickTaskRepository;
@@ -91,14 +94,41 @@ public class ConsumptionServiceImpl implements ConsumptionService {
         this.allocationRepository = allocationRepository;
         this.ledgerPostingService = ledgerPostingService;
         this.sourcingStrategyService = sourcingStrategyService;
+        this.lotOutboundService = lotOutboundService;
     }
 
     /**
-     * Engine-less constructor kept for the pre-H1 unit-test fixtures: without
-     * a {@link SourcingStrategyService} the allocation-close order is the
-     * platform-default FIFO (oldest-first) — identical to the engine's
-     * default-config decision, which the H1 regression tests prove.
+     * Engine-less constructor kept for the pre-H1 unit-test fixtures: without a
+     * {@link SourcingStrategyService} the allocation-close order is the platform-default FIFO
+     * (oldest-first) — identical to the engine's default-config decision, which the H1
+     * regression tests prove. The absent {@link InventoryLotOutboundService} likewise means
+     * every SKU behaves untracked (odoo-parity E2, #1042) — a task-recorded
+     * {@code pickedLotId} is still stamped, but no lot gating applies.
      */
+    public ConsumptionServiceImpl(
+            PickTaskRepository pickTaskRepository,
+            InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
+            ReservationRepository reservationRepository,
+            AllocationRepository allocationRepository,
+            LedgerPostingService ledgerPostingService,
+            InventoryFactPublisher inventoryFactPublisher,
+            Clock clock,
+            @Nullable SourcingStrategyService sourcingStrategyService) {
+        this(
+                pickTaskRepository,
+                inventoryLedgerEntryRepository,
+                reservationRepository,
+                allocationRepository,
+                ledgerPostingService,
+                inventoryFactPublisher,
+                clock,
+                sourcingStrategyService,
+                null);
+    }
+
+    /** See {@link #ConsumptionServiceImpl(PickTaskRepository, InventoryLedgerEntryRepository,
+     * ReservationRepository, AllocationRepository, LedgerPostingService, InventoryFactPublisher,
+     * Clock, SourcingStrategyService)}. */
     public ConsumptionServiceImpl(
             PickTaskRepository pickTaskRepository,
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
@@ -115,6 +145,7 @@ public class ConsumptionServiceImpl implements ConsumptionService {
                 ledgerPostingService,
                 inventoryFactPublisher,
                 clock,
+                null,
                 null);
     }
 
@@ -146,7 +177,7 @@ public class ConsumptionServiceImpl implements ConsumptionService {
                         "Requested quantity exceeds picked quantity for task: " + item.getPickTaskId());
             }
 
-            entriesToSave.add(buildConsumptionEntry(request, item));
+            entriesToSave.add(buildConsumptionEntry(request, item, resolveConsumptionLot(item, task)));
             entriesToSave.addAll(closeAllocations(request, item, task, releasedInBatch));
         }
 
@@ -310,12 +341,42 @@ public class ConsumptionServiceImpl implements ConsumptionService {
                 .toList();
     }
 
-    private InventoryLedgerEntry buildConsumptionEntry(ConsumeItemsRequest request, ConsumeItemLine item) {
+    /**
+     * Lot the {@code WORKORDER_CONSUMPTION} entry draws from (odoo-parity E2, issue #1042).
+     * Source order for LOT-tracked SKUs: an explicit {@code lotNumber} on the request line
+     * (validated: must exist and be ACTIVE) overrides; otherwise the lot recorded at pick
+     * confirmation ({@code PickTaskEntity.pickedLotId} — the pick→consumption linkage);
+     * neither present is a 422 {@code LOT_NUMBER_REQUIRED}. Untracked SKUs return the task's
+     * recorded lot (always null pre-E2) with no validation — byte-identical behavior.
+     *
+     * <p>The {@code ALLOCATION_RELEASED} entries this flow also writes stay lot-null by
+     * design: allocations are location-level and never pin lots (spec §6 E2 decision).
+     */
+    private @Nullable UUID resolveConsumptionLot(ConsumeItemLine item, PickTaskEntity task) {
+        if (lotOutboundService == null) {
+            return task.getPickedLotId();
+        }
+        String stockItemId = item.getSkuId() == null ? "" : item.getSkuId().toString();
+        if (!lotOutboundService.isLotTracked(stockItemId)) {
+            return task.getPickedLotId();
+        }
+        if (item.getLotNumber() != null && !item.getLotNumber().isBlank()) {
+            return lotOutboundService.resolveOutboundLot(stockItemId, item.getLotNumber());
+        }
+        if (task.getPickedLotId() != null) {
+            return task.getPickedLotId();
+        }
+        throw new LotNumberRequiredException(stockItemId);
+    }
+
+    private InventoryLedgerEntry buildConsumptionEntry(
+            ConsumeItemsRequest request, ConsumeItemLine item, @Nullable UUID lotId) {
         return InventoryLedgerEntry.builder()
                 .stockItemId(item.getSkuId() == null ? "" : item.getSkuId().toString())
                 .eventType(InventoryLedgerEventType.WORKORDER_CONSUMPTION)
                 .changeInQuantity(-Math.abs(item.getQuantity()))
                 .quantityAfter(0)
+                .lotId(lotId)
                 .transactionUserId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
                 .notes("Consumed from pick task " + item.getPickTaskId() + " for workorder " + request.getWorkorderId())
                 .build();

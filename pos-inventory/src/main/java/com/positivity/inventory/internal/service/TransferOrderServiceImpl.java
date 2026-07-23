@@ -110,6 +110,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
     private final LedgerPostingService ledgerPostingService;
     private final InventoryLedgerEntryRepository ledgerRepository;
     private final InventoryFactPublisher inventoryFactPublisher;
+    private final InventoryLotOutboundService lotOutboundService;
     private final Clock clock;
     private final boolean approvalRequired;
 
@@ -120,6 +121,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
             LedgerPostingService ledgerPostingService,
             InventoryLedgerEntryRepository ledgerRepository,
             InventoryFactPublisher inventoryFactPublisher,
+            InventoryLotOutboundService lotOutboundService,
             Clock clock,
             @Value("${pos.inventory.transfer.approval-required:false}") boolean approvalRequired) {
         this.transferOrderRepository = transferOrderRepository;
@@ -128,6 +130,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
         this.ledgerPostingService = ledgerPostingService;
         this.ledgerRepository = ledgerRepository;
         this.inventoryFactPublisher = inventoryFactPublisher;
+        this.lotOutboundService = lotOutboundService;
         this.clock = clock;
         this.approvalRequired = approvalRequired;
     }
@@ -249,7 +252,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
         requireEligibleSite(order.getSourceLocationId(), "source");
         requireEligibleSite(order.getDestinationLocationId(), "destination");
 
-        Map<UUID, Integer> explicit = explicitQuantities(request.getLines(), order);
+        Map<UUID, TransferQuantityLineRequest> explicit = explicitLines(request.getLines(), order);
         UUID sourcePosting = sourcePostingLocation(order);
         UUID destinationPosting = destinationPostingLocation(order);
         String actor = currentActor();
@@ -257,11 +260,21 @@ public class TransferOrderServiceImpl implements TransferOrderService {
         List<InventoryLedgerEntry> entries = new ArrayList<>();
         Map<String, Integer> runningDelta = new HashMap<>();
         for (TransferOrderLine line : order.getLines()) {
-            int quantity = explicit.getOrDefault(line.getLineId(), line.getRequestedQty());
+            TransferQuantityLineRequest explicitLine = explicit.get(line.getLineId());
+            int quantity = explicitLine != null ? explicitLine.getQuantity() : line.getRequestedQty();
             if (quantity > line.getRequestedQty()) {
                 throw TransferQuantityExceededException.dispatchExceedsRequested(
                         line.getLineId(), line.getSku(), quantity, line.getRequestedQty());
             }
+            // odoo-parity E2 (#1042): LOT-tracked SKUs must key the lot being dispatched
+            // (422 LOT_NUMBER_REQUIRED / LOT_UNKNOWN / LOT_NOT_AVAILABLE); the resolved lot is
+            // pinned on the line so receive and short-close post the SAME lot on both sides —
+            // per-lot balances then conserve across sites exactly like the lot-agnostic ones.
+            // Untracked SKUs resolve to null, byte-identical to pre-E2.
+            UUID lotId = lotOutboundService.resolveOutboundLot(
+                    line.getSku(), explicitLine != null ? explicitLine.getLotNumber() : null);
+            line.setLotId(lotId);
+            line.setLotNumber(lotId == null || explicitLine == null ? null : explicitLine.getLotNumber());
             entries.add(transferEntry(
                     order,
                     line.getSku(),
@@ -270,6 +283,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
                     sourcePosting,
                     sourcePosting,
                     destinationPosting,
+                    lotId,
                     runningDelta,
                     actor));
             line.setDispatchedQty(quantity);
@@ -306,7 +320,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
         // Spec C5: the receiving end re-validated at posting time.
         requireEligibleSite(order.getDestinationLocationId(), "destination");
 
-        Map<UUID, Integer> explicit = explicitQuantities(request.getLines(), order);
+        Map<UUID, TransferQuantityLineRequest> explicit = explicitLines(request.getLines(), order);
         UUID sourcePosting = sourcePostingLocation(order);
         UUID destinationPosting = destinationPostingLocation(order);
         String actor = currentActor();
@@ -315,7 +329,8 @@ public class TransferOrderServiceImpl implements TransferOrderService {
         Map<String, Integer> runningDelta = new HashMap<>();
         for (TransferOrderLine line : order.getLines()) {
             int remaining = line.getDispatchedQty() - line.getReceivedQty();
-            int quantity = explicit.getOrDefault(line.getLineId(), remaining);
+            TransferQuantityLineRequest explicitLine = explicit.get(line.getLineId());
+            int quantity = explicitLine != null ? explicitLine.getQuantity() : remaining;
             if (quantity > remaining) {
                 throw TransferQuantityExceededException.receiveExceedsDispatched(
                         line.getLineId(), line.getSku(), quantity, remaining);
@@ -323,6 +338,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
             if (quantity == 0) {
                 continue;
             }
+            // E2: the arrival carries the lot pinned at dispatch — never a request-keyed one.
             entries.add(transferEntry(
                     order,
                     line.getSku(),
@@ -331,6 +347,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
                     destinationPosting,
                     sourcePosting,
                     destinationPosting,
+                    line.getLotId(),
                     runningDelta,
                     actor));
             line.setReceivedQty(line.getReceivedQty() + quantity);
@@ -391,7 +408,9 @@ public class TransferOrderServiceImpl implements TransferOrderService {
                 continue;
             }
             // Constructive arrival at the destination key: cancels this line's outstanding
-            // in-transit (see the short-close ledger-shape javadoc on this class).
+            // in-transit (see the short-close ledger-shape javadoc on this class). Every entry
+            // of the shape carries the lot pinned at dispatch (E2), so the per-lot rows walk
+            // through the same conserving pairs as the lot-agnostic balances.
             entries.add(transferEntry(
                     order,
                     line.getSku(),
@@ -400,11 +419,12 @@ public class TransferOrderServiceImpl implements TransferOrderService {
                     destinationPosting,
                     sourcePosting,
                     destinationPosting,
+                    line.getLotId(),
                     runningDelta,
                     actor));
             if (request.getDisposition() == TransferShortCloseDisposition.LOST_IN_TRANSIT) {
-                entries.add(lostRemainderEntry(
-                        order, line.getSku(), remainder, destinationPosting, request, runningDelta, actor));
+                entries.add(
+                        lostRemainderEntry(order, line, remainder, destinationPosting, request, runningDelta, actor));
             } else {
                 entries.add(transferEntry(
                         order,
@@ -414,6 +434,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
                         destinationPosting,
                         destinationPosting,
                         sourcePosting,
+                        line.getLotId(),
                         runningDelta,
                         actor));
                 entries.add(transferEntry(
@@ -424,6 +445,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
                         sourcePosting,
                         destinationPosting,
                         sourcePosting,
+                        line.getLotId(),
                         runningDelta,
                         actor));
             }
@@ -464,12 +486,13 @@ public class TransferOrderServiceImpl implements TransferOrderService {
      */
     private InventoryLedgerEntry lostRemainderEntry(
             TransferOrder order,
-            String sku,
+            TransferOrderLine line,
             int remainder,
             UUID destinationPosting,
             ShortCloseTransferOrderRequest request,
             Map<String, Integer> runningDelta,
             String actor) {
+        String sku = line.getSku();
         Integer currentOnHand = ledgerRepository.calculateOnHandQuantityAtLocation(sku, destinationPosting);
         String deltaKey = runningDeltaKey(sku, destinationPosting);
         int before = (currentOnHand != null ? currentOnHand : 0) + runningDelta.getOrDefault(deltaKey, 0);
@@ -482,6 +505,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
                 .quantityAfter(before - remainder)
                 .unitCost(latestUnitCost(sku))
                 .reasonCode(ScrapReasonCode.LOST.name())
+                .lotId(line.getLotId())
                 .sourceTransactionId(order.getTransferOrderId().toString())
                 .transactionUserId(actor)
                 .notes(request.getNotes())
@@ -519,11 +543,11 @@ public class TransferOrderServiceImpl implements TransferOrderService {
     }
 
     /** Maps explicit request lines to their order lines; unknown line ids are a 400. */
-    private Map<UUID, Integer> explicitQuantities(
+    private Map<UUID, TransferQuantityLineRequest> explicitLines(
             @Nullable List<TransferQuantityLineRequest> requestLines, TransferOrder order) {
-        Map<UUID, Integer> quantities = new LinkedHashMap<>();
+        Map<UUID, TransferQuantityLineRequest> byLineId = new LinkedHashMap<>();
         if (requestLines == null) {
-            return quantities;
+            return byLineId;
         }
         for (TransferQuantityLineRequest requestLine : requestLines) {
             boolean known =
@@ -531,11 +555,11 @@ public class TransferOrderServiceImpl implements TransferOrderService {
             if (!known) {
                 throw new IllegalArgumentException("Unknown transfer order line: " + requestLine.getLineId());
             }
-            if (quantities.putIfAbsent(requestLine.getLineId(), requestLine.getQuantity()) != null) {
+            if (byLineId.putIfAbsent(requestLine.getLineId(), requestLine) != null) {
                 throw new IllegalArgumentException("Duplicate transfer order line: " + requestLine.getLineId());
             }
         }
-        return quantities;
+        return byLineId;
     }
 
     /**
@@ -553,6 +577,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
             UUID postingLocationId,
             UUID fromLocationId,
             UUID toLocationId,
+            @Nullable UUID lotId,
             Map<String, Integer> runningDelta,
             String actor) {
         Integer currentOnHand = ledgerRepository.calculateOnHandQuantityAtLocation(sku, postingLocationId);
@@ -567,6 +592,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
                 .eventType(eventType)
                 .changeInQuantity(changeInQuantity)
                 .quantityAfter(before + changeInQuantity)
+                .lotId(lotId)
                 .sourceTransactionId(order.getTransferOrderId().toString())
                 .transactionUserId(actor)
                 .timestamp(Instant.now(clock))
@@ -682,6 +708,8 @@ public class TransferOrderServiceImpl implements TransferOrderService {
                 .requestedQty(line.getRequestedQty())
                 .dispatchedQty(line.getDispatchedQty())
                 .receivedQty(line.getReceivedQty())
+                .lotId(line.getLotId())
+                .lotNumber(line.getLotNumber())
                 .createdAt(line.getCreatedAt())
                 .updatedAt(line.getUpdatedAt())
                 .build();

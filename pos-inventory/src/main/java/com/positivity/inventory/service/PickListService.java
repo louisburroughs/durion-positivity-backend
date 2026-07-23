@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.enums.PickListStatus;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 public interface PickListService {
 
@@ -25,13 +26,30 @@ public interface PickListService {
     @NonNull
     PickListResponse releasePickList(@NonNull UUID pickListId);
 
+    /** Pre-E2 arity: confirms without a lot number (LOT-tracked SKUs will reject — see below). */
+    @NonNull
+    default PickTaskResponse confirmPickTask(
+            @NonNull UUID pickListId,
+            @NonNull UUID pickTaskId,
+            @NonNull UUID scannedSkuId,
+            @NonNull UUID scannedLocationId,
+            int quantityPicked) {
+        return confirmPickTask(pickListId, pickTaskId, scannedSkuId, scannedLocationId, quantityPicked, null);
+    }
+
+    /**
+     * Confirms a pick task, optionally recording the lot the units were taken from
+     * (odoo-parity E2, issue #1042): LOT-tracked SKUs require a lot number referencing an
+     * existing ACTIVE lot; untracked SKUs ignore it.
+     */
     @NonNull
     PickTaskResponse confirmPickTask(
             @NonNull UUID pickListId,
             @NonNull UUID pickTaskId,
             @NonNull UUID scannedSkuId,
             @NonNull UUID scannedLocationId,
-            int quantityPicked);
+            int quantityPicked,
+            @Nullable String lotNumber);
 
     @NonNull
     List<PickTaskResponse> getPickTasksForPickList(@NonNull UUID pickListId);

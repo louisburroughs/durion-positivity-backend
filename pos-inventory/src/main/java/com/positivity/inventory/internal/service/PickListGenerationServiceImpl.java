@@ -18,9 +18,9 @@ import com.positivity.inventory.internal.service.SourcingStrategyService.Sourcin
 import com.positivity.inventory.service.PickListGenerationService;
 import java.util.List;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,7 +43,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @Transactional
-@RequiredArgsConstructor
 public class PickListGenerationServiceImpl implements PickListGenerationService {
 
     private final PickListRepository pickListRepository;
@@ -52,6 +51,48 @@ public class PickListGenerationServiceImpl implements PickListGenerationService 
     private final InventoryStockSummaryRepository stockSummaryRepository;
     private final SourcingStrategyService sourcingStrategyService;
     private final InventoryFactPublisher inventoryFactPublisher;
+    private final @Nullable InventoryLotOutboundService lotOutboundService;
+
+    @Autowired
+    public PickListGenerationServiceImpl(
+            PickListRepository pickListRepository,
+            PickTaskRepository pickTaskRepository,
+            ReservationRepository reservationRepository,
+            InventoryStockSummaryRepository stockSummaryRepository,
+            SourcingStrategyService sourcingStrategyService,
+            InventoryFactPublisher inventoryFactPublisher,
+            InventoryLotOutboundService lotOutboundService) {
+        this.pickListRepository = pickListRepository;
+        this.pickTaskRepository = pickTaskRepository;
+        this.reservationRepository = reservationRepository;
+        this.stockSummaryRepository = stockSummaryRepository;
+        this.sourcingStrategyService = sourcingStrategyService;
+        this.inventoryFactPublisher = inventoryFactPublisher;
+        this.lotOutboundService = lotOutboundService;
+    }
+
+    /**
+     * Lot-suggestion-less constructor kept for the pre-E2 unit-test fixtures: without an
+     * {@link InventoryLotOutboundService} every SKU behaves untracked (no
+     * {@code suggestedLotNumber}) — identical to the service's behavior for NONE-tracked
+     * products.
+     */
+    public PickListGenerationServiceImpl(
+            PickListRepository pickListRepository,
+            PickTaskRepository pickTaskRepository,
+            ReservationRepository reservationRepository,
+            InventoryStockSummaryRepository stockSummaryRepository,
+            SourcingStrategyService sourcingStrategyService,
+            InventoryFactPublisher inventoryFactPublisher) {
+        this(
+                pickListRepository,
+                pickTaskRepository,
+                reservationRepository,
+                stockSummaryRepository,
+                sourcingStrategyService,
+                inventoryFactPublisher,
+                null);
+    }
 
     @Override
     public @NonNull PickListResponse generatePickList(@NonNull GeneratePickListRequest request) {
@@ -100,6 +141,14 @@ public class PickListGenerationServiceImpl implements PickListGenerationService 
                 ? null
                 : decision.orderedCandidates().getFirst().locationId();
 
+        // odoo-parity E2 (#1042): advisory FIFO lot suggestion for LOT-tracked SKUs at the
+        // suggested location (earliest lot receivedAt among ACTIVE lots with per-lot stock).
+        // Confirm may override with any valid ACTIVE lot. E3's LotExpiryProvider upgrades the
+        // ordering to FEFO without touching this call site.
+        String suggestedLotNumber = lotOutboundService == null
+                ? null
+                : lotOutboundService.suggestFifoLotNumber(line.getSku(), suggestedLocationId);
+
         return PickTaskEntity.builder()
                 .pickList(pickList)
                 .productId(resolveProductId(line))
@@ -112,6 +161,7 @@ public class PickListGenerationServiceImpl implements PickListGenerationService 
                 .status(PickTaskStatus.PENDING)
                 .suggestedLocationId(suggestedLocationId)
                 .sourcingReason(suggestedLocationId == null ? null : decision.effectiveStrategy())
+                .suggestedLotNumber(suggestedLotNumber)
                 .build();
     }
 

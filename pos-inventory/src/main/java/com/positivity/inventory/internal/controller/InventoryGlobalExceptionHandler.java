@@ -17,7 +17,10 @@ import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.LocationServiceUnavailableException;
+import com.positivity.inventory.internal.exception.LotInsufficientStockException;
+import com.positivity.inventory.internal.exception.LotNotAvailableException;
 import com.positivity.inventory.internal.exception.LotNumberRequiredException;
+import com.positivity.inventory.internal.exception.LotUnknownException;
 import com.positivity.inventory.internal.exception.NegativeStockPolicyViolationException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
 import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
@@ -308,8 +311,28 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(LotNumberRequiredException.class)
     public ResponseEntity<ApiError> handleLotNumberRequired(LotNumberRequiredException ex) {
         // odoo-parity E1 (#1038): a receipt of a LOT-tracked product without a lot number is a
-        // deterministic 422, never a silently untracked posting.
+        // deterministic 422, never a silently untracked posting. Since E2 (#1042) the same
+        // code gates the outbound flows (pick confirm, consumption, transfer dispatch, scrap).
         return build(HttpStatus.valueOf(422), LotNumberRequiredException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(LotUnknownException.class)
+    public ResponseEntity<ApiError> handleLotUnknown(LotUnknownException ex) {
+        // odoo-parity E2 (#1042): outbound flows never create lots — an unknown lot number is
+        // a deterministic 422.
+        return build(HttpStatus.valueOf(422), LotUnknownException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(LotNotAvailableException.class)
+    public ResponseEntity<ApiError> handleLotNotAvailable(LotNotAvailableException ex) {
+        // odoo-parity E2 (#1042): QUARANTINED/RECALLED/CONSUMED lots cannot leave stock.
+        return build(HttpStatus.valueOf(422), LotNotAvailableException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(LotInsufficientStockException.class)
+    public ResponseEntity<ApiError> handleLotInsufficientStock(LotInsufficientStockException ex) {
+        // odoo-parity E2 (#1042): the per-lot negative floor is absolute — no override.
+        return build(HttpStatus.valueOf(422), LotInsufficientStockException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(InvalidParamCombinationException.class)

@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.dto.picklist;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.positivity.inventory.internal.enums.PickTaskStatus;
@@ -56,4 +57,44 @@ public class PickTaskResponse {
 
     @Schema(description = "Ordinal position of this task in the pick sequence", example = "1", requiredMode = REQUIRED)
     private int sortOrder;
+
+    @Schema(
+            description = "Advisory lot suggestion for LOT-tracked SKUs (FIFO by lot receivedAt at the suggested"
+                    + " location; FEFO once expiry data exists). Null for untracked SKUs or when no lot has stock",
+            example = "LOT-2026-A",
+            requiredMode = NOT_REQUIRED)
+    private String suggestedLotNumber;
+
+    @Schema(
+            description = "Identifier of the lot actually keyed at pick confirmation for LOT-tracked SKUs;"
+                    + " null for untracked SKUs and before confirmation",
+            example = "01960003-0000-7000-8000-000000000044",
+            requiredMode = NOT_REQUIRED)
+    private UUID pickedLotId;
+
+    /**
+     * Pre-E2 arity kept for existing callers/tests: lot fields default to null (odoo-parity
+     * E2, issue #1042).
+     */
+    public PickTaskResponse(
+            UUID pickTaskId,
+            UUID pickListId,
+            UUID skuId,
+            UUID locationId,
+            int quantityRequired,
+            int quantityPicked,
+            PickTaskStatus status,
+            int sortOrder) {
+        this(
+                pickTaskId,
+                pickListId,
+                skuId,
+                locationId,
+                quantityRequired,
+                quantityPicked,
+                status,
+                sortOrder,
+                null,
+                null);
+    }
 }

@@ -69,6 +69,19 @@ public class TransferOrderLine {
     @Column(name = "received_qty", nullable = false)
     private Integer receivedQty = 0;
 
+    /**
+     * Lot the dispatched units were drawn from, resolved and pinned at dispatch for
+     * LOT-tracked SKUs (odoo-parity E2, issue #1042). Receive and short-close reuse this lot
+     * on every posting of the line, so the per-lot rows conserve across sites exactly like
+     * the lot-agnostic balances. Null for untracked SKUs and lines dispatched before E2.
+     */
+    @Column(name = "lot_id")
+    private UUID lotId;
+
+    /** Lot number matching {@link #lotId}, kept on the document for audit/display. */
+    @Column(name = "lot_number", length = 128)
+    private String lotNumber;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

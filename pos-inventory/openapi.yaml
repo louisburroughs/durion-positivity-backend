@@ -5454,6 +5454,13 @@ components:
           type: integer
           format: int32
           description: Quantity received at the destination so far
+        lotId:
+          type: string
+          format: uuid
+          description: Lot the dispatched units were drawn from (LOT-tracked SKUs, pinned at dispatch)
+        lotNumber:
+          type: string
+          description: Lot number matching lotId, kept for audit/display
         createdAt:
           type: string
           format: date-time
@@ -5586,6 +5593,12 @@ components:
           type: integer
           format: int32
           description: Quantity to dispatch/receive on this line; must be positive
+        lotNumber:
+          type: string
+          description: Lot number the dispatched units are drawn from (dispatch only; receive and short-close reuse the lot recorded at dispatch). Required (422 LOT_NUMBER_REQUIRED) when the SKU is LOT-tracked; must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. Ignored for untracked SKUs
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
       required:
       - lineId
       - quantity
@@ -5750,6 +5763,12 @@ components:
           format: uuid
           description: Workorder the scrapped part belonged to, when linked
           example: 01960005-0000-7000-8000-000000000001
+        lotNumber:
+          type: string
+          description: Lot number the scrapped units belong to. Required (422 LOT_NUMBER_REQUIRED) when the SKU is LOT-tracked; must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. Ignored for untracked SKUs
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
         attachmentReference:
           type: string
           description: Photo/attachment reference (storage out of scope)
@@ -5810,6 +5829,10 @@ components:
           type: string
           format: uuid
           description: Linked workorder, when the part was damaged during a job
+        lotId:
+          type: string
+          format: uuid
+          description: Lot the scrapped units belong to (LOT-tracked SKUs)
         attachmentReference:
           type: string
           description: Photo/attachment reference
@@ -6419,6 +6442,12 @@ components:
           type: string
           description: Optional free-text note describing the cross-dock action
           example: Cross-docked at dock door 3 for urgent workorder
+        lotNumber:
+          type: string
+          description: Lot or batch number of the cross-docked stock. Required (422 LOT_NUMBER_REQUIRED) when the product is LOT-tracked (falls back to the lot number already keyed on the receiving line); the lot is found-or-created like any receipt and stamped on BOTH paired ledger entries. Ignored for untracked products
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
       required:
       - quantity
       - workorderId
@@ -7238,6 +7267,12 @@ components:
           format: int32
           description: Quantity of units actually picked at the scanned location
           example: 12
+        lotNumber:
+          type: string
+          description: Lot number the units were picked from. Required (422 LOT_NUMBER_REQUIRED) when the SKU is LOT-tracked; must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. May differ from the task's advisory suggestedLotNumber. Ignored for untracked SKUs
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
       required:
       - quantityPicked
       - scannedLocationId
@@ -7290,6 +7325,15 @@ components:
           format: int32
           description: Ordinal position of this task in the pick sequence
           example: 1
+        suggestedLotNumber:
+          type: string
+          description: Advisory lot suggestion for LOT-tracked SKUs (FIFO by lot receivedAt at the suggested location; FEFO once expiry data exists). Null for untracked SKUs or when no lot has stock
+          example: LOT-2026-A
+        pickedLotId:
+          type: string
+          format: uuid
+          description: Identifier of the lot actually keyed at pick confirmation for LOT-tracked SKUs; null for untracked SKUs and before confirmation
+          example: 01960003-0000-7000-8000-000000000044
       required:
       - locationId
       - pickListId
@@ -7998,6 +8042,12 @@ components:
           format: int32
           description: Quantity of the SKU to consume
           example: 4
+        lotNumber:
+          type: string
+          description: 'Optional lot override for LOT-tracked SKUs: must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. When absent, the lot recorded at pick confirmation is used; a LOT-tracked SKU with neither is rejected (422 LOT_NUMBER_REQUIRED). Ignored for untracked SKUs'
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
       required:
       - pickTaskId
       - quantity

@@ -24,14 +24,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
-@RequiredArgsConstructor
 public class ReturnServiceImpl implements ReturnService {
 
     private final InventoryReturnRepository inventoryReturnRepository;
@@ -40,6 +40,48 @@ public class ReturnServiceImpl implements ReturnService {
     private final InventoryFactPublisher inventoryFactPublisher;
     private final DocumentQuantityConverter documentQuantityConverter;
     private final Clock clock;
+    private final @Nullable InventoryLotOutboundService lotOutboundService;
+
+    @Autowired
+    public ReturnServiceImpl(
+            InventoryReturnRepository inventoryReturnRepository,
+            InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
+            LedgerPostingService ledgerPostingService,
+            InventoryFactPublisher inventoryFactPublisher,
+            DocumentQuantityConverter documentQuantityConverter,
+            Clock clock,
+            InventoryLotOutboundService lotOutboundService) {
+        this.inventoryReturnRepository = inventoryReturnRepository;
+        this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
+        this.ledgerPostingService = ledgerPostingService;
+        this.inventoryFactPublisher = inventoryFactPublisher;
+        this.documentQuantityConverter = documentQuantityConverter;
+        this.clock = clock;
+        this.lotOutboundService = lotOutboundService;
+    }
+
+    /**
+     * Lot-gate-less constructor kept for the pre-E2 unit-test fixtures: without an
+     * {@link InventoryLotOutboundService} every SKU behaves untracked (no lot validation,
+     * lot-null postings) — identical to the service's behavior for NONE-tracked products
+     * (odoo-parity E2, issue #1042).
+     */
+    public ReturnServiceImpl(
+            InventoryReturnRepository inventoryReturnRepository,
+            InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
+            LedgerPostingService ledgerPostingService,
+            InventoryFactPublisher inventoryFactPublisher,
+            DocumentQuantityConverter documentQuantityConverter,
+            Clock clock) {
+        this(
+                inventoryReturnRepository,
+                inventoryLedgerEntryRepository,
+                ledgerPostingService,
+                inventoryFactPublisher,
+                documentQuantityConverter,
+                clock,
+                null);
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -142,9 +184,18 @@ public class ReturnServiceImpl implements ReturnService {
     /**
      * Per-line return derivation (odoo-parity B2, #1034): the optional document-UoM conversion
      * plus the whole base quantity that validates against consumption and posts to the ledger.
+     * {@code lotId} (odoo-parity E2, #1042) is the resolved lot for LOT-tracked SKUs — a
+     * return must name an EXISTING lot ({@code LOT_NUMBER_REQUIRED}/{@code LOT_UNKNOWN}), but
+     * unlike the other outbound-flow validations its status is not gated: returning stock to a
+     * CONSUMED lot is the normal way it comes back to life (the funnel's status reconciler
+     * flips CONSUMED → ACTIVE once the quantity lands), and returned units of a
+     * QUARANTINED/RECALLED lot belong on that lot's balance where the block keeps applying.
      */
     private record ReturnLineComputation(
-            ReturnItemLine item, DocumentQuantityConverter.DocumentConversion conversion, int baseQuantity) {}
+            ReturnItemLine item,
+            DocumentQuantityConverter.DocumentConversion conversion,
+            int baseQuantity,
+            @Nullable UUID lotId) {}
 
     private ReturnLineComputation computeReturnLine(ReturnItemLine item) {
         DocumentQuantityConverter.DocumentConversion conversion = documentQuantityConverter
@@ -168,7 +219,10 @@ public class ReturnServiceImpl implements ReturnService {
         if (baseQuantity <= 0) {
             throw new IllegalArgumentException("quantityReturned must be positive");
         }
-        return new ReturnLineComputation(item, conversion, baseQuantity);
+        UUID lotId = lotOutboundService == null
+                ? null
+                : lotOutboundService.resolveReturnLot(item.getSkuId().toString(), item.getLotNumber());
+        return new ReturnLineComputation(item, conversion, baseQuantity, lotId);
     }
 
     private int calculateTotalItemsReturned(List<ReturnLineComputation> items) {
@@ -205,6 +259,7 @@ public class ReturnServiceImpl implements ReturnService {
                 .eventType(InventoryLedgerEventType.RETURN_TO_STOCK)
                 .changeInQuantity(Math.abs(computed.baseQuantity()))
                 .quantityAfter(0)
+                .lotId(computed.lotId())
                 .transactionUserId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
                 .notes("Returned to stock from workorder "
                         + request.getWorkorderId()
