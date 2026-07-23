@@ -2,12 +2,14 @@ package com.positivity.order.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.order.internal.dto.AddItemRequest;
+import com.positivity.order.internal.dto.CheckoutRequest;
 import com.positivity.order.internal.dto.CreateCartRequest;
 import com.positivity.order.internal.dto.LinkSourceRequest;
 import com.positivity.order.internal.dto.OrderDiscountRequest;
 import com.positivity.order.internal.dto.SalesOrderLineResponse;
 import com.positivity.order.internal.dto.SalesOrderResponse;
 import com.positivity.order.internal.dto.UpdateItemRequest;
+import com.positivity.order.internal.dto.VoidOrderRequest;
 import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.service.SalesOrderService;
 import com.positivity.order.service.model.AddItemCommand;
@@ -120,7 +122,8 @@ public class SalesOrderController {
                         request.getManualPrice(),
                         request.getLineUuid(),
                         request.getCustomerNote(),
-                        request.getInternalNote()));
+                        request.getInternalNote(),
+                        request.getSerialNumbers()));
         return ResponseEntity.status(HttpStatus.CREATED).body(toLineResponse(line));
     }
 
@@ -224,10 +227,28 @@ public class SalesOrderController {
             @PathVariable UUID orderId,
             @Parameter(description = "Required checkout idempotency key; replays return the original result")
                     @RequestHeader(name = "Idempotency-Key")
-                    String idempotencyKey) {
-        CheckoutResult result = salesOrderService.checkout(orderId, idempotencyKey);
+                    String idempotencyKey,
+            @RequestBody(required = false) CheckoutRequest request) {
+        CheckoutResult result =
+                salesOrderService.checkout(orderId, idempotencyKey, request == null ? null : request.getTenderType());
         HttpStatus status = result.replay() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(status).body(toResponse(result.summary()));
+    }
+
+    @Operation(
+            summary = "Void an unsettled order",
+            description = "Terminal void of a PENDING_PAYMENT order before any settlement: cancels the fronting "
+                    + "pos-invoice invoice and transitions the order to VOIDED. Rejected with 409 when settled "
+                    + "payments exist (use the cancellation flow) or from any other status (drafts are "
+                    + "cancelled, not voided).",
+            tags = {"Sales Orders"})
+    @PostMapping("/{orderId}/void")
+    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_VOID + "')")
+    @EmitEvent(id = "ORDER_VOID", apiVersion = "1")
+    public ResponseEntity<SalesOrderResponse> voidOrder(
+            @PathVariable UUID orderId, @RequestBody(required = false) VoidOrderRequest request) {
+        SalesOrderSummary voided = salesOrderService.voidOrder(orderId, request == null ? null : request.getReason());
+        return ResponseEntity.ok(toResponse(voided));
     }
 
     @Operation(
@@ -300,6 +321,8 @@ public class SalesOrderController {
                 .sourceType(summary.sourceType())
                 .sourceId(summary.sourceId())
                 .sourceLineId(summary.sourceLineId())
+                .serialNumbers(summary.serialNumbers())
+                .returnable(summary.returnable())
                 .build();
     }
 }

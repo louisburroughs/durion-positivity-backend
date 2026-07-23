@@ -99,6 +99,9 @@ class EstimateServiceImplCrmPropagationTest {
     @Mock
     private ObjectMapper objectMapper;
 
+    @Mock
+    private com.positivity.workorder.internal.service.EstimateFactPublisher estimateFactPublisher;
+
     @InjectMocks
     private EstimateServiceImpl estimateService;
 

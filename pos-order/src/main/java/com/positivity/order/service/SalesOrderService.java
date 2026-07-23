@@ -29,7 +29,8 @@ public interface SalesOrderService {
             BigDecimal manualPrice,
             UUID clientLineUuid) {
         return addItem(
-                orderId, new AddItemCommand(itemSku, quantity, reasonCode, manualPrice, clientLineUuid, null, null));
+                orderId,
+                new AddItemCommand(itemSku, quantity, reasonCode, manualPrice, clientLineUuid, null, null, null));
     }
 
     @NonNull
@@ -79,8 +80,22 @@ public interface SalesOrderService {
      * DRAFT|QUOTED → PENDING_PAYMENT (parity story C1, spec R2.1): validates the cart, final
      * reprice + tax, freezes the lines, and creates the fronting invoice at pos-invoice.
      * Idempotent on the required {@code Idempotency-Key}; settlement completion is asynchronous
-     * (story C3).
+     * (story C3). With {@code tenderType = ON_ACCOUNT} (story C4, spec R4.5) the accepted AR
+     * invoice counts as settlement and the order completes synchronously.
      */
     @NonNull
-    CheckoutResult checkout(@NonNull UUID orderId, @NonNull String idempotencyKey);
+    CheckoutResult checkout(@NonNull UUID orderId, @NonNull String idempotencyKey, String tenderType);
+
+    @NonNull
+    default CheckoutResult checkout(@NonNull UUID orderId, @NonNull String idempotencyKey) {
+        return checkout(orderId, idempotencyKey, null);
+    }
+
+    /**
+     * PENDING_PAYMENT → VOIDED (parity story C5, spec R2.4): terminal void before any settlement.
+     * Rejected when settled payments exist (use the cancellation saga) and from any other status
+     * (drafts are cancelled, not voided). Cancels the fronting pos-invoice invoice.
+     */
+    @NonNull
+    SalesOrderSummary voidOrder(@NonNull UUID orderId, String reason);
 }

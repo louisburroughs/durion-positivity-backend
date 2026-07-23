@@ -1,6 +1,7 @@
 package com.positivity.invoice.internal.repository;
 
 import com.positivity.invoice.internal.entity.PaymentIntent;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -23,4 +24,7 @@ public interface PaymentIntentRepository extends JpaRepository<PaymentIntent, UU
      * @return the existing payment intent, or empty if not found
      */
     Optional<PaymentIntent> findByIdempotencyKey(@NonNull String idempotencyKey);
+
+    @NonNull
+    List<PaymentIntent> findByInvoice_Id(@NonNull UUID invoiceId);
 }

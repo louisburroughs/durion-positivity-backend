@@ -2,6 +2,7 @@ package com.positivity.invoice.service;
 
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;
 import com.positivity.shared.dto.OrderInvoiceResponse;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
 /**
@@ -17,4 +18,12 @@ public interface OrderInvoiceService {
      */
     @NonNull
     OrderInvoiceResponse createInvoiceForOrder(@NonNull OrderInvoiceCreationRequest request);
+
+    /**
+     * Cancel a DRAFT invoice before any money moved (order-void path, parity story C5, spec
+     * R2.4): rejected when the invoice has left DRAFT or carries an authorized/captured payment.
+     * Idempotent — cancelling a CANCELLED invoice is a no-op.
+     */
+    @NonNull
+    OrderInvoiceResponse cancelInvoice(@NonNull UUID invoiceId);
 }

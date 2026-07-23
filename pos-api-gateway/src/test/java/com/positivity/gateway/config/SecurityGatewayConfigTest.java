@@ -1142,9 +1142,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 31")
+    @DisplayName("CATALOG_VERSION is 32")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(31);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(32);
     }
 
     @Test
@@ -1231,8 +1231,14 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(399)).isEqualTo("PERM_inventory:transfer:receive");
         assertThat(GatewayPermissionCatalog.authorityForBit(400)).isEqualTo("PERM_inventory:transfer:short_close");
         assertThat(GatewayPermissionCatalog.authorityForBit(401)).isEqualTo("PERM_inventory:transfer:view");
+        // catalog v32 (odoo-parity waves 2-4, #1092): order tender/lifecycle authorities (bits 402-406)
+        assertThat(GatewayPermissionCatalog.authorityForBit(402)).isEqualTo("PERM_order:order:discount");
+        assertThat(GatewayPermissionCatalog.authorityForBit(403)).isEqualTo("PERM_order:order:quote");
+        assertThat(GatewayPermissionCatalog.authorityForBit(404)).isEqualTo("PERM_order:order:checkout");
+        assertThat(GatewayPermissionCatalog.authorityForBit(405)).isEqualTo("PERM_order:order:void");
+        assertThat(GatewayPermissionCatalog.authorityForBit(406)).isEqualTo("PERM_order:order:charge_on_account");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(402)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(407)).isNull();
     }
 
     @Test

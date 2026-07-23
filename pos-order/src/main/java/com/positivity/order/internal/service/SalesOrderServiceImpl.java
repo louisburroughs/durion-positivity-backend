@@ -10,11 +10,17 @@ import com.positivity.order.internal.client.PricingPort;
 import com.positivity.order.internal.client.PricingQuote;
 import com.positivity.order.internal.client.SourceDocumentLine;
 import com.positivity.order.internal.client.SourceDocumentPort;
+import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.entity.*;
 import com.positivity.order.internal.exception.CartIdempotencyConflictException;
 import com.positivity.order.internal.exception.InvalidCustomerException;
 import com.positivity.order.internal.exception.InvalidSkuException;
+import com.positivity.order.internal.exception.OrderVoidBlockedException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
+import com.positivity.order.internal.repository.ExtBillingRulesRepository;
+import com.positivity.order.internal.repository.ExtCustomerRepository;
+import com.positivity.order.internal.repository.ExtProductRepository;
+import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.order.service.SalesOrderService;
@@ -57,6 +63,11 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     private final SourceDocumentPort sourceDocumentPort;
     private final CustomerPort customerPort;
     private final InvoicingPort invoicingPort;
+    private final ExtProductRepository extProductRepository;
+    private final ExtCustomerRepository extCustomerRepository;
+    private final ExtBillingRulesRepository extBillingRulesRepository;
+    private final OrderPaymentRecordRepository paymentRecordRepository;
+    private final OrderDomainEventPublisher domainEventPublisher;
     private final OrderStateMachine orderStateMachine;
     private final OrderNumberService orderNumberService;
     private final OrderTotalsCalculator totalsCalculator;
@@ -156,6 +167,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         FulfillmentStatus fulfillmentStatus =
                 inventoryResult.sufficient() ? FulfillmentStatus.AVAILABLE : FulfillmentStatus.BACKORDER;
 
+        List<String> serialNumbers = normalizeSerials(command.serialNumbers(), command.quantity());
+
         SalesOrderLine line = SalesOrderLine.builder()
                 .order(order)
                 .itemSku(command.itemSku())
@@ -169,6 +182,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 .customerNote(normalizeBlank(command.customerNote()))
                 .internalNote(normalizeBlank(command.internalNote()))
                 .pricingBreakdown(breakdownJson)
+                .serialNumbers(serialNumbers)
                 .build();
 
         SalesOrderLine saved = salesOrderLineRepository.save(line);
@@ -281,11 +295,13 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                         .itemDescription(sourceLine.itemDescription())
                         .quantity(sourceLine.quantity())
                         .unitPrice(sourceLine.unitPrice().setScale(4, RoundingMode.HALF_UP))
-                        .priceSource(PriceSource.PRICING_SERVICE)
+                        // Spec R7.1: approved source prices are contractual — never repriced.
+                        .priceSource(PriceSource.SOURCE_DOCUMENT)
                         .fulfillmentStatus(FulfillmentStatus.AVAILABLE)
                         .sourceType(type)
                         .sourceId(sourceId)
                         .sourceLineId(sourceLine.sourceLineId())
+                        .returnable(sourceLine.returnable())
                         .build();
                 SalesOrderLine savedNewLine = salesOrderLineRepository.save(newLine);
                 order.getLines().add(savedNewLine);
@@ -369,10 +385,16 @@ public class SalesOrderServiceImpl implements SalesOrderService {
 
     @Override
     @Transactional
-    public CheckoutResult checkout(UUID orderId, String idempotencyKey) {
+    public CheckoutResult checkout(UUID orderId, String idempotencyKey, String tenderType) {
         String key = normalizeBlank(idempotencyKey);
         if (key == null) {
             throw new IllegalArgumentException("Idempotency-Key is required for checkout");
+        }
+        String tender =
+                normalizeBlank(tenderType) == null ? null : tenderType.trim().toUpperCase(java.util.Locale.ROOT);
+        boolean onAccount = "ON_ACCOUNT".equals(tender);
+        if (!onAccount && tender != null && !"DEFAULT".equals(tender)) {
+            throw new IllegalArgumentException("Unsupported tenderType: " + tenderType);
         }
         SalesOrder order =
                 salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
@@ -395,6 +417,9 @@ public class SalesOrderServiceImpl implements SalesOrderService {
             throw new InvalidCustomerException(
                     "Customer validation is pending; checkout is blocked until CRM confirms the customer");
         }
+        if (onAccount) {
+            requireOnAccountEligibility(order);
+        }
         for (SalesOrderLine line : order.getLines()) {
             if (line == null) {
                 continue;
@@ -405,6 +430,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                         "Insufficient availability for SKU " + line.getItemSku() + "; cannot check out");
             }
         }
+
+        requireSerialsForTrackedProducts(order);
 
         // Final reprice (no stale prices, spec R2.1) + authoritative tax before the freeze.
         repriceLines(order, true);
@@ -422,7 +449,68 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         InvoiceRef invoiceRef = invoicingPort.createInvoiceForOrder(toInvoiceRequest(saved));
         saved.setInvoiceId(invoiceRef.invoiceId());
         saved.setInvoiceNumber(invoiceRef.invoiceNumber());
+
+        if (onAccount) {
+            completeOnAccount(saved);
+        }
         return new CheckoutResult(toSummary(salesOrderRepository.save(saved)), false);
+    }
+
+    /**
+     * Story C4 gate (spec R4.5, R11.2): ON_ACCOUNT needs a VALIDATED commercial customer whose
+     * replicated billing rules carry payment terms and no credit hold, plus the explicit
+     * charge-on-account permission.
+     */
+    private void requireOnAccountEligibility(SalesOrder order) {
+        if (!SecurityContextHelper.hasAuthority(
+                com.positivity.order.internal.security.OrderPermissions.ORDER_CHARGE_ON_ACCOUNT)) {
+            throw new AccessDeniedException(
+                    "Permission 'order:order:charge_on_account' is required for ON_ACCOUNT tender");
+        }
+        if (order.getCustomerId() == null
+                || order.getCustomerValidationStatus() != CustomerValidationStatus.VALIDATED) {
+            throw new InvalidCustomerException("ON_ACCOUNT tender requires a validated customer on the order");
+        }
+        ExtCustomer customer =
+                extCustomerRepository.findById(order.getCustomerId()).orElse(null);
+        if (customer == null || !"COMMERCIAL".equalsIgnoreCase(customer.getPartyType())) {
+            throw new InvalidCustomerException("ON_ACCOUNT tender requires a commercial customer account");
+        }
+        if (!customer.isRequirementsMet()) {
+            throw new InvalidCustomerException(
+                    "Customer account does not currently meet requirements (inactive or credit hold)");
+        }
+        ExtBillingRules billingRules =
+                extBillingRulesRepository.findById(order.getCustomerId()).orElse(null);
+        if (billingRules == null || normalizeBlank(billingRules.getPaymentTerms()) == null) {
+            throw new InvalidCustomerException("Customer has no billing terms configured for on-account charges");
+        }
+        if (Boolean.TRUE.equals(billingRules.getCreditHold())) {
+            throw new InvalidCustomerException("Customer account is on credit hold");
+        }
+    }
+
+    /**
+     * Story C4 completion (spec R4.5): the accepted AR invoice IS the settlement — record an
+     * ON_ACCOUNT ledger entry for the full total and complete the order synchronously. The AR
+     * balance lives on the invoice (pos-invoice/pos-accounting), not on the order.
+     */
+    private void completeOnAccount(SalesOrder order) {
+        paymentRecordRepository.save(OrderPaymentRecord.builder()
+                .orderId(order.getOrderId())
+                .recordType(OrderPaymentRecord.RecordType.SETTLED)
+                .methodType("ON_ACCOUNT")
+                .amount(order.getGrandTotal())
+                .reference(order.getInvoiceNumber())
+                .occurredAt(Instant.now(clock))
+                .build());
+        order.setAmountPaid(order.getGrandTotal());
+        order.setBalanceDue(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
+        orderStateMachine.transition(order, SalesOrderStatus.COMPLETED, "on-account invoice accepted");
+        domainEventPublisher.publishOrderCompleted(
+                order,
+                List.of(new com.positivity.domainevents.order.OrderCompletedV1.Tender(
+                        "ON_ACCOUNT", order.getGrandTotal())));
     }
 
     private static OrderInvoiceCreationRequest toInvoiceRequest(SalesOrder order) {
@@ -450,6 +538,31 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 .totalAmount(order.getGrandTotal())
                 .lines(lines)
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public SalesOrderSummary voidOrder(UUID orderId, String reason) {
+        SalesOrder order =
+                salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
+        if (order.getStatus() == SalesOrderStatus.VOIDED) {
+            return toSummary(order);
+        }
+        // Spec R2.4: settled money must go through the cancellation saga's reversal, never a void.
+        boolean hasSettled = paymentRecordRepository.findByOrderId(orderId).stream()
+                .anyMatch(record -> record.getRecordType() == OrderPaymentRecord.RecordType.SETTLED);
+        if (hasSettled) {
+            throw new OrderVoidBlockedException(orderId);
+        }
+        // PENDING_PAYMENT is the only voidable status; anything else (incl. DRAFT) is rejected
+        // by the state machine with a 409.
+        orderStateMachine.transition(order, SalesOrderStatus.VOIDED, normalizeBlank(reason));
+        if (order.getInvoiceId() != null) {
+            // Must fail loudly: a failed invoice cancel rolls the void back (atomic like checkout).
+            invoicingPort.cancelInvoice(order.getInvoiceId());
+        }
+        order.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        return toSummary(salesOrderRepository.save(order));
     }
 
     /**
@@ -560,6 +673,51 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         return (value == null || value.isBlank()) ? null : value;
     }
 
+    /** Spec R10.2: serial capture is optional at add time but never exceeds the line quantity. */
+    private static List<String> normalizeSerials(List<String> serialNumbers, int quantity) {
+        if (serialNumbers == null) {
+            return new java.util.ArrayList<>();
+        }
+        List<String> normalized = serialNumbers.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toCollection(java.util.ArrayList::new));
+        if (normalized.size() > quantity) {
+            throw new IllegalStateException(
+                    "serialNumbers count (" + normalized.size() + ") exceeds line quantity (" + quantity + ")");
+        }
+        return normalized;
+    }
+
+    /**
+     * Checkout serial enforcement (parity story H3, spec R8.4/R10.2): counter lines for tracked
+     * products must carry serials — SERIAL tracking demands one per unit, LOT at least one lot
+     * reference. Source-document lines are excluded (their stock story belongs to the source).
+     */
+    private void requireSerialsForTrackedProducts(SalesOrder order) {
+        for (SalesOrderLine line : order.getLines()) {
+            if (line == null || line.getSourceType() != null) {
+                continue;
+            }
+            String trackingLevel = extProductRepository
+                    .findFirstBySkuIgnoreCaseAndActiveTrue(line.getItemSku())
+                    .map(ExtProduct::getTrackingLevel)
+                    .orElse(null);
+            int captured = line.getSerialNumbers() == null
+                    ? 0
+                    : line.getSerialNumbers().size();
+            if ("SERIAL".equals(trackingLevel) && captured != line.getQuantity()) {
+                throw new IllegalStateException("SKU " + line.getItemSku() + " is serial-tracked: " + line.getQuantity()
+                        + " serial number(s) required, " + captured + " captured");
+            }
+            if ("LOT".equals(trackingLevel) && captured < 1) {
+                throw new IllegalStateException(
+                        "SKU " + line.getItemSku() + " is lot-tracked: at least one lot number is required");
+            }
+        }
+    }
+
     private static String asString(UUID value) {
         return value == null ? null : value.toString();
     }
@@ -583,7 +741,9 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 line.getInternalNote(),
                 line.getSourceType() != null ? line.getSourceType().name() : null,
                 line.getSourceId(),
-                line.getSourceLineId());
+                line.getSourceLineId(),
+                line.getSerialNumbers() == null ? List.of() : List.copyOf(line.getSerialNumbers()),
+                line.getReturnable());
     }
 
     private SalesOrderSummary toListSummary(SalesOrder order) {

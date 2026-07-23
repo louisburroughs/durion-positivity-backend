@@ -49,12 +49,16 @@ class OrderInvoiceServiceImplTest {
     @Mock
     private InvoiceEventPublisher invoiceEventPublisher;
 
+    @Mock
+    private com.positivity.invoice.internal.repository.PaymentIntentRepository paymentIntentRepository;
+
     private OrderInvoiceServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new OrderInvoiceServiceImpl(
                 invoiceRepository,
+                paymentIntentRepository,
                 invoiceEventPublisher,
                 Clock.fixed(Instant.parse("2026-07-23T12:00:00Z"), ZoneOffset.UTC));
         when(invoiceRepository.findByOrderId(any())).thenReturn(Optional.empty());
@@ -163,6 +167,43 @@ class OrderInvoiceServiceImplTest {
         OrderInvoiceCreationRequest negative = request(null);
         negative.setTotalAmount(new BigDecimal("-1.00"));
         assertThatThrownBy(() -> service.createInvoiceForOrder(negative)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("OIS-007: cancel — DRAFT with no live payments → CANCELLED; idempotent replay")
+    void cancelInvoice_draftNoPayments_cancels() {
+        Invoice invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setStatus(InvoiceStatus.DRAFT);
+        invoice.setInvoiceNumber("INV-1");
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(paymentIntentRepository.findByInvoice_Id(invoice.getId())).thenReturn(List.of());
+
+        OrderInvoiceResponse cancelled = service.cancelInvoice(invoice.getId());
+
+        assertThat(cancelled.getStatus()).isEqualTo(InvoiceStatus.CANCELLED.name());
+        assertThat(cancelled.isExisting()).isFalse();
+        verify(invoiceEventPublisher).publishInvoiceUpdated(any(Invoice.class));
+
+        OrderInvoiceResponse replay = service.cancelInvoice(invoice.getId());
+        assertThat(replay.isExisting()).isTrue();
+    }
+
+    @Test
+    @DisplayName("OIS-008: cancel with a captured payment → 409")
+    void cancelInvoice_withCapturedPayment_rejected() {
+        Invoice invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setStatus(InvoiceStatus.DRAFT);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        com.positivity.invoice.internal.entity.PaymentIntent intent =
+                new com.positivity.invoice.internal.entity.PaymentIntent();
+        intent.setStatus(com.positivity.invoice.internal.enums.PaymentIntentStatus.CAPTURED);
+        when(paymentIntentRepository.findByInvoice_Id(invoice.getId())).thenReturn(List.of(intent));
+
+        assertThatThrownBy(() -> service.cancelInvoice(invoice.getId()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("payments");
     }
 
     @Test

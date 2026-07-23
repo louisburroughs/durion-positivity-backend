@@ -1,6 +1,7 @@
 package com.positivity.order.service.model;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -16,6 +17,7 @@ import org.jspecify.annotations.Nullable;
  * @param clientLineUuid client-stable line identity for replay-safe adds
  * @param customerNote customer-visible line note
  * @param internalNote shop-internal line note
+ * @param serialNumbers captured lot/serial numbers (count ≤ quantity; parity story H3)
  */
 public record AddItemCommand(
         @NonNull String itemSku,
@@ -24,7 +26,8 @@ public record AddItemCommand(
         @Nullable BigDecimal manualPrice,
         @Nullable UUID clientLineUuid,
         @Nullable String customerNote,
-        @Nullable String internalNote) {
+        @Nullable String internalNote,
+        @Nullable List<String> serialNumbers) {
 
     public AddItemCommand {
         Objects.requireNonNull(itemSku, "itemSku must not be null");

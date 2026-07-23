@@ -1,9 +1,12 @@
 package com.positivity.order.internal.service;
 
+import com.positivity.domainevents.customer.BillingRulesUpdatedV1;
 import com.positivity.domainevents.customer.CustomerPartyDeletedV1;
 import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
+import com.positivity.order.internal.entity.ExtBillingRules;
 import com.positivity.order.internal.entity.ExtCustomer;
 import com.positivity.order.internal.entity.ProcessedEvent;
+import com.positivity.order.internal.repository.ExtBillingRulesRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
@@ -39,6 +42,7 @@ public class CustomerEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtCustomerRepository extCustomerRepository;
+    private final ExtBillingRulesRepository extBillingRulesRepository;
 
     @KafkaListener(
             topics = "${pos.order.kafka.customer-events-topic:customer.events.v1}",
@@ -55,7 +59,8 @@ public class CustomerEventsListener {
         String eventType = envelope.path("eventType").stringValue(null);
         boolean update = CustomerPartyUpdatedV1.EVENT_TYPE.equals(eventType);
         boolean delete = CustomerPartyDeletedV1.EVENT_TYPE.equals(eventType);
-        if (!update && !delete) {
+        boolean billingRules = BillingRulesUpdatedV1.EVENT_TYPE.equals(eventType);
+        if (!update && !delete && !billingRules) {
             log.debug("Ignoring customer event type={}", eventType);
             return;
         }
@@ -72,6 +77,8 @@ public class CustomerEventsListener {
         try {
             if (update) {
                 applyUpdate(envelope);
+            } else if (billingRules) {
+                applyBillingRules(envelope);
             } else {
                 applyDelete(envelope);
             }
@@ -105,9 +112,43 @@ public class CustomerEventsListener {
         replica.setPartyId(partyId);
         replica.setStatus(payload.path("status").stringValue("UNKNOWN"));
         replica.setDisplayName(payload.path("displayName").stringValue(null));
+        replica.setPartyType(payload.path("partyType").stringValue(null));
+        replica.setRequirementsMet(payload.path("requirementsMet").booleanValue(false));
         replica.setAggregateVersion(aggregateVersion);
         replica.setSyncedAt(Instant.now(clock));
         extCustomerRepository.save(replica);
+    }
+
+    /** Story C4 (spec R4.5): AR billing terms gate the on-account tender at checkout. */
+    private void applyBillingRules(JsonNode envelope) {
+        JsonNode payload = envelope.path("payload");
+        UUID partyId = UUID.fromString(payload.path("partyId").stringValue(null));
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
+
+        ExtBillingRules existing = extBillingRulesRepository.findById(partyId).orElse(null);
+        if (existing != null && existing.getAggregateVersion() >= aggregateVersion) {
+            log.debug("Skipping stale billing-rules event for {}", partyId);
+            return;
+        }
+        ExtBillingRules replica = existing != null ? existing : new ExtBillingRules();
+        replica.setPartyId(partyId);
+        replica.setPaymentTerms(payload.path("paymentTerms").stringValue(null));
+        replica.setCreditLimit(
+                payload.path("creditLimit").isMissingNode()
+                                || payload.path("creditLimit").isNull()
+                        ? null
+                        : payload.path("creditLimit").decimalValue());
+        replica.setCreditHold(
+                payload.path("creditHold").isNull()
+                        ? null
+                        : payload.path("creditHold").booleanValue(false));
+        replica.setPoRequired(
+                payload.path("poRequired").isNull()
+                        ? null
+                        : payload.path("poRequired").booleanValue(false));
+        replica.setAggregateVersion(aggregateVersion);
+        replica.setSyncedAt(Instant.now(clock));
+        extBillingRulesRepository.save(replica);
     }
 
     private void applyDelete(JsonNode envelope) {

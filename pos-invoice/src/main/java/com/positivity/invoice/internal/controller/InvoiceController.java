@@ -81,6 +81,22 @@ public class InvoiceController {
         return ResponseEntity.status(status).body(response);
     }
 
+    @PostMapping("/{invoiceId}/cancel")
+    @EmitEvent(id = "INVOICE_CANCEL", apiVersion = "1")
+    @Operation(
+            summary = "Cancel a draft invoice",
+            description = "Terminal cancel of a DRAFT invoice before any money moved (order-void path). Rejected "
+                    + "with 409 when the invoice has left DRAFT or carries an authorized/captured payment. "
+                    + "Idempotent — cancelling a CANCELLED invoice returns 200.")
+    @ApiResponse(responseCode = "200", description = "Invoice cancelled (or already cancelled)")
+    @ApiResponse(responseCode = "409", description = "Invoice not cancellable in its current state")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"invoice:manage"})
+    public ResponseEntity<OrderInvoiceResponse> cancelInvoice(@PathVariable @NonNull UUID invoiceId) {
+        return ResponseEntity.ok(orderInvoiceService.cancelInvoice(invoiceId));
+    }
+
     @GetMapping("/{invoiceId}")
     @EmitEvent(id = "INVOICE_GET", apiVersion = "1")
     @Operation(summary = "Get invoice", description = "Get invoice details")

@@ -135,6 +135,9 @@ pos:
       # Warranty part-return quarantine/hold tracking feed (#927)
       warranty-events-topic: ${POS_INVENTORY_WARRANTY_EVENTS_TOPIC:warranty.events.v1}
       warranty-events-consumer-group: ${POS_INVENTORY_WARRANTY_EVENTS_CONSUMER_GROUP:pos-inventory-warranty-events}
+      # Counter-sale stock consumption (order parity story H2, #1079)
+      order-events-topic: ${POS_INVENTORY_ORDER_EVENTS_TOPIC:order.events.v1}
+      order-events-consumer-group: ${POS_INVENTORY_ORDER_EVENTS_CONSUMER_GROUP:pos-inventory-order-events}
       # Own fact publishing (ADR-0044 §6, #899): availability / storage-location on-hand /
       # lead-time facts via the transactional outbox, with manifests and replay commands.
       events-topic: ${POS_INVENTORY_EVENTS_TOPIC:inventory.events.v1}
