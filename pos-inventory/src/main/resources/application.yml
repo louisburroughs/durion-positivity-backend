@@ -149,6 +149,11 @@ pos:
       # Window the manual sync endpoint asks pos-location to re-emit (owner caps lookback).
       replay-lookback: ${POS_INVENTORY_LOCATION_REPLAY_LOOKBACK:P30D}
     replenishment:
+      # Last-resort lead time for the forecast-aware orderpoint trigger (odoo-parity F2,
+      # #1040; decision D-4). Precedence: policy override (F3) -> vendor-feed MAX estimate
+      # -> this default. 0 projects to "now" (on-hand plus already-due supply minus open
+      # demand).
+      default-lead-time-days: ${POS_INVENTORY_REPLENISHMENT_DEFAULT_LEAD_TIME_DAYS:0}
       scan:
         # Scheduled batch replenishment scan (CAP-217 / odoo-parity F1, #1025).
         # Off by default; flip per environment. The scan is idempotent per

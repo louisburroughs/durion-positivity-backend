@@ -14,6 +14,7 @@ import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepositor
 import com.positivity.inventory.internal.repository.ReplenishmentTaskRepository;
 import com.positivity.inventory.service.ReplenishmentService;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -41,6 +42,9 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
     private final ReplenishmentTaskRepository replenishmentTaskRepository;
     private final ReplenishmentPolicyRepository replenishmentPolicyRepository;
     private final InventoryStockSummaryRepository stockSummaryRepository;
+    private final ForecastQuantityService forecastQuantityService;
+    private final ForecastSiteResolver forecastSiteResolver;
+    private final LeadTimeResolver leadTimeResolver;
     private final Clock clock;
 
     @Override
@@ -84,41 +88,75 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
         return toPolicyResponse(saved);
     }
 
+    /**
+     * Event-path orderpoint evaluation (odoo-parity F2, issue #1040). Uses the SAME
+     * forecast-aware trigger and quantity math as the batch scan ({@link
+     * #project(ReplenishmentPolicy)} / {@link #quantityToReplenish(ReplenishmentPolicy,
+     * Projection, UUID)}) — the two paths must not diverge.
+     *
+     * <p>An already-open task for the SKU/pick-face IS the in-progress supply for this
+     * breach: the evaluation short-circuits to {@code TASK_ALREADY_QUEUED} without adding
+     * quantity, which is what prevents double-ordering across the scan and event paths.
+     */
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public @NonNull ReplenishmentTaskResponse evaluatePickFaceForReplenishment(
             @NonNull String productId, @NonNull UUID pickFaceLocationId) {
-        boolean policyExists = replenishmentPolicyRepository.findByLocationId(pickFaceLocationId).stream()
-                .findFirst()
-                .isPresent();
+        Optional<ReplenishmentPolicy> policy =
+                replenishmentPolicyRepository.findByLocationId(pickFaceLocationId).stream()
+                        .filter(candidate -> productId.equals(candidate.getItemSKU()))
+                        .findFirst();
+        if (policy.isEmpty()) {
+            return ReplenishmentTaskResponse.builder()
+                    .taskId(null)
+                    .status("NO_ACTION")
+                    .build();
+        }
 
-        if (policyExists && hasOpenTask(productId, pickFaceLocationId)) {
+        if (hasOpenTask(productId, pickFaceLocationId)) {
             return ReplenishmentTaskResponse.builder()
                     .taskId(null)
                     .status("TASK_ALREADY_QUEUED")
                     .build();
         }
 
-        return ReplenishmentTaskResponse.builder()
-                .taskId(null)
-                .status("NO_ACTION")
-                .build();
+        Projection projection = project(policy.get());
+        if (!projection.triggered()) {
+            return ReplenishmentTaskResponse.builder()
+                    .taskId(null)
+                    .status("NO_ACTION")
+                    .build();
+        }
+
+        int quantityNeeded = quantityToReplenish(policy.get(), projection, null);
+        if (quantityNeeded == 0) {
+            return ReplenishmentTaskResponse.builder()
+                    .taskId(null)
+                    .status("NO_ACTION")
+                    .build();
+        }
+
+        ReplenishmentTask saved =
+                replenishmentTaskRepository.save(newTask(policy.get(), quantityNeeded, ReplenishmentTriggerType.EVENT));
+        logDecision("created", ReplenishmentTriggerType.EVENT, policy.get(), projection, quantityNeeded);
+        return toTaskResponse(saved);
     }
 
     /**
-     * Batch replenishment scan (CAP-217 / odoo-parity F1, issue #1025).
+     * Batch replenishment scan (CAP-217 / odoo-parity F1, issue #1025; forecast-aware
+     * orderpoint math since F2, issue #1040).
      *
-     * <p>Iterates every {@link ReplenishmentPolicy} and applies the same
-     * below-minimum trigger evaluation the event path uses ({@link
-     * #isBelowMinimum(ReplenishmentPolicy, long)} / {@link #hasOpenTask(String,
-     * UUID)}), against the current on-hand from the {@code
-     * inventory_stock_summary} read model (issue #1024). F2 upgrades this to
-     * forecast-aware math.
+     * <p>Iterates every {@link ReplenishmentPolicy} and applies the same forecast-aware
+     * trigger evaluation the event path uses ({@link #project(ReplenishmentPolicy)} /
+     * {@link #quantityToReplenish(ReplenishmentPolicy, Projection, UUID)}): trigger when
+     * {@code projectedAvailable(leadHorizon) < minimumQuantity}, replenish {@code max(0,
+     * maximumQuantity - projectedAvailable(leadHorizon) - inProgress)}.
      *
      * <p>Idempotency per (policy, day): a still-open task for the policy's
-     * SKU/location is refreshed (quantity re-derived) instead of duplicated, and
-     * if a batch-triggered task was already created today (UTC) no new task is
-     * created even if the earlier one has since closed.
+     * SKU/location is refreshed (quantity re-derived, netting OTHER open tasks) instead of
+     * duplicated, and if a batch-triggered task was already created today (UTC) no new task
+     * is created even if the earlier one has since closed. A triggered policy whose
+     * computed quantity is zero (in-progress supply already covers to max) creates nothing.
      */
     @Override
     @Transactional
@@ -135,21 +173,35 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
 
         for (ReplenishmentPolicy policy : replenishmentPolicyRepository.findAll()) {
             policiesEvaluated++;
-            long onHand = currentOnHand(policy.getItemSKU(), policy.getLocationId());
-            if (!isBelowMinimum(policy, onHand)) {
+            Projection projection = project(policy);
+            if (!projection.triggered()) {
                 continue;
             }
             belowMinimum++;
 
-            int quantityNeeded = (int) Math.max(1, policy.getMaximumQuantity() - onHand);
             Optional<ReplenishmentTask> openTask =
                     replenishmentTaskRepository
                             .findFirstByItemSKUAndDestinationLocationIdAndStatusInOrderByCreatedAtAsc(
                                     policy.getItemSKU(), policy.getLocationId(), OPEN_STATUSES);
             if (openTask.isPresent()) {
-                if (refreshOpenTask(openTask.get(), quantityNeeded)) {
+                // Re-derive the open task's quantity, netting any OTHER open tasks for the
+                // same SKU/location (the refreshed task itself is excluded from in-progress
+                // so its own quantity is replaced, not subtracted).
+                int quantityNeeded =
+                        quantityToReplenish(policy, projection, openTask.get().getTaskId());
+                if (quantityNeeded > 0 && refreshOpenTask(openTask.get(), quantityNeeded)) {
+                    logDecision("refreshed", ReplenishmentTriggerType.BATCH, policy, projection, quantityNeeded);
                     tasksRefreshed++;
                 }
+                continue;
+            }
+
+            int quantityNeeded = quantityToReplenish(policy, projection, null);
+            if (quantityNeeded == 0) {
+                log.debug(
+                        "Batch scan skip (in-progress supply covers to max): sku={} locationId={}",
+                        policy.getItemSKU(),
+                        policy.getLocationId());
                 continue;
             }
 
@@ -168,7 +220,8 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                 continue;
             }
 
-            createBatchTask(policy, quantityNeeded);
+            replenishmentTaskRepository.save(newTask(policy, quantityNeeded, ReplenishmentTriggerType.BATCH));
+            logDecision("created", ReplenishmentTriggerType.BATCH, policy, projection, quantityNeeded);
             tasksCreated++;
         }
 
@@ -190,13 +243,100 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
     }
 
     /**
-     * Shared below-minimum trigger evaluation (event path and batch scan must
-     * not diverge — odoo-parity F1). Current math: plain on-hand vs policy
-     * minimum; forecast-aware projection replaces this in F2.
+     * Forecast projection for one policy at its lead-time horizon (odoo-parity F2, issue
+     * #1040 — Odoo orderpoint semantics; event path and batch scan must not diverge).
+     *
+     * <p>{@code leadHorizon = now + leadTimeDays} where lead time resolves per D-4
+     * ({@link LeadTimeResolver}: policy override [F3] → vendor feed MAX estimate →
+     * configured default). On-hand is read at the policy's own (possibly bin-level)
+     * location — the stock the pick face actually holds — while forecast supply/demand is
+     * scoped to the location's parent SITE via {@link ForecastSiteResolver}, because open
+     * POs/ASNs/transfers are keyed by ship-to site, never by bin.
+     *
+     * <p>Trigger: {@code projectedAvailable(leadHorizon) < minimumQuantity}. With no open
+     * supply/demand documents and no feed lead time, {@code projectedAvailable == onHand}
+     * at any horizon, so the trigger degrades exactly to the pre-F2 on-hand comparison.
      */
-    private boolean isBelowMinimum(ReplenishmentPolicy policy, long onHand) {
-        return onHand < policy.getMinimumQuantity();
+    private Projection project(ReplenishmentPolicy policy) {
+        LeadTimeResolver.ResolvedLeadTime leadTime = leadTimeResolver.resolve(policy);
+        Instant leadHorizon = Instant.now(clock).plus(Duration.ofDays(leadTime.days()));
+        long onHand = currentOnHand(policy.getItemSKU(), policy.getLocationId());
+        UUID forecastSiteId = forecastSiteResolver.resolveForecastSite(policy.getLocationId());
+        long projectedAvailable = forecastQuantityService
+                .forecast(policy.getItemSKU(), forecastSiteId, leadHorizon, onHand)
+                .projectedAvailable();
+        boolean triggered = projectedAvailable < policy.getMinimumQuantity();
+        return new Projection(onHand, projectedAvailable, leadHorizon, leadTime, triggered);
     }
+
+    /**
+     * Odoo's replenish-to-max with in-progress netting ({@code qty_in_progress}):
+     * {@code max(0, maximumQuantity - projectedAvailable(leadHorizon) - inProgress)}.
+     * Zero means in-progress supply already covers the need — no task is created.
+     *
+     * @param excludeTaskId open task being refreshed, excluded from the in-progress sum so
+     *     its own quantity is replaced rather than double-counted; {@code null} otherwise
+     */
+    private int quantityToReplenish(ReplenishmentPolicy policy, Projection projection, @Nullable UUID excludeTaskId) {
+        long inProgress = inProgressQuantity(policy.getItemSKU(), policy.getLocationId(), excludeTaskId);
+        return (int) Math.max(0L, policy.getMaximumQuantity() - projection.projectedAvailable() - inProgress);
+    }
+
+    /**
+     * Open replenishment-task quantity already in flight for one SKU/destination — the
+     * in-progress supply netted out of {@link #quantityToReplenish}.
+     *
+     * <p>F4 seam: open {@code PurchaseSuggestion} quantities (SUGGESTED/ACCEPTED, not yet
+     * CONVERTED) join this sum once purchase suggestions exist, so a suggested-but-unordered
+     * buy also prevents double-ordering.
+     */
+    private long inProgressQuantity(String itemSKU, UUID destinationLocationId, @Nullable UUID excludeTaskId) {
+        return replenishmentTaskRepository
+                .findByItemSKUAndDestinationLocationIdAndStatusIn(itemSKU, destinationLocationId, OPEN_STATUSES)
+                .stream()
+                .filter(task -> excludeTaskId == null || !excludeTaskId.equals(task.getTaskId()))
+                .mapToLong(task -> task.getQuantity() != null ? task.getQuantity() : 0L)
+                .sum();
+    }
+
+    /**
+     * Decision-input recording (F2 scope 3): {@link ReplenishmentTask} deliberately gains no
+     * columns — {@code decisionReason=BELOW_MIN} goes on the entity and the numeric inputs
+     * are logged at INFO with structured fields (projected, horizon, lead-time source,
+     * min/max) so every created/refreshed task's math is reconstructable from logs.
+     */
+    private void logDecision(
+            String action,
+            ReplenishmentTriggerType triggerType,
+            ReplenishmentPolicy policy,
+            Projection projection,
+            int quantityNeeded) {
+        log.info(
+                "Replenishment task {}: triggerType={} decisionReason={} sku={} locationId={} onHand={}"
+                        + " projectedAvailable={} leadHorizon={} leadTimeDays={} leadTimeSource={} min={} max={}"
+                        + " quantity={}",
+                action,
+                triggerType,
+                ReplenishmentDecisionReason.BELOW_MIN,
+                policy.getItemSKU(),
+                policy.getLocationId(),
+                projection.onHand(),
+                projection.projectedAvailable(),
+                projection.leadHorizon(),
+                projection.leadTime().days(),
+                projection.leadTime().source(),
+                policy.getMinimumQuantity(),
+                policy.getMaximumQuantity(),
+                quantityNeeded);
+    }
+
+    /** Forecast evaluation of one policy at its lead-time horizon (F2). */
+    private record Projection(
+            long onHand,
+            long projectedAvailable,
+            Instant leadHorizon,
+            LeadTimeResolver.ResolvedLeadTime leadTime,
+            boolean triggered) {}
 
     /** Duplicate-open-task guard shared by the event path and the batch scan. */
     private boolean hasOpenTask(String itemSKU, UUID destinationLocationId) {
@@ -227,20 +367,20 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
         return true;
     }
 
-    private void createBatchTask(ReplenishmentPolicy policy, int quantityNeeded) {
+    private ReplenishmentTask newTask(
+            ReplenishmentPolicy policy, int quantityNeeded, ReplenishmentTriggerType triggerType) {
         // Source selection is a placeholder until odoo-parity F5 (internal
         // sourcing): the policy's own location stands in for the backstock
         // source because the column is non-null and no sourcing engine exists yet.
-        ReplenishmentTask task = ReplenishmentTask.builder()
+        return ReplenishmentTask.builder()
                 .itemSKU(policy.getItemSKU())
                 .quantity(quantityNeeded)
                 .sourceLocationId(policy.getLocationId())
                 .destinationLocationId(policy.getLocationId())
                 .status(ReplenishmentStatus.PENDING)
-                .triggerType(ReplenishmentTriggerType.BATCH)
+                .triggerType(triggerType)
                 .decisionReason(ReplenishmentDecisionReason.BELOW_MIN)
                 .build();
-        replenishmentTaskRepository.save(task);
     }
 
     private ReplenishmentTaskResponse toTaskResponse(ReplenishmentTask task) {
