@@ -3266,15 +3266,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InterferingMovementResponse'
+                type: array
+                items:
+                  $ref: '#/components/schemas/InterferingMovementResponse'
         '404':
           description: Task not found
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/InterferingMovementResponse'
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - inventory:cycle_count:view
@@ -6892,12 +6892,12 @@ components:
           description: Storage location identifier
         onHandQuantity:
           type: integer
-          format: int32
+          format: int64
           description: Current on-hand quantity across all stock items at the location
           example: 12
         availableToPromiseQuantity:
           type: integer
-          format: int32
+          format: int64
           description: 'Quantity available to promise after pending allocations. Note: reservation events are not yet factored in.'
           example: 8
       required:

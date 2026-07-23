@@ -44,8 +44,8 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
 
         return LocationInventoryInquiryResponse.builder()
                 .locationId(locationId)
-                .onHandQuantity(Math.toIntExact(onHandQuantity))
-                .availableToPromiseQuantity(Math.toIntExact(onHandQuantity - outstandingAllocations))
+                .onHandQuantity(onHandQuantity)
+                .availableToPromiseQuantity(onHandQuantity - outstandingAllocations)
                 .build();
     }
 

@@ -201,7 +201,8 @@ public class InventoryFactPublisher {
                         writer,
                         StorageLocationOnHandUpdatedV1.EVENT_TYPE,
                         storageLocationId,
-                        new StorageLocationOnHandUpdatedV1(storageLocationId, inquiry.getOnHandQuantity()));
+                        new StorageLocationOnHandUpdatedV1(
+                                storageLocationId, Math.toIntExact(inquiry.getOnHandQuantity())));
             } catch (Exception e) {
                 log.warn("Skipping storage-location on-hand fact for {}: {}", storageLocationId, e.getMessage());
             }

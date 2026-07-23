@@ -185,8 +185,16 @@ public class CycleCountController {
             content =
                     @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = InterferingMovementResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Task not found")
+                            array =
+                                    @io.swagger.v3.oas.annotations.media.ArraySchema(
+                                            schema = @Schema(implementation = InterferingMovementResponse.class))))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Task not found",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = com.positivity.shared.error.ApiError.class)))
     public ResponseEntity<List<InterferingMovementResponse>> getInterferingMovements(
             @Parameter(description = "Task ID") @PathVariable UUID taskId) {
         return ResponseEntity.ok(cycleCountService.getInterferingMovements(taskId));

@@ -24,12 +24,12 @@ public class LocationInventoryInquiryResponse {
             description = "Current on-hand quantity across all stock items at the location",
             example = "12",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    private int onHandQuantity;
+    private long onHandQuantity;
 
     @Schema(
             description =
                     "Quantity available to promise after pending allocations. Note: reservation events are not yet factored in.",
             example = "8",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    private int availableToPromiseQuantity;
+    private long availableToPromiseQuantity;
 }

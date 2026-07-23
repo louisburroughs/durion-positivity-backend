@@ -87,6 +87,90 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
     }
 
     /**
+     * Set-based drift diff between ledger truth and the summary table (issue
+     * #1024 drift verifier): returns ONLY mismatching keys, so the scheduled
+     * job never materializes either table in application memory. Emulates a
+     * full outer join as a UNION of two left joins (H2-compatible). Event
+     * types are passed as enum names ({@code event_type} is stored as text).
+     */
+    @Query(value = """
+                        WITH ledger AS (
+                            SELECT stock_item_id,
+                                   location_id,
+                                   COALESCE(SUM(CASE WHEN event_type IN (:onHandTypes) THEN change_in_quantity ELSE 0 END), 0) AS on_hand,
+                                   COALESCE(SUM(CASE WHEN event_type = :allocationCreated THEN change_in_quantity
+                                                     WHEN event_type = :allocationReleased THEN -change_in_quantity
+                                                     ELSE 0 END), 0) AS allocated,
+                                   COALESCE(SUM(CASE WHEN event_type = :reservationCreated THEN change_in_quantity
+                                                     WHEN event_type = :reservationReleased THEN -change_in_quantity
+                                                     ELSE 0 END), 0) AS reserved
+                            FROM inventory_ledger_entry
+                            WHERE event_type IN (:summaryTypes)
+                            GROUP BY stock_item_id, location_id
+                        )
+                        SELECT l.stock_item_id AS stockItemId,
+                               CAST(l.location_id AS VARCHAR) AS locationId,
+                               l.on_hand AS ledgerOnHand,
+                               l.allocated AS ledgerAllocated,
+                               l.reserved AS ledgerReserved,
+                               s.on_hand AS summaryOnHand,
+                               s.allocated AS summaryAllocated,
+                               s.reserved AS summaryReserved
+                        FROM ledger l
+                        LEFT JOIN inventory_stock_summary s
+                          ON s.stock_item_id = l.stock_item_id
+                         AND s.location_id IS NOT DISTINCT FROM l.location_id
+                        WHERE (s.summary_id IS NULL
+                               AND (l.on_hand <> 0 OR l.allocated <> 0 OR l.reserved <> 0))
+                           OR (s.summary_id IS NOT NULL
+                               AND (s.on_hand <> l.on_hand
+                                    OR s.allocated <> l.allocated
+                                    OR s.reserved <> l.reserved
+                                    OR s.atp <> l.on_hand - l.allocated))
+                        UNION ALL
+                        SELECT s.stock_item_id AS stockItemId,
+                               CAST(s.location_id AS VARCHAR) AS locationId,
+                               CAST(0 AS BIGINT) AS ledgerOnHand,
+                               CAST(0 AS BIGINT) AS ledgerAllocated,
+                               CAST(0 AS BIGINT) AS ledgerReserved,
+                               s.on_hand AS summaryOnHand,
+                               s.allocated AS summaryAllocated,
+                               s.reserved AS summaryReserved
+                        FROM inventory_stock_summary s
+                        LEFT JOIN ledger l
+                          ON l.stock_item_id = s.stock_item_id
+                         AND l.location_id IS NOT DISTINCT FROM s.location_id
+                        WHERE l.stock_item_id IS NULL
+                          AND (s.on_hand <> 0 OR s.allocated <> 0 OR s.reserved <> 0 OR s.atp <> 0)
+                        """, nativeQuery = true)
+    List<DriftRow> findDriftRows(
+            @Param("onHandTypes") Collection<String> onHandTypes,
+            @Param("allocationCreated") String allocationCreated,
+            @Param("allocationReleased") String allocationReleased,
+            @Param("reservationCreated") String reservationCreated,
+            @Param("reservationReleased") String reservationReleased,
+            @Param("summaryTypes") Collection<String> summaryTypes);
+
+    interface DriftRow {
+        String getStockItemId();
+
+        /** Rendered as text in SQL (log-only field; H2 returns raw UUID columns as byte[] in native projections). */
+        String getLocationId();
+
+        long getLedgerOnHand();
+
+        long getLedgerAllocated();
+
+        long getLedgerReserved();
+
+        Long getSummaryOnHand();
+
+        Long getSummaryAllocated();
+
+        Long getSummaryReserved();
+    }
+
+    /**
      * Chunk-safe per-location on-hand and allocated sums for the given
      * locations, optionally restricted to one stock item. Locations without
      * summary rows are absent from the maps (treat as 0).
