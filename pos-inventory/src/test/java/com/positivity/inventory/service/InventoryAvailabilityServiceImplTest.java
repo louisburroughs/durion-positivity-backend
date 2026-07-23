@@ -68,7 +68,8 @@ class InventoryAvailabilityServiceImplTest {
                 inventoryLedgerEntryRepository,
                 forecastQuantityService,
                 asOfQueryGuard,
-                new com.positivity.inventory.internal.service.ForecastSiteResolver(storageLocationReplicaRepository));
+                new com.positivity.inventory.internal.service.ForecastSiteResolver(storageLocationReplicaRepository),
+                java.time.Clock.systemUTC());
     }
 
     @Test
@@ -198,6 +199,28 @@ class InventoryAvailabilityServiceImplTest {
         assertThat(result.getAvailableToPromiseQuantity()).isEqualTo(8);
         assertThat(result.getStorageLocationId()).isNull();
         assertThat(result.getUnitOfMeasure()).isEqualTo("EA");
+    }
+
+    @Test
+    void queryAvailability_expiredLotsDropFromAtpButStayInOnHand() {
+        // odoo-parity E3 (#1047, D-7): ATP = (onHand − allocated) − expired ACTIVE lot on-hand;
+        // on-hand itself is unchanged.
+        String productSku = "SKU-123";
+        when(stockSummaryRepository.findByStockItemId(productSku))
+                .thenReturn(List.of(summary(productSku, LOC_1, 10, 2, 0)));
+        when(stockSummaryRepository.sumExpiredActiveLotOnHand(
+                        eq(productSku), eq(LOC_1), any(java.time.LocalDate.class)))
+                .thenReturn(4L);
+        when(inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItemAtLocation(
+                        eq(productSku), eq(LOC_1), any(Pageable.class)))
+                .thenReturn(List.of("EA"));
+
+        AvailabilityView result = service.queryAvailability(productSku, LOC_1, null, null);
+
+        assertThat(result.getOnHandQuantity()).isEqualTo(10);
+        assertThat(result.getAllocatedQuantity()).isEqualTo(2);
+        // 10 onHand − 2 allocated − 4 expired = 4
+        assertThat(result.getAvailableToPromiseQuantity()).isEqualTo(4);
     }
 
     @Test

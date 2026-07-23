@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 31")
+    @DisplayName("CATALOG_VERSION is 32")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(31);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(32);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 401")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 402")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1231,8 +1231,10 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(399)).isEqualTo("PERM_inventory:transfer:receive");
         assertThat(GatewayPermissionCatalog.authorityForBit(400)).isEqualTo("PERM_inventory:transfer:short_close");
         assertThat(GatewayPermissionCatalog.authorityForBit(401)).isEqualTo("PERM_inventory:transfer:view");
+        // catalog v32 (#1047/inventory wave-5): lot-management authority appended (bit 402)
+        assertThat(GatewayPermissionCatalog.authorityForBit(402)).isEqualTo("PERM_inventory:lot:manage");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(402)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(403)).isNull();
     }
 
     @Test

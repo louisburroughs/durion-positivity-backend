@@ -216,6 +216,13 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.fastRead("INVENTORY_LOT_GET", "Get an inventory lot with per-location on-hand")
                         .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_LOT_STATUS_UPDATE", "Quarantine, recall, or release an inventory lot")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_LOT_EXPIRATION_SET",
+                                "Set or clear an inventory lot's expiration/alert dates")
+                        .build(),
                 EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_APPROVE", "Approve a purchase order")
                         .build(),
                 EventTypeRegistration.approval(

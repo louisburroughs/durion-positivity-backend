@@ -174,6 +174,14 @@ public class InventoryPermissionRegistry {
      */
     public static final String REPLENISHMENT_MANAGE = "inventory:replenishment:manage";
 
+    // ==================== LOT PERMISSIONS ====================
+
+    /**
+     * Manage lot lifecycle: quarantine/recall/release a lot and set its expiration/alert dates
+     * (odoo-parity E3, issue #1047).
+     */
+    public static final String LOT_MANAGE = "inventory:lot:manage";
+
     // ==================== INVENTORY VIEW PERMISSIONS ====================
 
     /**
@@ -302,6 +310,13 @@ public class InventoryPermissionRegistry {
                         "MEDIUM",
                         "Issue #1025"),
 
+                // Lot permissions (1)
+                permission(
+                        LOT_MANAGE,
+                        "Manage lot lifecycle: quarantine/recall/release and set expiration/alert dates",
+                        "MEDIUM",
+                        "Issue #1047"),
+
                 // Inventory view permissions (2)
                 permission(INVENTORY_VIEW, "View on-hand inventory levels at locations", "LOW"),
                 permission(INVENTORY_SEARCH, "Search inventory across multiple locations", "LOW"));
@@ -391,6 +406,13 @@ public class InventoryPermissionRegistry {
      */
     public static List<String> replenishmentPermissions() {
         return Arrays.asList(REPLENISHMENT_MANAGE);
+    }
+
+    /**
+     * Lot management permissions
+     */
+    public static List<String> lotPermissions() {
+        return Arrays.asList(LOT_MANAGE);
     }
 
     /**

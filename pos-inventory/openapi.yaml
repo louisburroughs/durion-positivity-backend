@@ -260,6 +260,51 @@ paths:
         - inventory:replenishment:manage
       x-required-permissions:
       - inventory:replenishment:manage
+  /v1/inventory/lots/{lotId}/expiration:
+    put:
+      tags:
+      - Lots
+      summary: Set lot expiration
+      description: Sets or clears a lot's expiration date and alert-window date. Re-dating resets the emit-once alert bookkeeping so the daily expiry scan can alert the new dates.
+      operationId: updateLotExpiration
+      parameters:
+      - name: lotId
+        in: path
+        description: Lot ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LotExpirationUpdateRequest'
+        required: true
+      responses:
+        '200':
+          description: Lot expiration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotResponse'
+        '403':
+          description: Missing inventory:lot:manage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Lot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:lot:manage
+      x-required-permissions:
+      - inventory:lot:manage
   /v1/inventory/cycleCountSchedules/{scheduleId}:
     get:
       tags:
@@ -2300,6 +2345,57 @@ paths:
         - inventory:pick_list:execute
       x-required-permissions:
       - inventory:pick_list:execute
+  /v1/inventory/lots/{lotId}/status:
+    post:
+      tags:
+      - Lots
+      summary: Change lot status
+      description: Quarantines, recalls, or releases a lot back to ACTIVE. QUARANTINED and RECALLED lots are blocked from lot suggestion and outbound movement. Status flip only — physically moving stock to the site's quarantine bin is a separate operator-driven transfer. CONSUMED is rejected (reconciler-owned).
+      operationId: updateLotStatus
+      parameters:
+      - name: lotId
+        in: path
+        description: Lot ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LotStatusUpdateRequest'
+        required: true
+      responses:
+        '200':
+          description: Lot status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotResponse'
+        '400':
+          description: Invalid target status (e.g. CONSUMED) or missing reason
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:lot:manage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Lot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:lot:manage
+      x-required-permissions:
+      - inventory:lot:manage
   /v1/inventory/locations/{locationId}/deactivate:
     post:
       tags:
@@ -5519,6 +5615,75 @@ components:
       - minimumQuantity
       - policyId
       - preferredSourceType
+    LotExpirationUpdateRequest:
+      type: object
+      description: Set or clear a lot's expiration date and alert-window date
+      properties:
+        expirationDate:
+          type: string
+          format: date
+          description: Expiration date of the lot (null clears it)
+          example: 2027-01-31
+        alertDate:
+          type: string
+          format: date
+          description: Date the lot enters its expiring-soon alert window (null means no early alert)
+          example: 2027-01-01
+    LotResponse:
+      type: object
+      description: An inventory lot master record (odoo-parity E1)
+      properties:
+        lotId:
+          type: string
+          format: uuid
+          description: Identifier of the lot
+          example: 01980003-0000-7000-8000-000000000001
+        stockItemId:
+          type: string
+          description: Stock item (catalog product id) the lot belongs to
+          example: 01980003-0000-7000-8000-000000000002
+        lotNumber:
+          type: string
+          description: Vendor/manufacturer lot or batch number
+          example: LOT-2026-0042
+        receivedAt:
+          type: string
+          format: date-time
+          description: When the lot was first received into stock
+          example: 2026-07-01 12:00:00+00:00
+        vendorId:
+          type: string
+          format: uuid
+          description: Vendor the lot was first received from, when known
+          example: 01980003-0000-7000-8000-000000000003
+        expirationDate:
+          type: string
+          format: date
+          description: Expiration date; null until the expiry flows (E3) populate it
+          example: 2027-01-31
+        status:
+          type: string
+          description: Lifecycle status of the lot
+          enum:
+          - ACTIVE
+          - QUARANTINED
+          - RECALLED
+          - CONSUMED
+          example: ACTIVE
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last modification timestamp
+      required:
+      - lotId
+      - lotNumber
+      - receivedAt
+      - status
+      - stockItemId
     UpdateCycleCountScheduleRequest:
       type: object
       description: Partial update of a recurring cycle-count schedule; null fields are left unchanged
@@ -6698,6 +6863,11 @@ components:
           type: number
           description: Quantity received expressed in documentUom; must be supplied together with documentUom
           example: 1
+        expirationDate:
+          type: string
+          format: date
+          description: Optional expiration date of the received lot (odoo-parity E3). Stamped on the lot on first receipt for LOT-tracked products; ignored for untracked products and for lots that already exist (correct an existing lot via the lot-management endpoint)
+          example: 2027-01-31
       required:
       - lineId
     ReceiveItemsResponse:
@@ -7845,6 +8015,26 @@ components:
       - quantityRequired
       - skuId
       - sortOrder
+      - status
+    LotStatusUpdateRequest:
+      type: object
+      description: 'Lot status change: QUARANTINE/RECALL a lot or release it back to ACTIVE'
+      properties:
+        status:
+          type: string
+          description: Target lifecycle status. One of ACTIVE (release), QUARANTINED, RECALLED. CONSUMED is rejected (reconciler-owned).
+          enum:
+          - ACTIVE
+          - QUARANTINED
+          - RECALLED
+          - CONSUMED
+          example: QUARANTINED
+        reason:
+          type: string
+          description: Reason for the status change (mandatory; recorded for traceability)
+          example: Supplier recall notice R-2026-014
+      required:
+      - reason
       - status
     DeactivateLocationRequest:
       type: object
@@ -9607,61 +9797,6 @@ components:
           type: boolean
         unsorted:
           type: boolean
-    LotResponse:
-      type: object
-      description: An inventory lot master record (odoo-parity E1)
-      properties:
-        lotId:
-          type: string
-          format: uuid
-          description: Identifier of the lot
-          example: 01980003-0000-7000-8000-000000000001
-        stockItemId:
-          type: string
-          description: Stock item (catalog product id) the lot belongs to
-          example: 01980003-0000-7000-8000-000000000002
-        lotNumber:
-          type: string
-          description: Vendor/manufacturer lot or batch number
-          example: LOT-2026-0042
-        receivedAt:
-          type: string
-          format: date-time
-          description: When the lot was first received into stock
-          example: 2026-07-01 12:00:00+00:00
-        vendorId:
-          type: string
-          format: uuid
-          description: Vendor the lot was first received from, when known
-          example: 01980003-0000-7000-8000-000000000003
-        expirationDate:
-          type: string
-          format: date
-          description: Expiration date; null until the expiry flows (E3) populate it
-          example: 2027-01-31
-        status:
-          type: string
-          description: Lifecycle status of the lot
-          enum:
-          - ACTIVE
-          - QUARANTINED
-          - RECALLED
-          - CONSUMED
-          example: ACTIVE
-        createdAt:
-          type: string
-          format: date-time
-          description: Creation timestamp
-        updatedAt:
-          type: string
-          format: date-time
-          description: Last modification timestamp
-      required:
-      - lotId
-      - lotNumber
-      - receivedAt
-      - status
-      - stockItemId
     LotDetailResponse:
       type: object
       description: An inventory lot with its per-location on-hand balances (odoo-parity E1)

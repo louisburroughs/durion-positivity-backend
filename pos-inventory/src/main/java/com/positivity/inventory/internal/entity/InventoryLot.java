@@ -70,9 +70,30 @@ public class InventoryLot {
     @Column(name = "vendor_id")
     private UUID vendorId;
 
-    /** Expiration date; null in E1 — populated by the E3 expiry flows. */
+    /** Expiration date; populated from receipt capture or the lot-management endpoint (E3). */
     @Column(name = "expiration_date")
     private LocalDate expirationDate;
+
+    /**
+     * Date the lot enters its "expiring soon" alert window (odoo-parity E3, issue #1047). Null
+     * means the lot only ever raises an {@code EXPIRED} alert, never an {@code EXPIRING} one.
+     */
+    @Column(name = "alert_date")
+    private LocalDate alertDate;
+
+    /**
+     * Emit-once bookkeeping for the daily {@code LotExpiryScheduler} (odoo-parity E3): stamped
+     * when the {@code EXPIRING} alert fired, so a re-run never re-emits it.
+     */
+    @Column(name = "expiring_alerted_at")
+    private Instant expiringAlertedAt;
+
+    /**
+     * Emit-once bookkeeping for the daily {@code LotExpiryScheduler} (odoo-parity E3): stamped
+     * when the {@code EXPIRED} alert fired, so a re-run never re-emits it.
+     */
+    @Column(name = "expired_alerted_at")
+    private Instant expiredAlertedAt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)

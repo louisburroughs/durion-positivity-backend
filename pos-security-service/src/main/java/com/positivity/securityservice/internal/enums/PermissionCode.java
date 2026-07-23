@@ -522,13 +522,15 @@ public enum PermissionCode {
     INVENTORY__TRANSFER__DISPATCH(398, "inventory:transfer:dispatch"),
     INVENTORY__TRANSFER__RECEIVE(399, "inventory:transfer:receive"),
     INVENTORY__TRANSFER__SHORT_CLOSE(400, "inventory:transfer:short_close"),
-    INVENTORY__TRANSFER__VIEW(401, "inventory:transfer:view");
+    INVENTORY__TRANSFER__VIEW(401, "inventory:transfer:view"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__LOT__MANAGE(402, "inventory:lot:manage");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 31;
+    public static final int CATALOG_VERSION = 32;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

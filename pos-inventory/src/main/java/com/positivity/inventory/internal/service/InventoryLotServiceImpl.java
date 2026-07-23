@@ -1,7 +1,9 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.dto.lot.LotDetailResponse;
+import com.positivity.inventory.internal.dto.lot.LotExpirationUpdateRequest;
 import com.positivity.inventory.internal.dto.lot.LotResponse;
+import com.positivity.inventory.internal.dto.lot.LotStatusUpdateRequest;
 import com.positivity.inventory.internal.entity.InventoryLot;
 import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.enums.InventoryLotStatus;
@@ -13,6 +15,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Sort;
@@ -27,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class InventoryLotServiceImpl implements InventoryLotService {
 
     private final InventoryLotRepository lotRepository;
@@ -66,6 +70,48 @@ public class InventoryLotServiceImpl implements InventoryLotService {
                 .lot(toResponse(lot))
                 .locations(locations)
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public @NonNull LotResponse updateStatus(@NonNull UUID lotId, @NonNull LotStatusUpdateRequest request) {
+        if (request.getStatus() == InventoryLotStatus.CONSUMED) {
+            throw new IllegalArgumentException(
+                    "CONSUMED cannot be set through the lot-management API; it is derived by the posting funnel");
+        }
+        if (request.getReason() == null || request.getReason().isBlank()) {
+            throw new IllegalArgumentException("reason is required for a lot status change");
+        }
+        InventoryLot lot = lotRepository
+                .findById(lotId)
+                .orElseThrow(() -> new ResourceNotFoundException("InventoryLot", lotId.toString()));
+        if (lot.getStatus() == InventoryLotStatus.CONSUMED) {
+            throw new IllegalArgumentException(
+                    "lot " + lotId + " is CONSUMED (holds no stock); its status is reconciler-owned");
+        }
+        log.info(
+                "Lot {} status {} -> {} (reason: {})",
+                lotId,
+                lot.getStatus(),
+                request.getStatus(),
+                request.getReason());
+        lot.setStatus(request.getStatus());
+        return toResponse(lotRepository.save(lot));
+    }
+
+    @Override
+    @Transactional
+    public @NonNull LotResponse updateExpiration(@NonNull UUID lotId, @NonNull LotExpirationUpdateRequest request) {
+        InventoryLot lot = lotRepository
+                .findById(lotId)
+                .orElseThrow(() -> new ResourceNotFoundException("InventoryLot", lotId.toString()));
+        lot.setExpirationDate(request.getExpirationDate());
+        lot.setAlertDate(request.getAlertDate());
+        // Re-dating resets the emit-once bookkeeping so the daily scan can alert the new dates.
+        lot.setExpiredAlertedAt(null);
+        lot.setExpiringAlertedAt(null);
+        log.info("Lot {} expiration set to {} (alert {})", lotId, request.getExpirationDate(), request.getAlertDate());
+        return toResponse(lotRepository.save(lot));
     }
 
     private LotDetailResponse.LotLocationOnHand toLocationOnHand(InventoryStockSummary row) {

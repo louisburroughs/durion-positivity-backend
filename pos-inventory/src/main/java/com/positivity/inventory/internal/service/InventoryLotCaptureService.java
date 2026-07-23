@@ -4,6 +4,7 @@ import com.positivity.inventory.internal.entity.InventoryLot;
 import com.positivity.inventory.internal.enums.ProductTrackingLevel;
 import com.positivity.inventory.internal.exception.LotNumberRequiredException;
 import com.positivity.inventory.internal.repository.InventoryLotRepository;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -64,6 +65,21 @@ public class InventoryLotCaptureService {
      */
     public @Nullable UUID resolveReceiptLot(
             @NonNull String stockItemId, @Nullable String lotNumber, @Nullable UUID vendorId) {
+        return resolveReceiptLot(stockItemId, lotNumber, vendorId, null);
+    }
+
+    /**
+     * As {@link #resolveReceiptLot(String, String, UUID)} but with an optional expiration date
+     * (odoo-parity E3, issue #1047) stamped on first creation of the lot. An existing lot is not
+     * re-dated here — expiration corrections go through the lot-management endpoint.
+     *
+     * @param expirationDate expiration date keyed on the receiving/goods-receipt line, if any
+     */
+    public @Nullable UUID resolveReceiptLot(
+            @NonNull String stockItemId,
+            @Nullable String lotNumber,
+            @Nullable UUID vendorId,
+            @Nullable LocalDate expirationDate) {
         if (trackingLevelService.trackingLevelFor(stockItemId) != ProductTrackingLevel.LOT) {
             return null;
         }
@@ -78,7 +94,9 @@ public class InventoryLotCaptureService {
             return existing.getLotId();
         }
         try {
-            return lotCreator.create(stockItemId, normalizedLotNumber, vendorId).getLotId();
+            return lotCreator
+                    .create(stockItemId, normalizedLotNumber, vendorId, expirationDate)
+                    .getLotId();
         } catch (DataIntegrityViolationException raced) {
             // Concurrent first receipt of the same (stockItemId, lotNumber): the creator's
             // REQUIRES_NEW transaction lost the unique-constraint race and rolled back alone —
