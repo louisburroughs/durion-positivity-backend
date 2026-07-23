@@ -49,6 +49,29 @@ Inventory management service for the Durion Positivity ETSMS platform. Manages s
 - `GET /v1/inventory/sourcing-strategies` — list sourcing strategy configuration rows
 - `PUT /v1/inventory/sourcing-strategies` — upsert the sourcing strategy for one scope
 - `DELETE /v1/inventory/sourcing-strategies/{configId}` — deactivate a sourcing strategy configuration
+- `GET /v1/inventory/lots` — list lot master records (filters: stockItemId, status, lotNumber)
+- `GET /v1/inventory/lots/{lotId}` — lot details with per-location on-hand from the per-lot summary rows
+
+## Lot Tracking — Inbound Capture (odoo-parity E1)
+
+Products whose catalog replica (`ext_product.tracking_level`) says `LOT` require a `lotNumber`
+on every inbound receipt line (goods receipt, receive-into-staging, PO receive); a missing lot
+number is a deterministic `422 LOT_NUMBER_REQUIRED`. The lot is found-or-created per
+(stockItemId, lotNumber) in `inventory_lot` (receivedAt/vendorId stamped on first sight) and
+its id is stamped on the receipt's ledger entries (`inventory_ledger_entry.lot_id`).
+
+The stock summary uses dual-row bookkeeping: every posting updates the lot-agnostic
+(`lot_id IS NULL`) row exactly as before — that row remains what all availability, rollup, and
+forecast readers consume — and a lot-tagged posting additionally applies the same deltas to a
+per-lot row keyed `(stock_item_id, location_id, lot_id)` (unique `NULLS NOT DISTINCT`), from
+which the lot read API serves per-lot on-hand. Rebuild and drift verification replay the
+identical rule.
+
+Untracked products (tracking level `NONE`, unknown products, free-text SKUs) see zero behavior
+change: no validation, `lot_id` null everywhere, a single summary row. `SERIAL` is treated as
+`NONE` until parity-E4; outbound lot stamping (picks, consumption, transfers, scraps — and the
+cross-dock receipt+issue pair) is parity-E2. Expiry (`expiration_date`) is populated by the
+parity-E3 flows.
 
 ## Sourcing Strategy Engine (odoo-parity H1/H2)
 

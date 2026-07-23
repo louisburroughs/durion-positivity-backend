@@ -67,6 +67,10 @@ public class ReceivingLine {
     @Column(name = "workorder_line_id", length = 255)
     private String workorderLineId;
 
+    /** Lot/batch number keyed on receipt; validated + linked for LOT-tracked products (odoo-parity E1, #1038). */
+    @Column(name = "lot_number", length = 128)
+    private String lotNumber;
+
     /** UoM the line was keyed in, when it differed from base (odoo-parity B2, #1034). */
     @Column(name = "document_uom", length = 32)
     private String documentUom;

@@ -59,6 +59,7 @@ public class AsnServiceImpl implements AsnService {
     private final InventoryFactPublisher inventoryFactPublisher;
     private final ApplicationEventPublisher eventPublisher;
     private final DocumentQuantityConverter documentQuantityConverter;
+    private final InventoryLotCaptureService lotCaptureService;
 
     @Override
     @Transactional
@@ -190,7 +191,11 @@ public class AsnServiceImpl implements AsnService {
         // odoo-parity B2 (#1034): convert optional document-UoM quantities to base BEFORE the
         // over-receipt guard and any posting; money math stays documentQuantity × unitCostMinor
         // (unitCostMinor refers to one document-UoM unit when a document UoM is keyed).
-        List<ReceiptLineComputation> computedLines = computeReceiptLines(request.getLines());
+        // odoo-parity E1 (#1038): the tracking-level gate runs in the same pass — a LOT-tracked
+        // line without a lotNumber fails deterministically (LOT_NUMBER_REQUIRED) before any
+        // guard, event, or posting.
+        List<ReceiptLineComputation> computedLines =
+                computeReceiptLines(request.getLines(), purchaseOrder.getVendorId());
         long receiptTotalMinor = computedLines.stream()
                 .mapToLong(ReceiptLineComputation::lineAccruedMinor)
                 .sum();
@@ -262,6 +267,7 @@ public class AsnServiceImpl implements AsnService {
 
         for (ReceiptLineComputation computed : computedLines) {
             // Ledger rows stay base-UoM only (spec B2): the converted base quantity posts here.
+            // lotId is null for untracked products (E1 zero-change guarantee).
             InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                     .stockItemId(computed.request().getSku())
                     .locationId(request.getLocationId())
@@ -270,6 +276,7 @@ public class AsnServiceImpl implements AsnService {
                     .changeInQuantity(toWholeQuantity(computed.baseQuantity()))
                     .quantityAfter(calculateQuantityAfter(
                             computed.request().getSku(), request.getLocationId(), computed.baseQuantity()))
+                    .lotId(computed.lotId())
                     .transactionUserId(actorId)
                     .sourceTransactionId(persistedReceipt.getReceiptId().toString())
                     .notes("Goods receipt " + persistedReceipt.getReceiptNumber())
@@ -347,17 +354,20 @@ public class AsnServiceImpl implements AsnService {
 
     /**
      * Per-line receipt derivation (odoo-parity B2, #1034): the resolved PO line, the optional
-     * document-UoM conversion, the base quantity that posts to the ledger, and the accrued
-     * amount computed from the costed (document-unit) quantity.
+     * document-UoM conversion, the base quantity that posts to the ledger, the accrued
+     * amount computed from the costed (document-unit) quantity, and the lot resolved by the
+     * tracking-level gate (odoo-parity E1, #1038; null for untracked products).
      */
     private record ReceiptLineComputation(
             CreateGoodsReceiptLineRequest request,
             PurchaseOrderLineEntity poLine,
             DocumentQuantityConverter.DocumentConversion conversion,
             BigDecimal baseQuantity,
-            long lineAccruedMinor) {}
+            long lineAccruedMinor,
+            UUID lotId) {}
 
-    private List<ReceiptLineComputation> computeReceiptLines(@NonNull List<CreateGoodsReceiptLineRequest> lines) {
+    private List<ReceiptLineComputation> computeReceiptLines(
+            @NonNull List<CreateGoodsReceiptLineRequest> lines, UUID vendorId) {
         List<ReceiptLineComputation> computed = new ArrayList<>(lines.size());
         for (CreateGoodsReceiptLineRequest line : lines) {
             PurchaseOrderLineEntity poLine = resolvePurchaseOrderLine(line.getPoLineId());
@@ -380,7 +390,10 @@ public class AsnServiceImpl implements AsnService {
                     .multiply(BigDecimal.valueOf(line.getUnitCostMinor()))
                     .setScale(0, RoundingMode.HALF_EVEN)
                     .longValue();
-            computed.add(new ReceiptLineComputation(line, poLine, conversion, baseQuantity, lineAccruedMinor));
+            // odoo-parity E1 (#1038): LOT-tracked SKUs require a lotNumber (422 otherwise) and
+            // find-or-create the lot; untracked SKUs pass through with a null lot unchanged.
+            UUID lotId = lotCaptureService.resolveReceiptLot(line.getSku(), line.getLotNumber(), vendorId);
+            computed.add(new ReceiptLineComputation(line, poLine, conversion, baseQuantity, lineAccruedMinor, lotId));
         }
         return computed;
     }

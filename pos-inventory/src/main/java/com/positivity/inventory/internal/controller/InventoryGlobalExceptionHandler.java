@@ -17,6 +17,7 @@ import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.LocationServiceUnavailableException;
+import com.positivity.inventory.internal.exception.LotNumberRequiredException;
 import com.positivity.inventory.internal.exception.NegativeStockPolicyViolationException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
 import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
@@ -295,6 +296,13 @@ public class InventoryGlobalExceptionHandler {
         // odoo-parity B1/B4 (#1033): no conversion path to base UoM is a deterministic 422,
         // never a silent 1:1 assumption.
         return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(LotNumberRequiredException.class)
+    public ResponseEntity<ApiError> handleLotNumberRequired(LotNumberRequiredException ex) {
+        // odoo-parity E1 (#1038): a receipt of a LOT-tracked product without a lot number is a
+        // deterministic 422, never a silently untracked posting.
+        return build(HttpStatus.valueOf(422), LotNumberRequiredException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(InvalidParamCombinationException.class)

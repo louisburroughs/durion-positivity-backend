@@ -90,11 +90,12 @@ public class StockSummaryDriftVerifier {
 
     private void logDrift(InventoryStockSummaryRepository.DriftRow row) {
         log.warn(
-                "Stock summary drift: stockItemId={} locationId={} ledgerOnHand={} ledgerAllocated={}"
+                "Stock summary drift: stockItemId={} locationId={} lotId={} ledgerOnHand={} ledgerAllocated={}"
                         + " ledgerReserved={} ledgerInTransit={} summaryOnHand={} summaryAllocated={}"
                         + " summaryReserved={} summaryInTransit={}",
                 row.getStockItemId(),
                 row.getLocationId(),
+                row.getLotId(),
                 row.getLedgerOnHand(),
                 row.getLedgerAllocated(),
                 row.getLedgerReserved(),

@@ -26,6 +26,12 @@ import org.springframework.transaction.annotation.Transactional;
  * as {@code LedgerPostingServiceImpl} so a rebuild reproduces exactly what live
  * posting maintains — including destination keys whose only balance is
  * {@code inTransitQty} (dispatched, nothing received yet).
+ *
+ * <p>Per-lot rows (odoo-parity E1, issue #1038) replay the funnel's dual-row
+ * rule: the lot-agnostic aggregations above already include every lot-tagged
+ * entry (reproducing the pre-E1 rows byte-identically), and two additional
+ * lot-grouped aggregations restricted to {@code lotId IS NOT NULL} reconstruct
+ * the per-lot rows from the same entries.
  */
 @Service
 @Slf4j
@@ -47,33 +53,49 @@ public class StockSummaryRebuildServiceImpl implements StockSummaryRebuildServic
     public int rebuildFromLedger() {
         summaryRepository.deleteAllInBatch();
 
-        List<InventoryLedgerEntryRepository.SummaryAggregate> aggregates = ledgerRepository.aggregateForStockSummary(
+        Map<RebuildKey, InventoryStockSummary> rowsByKey = new LinkedHashMap<>();
+
+        for (InventoryLedgerEntryRepository.SummaryAggregate aggregate : ledgerRepository.aggregateForStockSummary(
                 InventoryLedgerEventType.onHandAffectingTypes(),
                 InventoryLedgerEventType.ALLOCATION_CREATED,
                 InventoryLedgerEventType.ALLOCATION_RELEASED,
                 InventoryLedgerEventType.RESERVATION_CREATED,
                 InventoryLedgerEventType.RESERVATION_RELEASED,
                 InventoryLedgerEventType.TRANSFER_IN,
-                StockSummaryEventSets.SUMMARY_TYPES);
+                StockSummaryEventSets.SUMMARY_TYPES)) {
+            RebuildKey key = new RebuildKey(aggregate.getStockItemId(), aggregate.getLocationId(), null);
+            rowsByKey.put(key, toSummaryRow(key, aggregate));
+        }
 
-        Map<RebuildKey, InventoryStockSummary> rowsByKey = new LinkedHashMap<>();
-        for (InventoryLedgerEntryRepository.SummaryAggregate aggregate : aggregates) {
-            rowsByKey.put(
-                    new RebuildKey(aggregate.getStockItemId(), aggregate.getLocationId()), toSummaryRow(aggregate));
+        // Per-lot rows: same delta rules over the lot-tagged subset, additionally keyed by lot
+        // (dual-row rule, E1 #1038).
+        for (InventoryLedgerEntryRepository.LotSummaryAggregate aggregate :
+                ledgerRepository.aggregateForStockSummaryByLot(
+                        InventoryLedgerEventType.onHandAffectingTypes(),
+                        InventoryLedgerEventType.ALLOCATION_CREATED,
+                        InventoryLedgerEventType.ALLOCATION_RELEASED,
+                        InventoryLedgerEventType.RESERVATION_CREATED,
+                        InventoryLedgerEventType.RESERVATION_RELEASED,
+                        InventoryLedgerEventType.TRANSFER_IN,
+                        StockSummaryEventSets.SUMMARY_TYPES)) {
+            RebuildKey key =
+                    new RebuildKey(aggregate.getStockItemId(), aggregate.getLocationId(), aggregate.getLotId());
+            rowsByKey.put(key, toSummaryRow(key, aggregate));
         }
 
         // Outbound in-transit contributions key on the DESTINATION location; a destination
         // with nothing but inbound transit gets a fresh row here (C2, #1036).
         for (InventoryLedgerEntryRepository.OutboundInTransitAggregate outbound :
                 ledgerRepository.aggregateOutboundInTransit(InventoryLedgerEventType.TRANSFER_OUT)) {
-            RebuildKey key = new RebuildKey(outbound.getStockItemId(), outbound.getLocationId());
-            InventoryStockSummary row = rowsByKey.computeIfAbsent(
-                    key,
-                    missing -> InventoryStockSummary.builder()
-                            .stockItemId(missing.stockItemId())
-                            .locationId(missing.locationId())
-                            .build());
-            row.setInTransitQty(row.getInTransitQty() + outbound.getInTransit());
+            applyOutboundInTransit(
+                    rowsByKey, new RebuildKey(outbound.getStockItemId(), outbound.getLocationId(), null), outbound);
+        }
+        for (InventoryLedgerEntryRepository.LotOutboundInTransitAggregate outbound :
+                ledgerRepository.aggregateOutboundInTransitByLot(InventoryLedgerEventType.TRANSFER_OUT)) {
+            applyOutboundInTransit(
+                    rowsByKey,
+                    new RebuildKey(outbound.getStockItemId(), outbound.getLocationId(), outbound.getLotId()),
+                    outbound);
         }
 
         List<InventoryStockSummary> rows = List.copyOf(rowsByKey.values());
@@ -83,20 +105,37 @@ public class StockSummaryRebuildServiceImpl implements StockSummaryRebuildServic
         return rows.size();
     }
 
-    private InventoryStockSummary toSummaryRow(InventoryLedgerEntryRepository.SummaryAggregate aggregate) {
-        InventoryLedgerEntry latest = ledgerRepository
-                .findLatestSummaryEntries(
-                        aggregate.getStockItemId(),
-                        aggregate.getLocationId(),
-                        StockSummaryEventSets.SUMMARY_TYPES,
-                        LATEST_ONLY)
-                .stream()
-                .findFirst()
-                .orElse(null);
+    private void applyOutboundInTransit(
+            Map<RebuildKey, InventoryStockSummary> rowsByKey,
+            RebuildKey key,
+            InventoryLedgerEntryRepository.OutboundInTransitAggregate outbound) {
+        InventoryStockSummary row = rowsByKey.computeIfAbsent(
+                key,
+                missing -> InventoryStockSummary.builder()
+                        .stockItemId(missing.stockItemId())
+                        .locationId(missing.locationId())
+                        .lotId(missing.lotId())
+                        .build());
+        row.setInTransitQty(row.getInTransitQty() + outbound.getInTransit());
+    }
+
+    private InventoryStockSummary toSummaryRow(
+            RebuildKey key, InventoryLedgerEntryRepository.SummaryAggregate aggregate) {
+        InventoryLedgerEntry latest = (key.lotId() == null
+                        ? ledgerRepository.findLatestSummaryEntries(
+                                key.stockItemId(), key.locationId(), StockSummaryEventSets.SUMMARY_TYPES, LATEST_ONLY)
+                        : ledgerRepository.findLatestSummaryEntriesForLot(
+                                key.stockItemId(),
+                                key.locationId(),
+                                key.lotId(),
+                                StockSummaryEventSets.SUMMARY_TYPES,
+                                LATEST_ONLY))
+                .stream().findFirst().orElse(null);
 
         return InventoryStockSummary.builder()
-                .stockItemId(aggregate.getStockItemId())
-                .locationId(aggregate.getLocationId())
+                .stockItemId(key.stockItemId())
+                .locationId(key.locationId())
+                .lotId(key.lotId())
                 .onHand(aggregate.getOnHand())
                 .allocated(aggregate.getAllocated())
                 .reserved(aggregate.getReserved())
@@ -107,7 +146,10 @@ public class StockSummaryRebuildServiceImpl implements StockSummaryRebuildServic
                 .build();
     }
 
-    private record RebuildKey(String stockItemId, @Nullable UUID locationId) {
+    private record RebuildKey(
+            String stockItemId,
+            @Nullable UUID locationId,
+            @Nullable UUID lotId) {
         private RebuildKey {
             Objects.requireNonNull(stockItemId, "stockItemId");
         }

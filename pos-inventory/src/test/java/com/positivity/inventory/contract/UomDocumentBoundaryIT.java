@@ -164,7 +164,7 @@ class UomDocumentBoundaryIT {
 
         ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest lineReceipt =
                 new ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest(
-                        po.getLines().getFirst().getLineId(), null, null, "CASE", new BigDecimal("1"));
+                        po.getLines().getFirst().getLineId(), null, null, "CASE", new BigDecimal("1"), null);
         ReceivePurchaseOrderResponse response = purchaseOrderService.receivePurchaseOrder(
                 po.getPurchaseOrderId(), new ReceivePurchaseOrderRequest(List.of(lineReceipt)), ACTOR);
 

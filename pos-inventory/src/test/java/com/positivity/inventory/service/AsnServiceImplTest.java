@@ -105,8 +105,11 @@ class AsnServiceImplTest {
                 ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 applicationEventPublisher,
-                new com.positivity.inventory.internal.service.DocumentQuantityConverter(org.mockito.Mockito.mock(
-                        com.positivity.inventory.internal.service.UomConversionService.class)));
+                new com.positivity.inventory.internal.service.DocumentQuantityConverter(
+                        org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
+                // Lot gate answers "untracked" for every SKU in these unit tests (E1 #1038):
+                // a mock resolveReceiptLot returns null by default.
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryLotCaptureService.class));
         authenticateAs("asn-test-user");
     }
 

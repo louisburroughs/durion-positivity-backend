@@ -12,6 +12,8 @@ servers:
 tags:
 - name: Inventory Locations
   description: Read inventory facts for storage locations
+- name: Lots
+  description: Lot master records captured on inbound receipts, with per-lot on-hand
 - name: Reallocation
   description: Allocation rebalancing endpoints
 - name: Cycle Count Plans
@@ -3635,6 +3637,96 @@ paths:
         - inventory:location:view
       x-required-permissions:
       - inventory:location:view
+  /v1/inventory/lots:
+    get:
+      tags:
+      - Lots
+      summary: List lots
+      description: Lists lot master records filtered by stock item, status, and lot number, newest received first
+      operationId: listLots
+      parameters:
+      - name: stockItemId
+        in: query
+        description: Filter by stock item (catalog product id)
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - QUARANTINED
+          - RECALLED
+          - CONSUMED
+      - name: lotNumber
+        in: query
+        description: Filter by exact lot number
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Lots retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LotResponse'
+        '403':
+          description: Missing inventory:on_hand:view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
+  /v1/inventory/lots/{lotId}:
+    get:
+      tags:
+      - Lots
+      summary: Get lot details
+      description: Retrieves one lot master record with its per-location on-hand from the per-lot stock summary rows
+      operationId: getLot
+      parameters:
+      - name: lotId
+        in: path
+        description: Lot ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Lot found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotDetailResponse'
+        '403':
+          description: Missing inventory:on_hand:view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Lot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
   /v1/inventory/locations:
     get:
       tags:
@@ -5804,6 +5896,10 @@ components:
           type: string
           description: Identifier of the workorder line the receiving line fulfils, when applicable
           example: 01960003-0000-7000-8000-000000000004
+        lotNumber:
+          type: string
+          description: Lot or batch number recorded on receipt; linked to the lot master for LOT-tracked products
+          example: LOT-2026-0042
         documentUom:
           type: string
           description: UoM the line was keyed in when it differed from the product's base UoM
@@ -5898,6 +5994,10 @@ components:
           description: Quantity actually received for the line, in the product's base UoM; may be zero. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 8
           minimum: 0.0
+        lotNumber:
+          type: string
+          description: Lot or batch number of the received stock. Required (422 LOT_NUMBER_REQUIRED) when the product is LOT-tracked per the catalog replica; ignored for tracking purposes otherwise
+          example: LOT-2026-0042
         documentUom:
           type: string
           description: Optional UoM the line is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at posting time; a UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
@@ -6639,6 +6739,10 @@ components:
           type: number
           description: Quantity received expressed in documentUom; must be supplied together with documentUom
           example: 1
+        lotNumber:
+          type: string
+          description: Lot or batch number of the received stock. Required (422 LOT_NUMBER_REQUIRED) when the line's product is LOT-tracked per the catalog replica; ignored for tracking purposes otherwise
+          example: LOT-2026-0042
       required:
       - lineId
     ReceivePurchaseOrderRequest:
@@ -8542,6 +8646,96 @@ components:
           type: boolean
         unsorted:
           type: boolean
+    LotResponse:
+      type: object
+      description: An inventory lot master record (odoo-parity E1)
+      properties:
+        lotId:
+          type: string
+          format: uuid
+          description: Identifier of the lot
+          example: 01980003-0000-7000-8000-000000000001
+        stockItemId:
+          type: string
+          description: Stock item (catalog product id) the lot belongs to
+          example: 01980003-0000-7000-8000-000000000002
+        lotNumber:
+          type: string
+          description: Vendor/manufacturer lot or batch number
+          example: LOT-2026-0042
+        receivedAt:
+          type: string
+          format: date-time
+          description: When the lot was first received into stock
+          example: 2026-07-01 12:00:00+00:00
+        vendorId:
+          type: string
+          format: uuid
+          description: Vendor the lot was first received from, when known
+          example: 01980003-0000-7000-8000-000000000003
+        expirationDate:
+          type: string
+          format: date
+          description: Expiration date; null until the expiry flows (E3) populate it
+          example: 2027-01-31
+        status:
+          type: string
+          description: Lifecycle status of the lot
+          enum:
+          - ACTIVE
+          - QUARANTINED
+          - RECALLED
+          - CONSUMED
+          example: ACTIVE
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last modification timestamp
+      required:
+      - lotId
+      - lotNumber
+      - receivedAt
+      - status
+      - stockItemId
+    LotDetailResponse:
+      type: object
+      description: An inventory lot with its per-location on-hand balances (odoo-parity E1)
+      properties:
+        lot:
+          $ref: '#/components/schemas/LotResponse'
+        locations:
+          type: array
+          description: Per-location on-hand of this lot, from the per-lot stock summary rows; locations with fully consumed balances may report zero
+          items:
+            $ref: '#/components/schemas/LotLocationOnHand'
+      required:
+      - lot
+    LotLocationOnHand:
+      type: object
+      description: On-hand quantity of a lot at one location
+      properties:
+        locationId:
+          type: string
+          format: uuid
+          description: Location holding the lot; null for postings recorded without a location
+          example: 01980003-0000-7000-8000-000000000004
+        onHand:
+          type: integer
+          format: int64
+          description: On-hand quantity of the lot at the location
+          example: 12
+        inTransitQty:
+          type: integer
+          format: int64
+          description: Quantity of the lot in transit toward the location
+          example: 0
+      required:
+      - inTransitQty
+      - onHand
     LocationInventoryRollupResponse:
       type: object
       description: Parent-location inventory rollup aggregating site totals across all descendant sites

@@ -58,6 +58,12 @@ public class ReceivingLineResponse {
     private String workorderLineId;
 
     @Schema(
+            description = "Lot or batch number recorded on receipt; linked to the lot master for LOT-tracked products",
+            example = "LOT-2026-0042",
+            requiredMode = NOT_REQUIRED)
+    private String lotNumber;
+
+    @Schema(
             description = "UoM the line was keyed in when it differed from the product's base UoM",
             example = "CASE",
             requiredMode = NOT_REQUIRED)

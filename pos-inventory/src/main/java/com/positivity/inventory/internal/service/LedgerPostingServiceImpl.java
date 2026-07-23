@@ -43,6 +43,13 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  * {@code atp} is maintained as {@code onHand - allocated} (ADR-0001).
  *
+ * <p>Dual-row lot bookkeeping (odoo-parity E1, issue #1038): every entry applies its deltas to
+ * the lot-agnostic (stockItemId, locationId, lotId=null) row exactly as before E1 — that row
+ * stays the authoritative balance for all availability/rollup/forecast readers and for the
+ * negative-stock matrix. An entry carrying a {@code lotId} ADDITIONALLY applies the same deltas
+ * to the (stockItemId, locationId, lotId) row, from which the lot read API serves per-lot
+ * on-hand. Rebuild and drift verification replay the identical rule.
+ *
  * <p>Negative-stock policy (odoo-parity K1, issue #1027): before the summary
  * deltas are applied, the batch is replayed per (stockItemId, locationId) key
  * against the locked summary rows and every on-hand-affecting entry is checked
@@ -105,14 +112,29 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         for (InventoryLedgerEntry entry : saved) {
             SummaryDelta delta = deltaFor(entry);
             if (delta != null) {
-                deltas.merge(new SummaryKey(entry.getStockItemId(), entry.getLocationId()), delta, SummaryDelta::plus);
+                // Lot-agnostic row first (pre-E1 behavior), then the additional per-lot row for
+                // lot-tagged entries — same deltas on both (odoo-parity E1, #1038).
+                deltas.merge(
+                        new SummaryKey(entry.getStockItemId(), entry.getLocationId(), null), delta, SummaryDelta::plus);
+                if (entry.getLotId() != null) {
+                    deltas.merge(
+                            new SummaryKey(entry.getStockItemId(), entry.getLocationId(), entry.getLotId()),
+                            delta,
+                            SummaryDelta::plus);
+                }
             }
             SummaryDelta transitDelta = outboundInTransitDeltaFor(entry);
             if (transitDelta != null) {
                 deltas.merge(
-                        new SummaryKey(entry.getStockItemId(), entry.getToLocationId()),
+                        new SummaryKey(entry.getStockItemId(), entry.getToLocationId(), null),
                         transitDelta,
                         SummaryDelta::plus);
+                if (entry.getLotId() != null) {
+                    deltas.merge(
+                            new SummaryKey(entry.getStockItemId(), entry.getToLocationId(), entry.getLotId()),
+                            transitDelta,
+                            SummaryDelta::plus);
+                }
             }
         }
 
@@ -191,7 +213,9 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
             if (eventType == null || !eventType.affectsOnHand()) {
                 continue;
             }
-            SummaryKey key = new SummaryKey(entry.getStockItemId(), entry.getLocationId());
+            // The matrix evaluates the lot-agnostic key only: per-lot rows mirror a subset of
+            // the same postings and per-lot negative guards are the E2 story.
+            SummaryKey key = new SummaryKey(entry.getStockItemId(), entry.getLocationId(), null);
             long projected = projectedOnHand.computeIfAbsent(
                     key,
                     missing -> Objects.requireNonNull(
@@ -296,34 +320,49 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         summaryRepository.save(row);
     }
 
+    /**
+     * Serializes summary-row creation in-JVM: since E1 the lot-agnostic row of every key holds a
+     * NULL {@code lot_id}, which only PostgreSQL's {@code NULLS NOT DISTINCT} unique index (V18)
+     * can reject as a duplicate — the JPA-generated H2 test schema cannot, so the constraint
+     * alone no longer closes the check-then-insert race locally. The monitor covers the
+     * initializer's whole REQUIRES_NEW transaction (the call goes through the proxy); across
+     * instances the PostgreSQL index remains the backstop.
+     */
+    private static final Object ROW_CREATION_MONITOR = new Object();
+
     private InventoryStockSummary createAndLockRow(SummaryKey key) {
         try {
-            rowInitializer.createRowIfAbsent(key.stockItemId(), key.locationId());
+            synchronized (ROW_CREATION_MONITOR) {
+                rowInitializer.createRowIfAbsent(key.stockItemId(), key.locationId(), key.lotId());
+            }
         } catch (DataIntegrityViolationException | UnexpectedRollbackException ex) {
             // Lost the creation race to a concurrent posting; the row exists now.
             log.debug(
-                    "Lost stock summary creation race for stockItemId={} locationId={}",
+                    "Lost stock summary creation race for stockItemId={} locationId={} lotId={}",
                     key.stockItemId(),
-                    key.locationId());
+                    key.locationId(),
+                    key.lotId());
         }
         return lockRow(key)
                 .orElseThrow(() ->
                         new IllegalStateException("Stock summary row missing after initialization for stockItemId="
-                                + key.stockItemId() + " locationId=" + key.locationId()));
+                                + key.stockItemId() + " locationId=" + key.locationId() + " lotId=" + key.lotId()));
     }
 
     private Optional<InventoryStockSummary> lockRow(SummaryKey key) {
-        return key.locationId() == null
-                ? summaryRepository.findWithLockByStockItemIdAndLocationIdIsNull(key.stockItemId())
-                : summaryRepository.findWithLockByStockItemIdAndLocationId(key.stockItemId(), key.locationId());
+        return summaryRepository.findWithLockByKey(key.stockItemId(), key.locationId(), key.lotId());
     }
 
-    private record SummaryKey(String stockItemId, @Nullable UUID locationId) {
+    private record SummaryKey(
+            String stockItemId,
+            @Nullable UUID locationId,
+            @Nullable UUID lotId) {
 
         /** Deterministic lock-acquisition order to avoid deadlocks between concurrent batches. */
         private static final Comparator<SummaryKey> ORDER = Comparator.comparing(SummaryKey::stockItemId)
                 .thenComparing(
-                        key -> key.locationId() == null ? "" : key.locationId().toString());
+                        key -> key.locationId() == null ? "" : key.locationId().toString())
+                .thenComparing(key -> key.lotId() == null ? "" : key.lotId().toString());
     }
 
     private record SummaryDelta(

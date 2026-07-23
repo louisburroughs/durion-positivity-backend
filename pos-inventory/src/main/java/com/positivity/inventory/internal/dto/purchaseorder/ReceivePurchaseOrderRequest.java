@@ -79,6 +79,14 @@ public class ReceivePurchaseOrderRequest {
         @Positive
         private BigDecimal documentQuantity;
 
+        @Schema(
+                description = "Lot or batch number of the received stock. Required (422 LOT_NUMBER_REQUIRED) when"
+                        + " the line's product is LOT-tracked per the catalog replica; ignored for tracking"
+                        + " purposes otherwise",
+                example = "LOT-2026-0042",
+                requiredMode = NOT_REQUIRED)
+        private String lotNumber;
+
         @JsonIgnore
         @AssertTrue(message = "quantityReceived is required when documentUom/documentQuantity are absent")
         public boolean isQuantitySourcePresent() {

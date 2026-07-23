@@ -57,6 +57,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final EncumbranceEventPublisher encumbranceEventPublisher;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final DocumentQuantityConverter documentQuantityConverter;
+    private final InventoryLotCaptureService lotCaptureService;
     private final Clock clock;
 
     @Value("${pos.inventory.encumbranceEnabled:false}")
@@ -344,7 +345,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         PurchaseOrderEntity po = getPoOrThrow(poId);
         validateReceivableStatus(po);
         Map<UUID, PurchaseOrderLineEntity> poLinesById = mapPoLinesById(po.getLines());
-        long openBalanceMinor = applyReceiptLines(request.getLines(), poLinesById, safeLong(po.getOpenBalanceMinor()));
+        long openBalanceMinor = applyReceiptLines(
+                request.getLines(), poLinesById, safeLong(po.getOpenBalanceMinor()), po.getVendorId());
         updateReceiptStatus(po, openBalanceMinor);
         purchaseOrderRepository.save(po);
         publishReceiptEvent(po, actorId);
@@ -378,7 +380,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private long applyReceiptLines(
             List<ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest> lineRequests,
             Map<UUID, PurchaseOrderLineEntity> poLinesById,
-            long openBalanceMinor) {
+            long openBalanceMinor,
+            UUID vendorId) {
         long updatedOpenBalanceMinor = openBalanceMinor;
         for (ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest lineRequest : lineRequests) {
             PurchaseOrderLineEntity line = resolvePurchaseOrderLine(lineRequest.getLineId(), poLinesById);
@@ -396,6 +399,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             if (receivedBaseQuantity == null) {
                 throw new IllegalArgumentException(
                         "quantityReceived is required when documentUom/documentQuantity are absent");
+            }
+            // odoo-parity E1 (#1038): the tracking-level gate also guards this receipt path —
+            // a LOT-tracked line without a lotNumber is a deterministic 422 and a keyed lot is
+            // found-or-created. This path posts no ledger entries (it only decrements open
+            // quantities/balances), so there is no ledger row to stamp — the lot master still
+            // registers the receipt.
+            if (line.getSkuId() != null) {
+                lotCaptureService.resolveReceiptLot(line.getSkuId().toString(), lineRequest.getLotNumber(), vendorId);
             }
             updateOpenQuantity(line, receivedBaseQuantity);
             long receivedValueMinor = calculateReceivedValueMinor(line, lineRequest, conversion);

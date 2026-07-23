@@ -37,6 +37,13 @@ public class ReceiveLineRequest {
     private BigDecimal receivedQuantity;
 
     @Schema(
+            description = "Lot or batch number of the received stock. Required (422 LOT_NUMBER_REQUIRED) when the"
+                    + " product is LOT-tracked per the catalog replica; ignored for tracking purposes otherwise",
+            example = "LOT-2026-0042",
+            requiredMode = NOT_REQUIRED)
+    private String lotNumber;
+
+    @Schema(
             description = "Optional UoM the line is keyed in (e.g. CASE). When present, documentQuantity is"
                     + " converted to the product's base UoM at posting time; a UoM with no conversion path is"
                     + " rejected with 422 UOM_CONVERSION_UNDEFINED",

@@ -29,9 +29,14 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * this table from scratch and {@code StockSummaryDriftVerifier} reports drift.
  *
  * <p>{@code locationId} is nullable: ledger entries posted without a location
- * (e.g. workorder consumption) aggregate on a NULL-location row. A later story
- * adds a nullable {@code lotId} to the uniqueness without reshaping the table;
+ * (e.g. workorder consumption) aggregate on a NULL-location row.
  * {@code inTransitQty} arrived with odoo-parity C2 (issue #1036).
+ *
+ * <p>Per-lot rows (odoo-parity E1, issue #1038): {@code lotId} joined the unique key with
+ * dual-row bookkeeping — the lot-agnostic row ({@code lotId} null) keeps aggregating EVERY
+ * ledger entry for its (stockItemId, locationId) exactly as before E1 and remains what all
+ * availability/rollup/forecast readers consume; a lot-tagged posting additionally applies the
+ * same deltas to a (stockItemId, locationId, lotId) row, which only the lot read API consumes.
  */
 @Entity
 @Table(
@@ -39,7 +44,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         uniqueConstraints =
                 @UniqueConstraint(
                         name = "uq_inventory_stock_summary_key",
-                        columnNames = {"stock_item_id", "location_id"}),
+                        columnNames = {"stock_item_id", "location_id", "lot_id"}),
         indexes = @Index(name = "idx_inventory_stock_summary_location", columnList = "location_id"))
 @Data
 @NoArgsConstructor
@@ -58,6 +63,14 @@ public class InventoryStockSummary {
 
     @Column(name = "location_id")
     private UUID locationId;
+
+    /**
+     * Lot dimension of the key (odoo-parity E1, issue #1038). Null on the lot-agnostic row —
+     * the pre-E1 row every existing reader consumes; set on the additional per-lot rows that
+     * lot-tagged postings maintain for the lot read API.
+     */
+    @Column(name = "lot_id")
+    private UUID lotId;
 
     /** Net physical stock: sum of on-hand-affecting ledger deltas. */
     @Column(name = "on_hand", nullable = false)

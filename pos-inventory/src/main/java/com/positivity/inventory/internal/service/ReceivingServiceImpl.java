@@ -67,6 +67,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final SiteDefaultsService siteDefaultsService;
     private final WorkorderValidationService workorderValidationService;
     private final DocumentQuantityConverter documentQuantityConverter;
+    private final InventoryLotCaptureService lotCaptureService;
 
     @Value("${pos.inventory.receiving.source-document-service:}")
     private String configuredSourceDocumentService;
@@ -149,7 +150,14 @@ public class ReceivingServiceImpl implements ReceivingService {
             }
             BigDecimal expectedQty = line.getExpectedQuantity();
 
+            // odoo-parity E1 (#1038): LOT-tracked products require a lotNumber (422
+            // LOT_NUMBER_REQUIRED) and find-or-create the lot; untracked products pass
+            // through with a null lot, byte-identical to pre-E1 behavior.
+            UUID lotId = lotCaptureService.resolveReceiptLot(
+                    line.getProductId(), lineReq.getLotNumber(), parseSupplierVendorId(session.getSupplierId()));
+
             line.setReceivedQuantity(receivedQty);
+            line.setLotNumber(lineReq.getLotNumber());
             line.setDocumentUom(conversion == null ? null : conversion.documentUom());
             line.setDocumentQuantity(conversion == null ? null : conversion.documentQuantity());
             line.setConversionFactor(conversion == null ? null : conversion.conversionFactor());
@@ -162,7 +170,8 @@ public class ReceivingServiceImpl implements ReceivingService {
                 line.setStatus(ReceivingLineStatus.RECEIVED_OVER);
             }
 
-            createGoodsReceiptLedgerEntry(sessionId, line.getLineId(), line.getProductId(), receivedQty, actorUserId);
+            createGoodsReceiptLedgerEntry(
+                    sessionId, line.getLineId(), line.getProductId(), receivedQty, lotId, actorUserId);
 
             if (cmp != 0) {
                 InventoryVarianceType varianceType =
@@ -252,6 +261,10 @@ public class ReceivingServiceImpl implements ReceivingService {
         UUID crossDockLocationId = resolveCrossDockLocationId();
         int receiptQuantityAfter = calculateQuantityAfter(line.getProductId(), crossDockLocationId, quantityDelta);
 
+        // odoo-parity E1 (#1038) deliberately does NOT lot-gate cross-dock: it posts a paired
+        // GOODS_RECEIPT + GOODS_ISSUE in one transaction, and lot-aware outbound postings are
+        // the E2 story — stamping only the receipt half would strand phantom per-lot on-hand.
+        // Cross-dock entries stay lot-null until E2 wires both halves.
         InventoryLedgerEntry receiptEntry = InventoryLedgerEntry.builder()
                 .stockItemId(line.getProductId())
                 .locationId(crossDockLocationId)
@@ -338,7 +351,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     private void createGoodsReceiptLedgerEntry(
-            UUID sessionId, UUID lineId, String productId, BigDecimal quantity, String actorUserId) {
+            UUID sessionId, UUID lineId, String productId, BigDecimal quantity, UUID lotId, String actorUserId) {
         int quantityDelta = toWholeLedgerQuantity(quantity, "receivedQuantity");
         UUID stagingLocationId = resolveStagingLocationId();
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
@@ -348,6 +361,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
                 .changeInQuantity(quantityDelta)
                 .quantityAfter(calculateQuantityAfter(productId, stagingLocationId, quantityDelta))
+                .lotId(lotId)
                 .transactionUserId(actorUserId)
                 .sourceTransactionId(sessionId + ":" + lineId)
                 .notes("Receiving session " + sessionId + " line " + lineId)
@@ -355,6 +369,21 @@ public class ReceivingServiceImpl implements ReceivingService {
 
         ledgerPostingService.post(entry);
         inventoryFactPublisher.markEntry(entry);
+    }
+
+    /**
+     * Parses the session's free-text supplier reference as a vendor UUID for lot stamping
+     * (odoo-parity E1, #1038); null when the reference is absent or not a UUID.
+     */
+    private UUID parseSupplierVendorId(String supplierId) {
+        if (supplierId == null || supplierId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(supplierId.trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     private int toWholeLedgerQuantity(BigDecimal quantity, String fieldName) {
@@ -667,6 +696,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .status(line.getStatus() != null ? line.getStatus().name() : null)
                 .workorderId(line.getWorkorderId())
                 .workorderLineId(line.getWorkorderLineId())
+                .lotNumber(line.getLotNumber())
                 .documentUom(line.getDocumentUom())
                 .documentQuantity(line.getDocumentQuantity())
                 .conversionFactor(line.getConversionFactor())
