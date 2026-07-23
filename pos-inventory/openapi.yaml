@@ -40,6 +40,8 @@ tags:
   description: Cycle count submission and recount operations
 - name: Inventory Management
   description: Operations related to inventory location management
+- name: Scraps
+  description: Scrap (write-off) documents with value-threshold approval and SCRAP_OUT posting
 - name: ASN
   description: Advanced Shipping Notice and goods receipt endpoints
 - name: Putaway
@@ -206,6 +208,222 @@ paths:
         - inventory:shortage:resolve
       x-required-permissions:
       - inventory:shortage:resolve
+  /v1/inventory/scraps:
+    get:
+      tags:
+      - Scraps
+      summary: List scraps
+      description: Lists scrap documents filtered by reason, status, location, and creation-date range
+      operationId: listScraps
+      parameters:
+      - name: reasonCode
+        in: query
+        description: Filter by scrap reason
+        required: false
+        schema:
+          type: string
+          enum:
+          - DAMAGED
+          - EXPIRED
+          - LOST
+          - RECALLED
+          - CONTAMINATED
+          - WARRANTY_DESTROYED
+          - OTHER
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - AUTO_APPROVED
+          - APPROVED
+          - POSTED
+          - REJECTED
+          - FAILED
+      - name: locationId
+        in: query
+        description: Filter by location
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: createdFrom
+        in: query
+        description: Inclusive lower creation-time bound
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: createdTo
+        in: query
+        description: Inclusive upper creation-time bound
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: Scraps retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScrapResponse'
+      security:
+      - bearerAuth:
+        - inventory:scrap:view
+        - inventory:scrap:approve
+      x-required-permissions:
+      - inventory:scrap:view
+      - inventory:scrap:approve
+    post:
+      tags:
+      - Scraps
+      summary: Create scrap document
+      description: Creates a scrap (write-off) document. Below the configured value thresholds the scrap is auto-approved and posted as SCRAP_OUT in the same transaction; above them (or when no cost is derivable) it enters PENDING_APPROVAL.
+      operationId: createScrap
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScrapRequest'
+        required: true
+      responses:
+        '201':
+          description: Scrap created (AUTO_APPROVED/POSTED or PENDING_APPROVAL)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapResponse'
+        '400':
+          description: Invalid request (e.g. OTHER reason without notes)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:scrap:create, or override requested without inventory:adjustment:override
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: 'Insufficient on-hand for the auto-approved posting (SCRAP_INSUFFICIENT_STOCK): reconcile via cycle count or adjustment, or use an authorized negative-stock override'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:scrap:create
+      x-required-permissions:
+      - inventory:scrap:create
+  /v1/inventory/scraps/{scrapId}/reject:
+    post:
+      tags:
+      - Scraps
+      summary: Reject scrap
+      description: Rejects a pending scrap with a reason. No inventory changes are made.
+      operationId: rejectScrap
+      parameters:
+      - name: scrapId
+        in: path
+        description: Scrap document ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectScrapRequest'
+        required: true
+      responses:
+        '200':
+          description: Scrap rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapResponse'
+        '404':
+          description: Scrap not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Scrap is not in a rejectable state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:scrap:approve
+      x-required-permissions:
+      - inventory:scrap:approve
+  /v1/inventory/scraps/{scrapId}/approve:
+    post:
+      tags:
+      - Scraps
+      summary: Approve scrap
+      description: Approves a pending scrap and posts its SCRAP_OUT entry to the inventory ledger
+      operationId: approveScrap
+      parameters:
+      - name: scrapId
+        in: path
+        description: Scrap document ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveScrapRequest'
+        required: true
+      responses:
+        '200':
+          description: Scrap approved and posted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapResponse'
+        '403':
+          description: Missing inventory:scrap:approve, or override requested without inventory:adjustment:override
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Scrap not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Scrap is not in an approvable state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: 'Insufficient on-hand (SCRAP_INSUFFICIENT_STOCK): reconcile via cycle count or adjustment, or use an authorized negative-stock override'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:scrap:approve
+      x-required-permissions:
+      - inventory:scrap:approve
   /v1/inventory/returns/submit-to-stock:
     post:
       tags:
@@ -2342,6 +2560,41 @@ paths:
         - inventory:shortage:view
       x-required-permissions:
       - inventory:shortage:view
+  /v1/inventory/scraps/{scrapId}:
+    get:
+      tags:
+      - Scraps
+      summary: Get scrap details
+      description: Retrieves one scrap document
+      operationId: getScrap
+      parameters:
+      - name: scrapId
+        in: path
+        description: Scrap document ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Scrap found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapResponse'
+        '404':
+          description: Scrap not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:scrap:view
+        - inventory:scrap:approve
+      x-required-permissions:
+      - inventory:scrap:view
+      - inventory:scrap:approve
   /v1/inventory/returns/returnable-items:
     get:
       tags:
@@ -3852,6 +4105,206 @@ components:
       required:
       - field
       - message
+    CreateScrapRequest:
+      type: object
+      description: Request to scrap (write off) stock at a location
+      properties:
+        stockItemId:
+          type: string
+          description: SKU / stock item identifier being scrapped
+          example: OIL-5W30-5QT
+          minLength: 1
+        quantity:
+          type: integer
+          format: int32
+          description: Quantity to write off; must be positive
+          example: 3
+        locationId:
+          type: string
+          format: uuid
+          description: Location the stock is scrapped from
+          example: 96dd346a-047c-86f5-3c9a-7c8cac53da86
+        storageLocationId:
+          type: string
+          format: uuid
+          description: Bin-level storage location, when the scrap is bin-scoped
+          example: 01960004-0001-7000-8000-000000000009
+        reasonCode:
+          type: string
+          description: Scrap reason; OTHER requires notes
+          enum:
+          - DAMAGED
+          - EXPIRED
+          - LOST
+          - RECALLED
+          - CONTAMINATED
+          - WARRANTY_DESTROYED
+          - OTHER
+          example: DAMAGED
+        notes:
+          type: string
+          description: Free-text notes; mandatory when reasonCode is OTHER
+          example: Dropped during putaway, casing cracked
+          maxLength: 2000
+          minLength: 0
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder the scrapped part belonged to, when linked
+          example: 01960005-0000-7000-8000-000000000001
+        attachmentReference:
+          type: string
+          description: Photo/attachment reference (storage out of scope)
+          example: s3://scrap-evidence/2026/07/scrap-123.jpg
+          maxLength: 500
+          minLength: 0
+        shouldReplenish:
+          type: boolean
+          description: When true, posting triggers a pick-face replenishment evaluation for the SKU/location
+          example: false
+        negativeStockOverride:
+          type: boolean
+          description: Explicit negative-stock override for the auto-approve posting path; honored only when the caller holds inventory:adjustment:override
+          example: false
+      required:
+      - locationId
+      - quantity
+      - reasonCode
+      - stockItemId
+    ScrapResponse:
+      type: object
+      description: Scrap document with its approval and posting state
+      properties:
+        scrapId:
+          type: string
+          format: uuid
+          description: Scrap document identifier
+        stockItemId:
+          type: string
+          description: SKU / stock item identifier
+        quantity:
+          type: integer
+          format: int32
+          description: Quantity written off
+        locationId:
+          type: string
+          format: uuid
+          description: Location the stock is scrapped from
+        storageLocationId:
+          type: string
+          format: uuid
+          description: Bin-level storage location, when bin-scoped
+        reasonCode:
+          type: string
+          description: Scrap reason
+          enum:
+          - DAMAGED
+          - EXPIRED
+          - LOST
+          - RECALLED
+          - CONTAMINATED
+          - WARRANTY_DESTROYED
+          - OTHER
+        notes:
+          type: string
+          description: Free-text notes
+        workorderId:
+          type: string
+          format: uuid
+          description: Linked workorder, when the part was damaged during a job
+        attachmentReference:
+          type: string
+          description: Photo/attachment reference
+        unitCostSnapshot:
+          type: number
+          description: Unit cost snapshot at creation; null when unknown
+        costSource:
+          type: string
+          description: Origin of the cost snapshot (LATEST_RECEIPT or NONE)
+          enum:
+          - LATEST_RECEIPT
+          - NONE
+        scrapValue:
+          type: number
+          description: Monetary value of the scrap (quantity x cost snapshot); null when cost is unknown
+        shouldReplenish:
+          type: boolean
+          description: Whether posting triggers a pick-face replenishment evaluation
+        status:
+          type: string
+          description: Lifecycle status
+          enum:
+          - PENDING_APPROVAL
+          - AUTO_APPROVED
+          - APPROVED
+          - POSTED
+          - REJECTED
+          - FAILED
+        requiredApprovalTier:
+          type: string
+          description: Required approval tier; null when auto-approved
+          enum:
+          - TIER_1_MANAGER
+          - TIER_2_DIRECTOR
+        createdBy:
+          type: string
+          description: User who created the scrap
+        approvedBy:
+          type: string
+          description: User who approved the scrap (SYSTEM for auto-approval)
+        rejectedBy:
+          type: string
+          description: User who rejected the scrap
+        rejectionReason:
+          type: string
+          description: Reason the scrap was rejected
+        ledgerEntryId:
+          type: string
+          format: uuid
+          description: SCRAP_OUT ledger entry created when posted
+        errorMessage:
+          type: string
+          description: Error message when status is FAILED
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+        approvedAt:
+          type: string
+          format: date-time
+          description: Approval timestamp
+        rejectedAt:
+          type: string
+          format: date-time
+          description: Rejection timestamp
+        postedAt:
+          type: string
+          format: date-time
+          description: Ledger posting timestamp
+    RejectScrapRequest:
+      type: object
+      description: Request to reject a pending scrap document; no inventory changes are made
+      properties:
+        rejectionReason:
+          type: string
+          description: Reason explaining why the scrap is being rejected
+          example: Part was recovered and restocked
+          maxLength: 1000
+          minLength: 0
+      required:
+      - rejectionReason
+    ApproveScrapRequest:
+      type: object
+      description: Request to approve a pending scrap document and post it to the ledger
+      properties:
+        negativeStockOverride:
+          type: boolean
+          description: Explicit negative-stock override for the posting; honored only when the caller holds inventory:adjustment:override
+          example: false
     ReturnLineDto:
       type: object
       description: 'A single line of a return submission: item, quantity, reason and disposition location'

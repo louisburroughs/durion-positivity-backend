@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.entity;
 
+import com.positivity.inventory.internal.enums.ApprovalFlowType;
 import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
@@ -24,7 +25,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * Supports two-tier approval based on threshold values.
  */
 @Entity
-@Table(name = "approval_threshold_config")
+@Table(
+        name = "approval_threshold_config",
+        uniqueConstraints =
+                @UniqueConstraint(
+                        name = "approval_threshold_config_flow_tier_key",
+                        columnNames = {"flow_type", "approval_tier"}))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -38,10 +44,20 @@ public class ApprovalThresholdConfig {
     private UUID configId;
 
     /**
-     * Approval tier this configuration applies to.
+     * Approval workflow this configuration applies to (odoo-parity D1, issue
+     * #1030). Cycle-count adjustments and scrap documents share the table but
+     * carry independent threshold rows.
      */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, unique = true)
+    @Column(name = "flow_type", nullable = false)
+    @Builder.Default
+    private ApprovalFlowType flowType = ApprovalFlowType.CYCLE_COUNT;
+
+    /**
+     * Approval tier this configuration applies to. Unique per flow type.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private ApprovalTier approvalTier;
 
     /**

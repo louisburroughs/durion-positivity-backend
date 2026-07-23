@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -404,6 +405,40 @@ public interface InventoryLedgerEntryRepository
                         ORDER BY e.timestamp ASC, e.ledgerEntryId ASC
                         """)
     List<String> findUnitsOfMeasureByStockItem(@Param("stockItemId") String stockItemId, Pageable pageable);
+
+    // ─── Scrap cost snapshot (odoo-parity D1, #1030; ADR-0048 interim rule) ───
+
+    /**
+     * Latest non-null unit costs recorded for one stock item and event type,
+     * newest first; pass a page of size 1. Interim scrap cost source: the most
+     * recent {@code GOODS_RECEIPT} cost (odoo-parity J1 replaces this).
+     */
+    @Query("""
+                        SELECT e.unitCost
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.eventType = :eventType
+                          AND e.unitCost IS NOT NULL
+                        ORDER BY e.timestamp DESC, e.ledgerEntryId DESC
+                        """)
+    List<BigDecimal> findLatestUnitCostByStockItemAndEventType(
+            @Param("stockItemId") String stockItemId,
+            @Param("eventType") InventoryLedgerEventType eventType,
+            Pageable pageable);
+
+    /**
+     * Latest non-null unit cost of any ledger entry for one stock item, newest
+     * first; pass a page of size 1. Fallback for the scrap cost snapshot when
+     * the SKU has no costed receipt.
+     */
+    @Query("""
+                        SELECT e.unitCost
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.unitCost IS NOT NULL
+                        ORDER BY e.timestamp DESC, e.ledgerEntryId DESC
+                        """)
+    List<BigDecimal> findLatestUnitCostByStockItem(@Param("stockItemId") String stockItemId, Pageable pageable);
 
     /** Location-scoped variant of {@link #findUnitsOfMeasureByStockItem}. */
     @Query("""

@@ -30,6 +30,14 @@ public final class EventTypes {
                                 "INVENTORY_CYCLE_COUNT_ADJUSTMENT_REJECT", "Reject a pending cycle count adjustment")
                         .build(),
 
+                // ScrapController - 3 events (odoo-parity D1, #1030)
+                EventTypeRegistration.write("INVENTORY_SCRAP_CREATE", "Create a scrap (write-off) document")
+                        .build(),
+                EventTypeRegistration.approval("INVENTORY_SCRAP_APPROVE", "Approve a pending scrap document")
+                        .build(),
+                EventTypeRegistration.approval("INVENTORY_SCRAP_REJECT", "Reject a pending scrap document")
+                        .build(),
+
                 // CycleCountController - 2 events
                 EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_SUBMIT", "Submit a count for a cycle count task")
                         .build(),

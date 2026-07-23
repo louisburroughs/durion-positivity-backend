@@ -7,6 +7,7 @@ import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
 import com.positivity.domainevents.inventory.LeadTimeUpdatedV1;
 import com.positivity.domainevents.inventory.PickListUpdatedV1;
 import com.positivity.domainevents.inventory.PickTaskUpdatedV1;
+import com.positivity.domainevents.inventory.ScrapPostedV1;
 import com.positivity.domainevents.inventory.StorageLocationOnHandUpdatedV1;
 import com.positivity.inventory.internal.config.OutboxEventWriter;
 import com.positivity.inventory.internal.dto.AvailabilityView;
@@ -154,6 +155,19 @@ public class InventoryFactPublisher {
         pending.expectedSupplyDrops.add(fact);
     }
 
+    /**
+     * Record a scrap-posted occurrence fact (odoo-parity D1, issue #1030): a scrap document's
+     * {@code SCRAP_OUT} entry reached the ledger. Queued as-is — this is an occurrence, not a
+     * snapshot, and is never re-emitted. pos-accounting consumes it for shrinkage GL posting.
+     */
+    public void recordScrapPosted(@NonNull ScrapPostedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.scrapPosts.add(fact);
+    }
+
     private @Nullable Pending pending() {
         if (outboxEventWriter.getIfAvailable() == null
                 || !TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -299,6 +313,13 @@ public class InventoryFactPublisher {
                 log.warn("Skipping expected-supply-dropped fact for {}: {}", drop.poId(), e.getMessage());
             }
         }
+        for (ScrapPostedV1 scrapPost : pending.scrapPosts) {
+            try {
+                publish(writer, ScrapPostedV1.EVENT_TYPE, ScrapPostedV1.SCHEMA_VERSION, scrapPost.scrapId(), scrapPost);
+            } catch (Exception e) {
+                log.warn("Skipping scrap-posted fact for {}: {}", scrapPost.scrapId(), e.getMessage());
+            }
+        }
         for (UUID productId : pending.leadTimeProductIds) {
             try {
                 LeadTimeView view = inventoryLeadTimeService.queryLeadTime(productId, null, null);
@@ -361,5 +382,6 @@ public class InventoryFactPublisher {
         private final Set<UUID> pickTaskIds = new LinkedHashSet<>();
         private final List<ConsumptionRecordedV1> consumptions = new ArrayList<>();
         private final List<ExpectedSupplyDroppedV1> expectedSupplyDrops = new ArrayList<>();
+        private final List<ScrapPostedV1> scrapPosts = new ArrayList<>();
     }
 }

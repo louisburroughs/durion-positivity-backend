@@ -29,6 +29,9 @@ import com.positivity.inventory.internal.exception.RecountLimitExceededException
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
 import com.positivity.inventory.internal.exception.RollupExpansionTooLargeException;
+import com.positivity.inventory.internal.exception.ScrapInsufficientStockException;
+import com.positivity.inventory.internal.exception.ScrapLedgerPostingException;
+import com.positivity.inventory.internal.exception.ScrapNotFoundException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
@@ -204,6 +207,23 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(AdjustmentLedgerPostingException.class)
     public ResponseEntity<ApiError> handleAdjustmentLedgerPosting(AdjustmentLedgerPostingException ex) {
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "ADJUSTMENT_LEDGER_POST_FAILED", ex.getMessage());
+    }
+
+    @ExceptionHandler(ScrapNotFoundException.class)
+    public ResponseEntity<ApiError> handleScrapNotFound(ScrapNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(ScrapInsufficientStockException.class)
+    public ResponseEntity<ApiError> handleScrapInsufficientStock(ScrapInsufficientStockException ex) {
+        // odoo-parity D1 (#1030): guided-reconciliation 422 mirroring the putaway
+        // source-on-hand rule (docs/putaway-validation-rules.md).
+        return build(HttpStatus.valueOf(422), ScrapInsufficientStockException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(ScrapLedgerPostingException.class)
+    public ResponseEntity<ApiError> handleScrapLedgerPosting(ScrapLedgerPostingException ex) {
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "SCRAP_LEDGER_POST_FAILED", ex.getMessage());
     }
 
     @ExceptionHandler({
