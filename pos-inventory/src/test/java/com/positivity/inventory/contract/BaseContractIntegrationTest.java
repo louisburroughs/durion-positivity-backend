@@ -57,7 +57,11 @@ public abstract class BaseContractIntegrationTest {
                                 "inventory:replenishment:manage",
                                 "inventory:scrap:create",
                                 "inventory:scrap:view",
-                                "inventory:scrap:approve"));
+                                "inventory:scrap:approve",
+                                "inventory:transfer:create",
+                                "inventory:transfer:view",
+                                "inventory:transfer:dispatch",
+                                "inventory:transfer:receive"));
     }
 
     protected MockHttpServletRequestBuilder withApproveOnlyAuth(MockHttpServletRequestBuilder requestBuilder) {

@@ -516,13 +516,19 @@ public enum PermissionCode {
     // ── Inventory (new) ────────────────────────────────────────────────────────
     INVENTORY__SCRAP__APPROVE(394, "inventory:scrap:approve"),
     INVENTORY__SCRAP__CREATE(395, "inventory:scrap:create"),
-    INVENTORY__SCRAP__VIEW(396, "inventory:scrap:view");
+    INVENTORY__SCRAP__VIEW(396, "inventory:scrap:view"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__TRANSFER__CREATE(397, "inventory:transfer:create"),
+    INVENTORY__TRANSFER__DISPATCH(398, "inventory:transfer:dispatch"),
+    INVENTORY__TRANSFER__RECEIVE(399, "inventory:transfer:receive"),
+    INVENTORY__TRANSFER__SHORT_CLOSE(400, "inventory:transfer:short_close"),
+    INVENTORY__TRANSFER__VIEW(401, "inventory:transfer:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 30;
+    public static final int CATALOG_VERSION = 31;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

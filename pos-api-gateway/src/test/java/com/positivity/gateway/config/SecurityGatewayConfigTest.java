@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 30")
+    @DisplayName("CATALOG_VERSION is 31")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(30);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(31);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 396")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 401")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1225,8 +1225,14 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(394)).isEqualTo("PERM_inventory:scrap:approve");
         assertThat(GatewayPermissionCatalog.authorityForBit(395)).isEqualTo("PERM_inventory:scrap:create");
         assertThat(GatewayPermissionCatalog.authorityForBit(396)).isEqualTo("PERM_inventory:scrap:view");
+        // catalog v31 (#1035/#1036/inventory wave-3): transfer-order authorities appended (bits 397-401)
+        assertThat(GatewayPermissionCatalog.authorityForBit(397)).isEqualTo("PERM_inventory:transfer:create");
+        assertThat(GatewayPermissionCatalog.authorityForBit(398)).isEqualTo("PERM_inventory:transfer:dispatch");
+        assertThat(GatewayPermissionCatalog.authorityForBit(399)).isEqualTo("PERM_inventory:transfer:receive");
+        assertThat(GatewayPermissionCatalog.authorityForBit(400)).isEqualTo("PERM_inventory:transfer:short_close");
+        assertThat(GatewayPermissionCatalog.authorityForBit(401)).isEqualTo("PERM_inventory:transfer:view");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(397)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(402)).isNull();
     }
 
     @Test

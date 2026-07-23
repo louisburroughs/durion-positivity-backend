@@ -35,6 +35,8 @@ import com.positivity.inventory.internal.exception.ScrapNotFoundException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
+import com.positivity.inventory.internal.exception.TransferLocationNotEligibleException;
+import com.positivity.inventory.internal.exception.TransferOrderNotFoundException;
 import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
@@ -207,6 +209,18 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(AdjustmentLedgerPostingException.class)
     public ResponseEntity<ApiError> handleAdjustmentLedgerPosting(AdjustmentLedgerPostingException ex) {
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "ADJUSTMENT_LEDGER_POST_FAILED", ex.getMessage());
+    }
+
+    @ExceptionHandler(TransferOrderNotFoundException.class)
+    public ResponseEntity<ApiError> handleTransferOrderNotFound(TransferOrderNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(TransferLocationNotEligibleException.class)
+    public ResponseEntity<ApiError> handleTransferLocationNotEligible(TransferLocationNotEligibleException ex) {
+        // odoo-parity C1/C5 (#1035): deterministic 422 for movement-ineligible sites
+        // (DECISION-INVENTORY-009: INACTIVE/PENDING blocked for movement).
+        return build(HttpStatus.valueOf(422), TransferLocationNotEligibleException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(ScrapNotFoundException.class)

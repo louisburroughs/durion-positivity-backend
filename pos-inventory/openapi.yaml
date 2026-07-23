@@ -40,6 +40,8 @@ tags:
   description: Cycle count submission and recount operations
 - name: Inventory Management
   description: Operations related to inventory location management
+- name: Transfer Orders
+  description: Cross-site transfer orders with in-transit tracking
 - name: Scraps
   description: Scrap (write-off) documents with value-threshold approval and SCRAP_OUT posting
 - name: ASN
@@ -320,6 +322,194 @@ paths:
         - inventory:cycle_count:complete
       x-required-permissions:
       - inventory:cycle_count:complete
+  /v1/inventory/transfer-orders:
+    get:
+      tags:
+      - Transfer Orders
+      summary: List transfer orders
+      description: Lists transfer orders filtered by status, source site, and destination site
+      operationId: listTransferOrders
+      parameters:
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - APPROVED
+          - DISPATCHED
+          - PARTIALLY_RECEIVED
+          - RECEIVED
+          - SHORT_CLOSED
+          - CANCELLED
+      - name: sourceLocationId
+        in: query
+        description: Filter by source site
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: destinationLocationId
+        in: query
+        description: Filter by destination site
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Transfer orders retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TransferOrderResponse'
+      security:
+      - bearerAuth:
+        - inventory:transfer:view
+      x-required-permissions:
+      - inventory:transfer:view
+    post:
+      tags:
+      - Transfer Orders
+      summary: Create transfer order
+      description: Creates a cross-site transfer order in DRAFT. Source and destination must be different sites, both ACTIVE in the location roster (DECISION-INVENTORY-009), with at least one positive-quantity line.
+      operationId: createTransferOrder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransferOrderRequest'
+        required: true
+      responses:
+        '201':
+          description: Transfer order created in DRAFT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '400':
+          description: Invalid request (same source and destination site, empty lines, non-positive quantity, or a storage location outside its site)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:transfer:create
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Source or destination site is not in the location roster
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: 'Source or destination site is not eligible for movement (TRANSFER_LOCATION_NOT_ELIGIBLE: INACTIVE/PENDING per DECISION-INVENTORY-009)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:create
+      x-required-permissions:
+      - inventory:transfer:create
+  /v1/inventory/transfer-orders/{transferOrderId}/cancel:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Cancel transfer order
+      description: 'Cancels a transfer order before dispatch (DRAFT/APPROVED to CANCELLED). After dispatch the stock has physically moved: cancellation returns 409 and discrepancies resolve via short-close (parity-C3).'
+      operationId: cancelTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Transfer order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '403':
+          description: Missing inventory:transfer:create
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Order already dispatched (or terminal) — cancellation is only allowed before dispatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:create
+      x-required-permissions:
+      - inventory:transfer:create
+  /v1/inventory/transfer-orders/{transferOrderId}/approve:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Approve transfer order
+      description: Approves a DRAFT transfer order (DRAFT to APPROVED). Only available when pos.inventory.transfer.approval-required=true; with the flag off (default), DRAFT orders dispatch directly and this endpoint returns 409 (decision D-8).
+      operationId: approveTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Transfer order approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '403':
+          description: Missing inventory:transfer:dispatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Approval step disabled, or order is not in DRAFT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:dispatch
+      x-required-permissions:
+      - inventory:transfer:dispatch
   /v1/inventory/stock-movements:
     post:
       tags:
@@ -2589,6 +2779,39 @@ paths:
         - inventory:pick_list:execute
       x-required-permissions:
       - inventory:pick_list:execute
+  /v1/inventory/transfer-orders/{transferOrderId}:
+    get:
+      tags:
+      - Transfer Orders
+      summary: Get transfer order
+      description: Retrieves one transfer order with its lines
+      operationId: getTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Transfer order found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:view
+      x-required-permissions:
+      - inventory:transfer:view
   /v1/inventory/sync-logs:
     get:
       tags:
@@ -4404,6 +4627,221 @@ components:
       - scheduledDate
       - status
       - updatedAt
+    CreateTransferOrderRequest:
+      type: object
+      description: Request to create a cross-site transfer order in DRAFT
+      properties:
+        sourceLocationId:
+          type: string
+          format: uuid
+          description: Source site the transfer ships from
+          example: 01960004-0001-7000-8000-00000000000a
+        sourceStorageLocationId:
+          type: string
+          format: uuid
+          description: Optional bin-level source storage location under the source site
+          example: 01960004-0001-7000-8000-00000000000b
+        destinationLocationId:
+          type: string
+          format: uuid
+          description: Destination site the transfer ships to
+          example: 01960004-0001-7000-8000-00000000000c
+        destinationStorageLocationId:
+          type: string
+          format: uuid
+          description: Optional bin-level destination storage location under the destination site
+          example: 01960004-0001-7000-8000-00000000000d
+        lines:
+          type: array
+          description: Requested SKU lines; at least one
+          items:
+            $ref: '#/components/schemas/TransferOrderLineRequest'
+          minItems: 1
+        notes:
+          type: string
+          description: Free-text notes
+          example: Weekly resupply run
+          maxLength: 2000
+          minLength: 0
+      required:
+      - destinationLocationId
+      - lines
+      - sourceLocationId
+    TransferOrderLineRequest:
+      type: object
+      description: Requested SKU line of a transfer order
+      properties:
+        sku:
+          type: string
+          description: SKU / stock item identifier to transfer
+          example: OIL-5W30-5QT
+          minLength: 1
+        requestedQty:
+          type: integer
+          format: int32
+          description: Quantity requested for transfer; must be positive
+          example: 6
+      required:
+      - requestedQty
+      - sku
+    ApiError:
+      type: object
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code
+          example: 404
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+        correlationId:
+          type: string
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          items:
+            $ref: '#/components/schemas/FieldError'
+        referenceId:
+          type: string
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+        nextAction:
+          type: string
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+        supportAction:
+          type: string
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
+      required:
+      - field
+      - message
+    TransferOrderLineResponse:
+      type: object
+      description: SKU line of a transfer order with requested/dispatched/received quantities
+      properties:
+        lineId:
+          type: string
+          format: uuid
+          description: Line identifier
+        lineNumber:
+          type: integer
+          format: int32
+          description: Position of the line within the order (1-based)
+        sku:
+          type: string
+          description: SKU / stock item identifier
+        requestedQty:
+          type: integer
+          format: int32
+          description: Quantity requested for transfer
+        dispatchedQty:
+          type: integer
+          format: int32
+          description: Quantity dispatched from the source so far
+        receivedQty:
+          type: integer
+          format: int32
+          description: Quantity received at the destination so far
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    TransferOrderResponse:
+      type: object
+      description: Cross-site transfer order with lifecycle status and quantity lines
+      properties:
+        transferOrderId:
+          type: string
+          format: uuid
+          description: Transfer order identifier
+        sourceLocationId:
+          type: string
+          format: uuid
+          description: Source site the transfer ships from
+        sourceStorageLocationId:
+          type: string
+          format: uuid
+          description: Bin-level source storage location, when bin-scoped
+        destinationLocationId:
+          type: string
+          format: uuid
+          description: Destination site the transfer ships to
+        destinationStorageLocationId:
+          type: string
+          format: uuid
+          description: Bin-level destination storage location, when bin-scoped
+        status:
+          type: string
+          description: Lifecycle status
+          enum:
+          - DRAFT
+          - APPROVED
+          - DISPATCHED
+          - PARTIALLY_RECEIVED
+          - RECEIVED
+          - SHORT_CLOSED
+          - CANCELLED
+        lines:
+          type: array
+          description: SKU lines
+          items:
+            $ref: '#/components/schemas/TransferOrderLineResponse'
+        notes:
+          type: string
+          description: Free-text notes
+        createdBy:
+          type: string
+          description: User who created the order
+        approvedBy:
+          type: string
+          description: User who approved the order, when the approval step is enabled
+        dispatchedBy:
+          type: string
+          description: User who dispatched the order
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
     RecordMovementRequest:
       type: object
       description: Request body for recording a directional stock movement in the inventory ledger
@@ -4509,69 +4947,6 @@ components:
       - resolution
       - resolvedAt
       - status
-    ApiError:
-      type: object
-      description: Standard error response envelope returned by all Durion backend APIs
-      properties:
-        code:
-          type: string
-          description: Machine-readable error code
-          example: ORDER_NOT_FOUND
-        message:
-          type: string
-          description: Human-readable error message
-          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
-        status:
-          type: integer
-          format: int32
-          description: HTTP status code
-          example: 404
-        timestamp:
-          type: string
-          description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
-        correlationId:
-          type: string
-          description: Unique correlation ID for distributed request tracing
-          example: 550e8400-e29b-41d4-a716-446655440000
-        fieldErrors:
-          type: array
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
-          items:
-            $ref: '#/components/schemas/FieldError'
-        referenceId:
-          type: string
-          description: Workflow or review-case reference identifier, when applicable
-          example: REVIEW-2026-000123
-        nextAction:
-          type: string
-          description: Recommended next step for the caller, when applicable
-          example: Retry the request with a valid quantity
-        supportAction:
-          type: string
-          description: Support or admin investigation guidance, when applicable
-          example: Contact support with the correlation ID for assistance
-      required:
-      - code
-      - correlationId
-      - message
-      - status
-      - timestamp
-    FieldError:
-      type: object
-      description: Validation error for a specific request field
-      properties:
-        field:
-          type: string
-          description: Field name
-          example: quantity
-        message:
-          type: string
-          description: Validation failure message
-          example: must be greater than 0
-      required:
-      - field
-      - message
     CreateScrapRequest:
       type: object
       description: Request to scrap (write off) stock at a location

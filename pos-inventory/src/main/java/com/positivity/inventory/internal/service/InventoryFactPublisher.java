@@ -9,6 +9,7 @@ import com.positivity.domainevents.inventory.PickListUpdatedV1;
 import com.positivity.domainevents.inventory.PickTaskUpdatedV1;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
 import com.positivity.domainevents.inventory.StorageLocationOnHandUpdatedV1;
+import com.positivity.domainevents.inventory.TransferOrderUpdatedV1;
 import com.positivity.inventory.internal.config.OutboxEventWriter;
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LeadTimeView;
@@ -168,6 +169,19 @@ public class InventoryFactPublisher {
         pending.scrapPosts.add(fact);
     }
 
+    /**
+     * Record a transfer-order lifecycle occurrence fact (odoo-parity C1, issue #1035): one fact
+     * per state change (create, approve, dispatch, receive, short-close, cancel). Queued as-is —
+     * this is an occurrence, not a snapshot, and is never re-emitted.
+     */
+    public void recordTransferOrderUpdated(@NonNull TransferOrderUpdatedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.transferOrderUpdates.add(fact);
+    }
+
     private @Nullable Pending pending() {
         if (outboxEventWriter.getIfAvailable() == null
                 || !TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -320,6 +334,18 @@ public class InventoryFactPublisher {
                 log.warn("Skipping scrap-posted fact for {}: {}", scrapPost.scrapId(), e.getMessage());
             }
         }
+        for (TransferOrderUpdatedV1 transferUpdate : pending.transferOrderUpdates) {
+            try {
+                publish(
+                        writer,
+                        TransferOrderUpdatedV1.EVENT_TYPE,
+                        TransferOrderUpdatedV1.SCHEMA_VERSION,
+                        transferUpdate.transferOrderId(),
+                        transferUpdate);
+            } catch (Exception e) {
+                log.warn("Skipping transfer-order fact for {}: {}", transferUpdate.transferOrderId(), e.getMessage());
+            }
+        }
         for (UUID productId : pending.leadTimeProductIds) {
             try {
                 LeadTimeView view = inventoryLeadTimeService.queryLeadTime(productId, null, null);
@@ -383,5 +409,6 @@ public class InventoryFactPublisher {
         private final List<ConsumptionRecordedV1> consumptions = new ArrayList<>();
         private final List<ExpectedSupplyDroppedV1> expectedSupplyDrops = new ArrayList<>();
         private final List<ScrapPostedV1> scrapPosts = new ArrayList<>();
+        private final List<TransferOrderUpdatedV1> transferOrderUpdates = new ArrayList<>();
     }
 }
