@@ -5,6 +5,7 @@ import com.positivity.invoice.internal.entity.DepositCreditApplication;
 import com.positivity.invoice.internal.enums.DepositCreditStatus;
 import com.positivity.invoice.internal.enums.DepositSourceType;
 import com.positivity.invoice.internal.exception.DepositCreditNotFoundException;
+import com.positivity.invoice.internal.repository.DepositCreditApplicationRepository;
 import com.positivity.invoice.internal.repository.DepositCreditRepository;
 import com.positivity.invoice.service.DepositCreditService;
 import com.positivity.invoice.service.model.CreateDepositCommand;
@@ -14,6 +15,7 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +38,7 @@ public class DepositCreditServiceImpl implements DepositCreditService {
             List.of(DepositCreditStatus.AVAILABLE, DepositCreditStatus.PARTIALLY_APPLIED);
 
     private final DepositCreditRepository depositCreditRepository;
+    private final DepositCreditApplicationRepository depositCreditApplicationRepository;
     private final Clock clock;
 
     @Override
@@ -91,14 +94,16 @@ public class DepositCreditServiceImpl implements DepositCreditService {
         BigDecimal appliedTotal = zero();
         List<DepositCredit> credits = depositCreditRepository.findBySourceTypeAndSourceIdAndStatusInOrderByCreatedAtAsc(
                 sourceType, sourceId, DRAWABLE_STATUSES);
+        // One query for the credits already applied to this invoice — no per-credit lazy load of
+        // the applications collection (Copilot #1093 review: avoids N+1).
+        Set<UUID> alreadyAppliedToInvoice =
+                depositCreditApplicationRepository.findDepositCreditIdsByInvoiceId(invoiceId);
         for (DepositCredit credit : credits) {
             if (remaining.signum() <= 0) {
                 break;
             }
             // Idempotent per (credit, invoice): a credit already applied to this invoice is skipped.
-            boolean alreadyApplied =
-                    credit.getApplications().stream().anyMatch(a -> invoiceId.equals(a.getInvoiceId()));
-            if (alreadyApplied) {
+            if (alreadyAppliedToInvoice.contains(credit.getDepositCreditId())) {
                 continue;
             }
             BigDecimal drawable = credit.getRemainingBalance().min(remaining);

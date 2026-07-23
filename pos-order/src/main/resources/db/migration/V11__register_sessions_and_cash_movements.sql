@@ -26,10 +26,12 @@ CREATE TABLE register_session (
   updated_at TIMESTAMPTZ NOT NULL
 );
 
--- One OPEN session per terminal (R6.1): a partial unique index lets closed history accumulate.
-CREATE UNIQUE INDEX ux_register_session_one_open_per_terminal
+-- One ACTIVE session per terminal (R6.1): OPEN or CLOSING both hold the drawer, so the partial
+-- unique index covers everything except CLOSED (which accumulates as history). A CLOSING session
+-- being counted must still block a second session on the terminal.
+CREATE UNIQUE INDEX ux_register_session_one_active_per_terminal
   ON register_session (terminal_id)
-  WHERE status = 'OPEN';
+  WHERE status <> 'CLOSED';
 
 CREATE INDEX ix_register_session_terminal ON register_session (terminal_id);
 

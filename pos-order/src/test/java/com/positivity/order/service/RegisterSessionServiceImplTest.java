@@ -3,6 +3,7 @@ package com.positivity.order.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -127,8 +128,8 @@ class RegisterSessionServiceImplTest {
     @Test
     @DisplayName("RSS-001: opening a session with no prior close defaults float to zero")
     void open_defaultsFloatToZero() {
-        when(registerSessionRepository.findFirstByTerminalIdAndStatus(TERMINAL, RegisterSessionStatus.OPEN))
-                .thenReturn(Optional.empty());
+        when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                .thenReturn(false);
         when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
                 .thenReturn(Optional.empty());
         when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -146,8 +147,8 @@ class RegisterSessionServiceImplTest {
         RegisterSession prior = openSession(UUID.randomUUID());
         prior.setStatus(RegisterSessionStatus.CLOSED);
         prior.setCountedCash(new BigDecimal("275.5000"));
-        when(registerSessionRepository.findFirstByTerminalIdAndStatus(TERMINAL, RegisterSessionStatus.OPEN))
-                .thenReturn(Optional.empty());
+        when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                .thenReturn(false);
         when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
                 .thenReturn(Optional.of(prior));
         when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -161,8 +162,20 @@ class RegisterSessionServiceImplTest {
     @Test
     @DisplayName("RSS-003: a second open on the same terminal is a 409 conflict")
     void open_secondOpenConflicts() {
-        when(registerSessionRepository.findFirstByTerminalIdAndStatus(TERMINAL, RegisterSessionStatus.OPEN))
-                .thenReturn(Optional.of(openSession(UUID.randomUUID())));
+        when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION, null, "clerk-1")))
+                .isInstanceOf(RegisterSessionConflictException.class);
+        verify(registerSessionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("RSS-003b: a CLOSING session on the terminal also blocks a new open")
+    void open_blockedByClosingSession() {
+        // existsByTerminalIdAndStatusIn covers OPEN and CLOSING; a session mid-close still holds it.
+        when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                .thenReturn(true);
 
         assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, LOCATION, null, "clerk-1")))
                 .isInstanceOf(RegisterSessionConflictException.class);

@@ -154,6 +154,27 @@ class SalesOrderServiceImplTest {
      * subtotal.
      */
     @Test
+    void createCart_whenTerminalSessionClosing_thenRejected() {
+        // Copilot #1093: a terminal being counted at close is frozen — no new orders.
+        when(registerSessionRepository.findFirstByTerminalIdAndStatus(
+                        "terminal-001", com.positivity.order.internal.entity.RegisterSessionStatus.CLOSING))
+                .thenReturn(java.util.Optional.of(com.positivity.order.internal.entity.RegisterSession.builder()
+                        .sessionId(UUID.randomUUID())
+                        .build()));
+
+        assertThatThrownBy(() -> createCart("clerk-001", "terminal-001", null, null))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void createCart_whenDepositSourcePairIncomplete_thenRejected() {
+        // Copilot #1093: deposit provenance is all-or-nothing.
+        assertThatThrownBy(() -> salesOrderService.createCart(new CreateCartCommand(
+                        "clerk-001", "terminal-001", null, null, TEST_LOCATION, null, null, null, "WORKORDER", null)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void createCart_whenCalledWithClerkAndTerminal_thenReturnsOrderWithDraftStatus() {
         // given
         UUID expectedOrderId = UUID.randomUUID();

@@ -53,6 +53,8 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
     private static final String CASH = "CASH";
     private static final String CURRENCY = "USD";
+    private static final List<RegisterSessionStatus> ACTIVE_STATUSES =
+            List.of(RegisterSessionStatus.OPEN, RegisterSessionStatus.CLOSING);
 
     private final RegisterSessionRepository registerSessionRepository;
     private final CashMovementRepository cashMovementRepository;
@@ -68,12 +70,12 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     @Override
     @Transactional
     public @NonNull RegisterSessionSummary openSession(@NonNull OpenSessionCommand command) {
-        registerSessionRepository
-                .findFirstByTerminalIdAndStatus(command.terminalId(), RegisterSessionStatus.OPEN)
-                .ifPresent(existing -> {
-                    throw new RegisterSessionConflictException(
-                            "Terminal " + command.terminalId() + " already has an open register session");
-                });
+        // Block while an OPEN *or* CLOSING session owns the terminal: a session being counted at
+        // close still holds the drawer (the DB partial index covers only OPEN).
+        if (registerSessionRepository.existsByTerminalIdAndStatusIn(command.terminalId(), ACTIVE_STATUSES)) {
+            throw new RegisterSessionConflictException(
+                    "Terminal " + command.terminalId() + " already has an active register session (OPEN or CLOSING)");
+        }
 
         BigDecimal openingFloat = command.openingFloat() != null
                 ? scale(command.openingFloat())

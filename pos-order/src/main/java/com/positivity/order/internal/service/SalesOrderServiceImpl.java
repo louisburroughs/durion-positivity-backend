@@ -98,8 +98,23 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         UUID vehicleId = parseReference(command.vehicleId(), "vehicleId");
         CustomerValidationStatus validationStatus = validateCustomerAndVehicle(customerId, vehicleId);
 
+        // Story E4: deposit provenance is all-or-nothing — reject a half-specified source pair
+        // (Copilot #1093 review) so an order never carries incomplete deposit provenance.
+        String depositSourceType = normalizeBlank(command.depositSourceType());
+        if ((depositSourceType == null) != (command.depositSourceId() == null)) {
+            throw new IllegalArgumentException(
+                    "depositSourceType and depositSourceId must be provided together for a deposit take");
+        }
+
         // Story G1: orders created while a session is open on the terminal bind to it, and the
-        // session supplies the location when the caller did not (A2's param is the fallback).
+        // session supplies the location when the caller did not (A2's param is the fallback). A
+        // terminal being counted at close (CLOSING) is frozen — no new orders (Copilot #1093 review).
+        if (registerSessionRepository
+                .findFirstByTerminalIdAndStatus(command.terminalId(), RegisterSessionStatus.CLOSING)
+                .isPresent()) {
+            throw new IllegalStateException("Terminal " + command.terminalId()
+                    + " has a register session being closed; no new orders until the close completes");
+        }
         RegisterSession openSession = registerSessionRepository
                 .findFirstByTerminalIdAndStatus(command.terminalId(), RegisterSessionStatus.OPEN)
                 .orElse(null);
@@ -121,7 +136,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 .clerkId(command.clerkId())
                 .terminalId(command.terminalId())
                 .sessionId(sessionId)
-                .depositSourceType(normalizeBlank(command.depositSourceType()))
+                .depositSourceType(depositSourceType)
                 .depositSourceId(command.depositSourceId())
                 .customerId(customerId)
                 .vehicleId(vehicleId)

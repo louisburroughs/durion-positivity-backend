@@ -47,11 +47,14 @@ class DepositCreditServiceImplTest {
     @Mock
     private DepositCreditRepository repository;
 
+    @Mock
+    private com.positivity.invoice.internal.repository.DepositCreditApplicationRepository applicationRepository;
+
     private DepositCreditServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new DepositCreditServiceImpl(repository, CLOCK);
+        service = new DepositCreditServiceImpl(repository, applicationRepository, CLOCK);
     }
 
     private static DepositCredit credit(UUID id, String remaining, DepositCreditStatus status) {
@@ -106,6 +109,7 @@ class DepositCreditServiceImplTest {
         when(repository.findBySourceTypeAndSourceIdAndStatusInOrderByCreatedAtAsc(
                         eq(DepositSourceType.WORKORDER), eq(WORKORDER_ID), any()))
                 .thenReturn(List.of(c));
+        when(applicationRepository.findDepositCreditIdsByInvoiceId(INVOICE_ID)).thenReturn(java.util.Set.of());
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         BigDecimal applied = service.applyAvailableCredits(
@@ -129,6 +133,7 @@ class DepositCreditServiceImplTest {
         when(repository.findBySourceTypeAndSourceIdAndStatusInOrderByCreatedAtAsc(
                         eq(DepositSourceType.WORKORDER), eq(WORKORDER_ID), any()))
                 .thenReturn(List.of(older, newer));
+        when(applicationRepository.findDepositCreditIdsByInvoiceId(INVOICE_ID)).thenReturn(java.util.Set.of());
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // invoice 150: older fully consumed (100), newer partially (50)
@@ -145,14 +150,13 @@ class DepositCreditServiceImplTest {
     @Test
     @DisplayName("DCS-005: a credit already applied to an invoice is not applied again")
     void apply_idempotentPerInvoice() {
-        DepositCredit c = credit(UUID.randomUUID(), "80.0000", DepositCreditStatus.PARTIALLY_APPLIED);
-        c.addApplication(com.positivity.invoice.internal.entity.DepositCreditApplication.builder()
-                .invoiceId(INVOICE_ID)
-                .amountApplied(new BigDecimal("120.0000"))
-                .build());
+        UUID creditId = UUID.fromString("00000000-0000-0000-0000-0000000000e9");
+        DepositCredit c = credit(creditId, "80.0000", DepositCreditStatus.PARTIALLY_APPLIED);
         when(repository.findBySourceTypeAndSourceIdAndStatusInOrderByCreatedAtAsc(
                         eq(DepositSourceType.WORKORDER), eq(WORKORDER_ID), any()))
                 .thenReturn(List.of(c));
+        // Single-query idempotency: this credit was already applied to the invoice.
+        when(applicationRepository.findDepositCreditIdsByInvoiceId(INVOICE_ID)).thenReturn(java.util.Set.of(creditId));
 
         BigDecimal applied = service.applyAvailableCredits(
                 DepositSourceType.WORKORDER, WORKORDER_ID, INVOICE_ID, new BigDecimal("50.00"));
