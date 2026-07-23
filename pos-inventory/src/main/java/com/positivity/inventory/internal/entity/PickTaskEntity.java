@@ -69,6 +69,25 @@ public class PickTaskEntity {
     @Column(name = "sourcing_reason", length = 32)
     private SourcingStrategy sourcingReason;
 
+    /**
+     * Advisory lot suggestion for LOT-tracked SKUs (odoo-parity E2, issue #1042): FIFO by lot
+     * {@code receivedAt} over the ACTIVE lots with positive per-lot on-hand at
+     * {@code suggestedLocationId}, stamped at generation. Confirm may override with any valid
+     * ACTIVE lot — {@code pickedLotId} records what was actually keyed. Null for untracked
+     * SKUs and when no lot has stock at the suggested location. E3 upgrades the ordering to
+     * FEFO via the {@code LotExpiryProvider} SPI.
+     */
+    @Column(name = "suggested_lot_number", length = 128)
+    private String suggestedLotNumber;
+
+    /**
+     * Lot actually keyed at pick confirmation for LOT-tracked SKUs (odoo-parity E2, issue
+     * #1042); the consumption flow stamps this lot on its {@code WORKORDER_CONSUMPTION}
+     * posting. Null for untracked SKUs and on tasks confirmed before E2.
+     */
+    @Column(name = "picked_lot_id")
+    private UUID pickedLotId;
+
     @Column(name = "sort_order", nullable = false)
     @Builder.Default
     private int sortOrder = 0;

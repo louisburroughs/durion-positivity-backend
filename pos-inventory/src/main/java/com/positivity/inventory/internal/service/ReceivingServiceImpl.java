@@ -261,10 +261,21 @@ public class ReceivingServiceImpl implements ReceivingService {
         UUID crossDockLocationId = resolveCrossDockLocationId();
         int receiptQuantityAfter = calculateQuantityAfter(line.getProductId(), crossDockLocationId, quantityDelta);
 
-        // odoo-parity E1 (#1038) deliberately does NOT lot-gate cross-dock: it posts a paired
-        // GOODS_RECEIPT + GOODS_ISSUE in one transaction, and lot-aware outbound postings are
-        // the E2 story — stamping only the receipt half would strand phantom per-lot on-hand.
-        // Cross-dock entries stay lot-null until E2 wires both halves.
+        // odoo-parity E2 (#1042): cross-dock is lot-gated like any other receipt of a
+        // LOT-tracked product (E1 deferred this because only the receipt half could have been
+        // stamped, stranding phantom per-lot on-hand). The lot number comes from the request,
+        // falling back to one already keyed on the receiving line, and the lot is
+        // found-or-created (inbound semantics — this receipt IS the lot's first sighting).
+        // BOTH paired entries carry the same lotId, so the per-lot row nets to zero and the
+        // funnel's status reconciler marks the lot CONSUMED — stock went straight to the
+        // workorder. Untracked products resolve to null, byte-identical to pre-E2.
+        String effectiveLotNumber =
+                request.getLotNumber() != null && !request.getLotNumber().isBlank()
+                        ? request.getLotNumber()
+                        : line.getLotNumber();
+        UUID lotId = lotCaptureService.resolveReceiptLot(
+                line.getProductId(), effectiveLotNumber, parseSupplierVendorId(session.getSupplierId()));
+
         InventoryLedgerEntry receiptEntry = InventoryLedgerEntry.builder()
                 .stockItemId(line.getProductId())
                 .locationId(crossDockLocationId)
@@ -272,6 +283,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
                 .changeInQuantity(quantityDelta)
                 .quantityAfter(receiptQuantityAfter)
+                .lotId(lotId)
                 .transactionUserId(actorUserId)
                 .sourceTransactionId(sessionId.toString())
                 .notes("Cross-dock GOODS_RECEIPT for workorder " + workorderId)
@@ -288,6 +300,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .eventType(InventoryLedgerEventType.GOODS_ISSUE)
                 .changeInQuantity(-quantityDelta)
                 .quantityAfter(issueQuantityAfter)
+                .lotId(lotId)
                 .transactionUserId(actorUserId)
                 .sourceTransactionId(sessionId.toString())
                 .notes("Cross-dock GOODS_ISSUE to workorder " + workorderId)
@@ -299,6 +312,9 @@ public class ReceivingServiceImpl implements ReceivingService {
         line.setWorkorderId(workorderId);
         line.setWorkorderLineId(request.getWorkorderLineId());
         line.setReceivedQuantity(cumulativeReceivedQuantity);
+        if (lotId != null && effectiveLotNumber != null) {
+            line.setLotNumber(effectiveLotNumber.trim());
+        }
 
         int quantityCompare = cumulativeReceivedQuantity.compareTo(expectedQuantity);
         if (quantityCompare == 0) {

@@ -68,7 +68,7 @@ class InventoryAvailabilityServiceImplTest {
                 inventoryLedgerEntryRepository,
                 forecastQuantityService,
                 asOfQueryGuard,
-                storageLocationReplicaRepository);
+                new com.positivity.inventory.internal.service.ForecastSiteResolver(storageLocationReplicaRepository));
     }
 
     @Test

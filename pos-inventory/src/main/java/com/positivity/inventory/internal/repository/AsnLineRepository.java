@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.enums.AsnStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -40,5 +41,26 @@ public interface AsnLineRepository extends JpaRepository<AsnLineEntity, UUID> {
             @Param("statuses") Collection<AsnStatus> statuses,
             @Param("siteId") UUID siteId,
             @Param("boundByExpectedArrival") boolean boundByExpectedArrival,
+            @Param("horizonDate") LocalDate horizonDate);
+
+    /**
+     * Distinct expected arrival dates of open ASN supply for one SKU within a horizon
+     * (odoo-parity F3, issue #1041): candidate cutoff dates for the stock-out deadline
+     * approximation. Undated ASNs are excluded, matching the bounded variant of
+     * {@link #sumUnreceivedRemainderForSku}.
+     */
+    @Query("""
+                        SELECT DISTINCT al.asn.expectedArrivalDate
+                        FROM AsnLineEntity al
+                        WHERE al.sku = :sku
+                          AND al.asn.status IN :statuses
+                          AND (:siteId IS NULL OR al.purchaseOrder.shipToLocationId = :siteId)
+                          AND al.asn.expectedArrivalDate IS NOT NULL
+                          AND al.asn.expectedArrivalDate <= :horizonDate
+                        """)
+    List<LocalDate> findDistinctExpectedArrivalDatesForSku(
+            @Param("sku") String sku,
+            @Param("statuses") Collection<AsnStatus> statuses,
+            @Param("siteId") UUID siteId,
             @Param("horizonDate") LocalDate horizonDate);
 }

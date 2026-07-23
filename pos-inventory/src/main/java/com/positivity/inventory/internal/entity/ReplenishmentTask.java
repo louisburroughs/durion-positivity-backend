@@ -14,6 +14,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -64,6 +65,14 @@ public class ReplenishmentTask {
     private ReplenishmentSourcingReason sourcingReason;
 
     private String assignedTo;
+
+    /**
+     * Earliest date the horizon-bounded stock-out projection goes negative (odoo-parity F3,
+     * issue #1041 — Odoo orderpoint deadline analogue), computed at task creation/refresh
+     * for prioritization; {@code null} when the projection never dips below zero within the
+     * lead horizon (or for pre-F3 tasks).
+     */
+    private LocalDate deadlineDate;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)

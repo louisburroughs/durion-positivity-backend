@@ -61,7 +61,8 @@ public abstract class BaseContractIntegrationTest {
                                 "inventory:transfer:create",
                                 "inventory:transfer:view",
                                 "inventory:transfer:dispatch",
-                                "inventory:transfer:receive"));
+                                "inventory:transfer:receive",
+                                "inventory:transfer:short_close"));
     }
 
     protected MockHttpServletRequestBuilder withApproveOnlyAuth(MockHttpServletRequestBuilder requestBuilder) {

@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.NegativeStockPolicy;
 import com.positivity.inventory.internal.exception.InsufficientStockException;
+import com.positivity.inventory.internal.exception.LotInsufficientStockException;
 import com.positivity.inventory.internal.exception.NegativeStockPolicyViolationException;
 import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
 import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
@@ -14,10 +15,12 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -71,16 +74,19 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
     private final InventoryStockSummaryRepository summaryRepository;
     private final StockSummaryRowInitializer rowInitializer;
     private final ExtProductReplicaRepository extProductReplicaRepository;
+    private final InventoryLotStatusReconciler lotStatusReconciler;
 
     public LedgerPostingServiceImpl(
             InventoryLedgerEntryRepository ledgerRepository,
             InventoryStockSummaryRepository summaryRepository,
             StockSummaryRowInitializer rowInitializer,
-            ExtProductReplicaRepository extProductReplicaRepository) {
+            ExtProductReplicaRepository extProductReplicaRepository,
+            InventoryLotStatusReconciler lotStatusReconciler) {
         this.ledgerRepository = ledgerRepository;
         this.summaryRepository = summaryRepository;
         this.rowInitializer = rowInitializer;
         this.extProductReplicaRepository = extProductReplicaRepository;
+        this.lotStatusReconciler = lotStatusReconciler;
     }
 
     @Override
@@ -144,8 +150,23 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
                 .forEach(key -> lockedRows.put(key, lockRow(key).orElseGet(() -> createAndLockRow(key))));
 
         enforceNegativeStockPolicy(saved, lockedRows, negativeStockOverride);
+        enforcePerLotFloor(saved, lockedRows);
 
         deltas.forEach((key, delta) -> applyDelta(lockedRows.get(key), delta));
+
+        // odoo-parity E2 (#1042): after the per-lot rows are current, reconcile the
+        // ACTIVE <-> CONSUMED status of every lot this batch moved stock for.
+        Set<UUID> touchedLotIds = new LinkedHashSet<>();
+        for (InventoryLedgerEntry entry : saved) {
+            if (entry.getLotId() != null
+                    && entry.getEventType() != null
+                    && entry.getEventType().affectsOnHand()) {
+                touchedLotIds.add(entry.getLotId());
+            }
+        }
+        if (!touchedLotIds.isEmpty()) {
+            lotStatusReconciler.reconcile(touchedLotIds);
+        }
 
         return saved;
     }
@@ -213,8 +234,8 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
             if (eventType == null || !eventType.affectsOnHand()) {
                 continue;
             }
-            // The matrix evaluates the lot-agnostic key only: per-lot rows mirror a subset of
-            // the same postings and per-lot negative guards are the E2 story.
+            // The matrix evaluates the lot-agnostic key only; the per-lot floor is a separate,
+            // absolute check (enforcePerLotFloor — odoo-parity E2, #1042).
             SummaryKey key = new SummaryKey(entry.getStockItemId(), entry.getLocationId(), null);
             long projected = projectedOnHand.computeIfAbsent(
                     key,
@@ -225,6 +246,42 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
             projectedOnHand.put(key, projected);
             if (projected < 0) {
                 rejectNegativeProjection(eventType, entry, projected, negativeStockOverride);
+            }
+        }
+    }
+
+    /**
+     * Per-lot negative floor (odoo-parity E2, issue #1042; spec §6 E2 — "negative lot balances
+     * rejected"): replays the batch's lot-tagged on-hand-affecting entries over the locked
+     * per-lot rows and rejects any entry whose projected per-lot on-hand goes below zero
+     * (422 {@code LOT_INSUFFICIENT_STOCK}).
+     *
+     * <p>Unlike the lot-agnostic matrix above, the floor is absolute — no per-type policy, no
+     * override: a physical lot can never hold negative stock, and letting it would silently
+     * misattribute stock between lots (the whole point of lot tracking). The lot-agnostic
+     * matrix stays exactly as it was — the two checks are independent, and both must pass.
+     * Batch order is preserved, so a constructive {@code TRANSFER_IN} preceding its paired
+     * outbound entry (the C3 short-close shapes) projects correctly.
+     */
+    private void enforcePerLotFloor(
+            List<InventoryLedgerEntry> entries, Map<SummaryKey, InventoryStockSummary> lockedRows) {
+        Map<SummaryKey, Long> projectedOnHand = new HashMap<>();
+        for (InventoryLedgerEntry entry : entries) {
+            InventoryLedgerEventType eventType = entry.getEventType();
+            if (entry.getLotId() == null || eventType == null || !eventType.affectsOnHand()) {
+                continue;
+            }
+            SummaryKey key = new SummaryKey(entry.getStockItemId(), entry.getLocationId(), entry.getLotId());
+            long projected = projectedOnHand.computeIfAbsent(
+                    key,
+                    missing -> Objects.requireNonNull(
+                                    lockedRows.get(missing), "per-lot summary row must be locked for entry " + missing)
+                            .getOnHand());
+            projected += entry.getChangeInQuantity() == null ? 0 : entry.getChangeInQuantity();
+            projectedOnHand.put(key, projected);
+            if (projected < 0) {
+                throw new LotInsufficientStockException(
+                        entry.getStockItemId(), entry.getLotId(), entry.getLocationId(), projected);
             }
         }
     }

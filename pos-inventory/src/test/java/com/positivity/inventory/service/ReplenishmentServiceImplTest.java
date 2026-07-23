@@ -19,17 +19,23 @@ import com.positivity.inventory.internal.enums.ReplenishmentTriggerType;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentTaskRepository;
+import com.positivity.inventory.internal.service.ForecastQuantityService;
+import com.positivity.inventory.internal.service.ForecastSiteResolver;
+import com.positivity.inventory.internal.service.LeadTimeResolver;
 import com.positivity.inventory.internal.service.ReplenishmentServiceImpl;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -61,6 +67,47 @@ class ReplenishmentServiceImplTest {
 
     @Mock
     private InventoryStockSummaryRepository stockSummaryRepository;
+
+    @Mock
+    private ForecastQuantityService forecastQuantityService;
+
+    @Mock
+    private ForecastSiteResolver forecastSiteResolver;
+
+    @Mock
+    private LeadTimeResolver leadTimeResolver;
+
+    @Mock
+    private com.positivity.inventory.internal.repository.NormalizedAvailabilityRepository
+            normalizedAvailabilityRepository;
+
+    /** F3 (#1041): deadline computation is mocked out — the unit vectors here don't exercise it. */
+    @Mock
+    private com.positivity.inventory.internal.service.StockoutDeadlineCalculator stockoutDeadlineCalculator;
+
+    /**
+     * F2 equivalence defaults: no feed lead time (DEFAULT source, 0 days), the policy
+     * location is already a site, and no open supply/demand documents — so
+     * {@code projectedAvailable == onHand} at any horizon and the forecast-aware trigger
+     * and quantity math degrade exactly to the pre-F2 on-hand behavior. Individual tests
+     * override the forecast where the projection matters.
+     */
+    @BeforeEach
+    void defaultForecastEqualsOnHand() {
+        Mockito.lenient()
+                .when(leadTimeResolver.resolve(any()))
+                .thenReturn(new LeadTimeResolver.ResolvedLeadTime(0, LeadTimeResolver.LeadTimeSource.DEFAULT));
+        Mockito.lenient()
+                .when(forecastSiteResolver.resolveForecastSite(any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        Mockito.lenient()
+                .when(forecastQuantityService.forecast(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenAnswer(invocation ->
+                        new ForecastQuantityService.ForecastQuantities(0L, 0L, invocation.getArgument(3, Long.class)));
+        Mockito.lenient()
+                .when(replenishmentTaskRepository.findByItemSKUAndDestinationLocationIdAndStatusIn(any(), any(), any()))
+                .thenReturn(Collections.emptyList());
+    }
 
     @Test
     void getReplenishmentTasks_shouldReturnMappedTasks() {
@@ -163,7 +210,11 @@ class ReplenishmentServiceImplTest {
     @Test
     void createReplenishmentPolicy_shouldSaveAndReturnMappedPolicy() {
         // Given
-        CreateReplenishmentPolicyRequest request = new CreateReplenishmentPolicyRequest(LOC_02, "SKUABC", 10, 50);
+        CreateReplenishmentPolicyRequest request = new CreateReplenishmentPolicyRequest();
+        request.setLocationId(LOC_02);
+        request.setItemSKU("SKUABC");
+        request.setMinimumQuantity(10);
+        request.setMaximumQuantity(50);
         UUID policyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Instant now = Instant.now(TEST_CLOCK);
 
@@ -206,10 +257,14 @@ class ReplenishmentServiceImplTest {
 
     @Test
     void evaluatePickFaceForReplenishment_shouldReturnTaskAlreadyQueued_whenTaskAlreadyExists() {
-        // Given - a policy exists for the location
+        // Given - a policy exists for the SKU at the location
         when(replenishmentPolicyRepository.findByLocationId(any()))
-                .thenReturn(List.of(
-                        ReplenishmentPolicy.builder().locationId(PICKFACE_01).build()));
+                .thenReturn(List.of(ReplenishmentPolicy.builder()
+                        .locationId(PICKFACE_01)
+                        .itemSKU("PROD123")
+                        .minimumQuantity(5)
+                        .maximumQuantity(20)
+                        .build()));
         // AND - a pending/in-progress replenishment task already exists for that
         // sku+location
         when(replenishmentTaskRepository.existsByItemSKUAndDestinationLocationIdAndStatusIn(any(), any(), any()))
@@ -219,9 +274,65 @@ class ReplenishmentServiceImplTest {
         ReplenishmentTaskResponse response =
                 replenishmentService.evaluatePickFaceForReplenishment("PROD123", PICKFACE_01);
 
-        // Then
+        // Then — the open task IS the in-progress supply for this breach: no new task, no
+        // added quantity (F2 no-double-ordering across scan and event paths).
         assertNotNull(response);
         assertEquals("TASK_ALREADY_QUEUED", response.getStatus());
+        org.mockito.Mockito.verify(replenishmentTaskRepository, org.mockito.Mockito.never())
+                .save(any());
+    }
+
+    @Test
+    void evaluatePickFaceForReplenishment_projectedAtOrAboveMinimum_returnsNoAction() {
+        when(replenishmentPolicyRepository.findByLocationId(PICKFACE_01))
+                .thenReturn(List.of(ReplenishmentPolicy.builder()
+                        .locationId(PICKFACE_01)
+                        .itemSKU("PROD123")
+                        .minimumQuantity(5)
+                        .maximumQuantity(20)
+                        .build()));
+        when(replenishmentTaskRepository.existsByItemSKUAndDestinationLocationIdAndStatusIn(any(), any(), any()))
+                .thenReturn(false);
+        givenOnHand("PROD123", PICKFACE_01, 3);
+        // Inbound supply within the horizon lifts the projection to the minimum.
+        when(forecastQuantityService.forecast(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(new ForecastQuantityService.ForecastQuantities(2L, 0L, 5L));
+
+        ReplenishmentTaskResponse response =
+                replenishmentService.evaluatePickFaceForReplenishment("PROD123", PICKFACE_01);
+
+        assertEquals("NO_ACTION", response.getStatus());
+        org.mockito.Mockito.verify(replenishmentTaskRepository, org.mockito.Mockito.never())
+                .save(any());
+    }
+
+    @Test
+    void evaluatePickFaceForReplenishment_projectedBelowMinimum_createsEventTaskToMax() {
+        when(replenishmentPolicyRepository.findByLocationId(PICKFACE_01))
+                .thenReturn(List.of(ReplenishmentPolicy.builder()
+                        .locationId(PICKFACE_01)
+                        .itemSKU("PROD123")
+                        .minimumQuantity(5)
+                        .maximumQuantity(20)
+                        .build()));
+        when(replenishmentTaskRepository.existsByItemSKUAndDestinationLocationIdAndStatusIn(any(), any(), any()))
+                .thenReturn(false);
+        givenOnHand("PROD123", PICKFACE_01, 3);
+        when(replenishmentTaskRepository.save(any(ReplenishmentTask.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReplenishmentTaskResponse response =
+                replenishmentService.evaluatePickFaceForReplenishment("PROD123", PICKFACE_01);
+
+        assertEquals("PENDING", response.getStatus());
+        org.mockito.ArgumentCaptor<ReplenishmentTask> captor =
+                org.mockito.ArgumentCaptor.forClass(ReplenishmentTask.class);
+        org.mockito.Mockito.verify(replenishmentTaskRepository).save(captor.capture());
+        ReplenishmentTask saved = captor.getValue();
+        assertEquals("PROD123", saved.getItemSKU());
+        assertEquals(17, saved.getQuantity()); // max 20 - projected 3
+        assertEquals(ReplenishmentTriggerType.EVENT, saved.getTriggerType());
+        assertEquals(ReplenishmentDecisionReason.BELOW_MIN, saved.getDecisionReason());
     }
 
     // ─── runBatchReplenishmentScan (CAP-217 / odoo-parity F1, issue #1025) ────
@@ -368,6 +479,163 @@ class ReplenishmentServiceImplTest {
 
         assertEquals(1, result.getPoliciesBelowMinimum());
         assertEquals(0, result.getTasksCreated());
+        org.mockito.Mockito.verify(replenishmentTaskRepository, org.mockito.Mockito.never())
+                .save(any());
+    }
+
+    // ─── F2 (#1040): Odoo-derived orderpoint vectors — forecast-aware trigger math ────
+
+    /**
+     * Odoo vector: on-hand below minimum but an inbound PO inside the lead horizon lifts
+     * {@code projectedAvailable} to the minimum — NO trigger (the pre-F2 on-hand math
+     * would have fired).
+     */
+    @Test
+    void runBatchReplenishmentScan_inboundSupplyWithinHorizonCoversGap_noTrigger() {
+        ReplenishmentPolicy policy = policy(LOC_01, "SKU-INBOUND", 5, 20);
+        when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
+        givenOnHand("SKU-INBOUND", LOC_01, 3);
+        // Inbound 7 due within the horizon: projected 10 >= min 5.
+        when(forecastQuantityService.forecast(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(new ForecastQuantityService.ForecastQuantities(7L, 0L, 10L));
+
+        ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
+
+        assertEquals(1, result.getPoliciesEvaluated());
+        assertEquals(0, result.getPoliciesBelowMinimum());
+        assertEquals(0, result.getTasksCreated());
+        org.mockito.Mockito.verify(replenishmentTaskRepository, org.mockito.Mockito.never())
+                .save(any());
+    }
+
+    /**
+     * Odoo vector: the same inbound supply arriving BEYOND the horizon is excluded from
+     * the horizon-bounded projection — trigger fires and the task replenishes to max off
+     * the projection (max − projected, not max − onHand).
+     */
+    @Test
+    void runBatchReplenishmentScan_inboundSupplyBeyondHorizon_triggersOnProjection() {
+        ReplenishmentPolicy policy = policy(LOC_01, "SKU-LATE-PO", 5, 20);
+        when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
+        givenOnHand("SKU-LATE-PO", LOC_01, 1);
+        // Horizon-bounded forecast: late PO excluded, but 3 units of due supply count →
+        // projected 4 < min 5.
+        when(forecastQuantityService.forecast(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(new ForecastQuantityService.ForecastQuantities(3L, 0L, 4L));
+        when(replenishmentTaskRepository.findFirstByItemSKUAndDestinationLocationIdAndStatusInOrderByCreatedAtAsc(
+                        any(), any(), any()))
+                .thenReturn(java.util.Optional.empty());
+        when(replenishmentTaskRepository
+                        .existsByItemSKUAndDestinationLocationIdAndTriggerTypeAndCreatedAtGreaterThanEqual(
+                                any(), any(), any(), any()))
+                .thenReturn(false);
+
+        ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
+
+        assertEquals(1, result.getPoliciesBelowMinimum());
+        assertEquals(1, result.getTasksCreated());
+        org.mockito.ArgumentCaptor<ReplenishmentTask> captor =
+                org.mockito.ArgumentCaptor.forClass(ReplenishmentTask.class);
+        org.mockito.Mockito.verify(replenishmentTaskRepository).save(captor.capture());
+        assertEquals(16, captor.getValue().getQuantity()); // max 20 - projected 4 (NOT max - onHand 1 = 19)
+    }
+
+    /**
+     * Horizon-boundary vector: {@code leadHorizon = now + leadTimeDays} exactly — the
+     * resolved (feed) lead time of 5 days against the fixed clock must produce a horizon
+     * of 2024-01-06T00:00:00Z, and the projection must be requested at that instant.
+     */
+    @Test
+    void runBatchReplenishmentScan_passesResolvedLeadTimeHorizonToForecast() {
+        ReplenishmentPolicy policy = policy(LOC_01, "SKU-HORIZON", 5, 20);
+        when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
+        givenOnHand("SKU-HORIZON", LOC_01, 9); // above min: trigger not fired, projection still requested
+        when(leadTimeResolver.resolve(policy))
+                .thenReturn(new LeadTimeResolver.ResolvedLeadTime(5, LeadTimeResolver.LeadTimeSource.FEED));
+
+        replenishmentService.runBatchReplenishmentScan();
+
+        org.mockito.ArgumentCaptor<Instant> horizonCaptor = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        org.mockito.Mockito.verify(forecastQuantityService)
+                .forecast(
+                        org.mockito.ArgumentMatchers.eq("SKU-HORIZON"),
+                        org.mockito.ArgumentMatchers.eq(LOC_01),
+                        horizonCaptor.capture(),
+                        org.mockito.ArgumentMatchers.eq(9L));
+        assertEquals(Instant.now(TEST_CLOCK).plus(Duration.ofDays(5)), horizonCaptor.getValue());
+        assertEquals(Instant.parse("2024-01-06T00:00:00Z"), horizonCaptor.getValue());
+    }
+
+    /**
+     * In-progress netting vector: refreshing the oldest open task nets the quantities of
+     * OTHER open tasks for the same SKU/location (Odoo {@code qty_in_progress}) — the
+     * refreshed task's own quantity is replaced, not double-counted.
+     */
+    @Test
+    void runBatchReplenishmentScan_refreshNetsOtherOpenTaskQuantities() {
+        ReplenishmentPolicy policy = policy(LOC_01, "SKU-NET", 5, 20);
+        when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
+        givenOnHand("SKU-NET", LOC_01, 2);
+        ReplenishmentTask oldest = ReplenishmentTask.builder()
+                .taskId(UUID.fromString("00000000-0000-0000-0000-0000000000aa"))
+                .itemSKU("SKU-NET")
+                .quantity(5)
+                .sourceLocationId(LOC_01)
+                .destinationLocationId(LOC_01)
+                .status(ReplenishmentStatus.PENDING)
+                .triggerType(ReplenishmentTriggerType.BATCH)
+                .build();
+        ReplenishmentTask inProgress = ReplenishmentTask.builder()
+                .taskId(UUID.fromString("00000000-0000-0000-0000-0000000000bb"))
+                .itemSKU("SKU-NET")
+                .quantity(4)
+                .sourceLocationId(LOC_01)
+                .destinationLocationId(LOC_01)
+                .status(ReplenishmentStatus.IN_PROGRESS)
+                .triggerType(ReplenishmentTriggerType.EVENT)
+                .build();
+        when(replenishmentTaskRepository.findFirstByItemSKUAndDestinationLocationIdAndStatusInOrderByCreatedAtAsc(
+                        any(), any(), any()))
+                .thenReturn(java.util.Optional.of(oldest));
+        when(replenishmentTaskRepository.findByItemSKUAndDestinationLocationIdAndStatusIn(any(), any(), any()))
+                .thenReturn(List.of(oldest, inProgress));
+
+        ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
+
+        assertEquals(1, result.getTasksRefreshed());
+        assertEquals(0, result.getTasksCreated());
+        // max 20 - projected 2 - other-in-progress 4 = 14 (own quantity 5 excluded).
+        assertEquals(14, oldest.getQuantity());
+        org.mockito.Mockito.verify(replenishmentTaskRepository).save(oldest);
+    }
+
+    /**
+     * Zero-quantity vector: trigger fires (projected < min) but in-progress supply already
+     * covers to max — no task is created. In-progress here flows through the F4 seam
+     * (open supply not surfaced as the policy's own open task).
+     */
+    @Test
+    void runBatchReplenishmentScan_triggeredButInProgressCoversToMax_createsNoTask() {
+        ReplenishmentPolicy policy = policy(LOC_01, "SKU-COVERED", 5, 20);
+        when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
+        givenOnHand("SKU-COVERED", LOC_01, 3);
+        when(replenishmentTaskRepository.findFirstByItemSKUAndDestinationLocationIdAndStatusInOrderByCreatedAtAsc(
+                        any(), any(), any()))
+                .thenReturn(java.util.Optional.empty());
+        // In-progress supply for the SKU/location already sums to 18: 20 - 3 - 18 < 0 → 0.
+        when(replenishmentTaskRepository.findByItemSKUAndDestinationLocationIdAndStatusIn(any(), any(), any()))
+                .thenReturn(List.of(ReplenishmentTask.builder()
+                        .taskId(UUID.fromString("00000000-0000-0000-0000-0000000000cc"))
+                        .itemSKU("SKU-COVERED")
+                        .quantity(18)
+                        .status(ReplenishmentStatus.IN_PROGRESS)
+                        .build()));
+
+        ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
+
+        assertEquals(1, result.getPoliciesBelowMinimum());
+        assertEquals(0, result.getTasksCreated());
+        assertEquals(0, result.getTasksRefreshed());
         org.mockito.Mockito.verify(replenishmentTaskRepository, org.mockito.Mockito.never())
                 .save(any());
     }

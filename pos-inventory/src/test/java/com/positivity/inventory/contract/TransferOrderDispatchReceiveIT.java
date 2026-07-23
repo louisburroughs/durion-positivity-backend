@@ -7,10 +7,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.domainevents.inventory.TransferOrderUpdatedV1;
 import com.positivity.inventory.internal.config.OutboxEventWriter;
+import com.positivity.inventory.internal.entity.ExtProductReplica;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.entity.InventoryLot;
 import com.positivity.inventory.internal.entity.LocationRefEntity;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import com.positivity.inventory.internal.enums.InventoryLotStatus;
+import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.InventoryLotRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
 import com.positivity.inventory.internal.repository.OutboxEventRepository;
@@ -94,6 +99,12 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
     @Autowired
     private ExpectedSupplyService expectedSupplyService;
 
+    @Autowired
+    private ExtProductReplicaRepository extProductReplicaRepository;
+
+    @Autowired
+    private InventoryLotRepository lotRepository;
+
     @BeforeEach
     void setUp() {
         outboxEventRepository.deleteAll();
@@ -162,6 +173,82 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
         assertThat(outboxEventRepository.findAll())
                 .anyMatch(row -> row.getPayload().contains(TransferOrderUpdatedV1.EVENT_TYPE)
                         && row.getPayload().contains("\"RECEIVED\""));
+    }
+
+    // ─── Lot-tracked conservation walk (odoo-parity E2, #1042) ────────────────
+
+    @Test
+    @DisplayName("lot-tracked transfer: dispatch requires an ACTIVE lot; per-lot balances conserve across"
+            + " dispatch, partial receive, and final receive exactly like the lot-agnostic ones")
+    void lotTrackedTransfer_conservesPerLotBalances() throws Exception {
+        UUID productId = UUID.randomUUID();
+        extProductReplicaRepository.save(ExtProductReplica.builder()
+                .productId(productId)
+                .baseUom("EA")
+                .trackingLevel("LOT")
+                .aggregateVersion(1L)
+                .build());
+        String sku = productId.toString();
+        InventoryLot lot = lotRepository.save(InventoryLot.builder()
+                .stockItemId(sku)
+                .lotNumber("LOT-C2-A")
+                .receivedAt(Instant.parse("2026-01-01T00:00:00Z"))
+                .status(InventoryLotStatus.ACTIVE)
+                .build());
+        seedLotOnHand(sku, SOURCE_SITE, lot.getLotId(), 10);
+        String orderId = createOrder(sku, 6);
+        UUID lineId = singleLineId(orderId);
+
+        // LOT-tracked dispatch without a lot number → 422 LOT_NUMBER_REQUIRED (whole batch
+        // rolled back), unknown lot → 422 LOT_UNKNOWN.
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/dispatch", orderId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(lineBody(lineId, 6)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("LOT_NUMBER_REQUIRED"));
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/dispatch", orderId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(lotLineBody(lineId, 6, "LOT-NOPE")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("LOT_UNKNOWN"));
+        assertPerLotBalances(sku, lot.getLotId(), 10, 0, 0);
+
+        // Valid dispatch: lot pinned on the line, per-lot balances mirror the agnostic walk.
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/dispatch", orderId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(lotLineBody(lineId, 6, "LOT-C2-A")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lines[0].lotNumber").value("LOT-C2-A"))
+                .andExpect(jsonPath("$.lines[0].lotId").value(lot.getLotId().toString()));
+        assertBalances(sku, 4, 6, 0);
+        assertPerLotBalances(sku, lot.getLotId(), 4, 6, 0);
+
+        // Partial receive (2 of 6): the arrival reuses the lot pinned at dispatch.
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/receive", orderId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(lineBody(lineId, 2)))
+                .andExpect(status().isOk());
+        assertBalances(sku, 4, 4, 2);
+        assertPerLotBalances(sku, lot.getLotId(), 4, 4, 2);
+
+        // Final receive: per-lot conservation completes; every transfer entry is lot-stamped.
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/receive", orderId)))
+                .andExpect(status().isOk());
+        assertBalances(sku, 4, 0, 6);
+        assertPerLotBalances(sku, lot.getLotId(), 4, 0, 6);
+        assertThat(entriesOf(sku, InventoryLedgerEventType.TRANSFER_OUT))
+                .allMatch(entry -> lot.getLotId().equals(entry.getLotId()));
+        assertThat(entriesOf(sku, InventoryLedgerEventType.TRANSFER_IN))
+                .hasSize(2)
+                .allMatch(entry -> lot.getLotId().equals(entry.getLotId()));
+        assertThat(lotRepository.findById(lot.getLotId()).orElseThrow().getStatus())
+                .isEqualTo(InventoryLotStatus.ACTIVE);
+
+        // Ledger truth reproduces the per-lot rows too: verifier clean, rebuild identical.
+        assertThat(driftVerifier.verify()).isZero();
+        rebuildService.rebuildFromLedger();
+        assertPerLotBalances(sku, lot.getLotId(), 4, 0, 6);
+        assertThat(driftVerifier.verify()).isZero();
     }
 
     // ─── Negative stock: TRANSFER_OUT is BLOCKED below zero ──────────────────
@@ -346,6 +433,52 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
 
     private String lineBody(UUID lineId, int quantity) {
         return "{\"lines\":[{\"lineId\":\"" + lineId + "\",\"quantity\":" + quantity + "}]}";
+    }
+
+    private String lotLineBody(UUID lineId, int quantity, String lotNumber) {
+        return "{\"lines\":[{\"lineId\":\"" + lineId + "\",\"quantity\":" + quantity + ",\"lotNumber\":\"" + lotNumber
+                + "\"}]}";
+    }
+
+    /** Lot-tagged variant of {@link #seedOnHand} (odoo-parity E2, #1042). */
+    private void seedLotOnHand(String sku, UUID locationId, UUID lotId, int quantity) {
+        ledgerPostingService.post(InventoryLedgerEntry.builder()
+                .stockItemId(sku)
+                .locationId(locationId)
+                .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
+                .changeInQuantity(quantity)
+                .quantityAfter(quantity)
+                .lotId(lotId)
+                .unitCost(new BigDecimal("2.0000"))
+                .transactionUserId("contract-test-user")
+                .timestamp(Instant.now())
+                .build());
+    }
+
+    /**
+     * Asserts the same three conserved balances as {@link #assertBalances} but over the
+     * PER-LOT summary rows of one lot (odoo-parity E2, #1042): source per-lot on-hand,
+     * destination per-lot in-transit, destination per-lot on-hand.
+     */
+    private void assertPerLotBalances(
+            String sku, UUID lotId, long sourceOnHand, long destinationInTransit, long destinationOnHand) {
+        assertThat(perLotRow(sku, SOURCE_SITE, lotId)
+                        .map(row -> row.getOnHand())
+                        .orElse(0L))
+                .isEqualTo(sourceOnHand);
+        assertThat(perLotRow(sku, DESTINATION_SITE, lotId)
+                        .map(row -> row.getInTransitQty())
+                        .orElse(0L))
+                .isEqualTo(destinationInTransit);
+        assertThat(perLotRow(sku, DESTINATION_SITE, lotId)
+                        .map(row -> row.getOnHand())
+                        .orElse(0L))
+                .isEqualTo(destinationOnHand);
+    }
+
+    private java.util.Optional<com.positivity.inventory.internal.entity.InventoryStockSummary> perLotRow(
+            String sku, UUID locationId, UUID lotId) {
+        return summaryRepository.findByKey(sku, locationId, lotId);
     }
 
     /**

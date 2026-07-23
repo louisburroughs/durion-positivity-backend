@@ -211,6 +211,51 @@ paths:
         - inventory:location:admin
       x-required-permissions:
       - inventory:location:admin
+  /v1/inventory/replenishment/policies/{policyId}:
+    put:
+      tags:
+      - Replenishment
+      summary: Update replenishment policy
+      description: Full-replace update of a policy's min/max thresholds and tuning fields (order multiple, lead-time override, preferred source type, active flag). Omitted optional fields are cleared or reset to defaults. Location, SKU, and snooze state are not updatable here; snooze is managed by the snooze endpoint.
+      operationId: updateReplenishmentPolicy
+      parameters:
+      - name: policyId
+        in: path
+        description: Replenishment policy identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateReplenishmentPolicyRequest'
+        required: true
+      responses:
+        '200':
+          description: Replenishment policy updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+        '404':
+          description: Policy not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+      security:
+      - bearerAuth:
+        - inventory:replenishment:manage
+      x-required-permissions:
+      - inventory:replenishment:manage
   /v1/inventory/cycleCountSchedules/{scheduleId}:
     get:
       tags:
@@ -487,6 +532,69 @@ paths:
         - inventory:transfer:create
       x-required-permissions:
       - inventory:transfer:create
+  /v1/inventory/transfer-orders/{transferOrderId}/short-close:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Short-close transfer order
+      description: 'Short-closes a DISPATCHED or PARTIALLY_RECEIVED order whose in-transit remainder will never be received normally (parity-C3). One whole-order disposition resolves every line''s remainder (dispatched minus received): LOST_IN_TRANSIT writes it off through the ledger funnel (paired constructive TRANSFER_IN + SCRAP_OUT with reason LOST at the destination — global on-hand drops, no scrap document is created); RETURNED_TO_SOURCE restores it to source on-hand (constructive TRANSFER_IN, TRANSFER_OUT back, TRANSFER_IN at source). Either way the destination in-transit quantity zeroes atomically and the order reaches the terminal SHORT_CLOSED status; reason and notes are mandatory. The terminal TransferOrderUpdatedV1 fact carries the disposition.'
+      operationId: shortCloseTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShortCloseTransferOrderRequest'
+        required: true
+      responses:
+        '200':
+          description: Transfer order short-closed (terminal)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '400':
+          description: Missing disposition, reason, or notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:transfer:short_close
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Order is not short-closable (not DISPATCHED/PARTIALLY_RECEIVED, or no outstanding in-transit remainder)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: 'RETURNED_TO_SOURCE only: the source site is not movement-eligible (TRANSFER_LOCATION_NOT_ELIGIBLE per DECISION-INVENTORY-009)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:short_close
+      x-required-permissions:
+      - inventory:transfer:short_close
   /v1/inventory/transfer-orders/{transferOrderId}/receive:
     post:
       tags:
@@ -1203,6 +1311,51 @@ paths:
                 $ref: '#/components/schemas/ReplenishmentPolicyResponse'
         '400':
           description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+      security:
+      - bearerAuth:
+        - inventory:replenishment:manage
+      x-required-permissions:
+      - inventory:replenishment:manage
+  /v1/inventory/replenishment/policies/{policyId}/snooze:
+    post:
+      tags:
+      - Replenishment
+      summary: Snooze or unsnooze a replenishment policy
+      description: Excludes the policy from scan, event, and needs evaluation until the given future instant (Odoo orderpoint snooze). A null snoozedUntil clears an existing snooze — there is no separate unsnooze endpoint. A non-null instant that is not in the future is rejected with 422.
+      operationId: snoozeReplenishmentPolicy
+      parameters:
+      - name: policyId
+        in: path
+        description: Replenishment policy identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SnoozeReplenishmentPolicyRequest'
+        required: true
+      responses:
+        '200':
+          description: Snooze state updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+        '404':
+          description: Policy not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+        '422':
+          description: snoozedUntil is not in the future
           content:
             application/json:
               schema:
@@ -3381,6 +3534,27 @@ paths:
         - inventory:on_hand:view
       x-required-permissions:
       - inventory:on_hand:view
+  /v1/inventory/replenishment/needs:
+    get:
+      tags:
+      - Replenishment
+      summary: Replenishment needs report
+      description: 'Side-effect-free orderpoint evaluation of every active, non-snoozed replenishment policy: projected availability at the lead-time horizon, whether a scan would trigger, the multiple-rounded suggested quantity, and the projected stock-out deadline. Never creates or refreshes tasks — ops review before running the scan.'
+      operationId: listReplenishmentNeeds
+      responses:
+        '200':
+          description: Replenishment needs returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReplenishmentNeedResponse'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
   /v1/inventory/receiving/sessions/{sessionId}:
     get:
       tags:
@@ -4906,6 +5080,113 @@ components:
       required:
       - field
       - message
+    UpdateReplenishmentPolicyRequest:
+      type: object
+      description: Full-replace update of a replenishment policy's thresholds and tuning fields. Omitted optional fields are cleared or reset to defaults; location, SKU, and snooze state are not updatable here.
+      properties:
+        minimumQuantity:
+          type: integer
+          format: int32
+          description: Minimum on-hand quantity that triggers replenishment when reached
+          example: 5
+          minimum: 0
+        maximumQuantity:
+          type: integer
+          format: int32
+          description: Maximum on-hand quantity replenishment aims to restock up to
+          example: 50
+          minimum: 1
+        orderMultiple:
+          type: integer
+          format: int32
+          description: Round the computed replenishment quantity up to the nearest multiple of this value; omit to clear (no rounding)
+          example: 6
+          minimum: 1
+        leadTimeDaysOverride:
+          type: integer
+          format: int32
+          description: Per-policy lead-time override in days; omit to clear (vendor-feed/default lead time applies)
+          example: 3
+          minimum: 0
+        preferredSourceType:
+          type: string
+          description: Preferred sourcing channel for replenishing this policy's pick face; omit to reset to EITHER
+          enum:
+          - INTERNAL_TRANSFER
+          - PURCHASE
+          - EITHER
+          example: EITHER
+        active:
+          type: boolean
+          description: Whether the policy participates in replenishment evaluation; omit to reset to true
+          example: true
+        minimumLessThanMaximum:
+          type: boolean
+      required:
+      - maximumQuantity
+      - minimumQuantity
+    ReplenishmentPolicyResponse:
+      type: object
+      description: Representation of a replenishment policy defining min/max stock thresholds for an item at a location
+      properties:
+        policyId:
+          type: string
+          description: Unique identifier of the replenishment policy
+          example: 01960003-0000-7000-8000-000000000001
+        locationId:
+          type: string
+          format: uuid
+          description: Identifier of the location the replenishment policy applies to
+          example: 01960003-0000-7000-8000-000000000002
+        itemSKU:
+          type: string
+          description: SKU of the item the replenishment policy applies to
+          example: SKU-10042
+        minimumQuantity:
+          type: integer
+          format: int32
+          description: Minimum on-hand quantity that triggers replenishment when reached
+          example: 5
+        maximumQuantity:
+          type: integer
+          format: int32
+          description: Maximum on-hand quantity replenishment aims to restock up to
+          example: 50
+        orderMultiple:
+          type: integer
+          format: int32
+          description: Round the computed replenishment quantity up to the nearest multiple of this value; absent means no rounding
+          example: 6
+        leadTimeDaysOverride:
+          type: integer
+          format: int32
+          description: Per-policy lead-time override in days; absent means vendor-feed/default lead time applies
+          example: 3
+        preferredSourceType:
+          type: string
+          description: Preferred sourcing channel for replenishing this policy's pick face
+          example: EITHER
+        snoozedUntil:
+          type: string
+          description: Instant until which the policy is snoozed (excluded from replenishment evaluation); absent or past means the policy is evaluated normally
+          example: 2026-02-01 00:00:00+00:00
+        active:
+          type: boolean
+          description: Whether the policy participates in replenishment evaluation
+          example: true
+        createdAt:
+          type: string
+          description: Timestamp at which the replenishment policy was created
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - active
+      - createdAt
+      - itemSKU
+      - locationId
+      - maximumQuantity
+      - minimumQuantity
+      - policyId
+      - preferredSourceType
     UpdateCycleCountScheduleRequest:
       type: object
       description: Partial update of a recurring cycle-count schedule; null fields are left unchanged
@@ -5173,6 +5454,13 @@ components:
           type: integer
           format: int32
           description: Quantity received at the destination so far
+        lotId:
+          type: string
+          format: uuid
+          description: Lot the dispatched units were drawn from (LOT-tracked SKUs, pinned at dispatch)
+        lotNumber:
+          type: string
+          description: Lot number matching lotId, kept for audit/display
         createdAt:
           type: string
           format: date-time
@@ -5233,6 +5521,25 @@ components:
         dispatchedBy:
           type: string
           description: User who dispatched the order
+        shortCloseDisposition:
+          type: string
+          description: Disposition of the undelivered remainder; set only when SHORT_CLOSED
+          enum:
+          - LOST_IN_TRANSIT
+          - RETURNED_TO_SOURCE
+        shortCloseReason:
+          type: string
+          description: Short-close reason; set only when SHORT_CLOSED
+        shortCloseNotes:
+          type: string
+          description: Short-close notes; set only when SHORT_CLOSED
+        shortClosedBy:
+          type: string
+          description: User who short-closed the order; set only when SHORT_CLOSED
+        shortClosedAt:
+          type: string
+          format: date-time
+          description: When the order was short-closed; set only when SHORT_CLOSED
         createdAt:
           type: string
           format: date-time
@@ -5241,6 +5548,30 @@ components:
           type: string
           format: date-time
           description: Last update timestamp
+    ShortCloseTransferOrderRequest:
+      type: object
+      description: Request to short-close a transfer order, resolving the undelivered remainder with a whole-order disposition
+      properties:
+        disposition:
+          type: string
+          description: 'Disposition of the undelivered remainder: LOST_IN_TRANSIT writes it off (SCRAP_OUT, reason LOST); RETURNED_TO_SOURCE restores it to source on-hand'
+          enum:
+          - LOST_IN_TRANSIT
+          - RETURNED_TO_SOURCE
+        reason:
+          type: string
+          description: Reason for the short-close (mandatory)
+          maxLength: 100
+          minLength: 0
+        notes:
+          type: string
+          description: Free-text notes explaining the short-close (mandatory)
+          maxLength: 2000
+          minLength: 0
+      required:
+      - disposition
+      - notes
+      - reason
     ReceiveTransferOrderRequest:
       type: object
       description: Request to receive a transfer order; omitted lines receive their full remainder
@@ -5262,6 +5593,12 @@ components:
           type: integer
           format: int32
           description: Quantity to dispatch/receive on this line; must be positive
+        lotNumber:
+          type: string
+          description: Lot number the dispatched units are drawn from (dispatch only; receive and short-close reuse the lot recorded at dispatch). Required (422 LOT_NUMBER_REQUIRED) when the SKU is LOT-tracked; must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. Ignored for untracked SKUs
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
       required:
       - lineId
       - quantity
@@ -5426,6 +5763,12 @@ components:
           format: uuid
           description: Workorder the scrapped part belonged to, when linked
           example: 01960005-0000-7000-8000-000000000001
+        lotNumber:
+          type: string
+          description: Lot number the scrapped units belong to. Required (422 LOT_NUMBER_REQUIRED) when the SKU is LOT-tracked; must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. Ignored for untracked SKUs
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
         attachmentReference:
           type: string
           description: Photo/attachment reference (storage out of scope)
@@ -5486,6 +5829,10 @@ components:
           type: string
           format: uuid
           description: Linked workorder, when the part was damaged during a job
+        lotId:
+          type: string
+          format: uuid
+          description: Lot the scrapped units belong to (LOT-tracked SKUs)
         attachmentReference:
           type: string
           description: Photo/attachment reference
@@ -5767,6 +6114,11 @@ components:
           format: int32
           description: Number of already-open replenishment tasks whose quantity was refreshed to the current need
           example: 2
+        policiesSkipped:
+          type: integer
+          format: int32
+          description: Number of policies skipped without evaluation because they are inactive or snoozed
+          example: 1
         scanAt:
           type: string
           description: Timestamp at which the scan ran
@@ -5774,6 +6126,7 @@ components:
       required:
       - policiesBelowMinimum
       - policiesEvaluated
+      - policiesSkipped
       - scanAt
       - tasksCreated
       - tasksRefreshed
@@ -5803,6 +6156,30 @@ components:
           description: Maximum on-hand quantity replenishment aims to restock up to
           example: 50
           minimum: 1
+        orderMultiple:
+          type: integer
+          format: int32
+          description: Round the computed replenishment quantity up to the nearest multiple of this value. When omitted, defaults to the vendor-feed pack size for the SKU when one is known (greater than 1); otherwise no rounding is applied.
+          example: 6
+          minimum: 1
+        leadTimeDaysOverride:
+          type: integer
+          format: int32
+          description: Per-policy lead-time override in days; takes precedence over vendor-feed lead-time estimates and the configured default
+          example: 3
+          minimum: 0
+        preferredSourceType:
+          type: string
+          description: Preferred sourcing channel for replenishing this policy's pick face; defaults to EITHER
+          enum:
+          - INTERNAL_TRANSFER
+          - PURCHASE
+          - EITHER
+          example: EITHER
+        active:
+          type: boolean
+          description: Whether the policy participates in replenishment evaluation; defaults to true
+          example: true
         minimumLessThanMaximum:
           type: boolean
       required:
@@ -5810,44 +6187,15 @@ components:
       - locationId
       - maximumQuantity
       - minimumQuantity
-    ReplenishmentPolicyResponse:
+    SnoozeReplenishmentPolicyRequest:
       type: object
-      description: Representation of a replenishment policy defining min/max stock thresholds for an item at a location
+      description: Request to snooze a replenishment policy until a future instant, or clear an existing snooze by sending a null snoozedUntil
       properties:
-        policyId:
+        snoozedUntil:
           type: string
-          description: Unique identifier of the replenishment policy
-          example: 01960003-0000-7000-8000-000000000001
-        locationId:
-          type: string
-          format: uuid
-          description: Identifier of the location the replenishment policy applies to
-          example: 01960003-0000-7000-8000-000000000002
-        itemSKU:
-          type: string
-          description: SKU of the item the replenishment policy applies to
-          example: SKU-10042
-        minimumQuantity:
-          type: integer
-          format: int32
-          description: Minimum on-hand quantity that triggers replenishment when reached
-          example: 5
-        maximumQuantity:
-          type: integer
-          format: int32
-          description: Maximum on-hand quantity replenishment aims to restock up to
-          example: 50
-        createdAt:
-          type: string
-          description: Timestamp at which the replenishment policy was created
-          example: 2026-01-15 09:30:00+00:00
-      required:
-      - createdAt
-      - itemSKU
-      - locationId
-      - maximumQuantity
-      - minimumQuantity
-      - policyId
+          format: date-time
+          description: Future instant until which the policy is excluded from replenishment evaluation; null clears an existing snooze
+          example: 2026-02-01 00:00:00+00:00
     CreateReceivingSessionRequest:
       type: object
       description: Request to open a new inventory receiving session against a source document
@@ -6094,6 +6442,12 @@ components:
           type: string
           description: Optional free-text note describing the cross-dock action
           example: Cross-docked at dock door 3 for urgent workorder
+        lotNumber:
+          type: string
+          description: Lot or batch number of the cross-docked stock. Required (422 LOT_NUMBER_REQUIRED) when the product is LOT-tracked (falls back to the lot number already keyed on the receiving line); the lot is found-or-created like any receipt and stamped on BOTH paired ledger entries. Ignored for untracked products
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
       required:
       - quantity
       - workorderId
@@ -6913,6 +7267,12 @@ components:
           format: int32
           description: Quantity of units actually picked at the scanned location
           example: 12
+        lotNumber:
+          type: string
+          description: Lot number the units were picked from. Required (422 LOT_NUMBER_REQUIRED) when the SKU is LOT-tracked; must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. May differ from the task's advisory suggestedLotNumber. Ignored for untracked SKUs
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
       required:
       - quantityPicked
       - scannedLocationId
@@ -6965,6 +7325,15 @@ components:
           format: int32
           description: Ordinal position of this task in the pick sequence
           example: 1
+        suggestedLotNumber:
+          type: string
+          description: Advisory lot suggestion for LOT-tracked SKUs (FIFO by lot receivedAt at the suggested location; FEFO once expiry data exists). Null for untracked SKUs or when no lot has stock
+          example: LOT-2026-A
+        pickedLotId:
+          type: string
+          format: uuid
+          description: Identifier of the lot actually keyed at pick confirmation for LOT-tracked SKUs; null for untracked SKUs and before confirmation
+          example: 01960003-0000-7000-8000-000000000044
       required:
       - locationId
       - pickListId
@@ -7673,6 +8042,12 @@ components:
           format: int32
           description: Quantity of the SKU to consume
           example: 4
+        lotNumber:
+          type: string
+          description: 'Optional lot override for LOT-tracked SKUs: must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. When absent, the lot recorded at pick confirmation is used; a LOT-tracked SKU with neither is rejected (422 LOT_NUMBER_REQUIRED). Ignored for untracked SKUs'
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
       required:
       - pickTaskId
       - quantity
@@ -8547,6 +8922,10 @@ components:
           type: string
           description: Identifier or name of the user the replenishment task is assigned to
           example: user-jdoe
+        deadlineDate:
+          type: string
+          description: Earliest date at which the projected available quantity goes below zero (stock-out deadline used for prioritization); absent when no stock-out is projected within the lead-time horizon
+          example: 2026-01-20
         createdAt:
           type: string
           description: Timestamp at which the replenishment task was created
@@ -8558,6 +8937,85 @@ components:
       - quantity
       - status
       - taskId
+    ReplenishmentNeedResponse:
+      type: object
+      description: 'Current computed replenishment state of one active, non-snoozed policy: the same orderpoint evaluation the batch scan applies, with no side effects'
+      properties:
+        policyId:
+          type: string
+          description: Unique identifier of the replenishment policy
+          example: 01960003-0000-7000-8000-000000000001
+        itemSKU:
+          type: string
+          description: SKU of the item the policy applies to
+          example: SKU-10042
+        locationId:
+          type: string
+          format: uuid
+          description: Identifier of the location the policy applies to
+          example: 01960003-0000-7000-8000-000000000002
+        onHand:
+          type: integer
+          format: int64
+          description: Current on-hand quantity at the policy's location
+          example: 3
+        projectedAvailable:
+          type: integer
+          format: int64
+          description: Projected available quantity at the lead-time horizon (on-hand + expected supply - open demand)
+          example: 3
+        leadHorizonDate:
+          type: string
+          description: UTC date of the lead-time horizon the projection was evaluated at
+          example: 2026-01-20
+        leadTimeSource:
+          type: string
+          description: Where the resolved lead time came from
+          enum:
+          - POLICY_OVERRIDE
+          - FEED
+          - DEFAULT
+          example: POLICY_OVERRIDE
+        minimumQuantity:
+          type: integer
+          format: int32
+          description: Minimum on-hand quantity that triggers replenishment when reached
+          example: 5
+        maximumQuantity:
+          type: integer
+          format: int32
+          description: Maximum on-hand quantity replenishment aims to restock up to
+          example: 50
+        wouldTrigger:
+          type: boolean
+          description: Whether a batch scan run now would consider this policy triggered (projected available below minimum)
+          example: true
+        suggestedQuantity:
+          type: integer
+          format: int32
+          description: 'Quantity a scan would replenish now: replenish-to-max after in-progress netting, rounded up to the policy''s order multiple; zero when in-progress supply already covers the need or the policy is not triggered'
+          example: 12
+        deadlineDate:
+          type: string
+          description: Earliest date at which the projected available quantity goes below zero; absent when the policy is not triggered or no stock-out is projected within the lead-time horizon
+          example: 2026-01-20
+        preferredSourceType:
+          type: string
+          description: Preferred sourcing channel configured on the policy
+          example: EITHER
+      required:
+      - itemSKU
+      - leadHorizonDate
+      - leadTimeSource
+      - locationId
+      - maximumQuantity
+      - minimumQuantity
+      - onHand
+      - policyId
+      - preferredSourceType
+      - projectedAvailable
+      - suggestedQuantity
+      - wouldTrigger
     ListPurchaseOrdersRequest:
       type: object
       description: Optional filter criteria for listing purchase orders

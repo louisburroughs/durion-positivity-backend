@@ -23,6 +23,11 @@ import org.jspecify.annotations.Nullable;
  * @param destinationLocationId destination site the transfer ships to
  * @param destinationStorageLocationId bin-level destination storage location, when bin-scoped
  * @param lines per-line quantity summary as of this transition
+ * @param shortCloseDisposition disposition chosen when the order was short-closed
+ *     ({@code LOST_IN_TRANSIT} or {@code RETURNED_TO_SOURCE}, odoo-parity C3 issue #1039);
+ *     null on every other transition. Transit losses carry NO {@code ScrapPostedV1} fact —
+ *     no scrap document exists for them — so accounting consumers derive the shrinkage from
+ *     this disposition plus the line remainders ({@code dispatchedQty - receivedQty})
  * @param occurredAt when the transition was recorded
  */
 public record TransferOrderUpdatedV1(
@@ -33,6 +38,7 @@ public record TransferOrderUpdatedV1(
         @NonNull UUID destinationLocationId,
         @Nullable UUID destinationStorageLocationId,
         @NonNull List<LineSummary> lines,
+        @Nullable String shortCloseDisposition,
         @NonNull Instant occurredAt) {
 
     public static final String EVENT_TYPE = "inventory.transfer-order.updated";
@@ -56,6 +62,20 @@ public record TransferOrderUpdatedV1(
         }
         if (occurredAt == null) {
             throw new IllegalArgumentException("occurredAt must not be null");
+        }
+        if (shortCloseDisposition != null) {
+            if (!"SHORT_CLOSED".equals(status)) {
+                throw new IllegalArgumentException("shortCloseDisposition is only valid for status SHORT_CLOSED");
+            }
+            if (!"LOST_IN_TRANSIT".equals(shortCloseDisposition)
+                    && !"RETURNED_TO_SOURCE".equals(shortCloseDisposition)) {
+                throw new IllegalArgumentException(
+                        "shortCloseDisposition must be LOST_IN_TRANSIT or RETURNED_TO_SOURCE, got: "
+                                + shortCloseDisposition);
+            }
+        }
+        if ("SHORT_CLOSED".equals(status) && shortCloseDisposition == null) {
+            throw new IllegalArgumentException("status SHORT_CLOSED requires a shortCloseDisposition");
         }
         lines = List.copyOf(lines);
     }

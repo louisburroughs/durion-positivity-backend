@@ -80,6 +80,33 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
     /** Per-lot rows of one lot across locations (odoo-parity E1, issue #1038 lot read API). */
     List<InventoryStockSummary> findByLotId(UUID lotId);
 
+    /**
+     * Per-lot rows with positive on-hand for one (stockItemId, locationId) — the FIFO lot
+     * suggestion candidates of odoo-parity E2 (issue #1042).
+     */
+    @Query("""
+                        SELECT s FROM InventoryStockSummary s
+                        WHERE s.stockItemId = :stockItemId
+                          AND s.locationId = :locationId
+                          AND s.lotId IS NOT NULL
+                          AND s.onHand > 0
+                        """)
+    List<InventoryStockSummary> findPositivePerLotRows(
+            @Param("stockItemId") String stockItemId, @Param("locationId") UUID locationId);
+
+    /**
+     * Total stock attributed to one lot across all per-lot rows: on-hand everywhere plus
+     * in-transit toward anywhere (odoo-parity E2, issue #1042). Including in-transit keeps the
+     * total conserved across transfer dispatch → receive, so a fully-dispatched-but-unreceived
+     * lot does not spuriously read as empty for the CONSUMED status transition.
+     */
+    @Query("""
+                        SELECT COALESCE(SUM(s.onHand + s.inTransitQty), 0)
+                        FROM InventoryStockSummary s
+                        WHERE s.lotId = :lotId
+                        """)
+    long sumLotStockAcrossLocations(@Param("lotId") UUID lotId);
+
     /** Lot-agnostic rows with positive on-hand at one location. */
     @Query("""
                         SELECT s FROM InventoryStockSummary s

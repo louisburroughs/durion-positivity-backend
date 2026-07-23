@@ -45,4 +45,23 @@ public interface ReservationRepository extends JpaRepository<ReservationEntity, 
             @Param("statuses") Collection<ReservationStatus> statuses,
             @Param("boundByDueDate") boolean boundByDueDate,
             @Param("horizon") Instant horizon);
+
+    /**
+     * Distinct due instants of open reservation demand for one SKU within a horizon
+     * (odoo-parity F3, issue #1041): candidate cutoff instants for the stock-out deadline
+     * approximation. Undated reservations are excluded, matching the bounded variant of
+     * {@link #sumOpenRemainderForSku}.
+     */
+    @Query("""
+                        SELECT DISTINCT r.dueDateTime
+                        FROM ReservationEntity r
+                        WHERE r.stockItemId = :stockItemId
+                          AND r.status IN :statuses
+                          AND r.dueDateTime IS NOT NULL
+                          AND r.dueDateTime <= :horizon
+                        """)
+    List<Instant> findDistinctDueInstantsForSku(
+            @Param("stockItemId") UUID stockItemId,
+            @Param("statuses") Collection<ReservationStatus> statuses,
+            @Param("horizon") Instant horizon);
 }

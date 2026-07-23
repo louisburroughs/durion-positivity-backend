@@ -47,6 +47,9 @@ public class ScrapResponse {
     @Schema(description = "Linked workorder, when the part was damaged during a job")
     private UUID workorderId;
 
+    @Schema(description = "Lot the scrapped units belong to (LOT-tracked SKUs)")
+    private UUID lotId;
+
     @Schema(description = "Photo/attachment reference")
     private String attachmentReference;
 

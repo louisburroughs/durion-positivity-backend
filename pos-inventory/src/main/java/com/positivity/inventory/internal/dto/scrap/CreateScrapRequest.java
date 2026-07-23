@@ -68,6 +68,15 @@ public class CreateScrapRequest {
     private UUID workorderId;
 
     @Schema(
+            description = "Lot number the scrapped units belong to. Required (422 LOT_NUMBER_REQUIRED) when the SKU"
+                    + " is LOT-tracked; must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE)"
+                    + " lot. Ignored for untracked SKUs",
+            example = "LOT-2026-A",
+            requiredMode = NOT_REQUIRED)
+    @Size(max = 128, message = "Lot number must not exceed 128 characters")
+    private String lotNumber;
+
+    @Schema(
             description = "Photo/attachment reference (storage out of scope)",
             example = "s3://scrap-evidence/2026/07/scrap-123.jpg",
             requiredMode = NOT_REQUIRED)

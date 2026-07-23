@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -49,6 +50,20 @@ public class ReturnItemLine {
             requiredMode = NOT_REQUIRED)
     @Positive
     private BigDecimal documentQuantity;
+
+    @Schema(
+            description = "Lot number the returned units belong to. Required (422 LOT_NUMBER_REQUIRED) when the SKU"
+                    + " is LOT-tracked and must reference an existing lot (422 LOT_UNKNOWN) — a CONSUMED lot is"
+                    + " legitimate (returning stock flips it back to ACTIVE). Ignored for untracked SKUs",
+            example = "LOT-2026-A",
+            requiredMode = NOT_REQUIRED)
+    @Size(max = 128)
+    private String lotNumber;
+
+    /** Pre-E2 arity kept for existing callers/tests: no lot number keyed. */
+    public ReturnItemLine(UUID skuId, int quantityReturned, String documentUom, BigDecimal documentQuantity) {
+        this(skuId, quantityReturned, documentUom, documentQuantity, null);
+    }
 
     @JsonIgnore
     @AssertTrue(message = "quantityReturned must be positive when documentUom/documentQuantity are absent")

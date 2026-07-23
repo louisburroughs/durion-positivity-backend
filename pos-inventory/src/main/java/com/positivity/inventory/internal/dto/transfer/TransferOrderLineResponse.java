@@ -36,6 +36,12 @@ public class TransferOrderLineResponse {
     @Schema(description = "Quantity received at the destination so far")
     private Integer receivedQty;
 
+    @Schema(description = "Lot the dispatched units were drawn from (LOT-tracked SKUs, pinned at dispatch)")
+    private UUID lotId;
+
+    @Schema(description = "Lot number matching lotId, kept for audit/display")
+    private String lotNumber;
+
     @Schema(description = "Creation timestamp")
     private Instant createdAt;
 

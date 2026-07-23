@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.dto.transfer;
 
 import com.positivity.inventory.internal.enums.TransferOrderStatus;
+import com.positivity.inventory.internal.enums.TransferShortCloseDisposition;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -52,6 +53,21 @@ public class TransferOrderResponse {
 
     @Schema(description = "User who dispatched the order")
     private String dispatchedBy;
+
+    @Schema(description = "Disposition of the undelivered remainder; set only when SHORT_CLOSED")
+    private TransferShortCloseDisposition shortCloseDisposition;
+
+    @Schema(description = "Short-close reason; set only when SHORT_CLOSED")
+    private String shortCloseReason;
+
+    @Schema(description = "Short-close notes; set only when SHORT_CLOSED")
+    private String shortCloseNotes;
+
+    @Schema(description = "User who short-closed the order; set only when SHORT_CLOSED")
+    private String shortClosedBy;
+
+    @Schema(description = "When the order was short-closed; set only when SHORT_CLOSED")
+    private Instant shortClosedAt;
 
     @Schema(description = "Creation timestamp")
     private Instant createdAt;

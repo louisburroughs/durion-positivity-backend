@@ -23,6 +23,13 @@ public interface ReplenishmentTaskRepository extends JpaRepository<Replenishment
             String itemSKU, UUID destinationLocationId, List<ReplenishmentStatus> statuses);
 
     /**
+     * Open tasks for one SKU/destination — the in-progress supply netted out of the
+     * forecast-aware replenish quantity (odoo-parity F2, issue #1040).
+     */
+    List<ReplenishmentTask> findByItemSKUAndDestinationLocationIdAndStatusIn(
+            String itemSKU, UUID destinationLocationId, List<ReplenishmentStatus> statuses);
+
+    /**
      * Per-(policy, day) idempotency guard for the batch scan (odoo-parity F1):
      * true when a batch-triggered task for this SKU/destination was already
      * created on or after the given day boundary, regardless of its status.

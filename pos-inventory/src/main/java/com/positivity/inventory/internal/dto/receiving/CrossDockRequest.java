@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -45,4 +46,19 @@ public class CrossDockRequest {
             example = "Cross-docked at dock door 3 for urgent workorder",
             requiredMode = NOT_REQUIRED)
     private String notes;
+
+    @Schema(
+            description = "Lot or batch number of the cross-docked stock. Required (422 LOT_NUMBER_REQUIRED) when"
+                    + " the product is LOT-tracked (falls back to the lot number already keyed on the receiving"
+                    + " line); the lot is found-or-created like any receipt and stamped on BOTH paired ledger"
+                    + " entries. Ignored for untracked products",
+            example = "LOT-2026-A",
+            requiredMode = NOT_REQUIRED)
+    @Size(max = 128)
+    private String lotNumber;
+
+    /** Pre-E2 arity kept for existing callers/tests: no lot number keyed. */
+    public CrossDockRequest(String workorderId, String workorderLineId, BigDecimal quantity, String notes) {
+        this(workorderId, workorderLineId, quantity, notes, null);
+    }
 }

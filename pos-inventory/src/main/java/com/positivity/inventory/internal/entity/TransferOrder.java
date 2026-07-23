@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.entity;
 
 import com.positivity.inventory.internal.enums.TransferOrderStatus;
+import com.positivity.inventory.internal.enums.TransferShortCloseDisposition;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -93,6 +94,29 @@ public class TransferOrder {
 
     @Column(name = "dispatched_by")
     private String dispatchedBy;
+
+    /**
+     * Disposition of the undelivered remainder when short-closed (parity-C3, issue #1039):
+     * LOST_IN_TRANSIT or RETURNED_TO_SOURCE. One disposition covers the whole order (v1
+     * simplification). Null unless status is SHORT_CLOSED.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "short_close_disposition", length = 30)
+    private TransferShortCloseDisposition shortCloseDisposition;
+
+    /** Mandatory short-close reason (spec C4); null unless status is SHORT_CLOSED. */
+    @Column(name = "short_close_reason", length = 100)
+    private String shortCloseReason;
+
+    /** Mandatory short-close notes (spec C4); null unless status is SHORT_CLOSED. */
+    @Column(name = "short_close_notes", length = 2000)
+    private String shortCloseNotes;
+
+    @Column(name = "short_closed_by")
+    private String shortClosedBy;
+
+    @Column(name = "short_closed_at")
+    private Instant shortClosedAt;
 
     @Builder.Default
     @OneToMany(mappedBy = "transferOrder", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)

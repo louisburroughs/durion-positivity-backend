@@ -38,7 +38,7 @@ public final class EventTypes {
                 EventTypeRegistration.approval("INVENTORY_SCRAP_REJECT", "Reject a pending scrap document")
                         .build(),
 
-                // TransferOrderController - 5 events (odoo-parity C1/C2, #1035/#1036)
+                // TransferOrderController - 6 events (odoo-parity C1/C2/C3, #1035/#1036/#1039)
                 EventTypeRegistration.write("INVENTORY_TRANSFER_ORDER_CREATE", "Create a cross-site transfer order")
                         .build(),
                 EventTypeRegistration.approval("INVENTORY_TRANSFER_ORDER_APPROVE", "Approve a DRAFT transfer order")
@@ -53,6 +53,13 @@ public final class EventTypes {
                 EventTypeRegistration.write(
                                 "INVENTORY_TRANSFER_ORDER_RECEIVE",
                                 "Receive dispatched transfer quantities at the destination (posts TRANSFER_IN)")
+                        .build(),
+                // Approval preset: short-close accepts a stock loss or reverses a movement
+                // (odoo-parity C3, #1039).
+                EventTypeRegistration.approval(
+                                "INVENTORY_TRANSFER_ORDER_SHORT_CLOSE",
+                                "Short-close a transfer order's undelivered remainder with a loss or return"
+                                        + " disposition")
                         .build(),
 
                 // SourcingStrategyController - 3 events (odoo-parity H1, #1037)
@@ -137,10 +144,21 @@ public final class EventTypes {
                 EventTypeRegistration.write("INVENTORY_PUTAWAY_TASK_CLAIM", "Claim a putaway task for execution")
                         .build(),
 
-                // ReplenishmentController - 2 events
+                // ReplenishmentController - 5 events
                 EventTypeRegistration.write(
                                 "INVENTORY_REPLENISHMENT_POLICY_CREATE",
                                 "Create replenishment policy used for task generation")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_REPLENISHMENT_POLICY_UPDATE",
+                                "Update a replenishment policy's thresholds and tuning fields")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_REPLENISHMENT_POLICY_SNOOZE", "Snooze or unsnooze a replenishment policy")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "INVENTORY_REPLENISHMENT_NEEDS_LIST",
+                                "List the side-effect-free replenishment needs report")
                         .build(),
                 EventTypeRegistration.write(
                                 "INVENTORY_REPLENISHMENT_SCAN_RUN",

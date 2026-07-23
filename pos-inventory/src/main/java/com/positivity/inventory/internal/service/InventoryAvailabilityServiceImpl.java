@@ -2,13 +2,11 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
-import com.positivity.inventory.internal.entity.ExtStorageLocationReplica;
 import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.InventorySourceType;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
-import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.service.InventoryAvailabilityService;
@@ -44,35 +42,24 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final ForecastQuantityService forecastQuantityService;
     private final AsOfQueryGuard asOfQueryGuard;
-    private final ExtStorageLocationReplicaRepository storageLocationReplicaRepository;
+    private final ForecastSiteResolver forecastSiteResolver;
 
     public InventoryAvailabilityServiceImpl(
             InventoryStockSummaryRepository stockSummaryRepository,
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
             ForecastQuantityService forecastQuantityService,
             AsOfQueryGuard asOfQueryGuard,
-            ExtStorageLocationReplicaRepository storageLocationReplicaRepository) {
+            ForecastSiteResolver forecastSiteResolver) {
         this.stockSummaryRepository = stockSummaryRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
         this.forecastQuantityService = forecastQuantityService;
         this.asOfQueryGuard = asOfQueryGuard;
-        this.storageLocationReplicaRepository = storageLocationReplicaRepository;
+        this.forecastSiteResolver = forecastSiteResolver;
     }
 
-    /**
-     * Forecast supply is keyed by ship-to SITE ({@code PurchaseOrderEntity.shipToLocationId});
-     * summary/scope ids are frequently bin-level. Resolve a bin to its parent site via the
-     * storage-location replica; ids not present in the replica are assumed to already be
-     * site ids and pass through unchanged.
-     */
+    /** Bin → parent-site resolution shared with the replenishment orderpoint math (F2). */
     private @Nullable UUID resolveForecastSite(@Nullable UUID locationOrStorageLocationId) {
-        if (locationOrStorageLocationId == null) {
-            return null;
-        }
-        return storageLocationReplicaRepository
-                .findById(locationOrStorageLocationId)
-                .map(ExtStorageLocationReplica::getSiteId)
-                .orElse(locationOrStorageLocationId);
+        return forecastSiteResolver.resolveForecastSite(locationOrStorageLocationId);
     }
 
     @Override
