@@ -104,7 +104,9 @@ class AsnServiceImplTest {
                 inventoryLedgerEntryRepository,
                 ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
-                applicationEventPublisher);
+                applicationEventPublisher,
+                new com.positivity.inventory.internal.service.DocumentQuantityConverter(org.mockito.Mockito.mock(
+                        com.positivity.inventory.internal.service.UomConversionService.class)));
         authenticateAs("asn-test-user");
     }
 

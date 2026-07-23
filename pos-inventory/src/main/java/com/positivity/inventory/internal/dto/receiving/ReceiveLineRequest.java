@@ -1,10 +1,14 @@
 package com.positivity.inventory.internal.dto.receiving;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -24,10 +28,38 @@ public class ReceiveLineRequest {
     private UUID lineId;
 
     @Schema(
-            description = "Quantity actually received for the line; may be zero",
+            description = "Quantity actually received for the line, in the product's base UoM; may be zero."
+                    + " Required unless documentUom/documentQuantity are supplied, in which case the base quantity"
+                    + " is derived and this field is ignored",
             example = "8",
-            requiredMode = REQUIRED)
-    @NotNull(message = "receivedQuantity is required")
+            requiredMode = NOT_REQUIRED)
     @DecimalMin(value = "0.0", inclusive = true, message = "receivedQuantity must be >= 0")
     private BigDecimal receivedQuantity;
+
+    @Schema(
+            description = "Optional UoM the line is keyed in (e.g. CASE). When present, documentQuantity is"
+                    + " converted to the product's base UoM at posting time; a UoM with no conversion path is"
+                    + " rejected with 422 UOM_CONVERSION_UNDEFINED",
+            example = "CASE",
+            requiredMode = NOT_REQUIRED)
+    private String documentUom;
+
+    @Schema(
+            description = "Quantity received expressed in documentUom; must be supplied together with documentUom",
+            example = "1",
+            requiredMode = NOT_REQUIRED)
+    @Positive
+    private BigDecimal documentQuantity;
+
+    @JsonIgnore
+    @AssertTrue(message = "receivedQuantity is required when documentUom/documentQuantity are absent")
+    public boolean isQuantitySourcePresent() {
+        return receivedQuantity != null || documentUom != null || documentQuantity != null;
+    }
+
+    @JsonIgnore
+    @AssertTrue(message = "documentUom and documentQuantity must be provided together")
+    public boolean isDocumentUomPairComplete() {
+        return (documentUom == null) == (documentQuantity == null);
+    }
 }

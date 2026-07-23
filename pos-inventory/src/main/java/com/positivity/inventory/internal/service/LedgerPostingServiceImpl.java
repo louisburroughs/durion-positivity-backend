@@ -6,6 +6,8 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.NegativeStockPolicy;
 import com.positivity.inventory.internal.exception.InsufficientStockException;
 import com.positivity.inventory.internal.exception.NegativeStockPolicyViolationException;
+import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
+import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import java.time.Instant;
@@ -58,14 +60,17 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
     private final InventoryLedgerEntryRepository ledgerRepository;
     private final InventoryStockSummaryRepository summaryRepository;
     private final StockSummaryRowInitializer rowInitializer;
+    private final ExtProductReplicaRepository extProductReplicaRepository;
 
     public LedgerPostingServiceImpl(
             InventoryLedgerEntryRepository ledgerRepository,
             InventoryStockSummaryRepository summaryRepository,
-            StockSummaryRowInitializer rowInitializer) {
+            StockSummaryRowInitializer rowInitializer,
+            ExtProductReplicaRepository extProductReplicaRepository) {
         this.ledgerRepository = ledgerRepository;
         this.summaryRepository = summaryRepository;
         this.rowInitializer = rowInitializer;
+        this.extProductReplicaRepository = extProductReplicaRepository;
     }
 
     @Override
@@ -90,6 +95,7 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
     @Transactional
     public @NonNull List<InventoryLedgerEntry> postAll(
             @NonNull List<InventoryLedgerEntry> entries, boolean negativeStockOverride) {
+        entries.forEach(this::validateUnitOfMeasure);
         List<InventoryLedgerEntry> saved = ledgerRepository.saveAll(entries);
 
         Map<SummaryKey, SummaryDelta> deltas = new LinkedHashMap<>();
@@ -111,6 +117,51 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         deltas.forEach((key, delta) -> applyDelta(lockedRows.get(key), delta));
 
         return saved;
+    }
+
+    /**
+     * Validates an entry's free-text {@code unitOfMeasure} against the catalog replica
+     * (odoo-parity B2/B4, #1034): the ledger is base-UoM only, so an entry naming a UoM that
+     * contradicts the product's replica base UoM is rejected with a deterministic 422
+     * ({@code UOM_CONVERSION_UNDEFINED}).
+     *
+     * <p>Documented tolerance — validation only applies "going forward" where the catalog
+     * contract can actually answer; each of these passes through unvalidated rather than
+     * hard-failing products that predate the contract:
+     * <ul>
+     *   <li>{@code unitOfMeasure} absent/blank (most posting paths never set it)</li>
+     *   <li>{@code stockItemId} is not a UUID (legacy free-text SKUs)</li>
+     *   <li>no {@code ext_product} replica row for the product</li>
+     *   <li>replica row exists but carries no base UoM (pre-v2 catalog facts)</li>
+     * </ul>
+     * The comparison is case-insensitive.
+     */
+    private void validateUnitOfMeasure(InventoryLedgerEntry entry) {
+        String unitOfMeasure = entry.getUnitOfMeasure();
+        if (unitOfMeasure == null || unitOfMeasure.isBlank()) {
+            return;
+        }
+        UUID productId = parseProductId(entry.getStockItemId());
+        if (productId == null) {
+            return;
+        }
+        extProductReplicaRepository.findById(productId).ifPresent(replica -> {
+            String baseUom = replica.getBaseUom();
+            if (baseUom != null && !baseUom.equalsIgnoreCase(unitOfMeasure.trim())) {
+                throw UomConversionUndefinedException.nonBaseLedgerUom(productId, unitOfMeasure, baseUom);
+            }
+        });
+    }
+
+    private @Nullable UUID parseProductId(@Nullable String stockItemId) {
+        if (stockItemId == null || stockItemId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(stockItemId.trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     /**

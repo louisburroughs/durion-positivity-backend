@@ -66,6 +66,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final SourceDocumentStubClient sourceDocumentStubClient;
     private final SiteDefaultsService siteDefaultsService;
     private final WorkorderValidationService workorderValidationService;
+    private final DocumentQuantityConverter documentQuantityConverter;
 
     @Value("${pos.inventory.receiving.source-document-service:}")
     private String configuredSourceDocumentService;
@@ -131,10 +132,27 @@ public class ReceivingServiceImpl implements ReceivingService {
                 continue;
             }
 
-            BigDecimal receivedQty = lineReq.getReceivedQuantity();
+            // odoo-parity B2 (#1034): an optional document UoM converts to base BEFORE the
+            // expected-vs-received comparison and the ledger posting; keyed values are kept
+            // on the line for audit.
+            DocumentQuantityConverter.DocumentConversion conversion = documentQuantityConverter
+                    .convertIfPresent(
+                            parseProductId(line.getProductId()),
+                            line.getProductId(),
+                            lineReq.getDocumentUom(),
+                            lineReq.getDocumentQuantity())
+                    .orElse(null);
+            BigDecimal receivedQty = conversion != null ? conversion.baseQuantity() : lineReq.getReceivedQuantity();
+            if (receivedQty == null) {
+                throw new IllegalArgumentException(
+                        "receivedQuantity is required when documentUom/documentQuantity are absent");
+            }
             BigDecimal expectedQty = line.getExpectedQuantity();
 
             line.setReceivedQuantity(receivedQty);
+            line.setDocumentUom(conversion == null ? null : conversion.documentUom());
+            line.setDocumentQuantity(conversion == null ? null : conversion.documentQuantity());
+            line.setConversionFactor(conversion == null ? null : conversion.conversionFactor());
             int cmp = receivedQty.compareTo(expectedQty);
             if (cmp == 0) {
                 line.setStatus(ReceivingLineStatus.RECEIVED);
@@ -347,6 +365,22 @@ public class ReceivingServiceImpl implements ReceivingService {
             return quantity.intValueExact();
         } catch (ArithmeticException ex) {
             throw new IllegalArgumentException(fieldName + " must be a whole number within 32-bit integer range", ex);
+        }
+    }
+
+    /**
+     * Parses a receiving line's free-text productId as a catalog product UUID; {@code null} when
+     * it does not parse (a document UoM on such a line raises {@code UOM_CONVERSION_UNDEFINED} —
+     * odoo-parity B2, #1034).
+     */
+    private UUID parseProductId(String productId) {
+        if (productId == null || productId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(productId.trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
         }
     }
 
@@ -633,6 +667,9 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .status(line.getStatus() != null ? line.getStatus().name() : null)
                 .workorderId(line.getWorkorderId())
                 .workorderLineId(line.getWorkorderLineId())
+                .documentUom(line.getDocumentUom())
+                .documentQuantity(line.getDocumentQuantity())
+                .conversionFactor(line.getConversionFactor())
                 .build();
     }
 }

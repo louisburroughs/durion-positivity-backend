@@ -58,6 +58,7 @@ public class AsnServiceImpl implements AsnService {
     private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final ApplicationEventPublisher eventPublisher;
+    private final DocumentQuantityConverter documentQuantityConverter;
 
     @Override
     @Transactional
@@ -92,17 +93,38 @@ public class AsnServiceImpl implements AsnService {
         AdvanceShippingNoticeEntity savedAsnRef = savedAsn;
 
         List<AsnLineEntity> lineEntities = request.getLineItems().stream()
-                .map(line -> AsnLineEntity.builder()
-                        .asn(savedAsnRef)
-                        .purchaseOrder(requireApprovedPurchaseOrder(line.getPoId()))
-                        .poLine(resolvePurchaseOrderLine(line.getPoLineId()))
-                        .sku(line.getSku())
-                        .quantityShipped(line.getQuantityShipped())
-                        .quantityReceived(BigDecimal.ZERO)
-                        .unitOfMeasure(line.getUnitOfMeasure())
-                        .unitCostMinor(line.getUnitCostMinor())
-                        .lotNumber(line.getLotNumber())
-                        .build())
+                .map(line -> {
+                    PurchaseOrderLineEntity poLine = resolvePurchaseOrderLine(line.getPoLineId());
+                    // odoo-parity B2 (#1034): an optional document UoM derives the base
+                    // quantityShipped; the keyed values are kept for audit.
+                    DocumentQuantityConverter.DocumentConversion conversion = documentQuantityConverter
+                            .convertIfPresent(
+                                    resolveProductId(poLine, line.getSku()),
+                                    line.getSku(),
+                                    line.getDocumentUom(),
+                                    line.getDocumentQuantity())
+                            .orElse(null);
+                    BigDecimal quantityShipped =
+                            conversion != null ? conversion.baseQuantity() : line.getQuantityShipped();
+                    if (quantityShipped == null) {
+                        throw new IllegalArgumentException(
+                                "quantityShipped is required when documentUom/documentQuantity are absent");
+                    }
+                    return AsnLineEntity.builder()
+                            .asn(savedAsnRef)
+                            .purchaseOrder(requireApprovedPurchaseOrder(line.getPoId()))
+                            .poLine(poLine)
+                            .sku(line.getSku())
+                            .quantityShipped(quantityShipped)
+                            .quantityReceived(BigDecimal.ZERO)
+                            .unitOfMeasure(line.getUnitOfMeasure())
+                            .unitCostMinor(line.getUnitCostMinor())
+                            .lotNumber(line.getLotNumber())
+                            .documentUom(conversion == null ? null : conversion.documentUom())
+                            .documentQuantity(conversion == null ? null : conversion.documentQuantity())
+                            .conversionFactor(conversion == null ? null : conversion.conversionFactor())
+                            .build();
+                })
                 .toList();
         List<AsnLineEntity> savedLines = asnLineRepository.saveAll(lineEntities);
         savedAsnRef.setLines(savedLines);
@@ -165,8 +187,12 @@ public class AsnServiceImpl implements AsnService {
             throw new InvalidPoReferenceException("INVALID_PO_REFERENCE: PO " + poId + " is unknown or not APPROVED");
         }
 
-        long receiptTotalMinor = request.getLines().stream()
-                .mapToLong(this::lineAccruedAmountMinor)
+        // odoo-parity B2 (#1034): convert optional document-UoM quantities to base BEFORE the
+        // over-receipt guard and any posting; money math stays documentQuantity × unitCostMinor
+        // (unitCostMinor refers to one document-UoM unit when a document UoM is keyed).
+        List<ReceiptLineComputation> computedLines = computeReceiptLines(request.getLines());
+        long receiptTotalMinor = computedLines.stream()
+                .mapToLong(ReceiptLineComputation::lineAccruedMinor)
                 .sum();
         long currentOpenBalance = safeLong(purchaseOrder.getOpenBalanceMinor());
         if (receiptTotalMinor > currentOpenBalance
@@ -183,16 +209,20 @@ public class AsnServiceImpl implements AsnService {
                 .build();
 
         List<GoodsReceiptLineEntity> lineEntities = new ArrayList<>();
-        for (CreateGoodsReceiptLineRequest line : request.getLines()) {
-            long lineAccruedMinor = lineAccruedAmountMinor(line);
+        for (ReceiptLineComputation computed : computedLines) {
+            CreateGoodsReceiptLineRequest line = computed.request();
+            DocumentQuantityConverter.DocumentConversion conversion = computed.conversion();
             GoodsReceiptLineEntity receiptLine = GoodsReceiptLineEntity.builder()
                     .goodsReceipt(receiptEntity)
-                    .poLine(resolvePurchaseOrderLine(line.getPoLineId()))
+                    .poLine(computed.poLine())
                     .sku(line.getSku())
-                    .quantityReceived(line.getQuantityReceived())
+                    .quantityReceived(computed.baseQuantity())
                     .unitCostMinor(line.getUnitCostMinor())
-                    .lineAccruedAmountMinor(lineAccruedMinor)
+                    .lineAccruedAmountMinor(computed.lineAccruedMinor())
                     .lotNumber(line.getLotNumber())
+                    .documentUom(conversion == null ? null : conversion.documentUom())
+                    .documentQuantity(conversion == null ? null : conversion.documentQuantity())
+                    .conversionFactor(conversion == null ? null : conversion.conversionFactor())
                     .build();
             lineEntities.add(receiptLine);
         }
@@ -214,29 +244,32 @@ public class AsnServiceImpl implements AsnService {
                         ? ""
                         : persistedReceipt.getAsn().getAsnId().toString(),
                 "lineItems",
-                request.getLines().stream()
-                        .map(line -> Map.of(
+                computedLines.stream()
+                        .map(computed -> Map.of(
                                 "sku",
-                                line.getSku(),
+                                computed.request().getSku(),
                                 "quantityReceived",
-                                line.getQuantityReceived().toPlainString(),
+                                computed.baseQuantity().toPlainString(),
                                 "unitCostMinor",
-                                line.getUnitCostMinor() == null ? 0L : line.getUnitCostMinor()))
+                                computed.request().getUnitCostMinor() == null
+                                        ? 0L
+                                        : computed.request().getUnitCostMinor()))
                         .toList(),
                 "createdBy",
                 actorId,
                 "occurredAt",
                 Instant.now(clock).toString()));
 
-        for (CreateGoodsReceiptLineRequest line : request.getLines()) {
+        for (ReceiptLineComputation computed : computedLines) {
+            // Ledger rows stay base-UoM only (spec B2): the converted base quantity posts here.
             InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
-                    .stockItemId(line.getSku())
+                    .stockItemId(computed.request().getSku())
                     .locationId(request.getLocationId())
                     .toLocationId(request.getLocationId())
                     .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
-                    .changeInQuantity(toWholeQuantity(line.getQuantityReceived()))
-                    .quantityAfter(
-                            calculateQuantityAfter(line.getSku(), request.getLocationId(), line.getQuantityReceived()))
+                    .changeInQuantity(toWholeQuantity(computed.baseQuantity()))
+                    .quantityAfter(calculateQuantityAfter(
+                            computed.request().getSku(), request.getLocationId(), computed.baseQuantity()))
                     .transactionUserId(actorId)
                     .sourceTransactionId(persistedReceipt.getReceiptId().toString())
                     .notes("Goods receipt " + persistedReceipt.getReceiptNumber())
@@ -252,7 +285,7 @@ public class AsnServiceImpl implements AsnService {
         purchaseOrderRepository.save(purchaseOrder);
 
         if (asn != null) {
-            applyReceiptToAsn(asn, request.getLines());
+            applyReceiptToAsn(asn, computedLines);
             asnRepository.save(asn);
         }
 
@@ -289,10 +322,12 @@ public class AsnServiceImpl implements AsnService {
     }
 
     private void applyReceiptToAsn(
-            @NonNull AdvanceShippingNoticeEntity asn, @NonNull List<CreateGoodsReceiptLineRequest> lines) {
+            @NonNull AdvanceShippingNoticeEntity asn, @NonNull List<ReceiptLineComputation> lines) {
+        // Base quantities on both sides: ASN quantityShipped is stored in base UoM and the
+        // receipt lines were converted to base before this comparison (odoo-parity B2, #1034).
         Map<String, BigDecimal> receiptBySku = new HashMap<>();
-        for (CreateGoodsReceiptLineRequest line : lines) {
-            receiptBySku.merge(line.getSku(), line.getQuantityReceived(), BigDecimal::add);
+        for (ReceiptLineComputation line : lines) {
+            receiptBySku.merge(line.request().getSku(), line.baseQuantity(), BigDecimal::add);
         }
 
         for (AsnLineEntity asnLine : asn.getLines()) {
@@ -310,11 +345,63 @@ public class AsnServiceImpl implements AsnService {
         asn.setStatus(allReceived ? AsnStatus.FULLY_RECEIVED : AsnStatus.PARTIALLY_RECEIVED);
     }
 
-    private long lineAccruedAmountMinor(@NonNull CreateGoodsReceiptLineRequest line) {
-        return line.getQuantityReceived()
-                .multiply(BigDecimal.valueOf(line.getUnitCostMinor()))
-                .setScale(0, RoundingMode.HALF_EVEN)
-                .longValue();
+    /**
+     * Per-line receipt derivation (odoo-parity B2, #1034): the resolved PO line, the optional
+     * document-UoM conversion, the base quantity that posts to the ledger, and the accrued
+     * amount computed from the costed (document-unit) quantity.
+     */
+    private record ReceiptLineComputation(
+            CreateGoodsReceiptLineRequest request,
+            PurchaseOrderLineEntity poLine,
+            DocumentQuantityConverter.DocumentConversion conversion,
+            BigDecimal baseQuantity,
+            long lineAccruedMinor) {}
+
+    private List<ReceiptLineComputation> computeReceiptLines(@NonNull List<CreateGoodsReceiptLineRequest> lines) {
+        List<ReceiptLineComputation> computed = new ArrayList<>(lines.size());
+        for (CreateGoodsReceiptLineRequest line : lines) {
+            PurchaseOrderLineEntity poLine = resolvePurchaseOrderLine(line.getPoLineId());
+            DocumentQuantityConverter.DocumentConversion conversion = documentQuantityConverter
+                    .convertIfPresent(
+                            resolveProductId(poLine, line.getSku()),
+                            line.getSku(),
+                            line.getDocumentUom(),
+                            line.getDocumentQuantity())
+                    .orElse(null);
+            BigDecimal baseQuantity = conversion != null ? conversion.baseQuantity() : line.getQuantityReceived();
+            if (baseQuantity == null) {
+                throw new IllegalArgumentException(
+                        "quantityReceived is required when documentUom/documentQuantity are absent");
+            }
+            // unitCostMinor refers to one document-UoM unit when a document UoM is keyed, so the
+            // money math is documentQuantity × unitCostMinor either way.
+            BigDecimal costedQuantity = conversion != null ? conversion.documentQuantity() : baseQuantity;
+            long lineAccruedMinor = costedQuantity
+                    .multiply(BigDecimal.valueOf(line.getUnitCostMinor()))
+                    .setScale(0, RoundingMode.HALF_EVEN)
+                    .longValue();
+            computed.add(new ReceiptLineComputation(line, poLine, conversion, baseQuantity, lineAccruedMinor));
+        }
+        return computed;
+    }
+
+    /**
+     * Resolves the catalog product id for a document line: the linked PO line's skuId when
+     * present, otherwise the free-text SKU parsed as a UUID; {@code null} when neither resolves
+     * (a document UoM on such a line raises {@code UOM_CONVERSION_UNDEFINED}).
+     */
+    private UUID resolveProductId(PurchaseOrderLineEntity poLine, String sku) {
+        if (poLine != null && poLine.getSkuId() != null) {
+            return poLine.getSkuId();
+        }
+        if (sku == null || sku.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(sku.trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     private int toWholeQuantity(@NonNull BigDecimal quantity) {
@@ -353,6 +440,9 @@ public class AsnServiceImpl implements AsnService {
                         .quantityReceived(line.getQuantityReceived())
                         .unitOfMeasure(line.getUnitOfMeasure())
                         .lotNumber(line.getLotNumber())
+                        .documentUom(line.getDocumentUom())
+                        .documentQuantity(line.getDocumentQuantity())
+                        .conversionFactor(line.getConversionFactor())
                         .build())
                 .toList();
 
@@ -381,6 +471,9 @@ public class AsnServiceImpl implements AsnService {
                         .quantityReceived(line.getQuantityReceived())
                         .unitCostMinor(line.getUnitCostMinor())
                         .lineAccruedAmountMinor(line.getLineAccruedAmountMinor())
+                        .documentUom(line.getDocumentUom())
+                        .documentQuantity(line.getDocumentQuantity())
+                        .conversionFactor(line.getConversionFactor())
                         .build())
                 .toList();
 

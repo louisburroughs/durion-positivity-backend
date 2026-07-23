@@ -5089,6 +5089,18 @@ components:
           type: string
           description: Identifier of the workorder line the receiving line fulfils, when applicable
           example: 01960003-0000-7000-8000-000000000004
+        documentUom:
+          type: string
+          description: UoM the line was keyed in when it differed from the product's base UoM
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity as keyed in documentUom; receivedQuantity holds the derived base quantity
+          example: 1
+        conversionFactor:
+          type: number
+          description: Effective base-per-document-unit conversion factor applied at posting time
+          example: 12
       required:
       - lineId
       - productId
@@ -5168,12 +5180,19 @@ components:
           example: 01960003-0000-7000-8000-000000000001
         receivedQuantity:
           type: number
-          description: Quantity actually received for the line; may be zero
+          description: Quantity actually received for the line, in the product's base UoM; may be zero. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 8
           minimum: 0.0
+        documentUom:
+          type: string
+          description: Optional UoM the line is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at posting time; a UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity received expressed in documentUom; must be supplied together with documentUom
+          example: 1
       required:
       - lineId
-      - receivedQuantity
     ReceiveItemsResponse:
       type: object
       description: Result of recording received quantities for a receiving session
@@ -5611,7 +5630,7 @@ components:
           minLength: 1
         quantity:
           type: number
-          description: Quantity of the item being ordered on this line
+          description: Quantity of the item being ordered on this line, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 12
         unitCostMinor:
           type: integer
@@ -5626,10 +5645,17 @@ components:
           type: string
           description: Identifier of the general ledger account this line posts to
           example: GL-5000
+        documentUom:
+          type: string
+          description: Optional UoM the line is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at derivation time via the catalog conversion factors; unitCostMinor then refers to one documentUom unit. A UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity ordered expressed in documentUom; must be supplied together with documentUom
+          example: 1
       required:
       - description
       - lineNumber
-      - quantity
       - unitCostMinor
     PurchaseOrderLineResponse:
       type: object
@@ -5677,6 +5703,18 @@ components:
           type: number
           description: Quantity on this line not yet received
           example: 4
+        documentUom:
+          type: string
+          description: UoM the line was keyed in when it differed from the product's base UoM
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity as keyed in documentUom; quantityDecimal holds the derived base quantity
+          example: 1
+        conversionFactor:
+          type: number
+          description: Effective base-per-document-unit conversion factor applied at derivation time
+          example: 12
       required:
       - lineId
       - lineNumber
@@ -5871,16 +5909,23 @@ components:
           example: 01960003-0000-7000-8000-000000000020
         quantityReceived:
           type: number
-          description: Quantity received for this line
+          description: Quantity received for this line, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 4
         unitCostMinor:
           type: integer
           format: int64
-          description: Actual unit cost of the received goods in the smallest currency unit (e.g. cents)
+          description: Actual unit cost of the received goods in the smallest currency unit (e.g. cents). When documentUom is present this refers to one documentUom unit
           example: 1499
+        documentUom:
+          type: string
+          description: Optional UoM the receipt is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at posting time; a UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity received expressed in documentUom; must be supplied together with documentUom
+          example: 1
       required:
       - lineId
-      - quantityReceived
     ReceivePurchaseOrderRequest:
       type: object
       description: Request to record receipt of goods against one or more purchase order lines
@@ -6245,7 +6290,7 @@ components:
           minLength: 1
         quantityReceived:
           type: number
-          description: Whole-unit quantity of the SKU received in this goods receipt
+          description: Whole-unit quantity of the SKU received, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 8
         unitCostMinor:
           type: integer
@@ -6256,8 +6301,15 @@ components:
           type: string
           description: Lot or batch number associated with the received product
           example: LOT-2026-0042
+        documentUom:
+          type: string
+          description: Optional UoM the receipt line is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at posting time and the ledger posts the base quantity; unitCostMinor then refers to one documentUom unit. A UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity received expressed in documentUom; must be supplied together with documentUom
+          example: 1
       required:
-      - quantityReceived
       - sku
       - unitCostMinor
     CreateGoodsReceiptRequest:
@@ -6320,6 +6372,18 @@ components:
           format: int64
           description: Total accrued cost for this line expressed in minor currency units (quantity multiplied by unit cost)
           example: 11992
+        documentUom:
+          type: string
+          description: UoM the line was keyed in when it differed from the product's base UoM
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity as keyed in documentUom; quantityReceived holds the derived base quantity
+          example: 1
+        conversionFactor:
+          type: number
+          description: Effective base-per-document-unit conversion factor applied at posting time
+          example: 12
       required:
       - quantityReceived
       - receiptLineId
@@ -7044,7 +7108,7 @@ components:
           minLength: 1
         quantityShipped:
           type: number
-          description: Quantity of the SKU declared as shipped on the ASN
+          description: Quantity of the SKU declared as shipped on the ASN, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 12
         unitOfMeasure:
           type: string
@@ -7059,9 +7123,16 @@ components:
           type: string
           description: Lot or batch number associated with the shipped product
           example: LOT-2026-0042
+        documentUom:
+          type: string
+          description: Optional UoM the line is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at derivation time; a UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity shipped expressed in documentUom; must be supplied together with documentUom
+          example: 1
       required:
       - poId
-      - quantityShipped
       - sku
     CreateAsnRequest:
       type: object
@@ -7140,6 +7211,18 @@ components:
           type: string
           description: Lot or batch number associated with the shipped product
           example: LOT-2026-0042
+        documentUom:
+          type: string
+          description: UoM the line was keyed in when it differed from the product's base UoM
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity as keyed in documentUom; quantityShipped holds the derived base quantity
+          example: 1
+        conversionFactor:
+          type: number
+          description: Effective base-per-document-unit conversion factor applied at derivation time
+          example: 12
       required:
       - asnLineId
       - poId

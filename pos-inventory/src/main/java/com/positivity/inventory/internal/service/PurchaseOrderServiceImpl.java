@@ -56,6 +56,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final ApplicationContext applicationContext;
     private final EncumbranceEventPublisher encumbranceEventPublisher;
     private final InventoryFactPublisher inventoryFactPublisher;
+    private final DocumentQuantityConverter documentQuantityConverter;
     private final Clock clock;
 
     @Value("${pos.inventory.encumbranceEnabled:false}")
@@ -381,8 +382,23 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         long updatedOpenBalanceMinor = openBalanceMinor;
         for (ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest lineRequest : lineRequests) {
             PurchaseOrderLineEntity line = resolvePurchaseOrderLine(lineRequest.getLineId(), poLinesById);
-            updateOpenQuantity(line, lineRequest.getQuantityReceived());
-            long receivedValueMinor = calculateReceivedValueMinor(line, lineRequest);
+            // odoo-parity B2 (#1034): an optional document UoM converts to base BEFORE any
+            // open-quantity comparison/decrement; money math stays in document units.
+            DocumentQuantityConverter.DocumentConversion conversion = documentQuantityConverter
+                    .convertIfPresent(
+                            line.getSkuId(),
+                            String.valueOf(line.getSkuId()),
+                            lineRequest.getDocumentUom(),
+                            lineRequest.getDocumentQuantity())
+                    .orElse(null);
+            BigDecimal receivedBaseQuantity =
+                    conversion != null ? conversion.baseQuantity() : lineRequest.getQuantityReceived();
+            if (receivedBaseQuantity == null) {
+                throw new IllegalArgumentException(
+                        "quantityReceived is required when documentUom/documentQuantity are absent");
+            }
+            updateOpenQuantity(line, receivedBaseQuantity);
+            long receivedValueMinor = calculateReceivedValueMinor(line, lineRequest, conversion);
             updatedOpenBalanceMinor = Math.max(0L, updatedOpenBalanceMinor - receivedValueMinor);
         }
         return updatedOpenBalanceMinor;
@@ -407,12 +423,17 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     private long calculateReceivedValueMinor(
-            PurchaseOrderLineEntity line, ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest lineRequest) {
+            PurchaseOrderLineEntity line,
+            ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest lineRequest,
+            DocumentQuantityConverter.DocumentConversion conversion) {
         long effectiveUnitCost = lineRequest.getUnitCostMinor() == null
                 ? safeLong(line.getUnitCostMinor())
                 : lineRequest.getUnitCostMinor();
-        return lineRequest
-                .getQuantityReceived()
+        // unitCostMinor refers to one document-UoM unit when a document UoM is keyed — the money
+        // math is documentQuantity × unitCostMinor either way (odoo-parity B2, #1034).
+        BigDecimal costedQuantity =
+                conversion != null ? conversion.documentQuantity() : lineRequest.getQuantityReceived();
+        return costedQuantity
                 .multiply(BigDecimal.valueOf(effectiveUnitCost))
                 .setScale(0, RoundingMode.HALF_EVEN)
                 .longValue();
@@ -472,8 +493,22 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         long totalTaxMinor = 0L;
 
         for (PurchaseOrderLineRequest lineRequest : lineRequests) {
-            long lineTotalMinor = lineRequest
-                    .getQuantity()
+            // odoo-parity B2 (#1034): an optional document UoM (e.g. 1 CASE) derives the base
+            // quantity that flows into open-quantity math; unitCostMinor refers to one
+            // document-UoM unit, so the money math stays documentQuantity × unitCostMinor.
+            DocumentQuantityConverter.DocumentConversion conversion = documentQuantityConverter
+                    .convertIfPresent(
+                            lineRequest.getSkuId(),
+                            String.valueOf(lineRequest.getSkuId()),
+                            lineRequest.getDocumentUom(),
+                            lineRequest.getDocumentQuantity())
+                    .orElse(null);
+            BigDecimal baseQuantity = conversion != null ? conversion.baseQuantity() : lineRequest.getQuantity();
+            if (baseQuantity == null) {
+                throw new IllegalArgumentException("quantity is required when documentUom/documentQuantity are absent");
+            }
+            BigDecimal costedQuantity = conversion != null ? conversion.documentQuantity() : baseQuantity;
+            long lineTotalMinor = costedQuantity
                     .multiply(BigDecimal.valueOf(lineRequest.getUnitCostMinor()))
                     .setScale(0, RoundingMode.HALF_EVEN)
                     .longValue();
@@ -484,13 +519,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     .lineNumber(lineRequest.getLineNumber())
                     .skuId(lineRequest.getSkuId())
                     .description(lineRequest.getDescription())
-                    .quantityDecimal(lineRequest.getQuantity())
+                    .quantityDecimal(baseQuantity)
                     .unitCostMinor(lineRequest.getUnitCostMinor())
                     .lineTotalMinor(lineTotalMinor)
                     .taxMinor(lineTaxMinor)
                     .taxCodeId(lineRequest.getTaxCodeId())
                     .glAccountId(lineRequest.getGlAccountId())
-                    .openQuantityDecimal(lineRequest.getQuantity())
+                    .openQuantityDecimal(baseQuantity)
+                    .documentUom(conversion == null ? null : conversion.documentUom())
+                    .documentQuantity(conversion == null ? null : conversion.documentQuantity())
+                    .conversionFactor(conversion == null ? null : conversion.conversionFactor())
                     .build();
             lines.add(line);
 
@@ -575,6 +613,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .lineTotalMinor(line.getLineTotalMinor())
                 .taxMinor(safeLong(line.getTaxMinor()))
                 .openQuantityDecimal(line.getOpenQuantityDecimal())
+                .documentUom(line.getDocumentUom())
+                .documentQuantity(line.getDocumentQuantity())
+                .conversionFactor(line.getConversionFactor())
                 .build();
     }
 

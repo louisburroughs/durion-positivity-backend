@@ -3,7 +3,9 @@ package com.positivity.inventory.internal.dto.purchaseorder;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -41,8 +43,12 @@ public class PurchaseOrderLineRequest {
     @NotBlank
     private String description;
 
-    @Schema(description = "Quantity of the item being ordered on this line", example = "12", requiredMode = REQUIRED)
-    @NotNull
+    @Schema(
+            description = "Quantity of the item being ordered on this line, in the product's base UoM. Required"
+                    + " unless documentUom/documentQuantity are supplied, in which case the base quantity is derived"
+                    + " and this field is ignored",
+            example = "12",
+            requiredMode = NOT_REQUIRED)
     @Positive
     private BigDecimal quantity;
 
@@ -65,4 +71,32 @@ public class PurchaseOrderLineRequest {
             example = "GL-5000",
             requiredMode = NOT_REQUIRED)
     private String glAccountId;
+
+    @Schema(
+            description = "Optional UoM the line is keyed in (e.g. CASE). When present, documentQuantity is"
+                    + " converted to the product's base UoM at derivation time via the catalog conversion factors;"
+                    + " unitCostMinor then refers to one documentUom unit. A UoM with no conversion path is"
+                    + " rejected with 422 UOM_CONVERSION_UNDEFINED",
+            example = "CASE",
+            requiredMode = NOT_REQUIRED)
+    private String documentUom;
+
+    @Schema(
+            description = "Quantity ordered expressed in documentUom; must be supplied together with documentUom",
+            example = "1",
+            requiredMode = NOT_REQUIRED)
+    @Positive
+    private BigDecimal documentQuantity;
+
+    @JsonIgnore
+    @AssertTrue(message = "quantity is required when documentUom/documentQuantity are absent")
+    public boolean isQuantitySourcePresent() {
+        return quantity != null || documentUom != null || documentQuantity != null;
+    }
+
+    @JsonIgnore
+    @AssertTrue(message = "documentUom and documentQuantity must be provided together")
+    public boolean isDocumentUomPairComplete() {
+        return (documentUom == null) == (documentQuantity == null);
+    }
 }
