@@ -106,4 +106,12 @@ public class SalesOrderLineResponse {
             example = "01960003-0000-7000-8000-000000000006",
             requiredMode = NOT_REQUIRED)
     private String sourceLineId;
+
+    @Schema(description = "Captured lot/serial numbers for tracked products", requiredMode = NOT_REQUIRED)
+    private java.util.List<String> serialNumbers;
+
+    @Schema(
+            description = "Explicit source-document returnability flag (imported lines only; null for counter lines)",
+            requiredMode = NOT_REQUIRED)
+    private Boolean returnable;
 }

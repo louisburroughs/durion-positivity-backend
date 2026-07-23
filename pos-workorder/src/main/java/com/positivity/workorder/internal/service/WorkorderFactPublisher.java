@@ -114,7 +114,9 @@ public class WorkorderFactPublisher {
                 part.getQuantity(),
                 part.getUnitPrice(),
                 part.getLineTotal(),
-                part.getPhotoEvidenceUrl());
+                part.getPhotoEvidenceUrl(),
+                part.getDeclined(),
+                part.getReturnable());
     }
 
     private static WorkorderUpdatedV1.ServiceLine toServiceLine(@NonNull WorkorderServiceLine service) {
@@ -124,6 +126,7 @@ public class WorkorderFactPublisher {
                 service.getQuantity(),
                 service.getUnitPrice(),
                 service.getLineTotal(),
-                service.getPhotoEvidenceUrl());
+                service.getPhotoEvidenceUrl(),
+                service.getDeclined());
     }
 }

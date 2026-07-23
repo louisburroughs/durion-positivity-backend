@@ -70,6 +70,9 @@ class EstimateServiceTest {
     @Mock
     private com.positivity.workorder.internal.repository.WorkorderRepository workOrderRepository;
 
+    @Mock
+    private com.positivity.workorder.internal.service.EstimateFactPublisher estimateFactPublisher;
+
     @InjectMocks
     private EstimateServiceImpl estimateService;
 

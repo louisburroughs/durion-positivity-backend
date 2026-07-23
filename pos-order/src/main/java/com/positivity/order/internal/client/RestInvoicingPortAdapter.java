@@ -88,6 +88,22 @@ public class RestInvoicingPortAdapter implements InvoicingPort {
         }
     }
 
+    @Override
+    public void cancelInvoice(@NonNull UUID invoiceId) {
+        try {
+            invoiceServiceRestClient
+                    .post()
+                    .uri("/v1/invoices/{invoiceId}/cancel", invoiceId)
+                    .header("X-User", "pos-order")
+                    .header("X-Authorities", "invoice:manage")
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (Exception e) {
+            throw new InvoicingUnavailableException(
+                    "Invoice cancel failed for invoice " + invoiceId + ": " + e.getMessage(), e);
+        }
+    }
+
     private static String reasonNotes(ReversePaymentCommand command) {
         String reason = command.reasonCode() == null ? "order cancellation" : command.reasonCode();
         return "pos-order cancellation saga (order " + command.orderId() + "): " + reason;

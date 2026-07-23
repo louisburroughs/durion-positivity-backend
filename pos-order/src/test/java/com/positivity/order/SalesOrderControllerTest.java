@@ -124,6 +124,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 null);
 
         when(salesOrderService.createCart(any(CreateCartCommand.class)))
@@ -496,7 +498,7 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
     void checkout_whenValid_returns201WithInvoiceRef() throws Exception {
         UUID orderId = UUID.randomUUID();
         UUID invoiceId = UUID.randomUUID();
-        when(salesOrderService.checkout(any(UUID.class), anyString()))
+        when(salesOrderService.checkout(any(UUID.class), anyString(), any()))
                 .thenReturn(new com.positivity.order.service.model.CheckoutResult(
                         checkedOutSummary(orderId, invoiceId), false));
 
@@ -515,7 +517,7 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
     void checkout_whenReplay_returns200() throws Exception {
         UUID orderId = UUID.randomUUID();
         UUID invoiceId = UUID.randomUUID();
-        when(salesOrderService.checkout(any(UUID.class), anyString()))
+        when(salesOrderService.checkout(any(UUID.class), anyString(), any()))
                 .thenReturn(new com.positivity.order.service.model.CheckoutResult(
                         checkedOutSummary(orderId, invoiceId), true));
 

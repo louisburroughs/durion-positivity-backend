@@ -79,6 +79,21 @@ class SalesOrderServiceImplTest {
     private com.positivity.order.internal.client.InvoicingPort invoicingPort;
 
     @Mock
+    private com.positivity.order.internal.repository.ExtProductRepository extProductRepository;
+
+    @Mock
+    private com.positivity.order.internal.repository.ExtCustomerRepository extCustomerRepository;
+
+    @Mock
+    private com.positivity.order.internal.repository.ExtBillingRulesRepository extBillingRulesRepository;
+
+    @Mock
+    private com.positivity.order.internal.repository.OrderPaymentRecordRepository orderPaymentRecordRepository;
+
+    @Mock
+    private com.positivity.order.internal.config.OrderDomainEventPublisher orderDomainEventPublisher;
+
+    @Mock
     private OrderNumberService orderNumberService;
 
     @Mock
@@ -106,6 +121,11 @@ class SalesOrderServiceImplTest {
                 sourceDocumentPort,
                 customerPort,
                 invoicingPort,
+                extProductRepository,
+                extCustomerRepository,
+                extBillingRulesRepository,
+                orderPaymentRecordRepository,
+                orderDomainEventPublisher,
                 new OrderStateMachine(orderStatusHistoryRepository, java.time.Clock.systemUTC()),
                 orderNumberService,
                 new com.positivity.order.internal.service.OrderTotalsCalculator(),
@@ -567,7 +587,7 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(mergedOrder);
         when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, estimateId))
                 .thenReturn(List.of(
-                        new SourceDocumentLine("TIRE-001", "Tire", 3, new BigDecimal("100.00"), "EST-LINE-001")));
+                        new SourceDocumentLine("TIRE-001", "Tire", 3, new BigDecimal("100.00"), "EST-LINE-001", null)));
 
         // when
         SalesOrderSummary result = salesOrderService.linkSource(orderId, "ESTIMATE", estimateId);
@@ -618,8 +638,8 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(mergedOrder);
         when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, estimateId))
-                .thenReturn(
-                        List.of(new SourceDocumentLine("OIL-001", "Oil", 1, new BigDecimal("25.00"), "EST-LINE-002")));
+                .thenReturn(List.of(
+                        new SourceDocumentLine("OIL-001", "Oil", 1, new BigDecimal("25.00"), "EST-LINE-002", null)));
 
         // when
         SalesOrderSummary result = salesOrderService.linkSource(orderId, "ESTIMATE", estimateId);
@@ -672,7 +692,7 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(mergedOrder);
         when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, estimateId))
                 .thenReturn(List.of(
-                        new SourceDocumentLine("TIRE-001", "Tire", 3, new BigDecimal("100.00"), estimateLineId)));
+                        new SourceDocumentLine("TIRE-001", "Tire", 3, new BigDecimal("100.00"), estimateLineId, null)));
 
         // when
         SalesOrderSummary result = salesOrderService.linkSource(orderId, "ESTIMATE", estimateId);
@@ -1070,8 +1090,8 @@ class SalesOrderServiceImplTest {
         // source document returns the same line that is already linked → should be
         // deduped
         when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, estimateId))
-                .thenReturn(List.of(
-                        new SourceDocumentLine("TIRE-001", "Tire", 1, new BigDecimal("100.00"), existingSourceLineId)));
+                .thenReturn(List.of(new SourceDocumentLine(
+                        "TIRE-001", "Tire", 1, new BigDecimal("100.00"), existingSourceLineId, null)));
 
         // when
         SalesOrderSummary result = salesOrderService.linkSource(orderId, "ESTIMATE", estimateId);

@@ -45,6 +45,14 @@ Core workorder service for the Durion Positivity ETSMS platform. Manages the ful
 - `POST /v1/workexec/time-tracking` — submit labor time entry
 - `GET /v1/workexec/adjustments` — time entry adjustments
 
+## Estimate/workorder snapshot facts (order parity E1)
+
+`WorkorderFactPublisher` snapshots now carry `declined` and the new explicit `returnable`
+flag per part line (resolved order-spec Q6 — set at settlement time, never inferred). A new
+`EstimateFactPublisher` emits `workorder.estimate.updated` snapshots (header + full item set
+with approval status) on every estimate mutation, feeding pos-order's source-document import
+replicas. Both are gated by `workorder.kafka.enabled`.
+
 ## Configuration
 
 | Property                       | Default                    | Description                      |

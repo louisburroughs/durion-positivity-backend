@@ -94,6 +94,15 @@ location suggestion, and (from parity-F5) replenishment source selection via
 - **Audit**: the effective strategy is recorded as `sourcingReason` on pick tasks
   (and, from F5, replenishment tasks) so ops can answer "why this bin".
 
+## Counter-sale consumption (order parity H2)
+
+When `pos.inventory.kafka.enabled` is on, `OrderEventsListener` consumes
+`order.order.completed` and posts a `GOODS_ISSUE` ledger movement per fulfillable line
+(`stockItemId` = the line's SKU, at the order's shop location; WORKORDER-sourced lines never
+move stock — spec R7.5). Each line posts in its own transaction: a rejected post (insufficient
+stock, unknown item) raises `inventory.counter-sale.consumption-failed` on
+`inventory.events.v1` and never affects the completed sale.
+
 ## Configuration
 
 | Property                | Default  | Description                  |

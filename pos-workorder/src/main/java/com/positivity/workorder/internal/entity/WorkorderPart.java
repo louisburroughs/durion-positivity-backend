@@ -111,6 +111,15 @@ public class WorkorderPart {
     @Builder.Default
     private Boolean declined = false;
 
+    /**
+     * Explicit settled-line returnability (order parity story E1 #1077, resolved order-spec Q6):
+     * counter returns of workorder-settled parts are allowed only when this is set at settlement
+     * time — consumers never infer it. Null means "not marked".
+     */
+    @Column
+    @Nullable
+    private Boolean returnable;
+
     // Status of the work order item
     @Enumerated(EnumType.STRING)
     @Builder.Default

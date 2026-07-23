@@ -29,6 +29,8 @@ Invoice and payment service for the Durion Positivity ETSMS platform. Creates in
 - `POST /v1/invoices/from-order` — create the invoice fronting a sales order at checkout
   (order parity story C2; idempotent on `orderId`, returns the existing workorder invoice when
   `workorderId` matches one)
+- `POST /v1/invoices/{invoiceId}/cancel` — terminal cancel of a DRAFT invoice before any money
+  moved (order-void path, story C5); 409 once finalized or with authorized/captured payments
 - `GET /v1/invoices/{invoiceId}` — retrieve an invoice
 - `POST /v1/invoices/{invoiceId}/finalize` — finalize an invoice
 - `POST /v1/invoices/{invoiceId}/revert` — revert a finalized invoice

@@ -190,8 +190,8 @@ public class OrderDomainEventPublisher {
                 line.getSourceType() == null ? null : line.getSourceType().name(),
                 line.getSourceId(),
                 line.getSourceLineId(),
-                null,
-                List.of(),
+                line.getReturnable(),
+                line.getSerialNumbers() == null ? List.of() : List.copyOf(line.getSerialNumbers()),
                 // Spec R7.5: WORKORDER-sourced lines are fulfilled by the source document —
                 // pos-inventory must not double-consume them.
                 !workorderSourced);

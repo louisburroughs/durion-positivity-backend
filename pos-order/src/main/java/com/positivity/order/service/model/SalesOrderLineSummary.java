@@ -1,6 +1,7 @@
 package com.positivity.order.service.model;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
@@ -22,7 +23,9 @@ public record SalesOrderLineSummary(
         String internalNote,
         String sourceType,
         String sourceId,
-        String sourceLineId) {
+        String sourceLineId,
+        List<String> serialNumbers,
+        Boolean returnable) {
 
     public SalesOrderLineSummary {
         Objects.requireNonNull(orderLineId, "orderLineId must not be null");
@@ -31,5 +34,6 @@ public record SalesOrderLineSummary(
         Objects.requireNonNull(unitPrice, "unitPrice must not be null");
         Objects.requireNonNull(fulfillmentStatus, "fulfillmentStatus must not be null");
         Objects.requireNonNull(priceSource, "priceSource must not be null");
+        serialNumbers = Objects.requireNonNullElse(serialNumbers, List.of());
     }
 }

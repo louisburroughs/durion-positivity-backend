@@ -78,6 +78,9 @@ pos:
       # Settlement handshake (parity story C3): pos-invoice per-payment settlement facts
       payment-events-topic: ${POS_ORDER_PAYMENT_EVENTS_TOPIC:payment.events.v1}
       payment-events-consumer-group: ${POS_ORDER_PAYMENT_EVENTS_CONSUMER_GROUP:pos-order-payment-events}
+      # Source-document replicas (parity story E1): estimate/workorder snapshots
+      workorder-events-topic: ${POS_ORDER_WORKORDER_EVENTS_TOPIC:workorder.events.v1}
+      workorder-events-consumer-group: ${POS_ORDER_WORKORDER_EVENTS_CONSUMER_GROUP:pos-order-workorder-events}
     pricing:
       # PriceQuoteRequest requires a customerTierId; served from config until a customer→tier
       # mapping feed exists (the ext_customer replica carries only the tier name). Story B1.

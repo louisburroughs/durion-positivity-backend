@@ -78,6 +78,7 @@ public class EstimateServiceImpl implements EstimateService {
     private final ObjectMapper objectMapper;
     private final CustomerReferenceService customerReferenceService;
     private final VehicleReferenceService vehicleReferenceService;
+    private final EstimateFactPublisher estimateFactPublisher;
 
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
@@ -281,6 +282,7 @@ public class EstimateServiceImpl implements EstimateService {
                 .build();
 
         Estimate saved = estimateRepository.save(estimate);
+        estimateFactPublisher.markChanged(saved.getId());
 
         log.info(
                 "Estimate created successfully: estimateId={}, estimateNumber={}",
@@ -362,6 +364,7 @@ public class EstimateServiceImpl implements EstimateService {
         estimate.setApprovedBy(approvedByCustomerId);
 
         log.info("Estimate {} approved by customer {}", estimateId, approvedByCustomerId);
+        estimateFactPublisher.markChanged(estimateId);
         return EstimateResponse.fromEntity(estimateRepository.save(estimate));
     }
 
@@ -510,6 +513,7 @@ public class EstimateServiceImpl implements EstimateService {
         estimate.setPurchaseOrderNumber(purchaseOrderNumber);
 
         log.info("Estimate {} approved by customer {} with signature capture", estimateId, customerId);
+        estimateFactPublisher.markChanged(estimateId);
         return estimateRepository.save(estimate);
     }
 
@@ -598,6 +602,7 @@ public class EstimateServiceImpl implements EstimateService {
         estimate.setExpiresAt(LocalDateTime.now(clock).plusDays(config.getDeclineExpiryDays()));
 
         log.info("Estimate {} declined with reason: {}", estimateId, reason);
+        estimateFactPublisher.markChanged(estimateId);
         return EstimateResponse.fromEntity(estimateRepository.save(estimate));
     }
 
@@ -621,6 +626,7 @@ public class EstimateServiceImpl implements EstimateService {
         estimate.setExpiresAt(null);
 
         log.info("Estimate {} reopened from declined state", estimateId);
+        estimateFactPublisher.markChanged(estimateId);
         return EstimateResponse.fromEntity(estimateRepository.save(estimate));
     }
 
@@ -673,6 +679,7 @@ public class EstimateServiceImpl implements EstimateService {
                 estimateId,
                 username,
                 estimate.getExpiresAt());
+        estimateFactPublisher.markChanged(estimateId);
         return EstimateResponse.fromEntity(estimateRepository.save(estimate));
     }
 
@@ -805,6 +812,7 @@ public class EstimateServiceImpl implements EstimateService {
         }
 
         Estimate saved = estimateRepository.save(estimate);
+        estimateFactPublisher.markChanged(saved.getId());
 
         // Publish revision event if total changed
         if (totalChanged) {
@@ -891,6 +899,7 @@ public class EstimateServiceImpl implements EstimateService {
 
         item.validate();
         EstimateItem saved = estimateItemRepository.save(item);
+        estimateFactPublisher.markChanged(estimateId);
 
         log.info(
                 "Added {} item to estimate {}: itemId={}, description='{}'",
@@ -949,6 +958,7 @@ public class EstimateServiceImpl implements EstimateService {
         item.validate();
 
         EstimateItem saved = estimateItemRepository.save(item);
+        estimateFactPublisher.markChanged(estimateId);
 
         log.info("Updated item {} on estimate {}", itemId, estimateId);
 
@@ -983,6 +993,7 @@ public class EstimateServiceImpl implements EstimateService {
         // Soft delete
         item.setDeleted(true);
         estimateItemRepository.save(item);
+        estimateFactPublisher.markChanged(estimateId);
 
         log.info("Deleted (soft) item {} from estimate {}", itemId, estimateId);
     }
@@ -1465,6 +1476,7 @@ public class EstimateServiceImpl implements EstimateService {
 
         Estimate saved = estimateRepository.save(estimate);
         UUID estimateId = saved.getId();
+        estimateFactPublisher.markChanged(estimateId);
 
         log.info(
                 "Estimate created from appointment: estimateId={}, appointmentId={}",
@@ -1510,6 +1522,7 @@ public class EstimateServiceImpl implements EstimateService {
         estimate.setDeclinedAt(now);
 
         estimateRepository.save(estimate);
+        estimateFactPublisher.markChanged(estimate.getId());
 
         log.info("Estimate {} marked as EXPIRED due to approval timeout", estimate.getId());
     }
