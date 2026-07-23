@@ -73,7 +73,7 @@ public class RestInvoicingPortAdapter implements InvoicingPort {
                     .post()
                     .uri(path, invoiceId, paymentIntentId)
                     .header("X-User", "pos-order")
-                    .header("X-Authorities", isVoid ? "VOID_PAYMENT" : "REFUND_PAYMENT")
+                    .header("X-Authorities", "invoice:manage," + (isVoid ? "VOID_PAYMENT" : "REFUND_PAYMENT"))
                     .body(body)
                     .retrieve()
                     .toBodilessEntity();

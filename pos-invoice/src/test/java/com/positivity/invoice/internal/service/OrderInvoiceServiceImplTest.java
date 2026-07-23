@@ -164,4 +164,21 @@ class OrderInvoiceServiceImplTest {
         negative.setTotalAmount(new BigDecimal("-1.00"));
         assertThatThrownBy(() -> service.createInvoiceForOrder(negative)).isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    @DisplayName("OIS-006: internally inconsistent figures are rejected cent-exact")
+    void inconsistentTotals_rejected() {
+        OrderInvoiceCreationRequest badLineSum = request(null);
+        badLineSum.setSubtotal(new BigDecimal("101.00"));
+        badLineSum.setTotalAmount(new BigDecimal("109.00"));
+        assertThatThrownBy(() -> service.createInvoiceForOrder(badLineSum))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("subtotal");
+
+        OrderInvoiceCreationRequest badTotal = request(null);
+        badTotal.setTotalAmount(new BigDecimal("108.01"));
+        assertThatThrownBy(() -> service.createInvoiceForOrder(badTotal))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("totalAmount");
+    }
 }

@@ -126,6 +126,19 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
         if (lines == null || lines.isEmpty()) {
             throw new IllegalArgumentException("at least one line is required");
         }
+        // Cent-exact invariants: pos-order sends line amounts net of all discounts, so the
+        // figures must reconcile exactly before they become a financial document.
+        BigDecimal lineSum = lines.stream()
+                .map(line -> money(line.getAmount(), BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (lineSum.compareTo(subtotal) != 0) {
+            throw new IllegalArgumentException(
+                    "line amounts (" + lineSum + ") do not sum to subtotal (" + subtotal + ")");
+        }
+        if (subtotal.add(tax).compareTo(total) != 0) {
+            throw new IllegalArgumentException(
+                    "subtotal (" + subtotal + ") + taxAmount (" + tax + ") does not equal totalAmount (" + total + ")");
+        }
     }
 
     @Nullable

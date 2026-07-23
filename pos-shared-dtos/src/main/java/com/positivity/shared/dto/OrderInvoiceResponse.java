@@ -41,7 +41,6 @@ public class OrderInvoiceResponse {
     @Schema(description = "Invoice total.", example = "129.60")
     private BigDecimal totalAmount;
 
-    @NotNull
     @Schema(
             description = "True when an existing invoice was returned (orderId replay or workorder dedupe).",
             requiredMode = Schema.RequiredMode.REQUIRED)
