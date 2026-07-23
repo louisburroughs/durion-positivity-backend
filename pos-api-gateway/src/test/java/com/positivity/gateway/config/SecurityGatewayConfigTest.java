@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 29")
+    @DisplayName("CATALOG_VERSION is 30")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(29);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(30);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 393")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 396")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1221,8 +1221,12 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(392)).isEqualTo("PERM_accounting:tax-snapshot:freeze");
         // catalog v29 (#997 void symmetry): credit-memo void authority appended (bit 393)
         assertThat(GatewayPermissionCatalog.authorityForBit(393)).isEqualTo("PERM_accounting:credit-memo:void");
+        // catalog v30 (#1030/inventory wave-2): scrap authorities appended (bits 394-396)
+        assertThat(GatewayPermissionCatalog.authorityForBit(394)).isEqualTo("PERM_inventory:scrap:approve");
+        assertThat(GatewayPermissionCatalog.authorityForBit(395)).isEqualTo("PERM_inventory:scrap:create");
+        assertThat(GatewayPermissionCatalog.authorityForBit(396)).isEqualTo("PERM_inventory:scrap:view");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(394)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(397)).isNull();
     }
 
     @Test

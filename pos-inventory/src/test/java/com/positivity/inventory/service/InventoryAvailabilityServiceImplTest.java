@@ -46,6 +46,10 @@ class InventoryAvailabilityServiceImplTest {
     @Mock
     private AsOfQueryGuard asOfQueryGuard;
 
+    @Mock
+    private com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository
+            storageLocationReplicaRepository;
+
     private InventoryAvailabilityServiceImpl service;
 
     @BeforeEach
@@ -56,8 +60,15 @@ class InventoryAvailabilityServiceImplTest {
                 .when(forecastQuantityService.forecast(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.anyLong()))
                 .thenAnswer(invocation ->
                         new ForecastQuantityService.ForecastQuantities(0L, 0L, invocation.getArgument(3, Long.class)));
+        Mockito.lenient()
+                .when(storageLocationReplicaRepository.findById(Mockito.any()))
+                .thenReturn(java.util.Optional.empty());
         service = new InventoryAvailabilityServiceImpl(
-                stockSummaryRepository, inventoryLedgerEntryRepository, forecastQuantityService, asOfQueryGuard);
+                stockSummaryRepository,
+                inventoryLedgerEntryRepository,
+                forecastQuantityService,
+                asOfQueryGuard,
+                storageLocationReplicaRepository);
     }
 
     @Test
@@ -289,5 +300,27 @@ class InventoryAvailabilityServiceImplTest {
                 .reserved(reserved)
                 .atp(onHand - allocated)
                 .build();
+    }
+
+    @Test
+    void queryAvailability_resolvesStorageLocationToParentSiteForForecast() {
+        // Regression for PR #1058 review: a bin-scoped query must forecast against the
+        // bin's PARENT SITE (PO/ASN supply is keyed by ship-to site), not the bin id.
+        UUID binId = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+        String sku = "SKU-BIN-SITE";
+        InventoryStockSummary row = summary(sku, binId, 5L, 0L, 0L);
+        when(stockSummaryRepository.findByStockItemId(sku)).thenReturn(List.of(row));
+        com.positivity.inventory.internal.entity.ExtStorageLocationReplica replica =
+                com.positivity.inventory.internal.entity.ExtStorageLocationReplica.builder()
+                        .storageLocationId(binId)
+                        .siteId(siteId)
+                        .build();
+        when(storageLocationReplicaRepository.findById(binId)).thenReturn(java.util.Optional.of(replica));
+
+        service.queryAvailability(sku, null, binId, null);
+
+        verify(forecastQuantityService)
+                .forecast(Mockito.eq(sku), Mockito.eq(siteId), Mockito.isNull(), Mockito.anyLong());
     }
 }
