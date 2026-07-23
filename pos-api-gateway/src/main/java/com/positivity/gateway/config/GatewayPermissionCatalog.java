@@ -447,9 +447,9 @@ public final class GatewayPermissionCatalog {
         "PERM_accounting:credit-memo:void", // 393
 
         // ── New batch (bits 394–396) ──────────────────────────────────────────
-        "PERM_inventory:scrap:approve",                      // 394
-        "PERM_inventory:scrap:create",                       // 395
-        "PERM_inventory:scrap:view"                         // 396
+        "PERM_inventory:scrap:approve", // 394
+        "PERM_inventory:scrap:create", // 395
+        "PERM_inventory:scrap:view" // 396
     };
 
     public static String authorityForBit(int bitIndex) {
