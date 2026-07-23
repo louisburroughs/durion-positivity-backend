@@ -51,8 +51,11 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     @Override
     @Transactional
     public CreateCartResult createCart(CreateCartCommand command) {
-        if (command.idempotencyKey() != null) {
-            Optional<SalesOrder> existing = salesOrderRepository.findByCreationIdempotencyKey(command.idempotencyKey());
+        // Blank keys behave as "no idempotency key" — never looked up, never persisted (PR #1089
+        // review): with the unique index, persisting "" would make unrelated requests collide.
+        String idempotencyKey = normalizeBlank(command.idempotencyKey());
+        if (idempotencyKey != null) {
+            Optional<SalesOrder> existing = salesOrderRepository.findByCreationIdempotencyKey(idempotencyKey);
             if (existing.isPresent()) {
                 validateCreateReplay(existing.get(), command);
                 return new CreateCartResult(toSummary(existing.get()), true);
@@ -67,13 +70,13 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         SalesOrder order = SalesOrder.builder()
                 .orderNumber(orderNumberService.nextNumber(command.locationId()))
                 .locationId(command.locationId())
-                .label(command.label())
+                .label(normalizeBlank(command.label()))
                 .clerkId(command.clerkId())
                 .terminalId(command.terminalId())
                 .customerId(customerId)
                 .vehicleId(vehicleId)
                 .customerValidationStatus(validationStatus)
-                .creationIdempotencyKey(command.idempotencyKey())
+                .creationIdempotencyKey(idempotencyKey)
                 .status(SalesOrderStatus.DRAFT)
                 .subtotal(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP))
                 .createdBy(actor)
@@ -193,9 +196,14 @@ public class SalesOrderServiceImpl implements SalesOrderService {
 
     @Override
     public List<SalesOrderSummary> listCarts(String clerkId, String terminalId, String status, int page, int size) {
-        SalesOrderStatus statusFilter = status == null ? null : SalesOrderStatus.valueOf(status);
+        SalesOrderStatus statusFilter = normalizeBlank(status) == null ? null : SalesOrderStatus.valueOf(status.trim());
+        int pageSize = Math.min(Math.max(size, 1), 100);
         return salesOrderRepository
-                .search(clerkId, terminalId, statusFilter, PageRequest.of(Math.max(page, 0), Math.min(size, 100)))
+                .search(
+                        normalizeBlank(clerkId),
+                        normalizeBlank(terminalId),
+                        statusFilter,
+                        PageRequest.of(Math.max(page, 0), pageSize))
                 .map(this::toListSummary)
                 .getContent();
     }
@@ -285,12 +293,14 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     }
 
     private void validateCreateReplay(SalesOrder existing, CreateCartCommand command) {
+        // Compare normalized references, not raw strings: a replay sending "" where the original
+        // sent null is semantically identical (PR #1089 review).
         boolean matches = existing.getClerkId().equals(command.clerkId())
                 && existing.getTerminalId().equals(command.terminalId())
                 && Objects.equals(existing.getLocationId(), command.locationId())
-                && Objects.equals(existing.getLabel(), command.label())
-                && Objects.equals(asString(existing.getCustomerId()), command.customerId())
-                && Objects.equals(asString(existing.getVehicleId()), command.vehicleId());
+                && Objects.equals(existing.getLabel(), normalizeBlank(command.label()))
+                && Objects.equals(existing.getCustomerId(), parseReference(command.customerId(), "customerId"))
+                && Objects.equals(existing.getVehicleId(), parseReference(command.vehicleId(), "vehicleId"));
         if (!matches) {
             throw new CartIdempotencyConflictException(
                     "Idempotency key was previously used with a different cart-creation payload");
@@ -316,6 +326,10 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         }
         boolean pending = customer == CustomerLookupResult.UNAVAILABLE || vehicle == CustomerLookupResult.UNAVAILABLE;
         return pending ? CustomerValidationStatus.PENDING : CustomerValidationStatus.VALIDATED;
+    }
+
+    private static String normalizeBlank(String value) {
+        return (value == null || value.isBlank()) ? null : value;
     }
 
     private static UUID parseReference(String value, String field) {
