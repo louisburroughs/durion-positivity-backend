@@ -42,6 +42,8 @@ Inventory management service for the Durion Positivity ETSMS platform. Manages s
 - `POST /v1/inventory/returns/submit-to-stock` — submit return lines to stock (async accepted)
 - `GET /v1/inventory/shortage/options` — list shortage resolution options
 - `POST /v1/inventory/shortage/resolve` — resolve shortage with selected strategy
+- `GET /v1/inventory/backorders` — list backorders (filters: status, sku, location, workorderLine)
+- `GET /v1/inventory/backorders/{backorderId}` — retrieve a backorder
 - `GET /v1/inventory/locations` — paged location reference data
 - `GET /v1/inventory/storage-locations` — paged storage-location reference data
 - `GET /v1/inventory/location-zones` — paged location-zone reference data

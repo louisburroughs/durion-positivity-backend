@@ -25,6 +25,7 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.UnexpectedRollbackException;
@@ -76,17 +77,27 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
     private final ExtProductReplicaRepository extProductReplicaRepository;
     private final InventoryLotStatusReconciler lotStatusReconciler;
 
+    /**
+     * Availability-driven backorder resolver (odoo-parity G1, issue #1046). Held as an
+     * {@link ObjectProvider} so the funnel does not form an eager dependency cycle with the resolver
+     * (which posts {@code BACKORDER_RESOLVED} back through this funnel). The provider is empty in the
+     * pre-G1 unit fixtures that construct this service directly.
+     */
+    private final ObjectProvider<BackorderResolutionTrigger> backorderResolutionTrigger;
+
     public LedgerPostingServiceImpl(
             InventoryLedgerEntryRepository ledgerRepository,
             InventoryStockSummaryRepository summaryRepository,
             StockSummaryRowInitializer rowInitializer,
             ExtProductReplicaRepository extProductReplicaRepository,
-            InventoryLotStatusReconciler lotStatusReconciler) {
+            InventoryLotStatusReconciler lotStatusReconciler,
+            ObjectProvider<BackorderResolutionTrigger> backorderResolutionTrigger) {
         this.ledgerRepository = ledgerRepository;
         this.summaryRepository = summaryRepository;
         this.rowInitializer = rowInitializer;
         this.extProductReplicaRepository = extProductReplicaRepository;
         this.lotStatusReconciler = lotStatusReconciler;
+        this.backorderResolutionTrigger = backorderResolutionTrigger;
     }
 
     @Override
@@ -168,7 +179,48 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
             lotStatusReconciler.reconcile(touchedLotIds);
         }
 
+        triggerBackorderResolution(saved);
+
         return saved;
+    }
+
+    /**
+     * After the summary deltas are applied, attempt availability-driven backorder resolution for
+     * every (SKU, site) this batch raised on-hand at (odoo-parity G1, issue #1046). "Raised on-hand"
+     * = an on-hand-affecting entry with a positive change (goods receipt, transfer-in, adjustment-in,
+     * count-variance-in, put-away landing, return-to-stock). The resolver posts only the ATP-neutral
+     * {@code BACKORDER_RESOLVED} entry — not on-hand-affecting — so this re-entrant post collects no
+     * inbound keys and the loop is closed by construction. Best-effort: a resolver failure is logged
+     * and never rolls back the inbound posting.
+     */
+    private void triggerBackorderResolution(List<InventoryLedgerEntry> entries) {
+        BackorderResolutionTrigger trigger = backorderResolutionTrigger.getIfAvailable();
+        if (trigger == null) {
+            return;
+        }
+        Set<SummaryKey> inboundKeys = new LinkedHashSet<>();
+        for (InventoryLedgerEntry entry : entries) {
+            InventoryLedgerEventType eventType = entry.getEventType();
+            int change = entry.getChangeInQuantity() == null ? 0 : entry.getChangeInQuantity();
+            if (eventType != null
+                    && eventType.affectsOnHand()
+                    && change > 0
+                    && entry.getStockItemId() != null
+                    && entry.getLocationId() != null) {
+                inboundKeys.add(new SummaryKey(entry.getStockItemId(), entry.getLocationId(), null));
+            }
+        }
+        for (SummaryKey key : inboundKeys) {
+            try {
+                trigger.onInboundAvailability(key.stockItemId(), key.locationId());
+            } catch (RuntimeException e) {
+                log.warn(
+                        "Backorder auto-resolution failed for stockItemId={} locationId={}: {}",
+                        key.stockItemId(),
+                        key.locationId(),
+                        e.getMessage());
+            }
+        }
     }
 
     /**

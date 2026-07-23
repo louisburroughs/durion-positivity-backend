@@ -1,6 +1,8 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.domainevents.inventory.BackorderCreatedV1;
+import com.positivity.domainevents.inventory.BackorderResolvedV1;
 import com.positivity.domainevents.inventory.ConsumptionRecordedV1;
 import com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1;
 import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
@@ -182,6 +184,32 @@ public class InventoryFactPublisher {
         pending.transferOrderUpdates.add(fact);
     }
 
+    /**
+     * Record a backorder-created occurrence fact (odoo-parity G1, issue #1046): a backorder was
+     * opened for short demand. Queued as-is — this is an occurrence, not a snapshot, and is never
+     * re-emitted. pos-workorder consumes it read-side for workorder-line shortage visibility.
+     */
+    public void recordBackorderCreated(@NonNull BackorderCreatedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.backorderCreations.add(fact);
+    }
+
+    /**
+     * Record a backorder-resolved occurrence fact (odoo-parity G1, issue #1046): an open backorder
+     * was resolved. Queued as-is — this is an occurrence, not a snapshot, and is never re-emitted; a
+     * backorder resolves at most once, so the fact is emitted exactly once per backorder.
+     */
+    public void recordBackorderResolved(@NonNull BackorderResolvedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.backorderResolutions.add(fact);
+    }
+
     private @Nullable Pending pending() {
         if (outboxEventWriter.getIfAvailable() == null
                 || !TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -346,6 +374,31 @@ public class InventoryFactPublisher {
                 log.warn("Skipping transfer-order fact for {}: {}", transferUpdate.transferOrderId(), e.getMessage());
             }
         }
+        for (BackorderCreatedV1 backorderCreated : pending.backorderCreations) {
+            try {
+                publish(
+                        writer,
+                        BackorderCreatedV1.EVENT_TYPE,
+                        BackorderCreatedV1.SCHEMA_VERSION,
+                        backorderCreated.backorderId(),
+                        backorderCreated);
+            } catch (Exception e) {
+                log.warn("Skipping backorder-created fact for {}: {}", backorderCreated.backorderId(), e.getMessage());
+            }
+        }
+        for (BackorderResolvedV1 backorderResolved : pending.backorderResolutions) {
+            try {
+                publish(
+                        writer,
+                        BackorderResolvedV1.EVENT_TYPE,
+                        BackorderResolvedV1.SCHEMA_VERSION,
+                        backorderResolved.backorderId(),
+                        backorderResolved);
+            } catch (Exception e) {
+                log.warn(
+                        "Skipping backorder-resolved fact for {}: {}", backorderResolved.backorderId(), e.getMessage());
+            }
+        }
         for (UUID productId : pending.leadTimeProductIds) {
             try {
                 LeadTimeView view = inventoryLeadTimeService.queryLeadTime(productId, null, null);
@@ -410,5 +463,7 @@ public class InventoryFactPublisher {
         private final List<ExpectedSupplyDroppedV1> expectedSupplyDrops = new ArrayList<>();
         private final List<ScrapPostedV1> scrapPosts = new ArrayList<>();
         private final List<TransferOrderUpdatedV1> transferOrderUpdates = new ArrayList<>();
+        private final List<BackorderCreatedV1> backorderCreations = new ArrayList<>();
+        private final List<BackorderResolvedV1> backorderResolutions = new ArrayList<>();
     }
 }

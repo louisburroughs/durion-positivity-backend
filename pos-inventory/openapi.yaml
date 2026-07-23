@@ -62,6 +62,8 @@ tags:
   description: Replenishment task and policy endpoints
 - name: Cycle Count Query
   description: Query endpoints for cycle count tasks and history
+- name: Backorders
+  description: Unfulfilled workorder-line demand held open until availability covers it
 - name: Cycle Count Schedules
   description: Recurring cycle-count schedule management endpoints
 - name: Purchase Orders
@@ -4823,6 +4825,91 @@ paths:
         - inventory:cycle_count:view
       x-required-permissions:
       - inventory:cycle_count:view
+  /v1/inventory/backorders:
+    get:
+      tags:
+      - Backorders
+      summary: List backorders
+      description: Lists backorders filtered by status, SKU, location, and workorder line
+      operationId: listBackorders
+      parameters:
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - RESOLVED
+          - CANCELLED
+      - name: sku
+        in: query
+        description: Filter by SKU / stock-item identifier
+        required: false
+        schema:
+          type: string
+      - name: locationId
+        in: query
+        description: Filter by site
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: workorderLineId
+        in: query
+        description: Filter by workorder line
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Backorders retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BackorderResponse'
+      security:
+      - bearerAuth:
+        - inventory:shortage:view
+      x-required-permissions:
+      - inventory:shortage:view
+  /v1/inventory/backorders/{backorderId}:
+    get:
+      tags:
+      - Backorders
+      summary: Get backorder details
+      description: Retrieves one backorder
+      operationId: getBackorder
+      parameters:
+      - name: backorderId
+        in: path
+        description: Backorder ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Backorder found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackorderResponse'
+        '404':
+          description: Backorder not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:shortage:view
+      x-required-permissions:
+      - inventory:shortage:view
   /v1/inventory/availability:
     get:
       tags:
@@ -10038,6 +10125,58 @@ components:
       - recount
       - recountSequenceNumber
       - variance
+    BackorderResponse:
+      type: object
+      description: 'A backorder: unfulfilled workorder-line demand held open until availability covers it'
+      properties:
+        backorderId:
+          type: string
+          format: uuid
+          description: Backorder record identifier
+        workorderLineId:
+          type: string
+          format: uuid
+          description: Workorder line whose demand was short
+        sku:
+          type: string
+          description: SKU / stock-item identifier that was short
+        locationId:
+          type: string
+          format: uuid
+          description: Site the demand is short at
+        quantityShort:
+          type: integer
+          format: int32
+          description: Quantity that could not be fulfilled (positive)
+        status:
+          type: string
+          description: 'Lifecycle status: OPEN, RESOLVED, or CANCELLED'
+          enum:
+          - OPEN
+          - RESOLVED
+          - CANCELLED
+        resolutionSource:
+          type: string
+          description: What drove resolution; null while OPEN or CANCELLED
+          enum:
+          - AVAILABILITY
+          - REPLENISHMENT_RECEIPT
+          - MANUAL
+        createdBy:
+          type: string
+          description: Actor that opened the backorder
+        createdAt:
+          type: string
+          format: date-time
+          description: When the backorder was opened
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the backorder was last updated
+        resolvedAt:
+          type: string
+          format: date-time
+          description: When the backorder was resolved; null otherwise
     AvailabilityView:
       type: object
       description: Read-only view of on-hand and available-to-promise quantities for a product at a specific location scope
