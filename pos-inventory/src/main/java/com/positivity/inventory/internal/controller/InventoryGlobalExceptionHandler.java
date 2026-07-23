@@ -32,6 +32,7 @@ import com.positivity.inventory.internal.exception.RollupExpansionTooLargeExcept
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
+import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
 import com.positivity.shared.error.ApiError;
@@ -238,6 +239,13 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(PartMatchPermissionException.class)
     public ResponseEntity<ApiError> handlePartMatchPermission(PartMatchPermissionException ex) {
         return build(HttpStatus.FORBIDDEN, "PART_MATCH_PERMISSION_REQUIRED", ex.getMessage());
+    }
+
+    @ExceptionHandler(UomConversionUndefinedException.class)
+    public ResponseEntity<ApiError> handleUomConversionUndefined(UomConversionUndefinedException ex) {
+        // odoo-parity B1/B4 (#1033): no conversion path to base UoM is a deterministic 422,
+        // never a silent 1:1 assumption.
+        return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
     }
 
     @ExceptionHandler(InvalidParamCombinationException.class)

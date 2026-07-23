@@ -1,0 +1,159 @@
+package com.positivity.inventory.internal.service;
+
+import com.positivity.domainevents.catalog.ProductUpdatedV1;
+import com.positivity.inventory.internal.entity.ExtProductReplica;
+import com.positivity.inventory.internal.entity.ExtProductSubstitutionReplica;
+import com.positivity.inventory.internal.entity.ExtProductUomReplica;
+import com.positivity.inventory.internal.entity.ProcessedEvent;
+import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
+import com.positivity.inventory.internal.repository.ExtProductSubstitutionReplicaRepository;
+import com.positivity.inventory.internal.repository.ExtProductUomReplicaRepository;
+import com.positivity.inventory.internal.repository.ProcessedEventRepository;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.TransientDataAccessException;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
+/**
+ * Consumes {@code catalog.events.v1} into the {@code ext_product} / {@code ext_product_uom} /
+ * {@code ext_product_substitution} replicas (odoo-parity B1, #1033; contract X1, #1023). One
+ * listener maintains every schema-v2 product field — base UoM + conversion set for the
+ * {@link UomConversionService}, tracking level for E1, substitution-group membership for G2 — so
+ * the later stories consume the replica instead of adding further catalog consumers.
+ *
+ * <p>Consumer contract mirrors the module's other listeners: {@code processed_events} idempotency
+ * (owner {@code catalog}) in the apply transaction, stale guard on the fact's
+ * {@code aggregateVersion}, transient DB errors rethrown for container retry/DLQ. Unsupported
+ * event types still record their eventIds so the owner's manifest reconciles.
+ *
+ * <p>Two catalog-specific contract points (X1 producer guidance):
+ *
+ * <ul>
+ *   <li>{@code aggregateVersion} is the product's {@code updatedAt} epoch millis; the guard skips
+ *       ONLY strictly-lower versions — equal versions apply, because group-membership changes fan
+ *       out multiple facts with the same millisecond timestamp.
+ *   <li>Null tolerance for pre-v2 facts: {@code trackingLevel} null ⇒ {@code NONE};
+ *       {@code uomConversions} / {@code substitutionProductIds} null ⇒ empty (children cleared —
+ *       the fact carries the full sets, replace wholesale).
+ * </ul>
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "pos.inventory.kafka", name = "enabled", havingValue = "true")
+public class CatalogEventsListener {
+
+    /** Producing domain, per the repo-wide processed_events convention (manifest scans key on it). */
+    static final String OWNER = "catalog";
+
+    private final Clock clock;
+    private final ObjectMapper objectMapper;
+    private final ProcessedEventRepository processedEventRepository;
+    private final ExtProductReplicaRepository extProductReplicaRepository;
+    private final ExtProductUomReplicaRepository extProductUomReplicaRepository;
+    private final ExtProductSubstitutionReplicaRepository extProductSubstitutionReplicaRepository;
+
+    @KafkaListener(
+            topics = "${pos.inventory.kafka.catalog-events-topic:catalog.events.v1}",
+            groupId = "${pos.inventory.kafka.catalog-events-consumer-group:pos-inventory-catalog-events}")
+    @Transactional
+    public void onCatalogEvent(@NonNull String message) {
+        JsonNode envelope;
+        try {
+            envelope = objectMapper.readTree(message);
+        } catch (Exception e) {
+            log.warn("Skipping unparsable catalog event: {}", message, e);
+            return;
+        }
+        String eventType = envelope.path("eventType").stringValue(null);
+        String eventId = envelope.path("eventId").stringValue(null);
+        if (eventId == null || eventId.isBlank()) {
+            log.warn("Skipping catalog event without eventId: {}", message);
+            return;
+        }
+        if (processedEventRepository.existsById(eventId)) {
+            return;
+        }
+
+        try {
+            if (ProductUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                applyProductUpdated(envelope);
+            } else {
+                // Ignored types still fall through to the processed_events insert below: the
+                // owner's manifest counts every fact in the window.
+                log.debug("Ignoring catalog event type={} eventId={}", eventType, eventId);
+            }
+        } catch (TransientDataAccessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Skipping malformed catalog event eventId={}", eventId, e);
+        }
+        processedEventRepository.save(ProcessedEvent.builder()
+                .eventId(eventId)
+                .owner(OWNER)
+                .processedAt(Instant.now(clock))
+                .build());
+    }
+
+    private void applyProductUpdated(JsonNode envelope) {
+        ProductUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), ProductUpdatedV1.class);
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        UUID productId = payload.productId();
+        ExtProductReplica existing =
+                extProductReplicaRepository.findById(productId).orElse(null);
+        // Strictly-lower-only skip: equal versions APPLY. Catalog stamps updatedAt epoch millis
+        // as the version and fans out same-millisecond facts on group-membership changes.
+        if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
+            return;
+        }
+
+        extProductReplicaRepository.save(ExtProductReplica.builder()
+                .productId(productId)
+                .baseUom(payload.baseUom())
+                .trackingLevel(
+                        payload.trackingLevel() == null
+                                ? ExtProductReplica.TRACKING_LEVEL_NONE
+                                : payload.trackingLevel())
+                .substitutionGroupId(payload.substitutionGroupId())
+                .aggregateVersion(aggregateVersion)
+                .updatedAt(Instant.now(clock))
+                .build());
+
+        // The fact carries the product's full UoM conversion set — replace, don't merge.
+        extProductUomReplicaRepository.deleteByProductId(productId);
+        List<ProductUpdatedV1.UomConversion> conversions =
+                payload.uomConversions() == null ? List.of() : payload.uomConversions();
+        conversions.forEach(conversion -> extProductUomReplicaRepository.save(ExtProductUomReplica.builder()
+                .productId(productId)
+                .uomCode(conversion.uomCode())
+                .uomType(conversion.uomType())
+                .factorToBase(conversion.factorToBase())
+                .precisionScale(conversion.precisionScale())
+                .build()));
+
+        // Same for the substitution member set: null means the product is in no group — clear.
+        extProductSubstitutionReplicaRepository.deleteByProductId(productId);
+        List<UUID> members = payload.substitutionProductIds() == null ? List.of() : payload.substitutionProductIds();
+        members.forEach(memberId -> extProductSubstitutionReplicaRepository.save(ExtProductSubstitutionReplica.builder()
+                .productId(productId)
+                .memberProductId(memberId)
+                .build()));
+
+        log.info(
+                "Updated ext_product productId={} version={} uomRows={} substitutionMembers={}",
+                productId,
+                aggregateVersion,
+                conversions.size(),
+                members.size());
+    }
+}
