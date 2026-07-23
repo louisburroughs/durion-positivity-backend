@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1;
 import com.positivity.inventory.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
 import com.positivity.inventory.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
 import com.positivity.inventory.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
@@ -24,6 +25,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -53,6 +55,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final ApplicationEventPublisher eventPublisher;
     private final ApplicationContext applicationContext;
     private final EncumbranceEventPublisher encumbranceEventPublisher;
+    private final InventoryFactPublisher inventoryFactPublisher;
     private final Clock clock;
 
     @Value("${pos.inventory.encumbranceEnabled:false}")
@@ -285,8 +288,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         if (po.getStatus() == PurchaseOrderStatus.FULLY_RECEIVED || po.getStatus() == PurchaseOrderStatus.CLOSED) {
             throw new IllegalStateException("Cannot cancel a fully received or closed purchase order");
         }
+        PurchaseOrderStatus priorStatus = po.getStatus();
         po.setStatus(PurchaseOrderStatus.CANCELLED);
         PurchaseOrderEntity saved = purchaseOrderRepository.save(po);
+        emitExpectedSupplyDropped(saved, priorStatus, ExpectedSupplyDroppedV1.REASON_CANCELLED);
         eventPublisher.publishEvent(Map.of(
                 EVENT_TYPE,
                 "PurchaseOrderCancelled",
@@ -297,6 +302,38 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 OCCURRED_AT,
                 Instant.now(clock).toString()));
         return toResponse(saved);
+    }
+
+    /**
+     * Emits one {@link ExpectedSupplyDroppedV1} fact per SKU with remaining open quantity when
+     * a purchase order that counted as expected supply reaches a terminal status (odoo-parity
+     * A4, issue #1028). Purchase orders that never entered the supply projection (DRAFT — never
+     * approved) emit nothing.
+     */
+    private void emitExpectedSupplyDropped(PurchaseOrderEntity po, PurchaseOrderStatus priorStatus, String reason) {
+        if (priorStatus != PurchaseOrderStatus.APPROVED && priorStatus != PurchaseOrderStatus.PARTIALLY_RECEIVED) {
+            return;
+        }
+        Map<UUID, BigDecimal> openBySku = new LinkedHashMap<>();
+        for (PurchaseOrderLineEntity line : po.getLines()) {
+            if (line.getSkuId() == null) {
+                continue;
+            }
+            BigDecimal open = line.getOpenQuantityDecimal();
+            if (open == null || open.signum() <= 0) {
+                continue;
+            }
+            openBySku.merge(line.getSkuId(), open, BigDecimal::add);
+        }
+        Instant occurredAt = Instant.now(clock);
+        openBySku.forEach((skuId, droppedQuantity) ->
+                inventoryFactPublisher.recordExpectedSupplyDropped(new ExpectedSupplyDroppedV1(
+                        skuId.toString(),
+                        po.getShipToLocationId(),
+                        droppedQuantity,
+                        po.getPurchaseOrderId(),
+                        reason,
+                        occurredAt)));
     }
 
     @Override

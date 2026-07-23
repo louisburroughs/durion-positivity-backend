@@ -1775,7 +1775,7 @@ paths:
       tags:
       - Inventory Availability
       summary: Query inventory availability
-      description: Returns per-location availability for a product.
+      description: Returns per-location availability for a product, including forecast quantities (incomingQty, outgoingQty, projectedAvailable) computed from open purchase orders, ASNs, reservations, and released pick tasks (odoo-parity A2).
       operationId: getInventoryAvailability
       parameters:
       - name: productId
@@ -1785,6 +1785,13 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: horizon
+        in: query
+        description: Optional forecast horizon (ISO-8601 instant). Bounds incomingQty to supply expected on or before this instant and outgoingQty to reservations due by it; documents without an expected date are excluded from horizon-bounded results.
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
         '200':
           description: Availability returned
@@ -3373,6 +3380,13 @@ paths:
           - WAREHOUSE
           - SUPPLIER
           - TRANSIT
+      - name: horizon
+        in: query
+        description: Optional forecast horizon (ISO-8601 instant) bounding incomingQty/outgoingQty; documents without an expected date are excluded from horizon-bounded results.
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
         '200':
           description: Availability list returned
@@ -3528,6 +3542,13 @@ paths:
           - WAREHOUSE
           - SUPPLIER
           - TRANSIT
+      - name: horizon
+        in: query
+        description: Optional forecast horizon (ISO-8601 instant) bounding incomingQty/outgoingQty; documents without an expected date are excluded from horizon-bounded results.
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
         '200':
           description: Availability view returned
@@ -7268,6 +7289,21 @@ components:
           type: string
           description: Unit of measure code for the quantities (e.g. EACH, KG)
           example: EACH
+        incomingQty:
+          type: integer
+          format: int64
+          description: 'Open expected supply: approved purchase-order open line quantity plus un-received ASN remainder. Site-level when a location scope is given. Bounded by the ''horizon'' query parameter when present (documents without an expected date are excluded from horizon-bounded results). Omitted for as-of (historical) requests.'
+          example: 25
+        outgoingQty:
+          type: integer
+          format: int64
+          description: 'Open expected demand not yet decremented from on-hand: unallocated reservation remainders plus released-not-picked pick-task remainders. Reservation demand carries no site and is included in every scope. Omitted for as-of (historical) requests.'
+          example: 10
+        projectedAvailable:
+          type: integer
+          format: int64
+          description: 'Projected availability: onHandQuantity + incomingQty - outgoingQty. Omitted for as-of (historical) requests.'
+          example: 135
       required:
       - allocatedQuantity
       - availableToPromiseQuantity
@@ -7298,6 +7334,21 @@ components:
           format: int32
           description: Available-to-promise quantity at the location
           example: 90
+        incomingQty:
+          type: integer
+          format: int64
+          description: 'Open expected supply at the site: approved purchase-order open line quantity plus un-received ASN remainder. Bounded by the ''horizon'' query parameter when present (documents without an expected date are excluded from horizon-bounded results). Omitted for as-of requests.'
+          example: 25
+        outgoingQty:
+          type: integer
+          format: int64
+          description: 'Open expected demand not yet decremented from on-hand: unallocated reservation remainders plus released-not-picked pick-task remainders. Reservation demand carries no site and is included in every site row. Omitted for as-of requests.'
+          example: 10
+        projectedAvailable:
+          type: integer
+          format: int64
+          description: 'Projected availability: onHandQuantity + incomingQty - outgoingQty (Odoo virtual_available). Omitted for as-of requests.'
+          example: 135
       required:
       - availableToPromiseQuantity
       - locationId

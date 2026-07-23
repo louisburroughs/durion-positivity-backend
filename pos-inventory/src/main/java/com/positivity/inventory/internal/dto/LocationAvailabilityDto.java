@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -38,4 +39,29 @@ public class LocationAvailabilityDto {
 
     @Schema(description = "Available-to-promise quantity at the location", example = "90", requiredMode = REQUIRED)
     private int availableToPromiseQuantity;
+
+    @Schema(
+            description =
+                    "Open expected supply at the site: approved purchase-order open line quantity plus un-received "
+                            + "ASN remainder. Bounded by the 'horizon' query parameter when present (documents without "
+                            + "an expected date are excluded from horizon-bounded results). Omitted for as-of requests.",
+            example = "25",
+            requiredMode = NOT_REQUIRED)
+    private Long incomingQty;
+
+    @Schema(
+            description =
+                    "Open expected demand not yet decremented from on-hand: unallocated reservation remainders plus "
+                            + "released-not-picked pick-task remainders. Reservation demand carries no site and is "
+                            + "included in every site row. Omitted for as-of requests.",
+            example = "10",
+            requiredMode = NOT_REQUIRED)
+    private Long outgoingQty;
+
+    @Schema(
+            description = "Projected availability: onHandQuantity + incomingQty - outgoingQty "
+                    + "(Odoo virtual_available). Omitted for as-of requests.",
+            example = "135",
+            requiredMode = NOT_REQUIRED)
+    private Long projectedAvailable;
 }

@@ -48,7 +48,9 @@ public class InventoryAvailabilityController {
     @Operation(
             operationId = "getInventoryAvailability",
             summary = "Query inventory availability",
-            description = "Returns per-location availability for a product.",
+            description = "Returns per-location availability for a product, including forecast quantities "
+                    + "(incomingQty, outgoingQty, projectedAvailable) computed from open purchase orders, ASNs, "
+                    + "reservations, and released pick tasks (odoo-parity A2).",
             tags = {"Inventory Availability"})
     @ApiResponse(
             responseCode = "200",
@@ -60,9 +62,16 @@ public class InventoryAvailabilityController {
     @ApiResponse(responseCode = "400", description = "Invalid product identifier")
     // Issue #48: Expose on-hand and ATP grouped by location.
     public ResponseEntity<List<LocationAvailabilityDto>> queryInventoryAvailability(
-            @Parameter(description = "Product identifier", required = true) @PathVariable UUID productId) {
-        log.info("GET /v1/inventory/availability/{}", productId);
-        return ResponseEntity.ok(availabilityService.getAvailabilityByProduct(productId));
+            @Parameter(description = "Product identifier", required = true) @PathVariable UUID productId,
+            @Parameter(
+                            description =
+                                    "Optional forecast horizon (ISO-8601 instant). Bounds incomingQty to supply expected "
+                                            + "on or before this instant and outgoingQty to reservations due by it; documents "
+                                            + "without an expected date are excluded from horizon-bounded results.")
+                    @RequestParam(required = false)
+                    java.time.Instant horizon) {
+        log.info("GET /v1/inventory/availability/{} horizon={}", productId, horizon);
+        return ResponseEntity.ok(availabilityService.getAvailabilityByProduct(productId, horizon));
     }
 
     @GetMapping
@@ -124,9 +133,15 @@ public class InventoryAvailabilityController {
                     @RequestParam(required = false)
                     UUID storageLocationId,
             @Parameter(description = "Inventory lookup strategy") @RequestParam(required = false)
-                    InventorySourceType sourceType) {
+                    InventorySourceType sourceType,
+            @Parameter(
+                            description =
+                                    "Optional forecast horizon (ISO-8601 instant) bounding incomingQty/outgoingQty; "
+                                            + "documents without an expected date are excluded from horizon-bounded results.")
+                    @RequestParam(required = false)
+                    java.time.Instant horizon) {
         log.info("GET /v1/inventory/availability sku={} locationId={} sourceType={}", sku, locationId, sourceType);
-        return ResponseEntity.ok(List.of(resolveAvailability(sku, locationId, storageLocationId, sourceType)));
+        return ResponseEntity.ok(List.of(resolveAvailability(sku, locationId, storageLocationId, sourceType, horizon)));
     }
 
     @GetMapping("/by-sku")
@@ -189,19 +204,29 @@ public class InventoryAvailabilityController {
                             description =
                                     "Inventory lookup strategy. WAREHOUSE = from physical location stock, SUPPLIER = from supplier lead time, TRANSIT = from in-transit supply. When sourceType is WAREHOUSE, locationId narrows to a specific location.")
                     @RequestParam(required = false)
-                    InventorySourceType sourceType) {
+                    InventorySourceType sourceType,
+            @Parameter(
+                            description =
+                                    "Optional forecast horizon (ISO-8601 instant) bounding incomingQty/outgoingQty; "
+                                            + "documents without an expected date are excluded from horizon-bounded results.")
+                    @RequestParam(required = false)
+                    java.time.Instant horizon) {
         log.info(
                 "GET /v1/inventory/availability/by-sku productSku={} locationId={} sourceType={}",
                 productSku,
                 locationId,
                 sourceType);
-        return ResponseEntity.ok(resolveAvailability(productSku, locationId, storageLocationId, sourceType));
+        return ResponseEntity.ok(resolveAvailability(productSku, locationId, storageLocationId, sourceType, horizon));
     }
 
     private AvailabilityView resolveAvailability(
-            String sku, UUID locationId, UUID storageLocationId, InventorySourceType sourceType) {
+            String sku,
+            UUID locationId,
+            UUID storageLocationId,
+            InventorySourceType sourceType,
+            java.time.Instant horizon) {
         validateLocationAndSourceType(locationId, sourceType);
-        return availabilityService.queryAvailability(sku, locationId, storageLocationId, sourceType);
+        return availabilityService.queryAvailability(sku, locationId, storageLocationId, sourceType, horizon);
     }
 
     @GetMapping("/lead-time")

@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.service.InventoryAvailabilityService;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -38,17 +39,26 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
 
     private final InventoryStockSummaryRepository stockSummaryRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final ForecastQuantityService forecastQuantityService;
 
     public InventoryAvailabilityServiceImpl(
             InventoryStockSummaryRepository stockSummaryRepository,
-            InventoryLedgerEntryRepository inventoryLedgerEntryRepository) {
+            InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
+            ForecastQuantityService forecastQuantityService) {
         this.stockSummaryRepository = stockSummaryRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
+        this.forecastQuantityService = forecastQuantityService;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<LocationAvailabilityDto> getAvailabilityByProduct(@NonNull UUID productId) {
+        return getAvailabilityByProduct(productId, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LocationAvailabilityDto> getAvailabilityByProduct(@NonNull UUID productId, @Nullable Instant horizon) {
         if (productId == null) {
             throw new InvalidInventoryAvailabilityRequestException("Product ID is required");
         }
@@ -64,7 +74,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         return summaryRows.stream()
                 .filter(row -> row.getLocationId() != null)
                 .sorted(Comparator.comparing(InventoryStockSummary::getLocationId))
-                .map(this::toLocationAvailability)
+                .map(row -> toLocationAvailability(row, horizon))
                 .toList();
     }
 
@@ -75,6 +85,17 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
             @Nullable UUID locationId,
             @Nullable UUID storageLocationId,
             @Nullable InventorySourceType sourceType) {
+        return queryAvailability(productSku, locationId, storageLocationId, sourceType, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AvailabilityView queryAvailability(
+            @NonNull String productSku,
+            @Nullable UUID locationId,
+            @Nullable UUID storageLocationId,
+            @Nullable InventorySourceType sourceType,
+            @Nullable Instant horizon) {
         List<InventoryStockSummary> productRows = stockSummaryRepository.findByStockItemId(productSku);
         if (productRows.isEmpty()) {
             throw new ProductNotFoundException(productSku);
@@ -99,6 +120,13 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
             allocated = scoped == null ? 0L : scoped.getAllocated();
         }
 
+        // Forecast site scope (odoo-parity A2, #1028): the site parameter when present,
+        // otherwise the storage-location scope (forecast values are site-level; PO/ASN
+        // supply is keyed by ship-to site).
+        UUID forecastSiteId = locationId != null ? locationId : storageLocationId;
+        ForecastQuantityService.ForecastQuantities forecast =
+                forecastQuantityService.forecast(productSku, forecastSiteId, horizon, onHand);
+
         return AvailabilityView.builder()
                 .productSku(productSku)
                 .locationId(locationId)
@@ -107,6 +135,9 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
                 .allocatedQuantity(Math.toIntExact(allocated))
                 .availableToPromiseQuantity(Math.toIntExact(onHand - allocated))
                 .unitOfMeasure(deriveUnitOfMeasure(productSku, scopeLocationId))
+                .incomingQty(forecast.incomingQty())
+                .outgoingQty(forecast.outgoingQty())
+                .projectedAvailable(forecast.projectedAvailable())
                 .build();
     }
 
@@ -118,16 +149,21 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         return units.isEmpty() ? DEFAULT_UOM : units.getFirst();
     }
 
-    private LocationAvailabilityDto toLocationAvailability(InventoryStockSummary row) {
+    private LocationAvailabilityDto toLocationAvailability(InventoryStockSummary row, @Nullable Instant horizon) {
         // Pre-#1024 behavior: this per-location list subtracts BOTH hard
         // allocations and soft reservations from ATP (unlike queryAvailability,
         // which per ADR-0001 subtracts allocations only).
         long atpWithReservations = row.getOnHand() - row.getAllocated() - row.getReserved();
+        ForecastQuantityService.ForecastQuantities forecast =
+                forecastQuantityService.forecast(row.getStockItemId(), row.getLocationId(), horizon, row.getOnHand());
         return LocationAvailabilityDto.builder()
                 .locationId(row.getLocationId())
                 .locationName(row.getLocationId().toString())
                 .onHandQuantity(Math.toIntExact(row.getOnHand()))
                 .availableToPromiseQuantity(Math.toIntExact(atpWithReservations))
+                .incomingQty(forecast.incomingQty())
+                .outgoingQty(forecast.outgoingQty())
+                .projectedAvailable(forecast.projectedAvailable())
                 .build();
     }
 }
