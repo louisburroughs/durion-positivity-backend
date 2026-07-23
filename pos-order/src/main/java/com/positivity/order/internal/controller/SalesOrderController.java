@@ -75,7 +75,9 @@ public class SalesOrderController {
                 request.getLocationId(),
                 request.getLabel(),
                 request.getGeneralNote(),
-                idempotencyKey));
+                idempotencyKey,
+                request.getDepositSourceType(),
+                request.getDepositSourceId()));
         HttpStatus status = result.replay() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(status).body(toResponse(result.summary()));
     }

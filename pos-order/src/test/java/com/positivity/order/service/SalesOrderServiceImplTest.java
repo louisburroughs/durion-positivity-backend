@@ -141,7 +141,7 @@ class SalesOrderServiceImplTest {
     private SalesOrderSummary createCart(String clerkId, String terminalId, String customerId, String vehicleId) {
         return salesOrderService
                 .createCart(new CreateCartCommand(
-                        clerkId, terminalId, customerId, vehicleId, TEST_LOCATION, null, null, null))
+                        clerkId, terminalId, customerId, vehicleId, TEST_LOCATION, null, null, null, null, null))
                 .summary();
     }
 

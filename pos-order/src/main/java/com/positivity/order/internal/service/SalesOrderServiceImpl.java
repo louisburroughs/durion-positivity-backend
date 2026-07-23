@@ -121,6 +121,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 .clerkId(command.clerkId())
                 .terminalId(command.terminalId())
                 .sessionId(sessionId)
+                .depositSourceType(normalizeBlank(command.depositSourceType()))
+                .depositSourceId(command.depositSourceId())
                 .customerId(customerId)
                 .vehicleId(vehicleId)
                 .customerValidationStatus(validationStatus)
@@ -545,7 +547,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                         .type("PART")
                         .build())
                 .toList();
-        return OrderInvoiceCreationRequest.builder()
+        OrderInvoiceCreationRequest.OrderInvoiceCreationRequestBuilder builder = OrderInvoiceCreationRequest.builder()
                 .orderId(order.getOrderId())
                 .workorderId(order.getWorkOrderId())
                 .customerId(order.getCustomerId())
@@ -553,8 +555,15 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 .subtotal(order.getGrandTotal().subtract(order.getTaxTotal()))
                 .taxAmount(order.getTaxTotal())
                 .totalAmount(order.getGrandTotal())
-                .lines(lines)
-                .build();
+                .lines(lines);
+        // Story E4: a deposit-take order registers a deposit credit against its source for the
+        // order total — pos-invoice owns the credit artifact (gate V2).
+        if (order.getDepositSourceType() != null && order.getDepositSourceId() != null) {
+            builder.depositSourceType(order.getDepositSourceType())
+                    .depositSourceId(order.getDepositSourceId())
+                    .depositAmount(order.getGrandTotal());
+        }
+        return builder.build();
     }
 
     @Override

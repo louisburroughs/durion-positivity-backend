@@ -81,6 +81,14 @@ public class SalesOrder {
     @Column(name = "session_id", columnDefinition = "UUID")
     private UUID sessionId;
 
+    /** When this order takes a deposit (story E4), the source document type it is held against. */
+    @Column(name = "deposit_source_type", length = 16)
+    private String depositSourceType;
+
+    /** Source document id the deposit is held against (story E4). */
+    @Column(name = "deposit_source_id", columnDefinition = "UUID")
+    private UUID depositSourceId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private SalesOrderStatus status;

@@ -18,6 +18,9 @@ import org.jspecify.annotations.Nullable;
  * @param label optional parking label for resumable drafts
  * @param generalNote optional order-level note
  * @param idempotencyKey optional client idempotency key; replays return the original cart
+ * @param depositSourceType when this cart takes a deposit (story E4), the source document type it
+ *     is held against (ESTIMATE / WORKORDER / ORDER); null for a normal sale
+ * @param depositSourceId source document id the deposit is held against (required with the type)
  */
 public record CreateCartCommand(
         @NonNull String clerkId,
@@ -27,7 +30,9 @@ public record CreateCartCommand(
         @Nullable UUID locationId,
         @Nullable String label,
         @Nullable String generalNote,
-        @Nullable String idempotencyKey) {
+        @Nullable String idempotencyKey,
+        @Nullable String depositSourceType,
+        @Nullable UUID depositSourceId) {
 
     public CreateCartCommand {
         Objects.requireNonNull(clerkId, "clerkId must not be null");

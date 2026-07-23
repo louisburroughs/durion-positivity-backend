@@ -57,4 +57,17 @@ public class CreateCartRequest {
             example = "01960003-0000-7000-8000-000000000080",
             requiredMode = NOT_REQUIRED)
     private String vehicleId;
+
+    @Schema(
+            description = "When this cart takes a deposit / down payment (odoo-parity story E4), the source "
+                    + "document type it is held against; pos-invoice registers a deposit credit at checkout.",
+            allowableValues = {"ESTIMATE", "WORKORDER", "ORDER"},
+            requiredMode = NOT_REQUIRED)
+    private String depositSourceType;
+
+    @Schema(
+            description = "Source document id the deposit is held against (required with depositSourceType).",
+            example = "01960003-0000-7000-8000-000000000011",
+            requiredMode = NOT_REQUIRED)
+    private java.util.UUID depositSourceId;
 }

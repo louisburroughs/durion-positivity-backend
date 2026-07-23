@@ -52,6 +52,9 @@ class OrderInvoiceServiceImplTest {
     @Mock
     private com.positivity.invoice.internal.repository.PaymentIntentRepository paymentIntentRepository;
 
+    @Mock
+    private com.positivity.invoice.service.DepositCreditService depositCreditService;
+
     private OrderInvoiceServiceImpl service;
 
     @BeforeEach
@@ -60,6 +63,7 @@ class OrderInvoiceServiceImplTest {
                 invoiceRepository,
                 paymentIntentRepository,
                 invoiceEventPublisher,
+                depositCreditService,
                 Clock.fixed(Instant.parse("2026-07-23T12:00:00Z"), ZoneOffset.UTC));
         when(invoiceRepository.findByOrderId(any())).thenReturn(Optional.empty());
         when(invoiceRepository.save(any())).thenAnswer(inv -> {
@@ -69,6 +73,8 @@ class OrderInvoiceServiceImplTest {
             }
             return invoice;
         });
+        when(depositCreditService.applyAvailableCredits(any(), any(), any(), any()))
+                .thenReturn(java.math.BigDecimal.ZERO);
     }
 
     private OrderInvoiceCreationRequest request(UUID workorderId) {
@@ -89,6 +95,39 @@ class OrderInvoiceServiceImplTest {
                         .type("PART")
                         .build()))
                 .build();
+    }
+
+    @Test
+    @DisplayName("OIS-E4a: a deposit-take order registers a deposit credit against its source")
+    void depositTake_registersCredit() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        OrderInvoiceCreationRequest depositTake = request(null);
+        depositTake.setDepositSourceType("WORKORDER");
+        depositTake.setDepositSourceId(workorderId);
+        depositTake.setDepositAmount(new BigDecimal("108.00"));
+
+        service.createInvoiceForOrder(depositTake);
+
+        org.mockito.ArgumentCaptor<com.positivity.invoice.service.model.CreateDepositCommand> cmd =
+                org.mockito.ArgumentCaptor.forClass(com.positivity.invoice.service.model.CreateDepositCommand.class);
+        verify(depositCreditService).createDeposit(cmd.capture());
+        assertThat(cmd.getValue().orderId()).isEqualTo(ORDER_ID);
+        assertThat(cmd.getValue().sourceType()).isEqualTo("WORKORDER");
+        assertThat(cmd.getValue().sourceId()).isEqualTo(workorderId);
+        assertThat(cmd.getValue().amount()).isEqualByComparingTo("108.00");
+    }
+
+    @Test
+    @DisplayName("OIS-E4b: a workorder settlement applies available deposit credits and reports the amount")
+    void settlement_appliesDepositCredits() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        when(depositCreditService.applyAvailableCredits(any(), any(), any(), any()))
+                .thenReturn(new BigDecimal("50.00"));
+
+        OrderInvoiceResponse response = service.createInvoiceForOrder(request(workorderId));
+
+        assertThat(response.getDepositApplied()).isEqualByComparingTo("50.00");
+        verify(depositCreditService).applyAvailableCredits(any(), any(), any(), any());
     }
 
     @Test
