@@ -46,10 +46,7 @@ public class OrderCancellationController {
     public ResponseEntity<CancellationResponse> cancelOrder(
             @PathVariable UUID orderId, @Valid @RequestBody CancelOrderRequest request) {
         CancelOrderCommand command = new CancelOrderCommand(
-                request.getCancellationReason(),
-                request.getWorkOrderId(),
-                request.getPaymentId(),
-                request.getIdempotencyKey());
+                request.getCancellationReason(), request.getWorkOrderId(), request.getIdempotencyKey());
         CancellationResult result = orderCancellationService.cancelOrder(orderId, command);
         CancellationResponse response = new CancellationResponse();
         response.setOrderId(result.orderId().toString());

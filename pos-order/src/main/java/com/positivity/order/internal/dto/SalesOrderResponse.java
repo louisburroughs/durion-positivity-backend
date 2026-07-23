@@ -116,6 +116,18 @@ public class SalesOrderResponse {
     @Schema(description = "Quote validity horizon (QUOTED orders)", requiredMode = NOT_REQUIRED)
     private Instant quoteExpiresAt;
 
+    @Schema(description = "Invoice fronting this order, set at checkout", requiredMode = NOT_REQUIRED)
+    private String invoiceId;
+
+    @Schema(description = "Human-facing invoice number", requiredMode = NOT_REQUIRED)
+    private String invoiceNumber;
+
+    @Schema(description = "Net settled amount (checkout onward)", requiredMode = NOT_REQUIRED)
+    private BigDecimal amountPaid;
+
+    @Schema(description = "Outstanding balance (checkout onward)", requiredMode = NOT_REQUIRED)
+    private BigDecimal balanceDue;
+
     @Schema(
             description = "Timestamp when the order was created (ISO 8601)",
             example = "2026-01-15T09:30:00Z",

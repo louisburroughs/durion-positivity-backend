@@ -17,7 +17,6 @@ import org.jspecify.annotations.Nullable;
  * @param orderId sales order identifier (also the envelope aggregateId)
  * @param orderNumber human-facing order number (null for orders created before numbering)
  * @param workorderId linked workorder cancelled by the saga, if any
- * @param paymentId payment reversed by the saga, if any
  * @param cancellationReason caller-supplied reason, if any
  * @param cancelledAt when the order reached CANCELLED
  */
@@ -25,7 +24,6 @@ public record OrderCancelledV1(
         @NonNull UUID orderId,
         @Nullable String orderNumber,
         @Nullable UUID workorderId,
-        @Nullable UUID paymentId,
         @Nullable String cancellationReason,
         @NonNull Instant cancelledAt) {
 

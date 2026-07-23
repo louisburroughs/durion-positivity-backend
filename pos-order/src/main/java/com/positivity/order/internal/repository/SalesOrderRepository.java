@@ -14,6 +14,10 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, UUID> {
 
     Optional<SalesOrder> findByCreationIdempotencyKey(String creationIdempotencyKey);
 
+    Optional<SalesOrder> findByCheckoutIdempotencyKey(String checkoutIdempotencyKey);
+
+    Optional<SalesOrder> findByInvoiceId(UUID invoiceId);
+
     @Query("select o from SalesOrder o"
             + " where (:clerkId is null or o.clerkId = :clerkId)"
             + " and (:terminalId is null or o.terminalId = :terminalId)"

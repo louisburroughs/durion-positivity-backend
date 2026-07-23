@@ -154,6 +154,11 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    public static final EventTypeRegistration INVOICE_CREATE_FROM_ORDER = EventTypeRegistration.write(
+                    "INVOICE_CREATE_FROM_ORDER", "Create invoice from a sales order at checkout")
+            .apiVersion("1")
+            .build();
+
     /**
      * Returns all event type registrations for the Invoice module.
      */
@@ -162,6 +167,7 @@ public final class EventTypes {
                 BILLING_RULES_GET,
                 BILLING_RULES_UPSERT,
                 INVOICE_CREATE,
+                INVOICE_CREATE_FROM_ORDER,
                 INVOICE_GET,
                 INVOICE_SEARCH,
                 INVOICE_ITEM_SEARCH,

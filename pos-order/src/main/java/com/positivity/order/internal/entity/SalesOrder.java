@@ -145,9 +145,26 @@ public class SalesOrder {
     @Column(nullable = true, columnDefinition = "UUID")
     private UUID workOrderId;
 
-    @Column(nullable = true, columnDefinition = "UUID")
-    private UUID paymentId;
-
     @Column(nullable = true)
     private String cancellationIdempotencyKey;
+
+    /** Invoice fronting this order, set at checkout (parity story C1). */
+    @Column(columnDefinition = "UUID")
+    private UUID invoiceId;
+
+    @Column(length = 64)
+    private String invoiceNumber;
+
+    /** Checkout idempotency key (spec R9.3); unique, replays return the checked-out order. */
+    @Column(length = 128, unique = true)
+    private String checkoutIdempotencyKey;
+
+    /** Net settled amount from the payment-record ledger (parity story C3). */
+    @Column(nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal amountPaid = BigDecimal.ZERO;
+
+    /** grandTotal − amountPaid, floored at zero; set at checkout, maintained by settlement events. */
+    @Column(precision = 19, scale = 4)
+    private BigDecimal balanceDue;
 }

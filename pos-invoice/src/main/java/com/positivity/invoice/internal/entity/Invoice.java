@@ -43,8 +43,13 @@ public class Invoice {
     @Column(name = "invoice_number", length = 64)
     private String invoiceNumber;
 
-    @Column(name = "workorder_id", columnDefinition = "UUID", nullable = false)
+    /** Nullable since the counter-sale from-order path (parity story C2): order-only invoices have no workorder. */
+    @Column(name = "workorder_id", columnDefinition = "UUID")
     private UUID workorderId;
+
+    /** Sales order that fronted this invoice (from-order path, parity story C2); idempotency anchor. */
+    @Column(name = "order_id", columnDefinition = "UUID", unique = true)
+    private UUID orderId;
 
     @Column(name = "estimate_id", columnDefinition = "UUID")
     private UUID estimateId;

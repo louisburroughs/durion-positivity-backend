@@ -20,6 +20,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
     Optional<Invoice> findByWorkorderId(@NonNull UUID workorderId);
 
     @NonNull
+    Optional<Invoice> findByOrderId(@NonNull UUID orderId);
+
+    @NonNull
     List<Invoice> findByStatus(@NonNull InvoiceStatus status);
 
     @NonNull

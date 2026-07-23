@@ -1,6 +1,7 @@
 package com.positivity.order.service;
 
 import com.positivity.order.service.model.AddItemCommand;
+import com.positivity.order.service.model.CheckoutResult;
 import com.positivity.order.service.model.CreateCartCommand;
 import com.positivity.order.service.model.CreateCartResult;
 import com.positivity.order.service.model.OrderDiscountCommand;
@@ -73,4 +74,13 @@ public interface SalesOrderService {
     /** QUOTED → DRAFT: reopen for editing; best-effort reprice, tax marked stale. */
     @NonNull
     SalesOrderSummary reopenQuote(@NonNull UUID orderId);
+
+    /**
+     * DRAFT|QUOTED → PENDING_PAYMENT (parity story C1, spec R2.1): validates the cart, final
+     * reprice + tax, freezes the lines, and creates the fronting invoice at pos-invoice.
+     * Idempotent on the required {@code Idempotency-Key}; settlement completion is asynchronous
+     * (story C3).
+     */
+    @NonNull
+    CheckoutResult checkout(@NonNull UUID orderId, @NonNull String idempotencyKey);
 }

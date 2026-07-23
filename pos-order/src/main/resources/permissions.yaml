@@ -14,6 +14,8 @@ permissions:
     description: "Apply or remove an order-level discount"
   - name: "order:order:quote"
     description: "Convert a cart to a counter quote and reopen quotes"
+  - name: "order:order:checkout"
+    description: "Check out a cart: freeze lines, create the fronting invoice, enter PENDING_PAYMENT"
   - name: "order:line:view"
     description: "View order lines"
   - name: "order:line:create"

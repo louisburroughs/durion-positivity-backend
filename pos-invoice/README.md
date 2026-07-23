@@ -26,6 +26,9 @@ Invoice and payment service for the Durion Positivity ETSMS platform. Creates in
 ## API Endpoints
 
 - `POST /v1/invoices` — create an invoice
+- `POST /v1/invoices/from-order` — create the invoice fronting a sales order at checkout
+  (order parity story C2; idempotent on `orderId`, returns the existing workorder invoice when
+  `workorderId` matches one)
 - `GET /v1/invoices/{invoiceId}` — retrieve an invoice
 - `POST /v1/invoices/{invoiceId}/finalize` — finalize an invoice
 - `POST /v1/invoices/{invoiceId}/revert` — revert a finalized invoice
@@ -38,6 +41,13 @@ Invoice and payment service for the Durion Positivity ETSMS platform. Creates in
 - `POST /v1/invoices/{invoiceId}/receipts/{receiptId}/email` — email a receipt
 - `POST /v1/invoices/{invoiceId}/receipts/{receiptId}/print` — print a receipt
 - `GET /v1/billing/rules/{partyId}` — retrieve billing rules for a party
+
+## Payment settlement events
+
+When `pos.invoice.kafka.enabled` is on, per-payment settlement facts are published on
+`payment.events.v1`: `payment.payment.settled` when a PaymentIntent captures (sale-capture or
+manual capture) and `payment.payment.reversed` on voids and refunds (gateway and standalone).
+pos-order's completion handshake is the first consumer (order parity story C3).
 
 ## Configuration
 

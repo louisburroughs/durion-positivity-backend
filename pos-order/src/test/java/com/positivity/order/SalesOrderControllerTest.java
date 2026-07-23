@@ -101,6 +101,10 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
                 List.of());
         SalesOrderLineSummary fakeLine = new SalesOrderLineSummary(
                 UUID.randomUUID().toString(),
@@ -416,6 +420,10 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
                 List.of());
 
         when(salesOrderService.linkSource(any(UUID.class), anyString(), anyString()))
@@ -446,5 +454,92 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ORDER_FORBIDDEN"))
                 .andExpect(jsonPath("$.status").value(403));
+    }
+
+    // ── Parity story C1 (#1071): checkout endpoint ───────────────────────────
+
+    private SalesOrderSummary checkedOutSummary(UUID orderId, UUID invoiceId) {
+        return new SalesOrderSummary(
+                orderId.toString(),
+                "SO-TEST-2607-000003",
+                UUID.randomUUID().toString(),
+                null,
+                null,
+                null,
+                null,
+                "clerk-001",
+                "terminal-001",
+                "PENDING_PAYMENT",
+                new BigDecimal("100.0000"),
+                BigDecimal.ZERO,
+                new BigDecimal("8.0000"),
+                new BigDecimal("108.0000"),
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                invoiceId.toString(),
+                "INV-1",
+                BigDecimal.ZERO,
+                new BigDecimal("108.0000"),
+                null,
+                null,
+                null,
+                null,
+                List.of());
+    }
+
+    @Test
+    @DisplayName("SC-010: POST /v1/orders/{orderId}/checkout with Idempotency-Key returns 201 + invoice ref")
+    void checkout_whenValid_returns201WithInvoiceRef() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        UUID invoiceId = UUID.randomUUID();
+        when(salesOrderService.checkout(any(UUID.class), anyString()))
+                .thenReturn(new com.positivity.order.service.model.CheckoutResult(
+                        checkedOutSummary(orderId, invoiceId), false));
+
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/{orderId}/checkout", orderId).header("Idempotency-Key", "chk-1"),
+                        "order:order:checkout"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING_PAYMENT"))
+                .andExpect(jsonPath("$.invoiceId").value(invoiceId.toString()))
+                .andExpect(jsonPath("$.invoiceNumber").value("INV-1"))
+                .andExpect(jsonPath("$.balanceDue").value(108.0));
+    }
+
+    @Test
+    @DisplayName("SC-011: replayed Idempotency-Key returns 200 with the original checkout result")
+    void checkout_whenReplay_returns200() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        UUID invoiceId = UUID.randomUUID();
+        when(salesOrderService.checkout(any(UUID.class), anyString()))
+                .thenReturn(new com.positivity.order.service.model.CheckoutResult(
+                        checkedOutSummary(orderId, invoiceId), true));
+
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/{orderId}/checkout", orderId).header("Idempotency-Key", "chk-1"),
+                        "order:order:checkout"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.invoiceId").value(invoiceId.toString()));
+    }
+
+    @Test
+    @DisplayName("SC-012: checkout without Idempotency-Key header returns 400")
+    void checkout_missingIdempotencyKey_returns400() throws Exception {
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/{orderId}/checkout", UUID.randomUUID()), "order:order:checkout"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("SC-013: checkout without the checkout authority returns 403")
+    void checkout_missingAuthority_returns403() throws Exception {
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/{orderId}/checkout", UUID.randomUUID()).header("Idempotency-Key", "chk-1"),
+                        "order:order:view"))
+                .andExpect(status().isForbidden());
     }
 }

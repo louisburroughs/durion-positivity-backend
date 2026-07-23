@@ -64,7 +64,9 @@ public class TestSecurityConfig {
             new SimpleGrantedAuthority(ORDER_LINE_DELETE),
             // Parity stories B2/A3 (#1067/#1069): discount + quote authorities
             new SimpleGrantedAuthority(com.positivity.order.internal.security.OrderPermissions.ORDER_DISCOUNT),
-            new SimpleGrantedAuthority(com.positivity.order.internal.security.OrderPermissions.ORDER_QUOTE));
+            new SimpleGrantedAuthority(com.positivity.order.internal.security.OrderPermissions.ORDER_QUOTE),
+            // Parity story C1 (#1071): checkout authority
+            new SimpleGrantedAuthority(com.positivity.order.internal.security.OrderPermissions.ORDER_CHECKOUT));
 
     /**
      * Replaces the production gateway filter chain with a permissive one that

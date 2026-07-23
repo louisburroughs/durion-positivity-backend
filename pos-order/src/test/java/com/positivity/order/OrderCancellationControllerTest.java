@@ -53,7 +53,6 @@ class OrderCancellationControllerTest extends BaseContractIntegrationTest {
             {
               "cancellationReason": "Customer requested cancellation",
               "workOrderId": null,
-              "paymentId": null,
               "idempotencyKey": "idem-key-001"
             }
             """;
@@ -117,8 +116,7 @@ class OrderCancellationControllerTest extends BaseContractIntegrationTest {
                 {
                   "cancellationReason": "",
                   "workOrderId": null,
-                  "paymentId": null,
-                  "idempotencyKey": "idem-key-001"
+                      "idempotencyKey": "idem-key-001"
                 }
                 """;
 

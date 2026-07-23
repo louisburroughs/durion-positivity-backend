@@ -26,12 +26,6 @@ public class CancelOrderRequest {
     private UUID workOrderId;
 
     @Schema(
-            description = "Identifier of the associated payment, when applicable",
-            example = "01960003-0000-7000-8000-000000000005",
-            requiredMode = NOT_REQUIRED)
-    private UUID paymentId;
-
-    @Schema(
             description = "Optional idempotency key for duplicate cancellation prevention",
             example = "cancel-req-abc123",
             requiredMode = NOT_REQUIRED)

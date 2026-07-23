@@ -12,6 +12,7 @@ public final class OrderPermissions {
 
     public static final String ORDER_DISCOUNT = "order:order:discount";
     public static final String ORDER_QUOTE = "order:order:quote";
+    public static final String ORDER_CHECKOUT = "order:order:checkout";
 
     public static final String ORDER_LINE_VIEW = "order:line:view";
     public static final String ORDER_LINE_CREATE = "order:line:create";
