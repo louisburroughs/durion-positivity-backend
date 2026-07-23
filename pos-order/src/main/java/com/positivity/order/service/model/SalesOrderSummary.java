@@ -8,8 +8,12 @@ import org.jspecify.annotations.NonNull;
 
 public record SalesOrderSummary(
         @NonNull String orderId,
+        String orderNumber,
+        String locationId,
+        String label,
         String customerId,
         String vehicleId,
+        String customerValidationStatus,
         @NonNull String clerkId,
         @NonNull String terminalId,
         @NonNull String status,

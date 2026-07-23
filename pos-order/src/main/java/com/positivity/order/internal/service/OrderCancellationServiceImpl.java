@@ -7,6 +7,7 @@ import com.positivity.order.internal.client.ReversePaymentCommand;
 import com.positivity.order.internal.client.WorkexecPort;
 import com.positivity.order.internal.client.WorkorderCancelResult;
 import com.positivity.order.internal.client.WorkorderStatusResult;
+import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
@@ -34,6 +35,8 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
     private final SalesOrderRepository salesOrderRepository;
     private final WorkexecPort workexecPort;
     private final BillingPort billingPort;
+    private final OrderStateMachine orderStateMachine;
+    private final OrderDomainEventPublisher domainEventPublisher;
 
     @Override
     @Transactional
@@ -66,7 +69,7 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
                 : UUIDv7Generator.generate().toString();
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
 
-        order.setStatus(SalesOrderStatus.CANCEL_REQUESTED);
+        orderStateMachine.transition(order, SalesOrderStatus.CANCEL_REQUESTED, command.cancellationReason());
         order.setCancellationReason(command.cancellationReason());
         order.setCancellationIdempotencyKey(idempotencyKey);
         if (command.workOrderId() != null) {
@@ -81,9 +84,7 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
         if (command.workOrderId() != null) {
             WorkorderStatusResult statusResult = workexecPort.checkWorkorderStatus(command.workOrderId());
             if (!statusResult.cancellable()) {
-                order.setStatus(SalesOrderStatus.CANCEL_FAILED_WORKEXEC);
-                order.setUpdatedBy(actor);
-                salesOrderRepository.save(order);
+                failTransition(order, SalesOrderStatus.CANCEL_FAILED_WORKEXEC, statusResult.nonCancellableReason());
                 throw new IllegalStateException(
                         "Workorder cannot be cancelled: " + statusResult.nonCancellableReason());
             }
@@ -93,13 +94,11 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
                     new CancelWorkorderCommand(orderId, actor, command.cancellationReason(), idempotencyKey));
 
             if (!cancelResult.success()) {
-                order.setStatus(SalesOrderStatus.CANCEL_FAILED_WORKEXEC);
-                order.setUpdatedBy(actor);
-                salesOrderRepository.save(order);
+                failTransition(order, SalesOrderStatus.CANCEL_FAILED_WORKEXEC, cancelResult.resultMessage());
                 throw new IllegalStateException("Workorder cancellation failed: " + cancelResult.resultMessage());
             }
 
-            order.setStatus(SalesOrderStatus.WORKORDER_CANCELLED);
+            orderStateMachine.transition(order, SalesOrderStatus.WORKORDER_CANCELLED, null);
             order.setUpdatedBy(actor);
             salesOrderRepository.save(order);
         }
@@ -110,20 +109,16 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
                     new ReversePaymentCommand("VOID", null, command.cancellationReason(), orderId, idempotencyKey));
 
             if (!reversalResult.success()) {
-                order.setStatus(SalesOrderStatus.CANCEL_FAILED_BILLING);
-                order.setUpdatedBy(actor);
-                salesOrderRepository.save(order);
+                failTransition(order, SalesOrderStatus.CANCEL_FAILED_BILLING, reversalResult.resultMessage());
                 throw new IllegalStateException("Payment reversal failed: " + reversalResult.resultMessage());
             }
 
-            order.setStatus(SalesOrderStatus.PAYMENT_REVERSED);
+            orderStateMachine.transition(order, SalesOrderStatus.PAYMENT_REVERSED, null);
             order.setUpdatedBy(actor);
             salesOrderRepository.save(order);
         }
 
-        order.setStatus(SalesOrderStatus.CANCELLED);
-        order.setUpdatedBy(actor);
-        salesOrderRepository.save(order);
+        completeCancellation(order, actor);
 
         return new CancellationResult(orderId, STATUS_CANCELLED, "Order cancelled successfully", idempotencyKey);
     }
@@ -144,21 +139,37 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
                 order.getPaymentId(), new ReversePaymentCommand("VOID", null, null, orderId, idempotencyKey));
 
         if (!reversalResult.success()) {
-            order.setStatus(SalesOrderStatus.CANCEL_FAILED_BILLING);
+            // A failed retry is terminal for automation (plan story A4): park the order for a
+            // human instead of looping on CANCEL_FAILED_BILLING, and raise the alert fact.
+            String failureReason = "Payment reversal retry failed: " + reversalResult.resultMessage();
+            orderStateMachine.transition(order, SalesOrderStatus.CANCEL_REQUIRES_MANUAL_REVIEW, failureReason);
             order.setUpdatedBy(actor);
             salesOrderRepository.save(order);
-            throw new IllegalStateException("Payment reversal retry failed: " + reversalResult.resultMessage());
+            domainEventPublisher.publishCancelReviewRequired(order, failureReason);
+            log.error("Order {} cancellation requires manual review: {}", orderId, reversalResult.resultMessage());
+            throw new IllegalStateException(failureReason);
         }
 
-        order.setStatus(SalesOrderStatus.PAYMENT_REVERSED);
+        orderStateMachine.transition(order, SalesOrderStatus.PAYMENT_REVERSED, null);
         order.setUpdatedBy(actor);
         salesOrderRepository.save(order);
 
-        order.setStatus(SalesOrderStatus.CANCELLED);
-        order.setUpdatedBy(actor);
-        salesOrderRepository.save(order);
+        completeCancellation(order, actor);
 
         return new CancellationResult(
                 orderId, STATUS_CANCELLED, "Order cancellation completed on retry", idempotencyKey);
+    }
+
+    private void failTransition(SalesOrder order, SalesOrderStatus failureStatus, String reason) {
+        orderStateMachine.transition(order, failureStatus, reason);
+        order.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        salesOrderRepository.save(order);
+    }
+
+    private void completeCancellation(SalesOrder order, String actor) {
+        orderStateMachine.transition(order, SalesOrderStatus.CANCELLED, null);
+        order.setUpdatedBy(actor);
+        salesOrderRepository.save(order);
+        domainEventPublisher.publishOrderCancelled(order);
     }
 }

@@ -270,7 +270,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
         SalesOrder order = SalesOrder.builder()
                 .orderId(orderId)
-                .customerId("customer-test")
+                .customerId(UUID.randomUUID())
                 .clerkId("clerk-test")
                 .terminalId("terminal-test")
                 .status(SalesOrderStatus.DRAFT)

@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import java.math.BigDecimal;
+import java.util.UUID;
 import lombok.Data;
 
 @Data
@@ -35,4 +36,11 @@ public class AddItemRequest {
             example = "19.99",
             requiredMode = NOT_REQUIRED)
     private BigDecimal manualPrice;
+
+    @Schema(
+            description = "Client-supplied stable line identity; a replayed add with a known lineUuid updates the"
+                    + " existing line instead of duplicating it",
+            example = "01960003-0000-7000-8000-0000000000aa",
+            requiredMode = NOT_REQUIRED)
+    private UUID lineUuid;
 }

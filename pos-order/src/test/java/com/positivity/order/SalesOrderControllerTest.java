@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.order.service.SalesOrderService;
+import com.positivity.order.service.model.CreateCartCommand;
+import com.positivity.order.service.model.CreateCartResult;
 import com.positivity.order.service.model.SalesOrderLineSummary;
 import com.positivity.order.service.model.SalesOrderSummary;
 import java.math.BigDecimal;
@@ -58,10 +60,27 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
     @MockitoBean
     private SalesOrderService salesOrderService;
 
+    @Override
+    protected String defaultAuthorities() {
+        // Parity story A4 (#1061): cart endpoints enforce order/line authorities.
+        return String.join(
+                ",",
+                "order:order:view",
+                "order:order:create",
+                "order:order:edit",
+                "order:line:create",
+                "order:line:edit",
+                "order:line:delete");
+    }
+
     @BeforeEach
     void mockServiceDefaults() {
         SalesOrderSummary fakeOrder = new SalesOrderSummary(
                 UUID.randomUUID().toString(),
+                "SO-TEST-2607-000001",
+                UUID.randomUUID().toString(),
+                null,
+                null,
                 null,
                 null,
                 "clerk-001",
@@ -86,8 +105,10 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 null,
                 null);
 
-        when(salesOrderService.createCart(any(), any(), any(), any())).thenReturn(fakeOrder);
-        when(salesOrderService.addItem(any(), any(), anyInt(), any(), any())).thenReturn(fakeLine);
+        when(salesOrderService.createCart(any(CreateCartCommand.class)))
+                .thenReturn(new CreateCartResult(fakeOrder, false));
+        when(salesOrderService.addItem(any(), any(), anyInt(), any(), any(), any()))
+                .thenReturn(fakeLine);
         when(salesOrderService.getOrder(any())).thenReturn(fakeOrder);
         when(salesOrderService.updateItemQuantity(any(), any(), anyInt())).thenReturn(fakeLine);
         doNothing().when(salesOrderService).removeItem(any(), any());
@@ -108,7 +129,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
         String body = """
                 {
                   "clerkId": "clerk-001",
-                  "terminalId": "terminal-001"
+                  "terminalId": "terminal-001",
+                  "locationId": "00000000-0000-0000-0000-0000000000aa"
                 }
                 """;
 
@@ -132,6 +154,7 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 {
                   "clerkId": "clerk-002",
                   "terminalId": "terminal-001",
+                  "locationId": "00000000-0000-0000-0000-0000000000aa",
                   "customerId": null
                 }
                 """;
@@ -330,7 +353,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
         String body = """
                 {
                   "clerkId": "clerk-001",
-                  "terminalId": "terminal-001"
+                  "terminalId": "terminal-001",
+                  "locationId": "00000000-0000-0000-0000-0000000000aa"
                 }
                 """;
 
@@ -352,6 +376,10 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
         UUID orderId = UUID.randomUUID();
         SalesOrderSummary linkedOrder = new SalesOrderSummary(
                 orderId.toString(),
+                "SO-TEST-2607-000002",
+                UUID.randomUUID().toString(),
+                null,
+                null,
                 null,
                 null,
                 "clerk-001",
@@ -382,7 +410,7 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
     @DisplayName("SC-009: POST /v1/orders/carts/{orderId}/items when access denied returns 403 Forbidden")
     void addItem_whenAccessDenied_thenReturns403() throws Exception {
         UUID orderId = UUID.randomUUID();
-        when(salesOrderService.addItem(any(), any(), anyInt(), any(), any()))
+        when(salesOrderService.addItem(any(), any(), anyInt(), any(), any(), any()))
                 .thenThrow(new AccessDeniedException("Insufficient permissions"));
 
         // SC-009

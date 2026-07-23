@@ -5,6 +5,8 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 import lombok.Data;
 
 @Data
@@ -17,6 +19,19 @@ public class CreateCartRequest {
             requiredMode = REQUIRED)
     @NotBlank
     private String clerkId;
+
+    @Schema(
+            description = "Shop location the cart is created at; drives order-number assignment",
+            example = "01960003-0000-7000-8000-000000000090",
+            requiredMode = REQUIRED)
+    @NotNull
+    private UUID locationId;
+
+    @Schema(
+            description = "Optional parking label for resumable drafts",
+            example = "blue F-150 waiting on customer",
+            requiredMode = NOT_REQUIRED)
+    private String label;
 
     @Schema(
             description = "Identifier of the terminal where the cart is created",

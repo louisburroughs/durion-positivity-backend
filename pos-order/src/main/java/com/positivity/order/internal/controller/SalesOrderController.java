@@ -7,10 +7,14 @@ import com.positivity.order.internal.dto.LinkSourceRequest;
 import com.positivity.order.internal.dto.SalesOrderLineResponse;
 import com.positivity.order.internal.dto.SalesOrderResponse;
 import com.positivity.order.internal.dto.UpdateItemRequest;
+import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.service.SalesOrderService;
+import com.positivity.order.service.model.CreateCartCommand;
+import com.positivity.order.service.model.CreateCartResult;
 import com.positivity.order.service.model.SalesOrderLineSummary;
 import com.positivity.order.service.model.SalesOrderSummary;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -27,7 +31,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -43,22 +49,60 @@ public class SalesOrderController {
 
     @Operation(
             summary = "Create a sales order cart",
-            description = "Create a new sales order cart for a customer, terminal, and optional vehicle context.",
+            description = "Create a new sales order cart for a customer, terminal, and optional vehicle context. "
+                    + "Supports the Idempotency-Key header: a replayed key returns the original cart with 200 "
+                    + "instead of creating a duplicate; a replayed key with a different payload returns 409.",
             tags = {"Sales Orders"})
     @PostMapping("/carts")
+    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_CREATE + "')")
     @EmitEvent(id = "ORDER_CART_CREATE", apiVersion = "1")
-    public ResponseEntity<SalesOrderResponse> createCart(@Valid @RequestBody CreateCartRequest request) {
-        SalesOrderSummary created = salesOrderService.createCart(
-                request.getClerkId(), request.getTerminalId(), request.getCustomerId(), request.getVehicleId());
-        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
+    public ResponseEntity<SalesOrderResponse> createCart(
+            @Parameter(description = "Client idempotency key; replays return the original cart")
+                    @RequestHeader(name = "Idempotency-Key", required = false)
+                    String idempotencyKey,
+            @Valid @RequestBody CreateCartRequest request) {
+        CreateCartResult result = salesOrderService.createCart(new CreateCartCommand(
+                request.getClerkId(),
+                request.getTerminalId(),
+                request.getCustomerId(),
+                request.getVehicleId(),
+                request.getLocationId(),
+                request.getLabel(),
+                idempotencyKey));
+        HttpStatus status = result.replay() ? HttpStatus.OK : HttpStatus.CREATED;
+        return ResponseEntity.status(status).body(toResponse(result.summary()));
+    }
+
+    @Operation(
+            summary = "List sales order carts",
+            description = "List carts filtered by clerk, terminal, and/or status — the draft-parking/resume "
+                    + "surface. Line items are omitted from list results.",
+            tags = {"Sales Orders"})
+    @GetMapping("/carts")
+    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_VIEW + "')")
+    @EmitEvent(id = "ORDER_CART_LIST", apiVersion = "1")
+    public ResponseEntity<List<SalesOrderResponse>> listCarts(
+            @Parameter(description = "Filter by clerk identifier") @RequestParam(required = false) String clerkId,
+            @Parameter(description = "Filter by terminal identifier") @RequestParam(required = false) String terminalId,
+            @Parameter(description = "Filter by order status, e.g. DRAFT") @RequestParam(required = false)
+                    String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        List<SalesOrderResponse> carts = salesOrderService.listCarts(clerkId, terminalId, status, page, size).stream()
+                .map(this::toResponse)
+                .toList();
+        return ResponseEntity.ok(carts);
     }
 
     @Operation(
             summary = "Add an item to a sales order cart",
             description =
-                    "Add a line item to an existing sales order cart using SKU, quantity, and optional pricing context.",
+                    "Add a line item to an existing sales order cart using SKU, quantity, and optional pricing context."
+                            + " A client-supplied lineUuid makes the call replay-safe: a replay with a known lineUuid"
+                            + " updates the existing line instead of duplicating it.",
             tags = {"Sales Orders"})
     @PostMapping("/carts/{orderId}/items")
+    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_LINE_CREATE + "')")
     @EmitEvent(id = "ORDER_CART_ITEM_ADD", apiVersion = "1")
     public ResponseEntity<SalesOrderLineResponse> addItem(
             @PathVariable UUID orderId, @Valid @RequestBody AddItemRequest request) {
@@ -67,7 +111,8 @@ public class SalesOrderController {
                 request.getItemSku(),
                 request.getQuantity(),
                 request.getReasonCode(),
-                request.getManualPrice());
+                request.getManualPrice(),
+                request.getLineUuid());
         return ResponseEntity.status(HttpStatus.CREATED).body(toLineResponse(line));
     }
 
@@ -76,6 +121,7 @@ public class SalesOrderController {
             description = "Update the quantity for an existing sales order line item in a cart.",
             tags = {"Sales Orders"})
     @PutMapping("/carts/{orderId}/items/{lineId}")
+    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_LINE_EDIT + "')")
     @EmitEvent(id = "ORDER_CART_ITEM_UPDATE", apiVersion = "1")
     public ResponseEntity<SalesOrderLineResponse> updateItemQuantity(
             @PathVariable UUID orderId, @PathVariable UUID lineId, @Valid @RequestBody UpdateItemRequest request) {
@@ -88,6 +134,7 @@ public class SalesOrderController {
             description = "Remove a line item from an existing sales order cart.",
             tags = {"Sales Orders"})
     @DeleteMapping("/carts/{orderId}/items/{lineId}")
+    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_LINE_DELETE + "')")
     @EmitEvent(id = "ORDER_CART_ITEM_REMOVE", apiVersion = "1")
     public ResponseEntity<Void> removeItem(@PathVariable UUID orderId, @PathVariable UUID lineId) {
         salesOrderService.removeItem(orderId, lineId);
@@ -99,6 +146,7 @@ public class SalesOrderController {
             description = "Retrieve a sales order cart and its current line items by identifier.",
             tags = {"Sales Orders"})
     @GetMapping("/carts/{orderId}")
+    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_VIEW + "')")
     public ResponseEntity<SalesOrderResponse> getOrder(@PathVariable UUID orderId) {
         return ResponseEntity.ok(toResponse(salesOrderService.getOrder(orderId)));
     }
@@ -108,6 +156,7 @@ public class SalesOrderController {
             description = "Associate an external source reference with an existing sales order cart.",
             tags = {"Sales Orders"})
     @PatchMapping("/carts/{orderId}/source")
+    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_EDIT + "')")
     @EmitEvent(id = "ORDER_LINK_SOURCE", apiVersion = "1")
     public ResponseEntity<SalesOrderResponse> linkSource(
             @PathVariable UUID orderId, @Valid @RequestBody LinkSourceRequest request) {
@@ -121,8 +170,12 @@ public class SalesOrderController {
                 summary.lines().stream().map(this::toLineResponse).toList();
         return SalesOrderResponse.builder()
                 .orderId(summary.orderId())
+                .orderNumber(summary.orderNumber())
+                .locationId(summary.locationId())
+                .label(summary.label())
                 .customerId(summary.customerId())
                 .vehicleId(summary.vehicleId())
+                .customerValidationStatus(summary.customerValidationStatus())
                 .clerkId(summary.clerkId())
                 .terminalId(summary.terminalId())
                 .status(summary.status())

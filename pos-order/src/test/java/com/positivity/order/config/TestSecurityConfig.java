@@ -1,6 +1,12 @@
 package com.positivity.order.config;
 
 import static com.positivity.order.internal.security.OrderPermissions.ORDER_CANCEL;
+import static com.positivity.order.internal.security.OrderPermissions.ORDER_CREATE;
+import static com.positivity.order.internal.security.OrderPermissions.ORDER_EDIT;
+import static com.positivity.order.internal.security.OrderPermissions.ORDER_LINE_CREATE;
+import static com.positivity.order.internal.security.OrderPermissions.ORDER_LINE_DELETE;
+import static com.positivity.order.internal.security.OrderPermissions.ORDER_LINE_EDIT;
+import static com.positivity.order.internal.security.OrderPermissions.ORDER_VIEW;
 import static com.positivity.order.internal.security.PriceOverridePermissions.*;
 
 import jakarta.servlet.FilterChain;
@@ -48,7 +54,14 @@ public class TestSecurityConfig {
             new SimpleGrantedAuthority(PRICE_OVERRIDE_REJECT),
             new SimpleGrantedAuthority("order:price_override:admin"),
             // Issue #19: cancellation controller requires ORDER_CANCEL authority
-            new SimpleGrantedAuthority(ORDER_CANCEL));
+            new SimpleGrantedAuthority(ORDER_CANCEL),
+            // Parity story A4 (#1061): cart endpoints now enforce order/line authorities
+            new SimpleGrantedAuthority(ORDER_VIEW),
+            new SimpleGrantedAuthority(ORDER_CREATE),
+            new SimpleGrantedAuthority(ORDER_EDIT),
+            new SimpleGrantedAuthority(ORDER_LINE_CREATE),
+            new SimpleGrantedAuthority(ORDER_LINE_EDIT),
+            new SimpleGrantedAuthority(ORDER_LINE_DELETE));
 
     /**
      * Replaces the production gateway filter chain with a permissive one that

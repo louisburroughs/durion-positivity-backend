@@ -12,6 +12,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -40,11 +41,35 @@ public class SalesOrder {
     @Column(columnDefinition = "UUID")
     private UUID orderId;
 
-    @Column
-    private String customerId;
+    @Version
+    @Column(nullable = false)
+    private Long version;
 
+    /** Human-facing order number, e.g. {@code SO-1A2B3C4D-2607-000042}; assigned at creation. */
+    @Column(unique = true, updatable = false)
+    private String orderNumber;
+
+    @Column(columnDefinition = "UUID")
+    private UUID locationId;
+
+    /** Optional parking label for resumable drafts ("blue F-150 waiting on customer"). */
     @Column
-    private String vehicleId;
+    private String label;
+
+    @Column(columnDefinition = "UUID")
+    private UUID customerId;
+
+    @Column(columnDefinition = "UUID")
+    private UUID vehicleId;
+
+    /** Set when a customer/vehicle is attached: VALIDATED, or PENDING while CRM is unreachable. */
+    @Enumerated(EnumType.STRING)
+    @Column
+    private CustomerValidationStatus customerValidationStatus;
+
+    /** Client idempotency key from cart creation; unique, replays return the original cart. */
+    @Column(updatable = false, length = 128, unique = true)
+    private String creationIdempotencyKey;
 
     @Column(nullable = false)
     private String clerkId;

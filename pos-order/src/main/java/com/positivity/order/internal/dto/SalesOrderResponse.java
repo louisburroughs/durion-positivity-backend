@@ -29,6 +29,30 @@ public class SalesOrderResponse {
     private String orderId;
 
     @Schema(
+            description = "Human-facing order number assigned at creation",
+            example = "SO-1A2B3C4D-2607-000042",
+            requiredMode = NOT_REQUIRED)
+    private String orderNumber;
+
+    @Schema(
+            description = "Shop location the order belongs to",
+            example = "01960003-0000-7000-8000-000000000090",
+            requiredMode = NOT_REQUIRED)
+    private String locationId;
+
+    @Schema(
+            description = "Parking label for resumable drafts",
+            example = "blue F-150 waiting on customer",
+            requiredMode = NOT_REQUIRED)
+    private String label;
+
+    @Schema(
+            description = "CRM validation state of the customer/vehicle references (VALIDATED or PENDING)",
+            example = "VALIDATED",
+            requiredMode = NOT_REQUIRED)
+    private String customerValidationStatus;
+
+    @Schema(
             description = "Identifier of the customer associated with the order",
             example = "01960003-0000-7000-8000-000000000070",
             requiredMode = NOT_REQUIRED)

@@ -79,6 +79,10 @@ public class SalesOrderLine {
     @Column
     private String sourceLineId;
 
+    /** Client-supplied stable line identity for idempotent add-item replays (plan story I1). */
+    @Column(columnDefinition = "UUID", updatable = false)
+    private UUID clientLineUuid;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

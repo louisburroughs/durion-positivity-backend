@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
+import com.positivity.order.internal.client.CustomerPort;
 import com.positivity.order.internal.client.InventoryPort;
 import com.positivity.order.internal.client.InventoryResult;
 import com.positivity.order.internal.client.PricingPort;
@@ -20,9 +21,13 @@ import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.entity.SourceType;
 import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
+import com.positivity.order.internal.repository.OrderStatusHistoryRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
+import com.positivity.order.internal.service.OrderNumberService;
+import com.positivity.order.internal.service.OrderStateMachine;
 import com.positivity.order.internal.service.SalesOrderServiceImpl;
+import com.positivity.order.service.model.CreateCartCommand;
 import com.positivity.order.service.model.SalesOrderLineSummary;
 import com.positivity.order.service.model.SalesOrderSummary;
 import com.positivity.security.common.SecurityContextHelper;
@@ -65,13 +70,39 @@ class SalesOrderServiceImplTest {
     @Mock
     private SourceDocumentPort sourceDocumentPort;
 
+    @Mock
+    private CustomerPort customerPort;
+
+    @Mock
+    private OrderNumberService orderNumberService;
+
+    @Mock
+    private OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    private static final UUID TEST_LOCATION = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+
     // Issue #21: SalesOrderService is the public interface under test (ADR-0026)
     private SalesOrderService salesOrderService;
 
     @BeforeEach
     void setUp() {
         salesOrderService = new SalesOrderServiceImpl(
-                salesOrderRepository, salesOrderLineRepository, pricingPort, inventoryPort, sourceDocumentPort);
+                salesOrderRepository,
+                salesOrderLineRepository,
+                pricingPort,
+                inventoryPort,
+                sourceDocumentPort,
+                customerPort,
+                new OrderStateMachine(orderStatusHistoryRepository, java.time.Clock.systemUTC()),
+                orderNumberService);
+        org.mockito.Mockito.lenient().when(orderNumberService.nextNumber(any())).thenReturn("SO-TEST-2607-000001");
+    }
+
+    private SalesOrderSummary createCart(String clerkId, String terminalId, String customerId, String vehicleId) {
+        return salesOrderService
+                .createCart(
+                        new CreateCartCommand(clerkId, terminalId, customerId, vehicleId, TEST_LOCATION, null, null))
+                .summary();
     }
 
     // -----------------------------------------------------------------------
@@ -96,7 +127,7 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(expectedOrder);
 
         // when
-        SalesOrderSummary result = salesOrderService.createCart("clerk-001", "terminal-001", null, null);
+        SalesOrderSummary result = createCart("clerk-001", "terminal-001", null, null);
 
         // then
         assertThat(result.status()).isEqualTo(SalesOrderStatus.DRAFT.name());
@@ -121,7 +152,7 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(expectedOrder);
 
         // when
-        SalesOrderSummary result = salesOrderService.createCart("clerk-001", "terminal-001", null, null);
+        SalesOrderSummary result = createCart("clerk-001", "terminal-001", null, null);
 
         // then
         assertThat(result.customerId()).isNull();
@@ -154,8 +185,8 @@ class SalesOrderServiceImplTest {
                 .thenReturn(secondOrder);
 
         // when
-        SalesOrderSummary cart1 = salesOrderService.createCart("clerk-001", "terminal-001", null, null);
-        SalesOrderSummary cart2 = salesOrderService.createCart("clerk-001", "terminal-001", null, null);
+        SalesOrderSummary cart1 = createCart("clerk-001", "terminal-001", null, null);
+        SalesOrderSummary cart2 = createCart("clerk-001", "terminal-001", null, null);
 
         // then
         assertThat(cart1.orderId()).isNotEqualTo(cart2.orderId());

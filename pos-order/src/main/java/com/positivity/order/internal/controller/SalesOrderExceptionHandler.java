@@ -37,6 +37,20 @@ public class SalesOrderExceptionHandler {
                         correlationId));
     }
 
+    @ExceptionHandler(com.positivity.order.internal.exception.InvalidCustomerException.class)
+    public ResponseEntity<ApiError> handleInvalidCustomer(
+            com.positivity.order.internal.exception.InvalidCustomerException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "ORDER_INVALID_CUSTOMER",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
     @ExceptionHandler(InvalidSkuException.class)
     public ResponseEntity<ApiError> handleInvalidSku(InvalidSkuException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);

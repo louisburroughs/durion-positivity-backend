@@ -1,5 +1,7 @@
 package com.positivity.order.internal.service;
 
+import com.positivity.order.internal.client.CustomerLookupResult;
+import com.positivity.order.internal.client.CustomerPort;
 import com.positivity.order.internal.client.InventoryPort;
 import com.positivity.order.internal.client.InventoryResult;
 import com.positivity.order.internal.client.PricingPort;
@@ -7,11 +9,15 @@ import com.positivity.order.internal.client.PricingResult;
 import com.positivity.order.internal.client.SourceDocumentLine;
 import com.positivity.order.internal.client.SourceDocumentPort;
 import com.positivity.order.internal.entity.*;
+import com.positivity.order.internal.exception.CartIdempotencyConflictException;
+import com.positivity.order.internal.exception.InvalidCustomerException;
 import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.order.service.SalesOrderService;
+import com.positivity.order.service.model.CreateCartCommand;
+import com.positivity.order.service.model.CreateCartResult;
 import com.positivity.order.service.model.SalesOrderLineSummary;
 import com.positivity.order.service.model.SalesOrderSummary;
 import com.positivity.security.common.SecurityContextHelper;
@@ -19,12 +25,15 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -35,28 +44,66 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     private final PricingPort pricingPort;
     private final InventoryPort inventoryPort;
     private final SourceDocumentPort sourceDocumentPort;
+    private final CustomerPort customerPort;
+    private final OrderStateMachine orderStateMachine;
+    private final OrderNumberService orderNumberService;
 
     @Override
-    public SalesOrderSummary createCart(String clerkId, String terminalId, String customerId, String vehicleId) {
+    @Transactional
+    public CreateCartResult createCart(CreateCartCommand command) {
+        if (command.idempotencyKey() != null) {
+            Optional<SalesOrder> existing = salesOrderRepository.findByCreationIdempotencyKey(command.idempotencyKey());
+            if (existing.isPresent()) {
+                validateCreateReplay(existing.get(), command);
+                return new CreateCartResult(toSummary(existing.get()), true);
+            }
+        }
+
+        UUID customerId = parseReference(command.customerId(), "customerId");
+        UUID vehicleId = parseReference(command.vehicleId(), "vehicleId");
+        CustomerValidationStatus validationStatus = validateCustomerAndVehicle(customerId, vehicleId);
+
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         SalesOrder order = SalesOrder.builder()
-                .clerkId(clerkId)
-                .terminalId(terminalId)
+                .orderNumber(orderNumberService.nextNumber(command.locationId()))
+                .locationId(command.locationId())
+                .label(command.label())
+                .clerkId(command.clerkId())
+                .terminalId(command.terminalId())
                 .customerId(customerId)
                 .vehicleId(vehicleId)
+                .customerValidationStatus(validationStatus)
+                .creationIdempotencyKey(command.idempotencyKey())
                 .status(SalesOrderStatus.DRAFT)
                 .subtotal(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP))
                 .createdBy(actor)
                 .updatedBy(actor)
                 .build();
-        return toSummary(salesOrderRepository.save(order));
+        SalesOrder saved = salesOrderRepository.save(order);
+        orderStateMachine.recordCreation(saved);
+        return new CreateCartResult(toSummary(saved), false);
     }
 
     @Override
+    @Transactional
     public SalesOrderLineSummary addItem(
-            UUID orderId, String itemSku, int quantity, String reasonCode, BigDecimal manualPrice) {
+            UUID orderId,
+            String itemSku,
+            int quantity,
+            String reasonCode,
+            BigDecimal manualPrice,
+            UUID clientLineUuid) {
         SalesOrder order =
                 salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
+        orderStateMachine.requireEditable(order);
+
+        if (clientLineUuid != null) {
+            Optional<SalesOrderLine> replayed =
+                    salesOrderLineRepository.findByOrder_OrderIdAndClientLineUuid(orderId, clientLineUuid);
+            if (replayed.isPresent()) {
+                return replayAddItem(order, replayed.get(), itemSku, quantity);
+            }
+        }
 
         BigDecimal unitPrice;
         PriceSource priceSource;
@@ -90,6 +137,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 .priceSource(priceSource)
                 .fulfillmentStatus(fulfillmentStatus)
                 .reasonCode(reasonCode)
+                .clientLineUuid(clientLineUuid)
                 .build();
 
         SalesOrderLine saved = salesOrderLineRepository.save(line);
@@ -102,9 +150,11 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     }
 
     @Override
+    @Transactional
     public SalesOrderLineSummary updateItemQuantity(UUID orderId, UUID lineId, int newQuantity) {
         SalesOrder order =
                 salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
+        orderStateMachine.requireEditable(order);
         SalesOrderLine line = salesOrderLineRepository
                 .findById(lineId)
                 .orElseThrow(() -> new SalesOrderNotFoundException("Order line not found: " + lineId));
@@ -122,9 +172,11 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     }
 
     @Override
+    @Transactional
     public void removeItem(UUID orderId, UUID lineId) {
         SalesOrder order =
                 salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
+        orderStateMachine.requireEditable(order);
 
         order.getLines().removeIf(l -> lineId.equals(l.getOrderLineId()));
         order.setSubtotal(recalculateSubtotal(order.getLines()));
@@ -140,11 +192,22 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     }
 
     @Override
+    public List<SalesOrderSummary> listCarts(String clerkId, String terminalId, String status, int page, int size) {
+        SalesOrderStatus statusFilter = status == null ? null : SalesOrderStatus.valueOf(status);
+        return salesOrderRepository
+                .search(clerkId, terminalId, statusFilter, PageRequest.of(Math.max(page, 0), Math.min(size, 100)))
+                .map(this::toListSummary)
+                .getContent();
+    }
+
+    @Override
+    @Transactional
     public SalesOrderSummary linkSource(UUID orderId, String sourceType, String sourceId) {
         SourceType type = SourceType.valueOf(sourceType);
 
         SalesOrder order =
                 salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
+        orderStateMachine.requireEditable(order);
 
         if (order.getCustomerId() == null && SourceType.WORKORDER.equals(type)) {
             throw new IllegalStateException(
@@ -205,6 +268,71 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         return toSummary(salesOrderRepository.save(order));
     }
 
+    private SalesOrderLineSummary replayAddItem(SalesOrder order, SalesOrderLine line, String itemSku, int quantity) {
+        if (!line.getItemSku().equals(itemSku)) {
+            throw new CartIdempotencyConflictException("Client line uuid " + line.getClientLineUuid()
+                    + " was previously used for SKU " + line.getItemSku() + ", not " + itemSku);
+        }
+        if (line.getQuantity() != quantity) {
+            // Odoo _process_order analog: a replayed CREATE with a known uuid becomes an UPDATE.
+            line.setQuantity(quantity);
+            salesOrderLineRepository.save(line);
+            order.setSubtotal(recalculateSubtotal(order.getLines()));
+            order.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+            salesOrderRepository.save(order);
+        }
+        return toLineSummary(line);
+    }
+
+    private void validateCreateReplay(SalesOrder existing, CreateCartCommand command) {
+        boolean matches = existing.getClerkId().equals(command.clerkId())
+                && existing.getTerminalId().equals(command.terminalId())
+                && Objects.equals(existing.getLocationId(), command.locationId())
+                && Objects.equals(existing.getLabel(), command.label())
+                && Objects.equals(asString(existing.getCustomerId()), command.customerId())
+                && Objects.equals(asString(existing.getVehicleId()), command.vehicleId());
+        if (!matches) {
+            throw new CartIdempotencyConflictException(
+                    "Idempotency key was previously used with a different cart-creation payload");
+        }
+    }
+
+    private CustomerValidationStatus validateCustomerAndVehicle(UUID customerId, UUID vehicleId) {
+        if (customerId == null) {
+            // A vehicle without a customer cannot be validated against CRM (vehicles are
+            // customer-scoped); it is recorded as-is.
+            return null;
+        }
+        CustomerLookupResult customer = customerPort.lookupCustomer(customerId);
+        if (customer == CustomerLookupResult.NOT_FOUND) {
+            throw new InvalidCustomerException("Customer not found in CRM: " + customerId);
+        }
+        CustomerLookupResult vehicle = CustomerLookupResult.FOUND;
+        if (vehicleId != null) {
+            vehicle = customerPort.lookupVehicle(customerId, vehicleId);
+            if (vehicle == CustomerLookupResult.NOT_FOUND) {
+                throw new InvalidCustomerException("Vehicle " + vehicleId + " not found for customer " + customerId);
+            }
+        }
+        boolean pending = customer == CustomerLookupResult.UNAVAILABLE || vehicle == CustomerLookupResult.UNAVAILABLE;
+        return pending ? CustomerValidationStatus.PENDING : CustomerValidationStatus.VALIDATED;
+    }
+
+    private static UUID parseReference(String value, String field) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidCustomerException(field + " must be a UUID: " + value);
+        }
+    }
+
+    private static String asString(UUID value) {
+        return value == null ? null : value.toString();
+    }
+
     private BigDecimal recalculateSubtotal(List<SalesOrderLine> lines) {
         return lines.stream()
                 .filter(Objects::nonNull)
@@ -227,15 +355,29 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 line.getSourceLineId());
     }
 
+    private SalesOrderSummary toListSummary(SalesOrder order) {
+        return toSummary(order, List.of());
+    }
+
     private SalesOrderSummary toSummary(SalesOrder order) {
         List<SalesOrderLineSummary> lines = order.getLines().stream()
                 .filter(Objects::nonNull)
                 .map(this::toLineSummary)
                 .toList();
+        return toSummary(order, lines);
+    }
+
+    private SalesOrderSummary toSummary(SalesOrder order, List<SalesOrderLineSummary> lines) {
         return new SalesOrderSummary(
                 order.getOrderId().toString(),
-                order.getCustomerId(),
-                order.getVehicleId(),
+                order.getOrderNumber(),
+                asString(order.getLocationId()),
+                order.getLabel(),
+                asString(order.getCustomerId()),
+                asString(order.getVehicleId()),
+                order.getCustomerValidationStatus() != null
+                        ? order.getCustomerValidationStatus().name()
+                        : null,
                 order.getClerkId(),
                 order.getTerminalId(),
                 order.getStatus().name(),

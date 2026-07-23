@@ -2,6 +2,12 @@
 spring:
   application:
     name: order
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
   datasource:
     url: ${SPRING_DATASOURCE_URL:}
     username: ${SPRING_DATASOURCE_USERNAME:}
@@ -48,6 +54,17 @@ logging:
       springframework:
         web: INFO
       hibernate: INFO
+pos:
+  order:
+    kafka:
+      # Domain-event publishing (ADR-0044, parity story D1). Off until the broker is
+      # provisioned; flip POS_ORDER_KAFKA_ENABLED per environment.
+      enabled: ${POS_ORDER_KAFKA_ENABLED:false}
+  inventory:
+    base-url: ${POS_INVENTORY_BASE_URL:http://pos-inventory:8080}
+  customer:
+    base-url: ${POS_CUSTOMER_BASE_URL:http://pos-customer:8080}
+
 springdoc:
   api-docs:
     enabled: true
