@@ -2,6 +2,7 @@ package com.positivity.order.internal.repository;
 
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderStatus;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -28,4 +29,8 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, UUID> {
             @Param("terminalId") String terminalId,
             @Param("status") SalesOrderStatus status,
             Pageable pageable);
+
+    List<SalesOrder> findBySessionId(UUID sessionId);
+
+    boolean existsBySessionIdAndStatus(UUID sessionId, SalesOrderStatus status);
 }

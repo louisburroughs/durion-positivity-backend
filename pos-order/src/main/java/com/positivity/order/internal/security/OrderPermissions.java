@@ -21,6 +21,13 @@ public final class OrderPermissions {
     public static final String ORDER_LINE_EDIT = "order:line:edit";
     public static final String ORDER_LINE_DELETE = "order:line:delete";
 
+    // Register sessions & cash management (odoo-parity G1/G2)
+    public static final String ORDER_SESSION_OPEN = "order:session:open";
+    public static final String ORDER_SESSION_VIEW = "order:session:view";
+    public static final String ORDER_SESSION_CASH_MOVEMENT = "order:session:cash_movement";
+    public static final String ORDER_SESSION_CLOSE = "order:session:close";
+    public static final String ORDER_SESSION_APPROVE_VARIANCE = "order:session:approve_variance";
+
     private OrderPermissions() {
         // Utility class
     }

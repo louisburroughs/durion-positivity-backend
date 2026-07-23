@@ -111,6 +111,9 @@ class SalesOrderWave4Test {
     private OrderPaymentRecordRepository orderPaymentRecordRepository;
 
     @Mock
+    private com.positivity.order.internal.repository.RegisterSessionRepository registerSessionRepository;
+
+    @Mock
     private OrderDomainEventPublisher orderDomainEventPublisher;
 
     @Mock
@@ -138,6 +141,7 @@ class SalesOrderWave4Test {
                 extCustomerRepository,
                 extBillingRulesRepository,
                 orderPaymentRecordRepository,
+                registerSessionRepository,
                 orderDomainEventPublisher,
                 new OrderStateMachine(orderStatusHistoryRepository, java.time.Clock.systemUTC()),
                 orderNumberService,

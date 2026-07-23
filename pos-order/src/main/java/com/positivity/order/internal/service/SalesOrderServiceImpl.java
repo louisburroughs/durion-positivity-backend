@@ -21,6 +21,7 @@ import com.positivity.order.internal.repository.ExtBillingRulesRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
+import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.order.service.SalesOrderService;
@@ -67,6 +68,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     private final ExtCustomerRepository extCustomerRepository;
     private final ExtBillingRulesRepository extBillingRulesRepository;
     private final OrderPaymentRecordRepository paymentRecordRepository;
+    private final RegisterSessionRepository registerSessionRepository;
     private final OrderDomainEventPublisher domainEventPublisher;
     private final OrderStateMachine orderStateMachine;
     private final OrderNumberService orderNumberService;
@@ -96,14 +98,29 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         UUID vehicleId = parseReference(command.vehicleId(), "vehicleId");
         CustomerValidationStatus validationStatus = validateCustomerAndVehicle(customerId, vehicleId);
 
+        // Story G1: orders created while a session is open on the terminal bind to it, and the
+        // session supplies the location when the caller did not (A2's param is the fallback).
+        RegisterSession openSession = registerSessionRepository
+                .findFirstByTerminalIdAndStatus(command.terminalId(), RegisterSessionStatus.OPEN)
+                .orElse(null);
+        UUID sessionId = openSession != null ? openSession.getSessionId() : null;
+        UUID locationId = command.locationId() != null
+                ? command.locationId()
+                : (openSession != null ? openSession.getLocationId() : null);
+        if (locationId == null) {
+            throw new IllegalArgumentException(
+                    "locationId is required when no register session is open on the terminal");
+        }
+
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         SalesOrder order = SalesOrder.builder()
-                .orderNumber(orderNumberService.nextNumber(command.locationId()))
-                .locationId(command.locationId())
+                .orderNumber(orderNumberService.nextNumber(locationId))
+                .locationId(locationId)
                 .label(normalizeBlank(command.label()))
                 .generalNote(normalizeBlank(command.generalNote()))
                 .clerkId(command.clerkId())
                 .terminalId(command.terminalId())
+                .sessionId(sessionId)
                 .customerId(customerId)
                 .vehicleId(vehicleId)
                 .customerValidationStatus(validationStatus)

@@ -90,5 +90,17 @@ public final class EventTypes {
             EventTypeRegistration.write("ORDER_CHECKOUT", "Order checked out to PENDING_PAYMENT with invoice created")
                     .build(),
             EventTypeRegistration.write("ORDER_VOID", "Unsettled order voided with its invoice cancelled")
+                    .build(),
+            EventTypeRegistration.write("ORDER_SESSION_OPEN", "Register session opened for a terminal")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.write("ORDER_SESSION_CASH_MOVEMENT", "Drawer cash paid-in/paid-out recorded")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.write("ORDER_SESSION_BEGIN_CLOSE", "Register session close begun with counted cash")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.write("ORDER_SESSION_CONFIRM_CLOSE", "Register session closed and drawer reconciled")
+                    .apiVersion("1")
                     .build());
 }

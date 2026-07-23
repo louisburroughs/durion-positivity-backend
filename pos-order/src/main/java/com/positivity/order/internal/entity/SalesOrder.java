@@ -77,6 +77,10 @@ public class SalesOrder {
     @Column(nullable = false)
     private String terminalId;
 
+    /** Register session this order was opened under, when a session was open on the terminal (G1). */
+    @Column(name = "session_id", columnDefinition = "UUID")
+    private UUID sessionId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private SalesOrderStatus status;
