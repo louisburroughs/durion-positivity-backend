@@ -3,6 +3,7 @@ package com.positivity.inventory.service;
 import com.positivity.inventory.internal.dto.transfer.CreateTransferOrderRequest;
 import com.positivity.inventory.internal.dto.transfer.DispatchTransferOrderRequest;
 import com.positivity.inventory.internal.dto.transfer.ReceiveTransferOrderRequest;
+import com.positivity.inventory.internal.dto.transfer.ShortCloseTransferOrderRequest;
 import com.positivity.inventory.internal.dto.transfer.TransferOrderResponse;
 import com.positivity.inventory.internal.enums.TransferOrderStatus;
 import java.util.List;
@@ -120,4 +121,29 @@ public interface TransferOrderService {
     @NonNull
     TransferOrderResponse receiveTransferOrder(
             @NonNull UUID transferOrderId, @NonNull ReceiveTransferOrderRequest request);
+
+    /**
+     * Short-closes an order with an undelivered in-transit remainder (odoo-parity C3, issue
+     * #1039; spec C4): resolves every line's {@code dispatched − received} remainder under ONE
+     * whole-order disposition and moves the order to the terminal SHORT_CLOSED status.
+     *
+     * <ul>
+     *   <li>{@code LOST_IN_TRANSIT} — the remainder is written off: destination in-transit
+     *       zeroes and global on-hand drops by the remainder ({@code SCRAP_OUT}, reason LOST,
+     *       {@code sourceTransactionId = transferOrderId}; no scrap document is created).</li>
+     *   <li>{@code RETURNED_TO_SOURCE} — the remainder is restored to source on-hand:
+     *       destination in-transit zeroes and global on-hand is unchanged.</li>
+     * </ul>
+     *
+     * <p>Allowed from DISPATCHED/PARTIALLY_RECEIVED with a positive total remainder; any other
+     * status — or a zero remainder — is a 409. Reason and notes are mandatory. Once
+     * SHORT_CLOSED, further dispatch/receive calls are 409s (terminal status).
+     *
+     * @param transferOrderId the order id
+     * @param request the disposition, reason, and notes
+     * @return the short-closed order
+     */
+    @NonNull
+    TransferOrderResponse shortCloseTransferOrder(
+            @NonNull UUID transferOrderId, @NonNull ShortCloseTransferOrderRequest request);
 }

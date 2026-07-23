@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.transfer.CreateTransferOrderRequest;
 import com.positivity.inventory.internal.dto.transfer.DispatchTransferOrderRequest;
 import com.positivity.inventory.internal.dto.transfer.ReceiveTransferOrderRequest;
+import com.positivity.inventory.internal.dto.transfer.ShortCloseTransferOrderRequest;
 import com.positivity.inventory.internal.dto.transfer.TransferOrderResponse;
 import com.positivity.inventory.internal.enums.TransferOrderStatus;
 import com.positivity.inventory.service.TransferOrderService;
@@ -348,6 +349,79 @@ public class TransferOrderController {
         log.info("Received request to receive transfer order {}", transferOrderId);
         return ResponseEntity.ok(transferOrderService.receiveTransferOrder(
                 transferOrderId, request != null ? request : new ReceiveTransferOrderRequest()));
+    }
+
+    /**
+     * Short-closes a transfer order with an undelivered in-transit remainder.
+     *
+     * @param transferOrderId the order id
+     * @param request the mandatory disposition, reason, and notes
+     * @return the short-closed order
+     */
+    @PostMapping("/{transferOrderId}/short-close")
+    @EmitEvent(id = "INVENTORY_TRANSFER_ORDER_SHORT_CLOSE", apiVersion = "1")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:transfer:short_close"})
+    @PreAuthorize("hasAuthority('inventory:transfer:short_close')")
+    @Operation(
+            summary = "Short-close transfer order",
+            description = "Short-closes a DISPATCHED or PARTIALLY_RECEIVED order whose in-transit remainder will"
+                    + " never be received normally (parity-C3). One whole-order disposition resolves every line's"
+                    + " remainder (dispatched minus received): LOST_IN_TRANSIT writes it off through the ledger"
+                    + " funnel (paired constructive TRANSFER_IN + SCRAP_OUT with reason LOST at the destination —"
+                    + " global on-hand drops, no scrap document is created); RETURNED_TO_SOURCE restores it to"
+                    + " source on-hand (constructive TRANSFER_IN, TRANSFER_OUT back, TRANSFER_IN at source)."
+                    + " Either way the destination in-transit quantity zeroes atomically and the order reaches"
+                    + " the terminal SHORT_CLOSED status; reason and notes are mandatory. The terminal"
+                    + " TransferOrderUpdatedV1 fact carries the disposition.",
+            tags = {"Transfer Orders"})
+    @ApiResponse(responseCode = "200", description = "Transfer order short-closed (terminal)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing disposition, reason, or notes",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Missing inventory:transfer:short_close",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Transfer order not found",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Order is not short-closable (not DISPATCHED/PARTIALLY_RECEIVED, or no outstanding"
+                    + " in-transit remainder)",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "RETURNED_TO_SOURCE only: the source site is not movement-eligible"
+                    + " (TRANSFER_LOCATION_NOT_ELIGIBLE per DECISION-INVENTORY-009)",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<TransferOrderResponse> shortCloseTransferOrder(
+            @Parameter(description = "Transfer order ID", required = true) @PathVariable UUID transferOrderId,
+            @Valid @RequestBody ShortCloseTransferOrderRequest request) {
+        log.info(
+                "Received request to short-close transfer order {} with disposition {}",
+                transferOrderId,
+                request.getDisposition());
+        return ResponseEntity.ok(transferOrderService.shortCloseTransferOrder(transferOrderId, request));
     }
 
     /**

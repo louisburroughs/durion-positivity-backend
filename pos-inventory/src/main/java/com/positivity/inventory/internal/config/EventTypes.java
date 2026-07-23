@@ -38,7 +38,7 @@ public final class EventTypes {
                 EventTypeRegistration.approval("INVENTORY_SCRAP_REJECT", "Reject a pending scrap document")
                         .build(),
 
-                // TransferOrderController - 5 events (odoo-parity C1/C2, #1035/#1036)
+                // TransferOrderController - 6 events (odoo-parity C1/C2/C3, #1035/#1036/#1039)
                 EventTypeRegistration.write("INVENTORY_TRANSFER_ORDER_CREATE", "Create a cross-site transfer order")
                         .build(),
                 EventTypeRegistration.approval("INVENTORY_TRANSFER_ORDER_APPROVE", "Approve a DRAFT transfer order")
@@ -53,6 +53,13 @@ public final class EventTypes {
                 EventTypeRegistration.write(
                                 "INVENTORY_TRANSFER_ORDER_RECEIVE",
                                 "Receive dispatched transfer quantities at the destination (posts TRANSFER_IN)")
+                        .build(),
+                // Approval preset: short-close accepts a stock loss or reverses a movement
+                // (odoo-parity C3, #1039).
+                EventTypeRegistration.approval(
+                                "INVENTORY_TRANSFER_ORDER_SHORT_CLOSE",
+                                "Short-close a transfer order's undelivered remainder with a loss or return"
+                                        + " disposition")
                         .build(),
 
                 // SourcingStrategyController - 3 events (odoo-parity H1, #1037)

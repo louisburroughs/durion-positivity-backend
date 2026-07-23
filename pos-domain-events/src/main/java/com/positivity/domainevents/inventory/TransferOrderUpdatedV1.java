@@ -23,6 +23,11 @@ import org.jspecify.annotations.Nullable;
  * @param destinationLocationId destination site the transfer ships to
  * @param destinationStorageLocationId bin-level destination storage location, when bin-scoped
  * @param lines per-line quantity summary as of this transition
+ * @param shortCloseDisposition disposition chosen when the order was short-closed
+ *     ({@code LOST_IN_TRANSIT} or {@code RETURNED_TO_SOURCE}, odoo-parity C3 issue #1039);
+ *     null on every other transition. Transit losses carry NO {@code ScrapPostedV1} fact —
+ *     no scrap document exists for them — so accounting consumers derive the shrinkage from
+ *     this disposition plus the line remainders ({@code dispatchedQty - receivedQty})
  * @param occurredAt when the transition was recorded
  */
 public record TransferOrderUpdatedV1(
@@ -33,6 +38,7 @@ public record TransferOrderUpdatedV1(
         @NonNull UUID destinationLocationId,
         @Nullable UUID destinationStorageLocationId,
         @NonNull List<LineSummary> lines,
+        @Nullable String shortCloseDisposition,
         @NonNull Instant occurredAt) {
 
     public static final String EVENT_TYPE = "inventory.transfer-order.updated";

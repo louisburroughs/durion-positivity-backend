@@ -487,6 +487,69 @@ paths:
         - inventory:transfer:create
       x-required-permissions:
       - inventory:transfer:create
+  /v1/inventory/transfer-orders/{transferOrderId}/short-close:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Short-close transfer order
+      description: 'Short-closes a DISPATCHED or PARTIALLY_RECEIVED order whose in-transit remainder will never be received normally (parity-C3). One whole-order disposition resolves every line''s remainder (dispatched minus received): LOST_IN_TRANSIT writes it off through the ledger funnel (paired constructive TRANSFER_IN + SCRAP_OUT with reason LOST at the destination — global on-hand drops, no scrap document is created); RETURNED_TO_SOURCE restores it to source on-hand (constructive TRANSFER_IN, TRANSFER_OUT back, TRANSFER_IN at source). Either way the destination in-transit quantity zeroes atomically and the order reaches the terminal SHORT_CLOSED status; reason and notes are mandatory. The terminal TransferOrderUpdatedV1 fact carries the disposition.'
+      operationId: shortCloseTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShortCloseTransferOrderRequest'
+        required: true
+      responses:
+        '200':
+          description: Transfer order short-closed (terminal)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '400':
+          description: Missing disposition, reason, or notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:transfer:short_close
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Order is not short-closable (not DISPATCHED/PARTIALLY_RECEIVED, or no outstanding in-transit remainder)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: 'RETURNED_TO_SOURCE only: the source site is not movement-eligible (TRANSFER_LOCATION_NOT_ELIGIBLE per DECISION-INVENTORY-009)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:short_close
+      x-required-permissions:
+      - inventory:transfer:short_close
   /v1/inventory/transfer-orders/{transferOrderId}/receive:
     post:
       tags:
@@ -5233,6 +5296,25 @@ components:
         dispatchedBy:
           type: string
           description: User who dispatched the order
+        shortCloseDisposition:
+          type: string
+          description: Disposition of the undelivered remainder; set only when SHORT_CLOSED
+          enum:
+          - LOST_IN_TRANSIT
+          - RETURNED_TO_SOURCE
+        shortCloseReason:
+          type: string
+          description: Short-close reason; set only when SHORT_CLOSED
+        shortCloseNotes:
+          type: string
+          description: Short-close notes; set only when SHORT_CLOSED
+        shortClosedBy:
+          type: string
+          description: User who short-closed the order; set only when SHORT_CLOSED
+        shortClosedAt:
+          type: string
+          format: date-time
+          description: When the order was short-closed; set only when SHORT_CLOSED
         createdAt:
           type: string
           format: date-time
@@ -5241,6 +5323,30 @@ components:
           type: string
           format: date-time
           description: Last update timestamp
+    ShortCloseTransferOrderRequest:
+      type: object
+      description: Request to short-close a transfer order, resolving the undelivered remainder with a whole-order disposition
+      properties:
+        disposition:
+          type: string
+          description: 'Disposition of the undelivered remainder: LOST_IN_TRANSIT writes it off (SCRAP_OUT, reason LOST); RETURNED_TO_SOURCE restores it to source on-hand'
+          enum:
+          - LOST_IN_TRANSIT
+          - RETURNED_TO_SOURCE
+        reason:
+          type: string
+          description: Reason for the short-close (mandatory)
+          maxLength: 100
+          minLength: 0
+        notes:
+          type: string
+          description: Free-text notes explaining the short-close (mandatory)
+          maxLength: 2000
+          minLength: 0
+      required:
+      - disposition
+      - notes
+      - reason
     ReceiveTransferOrderRequest:
       type: object
       description: Request to receive a transfer order; omitted lines receive their full remainder
