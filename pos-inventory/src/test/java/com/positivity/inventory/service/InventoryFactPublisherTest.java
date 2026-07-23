@@ -107,7 +107,7 @@ class InventoryFactPublisherTest {
                 .thenReturn(LocationInventoryInquiryResponse.builder()
                         .locationId(locationId)
                         .onHandQuantity(7)
-                        .availableToPromiseQuantity(5)
+                        .availableToPromiseQuantity(5L)
                         .build());
 
         publisher.markEntry(entry);

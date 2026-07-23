@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
+import com.positivity.inventory.internal.exception.AsOfInFutureException;
 import com.positivity.inventory.internal.exception.CycleCountConflictException;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
@@ -166,6 +167,12 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(RecountLimitExceededException.class)
     public ResponseEntity<ApiError> handleRecountLimitExceeded(RecountLimitExceededException ex) {
         return build(HttpStatus.BAD_REQUEST, "RECOUNT_LIMIT_EXCEEDED", ex.getMessage());
+    }
+
+    @ExceptionHandler(AsOfInFutureException.class)
+    public ResponseEntity<ApiError> handleAsOfInFuture(AsOfInFutureException ex) {
+        // odoo-parity A3 (#1029): deterministic 422 for future-dated point-in-time queries.
+        return build(HttpStatus.valueOf(422), "AS_OF_IN_FUTURE", ex.getMessage());
     }
 
     @ExceptionHandler(InsufficientPermissionException.class)

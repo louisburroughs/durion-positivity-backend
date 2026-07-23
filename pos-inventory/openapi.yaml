@@ -1775,7 +1775,7 @@ paths:
       tags:
       - Inventory Availability
       summary: Query inventory availability
-      description: Returns per-location availability for a product, including forecast quantities (incomingQty, outgoingQty, projectedAvailable) computed from open purchase orders, ASNs, reservations, and released pick tasks (odoo-parity A2).
+      description: 'Returns per-location availability for a product, including forecast quantities (incomingQty, outgoingQty, projectedAvailable) computed from open purchase orders, ASNs, reservations, and released pick tasks (odoo-parity A2). With ''asOf'', returns historical on-hand per location computed by direct ledger aggregation (timestamp <= asOf) instead: availableToPromiseQuantity and the forecast fields are null, because historical allocation state is not reliably reconstructable from ATP-neutral ledger events. As-of requests additionally require the ''inventory:ledger:view'' authority (history exposure) and reject future instants with 422; ''asOf'' cannot be combined with ''horizon''.'
       operationId: getInventoryAvailability
       parameters:
       - name: productId
@@ -1788,6 +1788,13 @@ paths:
       - name: horizon
         in: query
         description: Optional forecast horizon (ISO-8601 instant). Bounds incomingQty to supply expected on or before this instant and outgoingQty to reservations due by it; documents without an expected date are excluded from horizon-bounded results.
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: asOf
+        in: query
+        description: Optional historical instant (ISO-8601). Returns on-hand as of this instant by direct ledger aggregation; ATP and forecast fields are null. Requires 'inventory:ledger:view'; future instants are rejected (422). Cannot be combined with 'horizon'.
         required: false
         schema:
           type: string
@@ -2812,7 +2819,7 @@ paths:
       tags:
       - Inventory Locations
       summary: List location inventory contents
-      description: Returns the on-hand stock items (positive quantity) at a storage location.
+      description: Returns the on-hand stock items (positive quantity) at a storage location. With 'asOf', returns the historical contents as of that instant by direct ledger aggregation. As-of requests additionally require the 'inventory:ledger:view' authority and reject future instants with 422.
       operationId: listLocationInventoryItems
       parameters:
       - name: locationId
@@ -2822,6 +2829,13 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: asOf
+        in: query
+        description: Optional historical instant (ISO-8601). Returns the location contents as of this instant by direct ledger aggregation. Requires 'inventory:ledger:view'; future instants are rejected (422).
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
         '200':
           description: Location inventory contents returned
@@ -2851,7 +2865,7 @@ paths:
       tags:
       - Inventory Locations
       summary: Get location inventory summary
-      description: Returns on-hand quantity aggregated for a storage location.
+      description: Returns on-hand quantity aggregated for a storage location. With 'asOf', returns historical on-hand as of that instant by direct ledger aggregation; availableToPromiseQuantity is null because historical allocation state is not reliably reconstructable from ATP-neutral ledger events. As-of requests additionally require the 'inventory:ledger:view' authority and reject future instants with 422.
       operationId: getLocationInventory
       parameters:
       - name: locationId
@@ -2867,6 +2881,13 @@ paths:
         required: false
         schema:
           type: string
+      - name: asOf
+        in: query
+        description: Optional historical instant (ISO-8601). Returns on-hand as of this instant by direct ledger aggregation; availableToPromiseQuantity is null. Requires 'inventory:ledger:view'; future instants are rejected (422).
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
         '200':
           description: Location inventory returned
@@ -6919,10 +6940,9 @@ components:
         availableToPromiseQuantity:
           type: integer
           format: int64
-          description: 'Quantity available to promise after pending allocations. Note: reservation events are not yet factored in.'
+          description: 'Quantity available to promise after pending allocations. Note: reservation events are not yet factored in. Null for as-of (historical) requests: historical allocation state is not reliably reconstructable from ATP-neutral ledger events, so as-of responses carry on-hand only.'
           example: 8
       required:
-      - availableToPromiseQuantity
       - locationId
       - onHandQuantity
     LedgerPage:
@@ -7332,7 +7352,7 @@ components:
         availableToPromiseQuantity:
           type: integer
           format: int32
-          description: Available-to-promise quantity at the location
+          description: 'Available-to-promise quantity at the location. Null for as-of (historical) requests: historical allocation state is not reliably reconstructable from ATP-neutral ledger events, so as-of responses carry on-hand only.'
           example: 90
         incomingQty:
           type: integer
@@ -7350,7 +7370,6 @@ components:
           description: 'Projected availability: onHandQuantity + incomingQty - outgoingQty (Odoo virtual_available). Omitted for as-of requests.'
           example: 135
       required:
-      - availableToPromiseQuantity
       - locationId
       - locationName
       - onHandQuantity

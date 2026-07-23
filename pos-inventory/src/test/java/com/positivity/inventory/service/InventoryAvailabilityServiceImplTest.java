@@ -14,6 +14,7 @@ import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityR
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import com.positivity.inventory.internal.service.AsOfQueryGuard;
 import com.positivity.inventory.internal.service.ForecastQuantityService;
 import com.positivity.inventory.internal.service.InventoryAvailabilityServiceImpl;
 import java.util.List;
@@ -42,6 +43,9 @@ class InventoryAvailabilityServiceImplTest {
     @Mock
     private ForecastQuantityService forecastQuantityService;
 
+    @Mock
+    private AsOfQueryGuard asOfQueryGuard;
+
     private InventoryAvailabilityServiceImpl service;
 
     @BeforeEach
@@ -53,7 +57,7 @@ class InventoryAvailabilityServiceImplTest {
                 .thenAnswer(invocation ->
                         new ForecastQuantityService.ForecastQuantities(0L, 0L, invocation.getArgument(3, Long.class)));
         service = new InventoryAvailabilityServiceImpl(
-                stockSummaryRepository, inventoryLedgerEntryRepository, forecastQuantityService);
+                stockSummaryRepository, inventoryLedgerEntryRepository, forecastQuantityService, asOfQueryGuard);
     }
 
     @Test

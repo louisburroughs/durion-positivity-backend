@@ -50,7 +50,12 @@ public class InventoryAvailabilityController {
             summary = "Query inventory availability",
             description = "Returns per-location availability for a product, including forecast quantities "
                     + "(incomingQty, outgoingQty, projectedAvailable) computed from open purchase orders, ASNs, "
-                    + "reservations, and released pick tasks (odoo-parity A2).",
+                    + "reservations, and released pick tasks (odoo-parity A2). "
+                    + "With 'asOf', returns historical on-hand per location computed by direct ledger aggregation "
+                    + "(timestamp <= asOf) instead: availableToPromiseQuantity and the forecast fields are null, "
+                    + "because historical allocation state is not reliably reconstructable from ATP-neutral ledger "
+                    + "events. As-of requests additionally require the 'inventory:ledger:view' authority (history "
+                    + "exposure) and reject future instants with 422; 'asOf' cannot be combined with 'horizon'.",
             tags = {"Inventory Availability"})
     @ApiResponse(
             responseCode = "200",
@@ -69,8 +74,22 @@ public class InventoryAvailabilityController {
                                             + "on or before this instant and outgoingQty to reservations due by it; documents "
                                             + "without an expected date are excluded from horizon-bounded results.")
                     @RequestParam(required = false)
-                    java.time.Instant horizon) {
-        log.info("GET /v1/inventory/availability/{} horizon={}", productId, horizon);
+                    java.time.Instant horizon,
+            @Parameter(
+                            description =
+                                    "Optional historical instant (ISO-8601). Returns on-hand as of this instant by "
+                                            + "direct ledger aggregation; ATP and forecast fields are null. Requires "
+                                            + "'inventory:ledger:view'; future instants are rejected (422). "
+                                            + "Cannot be combined with 'horizon'.")
+                    @RequestParam(required = false)
+                    java.time.Instant asOf) {
+        log.info("GET /v1/inventory/availability/{} horizon={} asOf={}", productId, horizon, asOf);
+        if (asOf != null && horizon != null) {
+            throw new InvalidParamCombinationException("asOf cannot be combined with horizon");
+        }
+        if (asOf != null) {
+            return ResponseEntity.ok(availabilityService.getAvailabilityByProductAsOf(productId, asOf));
+        }
         return ResponseEntity.ok(availabilityService.getAvailabilityByProduct(productId, horizon));
     }
 

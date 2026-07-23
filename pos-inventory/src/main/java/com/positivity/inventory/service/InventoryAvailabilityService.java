@@ -39,6 +39,25 @@ public interface InventoryAvailabilityService {
     List<LocationAvailabilityDto> getAvailabilityByProduct(@NonNull UUID productId, @Nullable Instant horizon);
 
     /**
+     * Point-in-time on-hand per location (odoo-parity A3, issue #1029): computed by direct
+     * ledger aggregation with {@code timestamp <= asOf} over on-hand-affecting event types —
+     * the stock summary is not involved.
+     *
+     * <p>Returns on-hand only: allocation-derived ({@code availableToPromiseQuantity}) and
+     * forecast fields are {@code null}, because historical allocation state is not reliably
+     * reconstructable from ATP-neutral ledger events.
+     *
+     * <p>Requires {@code inventory:ledger:view} in addition to the endpoint's on-hand view
+     * permission (history exposure); a future-dated {@code asOf} is rejected (422).
+     *
+     * @param productId product identifier represented by stock item id in the ledger
+     * @param asOf      historical instant (inclusive)
+     * @return per-location historical on-hand list (locations with no entries at or before
+     *         {@code asOf} are absent)
+     */
+    List<LocationAvailabilityDto> getAvailabilityByProductAsOf(@NonNull UUID productId, @NonNull Instant asOf);
+
+    /**
      * Returns availability for the requested product at a specific location.
      *
      * <p>

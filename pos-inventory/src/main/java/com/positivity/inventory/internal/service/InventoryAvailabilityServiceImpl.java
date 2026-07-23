@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.service;
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.entity.InventoryStockSummary;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.InventorySourceType;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
@@ -40,14 +41,17 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
     private final InventoryStockSummaryRepository stockSummaryRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final ForecastQuantityService forecastQuantityService;
+    private final AsOfQueryGuard asOfQueryGuard;
 
     public InventoryAvailabilityServiceImpl(
             InventoryStockSummaryRepository stockSummaryRepository,
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
-            ForecastQuantityService forecastQuantityService) {
+            ForecastQuantityService forecastQuantityService,
+            AsOfQueryGuard asOfQueryGuard) {
         this.stockSummaryRepository = stockSummaryRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
         this.forecastQuantityService = forecastQuantityService;
+        this.asOfQueryGuard = asOfQueryGuard;
     }
 
     @Override
@@ -75,6 +79,31 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
                 .filter(row -> row.getLocationId() != null)
                 .sorted(Comparator.comparing(InventoryStockSummary::getLocationId))
                 .map(row -> toLocationAvailability(row, horizon))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LocationAvailabilityDto> getAvailabilityByProductAsOf(@NonNull UUID productId, @NonNull Instant asOf) {
+        if (productId == null) {
+            throw new InvalidInventoryAvailabilityRequestException("Product ID is required");
+        }
+        asOfQueryGuard.check(asOf);
+
+        // Odoo-parity A3 (#1029): direct ledger aggregation with a timestamp bound; the
+        // stock summary is not consulted. On-hand only — allocation-derived and forecast
+        // fields stay null (historical allocation state is not reliably reconstructable).
+        return inventoryLedgerEntryRepository
+                .sumQuantityByLocationForStockItemAsOf(
+                        productId.toString(), InventoryLedgerEventType.onHandAffectingTypes(), asOf)
+                .stream()
+                .filter(row -> row.getLocationId() != null)
+                .sorted(Comparator.comparing(InventoryLedgerEntryRepository.LocationQuantity::getLocationId))
+                .map(row -> LocationAvailabilityDto.builder()
+                        .locationId(row.getLocationId())
+                        .locationName(row.getLocationId().toString())
+                        .onHandQuantity(Math.toIntExact(row.getQuantity()))
+                        .build())
                 .toList();
     }
 
