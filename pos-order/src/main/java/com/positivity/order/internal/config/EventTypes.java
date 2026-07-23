@@ -86,5 +86,7 @@ public final class EventTypes {
             EventTypeRegistration.write("ORDER_CART_DISCOUNT_APPLY", "Order-level discount applied")
                     .build(),
             EventTypeRegistration.write("ORDER_CART_DISCOUNT_REMOVE", "Order-level discount removed")
+                    .build(),
+            EventTypeRegistration.write("ORDER_CHECKOUT", "Order checked out to PENDING_PAYMENT with invoice created")
                     .build());
 }

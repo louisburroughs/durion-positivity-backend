@@ -60,11 +60,18 @@ class DomainWallsTest {
      * is pos-invoice: settlement adjustment/refund writes plus their reconciliation reads stay
      * synchronous permanently per the <b>ADR-0044 amendment 2026-07-22</b> ("Pos-warranty settlement
      * remains synchronous against pos-invoice") — a money-moving counter-flow that must fail loudly
-     * in the request path, with reconciliation reading authoritative post-write state. This edge is
-     * the permanent, narrowest exception; widening it requires a further ADR-0044 amendment.
+     * in the request path, with reconciliation reading authoritative post-write state. Widening any
+     * edge requires a further ADR-0044 amendment.
+     *
+     * <p>pos-order: the counter-sale checkout handshake (order parity stories C1–C3, #1071/#1072)
+     * creates the fronting invoice at checkout and reverses settled payments in the cancellation
+     * saga — the same money-moving counter-flow class, permitted per the <b>ADR-0044 amendment
+     * 2026-07-23</b> ("Pos-order checkout/cancellation is synchronous against pos-invoice").
+     * Settlement signals stay asynchronous on {@code payment.events.v1}.
      */
-    private static final Map<String, Set<String>> SCOPED_MODULE_EXCEPTIONS =
-            Map.of("pos-warranty", Set.of("pos-invoice"));
+    private static final Map<String, Set<String>> SCOPED_MODULE_EXCEPTIONS = Map.of(
+            "pos-warranty", Set.of("pos-invoice"),
+            "pos-order", Set.of("pos-invoice"));
 
     /** Startup-infra classes exempt per ADR-0044 R2 (registration calls, best-effort at boot). */
     private static final Pattern EXEMPT_FILES =

@@ -11,6 +11,7 @@ import com.positivity.order.internal.dto.UpdateItemRequest;
 import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.service.SalesOrderService;
 import com.positivity.order.service.model.AddItemCommand;
+import com.positivity.order.service.model.CheckoutResult;
 import com.positivity.order.service.model.CreateCartCommand;
 import com.positivity.order.service.model.CreateCartResult;
 import com.positivity.order.service.model.OrderDiscountCommand;
@@ -209,6 +210,27 @@ public class SalesOrderController {
     }
 
     @Operation(
+            summary = "Check out a sales order",
+            description = "Freeze the cart and take it to PENDING_PAYMENT: validates lines/customer/availability, "
+                    + "performs the final reprice and tax computation, and creates the fronting invoice at "
+                    + "pos-invoice. The Idempotency-Key header is required; a replayed key returns the checked-out "
+                    + "order with 200. Settlement completion is asynchronous — the order completes when payment "
+                    + "events settle the balance to zero.",
+            tags = {"Sales Orders"})
+    @PostMapping("/{orderId}/checkout")
+    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_CHECKOUT + "')")
+    @EmitEvent(id = "ORDER_CHECKOUT", apiVersion = "1")
+    public ResponseEntity<SalesOrderResponse> checkout(
+            @PathVariable UUID orderId,
+            @Parameter(description = "Required checkout idempotency key; replays return the original result")
+                    @RequestHeader(name = "Idempotency-Key")
+                    String idempotencyKey) {
+        CheckoutResult result = salesOrderService.checkout(orderId, idempotencyKey);
+        HttpStatus status = result.replay() ? HttpStatus.OK : HttpStatus.CREATED;
+        return ResponseEntity.status(status).body(toResponse(result.summary()));
+    }
+
+    @Operation(
             summary = "Link a source to a sales order",
             description = "Associate an external source reference with an existing sales order cart.",
             tags = {"Sales Orders"})
@@ -246,6 +268,10 @@ public class SalesOrderController {
                 .orderDiscountReasonCode(summary.orderDiscountReasonCode())
                 .generalNote(summary.generalNote())
                 .quoteExpiresAt(summary.quoteExpiresAt())
+                .invoiceId(summary.invoiceId())
+                .invoiceNumber(summary.invoiceNumber())
+                .amountPaid(summary.amountPaid())
+                .balanceDue(summary.balanceDue())
                 .createdAt(summary.createdAt())
                 .updatedAt(summary.updatedAt())
                 .createdBy(summary.createdBy())

@@ -51,6 +51,20 @@ public class SalesOrderExceptionHandler {
                         correlationId));
     }
 
+    @ExceptionHandler(com.positivity.order.internal.exception.InvoicingUnavailableException.class)
+    public ResponseEntity<ApiError> handleInvoicingUnavailable(
+            com.positivity.order.internal.exception.InvoicingUnavailableException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "ORDER_INVOICING_UNAVAILABLE",
+                        ex.getMessage(),
+                        HttpStatus.SERVICE_UNAVAILABLE.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
     @ExceptionHandler(com.positivity.order.internal.exception.InvalidCustomerException.class)
     public ResponseEntity<ApiError> handleInvalidCustomer(
             com.positivity.order.internal.exception.InvalidCustomerException ex, HttpServletRequest request) {

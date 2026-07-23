@@ -4,10 +4,18 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.order.OrderCancelReviewRequiredV1;
 import com.positivity.domainevents.order.OrderCancelledV1;
+import com.positivity.domainevents.order.OrderCommissionImpactV1;
+import com.positivity.domainevents.order.OrderCompletedV1;
+import com.positivity.domainevents.order.OrderPaymentIntegrityAlertV1;
+import com.positivity.order.internal.entity.PriceOverride;
 import com.positivity.order.internal.entity.SalesOrder;
+import com.positivity.order.internal.entity.SalesOrderLine;
+import com.positivity.order.internal.entity.SourceType;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -15,8 +23,8 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /**
- * Emits order domain facts to the outbox (ADR-0044, plan story D1). No-op while the Kafka feature
- * flag ({@code pos.order.kafka.enabled}) is off — the {@link OutboxEventWriter} bean is
+ * Emits order domain facts to the outbox (ADR-0044, plan stories D1/D2/D3). No-op while the Kafka
+ * feature flag ({@code pos.order.kafka.enabled}) is off — the {@link OutboxEventWriter} bean is
  * conditional, so callers degrade gracefully. Must be called inside the mutating transaction.
  */
 @Slf4j
@@ -25,6 +33,7 @@ import org.springframework.stereotype.Component;
 public class OrderDomainEventPublisher {
 
     private static final String SOURCE_SERVICE = "pos-order";
+    private static final String CURRENCY = "USD";
 
     private final Clock clock;
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
@@ -38,21 +47,9 @@ public class OrderDomainEventPublisher {
                 order.getOrderId(),
                 order.getOrderNumber(),
                 order.getWorkOrderId(),
-                order.getPaymentId(),
                 order.getCancellationReason(),
                 Instant.now(clock));
-        writer.publish(
-                DomainTopics.events("order"),
-                DomainEventEnvelope.of(
-                        OrderCancelledV1.EVENT_TYPE,
-                        OrderCancelledV1.SCHEMA_VERSION,
-                        order.getOrderId(),
-                        aggregateVersion(order),
-                        SOURCE_SERVICE,
-                        null,
-                        SecurityContextHelper.getCurrentUsernameOrDefault("system"),
-                        payload,
-                        clock));
+        publish(writer, OrderCancelledV1.EVENT_TYPE, OrderCancelledV1.SCHEMA_VERSION, order, payload);
         log.debug("Queued order.order.cancelled orderId={}", order.getOrderId());
     }
 
@@ -62,17 +59,110 @@ public class OrderDomainEventPublisher {
             return;
         }
         OrderCancelReviewRequiredV1 payload = new OrderCancelReviewRequiredV1(
+                order.getOrderId(), order.getOrderNumber(), order.getWorkOrderId(), failureReason, Instant.now(clock));
+        publish(
+                writer,
+                OrderCancelReviewRequiredV1.EVENT_TYPE,
+                OrderCancelReviewRequiredV1.SCHEMA_VERSION,
+                order,
+                payload);
+        log.debug("Queued order.order.cancel-review-required orderId={}", order.getOrderId());
+    }
+
+    /**
+     * Emits {@code order.order.completed} (story D2, resolved Q9: rich but PII-minimal).
+     * {@code tenders} is the net settlement summary from the order's payment records.
+     */
+    public void publishOrderCompleted(@NonNull SalesOrder order, @NonNull List<OrderCompletedV1.Tender> tenders) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        List<OrderCompletedV1.Line> lines = order.getLines().stream()
+                .filter(Objects::nonNull)
+                .map(OrderDomainEventPublisher::toEventLine)
+                .toList();
+        OrderCompletedV1 payload = new OrderCompletedV1(
                 order.getOrderId(),
                 order.getOrderNumber(),
+                order.getLocationId(),
                 order.getWorkOrderId(),
-                order.getPaymentId(),
-                failureReason,
+                null,
+                order.getCustomerId(),
+                order.getVehicleId(),
+                order.getClerkId(),
+                order.getTerminalId(),
+                CURRENCY,
+                order.getSubtotal(),
+                order.getDiscountTotal(),
+                order.getTaxTotal(),
+                order.getGrandTotal(),
+                lines,
+                tenders,
                 Instant.now(clock));
+        publish(writer, OrderCompletedV1.EVENT_TYPE, OrderCompletedV1.SCHEMA_VERSION, order, payload);
+        log.debug("Queued order.order.completed orderId={}", order.getOrderId());
+    }
+
+    /** Emits {@code order.payment.integrity-alert} on over-settlement (story C3, spec R4.4). */
+    public void publishPaymentIntegrityAlert(@NonNull SalesOrder order) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        OrderPaymentIntegrityAlertV1 payload = new OrderPaymentIntegrityAlertV1(
+                order.getOrderId(),
+                order.getOrderNumber(),
+                order.getInvoiceId(),
+                order.getGrandTotal(),
+                order.getAmountPaid(),
+                Instant.now(clock));
+        publish(
+                writer,
+                OrderPaymentIntegrityAlertV1.EVENT_TYPE,
+                OrderPaymentIntegrityAlertV1.SCHEMA_VERSION,
+                order,
+                payload);
+        log.warn(
+                "Queued order.payment.integrity-alert orderId={} amountPaid={} grandTotal={}",
+                order.getOrderId(),
+                order.getAmountPaid(),
+                order.getGrandTotal());
+    }
+
+    /** Emits {@code order.line.commission-impact} for an applied override (story D3, resolved Q7). */
+    public void publishCommissionImpact(@NonNull PriceOverride override) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        SalesOrder order = override.getOrder();
+        OrderCommissionImpactV1 payload = new OrderCommissionImpactV1(
+                order.getOrderId(),
+                override.getOrderLine().getOrderLineId(),
+                override.getOverrideId(),
+                override.getProductId(),
+                Boolean.TRUE.equals(override.getAffectsCommission()),
+                override.getOriginalPrice(),
+                override.getOverridePrice(),
+                override.getOriginalPrice().subtract(override.getOverridePrice()),
+                override.getRequestedByUserId(),
+                override.getApprovedByUserId(),
+                override.getReasonCode() == null
+                        ? "UNSPECIFIED"
+                        : override.getReasonCode().name(),
+                override.getApprovedAt() != null ? override.getApprovedAt() : Instant.now(clock));
+        publish(writer, OrderCommissionImpactV1.EVENT_TYPE, OrderCommissionImpactV1.SCHEMA_VERSION, order, payload);
+        log.debug("Queued order.line.commission-impact overrideId={}", override.getOverrideId());
+    }
+
+    private void publish(
+            OutboxEventWriter writer, String eventType, int schemaVersion, SalesOrder order, Object payload) {
         writer.publish(
                 DomainTopics.events("order"),
                 DomainEventEnvelope.of(
-                        OrderCancelReviewRequiredV1.EVENT_TYPE,
-                        OrderCancelReviewRequiredV1.SCHEMA_VERSION,
+                        eventType,
+                        schemaVersion,
                         order.getOrderId(),
                         aggregateVersion(order),
                         SOURCE_SERVICE,
@@ -80,7 +170,31 @@ public class OrderDomainEventPublisher {
                         SecurityContextHelper.getCurrentUsernameOrDefault("system"),
                         payload,
                         clock));
-        log.debug("Queued order.order.cancel-review-required orderId={}", order.getOrderId());
+    }
+
+    private static OrderCompletedV1.Line toEventLine(SalesOrderLine line) {
+        boolean workorderSourced = SourceType.WORKORDER.equals(line.getSourceType());
+        return new OrderCompletedV1.Line(
+                line.getOrderLineId(),
+                line.getItemSku(),
+                line.getItemDescription(),
+                line.getQuantity(),
+                line.getUnitPrice(),
+                line.getDiscountAmount(),
+                line.getLineSubtotal(),
+                line.getTaxAmount(),
+                line.getLineTotal(),
+                line.getPriceSource() == null
+                        ? "PRICING_SERVICE"
+                        : line.getPriceSource().name(),
+                line.getSourceType() == null ? null : line.getSourceType().name(),
+                line.getSourceId(),
+                line.getSourceLineId(),
+                null,
+                List.of(),
+                // Spec R7.5: WORKORDER-sourced lines are fulfilled by the source document —
+                // pos-inventory must not double-consume them.
+                !workorderSourced);
     }
 
     private static long aggregateVersion(SalesOrder order) {

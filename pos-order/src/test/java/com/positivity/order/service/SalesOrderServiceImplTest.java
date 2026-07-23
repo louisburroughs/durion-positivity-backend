@@ -76,6 +76,9 @@ class SalesOrderServiceImplTest {
     private CustomerPort customerPort;
 
     @Mock
+    private com.positivity.order.internal.client.InvoicingPort invoicingPort;
+
+    @Mock
     private OrderNumberService orderNumberService;
 
     @Mock
@@ -102,6 +105,7 @@ class SalesOrderServiceImplTest {
                 inventoryPort,
                 sourceDocumentPort,
                 customerPort,
+                invoicingPort,
                 new OrderStateMachine(orderStatusHistoryRepository, java.time.Clock.systemUTC()),
                 orderNumberService,
                 new com.positivity.order.internal.service.OrderTotalsCalculator(),

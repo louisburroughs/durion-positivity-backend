@@ -4,6 +4,8 @@ import com.positivity.order.internal.client.CustomerLookupResult;
 import com.positivity.order.internal.client.CustomerPort;
 import com.positivity.order.internal.client.InventoryPort;
 import com.positivity.order.internal.client.InventoryResult;
+import com.positivity.order.internal.client.InvoiceRef;
+import com.positivity.order.internal.client.InvoicingPort;
 import com.positivity.order.internal.client.PricingPort;
 import com.positivity.order.internal.client.PricingQuote;
 import com.positivity.order.internal.client.SourceDocumentLine;
@@ -17,12 +19,15 @@ import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.order.service.SalesOrderService;
 import com.positivity.order.service.model.AddItemCommand;
+import com.positivity.order.service.model.CheckoutResult;
 import com.positivity.order.service.model.CreateCartCommand;
 import com.positivity.order.service.model.CreateCartResult;
 import com.positivity.order.service.model.OrderDiscountCommand;
 import com.positivity.order.service.model.SalesOrderLineSummary;
 import com.positivity.order.service.model.SalesOrderSummary;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.dto.OrderInvoiceCreationRequest;
+import com.positivity.shared.dto.OrderInvoiceLineItem;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -51,6 +56,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     private final InventoryPort inventoryPort;
     private final SourceDocumentPort sourceDocumentPort;
     private final CustomerPort customerPort;
+    private final InvoicingPort invoicingPort;
     private final OrderStateMachine orderStateMachine;
     private final OrderNumberService orderNumberService;
     private final OrderTotalsCalculator totalsCalculator;
@@ -361,6 +367,91 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         return toSummary(salesOrderRepository.save(order));
     }
 
+    @Override
+    @Transactional
+    public CheckoutResult checkout(UUID orderId, String idempotencyKey) {
+        String key = normalizeBlank(idempotencyKey);
+        if (key == null) {
+            throw new IllegalArgumentException("Idempotency-Key is required for checkout");
+        }
+        SalesOrder order =
+                salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
+
+        if (key.equals(order.getCheckoutIdempotencyKey())) {
+            return new CheckoutResult(toSummary(order), true);
+        }
+        Optional<SalesOrder> keyOwner = salesOrderRepository.findByCheckoutIdempotencyKey(key);
+        if (keyOwner.isPresent() && !orderId.equals(keyOwner.get().getOrderId())) {
+            throw new CartIdempotencyConflictException(
+                    "Idempotency key was previously used to check out a different order");
+        }
+
+        if (order.getLines().stream().filter(Objects::nonNull).findAny().isEmpty()) {
+            throw new IllegalStateException("Cannot check out an empty cart");
+        }
+        // Resolved Q8: PENDING customer validation hard-blocks financially consequential
+        // transitions; the cart stays workable until CRM resolves.
+        if (order.getCustomerValidationStatus() == CustomerValidationStatus.PENDING) {
+            throw new InvalidCustomerException(
+                    "Customer validation is pending; checkout is blocked until CRM confirms the customer");
+        }
+        for (SalesOrderLine line : order.getLines()) {
+            if (line == null) {
+                continue;
+            }
+            InventoryResult availability = inventoryPort.checkAvailability(line.getItemSku(), line.getQuantity());
+            if (!availability.sufficient()) {
+                throw new IllegalStateException(
+                        "Insufficient availability for SKU " + line.getItemSku() + "; cannot check out");
+            }
+        }
+
+        // Final reprice (no stale prices, spec R2.1) + authoritative tax before the freeze.
+        repriceLines(order, true);
+        orderTaxService.recomputeTax(order);
+
+        orderStateMachine.transition(order, SalesOrderStatus.PENDING_PAYMENT, "checkout");
+        order.setCheckoutIdempotencyKey(key);
+        order.setAmountPaid(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
+        order.setBalanceDue(order.getGrandTotal());
+        order.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        SalesOrder saved = salesOrderRepository.save(order);
+
+        // Synchronous invoice handshake (stories C1/C2). A failure here throws and rolls the
+        // whole checkout back — atomic from the client's view.
+        InvoiceRef invoiceRef = invoicingPort.createInvoiceForOrder(toInvoiceRequest(saved));
+        saved.setInvoiceId(invoiceRef.invoiceId());
+        saved.setInvoiceNumber(invoiceRef.invoiceNumber());
+        return new CheckoutResult(toSummary(salesOrderRepository.save(saved)), false);
+    }
+
+    private static OrderInvoiceCreationRequest toInvoiceRequest(SalesOrder order) {
+        // Line amounts are net of ALL discounts (lineTotal − tax includes the pro-rata order
+        // discount allocation) so the invoice's subtotal + tax = total exactly.
+        List<OrderInvoiceLineItem> lines = order.getLines().stream()
+                .filter(Objects::nonNull)
+                .map(line -> OrderInvoiceLineItem.builder()
+                        .orderLineId(line.getOrderLineId())
+                        .description(line.getItemDescription())
+                        .quantity(BigDecimal.valueOf(line.getQuantity()))
+                        .unitPrice(line.getUnitPrice())
+                        .amount(line.getLineTotal().subtract(line.getTaxAmount()))
+                        .taxAmount(line.getTaxAmount())
+                        .type("PART")
+                        .build())
+                .toList();
+        return OrderInvoiceCreationRequest.builder()
+                .orderId(order.getOrderId())
+                .workorderId(order.getWorkOrderId())
+                .customerId(order.getCustomerId())
+                .locationId(order.getLocationId())
+                .subtotal(order.getGrandTotal().subtract(order.getTaxTotal()))
+                .taxAmount(order.getTaxTotal())
+                .totalAmount(order.getGrandTotal())
+                .lines(lines)
+                .build();
+    }
+
     /**
      * Resolved Q3 (spec R2.3): QUOTED is counter-only — pos-workorder Estimates own repair
      * quoting. Reject when the order references a workorder directly or via imported lines.
@@ -533,6 +624,10 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 order.getOrderDiscountReasonCode(),
                 order.getGeneralNote(),
                 order.getQuoteExpiresAt(),
+                asString(order.getInvoiceId()),
+                order.getInvoiceNumber(),
+                order.getAmountPaid(),
+                order.getBalanceDue(),
                 order.getCreatedAt(),
                 order.getUpdatedAt(),
                 order.getCreatedBy(),

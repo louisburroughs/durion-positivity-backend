@@ -75,6 +75,9 @@ pos:
       catalog-events-consumer-group: ${POS_ORDER_CATALOG_EVENTS_CONSUMER_GROUP:pos-order-catalog-events}
       location-events-topic: ${POS_ORDER_LOCATION_EVENTS_TOPIC:location.events.v1}
       location-events-consumer-group: ${POS_ORDER_LOCATION_EVENTS_CONSUMER_GROUP:pos-order-location-events}
+      # Settlement handshake (parity story C3): pos-invoice per-payment settlement facts
+      payment-events-topic: ${POS_ORDER_PAYMENT_EVENTS_TOPIC:payment.events.v1}
+      payment-events-consumer-group: ${POS_ORDER_PAYMENT_EVENTS_CONSUMER_GROUP:pos-order-payment-events}
     pricing:
       # PriceQuoteRequest requires a customerTierId; served from config until a customer→tier
       # mapping feed exists (the ext_customer replica carries only the tier name). Story B1.
@@ -86,6 +89,9 @@ pos:
     base-url: ${POS_PRICE_BASE_URL:http://pos-price:8080}
   tax:
     base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
+  invoice:
+    # Scoped ADR-0044 exception (checkout invoice creation + saga payment reversal)
+    base-url: ${POS_INVOICE_BASE_URL:http://pos-invoice:8080}
 
 springdoc:
   api-docs:

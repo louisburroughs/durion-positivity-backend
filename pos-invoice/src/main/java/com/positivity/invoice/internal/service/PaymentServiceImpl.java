@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.config.PaymentEventPublisher;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
 import com.positivity.invoice.internal.entity.Invoice;
@@ -41,14 +42,17 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentGatewayPort gatewayPort;
     private final InvoiceRepository invoiceRepository;
     private final PaymentIntentRepository paymentIntentRepository;
+    private final PaymentEventPublisher paymentEventPublisher;
 
     public PaymentServiceImpl(
             @NonNull PaymentGatewayPort gatewayPort,
             @NonNull InvoiceRepository invoiceRepository,
-            @NonNull PaymentIntentRepository paymentIntentRepository) {
+            @NonNull PaymentIntentRepository paymentIntentRepository,
+            @NonNull PaymentEventPublisher paymentEventPublisher) {
         this.gatewayPort = gatewayPort;
         this.invoiceRepository = invoiceRepository;
         this.paymentIntentRepository = paymentIntentRepository;
+        this.paymentEventPublisher = paymentEventPublisher;
     }
 
     @Override
@@ -130,6 +134,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         PaymentIntent saved = paymentIntentRepository.save(pendingPaymentIntent);
+        paymentEventPublisher.publishPaymentSettled(saved);
         return toResponse(saved);
     }
 
@@ -190,6 +195,9 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         PaymentIntent saved = paymentIntentRepository.save(savedPaymentIntent);
+        if (saved.getStatus() == PaymentIntentStatus.CAPTURED) {
+            paymentEventPublisher.publishPaymentSettled(saved);
+        }
         return toResponse(saved);
     }
 

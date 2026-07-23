@@ -18,7 +18,6 @@ import org.jspecify.annotations.Nullable;
  * @param orderId sales order identifier (also the envelope aggregateId)
  * @param orderNumber human-facing order number (null for orders created before numbering)
  * @param workorderId linked workorder, if any
- * @param paymentId payment whose reversal failed, if any
  * @param failureReason terminal failure description
  * @param occurredAt when the order entered manual review
  */
@@ -26,7 +25,6 @@ public record OrderCancelReviewRequiredV1(
         @NonNull UUID orderId,
         @Nullable String orderNumber,
         @Nullable UUID workorderId,
-        @Nullable UUID paymentId,
         @NonNull String failureReason,
         @NonNull Instant occurredAt) {
 
