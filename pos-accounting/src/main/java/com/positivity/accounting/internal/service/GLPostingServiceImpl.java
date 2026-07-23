@@ -416,10 +416,12 @@ public class GLPostingServiceImpl implements GLPostingService {
             @Nullable String overrideJustification) {
 
         log.info(
-                "Posting inventory shrinkage GL entry {}: debit shrinkage expense {}, credit inventory {}",
+                "Posting inventory shrinkage GL entry {}: amount {}, debit shrinkage expense account {},"
+                        + " credit inventory account {}",
                 sourceEventId,
                 amount,
-                amount);
+                shrinkageAccountId,
+                inventoryAccountId);
 
         JournalEntry entry = new JournalEntry();
         entry.setTransactionDate(transactionDate);

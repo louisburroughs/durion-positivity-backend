@@ -63,6 +63,20 @@ public record TransferOrderUpdatedV1(
         if (occurredAt == null) {
             throw new IllegalArgumentException("occurredAt must not be null");
         }
+        if (shortCloseDisposition != null) {
+            if (!"SHORT_CLOSED".equals(status)) {
+                throw new IllegalArgumentException("shortCloseDisposition is only valid for status SHORT_CLOSED");
+            }
+            if (!"LOST_IN_TRANSIT".equals(shortCloseDisposition)
+                    && !"RETURNED_TO_SOURCE".equals(shortCloseDisposition)) {
+                throw new IllegalArgumentException(
+                        "shortCloseDisposition must be LOST_IN_TRANSIT or RETURNED_TO_SOURCE, got: "
+                                + shortCloseDisposition);
+            }
+        }
+        if ("SHORT_CLOSED".equals(status) && shortCloseDisposition == null) {
+            throw new IllegalArgumentException("status SHORT_CLOSED requires a shortCloseDisposition");
+        }
         lines = List.copyOf(lines);
     }
 
