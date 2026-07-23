@@ -527,6 +527,27 @@ public class GLPostingServiceImpl implements GLPostingService {
                 "Settlement Reclass");
     }
 
+    @Override
+    public JournalEntry postRegisterOverShort(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID sessionId,
+            @NonNull UUID debitAccountId,
+            @NonNull UUID creditAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification) {
+        return postTwoLineReclass(
+                sourceEventId,
+                debitAccountId,
+                creditAccountId,
+                amount,
+                transactionDate,
+                description,
+                overrideJustification,
+                "Register Over/Short - Session#" + sessionId);
+    }
+
     /**
      * Post a balanced two-line entry {@code Dr debitAccount / Cr creditAccount}
      * of {@code amount}. Used by settlement write-off (Dr Suspense / Cr

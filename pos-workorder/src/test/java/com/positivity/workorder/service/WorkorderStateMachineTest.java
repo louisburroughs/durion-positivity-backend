@@ -249,4 +249,42 @@ class WorkorderStateMachineTest {
         assertTrue(WorkorderStatus.getInProgressSubStatuses().contains(WorkorderStatus.AWAITING_APPROVAL));
         assertFalse(WorkorderStatus.getInProgressSubStatuses().contains(WorkorderStatus.COMPLETED));
     }
+
+    // -----------------------------------------------------------------------
+    // Odoo-parity E3 (#1084): finalize-back to workorder on order settlement
+    // -----------------------------------------------------------------------
+
+    @Test
+    void finalizeFromOrderSettlement_unknownWorkorder_isNoOp() {
+        UUID orderId = UUID.fromString("550e8400-e29b-41d4-a716-4466554400a1");
+        when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.empty());
+
+        stateMachine.finalizeFromOrderSettlement(testWorkorderId, orderId, "pos-order");
+
+        verify(workorderRepository, org.mockito.Mockito.never()).save(any(Workorder.class));
+    }
+
+    @Test
+    void finalizeFromOrderSettlement_alreadyCompleted_isNoOp() {
+        UUID orderId = UUID.fromString("550e8400-e29b-41d4-a716-4466554400a2");
+        testWorkorder.setStatus(WorkorderStatus.COMPLETED);
+        when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
+
+        stateMachine.finalizeFromOrderSettlement(testWorkorderId, orderId, "pos-order");
+
+        verify(workorderRepository, org.mockito.Mockito.never()).save(any(Workorder.class));
+        verify(transitionRepository, org.mockito.Mockito.never()).save(any(WorkorderStateTransition.class));
+    }
+
+    @Test
+    void finalizeFromOrderSettlement_nonEligibleStatus_isNoOp() {
+        UUID orderId = UUID.fromString("550e8400-e29b-41d4-a716-4466554400a3");
+        testWorkorder.setStatus(WorkorderStatus.APPROVED); // not completion-eligible
+        when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
+
+        stateMachine.finalizeFromOrderSettlement(testWorkorderId, orderId, "pos-order");
+
+        verify(workorderRepository, org.mockito.Mockito.never()).save(any(Workorder.class));
+        verify(transitionRepository, org.mockito.Mockito.never()).save(any(WorkorderStateTransition.class));
+    }
 }
