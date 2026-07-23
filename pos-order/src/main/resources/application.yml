@@ -8,6 +8,11 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: pos-order-events
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   datasource:
     url: ${SPRING_DATASOURCE_URL:}
     username: ${SPRING_DATASOURCE_USERNAME:}
@@ -57,13 +62,14 @@ logging:
 pos:
   order:
     kafka:
-      # Domain-event publishing (ADR-0044, parity story D1). Off until the broker is
-      # provisioned; flip POS_ORDER_KAFKA_ENABLED per environment.
+      # Domain-event publishing + replica feeds (ADR-0044, parity stories D1/I2). Off until the
+      # broker is provisioned; flip POS_ORDER_KAFKA_ENABLED per environment.
       enabled: ${POS_ORDER_KAFKA_ENABLED:false}
-  inventory:
-    base-url: ${POS_INVENTORY_BASE_URL:http://pos-inventory:8080}
-  customer:
-    base-url: ${POS_CUSTOMER_BASE_URL:http://pos-customer:8080}
+      # CRM replica feeds (ADR-0044 §6): ext_customer / ext_vehicle
+      customer-events-topic: ${POS_ORDER_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
+      customer-events-consumer-group: ${POS_ORDER_CUSTOMER_EVENTS_CONSUMER_GROUP:pos-order-customer-events}
+      vehicle-events-topic: ${POS_ORDER_VEHICLE_EVENTS_TOPIC:vehicle.events.v1}
+      vehicle-events-consumer-group: ${POS_ORDER_VEHICLE_EVENTS_CONSUMER_GROUP:pos-order-vehicle-events}
 
 springdoc:
   api-docs:
