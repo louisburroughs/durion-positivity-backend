@@ -12,12 +12,16 @@ import com.positivity.inventory.internal.enums.AllocationState;
 import com.positivity.inventory.internal.enums.AllocationStatus;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.PickTaskStatus;
+import com.positivity.inventory.internal.enums.SourcingStrategy;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
 import com.positivity.inventory.internal.repository.AllocationRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.PickTaskRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
+import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingCandidate;
+import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingDecision;
+import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingSelection;
 import com.positivity.inventory.service.ConsumptionService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -32,6 +36,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,10 +47,16 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code ALLOCATION_RELEASED} in the same transaction (CAP-218 #662).
  *
  * <p>Allocations are resolved deterministically: pick task →
- * {@code workorderLineId} → reservation → located HARD allocations. Consumed
- * quantity is applied to allocations oldest-first; each portion releases at
- * most the allocation's un-released remainder (derived from the ledger via
- * {@code sourceTransactionId}), preserving the per-allocation
+ * {@code workorderLineId} → reservation → located HARD allocations. The order
+ * in which consumed quantity is applied to allocations follows the sourcing
+ * strategy engine (odoo-parity H1, issue #1037): under the platform-default
+ * FIFO strategy allocations close oldest-first (creation timestamp, then
+ * allocation id) — exactly the pre-H1 behavior — while PROXIMITY and
+ * HIGHEST_STOCK close allocations grouped by the engine's location ordering
+ * first (allocations at better-ranked locations close before older ones at
+ * worse-ranked locations), still oldest-first within a location. Each portion
+ * releases at most the allocation's un-released remainder (derived from the
+ * ledger via {@code sourceTransactionId}), preserving the per-allocation
  * CREATED − RELEASED ∈ {0, allocatedQuantity} invariant. Consumption of
  * unallocated stock writes no allocation events.
  */
@@ -59,7 +71,34 @@ public class ConsumptionServiceImpl implements ConsumptionService {
     private final AllocationRepository allocationRepository;
     private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
+    private final @Nullable SourcingStrategyService sourcingStrategyService;
 
+    @Autowired
+    public ConsumptionServiceImpl(
+            PickTaskRepository pickTaskRepository,
+            InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
+            ReservationRepository reservationRepository,
+            AllocationRepository allocationRepository,
+            LedgerPostingService ledgerPostingService,
+            InventoryFactPublisher inventoryFactPublisher,
+            Clock clock,
+            SourcingStrategyService sourcingStrategyService) {
+        this.clock = clock;
+        this.inventoryFactPublisher = inventoryFactPublisher;
+        this.pickTaskRepository = pickTaskRepository;
+        this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
+        this.reservationRepository = reservationRepository;
+        this.allocationRepository = allocationRepository;
+        this.ledgerPostingService = ledgerPostingService;
+        this.sourcingStrategyService = sourcingStrategyService;
+    }
+
+    /**
+     * Engine-less constructor kept for the pre-H1 unit-test fixtures: without
+     * a {@link SourcingStrategyService} the allocation-close order is the
+     * platform-default FIFO (oldest-first) — identical to the engine's
+     * default-config decision, which the H1 regression tests prove.
+     */
     public ConsumptionServiceImpl(
             PickTaskRepository pickTaskRepository,
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
@@ -68,13 +107,15 @@ public class ConsumptionServiceImpl implements ConsumptionService {
             LedgerPostingService ledgerPostingService,
             InventoryFactPublisher inventoryFactPublisher,
             Clock clock) {
-        this.clock = clock;
-        this.inventoryFactPublisher = inventoryFactPublisher;
-        this.pickTaskRepository = pickTaskRepository;
-        this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
-        this.reservationRepository = reservationRepository;
-        this.allocationRepository = allocationRepository;
-        this.ledgerPostingService = ledgerPostingService;
+        this(
+                pickTaskRepository,
+                inventoryLedgerEntryRepository,
+                reservationRepository,
+                allocationRepository,
+                ledgerPostingService,
+                inventoryFactPublisher,
+                clock,
+                null);
     }
 
     @Override
@@ -161,18 +202,16 @@ public class ConsumptionServiceImpl implements ConsumptionService {
             return List.of();
         }
 
-        List<AllocationEntity> locatedHard = allocationRepository.findByReservation(reservation.get()).stream()
+        List<AllocationEntity> unordered = allocationRepository.findByReservation(reservation.get()).stream()
                 .filter(allocation -> allocation.getAllocationState() == AllocationState.HARD)
                 .filter(allocation -> allocation.getLocationId() != null)
                 .filter(allocation -> allocation.getStatus() != AllocationStatus.RELEASED)
-                .sorted(Comparator.comparing(
-                                AllocationEntity::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(
-                                AllocationEntity::getAllocationId, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
-        if (locatedHard.isEmpty()) {
+        if (unordered.isEmpty()) {
             return List.of();
         }
+        List<AllocationEntity> locatedHard =
+                orderAllocationsForClose(unordered, reservation.get().getStockItemId(), task);
 
         UUID stockItemId = reservation.get().getStockItemId();
         int netOnHand = Optional.ofNullable(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId))
@@ -224,6 +263,51 @@ public class ConsumptionServiceImpl implements ConsumptionService {
             reservationRepository.save(owning);
         }
         return releases;
+    }
+
+    /**
+     * Allocation-close order per the sourcing strategy engine (odoo-parity
+     * H1, issue #1037).
+     *
+     * <p>FIFO (the platform default, and the FEFO/PROXIMITY fallback) closes
+     * oldest allocation first — allocation creation follows receipt order, so
+     * this is FIFO at allocation granularity and is bit-identical to the
+     * pre-H1 hardcoded ordering. Any other effective strategy ranks the
+     * allocations' distinct locations through the engine (PROXIMITY anchors
+     * on the pick task's scanned/suggested location) and closes allocations
+     * by location rank first, oldest-first within a location, allocation id
+     * as the final tie-breaker.
+     */
+    private List<AllocationEntity> orderAllocationsForClose(
+            List<AllocationEntity> allocations, UUID stockItemId, PickTaskEntity task) {
+        Comparator<AllocationEntity> oldestFirst = Comparator.comparing(
+                        AllocationEntity::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(AllocationEntity::getAllocationId, Comparator.nullsLast(Comparator.naturalOrder()));
+        if (sourcingStrategyService == null) {
+            return allocations.stream().sorted(oldestFirst).toList();
+        }
+
+        List<SourcingCandidate> candidates = allocations.stream()
+                .map(AllocationEntity::getLocationId)
+                .distinct()
+                .map(locationId -> new SourcingCandidate(locationId, null))
+                .toList();
+        SourcingDecision decision = sourcingStrategyService.orderCandidates(
+                new SourcingSelection(stockItemId.toString(), null, task.getSuggestedLocationId(), candidates));
+        if (decision.effectiveStrategy() == SourcingStrategy.FIFO) {
+            return allocations.stream().sorted(oldestFirst).toList();
+        }
+
+        Map<UUID, Integer> locationRank = new HashMap<>();
+        List<SourcingCandidate> ordered = decision.orderedCandidates();
+        for (int i = 0; i < ordered.size(); i++) {
+            locationRank.put(ordered.get(i).locationId(), i);
+        }
+        return allocations.stream()
+                .sorted(Comparator.<AllocationEntity>comparingInt(
+                                allocation -> locationRank.getOrDefault(allocation.getLocationId(), Integer.MAX_VALUE))
+                        .thenComparing(oldestFirst))
+                .toList();
     }
 
     private InventoryLedgerEntry buildConsumptionEntry(ConsumeItemsRequest request, ConsumeItemLine item) {

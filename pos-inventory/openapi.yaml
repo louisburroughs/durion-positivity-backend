@@ -66,6 +66,8 @@ tags:
   description: Manage inventory adjustments from cycle counts
 - name: Receiving
   description: Receiving session creation, item receiving, and cross-dock execution endpoints
+- name: Sourcing Strategies
+  description: Sourcing/removal strategy configuration endpoints
 - name: Inventory Sites
   description: Site inventory configuration endpoints. Inventory Sites represent physical locations that hold inventory.
 - name: Inventory Ledger
@@ -73,6 +75,69 @@ tags:
 - name: Stock Movements
   description: Inventory ledger movement recording and adjustment endpoints
 paths:
+  /v1/inventory/sourcing-strategies:
+    get:
+      tags:
+      - Sourcing Strategies
+      summary: List sourcing strategy configurations
+      description: Lists all sourcing strategy configuration rows (active and inactive), ordered by scope. Resolution precedence at decision time is SKU_CATEGORY, then SITE, then DEFAULT, then the platform default FIFO.
+      operationId: listConfigs
+      responses:
+        '200':
+          description: Sourcing strategy configurations returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SourcingStrategyConfigResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      x-required-permissions:
+      - inventory:location:admin
+    put:
+      tags:
+      - Sourcing Strategies
+      summary: Upsert sourcing strategy configuration
+      description: Creates or updates the sourcing strategy for one scope (SKU_CATEGORY, SITE, or DEFAULT) and reactivates it. At most one row exists per scope.
+      operationId: upsertConfig
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourcingStrategyConfigRequest'
+        required: true
+      responses:
+        '200':
+          description: Sourcing strategy configuration upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcingStrategyConfigResponse'
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      x-required-permissions:
+      - inventory:location:admin
   /v1/inventory/sites/{siteId}/defaultLocations:
     get:
       tags:
@@ -4531,6 +4596,45 @@ paths:
         - inventory:asn:view
       x-required-permissions:
       - inventory:asn:view
+  /v1/inventory/sourcing-strategies/{configId}:
+    delete:
+      tags:
+      - Sourcing Strategies
+      summary: Deactivate sourcing strategy configuration
+      description: 'Soft delete: marks the configuration row inactive so it stops participating in strategy resolution; the row is never removed.'
+      operationId: deactivateConfig
+      parameters:
+      - name: configId
+        in: path
+        description: Sourcing strategy configuration identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Sourcing strategy configuration deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcingStrategyConfigResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Sourcing strategy configuration not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      x-required-permissions:
+      - inventory:location:admin
   /v1/inventory/reservations/{workorderLineId}:
     delete:
       tags:
@@ -4568,6 +4672,148 @@ paths:
       - inventory:adjustment:create
 components:
   schemas:
+    SourcingStrategyConfigRequest:
+      type: object
+      description: Upsert of the sourcing strategy configured for one scope (odoo-parity H1)
+      properties:
+        scopeType:
+          type: string
+          description: Configuration scope kind
+          enum:
+          - SKU_CATEGORY
+          - SITE
+          - DEFAULT
+          example: SITE
+        scopeValue:
+          type: string
+          description: 'Scope key: the SKU category string for SKU_CATEGORY, the site UUID as text for SITE, omitted for DEFAULT'
+          example: 01960003-0000-7000-8000-000000000010
+        strategy:
+          type: string
+          description: Sourcing strategy applied at this scope
+          enum:
+          - FIFO
+          - FEFO
+          - PROXIMITY
+          - HIGHEST_STOCK
+          example: PROXIMITY
+      required:
+      - scopeType
+      - strategy
+    SourcingStrategyConfigResponse:
+      type: object
+      description: One sourcing strategy configuration row (odoo-parity H1)
+      properties:
+        configId:
+          type: string
+          format: uuid
+          description: Unique identifier of the configuration row
+          example: 01960003-0000-7000-8000-000000000001
+        scopeType:
+          type: string
+          description: Configuration scope kind
+          enum:
+          - SKU_CATEGORY
+          - SITE
+          - DEFAULT
+          example: SITE
+        scopeValue:
+          type: string
+          description: 'Scope key: category string, site UUID as text, or null for DEFAULT'
+          example: 01960003-0000-7000-8000-000000000010
+        strategy:
+          type: string
+          description: Sourcing strategy applied at this scope
+          enum:
+          - FIFO
+          - FEFO
+          - PROXIMITY
+          - HIGHEST_STOCK
+          example: PROXIMITY
+        active:
+          type: boolean
+          description: Whether this row participates in resolution
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the row was created
+          example: 2026-07-01 00:00:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the row was last updated
+          example: 2026-07-01 00:00:00+00:00
+      required:
+      - active
+      - configId
+      - createdAt
+      - scopeType
+      - strategy
+      - updatedAt
+    ApiError:
+      type: object
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code
+          example: 404
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+        correlationId:
+          type: string
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          items:
+            $ref: '#/components/schemas/FieldError'
+        referenceId:
+          type: string
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+        nextAction:
+          type: string
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+        supportAction:
+          type: string
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
+      required:
+      - field
+      - message
     UpdateCycleCountScheduleRequest:
       type: object
       description: Partial update of a recurring cycle-count schedule; null fields are left unchanged
@@ -4808,69 +5054,6 @@ components:
       required:
       - requestedQty
       - sku
-    ApiError:
-      type: object
-      description: Standard error response envelope returned by all Durion backend APIs
-      properties:
-        code:
-          type: string
-          description: Machine-readable error code
-          example: ORDER_NOT_FOUND
-        message:
-          type: string
-          description: Human-readable error message
-          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
-        status:
-          type: integer
-          format: int32
-          description: HTTP status code
-          example: 404
-        timestamp:
-          type: string
-          description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
-        correlationId:
-          type: string
-          description: Unique correlation ID for distributed request tracing
-          example: 550e8400-e29b-41d4-a716-446655440000
-        fieldErrors:
-          type: array
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
-          items:
-            $ref: '#/components/schemas/FieldError'
-        referenceId:
-          type: string
-          description: Workflow or review-case reference identifier, when applicable
-          example: REVIEW-2026-000123
-        nextAction:
-          type: string
-          description: Recommended next step for the caller, when applicable
-          example: Retry the request with a valid quantity
-        supportAction:
-          type: string
-          description: Support or admin investigation guidance, when applicable
-          example: Contact support with the correlation ID for assistance
-      required:
-      - code
-      - correlationId
-      - message
-      - status
-      - timestamp
-    FieldError:
-      type: object
-      description: Validation error for a specific request field
-      properties:
-        field:
-          type: string
-          description: Field name
-          example: quantity
-        message:
-          type: string
-          description: Validation failure message
-          example: must be greater than 0
-      required:
-      - field
-      - message
     TransferOrderLineResponse:
       type: object
       description: SKU line of a transfer order with requested/dispatched/received quantities

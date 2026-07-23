@@ -46,6 +46,30 @@ Inventory management service for the Durion Positivity ETSMS platform. Manages s
 - `GET /v1/inventory/storage-locations` — paged storage-location reference data
 - `GET /v1/inventory/location-zones` — paged location-zone reference data
 - `POST /v1/inventory/bulk-ingest` — bulk import inventory records
+- `GET /v1/inventory/sourcing-strategies` — list sourcing strategy configuration rows
+- `PUT /v1/inventory/sourcing-strategies` — upsert the sourcing strategy for one scope
+- `DELETE /v1/inventory/sourcing-strategies/{configId}` — deactivate a sourcing strategy configuration
+
+## Sourcing Strategy Engine (odoo-parity H1/H2)
+
+`SourcingStrategyService` (internal) orders candidate locations for a SKU per a configured
+removal/sourcing strategy — consumed by consumption allocation-close ordering, pick-task
+location suggestion, and (from parity-F5) replenishment source selection via
+`selectSource(selection, neededQuantity)`.
+
+- **Strategies**: `FIFO` (earliest `GOODS_RECEIPT`/`TRANSFER_IN` ledger timestamp per location —
+  a documented per-location approximation), `FEFO` (earliest lot expiry via the
+  `LotExpiryProvider` SPI; falls back to FIFO until the lot stories E2/E3 register a real
+  provider), `PROXIMITY` (hop distance to a reference location, BFS over
+  `ext_storage_location` parent links plus `ext_location_parent` edges; falls back to FIFO
+  without a reference), `HIGHEST_STOCK` (most `onHand - allocated` first). All orderings
+  tie-break by ascending location id. LIFO and least-packages are explicit non-goals.
+- **Resolution**: active `SKU_CATEGORY` config (skipped while the catalog replica carries no
+  category — `SkuCategoryProvider` SPI) → active `SITE` config → active `DEFAULT` config →
+  platform default FIFO. Configuration lives in `sourcing_strategy_config` (V17), administered
+  via the `sourcing-strategies` endpoints (`inventory:location:admin`).
+- **Audit**: the effective strategy is recorded as `sourcingReason` on pick tasks
+  (and, from F5, replenishment tasks) so ops can answer "why this bin".
 
 ## Configuration
 

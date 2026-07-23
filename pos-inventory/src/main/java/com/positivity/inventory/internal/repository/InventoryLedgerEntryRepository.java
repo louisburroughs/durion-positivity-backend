@@ -243,6 +243,33 @@ public interface InventoryLedgerEntryRepository
             @Param("eventType") InventoryLedgerEventType eventType);
 
     /**
+     * Earliest receipt timestamp of one SKU per location (odoo-parity H1,
+     * issue #1037): {@code MIN(timestamp)} over {@code GOODS_RECEIPT}/
+     * {@code TRANSFER_IN} entries per location. FIFO sourcing orders
+     * candidate locations by this value — a documented approximation
+     * (per-location earliest receipt, not per-unit aging). Locations with no
+     * receipt entries are absent from the result (FIFO sorts them last).
+     */
+    @Query("""
+                        SELECT e.locationId AS locationId, MIN(e.timestamp) AS earliestReceipt
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.locationId IN :locationIds
+                          AND e.eventType IN :eventTypes
+                        GROUP BY e.locationId
+                        """)
+    List<LocationEarliestReceipt> findEarliestReceiptByLocation(
+            @Param("stockItemId") String stockItemId,
+            @Param("locationIds") Collection<UUID> locationIds,
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
+
+    interface LocationEarliestReceipt {
+        UUID getLocationId();
+
+        java.time.Instant getEarliestReceipt();
+    }
+
+    /**
      * Maximum number of location ids passed to a single {@code IN} clause.
      */
     int LOCATION_ID_CHUNK_SIZE = 1000;

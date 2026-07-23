@@ -13,6 +13,12 @@ public interface ExtLocationParentReplicaRepository
     /** Batched downward traversal: all edges of one type for a whole frontier level. */
     List<ExtLocationParentReplica> findByParentIdInAndParentType(Collection<UUID> parentIds, String parentType);
 
+    /** Batched upward traversal (all edge types) for proximity BFS (odoo-parity H1, #1037). */
+    List<ExtLocationParentReplica> findByChildIdIn(Collection<UUID> childIds);
+
+    /** Batched downward traversal (all edge types) for proximity BFS (odoo-parity H1, #1037). */
+    List<ExtLocationParentReplica> findByParentIdIn(Collection<UUID> parentIds);
+
     @Modifying
     void deleteByChildId(UUID childId);
 }

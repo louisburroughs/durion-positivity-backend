@@ -55,6 +55,19 @@ public final class EventTypes {
                                 "Receive dispatched transfer quantities at the destination (posts TRANSFER_IN)")
                         .build(),
 
+                // SourcingStrategyController - 3 events (odoo-parity H1, #1037)
+                EventTypeRegistration.fastRead(
+                                "INVENTORY_SOURCING_STRATEGY_LIST", "List sourcing strategy configurations")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_SOURCING_STRATEGY_UPSERT",
+                                "Create or update the sourcing strategy for one scope")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_SOURCING_STRATEGY_DEACTIVATE",
+                                "Deactivate a sourcing strategy configuration row")
+                        .build(),
+
                 // CycleCountController - 2 events
                 EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_SUBMIT", "Submit a count for a cycle count task")
                         .build(),
