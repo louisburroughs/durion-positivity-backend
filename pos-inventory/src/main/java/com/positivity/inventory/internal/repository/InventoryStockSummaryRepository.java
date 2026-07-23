@@ -171,6 +171,57 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
     }
 
     /**
+     * Set-based per-location reconciliation of the summary {@code allocated}
+     * column against ledger outstanding allocations (odoo-parity K3, issue
+     * #1032): {@code Σ ALLOCATION_CREATED − Σ ALLOCATION_RELEASED} per
+     * location must equal {@code SUM(allocated)} over the location's summary
+     * rows. Returns ONLY mismatching locations — same emulated full outer
+     * join as {@link #findDriftRows} (H2-compatible; the anti-join test uses
+     * {@code l.outstanding IS NULL} because {@code location_id} is nullable
+     * on both sides). Event types are passed as enum names.
+     */
+    @Query(value = """
+                        WITH ledger AS (
+                            SELECT location_id,
+                                   COALESCE(SUM(CASE WHEN event_type = :created THEN change_in_quantity
+                                                     WHEN event_type = :released THEN -change_in_quantity
+                                                     ELSE 0 END), 0) AS outstanding
+                            FROM inventory_ledger_entry
+                            WHERE event_type IN (:created, :released)
+                            GROUP BY location_id
+                        ), summary AS (
+                            SELECT location_id, COALESCE(SUM(allocated), 0) AS allocated
+                            FROM inventory_stock_summary
+                            GROUP BY location_id
+                        )
+                        SELECT CAST(l.location_id AS VARCHAR) AS locationId,
+                               l.outstanding AS ledgerOutstanding,
+                               COALESCE(s.allocated, 0) AS summaryAllocated
+                        FROM ledger l
+                        LEFT JOIN summary s ON s.location_id IS NOT DISTINCT FROM l.location_id
+                        WHERE COALESCE(s.allocated, 0) <> l.outstanding
+                        UNION ALL
+                        SELECT CAST(s.location_id AS VARCHAR) AS locationId,
+                               CAST(0 AS BIGINT) AS ledgerOutstanding,
+                               s.allocated AS summaryAllocated
+                        FROM summary s
+                        LEFT JOIN ledger l ON l.location_id IS NOT DISTINCT FROM s.location_id
+                        WHERE l.outstanding IS NULL AND s.allocated <> 0
+                        """, nativeQuery = true)
+    List<AllocatedDriftRow> findAllocatedDriftByLocation(
+            @Param("created") String created, @Param("released") String released);
+
+    /** One location whose summary {@code allocated} disagrees with ledger outstanding. Log-only projection. */
+    interface AllocatedDriftRow {
+        /** Rendered as text in SQL; null for the null-location (site-level) key. */
+        String getLocationId();
+
+        long getLedgerOutstanding();
+
+        long getSummaryAllocated();
+    }
+
+    /**
      * Chunk-safe per-location on-hand and allocated sums for the given
      * locations, optionally restricted to one stock item. Locations without
      * summary rows are absent from the maps (treat as 0).

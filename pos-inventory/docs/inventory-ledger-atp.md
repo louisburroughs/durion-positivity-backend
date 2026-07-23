@@ -258,6 +258,9 @@ public InventoryAvailability getAvailability(UUID productId, UUID locationId) {
 - Error rate > 1% (Warning)
 - Database connection pool exhaustion (Critical)
 
+### Consistency Sweeps
+- Allocation/reservation consistency (odoo-parity K3, #1032): see [allocation-consistency.md](allocation-consistency.md) — report-only; corrections are new ledger entries per DECISION-INVENTORY-005.
+
 ## Future Enhancements (Out of Scope for v1)
 
 1. ~~**Expected Receipts**~~ — delivered as forecast quantities (odoo-parity A2, issue #1028);

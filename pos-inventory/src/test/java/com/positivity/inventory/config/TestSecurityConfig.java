@@ -81,8 +81,8 @@ public class TestSecurityConfig {
             var authentication = new UsernamePasswordAuthenticationToken(username, null, authorities);
             // Mirror the gateway filter: SecurityContextHelper resolves the audit
             // username from the authentication details map (ADR-0018).
-            authentication.setDetails(
-                    java.util.Map.of(com.positivity.security.common.GatewaySecurityConstants.DETAIL_USERNAME, username));
+            authentication.setDetails(java.util.Map.of(
+                    com.positivity.security.common.GatewaySecurityConstants.DETAIL_USERNAME, username));
             Authentication existing = SecurityContextHolder.getContext().getAuthentication();
             if (existing == null || !existing.isAuthenticated()) {
                 SecurityContextHolder.getContext().setAuthentication(authentication);
