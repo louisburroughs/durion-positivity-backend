@@ -46,6 +46,8 @@ tags:
   description: Cross-site transfer orders with in-transit tracking
 - name: Scraps
   description: Scrap (write-off) documents with value-threshold approval and SCRAP_OUT posting
+- name: Purchase Suggestions
+  description: Purchase suggestion listing and lifecycle endpoints
 - name: ASN
   description: Advanced Shipping Notice and goods receipt endpoints
 - name: Putaway
@@ -1645,6 +1647,159 @@ paths:
         - inventory:putaway:generate
       x-required-permissions:
       - inventory:putaway:generate
+  /v1/inventory/purchase-suggestions/{suggestionId}/dismiss:
+    post:
+      tags:
+      - Purchase Suggestions
+      summary: Dismiss a purchase suggestion
+      description: Dismisses a SUGGESTED or ACCEPTED suggestion with a mandatory reason. Dismissal is terminal and per-instance; suppressing future suggestions is the policy snooze's job.
+      operationId: dismissPurchaseSuggestion
+      parameters:
+      - name: suggestionId
+        in: path
+        description: Purchase suggestion identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DismissPurchaseSuggestionRequest'
+        required: true
+      responses:
+        '200':
+          description: Purchase suggestion dismissed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseSuggestionResponse'
+        '400':
+          description: Missing or blank dismissal reason
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: User lacks required replenishment manage authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Purchase suggestion not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Suggestion is already CONVERTED or DISMISSED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:replenishment:manage
+      x-required-permissions:
+      - inventory:replenishment:manage
+  /v1/inventory/purchase-suggestions/{suggestionId}/accept:
+    post:
+      tags:
+      - Purchase Suggestions
+      summary: Accept a purchase suggestion
+      description: 'Human-mandatory accept gate (plan D-3): transitions SUGGESTED → ACCEPTED, making the suggestion eligible for conversion into a DRAFT purchase order. The replenishment scan never accepts suggestions.'
+      operationId: acceptPurchaseSuggestion
+      parameters:
+      - name: suggestionId
+        in: path
+        description: Purchase suggestion identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Purchase suggestion accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseSuggestionResponse'
+        '403':
+          description: User lacks required replenishment manage authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Purchase suggestion not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Suggestion is not in SUGGESTED status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:replenishment:manage
+      x-required-permissions:
+      - inventory:replenishment:manage
+  /v1/inventory/purchase-suggestions/convert:
+    post:
+      tags:
+      - Purchase Suggestions
+      summary: Convert accepted purchase suggestions into a DRAFT purchase order
+      description: Creates ONE multi-line DRAFT purchase order from ACCEPTED suggestions sharing a single vendor, then stamps each suggestion CONVERTED. The DRAFT order still passes the existing purchase order approval workflow — conversion never approves spend. Requires BOTH inventory:replenishment:manage AND inventory:purchase_order:create.
+      operationId: convertPurchaseSuggestions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConvertPurchaseSuggestionsRequest'
+        required: true
+      responses:
+        '201':
+          description: DRAFT purchase order created and suggestions stamped CONVERTED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConvertPurchaseSuggestionsResponse'
+        '400':
+          description: Validation failure (empty suggestion list)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: User lacks replenishment manage and/or purchase order create authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: A listed purchase suggestion was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: 'Conversion precondition violated: a suggestion is not ACCEPTED, suggestions mix vendors or ship-to sites, or a suggestion lacks a vendor or feed price'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:replenishment:manage
+        - inventory:purchase_order:create
+      x-required-permissions:
+      - inventory:replenishment:manage
+      - inventory:purchase_order:create
   /v1/inventory/purchase-orders:
     get:
       tags:
@@ -3630,6 +3785,96 @@ paths:
         - inventory:putaway:view
       x-required-permissions:
       - inventory:putaway:view
+  /v1/inventory/purchase-suggestions:
+    get:
+      tags:
+      - Purchase Suggestions
+      summary: List purchase suggestions
+      description: Lists purchase suggestions, optionally filtered by status, SKU, and destination location.
+      operationId: listPurchaseSuggestions
+      parameters:
+      - name: status
+        in: query
+        description: Lifecycle status filter (SUGGESTED, ACCEPTED, CONVERTED, DISMISSED)
+        required: false
+        schema:
+          type: string
+      - name: sku
+        in: query
+        description: Stock item (SKU) filter
+        required: false
+        schema:
+          type: string
+      - name: locationId
+        in: query
+        description: Destination location filter
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
+      responses:
+        '200':
+          description: Purchase suggestions returned (paged)
+          content:
+            application/json:
+              schema:
+                type: string
+                description: Page of purchase suggestions
+        '403':
+          description: User lacks required view authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
+  /v1/inventory/purchase-suggestions/{suggestionId}:
+    get:
+      tags:
+      - Purchase Suggestions
+      summary: Get purchase suggestion
+      description: Retrieves one purchase suggestion by identifier.
+      operationId: getPurchaseSuggestion
+      parameters:
+      - name: suggestionId
+        in: path
+        description: Purchase suggestion identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Purchase suggestion returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseSuggestionResponse'
+        '403':
+          description: User lacks required view authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Purchase suggestion not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
   /v1/inventory/purchase-orders/{poId}:
     get:
       tags:
@@ -6114,6 +6359,16 @@ components:
           format: int32
           description: Number of already-open replenishment tasks whose quantity was refreshed to the current need
           example: 2
+        suggestionsCreated:
+          type: integer
+          format: int32
+          description: Number of new purchase suggestions created for PURCHASE-preferring policies (odoo-parity F4)
+          example: 1
+        suggestionsRefreshed:
+          type: integer
+          format: int32
+          description: Number of already-open purchase suggestions whose quantity was refreshed to the current need (odoo-parity F4)
+          example: 0
         policiesSkipped:
           type: integer
           format: int32
@@ -6128,6 +6383,8 @@ components:
       - policiesEvaluated
       - policiesSkipped
       - scanAt
+      - suggestionsCreated
+      - suggestionsRefreshed
       - tasksCreated
       - tasksRefreshed
     CreateReplenishmentPolicyRequest:
@@ -6726,6 +6983,165 @@ components:
       required:
       - productId
       - quantity
+    DismissPurchaseSuggestionRequest:
+      type: object
+      description: Request to dismiss a purchase suggestion; the reason is mandatory
+      properties:
+        reason:
+          type: string
+          description: Why the suggestion is being dismissed
+          example: Vendor contract under renegotiation
+          maxLength: 255
+          minLength: 0
+      required:
+      - reason
+    PurchaseSuggestionResponse:
+      type: object
+      description: A scan-generated suggestion to purchase stock for a PURCHASE-preferring replenishment policy. Lifecycle SUGGESTED → ACCEPTED → CONVERTED | DISMISSED; acceptance is human-mandatory and conversion produces a DRAFT purchase order subject to the normal approval workflow
+      properties:
+        suggestionId:
+          type: string
+          format: uuid
+          description: Purchase suggestion identifier
+          example: 01980003-0000-7000-8000-000000000001
+        policyId:
+          type: string
+          format: uuid
+          description: Replenishment policy the suggestion was computed for
+          example: 01980003-0000-7000-8000-000000000002
+        itemSKU:
+          type: string
+          description: Stock item (SKU) to purchase
+          example: SKU-12345
+        locationId:
+          type: string
+          format: uuid
+          description: Destination location the purchased stock is for
+          example: 01980003-0000-7000-8000-000000000003
+        suggestedQuantity:
+          type: integer
+          format: int32
+          description: Quantity to purchase after MOQ/pack/order-multiple rounding
+          example: 24
+        suggestedVendorType:
+          type: string
+          description: Which normalized vendor feed the selected vendor came from; null when no vendor was selectable
+          enum:
+          - MANUFACTURER
+          - DISTRIBUTOR
+          example: MANUFACTURER
+        vendorRefId:
+          type: string
+          format: uuid
+          description: Selected manufacturer or distributor identifier; null when no vendor was selectable
+          example: 01980003-0000-7000-8000-000000000004
+        unitCostMinor:
+          type: integer
+          format: int64
+          description: Per-unit cost in minor currency units from the vendor feed; null when the feed carries no price
+          example: 1499
+        unitCostCurrency:
+          type: string
+          description: ISO 4217 currency of unitCostMinor
+          example: USD
+        vendorPackSize:
+          type: integer
+          format: int32
+          description: Selected vendor's pack size captured at suggestion time
+          example: 6
+        leadTimeDays:
+          type: integer
+          format: int32
+          description: Vendor lead-time estimate in days (MAX-day estimate, consistent with the replenishment horizon math)
+          example: 5
+        earliestExpectedDate:
+          type: string
+          format: date
+          description: Earliest date the purchase could plausibly arrive (suggestion date + lead time)
+          example: 2026-08-01
+        selectionReason:
+          type: string
+          description: Explainable record of the deterministic vendor-ranking inputs
+          example: 'MANUFACTURER 0198…: avail 40>=12, lead 5d, price 1499 USD-minor/unit; beat DISTRIBUTOR 0199…: avail 30>=12, lead 7d, price n/a'
+        status:
+          type: string
+          description: Lifecycle status
+          enum:
+          - SUGGESTED
+          - ACCEPTED
+          - CONVERTED
+          - DISMISSED
+          example: SUGGESTED
+        dismissalReason:
+          type: string
+          description: Human-entered reason captured when the suggestion was dismissed
+          example: Vendor contract under renegotiation
+        convertedPurchaseOrderId:
+          type: string
+          format: uuid
+          description: The DRAFT purchase order the suggestion was converted into
+          example: 01980003-0000-7000-8000-000000000005
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: 2026-07-23 09:30:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: 2026-07-23 09:30:00+00:00
+      required:
+      - createdAt
+      - itemSKU
+      - locationId
+      - policyId
+      - selectionReason
+      - status
+      - suggestedQuantity
+      - suggestionId
+      - updatedAt
+    ConvertPurchaseSuggestionsRequest:
+      type: object
+      description: Request to convert one or more ACCEPTED purchase suggestions into a single multi-line DRAFT purchase order. All suggestions must be ACCEPTED and share one vendor
+      properties:
+        suggestionIds:
+          type: array
+          description: Identifiers of the ACCEPTED suggestions to convert; all must share one vendor
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+      required:
+      - suggestionIds
+    ConvertPurchaseSuggestionsResponse:
+      type: object
+      description: Result of converting accepted purchase suggestions into a DRAFT purchase order
+      properties:
+        purchaseOrderId:
+          type: string
+          format: uuid
+          description: Identifier of the created DRAFT purchase order
+          example: 01980003-0000-7000-8000-000000000005
+        poNumber:
+          type: string
+          description: Human-readable purchase order number
+          example: PO-000123
+        purchaseOrderStatus:
+          type: string
+          description: Status of the created purchase order (always DRAFT; the existing approval workflow applies)
+          example: DRAFT
+        convertedSuggestionIds:
+          type: array
+          description: Suggestions stamped CONVERTED by this call
+          items:
+            type: string
+            format: uuid
+      required:
+      - convertedSuggestionIds
+      - poNumber
+      - purchaseOrderId
+      - purchaseOrderStatus
     CreatePurchaseOrderRequest:
       type: object
       description: Request to create a new purchase order for a vendor with one or more order lines

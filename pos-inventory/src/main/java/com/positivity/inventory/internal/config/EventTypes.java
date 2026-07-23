@@ -165,6 +165,21 @@ public final class EventTypes {
                                 "Run the batch replenishment scan over all replenishment policies")
                         .build(),
 
+                // PurchaseSuggestionController - 3 events (odoo-parity F4, #1044)
+                EventTypeRegistration.write(
+                                "INVENTORY_PURCHASE_SUGGESTION_ACCEPT",
+                                "Accept a purchase suggestion (human-mandatory gate, plan D-3)")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_PURCHASE_SUGGESTION_DISMISS",
+                                "Dismiss a purchase suggestion with a mandatory reason")
+                        .build(),
+                // Approval preset: conversion opens spend (a DRAFT PO) against the PO domain.
+                EventTypeRegistration.approval(
+                                "INVENTORY_PURCHASE_SUGGESTION_CONVERT",
+                                "Convert accepted purchase suggestions into a single DRAFT purchase order")
+                        .build(),
+
                 // StockMovementController - 3 events
                 EventTypeRegistration.write(
                                 "INVENTORY_STOCK_MOVEMENT_CREATE", "Record an inventory stock movement in the ledger")

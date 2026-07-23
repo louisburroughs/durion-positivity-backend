@@ -28,6 +28,8 @@ import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.PickScanMismatchException;
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.exception.PurchaseOrderNotApprovedException;
+import com.positivity.inventory.internal.exception.PurchaseSuggestionConversionException;
+import com.positivity.inventory.internal.exception.PurchaseSuggestionStateException;
 import com.positivity.inventory.internal.exception.PutawayValidationException;
 import com.positivity.inventory.internal.exception.ReceivingSessionNotFoundException;
 import com.positivity.inventory.internal.exception.RecountLimitExceededException;
@@ -333,6 +335,19 @@ public class InventoryGlobalExceptionHandler {
     public ResponseEntity<ApiError> handleLotInsufficientStock(LotInsufficientStockException ex) {
         // odoo-parity E2 (#1042): the per-lot negative floor is absolute — no override.
         return build(HttpStatus.valueOf(422), LotInsufficientStockException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(PurchaseSuggestionConversionException.class)
+    public ResponseEntity<ApiError> handlePurchaseSuggestionConversion(PurchaseSuggestionConversionException ex) {
+        // odoo-parity F4 (#1044): deterministic per-case 422 for convert preconditions
+        // (NOT_ACCEPTED / VENDOR_MISMATCH / SITE_MISMATCH / MISSING_VENDOR / MISSING_UNIT_COST).
+        return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(PurchaseSuggestionStateException.class)
+    public ResponseEntity<ApiError> handlePurchaseSuggestionState(PurchaseSuggestionStateException ex) {
+        // odoo-parity F4 (#1044): accept/dismiss from a terminal status is a 409 conflict.
+        return build(HttpStatus.CONFLICT, PurchaseSuggestionStateException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(InvalidParamCombinationException.class)

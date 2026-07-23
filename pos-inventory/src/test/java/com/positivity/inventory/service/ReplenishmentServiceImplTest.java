@@ -85,6 +85,11 @@ class ReplenishmentServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.StockoutDeadlineCalculator stockoutDeadlineCalculator;
 
+    /** F4 (#1044): open-suggestion netting — defaulted to 0 so pre-F4 vectors are unaffected. */
+    @Mock
+    private com.positivity.inventory.internal.service.PurchaseSuggestionCreationService
+            purchaseSuggestionCreationService;
+
     /**
      * F2 equivalence defaults: no feed lead time (DEFAULT source, 0 days), the policy
      * location is already a site, and no open supply/demand documents — so
@@ -107,6 +112,9 @@ class ReplenishmentServiceImplTest {
         Mockito.lenient()
                 .when(replenishmentTaskRepository.findByItemSKUAndDestinationLocationIdAndStatusIn(any(), any(), any()))
                 .thenReturn(Collections.emptyList());
+        Mockito.lenient()
+                .when(purchaseSuggestionCreationService.openSuggestionQuantity(any(), any(), any()))
+                .thenReturn(0L);
     }
 
     @Test
