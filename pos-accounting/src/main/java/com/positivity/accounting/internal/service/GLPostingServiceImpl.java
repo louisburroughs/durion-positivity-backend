@@ -405,6 +405,45 @@ public class GLPostingServiceImpl implements GLPostingService {
     }
 
     @Override
+    public JournalEntry postInventoryShrinkage(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID scrapId,
+            @NonNull UUID shrinkageAccountId,
+            @NonNull UUID inventoryAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification) {
+
+        log.info(
+                "Posting inventory shrinkage GL entry {}: debit shrinkage expense {}, credit inventory {}",
+                sourceEventId,
+                amount,
+                amount);
+
+        JournalEntry entry = new JournalEntry();
+        entry.setTransactionDate(transactionDate);
+        entry.setDescription(description);
+        entry.setSourceEventId(sourceEventId);
+
+        List<JournalEntryLine> lines = new ArrayList<>();
+
+        // Debit: Inventory Shrinkage expense (the write-off cost recognized).
+        addDebit(lines, shrinkageAccountId, amount, "Shrinkage Expense - Scrap#" + scrapId);
+        // Credit: Inventory asset (the stock value leaving the balance sheet).
+        addCredit(lines, inventoryAccountId, amount, "Inventory Relief - Scrap#" + scrapId);
+
+        entry.setLines(lines);
+
+        JournalEntry created = journalEntryService.createJournalEntry(entry);
+        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
+
+        log.info("Posted inventory shrinkage GL entry: journal entry ID {}", posted.getJournalEntryId());
+
+        return posted;
+    }
+
+    @Override
     public JournalEntry postSettlement(@NonNull SettlementPostingCommand command) {
         log.info(
                 "Posting settlement GL entry {}: Dr Cash {}, Dr Fees {}, Cr Undeposited {}, Cr Suspense {}",

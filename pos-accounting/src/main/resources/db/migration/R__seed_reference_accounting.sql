@@ -444,3 +444,51 @@ ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system
 INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
 VALUES ('5eed0acc-0000-4000-8000-00000000cc24'::uuid, 'ACCOUNTING', 'CUSTOMER_CREDIT_REFUND_UNDEPOSITED_FUNDS', '5eed0acc-0000-4000-8000-00000000cc20'::uuid, '5eed0acc-0000-4000-8000-00000000cc22'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '1090'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
 ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+
+-- ============================================================================
+-- Parity-D2 (Issue #1043): inventory shrinkage GL posting.
+-- pos-accounting consumes the inventory.scrap.posted fact (ScrapPostedV1 on
+-- inventory.events.v1) and posts Dr Inventory Shrinkage (5100) / Cr Inventory
+-- (1300) for quantity x unitCost. Accounts resolve through the
+-- INVENTORY_SHRINKAGE posting category's SHRINKAGE_EXPENSE / INVENTORY_ASSET
+-- mapping keys — never hardcoded. gl_mapping.gl_account_id is resolved by
+-- account_code SELECT (not a hardcoded UUID) so the FK always binds to
+-- whichever id won the ON CONFLICT (account_code) upsert, matching the
+-- customer-credit / bank-rec pattern (accounting plan D-13).
+-- ============================================================================
+
+-- GL accounts: 1300 Inventory (asset relieved by the write-off) and
+-- 5100 Inventory Shrinkage (the recognized write-off cost).
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-000000001300'::uuid, '1300', 'Inventory', 'ASSET', 'CURRENT_ASSET', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (account_code) DO UPDATE SET
+    account_name = EXCLUDED.account_name, account_type = EXCLUDED.account_type, account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable, modified_at = NOW(), modified_by = 'seed-generator';
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-000000005100'::uuid, '5100', 'Inventory Shrinkage', 'EXPENSE', 'COST_OF_SALES', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (account_code) DO UPDATE SET
+    account_name = EXCLUDED.account_name, account_type = EXCLUDED.account_type, account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable, modified_at = NOW(), modified_by = 'seed-generator';
+
+-- Posting category.
+INSERT INTO posting_category (posting_category_id, category_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d201'::uuid, 'INVENTORY_SHRINKAGE', 'Inventory scrap write-off GL posting (Dr Inventory Shrinkage / Cr Inventory, issue #1043)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (posting_category_id) DO UPDATE SET
+    category_name = EXCLUDED.category_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active,
+    modified_at = NOW(), modified_by = 'seed-generator';
+
+-- Mapping keys: SHRINKAGE_EXPENSE (debit) + INVENTORY_ASSET (credit).
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d202'::uuid, '5eed0acc-0000-4000-8000-00000000d201'::uuid, 'SHRINKAGE_EXPENSE', 'Debit side of a scrap write-off (shrinkage cost recognized)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d203'::uuid, '5eed0acc-0000-4000-8000-00000000d201'::uuid, 'INVENTORY_ASSET', 'Credit side of a scrap write-off (stock value relieved)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+
+-- GL mappings (fixed effective_start_date for idempotent re-runs; FK by account_code).
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d204'::uuid, 'ACCOUNTING', 'INVENTORY_SHRINKAGE_SHRINKAGE_EXPENSE', '5eed0acc-0000-4000-8000-00000000d201'::uuid, '5eed0acc-0000-4000-8000-00000000d202'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '5100'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d205'::uuid, 'ACCOUNTING', 'INVENTORY_SHRINKAGE_INVENTORY_ASSET', '5eed0acc-0000-4000-8000-00000000d201'::uuid, '5eed0acc-0000-4000-8000-00000000d203'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '1300'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';

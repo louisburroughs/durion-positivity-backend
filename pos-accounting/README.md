@@ -12,6 +12,7 @@ General-ledger accounting service for the Durion Positivity ETSMS platform. Mana
 - Apply payments to invoices and record AP payments
 - Issue credit memos with configurable GL account targets, freezing their per-jurisdiction tax reversal
 - Apply or refund AR customer credits, relieving the customer-credit liability recognized at issuance
+- Post inventory shrinkage (Dr Inventory Shrinkage 5100 / Cr Inventory 1300) from `inventory.scrap.posted` facts on `inventory.events.v1`, exactly once per scrap; uncosted scraps (ADR-0048 interim `costSource=NONE`) are logged and skipped, never posted
 - Manage monthly accounting periods (list, close, reopen)
 - Produce financial reports (income statement, balance sheet)
 - Ingest domain events from Kafka via the event ingestion pipeline
@@ -196,6 +197,7 @@ preserved); a second conflict returns `409 Conflict` and the client should retry
 | `pos.accounting.credit-memo.ar-account-id`          | required             | GL account for AR reductions             |
 | `pos.accounting.kafka.enabled`                      | `false`              | Enable Kafka consumer for payment events |
 | `pos.accounting.kafka.payments-topic`               | `payment.cleared.v1` | Kafka topic for cleared payments         |
+| `pos.accounting.kafka.inventory-events-topic`       | `inventory.events.v1` | Inventory scrap facts for shrinkage GL posting (#1043) |
 | `stripe.api-key`                                    | required             | Stripe API key for payment processing    |
 
 ## Dependencies

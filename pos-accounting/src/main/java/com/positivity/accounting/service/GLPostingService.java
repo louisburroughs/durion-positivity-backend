@@ -226,6 +226,41 @@ public interface GLPostingService {
             @Nullable String overrideJustification);
 
     /**
+     * Post an inventory shrinkage write-off to GL (odoo-parity D2, issue #1043):
+     * {@code Dr Inventory Shrinkage (expense) / Cr Inventory (asset)} for
+     * {@code quantity x unitCost} of a posted scrap document. Consumed from the
+     * {@code inventory.scrap.posted} fact on {@code inventory.events.v1}; both
+     * accounts are resolved by the caller through the {@code INVENTORY_SHRINKAGE}
+     * posting category's mapping keys, never hardcoded.
+     *
+     * @param sourceEventId         deterministic JE source id derived from the
+     *                              scrap id (namespaced so it never collides with
+     *                              another entry deriving from the same id)
+     * @param scrapId               the scrap document being expensed (audit label
+     *                              on the entry lines)
+     * @param shrinkageAccountId    GL account for Inventory Shrinkage expense (debit)
+     * @param inventoryAccountId    GL account for the Inventory asset (credit)
+     * @param amount                write-off amount ({@code quantity x unitCost})
+     * @param transactionDate       business transaction date (the scrap's
+     *                              {@code occurredAt}) used as the journal entry
+     *                              date; must not be derived from processing/clock
+     *                              time so Kafka redeliveries post into the correct
+     *                              period
+     * @param description           entry description (carries the scrap reason code)
+     * @param overrideJustification optional CLOSED-period override justification
+     * @return posted journal entry
+     */
+    JournalEntry postInventoryShrinkage(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID scrapId,
+            @NonNull UUID shrinkageAccountId,
+            @NonNull UUID inventoryAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification);
+
+    /**
      * Post the batched settlement journal entry (story F1c, issue #963, decision
      * D-13): {@code Dr Cash (net) / Dr Processor Fees (fee) / Cr Undeposited
      * Funds (matched gross) / Cr Settlement Suspense (unmatched gross)}. Zero
