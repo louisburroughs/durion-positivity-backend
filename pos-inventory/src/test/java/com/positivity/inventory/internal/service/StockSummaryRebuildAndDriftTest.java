@@ -131,6 +131,62 @@ class StockSummaryRebuildAndDriftTest {
     }
 
     @Test
+    void rebuild_and_verifier_reconstructInTransitFromTransferShape() {
+        // odoo-parity C2 (#1036): in-transit is derived from ledger shape — TRANSFER_OUT
+        // contributes +qty at its DESTINATION (toLocationId) key, TRANSFER_IN drains it.
+        String sku = "SKU-TRANSIT-" + UUID.randomUUID();
+        UUID source = UUID.randomUUID();
+        UUID destination = UUID.randomUUID();
+
+        post(sku, source, InventoryLedgerEventType.GOODS_RECEIPT, 10);
+        ledgerPostingService.post(InventoryLedgerEntry.builder()
+                .stockItemId(sku)
+                .locationId(source)
+                .fromLocationId(source)
+                .toLocationId(destination)
+                .eventType(InventoryLedgerEventType.TRANSFER_OUT)
+                .changeInQuantity(-6)
+                .quantityAfter(4)
+                .transactionUserId("rebuild-test")
+                .build());
+        ledgerPostingService.post(InventoryLedgerEntry.builder()
+                .stockItemId(sku)
+                .locationId(destination)
+                .fromLocationId(source)
+                .toLocationId(destination)
+                .eventType(InventoryLedgerEventType.TRANSFER_IN)
+                .changeInQuantity(2)
+                .quantityAfter(2)
+                .transactionUserId("rebuild-test")
+                .build());
+
+        InventoryStockSummary liveDestination = summaryRepository
+                .findByStockItemIdAndLocationId(sku, destination)
+                .orElseThrow();
+        assertThat(liveDestination.getOnHand()).isEqualTo(2);
+        assertThat(liveDestination.getInTransitQty()).isEqualTo(4);
+        assertThat(driftVerifier.verify()).isZero();
+
+        rebuildService.rebuildFromLedger();
+
+        InventoryStockSummary rebuiltDestination = summaryRepository
+                .findByStockItemIdAndLocationId(sku, destination)
+                .orElseThrow();
+        assertThat(rebuiltDestination.getOnHand()).isEqualTo(2);
+        assertThat(rebuiltDestination.getInTransitQty()).isEqualTo(4);
+        InventoryStockSummary rebuiltSource =
+                summaryRepository.findByStockItemIdAndLocationId(sku, source).orElseThrow();
+        assertThat(rebuiltSource.getOnHand()).isEqualTo(4);
+        assertThat(rebuiltSource.getInTransitQty()).isZero();
+        assertThat(driftVerifier.verify()).isZero();
+
+        // Out-of-band in-transit corruption is drift like any other column.
+        rebuiltDestination.setInTransitQty(999);
+        summaryRepository.save(rebuiltDestination);
+        assertThat(driftVerifier.verify()).isEqualTo(1);
+    }
+
+    @Test
     void verifier_reportsMissingSummaryRowForLedgerBalance() {
         String sku = "SKU-MISSING-" + UUID.randomUUID();
         UUID location = UUID.randomUUID();

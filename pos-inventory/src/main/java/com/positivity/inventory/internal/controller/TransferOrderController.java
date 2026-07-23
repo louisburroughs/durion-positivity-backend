@@ -2,6 +2,8 @@ package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.transfer.CreateTransferOrderRequest;
+import com.positivity.inventory.internal.dto.transfer.DispatchTransferOrderRequest;
+import com.positivity.inventory.internal.dto.transfer.ReceiveTransferOrderRequest;
 import com.positivity.inventory.internal.dto.transfer.TransferOrderResponse;
 import com.positivity.inventory.internal.enums.TransferOrderStatus;
 import com.positivity.inventory.service.TransferOrderService;
@@ -212,6 +214,140 @@ public class TransferOrderController {
             @Parameter(description = "Transfer order ID", required = true) @PathVariable UUID transferOrderId) {
         log.info("Received request to approve transfer order {}", transferOrderId);
         return ResponseEntity.ok(transferOrderService.approveTransferOrder(transferOrderId));
+    }
+
+    /**
+     * Dispatches a transfer order from the source site, posting TRANSFER_OUT into transit.
+     *
+     * @param transferOrderId the order id
+     * @param request optional per-line dispatch quantities (omitted lines dispatch full requested)
+     * @return the dispatched order
+     */
+    @PostMapping("/{transferOrderId}/dispatch")
+    @EmitEvent(id = "INVENTORY_TRANSFER_ORDER_DISPATCH", apiVersion = "1")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:transfer:dispatch"})
+    @PreAuthorize("hasAuthority('inventory:transfer:dispatch')")
+    @Operation(
+            summary = "Dispatch transfer order",
+            description = "Dispatches the order from the source site: posts one TRANSFER_OUT per line through the"
+                    + " ledger funnel (sourceTransactionId = transferOrderId), decrements source on-hand, and"
+                    + " raises the destination key's in-transit quantity. Per-line quantities default to the"
+                    + " full requested quantity and must not exceed it.",
+            tags = {"Transfer Orders"})
+    @ApiResponse(responseCode = "200", description = "Transfer order dispatched")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Unknown or duplicate line id in the request",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Missing inventory:transfer:dispatch",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Transfer order not found",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Order is not dispatchable (already dispatched/terminal, or awaiting approval)",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Dispatch quantity exceeds requested (TRANSFER_DISPATCH_EXCEEDS_REQUESTED), source"
+                    + " on-hand insufficient (INSUFFICIENT_STOCK — TRANSFER_OUT is blocked below zero), or a"
+                    + " site is not movement-eligible (TRANSFER_LOCATION_NOT_ELIGIBLE)",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<TransferOrderResponse> dispatchTransferOrder(
+            @Parameter(description = "Transfer order ID", required = true) @PathVariable UUID transferOrderId,
+            @Valid @RequestBody(required = false) DispatchTransferOrderRequest request) {
+        log.info("Received request to dispatch transfer order {}", transferOrderId);
+        return ResponseEntity.ok(transferOrderService.dispatchTransferOrder(
+                transferOrderId, request != null ? request : new DispatchTransferOrderRequest()));
+    }
+
+    /**
+     * Receives dispatched quantities of a transfer order at the destination site.
+     *
+     * @param transferOrderId the order id
+     * @param request optional per-line received quantities (omitted lines receive full remainder)
+     * @return the updated order
+     */
+    @PostMapping("/{transferOrderId}/receive")
+    @EmitEvent(id = "INVENTORY_TRANSFER_ORDER_RECEIVE", apiVersion = "1")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:transfer:receive"})
+    @PreAuthorize("hasAuthority('inventory:transfer:receive')")
+    @Operation(
+            summary = "Receive transfer order",
+            description = "Receives dispatched quantities at the destination: posts one TRANSFER_IN per line"
+                    + " through the ledger funnel (sourceTransactionId = transferOrderId), raising destination"
+                    + " on-hand and draining the in-transit quantity. Status becomes RECEIVED when every line is"
+                    + " fully received, else PARTIALLY_RECEIVED (the remainder stays in transit). Per-line"
+                    + " quantities default to the full un-received remainder and must not exceed it.",
+            tags = {"Transfer Orders"})
+    @ApiResponse(responseCode = "200", description = "Receipt recorded (RECEIVED or PARTIALLY_RECEIVED)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Unknown or duplicate line id in the request",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Missing inventory:transfer:receive",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Transfer order not found",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Order is not receivable (not yet dispatched, cancelled, short-closed, or already"
+                    + " fully received)",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Received quantity exceeds the un-received dispatched remainder"
+                    + " (TRANSFER_RECEIVE_EXCEEDS_DISPATCHED), or the destination site is not movement-eligible"
+                    + " (TRANSFER_LOCATION_NOT_ELIGIBLE)",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<TransferOrderResponse> receiveTransferOrder(
+            @Parameter(description = "Transfer order ID", required = true) @PathVariable UUID transferOrderId,
+            @Valid @RequestBody(required = false) ReceiveTransferOrderRequest request) {
+        log.info("Received request to receive transfer order {}", transferOrderId);
+        return ResponseEntity.ok(transferOrderService.receiveTransferOrder(
+                transferOrderId, request != null ? request : new ReceiveTransferOrderRequest()));
     }
 
     /**

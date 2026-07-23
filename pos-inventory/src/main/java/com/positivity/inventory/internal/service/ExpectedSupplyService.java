@@ -9,9 +9,10 @@ import org.jspecify.annotations.Nullable;
 /**
  * Open expected supply per SKU × site (odoo-parity A2, issue #1028).
  *
- * <p>Deliberately its own query surface so later parity stories extend supply sources
- * additively — parity-C2 adds inbound transfer orders in transit to this computation without
- * touching the availability read path.
+ * <p>Deliberately its own query surface so parity stories extend supply sources additively —
+ * parity-C2 (issue #1036) added inbound transfer orders in transit (dispatched − received per
+ * destination site) alongside the original PO/ASN sources, without touching the availability
+ * read path.
  */
 public interface ExpectedSupplyService {
 
@@ -30,6 +31,12 @@ public interface ExpectedSupplyService {
      * instant's UTC date). Documents with a {@code NULL} expected date are INCLUDED in the
      * unbounded variant and EXCLUDED from the horizon-bounded variant: undated supply exists
      * but cannot be promised by any date.
+     *
+     * <p><b>In-transit transfers</b> (odoo-parity C2, #1036): {@code dispatchedQty −
+     * receivedQty} of DISPATCHED/PARTIALLY_RECEIVED transfer orders whose destination matches
+     * {@code siteId} joins the sum. Transfers carry no expected date, but unlike undated
+     * PO/ASN supply the goods have already physically shipped, so they are included under ANY
+     * horizon (they are the most certain supply component, not the least).
      *
      * @param stockItemId ledger stock-item identifier (product UUID string for PO lines; also
      *     matched verbatim against the ASN line {@code sku})

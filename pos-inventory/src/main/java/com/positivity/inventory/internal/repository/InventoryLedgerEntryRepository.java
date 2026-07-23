@@ -352,7 +352,9 @@ public interface InventoryLedgerEntryRepository
                                                  ELSE 0 END), 0) AS allocated,
                                COALESCE(SUM(CASE WHEN e.eventType = :reservationCreated THEN e.changeInQuantity
                                                  WHEN e.eventType = :reservationReleased THEN -e.changeInQuantity
-                                                 ELSE 0 END), 0) AS reserved
+                                                 ELSE 0 END), 0) AS reserved,
+                               COALESCE(SUM(CASE WHEN e.eventType = :transferIn THEN -e.changeInQuantity
+                                                 ELSE 0 END), 0) AS inTransitArrived
                         FROM InventoryLedgerEntry e
                         WHERE e.eventType IN :summaryTypes
                         GROUP BY e.stockItemId, e.locationId
@@ -363,6 +365,7 @@ public interface InventoryLedgerEntryRepository
             @Param("allocationReleased") InventoryLedgerEventType allocationReleased,
             @Param("reservationCreated") InventoryLedgerEventType reservationCreated,
             @Param("reservationReleased") InventoryLedgerEventType reservationReleased,
+            @Param("transferIn") InventoryLedgerEventType transferIn,
             @Param("summaryTypes") Collection<InventoryLedgerEventType> summaryTypes);
 
     interface SummaryAggregate {
@@ -375,6 +378,39 @@ public interface InventoryLedgerEntryRepository
         long getAllocated();
 
         long getReserved();
+
+        /**
+         * In-transit contribution of arrivals grouped at this key: {@code Σ -change} of
+         * {@code TRANSFER_IN} entries (negative — arrivals drain transit). The outbound
+         * (positive) side keys on {@code toLocationId} and comes from
+         * {@link #aggregateOutboundInTransit} (odoo-parity C2, #1036).
+         */
+        long getInTransitArrived();
+    }
+
+    /**
+     * Outbound in-transit contributions keyed at the DESTINATION location (odoo-parity C2,
+     * issue #1036): {@code Σ -change} (positive) of {@code TRANSFER_OUT} entries per
+     * (stockItemId, toLocationId). Together with {@code SummaryAggregate#getInTransitArrived}
+     * this reconstructs {@code inTransitQty} from ledger shape alone. Rebuild/drift use only.
+     */
+    @Query("""
+                        SELECT e.stockItemId AS stockItemId, e.toLocationId AS locationId,
+                               COALESCE(SUM(-e.changeInQuantity), 0) AS inTransit
+                        FROM InventoryLedgerEntry e
+                        WHERE e.eventType = :transferOut
+                          AND e.toLocationId IS NOT NULL
+                        GROUP BY e.stockItemId, e.toLocationId
+                        """)
+    List<OutboundInTransitAggregate> aggregateOutboundInTransit(
+            @Param("transferOut") InventoryLedgerEventType transferOut);
+
+    interface OutboundInTransitAggregate {
+        String getStockItemId();
+
+        UUID getLocationId();
+
+        long getInTransit();
     }
 
     /** Latest summary-relevant entries for one key; pass a page of size 1. Rebuild use only. */

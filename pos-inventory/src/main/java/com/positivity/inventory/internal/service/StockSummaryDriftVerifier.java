@@ -66,6 +66,8 @@ public class StockSummaryDriftVerifier {
                 InventoryLedgerEventType.ALLOCATION_RELEASED.name(),
                 InventoryLedgerEventType.RESERVATION_CREATED.name(),
                 InventoryLedgerEventType.RESERVATION_RELEASED.name(),
+                InventoryLedgerEventType.TRANSFER_IN.name(),
+                InventoryLedgerEventType.TRANSFER_OUT.name(),
                 summaryTypes);
 
         int driftedKeys = drifted.size();
@@ -89,14 +91,17 @@ public class StockSummaryDriftVerifier {
     private void logDrift(InventoryStockSummaryRepository.DriftRow row) {
         log.warn(
                 "Stock summary drift: stockItemId={} locationId={} ledgerOnHand={} ledgerAllocated={}"
-                        + " ledgerReserved={} summaryOnHand={} summaryAllocated={} summaryReserved={}",
+                        + " ledgerReserved={} ledgerInTransit={} summaryOnHand={} summaryAllocated={}"
+                        + " summaryReserved={} summaryInTransit={}",
                 row.getStockItemId(),
                 row.getLocationId(),
                 row.getLedgerOnHand(),
                 row.getLedgerAllocated(),
                 row.getLedgerReserved(),
+                row.getLedgerInTransit(),
                 row.getSummaryOnHand(),
                 row.getSummaryAllocated(),
-                row.getSummaryReserved());
+                row.getSummaryReserved(),
+                row.getSummaryInTransit());
     }
 }

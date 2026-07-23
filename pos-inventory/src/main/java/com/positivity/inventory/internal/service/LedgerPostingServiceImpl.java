@@ -36,6 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@link InventoryLedgerEventType#affectsOnHand() on-hand-affecting} — {@code onHand}</li>
  *   <li>{@code ALLOCATION_CREATED}/{@code ALLOCATION_RELEASED} — {@code allocated}</li>
  *   <li>{@code RESERVATION_CREATED}/{@code RESERVATION_RELEASED} — {@code reserved}</li>
+ *   <li>{@code TRANSFER_OUT} with a {@code toLocationId} — additionally {@code +qty} to the
+ *       DESTINATION key's {@code inTransitQty}; {@code TRANSFER_IN} — {@code -qty} from its own
+ *       key's {@code inTransitQty} (odoo-parity C2, issue #1036)</li>
  *   <li>anything else (backorders, pick-task markers) — no summary touch</li>
  * </ul>
  * {@code atp} is maintained as {@code onHand - allocated} (ADR-0001).
@@ -101,10 +104,16 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         Map<SummaryKey, SummaryDelta> deltas = new LinkedHashMap<>();
         for (InventoryLedgerEntry entry : saved) {
             SummaryDelta delta = deltaFor(entry);
-            if (delta == null) {
-                continue;
+            if (delta != null) {
+                deltas.merge(new SummaryKey(entry.getStockItemId(), entry.getLocationId()), delta, SummaryDelta::plus);
             }
-            deltas.merge(new SummaryKey(entry.getStockItemId(), entry.getLocationId()), delta, SummaryDelta::plus);
+            SummaryDelta transitDelta = outboundInTransitDeltaFor(entry);
+            if (transitDelta != null) {
+                deltas.merge(
+                        new SummaryKey(entry.getStockItemId(), entry.getToLocationId()),
+                        transitDelta,
+                        SummaryDelta::plus);
+            }
         }
 
         Map<SummaryKey, InventoryStockSummary> lockedRows = new LinkedHashMap<>();
@@ -238,8 +247,14 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         long onHand = 0;
         long allocated = 0;
         long reserved = 0;
+        long inTransit = 0;
         if (eventType != null && eventType.affectsOnHand()) {
             onHand = change;
+            if (eventType == InventoryLedgerEventType.TRANSFER_IN) {
+                // Arrival at the destination key: goods leave transit as they land on-hand
+                // (odoo-parity C2, #1036). -change because arrivals carry a positive change.
+                inTransit = -change;
+            }
         } else if (eventType == InventoryLedgerEventType.ALLOCATION_CREATED) {
             allocated = change;
         } else if (eventType == InventoryLedgerEventType.ALLOCATION_RELEASED) {
@@ -251,7 +266,23 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         } else {
             return null;
         }
-        return new SummaryDelta(onHand, allocated, reserved, entry.getLedgerEntryId(), entry.getTimestamp());
+        return new SummaryDelta(onHand, allocated, reserved, inTransit, entry.getLedgerEntryId(), entry.getTimestamp());
+    }
+
+    /**
+     * In-transit contribution of a {@code TRANSFER_OUT} entry at the DESTINATION key
+     * (odoo-parity C2, issue #1036): goods that left the source ({@code locationId}) are
+     * inbound to {@code toLocationId} until a matching {@code TRANSFER_IN} lands there.
+     * {@code -change} because departures carry a negative change. Ledger-shape rule, no
+     * document lookup: intra-site bin moves post OUT+IN in one transaction, so their
+     * contributions cancel and only transfer orders (receive lags dispatch) leave a residual.
+     */
+    private @Nullable SummaryDelta outboundInTransitDeltaFor(InventoryLedgerEntry entry) {
+        if (entry.getEventType() != InventoryLedgerEventType.TRANSFER_OUT || entry.getToLocationId() == null) {
+            return null;
+        }
+        int change = entry.getChangeInQuantity() == null ? 0 : entry.getChangeInQuantity();
+        return new SummaryDelta(0, 0, 0, -change, entry.getLedgerEntryId(), entry.getTimestamp());
     }
 
     private void applyDelta(InventoryStockSummary row, SummaryDelta delta) {
@@ -259,6 +290,7 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         row.setAllocated(row.getAllocated() + delta.allocated());
         row.setReserved(row.getReserved() + delta.reserved());
         row.setAtp(row.getOnHand() - row.getAllocated());
+        row.setInTransitQty(row.getInTransitQty() + delta.inTransit());
         row.setLastLedgerEntryId(delta.lastLedgerEntryId());
         row.setLastEventAt(delta.lastEventAt());
         summaryRepository.save(row);
@@ -298,6 +330,7 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
             long onHand,
             long allocated,
             long reserved,
+            long inTransit,
             @Nullable UUID lastLedgerEntryId,
             @Nullable Instant lastEventAt) {
 
@@ -306,6 +339,7 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
                     onHand + other.onHand,
                     allocated + other.allocated,
                     reserved + other.reserved,
+                    inTransit + other.inTransit,
                     other.lastLedgerEntryId() != null ? other.lastLedgerEntryId() : lastLedgerEntryId,
                     other.lastEventAt() != null ? other.lastEventAt() : lastEventAt);
         }

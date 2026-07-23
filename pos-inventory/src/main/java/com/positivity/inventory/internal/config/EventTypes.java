@@ -38,13 +38,21 @@ public final class EventTypes {
                 EventTypeRegistration.approval("INVENTORY_SCRAP_REJECT", "Reject a pending scrap document")
                         .build(),
 
-                // TransferOrderController - 3 events (odoo-parity C1, #1035)
+                // TransferOrderController - 5 events (odoo-parity C1/C2, #1035/#1036)
                 EventTypeRegistration.write("INVENTORY_TRANSFER_ORDER_CREATE", "Create a cross-site transfer order")
                         .build(),
                 EventTypeRegistration.approval("INVENTORY_TRANSFER_ORDER_APPROVE", "Approve a DRAFT transfer order")
                         .build(),
                 EventTypeRegistration.write(
                                 "INVENTORY_TRANSFER_ORDER_CANCEL", "Cancel a transfer order before dispatch")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_TRANSFER_ORDER_DISPATCH",
+                                "Dispatch a transfer order (posts TRANSFER_OUT into transit)")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_TRANSFER_ORDER_RECEIVE",
+                                "Receive dispatched transfer quantities at the destination (posts TRANSFER_IN)")
                         .build(),
 
                 // CycleCountController - 2 events

@@ -29,9 +29,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * this table from scratch and {@code StockSummaryDriftVerifier} reports drift.
  *
  * <p>{@code locationId} is nullable: ledger entries posted without a location
- * (e.g. workorder consumption) aggregate on a NULL-location row. Later stories
- * add a nullable {@code lotId} to the uniqueness and an {@code inTransitQty}
- * column without reshaping the table.
+ * (e.g. workorder consumption) aggregate on a NULL-location row. A later story
+ * adds a nullable {@code lotId} to the uniqueness without reshaping the table;
+ * {@code inTransitQty} arrived with odoo-parity C2 (issue #1036).
  */
 @Entity
 @Table(
@@ -74,6 +74,17 @@ public class InventoryStockSummary {
     /** Available to promise: onHand - allocated (ADR-0001). */
     @Column(name = "atp", nullable = false)
     private long atp;
+
+    /**
+     * Stock in transit TOWARD this key (odoo-parity C2, issue #1036): dispatched transfer
+     * quantity not yet received here. Keyed on the transfer's DESTINATION posting location —
+     * a {@code TRANSFER_OUT} carrying a {@code toLocationId} adds its quantity to the
+     * destination key; the matching {@code TRANSFER_IN} at the destination removes it (and
+     * adds to {@code onHand}). Conserved invariant: source on-hand + destination in-transit +
+     * destination on-hand is constant across dispatch → partial receive → final receive.
+     */
+    @Column(name = "in_transit_qty", nullable = false)
+    private long inTransitQty;
 
     /** Ledger entry that last touched this row. */
     @Column(name = "last_ledger_entry_id")

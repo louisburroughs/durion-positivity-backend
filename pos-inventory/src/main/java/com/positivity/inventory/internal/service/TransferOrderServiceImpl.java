@@ -2,24 +2,35 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.inventory.TransferOrderUpdatedV1;
 import com.positivity.inventory.internal.dto.transfer.CreateTransferOrderRequest;
+import com.positivity.inventory.internal.dto.transfer.DispatchTransferOrderRequest;
+import com.positivity.inventory.internal.dto.transfer.ReceiveTransferOrderRequest;
 import com.positivity.inventory.internal.dto.transfer.TransferOrderLineRequest;
 import com.positivity.inventory.internal.dto.transfer.TransferOrderLineResponse;
 import com.positivity.inventory.internal.dto.transfer.TransferOrderResponse;
+import com.positivity.inventory.internal.dto.transfer.TransferQuantityLineRequest;
+import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.LocationRefEntity;
 import com.positivity.inventory.internal.entity.TransferOrder;
 import com.positivity.inventory.internal.entity.TransferOrderLine;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.TransferOrderStatus;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.TransferLocationNotEligibleException;
 import com.positivity.inventory.internal.exception.TransferOrderNotFoundException;
+import com.positivity.inventory.internal.exception.TransferQuantityExceededException;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
+import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
 import com.positivity.inventory.internal.repository.TransferOrderRepository;
 import com.positivity.inventory.service.TransferOrderService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -58,6 +69,8 @@ public class TransferOrderServiceImpl implements TransferOrderService {
     private final TransferOrderRepository transferOrderRepository;
     private final LocationRefRepository locationRefRepository;
     private final ExtStorageLocationReplicaRepository storageLocationRepository;
+    private final LedgerPostingService ledgerPostingService;
+    private final InventoryLedgerEntryRepository ledgerRepository;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final Clock clock;
     private final boolean approvalRequired;
@@ -66,12 +79,16 @@ public class TransferOrderServiceImpl implements TransferOrderService {
             TransferOrderRepository transferOrderRepository,
             LocationRefRepository locationRefRepository,
             ExtStorageLocationReplicaRepository storageLocationRepository,
+            LedgerPostingService ledgerPostingService,
+            InventoryLedgerEntryRepository ledgerRepository,
             InventoryFactPublisher inventoryFactPublisher,
             Clock clock,
             @Value("${pos.inventory.transfer.approval-required:false}") boolean approvalRequired) {
         this.transferOrderRepository = transferOrderRepository;
         this.locationRefRepository = locationRefRepository;
         this.storageLocationRepository = storageLocationRepository;
+        this.ledgerPostingService = ledgerPostingService;
+        this.ledgerRepository = ledgerRepository;
         this.inventoryFactPublisher = inventoryFactPublisher;
         this.clock = clock;
         this.approvalRequired = approvalRequired;
@@ -182,6 +199,202 @@ public class TransferOrderServiceImpl implements TransferOrderService {
         log.info("Transfer order {} cancelled by {}", transferOrderId, currentActor());
         recordFact(order);
         return toResponse(order);
+    }
+
+    @Override
+    @Transactional
+    public @NonNull TransferOrderResponse dispatchTransferOrder(
+            @NonNull UUID transferOrderId, @NonNull DispatchTransferOrderRequest request) {
+        TransferOrder order = load(transferOrderId);
+        requireDispatchableStatus(order);
+        // Spec C5: both endpoints of the movement re-validated at posting time.
+        requireEligibleSite(order.getSourceLocationId(), "source");
+        requireEligibleSite(order.getDestinationLocationId(), "destination");
+
+        Map<UUID, Integer> explicit = explicitQuantities(request.getLines(), order);
+        UUID sourcePosting = sourcePostingLocation(order);
+        UUID destinationPosting = destinationPostingLocation(order);
+        String actor = currentActor();
+
+        List<InventoryLedgerEntry> entries = new ArrayList<>();
+        Map<String, Integer> runningDelta = new HashMap<>();
+        for (TransferOrderLine line : order.getLines()) {
+            int quantity = explicit.getOrDefault(line.getLineId(), line.getRequestedQty());
+            if (quantity > line.getRequestedQty()) {
+                throw TransferQuantityExceededException.dispatchExceedsRequested(
+                        line.getLineId(), line.getSku(), quantity, line.getRequestedQty());
+            }
+            entries.add(transferEntry(
+                    order,
+                    line.getSku(),
+                    InventoryLedgerEventType.TRANSFER_OUT,
+                    -quantity,
+                    sourcePosting,
+                    sourcePosting,
+                    destinationPosting,
+                    runningDelta,
+                    actor));
+            line.setDispatchedQty(quantity);
+        }
+
+        // Funnel enforces the negative-stock matrix: TRANSFER_OUT is BLOCKED below zero, so an
+        // over-dispatch of physical stock rejects the whole batch (422 INSUFFICIENT_STOCK).
+        List<InventoryLedgerEntry> saved = ledgerPostingService.postAll(entries);
+        inventoryFactPublisher.markEntries(saved);
+
+        order.setStatus(TransferOrderStatus.DISPATCHED);
+        order.setDispatchedBy(actor);
+        order = transferOrderRepository.save(order);
+
+        log.info(
+                "Transfer order {} dispatched by {}: {} -> {} ({} lines)",
+                transferOrderId,
+                actor,
+                sourcePosting,
+                destinationPosting,
+                saved.size());
+        recordFact(order);
+        return toResponse(order);
+    }
+
+    @Override
+    @Transactional
+    public @NonNull TransferOrderResponse receiveTransferOrder(
+            @NonNull UUID transferOrderId, @NonNull ReceiveTransferOrderRequest request) {
+        TransferOrder order = load(transferOrderId);
+        if (!order.getStatus().receivable()) {
+            throw new IllegalStateException("Cannot receive transfer order in status: " + order.getStatus());
+        }
+        // Spec C5: the receiving end re-validated at posting time.
+        requireEligibleSite(order.getDestinationLocationId(), "destination");
+
+        Map<UUID, Integer> explicit = explicitQuantities(request.getLines(), order);
+        UUID sourcePosting = sourcePostingLocation(order);
+        UUID destinationPosting = destinationPostingLocation(order);
+        String actor = currentActor();
+
+        List<InventoryLedgerEntry> entries = new ArrayList<>();
+        Map<String, Integer> runningDelta = new HashMap<>();
+        for (TransferOrderLine line : order.getLines()) {
+            int remaining = line.getDispatchedQty() - line.getReceivedQty();
+            int quantity = explicit.getOrDefault(line.getLineId(), remaining);
+            if (quantity > remaining) {
+                throw TransferQuantityExceededException.receiveExceedsDispatched(
+                        line.getLineId(), line.getSku(), quantity, remaining);
+            }
+            if (quantity == 0) {
+                continue;
+            }
+            entries.add(transferEntry(
+                    order,
+                    line.getSku(),
+                    InventoryLedgerEventType.TRANSFER_IN,
+                    quantity,
+                    destinationPosting,
+                    sourcePosting,
+                    destinationPosting,
+                    runningDelta,
+                    actor));
+            line.setReceivedQty(line.getReceivedQty() + quantity);
+        }
+
+        List<InventoryLedgerEntry> saved = ledgerPostingService.postAll(entries);
+        inventoryFactPublisher.markEntries(saved);
+
+        boolean fullyReceived =
+                order.getLines().stream().allMatch(line -> line.getReceivedQty().equals(line.getDispatchedQty()));
+        order.setStatus(fullyReceived ? TransferOrderStatus.RECEIVED : TransferOrderStatus.PARTIALLY_RECEIVED);
+        order = transferOrderRepository.save(order);
+
+        log.info(
+                "Transfer order {} received by {} at {}: {} entries, status {}",
+                transferOrderId,
+                actor,
+                destinationPosting,
+                saved.size(),
+                order.getStatus());
+        recordFact(order);
+        return toResponse(order);
+    }
+
+    /**
+     * Decision D-8 status gate for dispatch: flag off — DRAFT dispatches directly (APPROVED is
+     * unreachable); flag on — only APPROVED dispatches, a DRAFT must be approved first.
+     */
+    private void requireDispatchableStatus(TransferOrder order) {
+        TransferOrderStatus expected = approvalRequired ? TransferOrderStatus.APPROVED : TransferOrderStatus.DRAFT;
+        if (order.getStatus() != expected) {
+            String hint = approvalRequired && order.getStatus() == TransferOrderStatus.DRAFT
+                    ? " (approval is required before dispatch: pos.inventory.transfer.approval-required=true)"
+                    : "";
+            throw new IllegalStateException("Cannot dispatch transfer order in status: " + order.getStatus() + hint);
+        }
+    }
+
+    /** Maps explicit request lines to their order lines; unknown line ids are a 400. */
+    private Map<UUID, Integer> explicitQuantities(
+            @Nullable List<TransferQuantityLineRequest> requestLines, TransferOrder order) {
+        Map<UUID, Integer> quantities = new LinkedHashMap<>();
+        if (requestLines == null) {
+            return quantities;
+        }
+        for (TransferQuantityLineRequest requestLine : requestLines) {
+            boolean known =
+                    order.getLines().stream().anyMatch(line -> line.getLineId().equals(requestLine.getLineId()));
+            if (!known) {
+                throw new IllegalArgumentException("Unknown transfer order line: " + requestLine.getLineId());
+            }
+            if (quantities.putIfAbsent(requestLine.getLineId(), requestLine.getQuantity()) != null) {
+                throw new IllegalArgumentException("Duplicate transfer order line: " + requestLine.getLineId());
+            }
+        }
+        return quantities;
+    }
+
+    /**
+     * Builds one transfer posting entry. {@code runningDelta} accumulates per-SKU deltas within
+     * the batch so {@code quantityAfter} stays correct when multiple lines share a SKU (the
+     * batch posts atomically, so each entry's after-quantity must include earlier lines).
+     */
+    private InventoryLedgerEntry transferEntry(
+            TransferOrder order,
+            String sku,
+            InventoryLedgerEventType eventType,
+            int changeInQuantity,
+            UUID postingLocationId,
+            UUID fromLocationId,
+            UUID toLocationId,
+            Map<String, Integer> runningDelta,
+            String actor) {
+        Integer currentOnHand = ledgerRepository.calculateOnHandQuantityAtLocation(sku, postingLocationId);
+        int before = (currentOnHand != null ? currentOnHand : 0) + runningDelta.getOrDefault(sku, 0);
+        runningDelta.merge(sku, changeInQuantity, Integer::sum);
+        return InventoryLedgerEntry.builder()
+                .stockItemId(sku)
+                .locationId(postingLocationId)
+                .fromLocationId(fromLocationId)
+                .toLocationId(toLocationId)
+                .eventType(eventType)
+                .changeInQuantity(changeInQuantity)
+                .quantityAfter(before + changeInQuantity)
+                .sourceTransactionId(order.getTransferOrderId().toString())
+                .transactionUserId(actor)
+                .timestamp(Instant.now(clock))
+                .build();
+    }
+
+    /** Bin-level source posting location when pinned on the order, else the source site key. */
+    private UUID sourcePostingLocation(TransferOrder order) {
+        return order.getSourceStorageLocationId() != null
+                ? order.getSourceStorageLocationId()
+                : order.getSourceLocationId();
+    }
+
+    /** Bin-level destination posting location when pinned on the order, else the destination site key. */
+    private UUID destinationPostingLocation(TransferOrder order) {
+        return order.getDestinationStorageLocationId() != null
+                ? order.getDestinationStorageLocationId()
+                : order.getDestinationLocationId();
     }
 
     private TransferOrder load(UUID transferOrderId) {

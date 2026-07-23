@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
 import com.positivity.inventory.internal.exception.AsOfInFutureException;
+import com.positivity.inventory.internal.exception.CrossSiteTransferRequiresOrderException;
 import com.positivity.inventory.internal.exception.CycleCountConflictException;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
@@ -37,6 +38,7 @@ import com.positivity.inventory.internal.exception.SourceDocumentNotFoundExcepti
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.exception.TransferLocationNotEligibleException;
 import com.positivity.inventory.internal.exception.TransferOrderNotFoundException;
+import com.positivity.inventory.internal.exception.TransferQuantityExceededException;
 import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
@@ -209,6 +211,19 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(AdjustmentLedgerPostingException.class)
     public ResponseEntity<ApiError> handleAdjustmentLedgerPosting(AdjustmentLedgerPostingException ex) {
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "ADJUSTMENT_LEDGER_POST_FAILED", ex.getMessage());
+    }
+
+    @ExceptionHandler(TransferQuantityExceededException.class)
+    public ResponseEntity<ApiError> handleTransferQuantityExceeded(TransferQuantityExceededException ex) {
+        // odoo-parity C2 (#1036): deterministic per-bound 422
+        // (TRANSFER_DISPATCH_EXCEEDS_REQUESTED / TRANSFER_RECEIVE_EXCEEDS_DISPATCHED).
+        return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(CrossSiteTransferRequiresOrderException.class)
+    public ResponseEntity<ApiError> handleCrossSiteTransferRequiresOrder(CrossSiteTransferRequiresOrderException ex) {
+        // odoo-parity C2/spec C7 (#1036): immediate stock movements are intra-site only.
+        return build(HttpStatus.valueOf(422), CrossSiteTransferRequiresOrderException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(TransferOrderNotFoundException.class)

@@ -49,6 +49,7 @@ public class StockSummaryRowInitializer {
                 .allocated(0L)
                 .reserved(0L)
                 .atp(0L)
+                .inTransitQty(0L)
                 .build());
     }
 }

@@ -1,6 +1,8 @@
 package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.dto.transfer.CreateTransferOrderRequest;
+import com.positivity.inventory.internal.dto.transfer.DispatchTransferOrderRequest;
+import com.positivity.inventory.internal.dto.transfer.ReceiveTransferOrderRequest;
 import com.positivity.inventory.internal.dto.transfer.TransferOrderResponse;
 import com.positivity.inventory.internal.enums.TransferOrderStatus;
 import java.util.List;
@@ -77,4 +79,45 @@ public interface TransferOrderService {
      */
     @NonNull
     TransferOrderResponse cancelTransferOrder(@NonNull UUID transferOrderId);
+
+    /**
+     * Dispatches an order from the source site (odoo-parity C2, issue #1036): posts one
+     * {@code TRANSFER_OUT} per dispatched line through the ledger funnel (negative-stock
+     * BLOCKED — a below-zero source rejects with 422 {@code INSUFFICIENT_STOCK}), carrying
+     * {@code sourceTransactionId = transferOrderId} and the from/to posting locations; the
+     * destination key's {@code inTransitQty} rises by the dispatched quantity. Status →
+     * DISPATCHED.
+     *
+     * <p>Allowed from DRAFT (approval flag off) or APPROVED (flag on); anything else is a 409.
+     * Per-line quantities must not exceed the requested quantity (422
+     * {@code TRANSFER_DISPATCH_EXCEEDS_REQUESTED}); omitted lines dispatch full requested.
+     * Both sites are re-validated for movement eligibility (DECISION-INVENTORY-009).
+     *
+     * @param transferOrderId the order id
+     * @param request optional per-line dispatch quantities
+     * @return the dispatched order
+     */
+    @NonNull
+    TransferOrderResponse dispatchTransferOrder(
+            @NonNull UUID transferOrderId, @NonNull DispatchTransferOrderRequest request);
+
+    /**
+     * Receives dispatched quantities at the destination site (odoo-parity C2, issue #1036):
+     * posts one {@code TRANSFER_IN} per received line through the ledger funnel with
+     * {@code sourceTransactionId = transferOrderId}; destination on-hand rises and its
+     * {@code inTransitQty} falls by the received quantity. Status → RECEIVED when every line
+     * is fully received, else PARTIALLY_RECEIVED (remainder stays in transit).
+     *
+     * <p>Allowed from DISPATCHED/PARTIALLY_RECEIVED; terminal or pre-dispatch statuses are a
+     * 409. Per-line quantities must not exceed {@code dispatched − already received} (422
+     * {@code TRANSFER_RECEIVE_EXCEEDS_DISPATCHED}); omitted lines receive their full
+     * remainder. The destination site is re-validated for movement eligibility.
+     *
+     * @param transferOrderId the order id
+     * @param request optional per-line received quantities
+     * @return the updated order
+     */
+    @NonNull
+    TransferOrderResponse receiveTransferOrder(
+            @NonNull UUID transferOrderId, @NonNull ReceiveTransferOrderRequest request);
 }

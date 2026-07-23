@@ -420,6 +420,130 @@ paths:
         - inventory:transfer:create
       x-required-permissions:
       - inventory:transfer:create
+  /v1/inventory/transfer-orders/{transferOrderId}/receive:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Receive transfer order
+      description: 'Receives dispatched quantities at the destination: posts one TRANSFER_IN per line through the ledger funnel (sourceTransactionId = transferOrderId), raising destination on-hand and draining the in-transit quantity. Status becomes RECEIVED when every line is fully received, else PARTIALLY_RECEIVED (the remainder stays in transit). Per-line quantities default to the full un-received remainder and must not exceed it.'
+      operationId: receiveTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiveTransferOrderRequest'
+      responses:
+        '200':
+          description: Receipt recorded (RECEIVED or PARTIALLY_RECEIVED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '400':
+          description: Unknown or duplicate line id in the request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:transfer:receive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Order is not receivable (not yet dispatched, cancelled, short-closed, or already fully received)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Received quantity exceeds the un-received dispatched remainder (TRANSFER_RECEIVE_EXCEEDS_DISPATCHED), or the destination site is not movement-eligible (TRANSFER_LOCATION_NOT_ELIGIBLE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:receive
+      x-required-permissions:
+      - inventory:transfer:receive
+  /v1/inventory/transfer-orders/{transferOrderId}/dispatch:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Dispatch transfer order
+      description: 'Dispatches the order from the source site: posts one TRANSFER_OUT per line through the ledger funnel (sourceTransactionId = transferOrderId), decrements source on-hand, and raises the destination key''s in-transit quantity. Per-line quantities default to the full requested quantity and must not exceed it.'
+      operationId: dispatchTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchTransferOrderRequest'
+      responses:
+        '200':
+          description: Transfer order dispatched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '400':
+          description: Unknown or duplicate line id in the request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:transfer:dispatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Order is not dispatchable (already dispatched/terminal, or awaiting approval)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Dispatch quantity exceeds requested (TRANSFER_DISPATCH_EXCEEDS_REQUESTED), source on-hand insufficient (INSUFFICIENT_STOCK — TRANSFER_OUT is blocked below zero), or a site is not movement-eligible (TRANSFER_LOCATION_NOT_ELIGIBLE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:dispatch
+      x-required-permissions:
+      - inventory:transfer:dispatch
   /v1/inventory/transfer-orders/{transferOrderId}/cancel:
     post:
       tags:
@@ -4842,6 +4966,39 @@ components:
           type: string
           format: date-time
           description: Last update timestamp
+    ReceiveTransferOrderRequest:
+      type: object
+      description: Request to receive a transfer order; omitted lines receive their full remainder
+      properties:
+        lines:
+          type: array
+          description: Explicit per-line received quantities; omitted lines receive their full remainder
+          items:
+            $ref: '#/components/schemas/TransferQuantityLineRequest'
+    TransferQuantityLineRequest:
+      type: object
+      description: Explicit per-line quantity for a transfer dispatch or receive
+      properties:
+        lineId:
+          type: string
+          format: uuid
+          description: Transfer order line identifier
+        quantity:
+          type: integer
+          format: int32
+          description: Quantity to dispatch/receive on this line; must be positive
+      required:
+      - lineId
+      - quantity
+    DispatchTransferOrderRequest:
+      type: object
+      description: Request to dispatch a transfer order; omitted lines dispatch their full requested quantity
+      properties:
+        lines:
+          type: array
+          description: Explicit per-line dispatch quantities; omitted lines dispatch full requested
+          items:
+            $ref: '#/components/schemas/TransferQuantityLineRequest'
     RecordMovementRequest:
       type: object
       description: Request body for recording a directional stock movement in the inventory ledger
