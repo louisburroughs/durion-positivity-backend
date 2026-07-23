@@ -1,14 +1,48 @@
 package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.ReservationEntity;
+import com.positivity.inventory.internal.enums.ReservationStatus;
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface ReservationRepository extends JpaRepository<ReservationEntity, UUID> {
 
     List<ReservationEntity> findByStockItemId(UUID stockItemId);
 
     Optional<ReservationEntity> findByWorkorderLineId(UUID workorderLineId);
+
+    /**
+     * Open reservation remainders for one SKU (odoo-parity A2, issue #1028): sum of
+     * {@code requiredQuantity - allocatedQuantity} (per reservation, floored at zero) over
+     * reservations in the given statuses, optionally bounded to a due-date horizon.
+     *
+     * <p>Reservations carry no site — the remainder is site-agnostic demand. Verified entity
+     * semantics: {@code allocatedQuantity} includes SOFT allocations (a freshly created
+     * reservation is fully soft-allocated and contributes 0); the remainder becomes positive
+     * when reallocation or backorder flows leave required quantity uncovered.
+     *
+     * <p>With {@code boundByDueDate = true}, reservations with a {@code NULL} due date are
+     * excluded; with {@code false} they are included and {@code horizon} is ignored.
+     */
+    @Query("""
+                        SELECT COALESCE(SUM(CASE WHEN r.requiredQuantity - r.allocatedQuantity > 0
+                                                 THEN r.requiredQuantity - r.allocatedQuantity
+                                                 ELSE 0 END), 0)
+                        FROM ReservationEntity r
+                        WHERE r.stockItemId = :stockItemId
+                          AND r.status IN :statuses
+                          AND (:boundByDueDate = FALSE
+                               OR (r.dueDateTime IS NOT NULL AND r.dueDateTime <= :horizon))
+                        """)
+    Long sumOpenRemainderForSku(
+            @Param("stockItemId") UUID stockItemId,
+            @Param("statuses") Collection<ReservationStatus> statuses,
+            @Param("boundByDueDate") boolean boundByDueDate,
+            @Param("horizon") Instant horizon);
 }

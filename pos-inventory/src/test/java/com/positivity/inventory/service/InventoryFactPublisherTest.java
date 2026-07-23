@@ -99,12 +99,15 @@ class InventoryFactPublisherTest {
                         .allocatedQuantity(2)
                         .availableToPromiseQuantity(5)
                         .unitOfMeasure("EACH")
+                        .incomingQty(4L)
+                        .outgoingQty(1L)
+                        .projectedAvailable(10L)
                         .build());
         when(inquiryService.getLocationInventory(locationId, null))
                 .thenReturn(LocationInventoryInquiryResponse.builder()
                         .locationId(locationId)
                         .onHandQuantity(7)
-                        .availableToPromiseQuantity(5)
+                        .availableToPromiseQuantity(5L)
                         .build());
 
         publisher.markEntry(entry);
@@ -116,13 +119,47 @@ class InventoryFactPublisherTest {
         verify(writer, times(2)).publish(eq("inventory.events.v1"), captor.capture());
         List<DomainEventEnvelope<Object>> envelopes = captor.getAllValues();
         assertThat(envelopes.get(0).eventType()).isEqualTo(InventoryAvailabilityUpdatedV1.EVENT_TYPE);
+        assertThat(envelopes.get(0).schemaVersion()).isEqualTo(InventoryAvailabilityUpdatedV1.SCHEMA_VERSION);
         InventoryAvailabilityUpdatedV1 availability =
                 (InventoryAvailabilityUpdatedV1) envelopes.get(0).payload();
         assertThat(availability.onHandQuantity()).isEqualTo(7);
         assertThat(availability.availableToPromiseQuantity()).isEqualTo(5);
+        // Schema v2 forecast fields (odoo-parity A2, #1028) carry the unbounded view values.
+        assertThat(availability.incomingQuantity()).isEqualTo(4L);
+        assertThat(availability.outgoingQuantity()).isEqualTo(1L);
+        assertThat(availability.projectedAvailableQuantity()).isEqualTo(10L);
         assertThat(envelopes.get(1).eventType()).isEqualTo(StorageLocationOnHandUpdatedV1.EVENT_TYPE);
         assertThat(((StorageLocationOnHandUpdatedV1) envelopes.get(1).payload()).onHandQuantity())
                 .isEqualTo(7);
+    }
+
+    @Test
+    @DisplayName("Recorded expected-supply-dropped facts are written to the outbox at beforeCommit (#1028)")
+    void publishesExpectedSupplyDroppedFact() {
+        UUID poId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+        com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1 fact =
+                new com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1(
+                        "SKU-9",
+                        siteId,
+                        new java.math.BigDecimal("5.5"),
+                        poId,
+                        com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1.REASON_CANCELLED,
+                        Instant.parse("2026-07-13T12:00:00Z"));
+
+        publisher.recordExpectedSupplyDropped(fact);
+        fireBeforeCommit();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<DomainEventEnvelope<Object>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer).publish(eq("inventory.events.v1"), captor.capture());
+        DomainEventEnvelope<Object> envelope = captor.getValue();
+        assertThat(envelope.eventType())
+                .isEqualTo(com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1.EVENT_TYPE);
+        assertThat(envelope.schemaVersion())
+                .isEqualTo(com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1.SCHEMA_VERSION);
+        assertThat(envelope.aggregateId()).isEqualTo(poId);
+        assertThat(envelope.payload()).isSameAs(fact);
     }
 
     @Test

@@ -18,6 +18,12 @@ import org.jspecify.annotations.Nullable;
  * emission time and arrive within normal Kafka lag (seconds). They are display/planning inputs —
  * authoritative allocation decisions stay inside pos-inventory, which reads its own ledger.
  *
+ * <p><b>Schema v2 (odoo-parity A2, issue #1028):</b> adds the additive forecast fields
+ * {@code incomingQuantity}, {@code outgoingQuantity}, and {@code projectedAvailableQuantity}
+ * (unbounded variant — no horizon cutoff). Events emitted under schema v1 deserialize with these
+ * fields defaulting to {@code 0}; consumers must not treat a zero forecast on a v1 event as a
+ * computed value.
+ *
  * @param stockItemId owner stock-item identifier (the product SKU string)
  * @param locationId location the availability is scoped to (site or storage location, as
  *     recorded on the ledger entries)
@@ -25,6 +31,11 @@ import org.jspecify.annotations.Nullable;
  * @param allocatedQuantity active hard-allocation sum
  * @param availableToPromiseQuantity onHand minus allocated
  * @param unitOfMeasure first non-blank unit of measure on the ledger (default {@code EACH})
+ * @param incomingQuantity open expected supply: approved-PO open line quantity plus un-received
+ *     ASN remainder (site-scoped when {@code locationId} is a site; global otherwise)
+ * @param outgoingQuantity open expected demand: unallocated reservation remainders plus
+ *     released-not-picked pick-task remainders
+ * @param projectedAvailableQuantity {@code onHandQuantity + incomingQuantity - outgoingQuantity}
  */
 public record InventoryAvailabilityUpdatedV1(
         @NonNull String stockItemId,
@@ -32,10 +43,13 @@ public record InventoryAvailabilityUpdatedV1(
         int onHandQuantity,
         int allocatedQuantity,
         int availableToPromiseQuantity,
-        @Nullable String unitOfMeasure) {
+        @Nullable String unitOfMeasure,
+        long incomingQuantity,
+        long outgoingQuantity,
+        long projectedAvailableQuantity) {
 
     public static final String EVENT_TYPE = "inventory.availability.updated";
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
 
     public InventoryAvailabilityUpdatedV1 {
         if (stockItemId == null || stockItemId.isBlank()) {

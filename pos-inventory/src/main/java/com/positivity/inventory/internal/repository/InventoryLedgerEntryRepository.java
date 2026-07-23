@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -162,6 +163,68 @@ public interface InventoryLedgerEntryRepository
 
         Long getOnHandQuantity();
     }
+
+    // ─── Point-in-time (as-of) aggregations (odoo-parity A3, issue #1029) ─────
+    // Direct ledger math with a timestamp bound — the pre-A1 SUM queries with an
+    // `e.timestamp <= :asOf` cutoff. Never touches the stock summary; acceptable
+    // for audit-frequency historical queries only.
+
+    /** Per-location on-hand for one stock item as of an instant (timestamp inclusive). */
+    @Query("""
+                        SELECT e.locationId AS locationId, COALESCE(SUM(e.changeInQuantity), 0) AS quantity
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.eventType IN :eventTypes
+                          AND e.timestamp <= :asOf
+                        GROUP BY e.locationId
+                        """)
+    List<LocationQuantity> sumQuantityByLocationForStockItemAsOf(
+            @Param("stockItemId") String stockItemId,
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
+            @Param("asOf") java.time.Instant asOf);
+
+    /** Total on-hand at one location (all stock items) as of an instant. */
+    @Query("""
+                        SELECT COALESCE(SUM(e.changeInQuantity), 0)
+                        FROM InventoryLedgerEntry e
+                        WHERE e.locationId = :locationId
+                          AND e.eventType IN :eventTypes
+                          AND e.timestamp <= :asOf
+                        """)
+    Integer calculateOnHandAtLocationAsOf(
+            @Param("locationId") UUID locationId,
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
+            @Param("asOf") java.time.Instant asOf);
+
+    /** On-hand of one stock item at one location as of an instant. */
+    @Query("""
+                        SELECT COALESCE(SUM(e.changeInQuantity), 0)
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.locationId = :locationId
+                          AND e.eventType IN :eventTypes
+                          AND e.timestamp <= :asOf
+                        """)
+    Integer calculateOnHandForStockItemAtLocationAsOf(
+            @Param("stockItemId") String stockItemId,
+            @Param("locationId") UUID locationId,
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
+            @Param("asOf") java.time.Instant asOf);
+
+    /** Positive per-stock-item on-hand at one location as of an instant. */
+    @Query("""
+                        SELECT e.stockItemId AS stockItemId, COALESCE(SUM(e.changeInQuantity), 0) AS onHandQuantity
+                        FROM InventoryLedgerEntry e
+                        WHERE e.locationId = :locationId
+                          AND e.eventType IN :eventTypes
+                          AND e.timestamp <= :asOf
+                        GROUP BY e.stockItemId
+                        HAVING COALESCE(SUM(e.changeInQuantity), 0) > 0
+                        """)
+    List<LocationOnHand> findPositiveOnHandByLocationAsOf(
+            @Param("locationId") UUID locationId,
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
+            @Param("asOf") java.time.Instant asOf);
 
     /**
      * Sum of {@code changeInQuantity} for one event type attributed to a source
@@ -342,6 +405,40 @@ public interface InventoryLedgerEntryRepository
                         ORDER BY e.timestamp ASC, e.ledgerEntryId ASC
                         """)
     List<String> findUnitsOfMeasureByStockItem(@Param("stockItemId") String stockItemId, Pageable pageable);
+
+    // ─── Scrap cost snapshot (odoo-parity D1, #1030; ADR-0048 interim rule) ───
+
+    /**
+     * Latest non-null unit costs recorded for one stock item and event type,
+     * newest first; pass a page of size 1. Interim scrap cost source: the most
+     * recent {@code GOODS_RECEIPT} cost (odoo-parity J1 replaces this).
+     */
+    @Query("""
+                        SELECT e.unitCost
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.eventType = :eventType
+                          AND e.unitCost IS NOT NULL
+                        ORDER BY e.timestamp DESC, e.ledgerEntryId DESC
+                        """)
+    List<BigDecimal> findLatestUnitCostByStockItemAndEventType(
+            @Param("stockItemId") String stockItemId,
+            @Param("eventType") InventoryLedgerEventType eventType,
+            Pageable pageable);
+
+    /**
+     * Latest non-null unit cost of any ledger entry for one stock item, newest
+     * first; pass a page of size 1. Fallback for the scrap cost snapshot when
+     * the SKU has no costed receipt.
+     */
+    @Query("""
+                        SELECT e.unitCost
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.unitCost IS NOT NULL
+                        ORDER BY e.timestamp DESC, e.ledgerEntryId DESC
+                        """)
+    List<BigDecimal> findLatestUnitCostByStockItem(@Param("stockItemId") String stockItemId, Pageable pageable);
 
     /** Location-scoped variant of {@link #findUnitsOfMeasureByStockItem}. */
     @Query("""

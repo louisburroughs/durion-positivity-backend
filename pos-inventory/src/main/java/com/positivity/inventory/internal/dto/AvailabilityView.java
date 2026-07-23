@@ -76,4 +76,39 @@ public class AvailabilityView {
             requiredMode = REQUIRED)
     @NotNull
     String unitOfMeasure;
+
+    /**
+     * Open expected supply (approved-PO open quantity + un-received ASN remainder), site-scoped
+     * when a location scope was requested (odoo-parity A2, issue #1028).
+     */
+    @Schema(
+            description =
+                    "Open expected supply: approved purchase-order open line quantity plus un-received ASN remainder. "
+                            + "Site-level when a location scope is given. Bounded by the 'horizon' query parameter when present "
+                            + "(documents without an expected date are excluded from horizon-bounded results). "
+                            + "Omitted for as-of (historical) requests.",
+            example = "25",
+            requiredMode = NOT_REQUIRED)
+    Long incomingQty;
+
+    /**
+     * Open expected demand not yet decremented from on-hand (unallocated reservation remainders +
+     * released-not-picked pick-task remainders) (odoo-parity A2, issue #1028).
+     */
+    @Schema(
+            description =
+                    "Open expected demand not yet decremented from on-hand: unallocated reservation remainders plus "
+                            + "released-not-picked pick-task remainders. Reservation demand carries no site and is included "
+                            + "in every scope. Omitted for as-of (historical) requests.",
+            example = "10",
+            requiredMode = NOT_REQUIRED)
+    Long outgoingQty;
+
+    /** Projected availability: onHandQuantity + incomingQty - outgoingQty (Odoo virtual_available). */
+    @Schema(
+            description = "Projected availability: onHandQuantity + incomingQty - outgoingQty. "
+                    + "Omitted for as-of (historical) requests.",
+            example = "135",
+            requiredMode = NOT_REQUIRED)
+    Long projectedAvailable;
 }

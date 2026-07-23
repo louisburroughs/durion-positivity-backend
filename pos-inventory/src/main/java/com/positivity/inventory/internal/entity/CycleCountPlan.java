@@ -14,6 +14,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -27,7 +28,12 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
-@Table(name = "cycle_count_plan")
+@Table(
+        name = "cycle_count_plan",
+        uniqueConstraints =
+                @UniqueConstraint(
+                        name = "cycle_count_plan_schedule_due_key",
+                        columnNames = {"schedule_id", "due_date"}))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -58,6 +64,18 @@ public class CycleCountPlan {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 50)
     private CycleCountPlanStatus status;
+
+    /**
+     * Provenance for schedule-created plans (odoo-parity I1, #1031): the
+     * originating {@link CycleCountSchedule} and the due date the plan covers.
+     * The (schedule_id, due_date) unique constraint is the exactly-once guard
+     * for the scheduled runner; both columns are null for manual plans.
+     */
+    @Column(name = "schedule_id")
+    private UUID scheduleId;
+
+    @Column(name = "due_date")
+    private LocalDate dueDate;
 
     @Column(name = "created_by", nullable = false)
     private String createdBy;

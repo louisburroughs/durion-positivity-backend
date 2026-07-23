@@ -32,15 +32,15 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
-    private static final int EXPECTED_PERMISSION_COUNT = 394;
-    private static final int EXPECTED_CATALOG_VERSION = 29;
+    private static final int EXPECTED_PERMISSION_COUNT = 397;
+    private static final int EXPECTED_CATALOG_VERSION = 30;
 
     // -------------------------------------------------------------------------
-    // AC-1: Catalog size — 394 entries
+    // AC-1: Catalog size — 397 entries
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("catalog contains exactly 394 permissions")
+    @DisplayName("catalog contains exactly 397 permissions")
     void catalogContainsExpectedPermissions() {
         assertThat(PermissionCode.values()).hasSize(EXPECTED_PERMISSION_COUNT);
     }

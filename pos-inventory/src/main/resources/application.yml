@@ -124,6 +124,14 @@ pos:
       workorder-manifest-topic: ${POS_INVENTORY_WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
       workorder-manifest-consumer-group: ${POS_INVENTORY_WORKORDER_MANIFEST_CONSUMER_GROUP:pos-inventory-workorder-manifests}
       workorder-commands-topic: ${POS_INVENTORY_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
+      # Catalog product replica feed (odoo-parity B1, #1033): base UoM + conversion factors,
+      # tracking level, and substitution-group membership from catalog.product.updated v2 facts.
+      # No catalog-commands topic: pos-catalog has no replay-command listener yet (#1023), so
+      # manifest drift is detected (log + replica.drift metric) without requesting replay.
+      catalog-events-topic: ${POS_INVENTORY_CATALOG_EVENTS_TOPIC:catalog.events.v1}
+      catalog-events-consumer-group: ${POS_INVENTORY_CATALOG_EVENTS_CONSUMER_GROUP:pos-inventory-catalog-events}
+      catalog-manifest-topic: ${POS_INVENTORY_CATALOG_MANIFEST_TOPIC:catalog.manifest.v1}
+      catalog-manifest-consumer-group: ${POS_INVENTORY_CATALOG_MANIFEST_CONSUMER_GROUP:pos-inventory-catalog-manifests}
       # Warranty part-return quarantine/hold tracking feed (#927)
       warranty-events-topic: ${POS_INVENTORY_WARRANTY_EVENTS_TOPIC:warranty.events.v1}
       warranty-events-consumer-group: ${POS_INVENTORY_WARRANTY_EVENTS_CONSUMER_GROUP:pos-inventory-warranty-events}
@@ -148,5 +156,14 @@ pos:
         enabled: ${POS_INVENTORY_REPLENISHMENT_SCAN_ENABLED:false}
         interval-ms: ${POS_INVENTORY_REPLENISHMENT_SCAN_INTERVAL_MS:3600000}
         initial-delay-ms: ${POS_INVENTORY_REPLENISHMENT_SCAN_INITIAL_DELAY_MS:600000}
+    cycle-count:
+      schedule:
+        # Recurring cycle-count schedule runner (odoo-parity I1, #1031).
+        # Off by default; flip per environment. The pass is idempotent per
+        # (schedule, dueDate) so the interval only controls freshness, not
+        # duplication.
+        enabled: ${POS_INVENTORY_CYCLE_COUNT_SCHEDULE_ENABLED:false}
+        interval-ms: ${POS_INVENTORY_CYCLE_COUNT_SCHEDULE_INTERVAL_MS:3600000}
+        initial-delay-ms: ${POS_INVENTORY_CYCLE_COUNT_SCHEDULE_INITIAL_DELAY_MS:600000}
   workorder:
     service-id: ${POS_WORKORDER_SERVICE_ID:workorder}

@@ -12,9 +12,11 @@ import static org.mockito.Mockito.when;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
 import com.positivity.inventory.internal.entity.CycleCountPlan;
+import com.positivity.inventory.internal.entity.CycleCountSchedule;
 import com.positivity.inventory.internal.enums.CycleCountPlanStatus;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
+import com.positivity.inventory.internal.repository.CycleCountScheduleRepository;
 import com.positivity.inventory.internal.service.CycleCountPlanServiceImpl;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -51,13 +53,16 @@ class CycleCountPlanServiceTest {
     @Mock
     private CycleCountPlanRepository cycleCountPlanRepository;
 
+    @Mock
+    private CycleCountScheduleRepository cycleCountScheduleRepository;
+
     private CycleCountPlanServiceImpl service;
 
     private static final String ACTOR_USER_ID = "test-user-001";
 
     @BeforeEach
     void setUp() {
-        service = new CycleCountPlanServiceImpl(cycleCountPlanRepository, FIXED_CLOCK);
+        service = new CycleCountPlanServiceImpl(cycleCountPlanRepository, cycleCountScheduleRepository, FIXED_CLOCK);
     }
 
     // ─── createPlan ────────────────────────────────────────────────────────────
@@ -309,5 +314,97 @@ class CycleCountPlanServiceTest {
                 .thenReturn(Page.empty());
 
         assertThat(service.listPlans(null, null, 0, 50)).isEmpty();
+    }
+
+    // ─── updateStatus (odoo-parity I1, #1031) ─────────────────────────────────
+
+    private CycleCountPlan storedPlan(UUID planId, CycleCountPlanStatus status, UUID scheduleId) {
+        return CycleCountPlan.builder()
+                .planId(planId)
+                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000010"))
+                .zoneIds(List.of())
+                .planName("plan")
+                .scheduledDate(LocalDate.now(FIXED_CLOCK))
+                .status(status)
+                .scheduleId(scheduleId)
+                .dueDate(scheduleId == null ? null : LocalDate.now(FIXED_CLOCK))
+                .createdBy(ACTOR_USER_ID)
+                .build();
+    }
+
+    /** Verifies a valid transition persists and maps the new status. */
+    @Test
+    void updateStatus_validTransition_persistsNewStatus() {
+        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(cycleCountPlanRepository.findById(planId))
+                .thenReturn(Optional.of(storedPlan(planId, CycleCountPlanStatus.PLANNED, null)));
+        when(cycleCountPlanRepository.save(any(CycleCountPlan.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        CycleCountPlanResponse response = service.updateStatus(planId, CycleCountPlanStatus.STARTED);
+
+        assertThat(response.getStatus()).isEqualTo("STARTED");
+    }
+
+    /** Verifies an invalid transition is rejected without saving. */
+    @Test
+    void updateStatus_invalidTransition_throwsIllegalState() {
+        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(cycleCountPlanRepository.findById(planId))
+                .thenReturn(Optional.of(storedPlan(planId, CycleCountPlanStatus.PLANNED, null)));
+
+        assertThatThrownBy(() -> service.updateStatus(planId, CycleCountPlanStatus.APPROVED))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("PLANNED -> APPROVED");
+        verify(cycleCountPlanRepository, never()).save(any());
+    }
+
+    /**
+     * Verifies approving a schedule-created plan restamps the schedule's next
+     * due date from the completion date + frequencyDays (odoo-parity I1).
+     */
+    @Test
+    void updateStatus_approvedScheduleCreatedPlan_restampsScheduleNextDueDate() {
+        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID scheduleId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+        CycleCountSchedule schedule = CycleCountSchedule.builder()
+                .scheduleId(scheduleId)
+                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000010"))
+                .frequencyDays(14)
+                .nextDueDate(LocalDate.now(FIXED_CLOCK).minusDays(3))
+                .autoCreatePlan(true)
+                .active(true)
+                .createdBy(ACTOR_USER_ID)
+                .build();
+        when(cycleCountPlanRepository.findById(planId))
+                .thenReturn(
+                        Optional.of(storedPlan(planId, CycleCountPlanStatus.COMPLETED_PENDING_APPROVAL, scheduleId)));
+        when(cycleCountPlanRepository.save(any(CycleCountPlan.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(cycleCountScheduleRepository.findById(scheduleId)).thenReturn(Optional.of(schedule));
+        when(cycleCountScheduleRepository.save(any(CycleCountSchedule.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.updateStatus(planId, CycleCountPlanStatus.APPROVED);
+
+        assertThat(schedule.getNextDueDate())
+                .isEqualTo(LocalDate.now(FIXED_CLOCK).plusDays(14));
+        verify(cycleCountScheduleRepository).save(schedule);
+    }
+
+    /** Verifies rejecting a schedule-created plan does NOT restamp the schedule. */
+    @Test
+    void updateStatus_rejectedScheduleCreatedPlan_doesNotRestamp() {
+        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID scheduleId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+        when(cycleCountPlanRepository.findById(planId))
+                .thenReturn(
+                        Optional.of(storedPlan(planId, CycleCountPlanStatus.COMPLETED_PENDING_APPROVAL, scheduleId)));
+        when(cycleCountPlanRepository.save(any(CycleCountPlan.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.updateStatus(planId, CycleCountPlanStatus.REJECTED);
+
+        verify(cycleCountScheduleRepository, never()).save(any());
     }
 }

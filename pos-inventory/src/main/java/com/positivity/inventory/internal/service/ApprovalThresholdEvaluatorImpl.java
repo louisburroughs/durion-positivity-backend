@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.entity.ApprovalThresholdConfig;
 import com.positivity.inventory.internal.entity.CycleCountAdjustment;
+import com.positivity.inventory.internal.enums.ApprovalFlowType;
 import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.inventory.internal.repository.ApprovalThresholdConfigRepository;
 import com.positivity.inventory.service.ApprovalThresholdEvaluator;
@@ -10,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 
 /**
@@ -18,6 +20,10 @@ import org.springframework.stereotype.Service;
  * <p>
  * Uses a composite threshold model: approval is required if ANY threshold is
  * exceeded. Supports two-tier approval based on threshold severity.
+ *
+ * <p>Since odoo-parity D1 (issue #1030) the config table is shared between
+ * approval flows ({@link ApprovalFlowType}); cycle-count evaluation reads only
+ * {@code CYCLE_COUNT} rows and scrap evaluation only {@code SCRAP} rows.
  */
 @Service
 @RequiredArgsConstructor
@@ -28,7 +34,9 @@ public class ApprovalThresholdEvaluatorImpl implements ApprovalThresholdEvaluato
 
     @Override
     public Optional<ApprovalTier> evaluateRequiredApprovalTier(CycleCountAdjustment adjustment) {
-        List<ApprovalThresholdConfig> configs = thresholdConfigRepository.findByActiveTrueOrderByApprovalTierAsc();
+        List<ApprovalThresholdConfig> configs =
+                thresholdConfigRepository.findByFlowTypeAndActiveTrueOrderByApprovalTierAsc(
+                        ApprovalFlowType.CYCLE_COUNT);
 
         if (configs.isEmpty()) {
             log.warn(
@@ -65,6 +73,33 @@ public class ApprovalThresholdEvaluatorImpl implements ApprovalThresholdEvaluato
             }
         }
 
+        return Optional.ofNullable(requiredTier);
+    }
+
+    @Override
+    public Optional<ApprovalTier> evaluateScrapApprovalTier(@NonNull BigDecimal scrapValue) {
+        List<ApprovalThresholdConfig> configs =
+                thresholdConfigRepository.findByFlowTypeAndActiveTrueOrderByApprovalTierAsc(ApprovalFlowType.SCRAP);
+
+        if (configs.isEmpty()) {
+            log.warn(
+                    "No active SCRAP approval threshold configurations found. Auto-approving scrap value {}",
+                    scrapValue);
+            return Optional.empty();
+        }
+
+        // Scrap thresholds are value-based only (odoo-parity D1): the highest
+        // tier whose value threshold is met wins; below all thresholds means
+        // auto-approval.
+        ApprovalTier requiredTier = null;
+        for (ApprovalThresholdConfig config : configs) {
+            if (scrapValue.compareTo(config.getValueVarianceThreshold()) >= 0) {
+                requiredTier = config.getApprovalTier();
+            }
+        }
+        if (requiredTier != null) {
+            log.info("Scrap value {} requires {} approval", scrapValue, requiredTier);
+        }
         return Optional.ofNullable(requiredTier);
     }
 

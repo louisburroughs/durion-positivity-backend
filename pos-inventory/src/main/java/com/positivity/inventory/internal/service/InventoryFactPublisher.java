@@ -2,10 +2,12 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.inventory.ConsumptionRecordedV1;
+import com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1;
 import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
 import com.positivity.domainevents.inventory.LeadTimeUpdatedV1;
 import com.positivity.domainevents.inventory.PickListUpdatedV1;
 import com.positivity.domainevents.inventory.PickTaskUpdatedV1;
+import com.positivity.domainevents.inventory.ScrapPostedV1;
 import com.positivity.domainevents.inventory.StorageLocationOnHandUpdatedV1;
 import com.positivity.inventory.internal.config.OutboxEventWriter;
 import com.positivity.inventory.internal.dto.AvailabilityView;
@@ -140,6 +142,32 @@ public class InventoryFactPublisher {
         pending.consumptions.add(fact);
     }
 
+    /**
+     * Record an expected-supply-dropped occurrence fact (odoo-parity A4, issue #1028): a
+     * purchase order reached CLOSED/CANCELLED with open quantity. Queued as-is — this is an
+     * occurrence, not a snapshot, and is never re-emitted.
+     */
+    public void recordExpectedSupplyDropped(@NonNull ExpectedSupplyDroppedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.expectedSupplyDrops.add(fact);
+    }
+
+    /**
+     * Record a scrap-posted occurrence fact (odoo-parity D1, issue #1030): a scrap document's
+     * {@code SCRAP_OUT} entry reached the ledger. Queued as-is — this is an occurrence, not a
+     * snapshot, and is never re-emitted. pos-accounting consumes it for shrinkage GL posting.
+     */
+    public void recordScrapPosted(@NonNull ScrapPostedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.scrapPosts.add(fact);
+    }
+
     private @Nullable Pending pending() {
         if (outboxEventWriter.getIfAvailable() == null
                 || !TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -179,6 +207,7 @@ public class InventoryFactPublisher {
                 publish(
                         writer,
                         InventoryAvailabilityUpdatedV1.EVENT_TYPE,
+                        InventoryAvailabilityUpdatedV1.SCHEMA_VERSION,
                         availabilityAggregateId(key),
                         new InventoryAvailabilityUpdatedV1(
                                 key.stockItemId(),
@@ -186,7 +215,10 @@ public class InventoryFactPublisher {
                                 view.getOnHandQuantity(),
                                 view.getAllocatedQuantity(),
                                 view.getAvailableToPromiseQuantity(),
-                                view.getUnitOfMeasure()));
+                                view.getUnitOfMeasure(),
+                                zeroIfNull(view.getIncomingQty()),
+                                zeroIfNull(view.getOutgoingQty()),
+                                zeroIfNull(view.getProjectedAvailable())));
             } catch (Exception e) {
                 // A snapshot that cannot be computed must not roll back the business write;
                 // the next mutation or a manifest replay repairs the replica.
@@ -200,6 +232,7 @@ public class InventoryFactPublisher {
                 publish(
                         writer,
                         StorageLocationOnHandUpdatedV1.EVENT_TYPE,
+                        StorageLocationOnHandUpdatedV1.SCHEMA_VERSION,
                         storageLocationId,
                         new StorageLocationOnHandUpdatedV1(
                                 storageLocationId, Math.toIntExact(inquiry.getOnHandQuantity())));
@@ -217,6 +250,7 @@ public class InventoryFactPublisher {
                 publish(
                         writer,
                         PickListUpdatedV1.EVENT_TYPE,
+                        PickListUpdatedV1.SCHEMA_VERSION,
                         pickListId,
                         new PickListUpdatedV1(
                                 pickListId,
@@ -239,6 +273,7 @@ public class InventoryFactPublisher {
                 publish(
                         writer,
                         PickTaskUpdatedV1.EVENT_TYPE,
+                        PickTaskUpdatedV1.SCHEMA_VERSION,
                         pickTaskId,
                         new PickTaskUpdatedV1(
                                 pickTaskId,
@@ -256,9 +291,33 @@ public class InventoryFactPublisher {
         }
         for (ConsumptionRecordedV1 consumption : pending.consumptions) {
             try {
-                publish(writer, ConsumptionRecordedV1.EVENT_TYPE, consumption.consumptionId(), consumption);
+                publish(
+                        writer,
+                        ConsumptionRecordedV1.EVENT_TYPE,
+                        ConsumptionRecordedV1.SCHEMA_VERSION,
+                        consumption.consumptionId(),
+                        consumption);
             } catch (Exception e) {
                 log.warn("Skipping consumption fact for {}: {}", consumption.consumptionId(), e.getMessage());
+            }
+        }
+        for (ExpectedSupplyDroppedV1 drop : pending.expectedSupplyDrops) {
+            try {
+                publish(
+                        writer,
+                        ExpectedSupplyDroppedV1.EVENT_TYPE,
+                        ExpectedSupplyDroppedV1.SCHEMA_VERSION,
+                        drop.poId(),
+                        drop);
+            } catch (Exception e) {
+                log.warn("Skipping expected-supply-dropped fact for {}: {}", drop.poId(), e.getMessage());
+            }
+        }
+        for (ScrapPostedV1 scrapPost : pending.scrapPosts) {
+            try {
+                publish(writer, ScrapPostedV1.EVENT_TYPE, ScrapPostedV1.SCHEMA_VERSION, scrapPost.scrapId(), scrapPost);
+            } catch (Exception e) {
+                log.warn("Skipping scrap-posted fact for {}: {}", scrapPost.scrapId(), e.getMessage());
             }
         }
         for (UUID productId : pending.leadTimeProductIds) {
@@ -267,6 +326,7 @@ public class InventoryFactPublisher {
                 publish(
                         writer,
                         LeadTimeUpdatedV1.EVENT_TYPE,
+                        LeadTimeUpdatedV1.SCHEMA_VERSION,
                         productId,
                         new LeadTimeUpdatedV1(
                                 productId,
@@ -283,10 +343,26 @@ public class InventoryFactPublisher {
     }
 
     private void publish(
-            @NonNull OutboxEventWriter writer, @NonNull String eventType, @NonNull UUID aggregateId, Object payload) {
+            @NonNull OutboxEventWriter writer,
+            @NonNull String eventType,
+            int schemaVersion,
+            @NonNull UUID aggregateId,
+            Object payload) {
         DomainEventEnvelope<Object> envelope = DomainEventEnvelope.of(
-                eventType, 1, aggregateId, Instant.now(clock).toEpochMilli(), SOURCE, null, null, payload, clock);
+                eventType,
+                schemaVersion,
+                aggregateId,
+                Instant.now(clock).toEpochMilli(),
+                SOURCE,
+                null,
+                null,
+                payload,
+                clock);
         writer.publish(eventsTopic, envelope);
+    }
+
+    private static long zeroIfNull(@Nullable Long value) {
+        return value == null ? 0L : value;
     }
 
     /** Deterministic aggregate identity for a (stockItemId, locationId) availability key. */
@@ -305,5 +381,7 @@ public class InventoryFactPublisher {
         private final Set<UUID> pickListIds = new LinkedHashSet<>();
         private final Set<UUID> pickTaskIds = new LinkedHashSet<>();
         private final List<ConsumptionRecordedV1> consumptions = new ArrayList<>();
+        private final List<ExpectedSupplyDroppedV1> expectedSupplyDrops = new ArrayList<>();
+        private final List<ScrapPostedV1> scrapPosts = new ArrayList<>();
     }
 }

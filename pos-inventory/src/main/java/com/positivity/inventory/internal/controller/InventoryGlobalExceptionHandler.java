@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
+import com.positivity.inventory.internal.exception.AsOfInFutureException;
 import com.positivity.inventory.internal.exception.CycleCountConflictException;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
@@ -28,9 +29,13 @@ import com.positivity.inventory.internal.exception.RecountLimitExceededException
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
 import com.positivity.inventory.internal.exception.RollupExpansionTooLargeException;
+import com.positivity.inventory.internal.exception.ScrapInsufficientStockException;
+import com.positivity.inventory.internal.exception.ScrapLedgerPostingException;
+import com.positivity.inventory.internal.exception.ScrapNotFoundException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
+import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
 import com.positivity.shared.error.ApiError;
@@ -168,6 +173,12 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "RECOUNT_LIMIT_EXCEEDED", ex.getMessage());
     }
 
+    @ExceptionHandler(AsOfInFutureException.class)
+    public ResponseEntity<ApiError> handleAsOfInFuture(AsOfInFutureException ex) {
+        // odoo-parity A3 (#1029): deterministic 422 for future-dated point-in-time queries.
+        return build(HttpStatus.valueOf(422), "AS_OF_IN_FUTURE", ex.getMessage());
+    }
+
     @ExceptionHandler(InsufficientPermissionException.class)
     public ResponseEntity<ApiError> handleInsufficientPermission(InsufficientPermissionException ex) {
         return build(HttpStatus.FORBIDDEN, FORBIDDEN, ex.getMessage());
@@ -196,6 +207,23 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(AdjustmentLedgerPostingException.class)
     public ResponseEntity<ApiError> handleAdjustmentLedgerPosting(AdjustmentLedgerPostingException ex) {
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "ADJUSTMENT_LEDGER_POST_FAILED", ex.getMessage());
+    }
+
+    @ExceptionHandler(ScrapNotFoundException.class)
+    public ResponseEntity<ApiError> handleScrapNotFound(ScrapNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(ScrapInsufficientStockException.class)
+    public ResponseEntity<ApiError> handleScrapInsufficientStock(ScrapInsufficientStockException ex) {
+        // odoo-parity D1 (#1030): guided-reconciliation 422 mirroring the putaway
+        // source-on-hand rule (docs/putaway-validation-rules.md).
+        return build(HttpStatus.valueOf(422), ScrapInsufficientStockException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(ScrapLedgerPostingException.class)
+    public ResponseEntity<ApiError> handleScrapLedgerPosting(ScrapLedgerPostingException ex) {
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "SCRAP_LEDGER_POST_FAILED", ex.getMessage());
     }
 
     @ExceptionHandler({
@@ -231,6 +259,13 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(PartMatchPermissionException.class)
     public ResponseEntity<ApiError> handlePartMatchPermission(PartMatchPermissionException ex) {
         return build(HttpStatus.FORBIDDEN, "PART_MATCH_PERMISSION_REQUIRED", ex.getMessage());
+    }
+
+    @ExceptionHandler(UomConversionUndefinedException.class)
+    public ResponseEntity<ApiError> handleUomConversionUndefined(UomConversionUndefinedException ex) {
+        // odoo-parity B1/B4 (#1033): no conversion path to base UoM is a deterministic 422,
+        // never a silent 1:1 assumption.
+        return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
     }
 
     @ExceptionHandler(InvalidParamCombinationException.class)

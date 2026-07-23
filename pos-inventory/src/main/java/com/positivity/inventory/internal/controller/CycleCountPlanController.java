@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
+import com.positivity.inventory.internal.dto.cyclecount.plan.UpdateCycleCountPlanStatusRequest;
 import com.positivity.inventory.internal.enums.CycleCountPlanStatus;
 import com.positivity.inventory.service.CycleCountPlanService;
 import com.positivity.security.common.SecurityContextHelper;
@@ -25,6 +26,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -113,5 +115,34 @@ public class CycleCountPlanController {
     public ResponseEntity<CycleCountPlanResponse> getPlan(
             @Parameter(description = "Cycle count plan identifier", required = true) @PathVariable UUID planId) {
         return ResponseEntity.ok(cycleCountPlanService.getPlan(planId));
+    }
+
+    @PutMapping("/{planId}/status")
+    @EmitEvent(id = "INVENTORY_CYCLE_COUNT_PLAN_STATUS_UPDATE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:cycle_count:complete"})
+    @PreAuthorize("hasAuthority('inventory:cycle_count:complete')")
+    @Operation(
+            summary = "Transition cycle count plan status",
+            description = "Moves a plan through its lifecycle (PLANNED → STARTED → COMPLETED_PENDING_APPROVAL →"
+                    + " APPROVED/REJECTED; PLANNED/STARTED may be CANCELLED). Approving a schedule-created plan"
+                    + " restamps the originating schedule's next due date (odoo-parity I1, #1031).",
+            tags = {"Cycle Count Plans"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Cycle count plan status updated",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = CycleCountPlanResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Validation failure")
+    @ApiResponse(responseCode = "403", description = "User lacks required permission")
+    @ApiResponse(responseCode = "404", description = "Cycle count plan not found")
+    @ApiResponse(responseCode = "409", description = "Invalid status transition")
+    public ResponseEntity<CycleCountPlanResponse> updatePlanStatus(
+            @Parameter(description = "Cycle count plan identifier", required = true) @PathVariable UUID planId,
+            @jakarta.validation.Valid @RequestBody UpdateCycleCountPlanStatusRequest request) {
+        return ResponseEntity.ok(cycleCountPlanService.updateStatus(planId, request.getStatus()));
     }
 }
