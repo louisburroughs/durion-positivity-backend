@@ -44,6 +44,36 @@ public class SalesOrderLineResponse {
     @Schema(description = "Unit price applied to the line", example = "19.99", requiredMode = NOT_REQUIRED)
     private BigDecimal unitPrice;
 
+    @Schema(description = "Line-level discount percent (0-100)", example = "5", requiredMode = NOT_REQUIRED)
+    private BigDecimal discountPercent;
+
+    @Schema(
+            description = "Line discount plus this line's pro-rata share of the order discount",
+            example = "2.00",
+            requiredMode = NOT_REQUIRED)
+    private BigDecimal discountAmount;
+
+    @Schema(
+            description = "Extended amount post-line-discount, pre-order-discount, pre-tax",
+            example = "37.98",
+            requiredMode = NOT_REQUIRED)
+    private BigDecimal lineSubtotal;
+
+    @Schema(description = "Tax for this line (pos-tax authoritative)", example = "3.04", requiredMode = NOT_REQUIRED)
+    private BigDecimal taxAmount;
+
+    @Schema(
+            description = "lineSubtotal minus order-discount allocation plus taxAmount",
+            example = "39.02",
+            requiredMode = NOT_REQUIRED)
+    private BigDecimal lineTotal;
+
+    @Schema(description = "Customer-visible line note", requiredMode = NOT_REQUIRED)
+    private String customerNote;
+
+    @Schema(description = "Shop-internal line note", requiredMode = NOT_REQUIRED)
+    private String internalNote;
+
     @Schema(description = "Fulfillment status of the line", example = "PENDING", requiredMode = NOT_REQUIRED)
     private String fulfillmentStatus;
 

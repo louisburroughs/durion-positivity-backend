@@ -3,6 +3,8 @@ package com.positivity.order.internal.entity;
 public enum SalesOrderStatus {
     DRAFT,
     QUOTED,
+    /** Checkout accepted; awaiting settlement confirmation (parity plan stories C1/C3). */
+    PENDING_PAYMENT,
     COMPLETED,
     VOIDED,
     CANCEL_REQUESTED,

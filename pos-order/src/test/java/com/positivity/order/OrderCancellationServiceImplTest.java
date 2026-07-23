@@ -28,7 +28,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -57,8 +56,24 @@ class OrderCancellationServiceImplTest {
     @Mock
     private BillingPort billingPort;
 
-    @InjectMocks
+    @Mock
+    private com.positivity.order.internal.repository.OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    @Mock
+    private com.positivity.order.internal.config.OrderDomainEventPublisher orderDomainEventPublisher;
+
     private OrderCancellationServiceImpl orderCancellationService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        orderCancellationService = new OrderCancellationServiceImpl(
+                salesOrderRepository,
+                workexecPort,
+                billingPort,
+                new com.positivity.order.internal.service.OrderStateMachine(
+                        orderStatusHistoryRepository, java.time.Clock.systemUTC()),
+                orderDomainEventPublisher);
+    }
 
     // ── shared fixtures ───────────────────────────────────────────────────────
 

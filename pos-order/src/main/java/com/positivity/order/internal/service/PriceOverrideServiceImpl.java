@@ -104,6 +104,12 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
         SalesOrder order = salesOrderRepository
                 .findById(orderId)
                 .orElseThrow(() -> new InvalidPriceOverrideException("Order not found: " + orderId));
+        if (order.getStatus() != null
+                && order.getStatus() != com.positivity.order.internal.entity.SalesOrderStatus.DRAFT) {
+            // Spec R2.5 (plan story A1): overrides only while the cart is editable.
+            throw new InvalidPriceOverrideException(
+                    "Price overrides are only allowed while the order is DRAFT; current status: " + order.getStatus());
+        }
         SalesOrderLine orderLine = salesOrderLineRepository
                 .findById(orderLineId)
                 .orElseThrow(() -> new InvalidPriceOverrideException("Order line not found: " + orderLineId));
@@ -141,6 +147,8 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
             SalesOrderLine line = savedOverride.getOrderLine();
             line.setUnitPrice(savedOverride.getOverridePrice());
             salesOrderLineRepository.save(line);
+            // The override price has landed on the line: stamp appliedAt (plan story A4).
+            savedOverride.setAppliedAt(Instant.now(clock));
 
             // Recalculate order subtotal.
             var persistedOrder = savedOverride.getOrder();

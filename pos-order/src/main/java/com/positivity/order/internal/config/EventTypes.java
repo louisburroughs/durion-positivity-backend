@@ -76,5 +76,15 @@ public final class EventTypes {
             EventTypeRegistration.write("ORDER_CART_ITEM_REMOVE", "Item removed from sales order cart")
                     .build(),
             EventTypeRegistration.write("ORDER_LINK_SOURCE", "Source linked to sales order")
+                    .build(),
+            EventTypeRegistration.search("ORDER_CART_LIST", "List sales order carts for parking/resume")
+                    .build(),
+            EventTypeRegistration.write("ORDER_CART_QUOTE", "Cart converted to a counter quote")
+                    .build(),
+            EventTypeRegistration.write("ORDER_CART_QUOTE_REOPEN", "Counter quote reopened for editing")
+                    .build(),
+            EventTypeRegistration.write("ORDER_CART_DISCOUNT_APPLY", "Order-level discount applied")
+                    .build(),
+            EventTypeRegistration.write("ORDER_CART_DISCOUNT_REMOVE", "Order-level discount removed")
                     .build());
 }

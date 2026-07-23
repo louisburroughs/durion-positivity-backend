@@ -3,13 +3,16 @@ package com.positivity.order.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
+import com.positivity.order.internal.client.CustomerPort;
 import com.positivity.order.internal.client.InventoryPort;
 import com.positivity.order.internal.client.InventoryResult;
 import com.positivity.order.internal.client.PricingPort;
-import com.positivity.order.internal.client.PricingResult;
+import com.positivity.order.internal.client.PricingQuote;
 import com.positivity.order.internal.client.SourceDocumentLine;
 import com.positivity.order.internal.client.SourceDocumentPort;
 import com.positivity.order.internal.entity.FulfillmentStatus;
@@ -20,9 +23,13 @@ import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.entity.SourceType;
 import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
+import com.positivity.order.internal.repository.OrderStatusHistoryRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
+import com.positivity.order.internal.service.OrderNumberService;
+import com.positivity.order.internal.service.OrderStateMachine;
 import com.positivity.order.internal.service.SalesOrderServiceImpl;
+import com.positivity.order.service.model.CreateCartCommand;
 import com.positivity.order.service.model.SalesOrderLineSummary;
 import com.positivity.order.service.model.SalesOrderSummary;
 import com.positivity.security.common.SecurityContextHelper;
@@ -65,13 +72,49 @@ class SalesOrderServiceImplTest {
     @Mock
     private SourceDocumentPort sourceDocumentPort;
 
+    @Mock
+    private CustomerPort customerPort;
+
+    @Mock
+    private OrderNumberService orderNumberService;
+
+    @Mock
+    private OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    @Mock
+    private com.positivity.order.internal.service.OrderTaxService orderTaxService;
+
+    private static final UUID TEST_LOCATION = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+
+    private static PricingQuote priced(BigDecimal price) {
+        return new PricingQuote(PricingQuote.Status.PRICED, price, UUID.randomUUID(), null, null, null);
+    }
+
     // Issue #21: SalesOrderService is the public interface under test (ADR-0026)
     private SalesOrderService salesOrderService;
 
     @BeforeEach
     void setUp() {
         salesOrderService = new SalesOrderServiceImpl(
-                salesOrderRepository, salesOrderLineRepository, pricingPort, inventoryPort, sourceDocumentPort);
+                salesOrderRepository,
+                salesOrderLineRepository,
+                pricingPort,
+                inventoryPort,
+                sourceDocumentPort,
+                customerPort,
+                new OrderStateMachine(orderStatusHistoryRepository, java.time.Clock.systemUTC()),
+                orderNumberService,
+                new com.positivity.order.internal.service.OrderTotalsCalculator(),
+                orderTaxService,
+                java.time.Clock.systemUTC());
+        org.mockito.Mockito.lenient().when(orderNumberService.nextNumber(any())).thenReturn("SO-TEST-2607-000001");
+    }
+
+    private SalesOrderSummary createCart(String clerkId, String terminalId, String customerId, String vehicleId) {
+        return salesOrderService
+                .createCart(new CreateCartCommand(
+                        clerkId, terminalId, customerId, vehicleId, TEST_LOCATION, null, null, null))
+                .summary();
     }
 
     // -----------------------------------------------------------------------
@@ -96,7 +139,7 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(expectedOrder);
 
         // when
-        SalesOrderSummary result = salesOrderService.createCart("clerk-001", "terminal-001", null, null);
+        SalesOrderSummary result = createCart("clerk-001", "terminal-001", null, null);
 
         // then
         assertThat(result.status()).isEqualTo(SalesOrderStatus.DRAFT.name());
@@ -121,7 +164,7 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(expectedOrder);
 
         // when
-        SalesOrderSummary result = salesOrderService.createCart("clerk-001", "terminal-001", null, null);
+        SalesOrderSummary result = createCart("clerk-001", "terminal-001", null, null);
 
         // then
         assertThat(result.customerId()).isNull();
@@ -154,8 +197,8 @@ class SalesOrderServiceImplTest {
                 .thenReturn(secondOrder);
 
         // when
-        SalesOrderSummary cart1 = salesOrderService.createCart("clerk-001", "terminal-001", null, null);
-        SalesOrderSummary cart2 = salesOrderService.createCart("clerk-001", "terminal-001", null, null);
+        SalesOrderSummary cart1 = createCart("clerk-001", "terminal-001", null, null);
+        SalesOrderSummary cart2 = createCart("clerk-001", "terminal-001", null, null);
 
         // then
         assertThat(cart1.orderId()).isNotEqualTo(cart2.orderId());
@@ -192,7 +235,8 @@ class SalesOrderServiceImplTest {
                 .build();
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(expectedLine);
-        when(pricingPort.resolvePrice("ABC-123")).thenReturn(new PricingResult(new BigDecimal("10.5000"), false, true));
+        when(pricingPort.quoteForSku(eq("ABC-123"), anyInt(), any(), any()))
+                .thenReturn(priced(new BigDecimal("10.5000")));
         when(inventoryPort.checkAvailability("ABC-123", 2)).thenReturn(new InventoryResult(true, 100));
 
         // when
@@ -238,7 +282,8 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(expectedLine);
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(updatedOrder);
-        when(pricingPort.resolvePrice("ABC-123")).thenReturn(new PricingResult(new BigDecimal("10.5000"), false, true));
+        when(pricingPort.quoteForSku(eq("ABC-123"), anyInt(), any(), any()))
+                .thenReturn(priced(new BigDecimal("10.5000")));
         when(inventoryPort.checkAvailability("ABC-123", 2)).thenReturn(new InventoryResult(true, 100));
 
         // when
@@ -270,7 +315,7 @@ class SalesOrderServiceImplTest {
                 .subtotal(BigDecimal.ZERO)
                 .build();
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
-        when(pricingPort.resolvePrice("INVALID-SKU")).thenReturn(new PricingResult(BigDecimal.ZERO, false, false));
+        when(pricingPort.quoteForSku(eq("INVALID-SKU"), anyInt(), any(), any())).thenReturn(PricingQuote.unknownSku());
 
         // when / then
         assertThatThrownBy(() -> salesOrderService.addItem(orderId, "INVALID-SKU", 1, null, null))
@@ -415,8 +460,8 @@ class SalesOrderServiceImplTest {
                 .build();
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(backorderLine);
-        when(pricingPort.resolvePrice("LOW-STOCK-SKU"))
-                .thenReturn(new PricingResult(new BigDecimal("10.5000"), false, true));
+        when(pricingPort.quoteForSku(eq("LOW-STOCK-SKU"), anyInt(), any(), any()))
+                .thenReturn(priced(new BigDecimal("10.5000")));
         when(inventoryPort.checkAvailability("LOW-STOCK-SKU", 50)).thenReturn(new InventoryResult(false, 0));
 
         // when
@@ -461,8 +506,8 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(backorderLine);
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(updatedOrder);
-        when(pricingPort.resolvePrice("LOW-STOCK-SKU"))
-                .thenReturn(new PricingResult(new BigDecimal("10.5000"), false, true));
+        when(pricingPort.quoteForSku(eq("LOW-STOCK-SKU"), anyInt(), any(), any()))
+                .thenReturn(priced(new BigDecimal("10.5000")));
         when(inventoryPort.checkAvailability("LOW-STOCK-SKU", 50)).thenReturn(new InventoryResult(false, 0));
 
         // when
@@ -670,7 +715,8 @@ class SalesOrderServiceImplTest {
                 .build();
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(cachedPriceLine);
-        when(pricingPort.resolvePrice("ABC-123")).thenReturn(new PricingResult(new BigDecimal("10.5000"), true, true));
+        when(pricingPort.quoteForSku(eq("ABC-123"), anyInt(), any(), any()))
+                .thenReturn(priced(new BigDecimal("10.5000")));
         when(inventoryPort.checkAvailability("ABC-123", 1)).thenReturn(new InventoryResult(true, 100));
 
         // when
