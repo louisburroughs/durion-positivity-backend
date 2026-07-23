@@ -12,6 +12,8 @@ servers:
 tags:
 - name: Inventory Locations
   description: Read inventory facts for storage locations
+- name: Lots
+  description: Lot master records captured on inbound receipts, with per-lot on-hand
 - name: Reallocation
   description: Allocation rebalancing endpoints
 - name: Cycle Count Plans
@@ -40,6 +42,8 @@ tags:
   description: Cycle count submission and recount operations
 - name: Inventory Management
   description: Operations related to inventory location management
+- name: Transfer Orders
+  description: Cross-site transfer orders with in-transit tracking
 - name: Scraps
   description: Scrap (write-off) documents with value-threshold approval and SCRAP_OUT posting
 - name: ASN
@@ -64,6 +68,8 @@ tags:
   description: Manage inventory adjustments from cycle counts
 - name: Receiving
   description: Receiving session creation, item receiving, and cross-dock execution endpoints
+- name: Sourcing Strategies
+  description: Sourcing/removal strategy configuration endpoints
 - name: Inventory Sites
   description: Site inventory configuration endpoints. Inventory Sites represent physical locations that hold inventory.
 - name: Inventory Ledger
@@ -71,6 +77,69 @@ tags:
 - name: Stock Movements
   description: Inventory ledger movement recording and adjustment endpoints
 paths:
+  /v1/inventory/sourcing-strategies:
+    get:
+      tags:
+      - Sourcing Strategies
+      summary: List sourcing strategy configurations
+      description: Lists all sourcing strategy configuration rows (active and inactive), ordered by scope. Resolution precedence at decision time is SKU_CATEGORY, then SITE, then DEFAULT, then the platform default FIFO.
+      operationId: listConfigs
+      responses:
+        '200':
+          description: Sourcing strategy configurations returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SourcingStrategyConfigResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      x-required-permissions:
+      - inventory:location:admin
+    put:
+      tags:
+      - Sourcing Strategies
+      summary: Upsert sourcing strategy configuration
+      description: Creates or updates the sourcing strategy for one scope (SKU_CATEGORY, SITE, or DEFAULT) and reactivates it. At most one row exists per scope.
+      operationId: upsertConfig
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourcingStrategyConfigRequest'
+        required: true
+      responses:
+        '200':
+          description: Sourcing strategy configuration upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcingStrategyConfigResponse'
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      x-required-permissions:
+      - inventory:location:admin
   /v1/inventory/sites/{siteId}/defaultLocations:
     get:
       tags:
@@ -320,6 +389,318 @@ paths:
         - inventory:cycle_count:complete
       x-required-permissions:
       - inventory:cycle_count:complete
+  /v1/inventory/transfer-orders:
+    get:
+      tags:
+      - Transfer Orders
+      summary: List transfer orders
+      description: Lists transfer orders filtered by status, source site, and destination site
+      operationId: listTransferOrders
+      parameters:
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - APPROVED
+          - DISPATCHED
+          - PARTIALLY_RECEIVED
+          - RECEIVED
+          - SHORT_CLOSED
+          - CANCELLED
+      - name: sourceLocationId
+        in: query
+        description: Filter by source site
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: destinationLocationId
+        in: query
+        description: Filter by destination site
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Transfer orders retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TransferOrderResponse'
+      security:
+      - bearerAuth:
+        - inventory:transfer:view
+      x-required-permissions:
+      - inventory:transfer:view
+    post:
+      tags:
+      - Transfer Orders
+      summary: Create transfer order
+      description: Creates a cross-site transfer order in DRAFT. Source and destination must be different sites, both ACTIVE in the location roster (DECISION-INVENTORY-009), with at least one positive-quantity line.
+      operationId: createTransferOrder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransferOrderRequest'
+        required: true
+      responses:
+        '201':
+          description: Transfer order created in DRAFT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '400':
+          description: Invalid request (same source and destination site, empty lines, non-positive quantity, or a storage location outside its site)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:transfer:create
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Source or destination site is not in the location roster
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: 'Source or destination site is not eligible for movement (TRANSFER_LOCATION_NOT_ELIGIBLE: INACTIVE/PENDING per DECISION-INVENTORY-009)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:create
+      x-required-permissions:
+      - inventory:transfer:create
+  /v1/inventory/transfer-orders/{transferOrderId}/receive:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Receive transfer order
+      description: 'Receives dispatched quantities at the destination: posts one TRANSFER_IN per line through the ledger funnel (sourceTransactionId = transferOrderId), raising destination on-hand and draining the in-transit quantity. Status becomes RECEIVED when every line is fully received, else PARTIALLY_RECEIVED (the remainder stays in transit). Per-line quantities default to the full un-received remainder and must not exceed it.'
+      operationId: receiveTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiveTransferOrderRequest'
+      responses:
+        '200':
+          description: Receipt recorded (RECEIVED or PARTIALLY_RECEIVED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '400':
+          description: Unknown or duplicate line id in the request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:transfer:receive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Order is not receivable (not yet dispatched, cancelled, short-closed, or already fully received)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Received quantity exceeds the un-received dispatched remainder (TRANSFER_RECEIVE_EXCEEDS_DISPATCHED), or the destination site is not movement-eligible (TRANSFER_LOCATION_NOT_ELIGIBLE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:receive
+      x-required-permissions:
+      - inventory:transfer:receive
+  /v1/inventory/transfer-orders/{transferOrderId}/dispatch:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Dispatch transfer order
+      description: 'Dispatches the order from the source site: posts one TRANSFER_OUT per line through the ledger funnel (sourceTransactionId = transferOrderId), decrements source on-hand, and raises the destination key''s in-transit quantity. Per-line quantities default to the full requested quantity and must not exceed it.'
+      operationId: dispatchTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchTransferOrderRequest'
+      responses:
+        '200':
+          description: Transfer order dispatched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '400':
+          description: Unknown or duplicate line id in the request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:transfer:dispatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Order is not dispatchable (already dispatched/terminal, or awaiting approval)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Dispatch quantity exceeds requested (TRANSFER_DISPATCH_EXCEEDS_REQUESTED), source on-hand insufficient (INSUFFICIENT_STOCK — TRANSFER_OUT is blocked below zero), or a site is not movement-eligible (TRANSFER_LOCATION_NOT_ELIGIBLE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:dispatch
+      x-required-permissions:
+      - inventory:transfer:dispatch
+  /v1/inventory/transfer-orders/{transferOrderId}/cancel:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Cancel transfer order
+      description: 'Cancels a transfer order before dispatch (DRAFT/APPROVED to CANCELLED). After dispatch the stock has physically moved: cancellation returns 409 and discrepancies resolve via short-close (parity-C3).'
+      operationId: cancelTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Transfer order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '403':
+          description: Missing inventory:transfer:create
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Order already dispatched (or terminal) — cancellation is only allowed before dispatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:create
+      x-required-permissions:
+      - inventory:transfer:create
+  /v1/inventory/transfer-orders/{transferOrderId}/approve:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Approve transfer order
+      description: Approves a DRAFT transfer order (DRAFT to APPROVED). Only available when pos.inventory.transfer.approval-required=true; with the flag off (default), DRAFT orders dispatch directly and this endpoint returns 409 (decision D-8).
+      operationId: approveTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Transfer order approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '403':
+          description: Missing inventory:transfer:dispatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Approval step disabled, or order is not in DRAFT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:dispatch
+      x-required-permissions:
+      - inventory:transfer:dispatch
   /v1/inventory/stock-movements:
     post:
       tags:
@@ -2589,6 +2970,39 @@ paths:
         - inventory:pick_list:execute
       x-required-permissions:
       - inventory:pick_list:execute
+  /v1/inventory/transfer-orders/{transferOrderId}:
+    get:
+      tags:
+      - Transfer Orders
+      summary: Get transfer order
+      description: Retrieves one transfer order with its lines
+      operationId: getTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Transfer order found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:view
+      x-required-permissions:
+      - inventory:transfer:view
   /v1/inventory/sync-logs:
     get:
       tags:
@@ -3223,6 +3637,96 @@ paths:
         - inventory:location:view
       x-required-permissions:
       - inventory:location:view
+  /v1/inventory/lots:
+    get:
+      tags:
+      - Lots
+      summary: List lots
+      description: Lists lot master records filtered by stock item, status, and lot number, newest received first
+      operationId: listLots
+      parameters:
+      - name: stockItemId
+        in: query
+        description: Filter by stock item (catalog product id)
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - QUARANTINED
+          - RECALLED
+          - CONSUMED
+      - name: lotNumber
+        in: query
+        description: Filter by exact lot number
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Lots retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LotResponse'
+        '403':
+          description: Missing inventory:on_hand:view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
+  /v1/inventory/lots/{lotId}:
+    get:
+      tags:
+      - Lots
+      summary: Get lot details
+      description: Retrieves one lot master record with its per-location on-hand from the per-lot stock summary rows
+      operationId: getLot
+      parameters:
+      - name: lotId
+        in: path
+        description: Lot ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Lot found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotDetailResponse'
+        '403':
+          description: Missing inventory:on_hand:view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Lot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
   /v1/inventory/locations:
     get:
       tags:
@@ -4184,6 +4688,45 @@ paths:
         - inventory:asn:view
       x-required-permissions:
       - inventory:asn:view
+  /v1/inventory/sourcing-strategies/{configId}:
+    delete:
+      tags:
+      - Sourcing Strategies
+      summary: Deactivate sourcing strategy configuration
+      description: 'Soft delete: marks the configuration row inactive so it stops participating in strategy resolution; the row is never removed.'
+      operationId: deactivateConfig
+      parameters:
+      - name: configId
+        in: path
+        description: Sourcing strategy configuration identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Sourcing strategy configuration deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcingStrategyConfigResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Sourcing strategy configuration not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      x-required-permissions:
+      - inventory:location:admin
   /v1/inventory/reservations/{workorderLineId}:
     delete:
       tags:
@@ -4221,6 +4764,148 @@ paths:
       - inventory:adjustment:create
 components:
   schemas:
+    SourcingStrategyConfigRequest:
+      type: object
+      description: Upsert of the sourcing strategy configured for one scope (odoo-parity H1)
+      properties:
+        scopeType:
+          type: string
+          description: Configuration scope kind
+          enum:
+          - SKU_CATEGORY
+          - SITE
+          - DEFAULT
+          example: SITE
+        scopeValue:
+          type: string
+          description: 'Scope key: the SKU category string for SKU_CATEGORY, the site UUID as text for SITE, omitted for DEFAULT'
+          example: 01960003-0000-7000-8000-000000000010
+        strategy:
+          type: string
+          description: Sourcing strategy applied at this scope
+          enum:
+          - FIFO
+          - FEFO
+          - PROXIMITY
+          - HIGHEST_STOCK
+          example: PROXIMITY
+      required:
+      - scopeType
+      - strategy
+    SourcingStrategyConfigResponse:
+      type: object
+      description: One sourcing strategy configuration row (odoo-parity H1)
+      properties:
+        configId:
+          type: string
+          format: uuid
+          description: Unique identifier of the configuration row
+          example: 01960003-0000-7000-8000-000000000001
+        scopeType:
+          type: string
+          description: Configuration scope kind
+          enum:
+          - SKU_CATEGORY
+          - SITE
+          - DEFAULT
+          example: SITE
+        scopeValue:
+          type: string
+          description: 'Scope key: category string, site UUID as text, or null for DEFAULT'
+          example: 01960003-0000-7000-8000-000000000010
+        strategy:
+          type: string
+          description: Sourcing strategy applied at this scope
+          enum:
+          - FIFO
+          - FEFO
+          - PROXIMITY
+          - HIGHEST_STOCK
+          example: PROXIMITY
+        active:
+          type: boolean
+          description: Whether this row participates in resolution
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the row was created
+          example: 2026-07-01 00:00:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the row was last updated
+          example: 2026-07-01 00:00:00+00:00
+      required:
+      - active
+      - configId
+      - createdAt
+      - scopeType
+      - strategy
+      - updatedAt
+    ApiError:
+      type: object
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code
+          example: 404
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+        correlationId:
+          type: string
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          items:
+            $ref: '#/components/schemas/FieldError'
+        referenceId:
+          type: string
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+        nextAction:
+          type: string
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+        supportAction:
+          type: string
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
+      required:
+      - field
+      - message
     UpdateCycleCountScheduleRequest:
       type: object
       description: Partial update of a recurring cycle-count schedule; null fields are left unchanged
@@ -4404,6 +5089,191 @@ components:
       - scheduledDate
       - status
       - updatedAt
+    CreateTransferOrderRequest:
+      type: object
+      description: Request to create a cross-site transfer order in DRAFT
+      properties:
+        sourceLocationId:
+          type: string
+          format: uuid
+          description: Source site the transfer ships from
+          example: 01960004-0001-7000-8000-00000000000a
+        sourceStorageLocationId:
+          type: string
+          format: uuid
+          description: Optional bin-level source storage location under the source site
+          example: 01960004-0001-7000-8000-00000000000b
+        destinationLocationId:
+          type: string
+          format: uuid
+          description: Destination site the transfer ships to
+          example: 01960004-0001-7000-8000-00000000000c
+        destinationStorageLocationId:
+          type: string
+          format: uuid
+          description: Optional bin-level destination storage location under the destination site
+          example: 01960004-0001-7000-8000-00000000000d
+        lines:
+          type: array
+          description: Requested SKU lines; at least one
+          items:
+            $ref: '#/components/schemas/TransferOrderLineRequest'
+          minItems: 1
+        notes:
+          type: string
+          description: Free-text notes
+          example: Weekly resupply run
+          maxLength: 2000
+          minLength: 0
+      required:
+      - destinationLocationId
+      - lines
+      - sourceLocationId
+    TransferOrderLineRequest:
+      type: object
+      description: Requested SKU line of a transfer order
+      properties:
+        sku:
+          type: string
+          description: SKU / stock item identifier to transfer
+          example: OIL-5W30-5QT
+          minLength: 1
+        requestedQty:
+          type: integer
+          format: int32
+          description: Quantity requested for transfer; must be positive
+          example: 6
+      required:
+      - requestedQty
+      - sku
+    TransferOrderLineResponse:
+      type: object
+      description: SKU line of a transfer order with requested/dispatched/received quantities
+      properties:
+        lineId:
+          type: string
+          format: uuid
+          description: Line identifier
+        lineNumber:
+          type: integer
+          format: int32
+          description: Position of the line within the order (1-based)
+        sku:
+          type: string
+          description: SKU / stock item identifier
+        requestedQty:
+          type: integer
+          format: int32
+          description: Quantity requested for transfer
+        dispatchedQty:
+          type: integer
+          format: int32
+          description: Quantity dispatched from the source so far
+        receivedQty:
+          type: integer
+          format: int32
+          description: Quantity received at the destination so far
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    TransferOrderResponse:
+      type: object
+      description: Cross-site transfer order with lifecycle status and quantity lines
+      properties:
+        transferOrderId:
+          type: string
+          format: uuid
+          description: Transfer order identifier
+        sourceLocationId:
+          type: string
+          format: uuid
+          description: Source site the transfer ships from
+        sourceStorageLocationId:
+          type: string
+          format: uuid
+          description: Bin-level source storage location, when bin-scoped
+        destinationLocationId:
+          type: string
+          format: uuid
+          description: Destination site the transfer ships to
+        destinationStorageLocationId:
+          type: string
+          format: uuid
+          description: Bin-level destination storage location, when bin-scoped
+        status:
+          type: string
+          description: Lifecycle status
+          enum:
+          - DRAFT
+          - APPROVED
+          - DISPATCHED
+          - PARTIALLY_RECEIVED
+          - RECEIVED
+          - SHORT_CLOSED
+          - CANCELLED
+        lines:
+          type: array
+          description: SKU lines
+          items:
+            $ref: '#/components/schemas/TransferOrderLineResponse'
+        notes:
+          type: string
+          description: Free-text notes
+        createdBy:
+          type: string
+          description: User who created the order
+        approvedBy:
+          type: string
+          description: User who approved the order, when the approval step is enabled
+        dispatchedBy:
+          type: string
+          description: User who dispatched the order
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    ReceiveTransferOrderRequest:
+      type: object
+      description: Request to receive a transfer order; omitted lines receive their full remainder
+      properties:
+        lines:
+          type: array
+          description: Explicit per-line received quantities; omitted lines receive their full remainder
+          items:
+            $ref: '#/components/schemas/TransferQuantityLineRequest'
+    TransferQuantityLineRequest:
+      type: object
+      description: Explicit per-line quantity for a transfer dispatch or receive
+      properties:
+        lineId:
+          type: string
+          format: uuid
+          description: Transfer order line identifier
+        quantity:
+          type: integer
+          format: int32
+          description: Quantity to dispatch/receive on this line; must be positive
+      required:
+      - lineId
+      - quantity
+    DispatchTransferOrderRequest:
+      type: object
+      description: Request to dispatch a transfer order; omitted lines dispatch their full requested quantity
+      properties:
+        lines:
+          type: array
+          description: Explicit per-line dispatch quantities; omitted lines dispatch full requested
+          items:
+            $ref: '#/components/schemas/TransferQuantityLineRequest'
     RecordMovementRequest:
       type: object
       description: Request body for recording a directional stock movement in the inventory ledger
@@ -4509,69 +5379,6 @@ components:
       - resolution
       - resolvedAt
       - status
-    ApiError:
-      type: object
-      description: Standard error response envelope returned by all Durion backend APIs
-      properties:
-        code:
-          type: string
-          description: Machine-readable error code
-          example: ORDER_NOT_FOUND
-        message:
-          type: string
-          description: Human-readable error message
-          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
-        status:
-          type: integer
-          format: int32
-          description: HTTP status code
-          example: 404
-        timestamp:
-          type: string
-          description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
-        correlationId:
-          type: string
-          description: Unique correlation ID for distributed request tracing
-          example: 550e8400-e29b-41d4-a716-446655440000
-        fieldErrors:
-          type: array
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
-          items:
-            $ref: '#/components/schemas/FieldError'
-        referenceId:
-          type: string
-          description: Workflow or review-case reference identifier, when applicable
-          example: REVIEW-2026-000123
-        nextAction:
-          type: string
-          description: Recommended next step for the caller, when applicable
-          example: Retry the request with a valid quantity
-        supportAction:
-          type: string
-          description: Support or admin investigation guidance, when applicable
-          example: Contact support with the correlation ID for assistance
-      required:
-      - code
-      - correlationId
-      - message
-      - status
-      - timestamp
-    FieldError:
-      type: object
-      description: Validation error for a specific request field
-      properties:
-        field:
-          type: string
-          description: Field name
-          example: quantity
-        message:
-          type: string
-          description: Validation failure message
-          example: must be greater than 0
-      required:
-      - field
-      - message
     CreateScrapRequest:
       type: object
       description: Request to scrap (write off) stock at a location
@@ -5089,6 +5896,22 @@ components:
           type: string
           description: Identifier of the workorder line the receiving line fulfils, when applicable
           example: 01960003-0000-7000-8000-000000000004
+        lotNumber:
+          type: string
+          description: Lot or batch number recorded on receipt; linked to the lot master for LOT-tracked products
+          example: LOT-2026-0042
+        documentUom:
+          type: string
+          description: UoM the line was keyed in when it differed from the product's base UoM
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity as keyed in documentUom; receivedQuantity holds the derived base quantity
+          example: 1
+        conversionFactor:
+          type: number
+          description: Effective base-per-document-unit conversion factor applied at posting time
+          example: 12
       required:
       - lineId
       - productId
@@ -5168,12 +5991,23 @@ components:
           example: 01960003-0000-7000-8000-000000000001
         receivedQuantity:
           type: number
-          description: Quantity actually received for the line; may be zero
+          description: Quantity actually received for the line, in the product's base UoM; may be zero. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 8
           minimum: 0.0
+        lotNumber:
+          type: string
+          description: Lot or batch number of the received stock. Required (422 LOT_NUMBER_REQUIRED) when the product is LOT-tracked per the catalog replica; ignored for tracking purposes otherwise
+          example: LOT-2026-0042
+        documentUom:
+          type: string
+          description: Optional UoM the line is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at posting time; a UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity received expressed in documentUom; must be supplied together with documentUom
+          example: 1
       required:
       - lineId
-      - receivedQuantity
     ReceiveItemsResponse:
       type: object
       description: Result of recording received quantities for a receiving session
@@ -5611,7 +6445,7 @@ components:
           minLength: 1
         quantity:
           type: number
-          description: Quantity of the item being ordered on this line
+          description: Quantity of the item being ordered on this line, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 12
         unitCostMinor:
           type: integer
@@ -5626,10 +6460,17 @@ components:
           type: string
           description: Identifier of the general ledger account this line posts to
           example: GL-5000
+        documentUom:
+          type: string
+          description: Optional UoM the line is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at derivation time via the catalog conversion factors; unitCostMinor then refers to one documentUom unit. A UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity ordered expressed in documentUom; must be supplied together with documentUom
+          example: 1
       required:
       - description
       - lineNumber
-      - quantity
       - unitCostMinor
     PurchaseOrderLineResponse:
       type: object
@@ -5677,6 +6518,18 @@ components:
           type: number
           description: Quantity on this line not yet received
           example: 4
+        documentUom:
+          type: string
+          description: UoM the line was keyed in when it differed from the product's base UoM
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity as keyed in documentUom; quantityDecimal holds the derived base quantity
+          example: 1
+        conversionFactor:
+          type: number
+          description: Effective base-per-document-unit conversion factor applied at derivation time
+          example: 12
       required:
       - lineId
       - lineNumber
@@ -5871,16 +6724,27 @@ components:
           example: 01960003-0000-7000-8000-000000000020
         quantityReceived:
           type: number
-          description: Quantity received for this line
+          description: Quantity received for this line, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 4
         unitCostMinor:
           type: integer
           format: int64
-          description: Actual unit cost of the received goods in the smallest currency unit (e.g. cents)
+          description: Actual unit cost of the received goods in the smallest currency unit (e.g. cents). When documentUom is present this refers to one documentUom unit
           example: 1499
+        documentUom:
+          type: string
+          description: Optional UoM the receipt is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at posting time; a UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity received expressed in documentUom; must be supplied together with documentUom
+          example: 1
+        lotNumber:
+          type: string
+          description: Lot or batch number of the received stock. Required (422 LOT_NUMBER_REQUIRED) when the line's product is LOT-tracked per the catalog replica; ignored for tracking purposes otherwise
+          example: LOT-2026-0042
       required:
       - lineId
-      - quantityReceived
     ReceivePurchaseOrderRequest:
       type: object
       description: Request to record receipt of goods against one or more purchase order lines
@@ -6245,7 +7109,7 @@ components:
           minLength: 1
         quantityReceived:
           type: number
-          description: Whole-unit quantity of the SKU received in this goods receipt
+          description: Whole-unit quantity of the SKU received, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 8
         unitCostMinor:
           type: integer
@@ -6256,8 +7120,15 @@ components:
           type: string
           description: Lot or batch number associated with the received product
           example: LOT-2026-0042
+        documentUom:
+          type: string
+          description: Optional UoM the receipt line is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at posting time and the ledger posts the base quantity; unitCostMinor then refers to one documentUom unit. A UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity received expressed in documentUom; must be supplied together with documentUom
+          example: 1
       required:
-      - quantityReceived
       - sku
       - unitCostMinor
     CreateGoodsReceiptRequest:
@@ -6320,6 +7191,18 @@ components:
           format: int64
           description: Total accrued cost for this line expressed in minor currency units (quantity multiplied by unit cost)
           example: 11992
+        documentUom:
+          type: string
+          description: UoM the line was keyed in when it differed from the product's base UoM
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity as keyed in documentUom; quantityReceived holds the derived base quantity
+          example: 1
+        conversionFactor:
+          type: number
+          description: Effective base-per-document-unit conversion factor applied at posting time
+          example: 12
       required:
       - quantityReceived
       - receiptLineId
@@ -7044,7 +7927,7 @@ components:
           minLength: 1
         quantityShipped:
           type: number
-          description: Quantity of the SKU declared as shipped on the ASN
+          description: Quantity of the SKU declared as shipped on the ASN, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 12
         unitOfMeasure:
           type: string
@@ -7059,9 +7942,16 @@ components:
           type: string
           description: Lot or batch number associated with the shipped product
           example: LOT-2026-0042
+        documentUom:
+          type: string
+          description: Optional UoM the line is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at derivation time; a UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity shipped expressed in documentUom; must be supplied together with documentUom
+          example: 1
       required:
       - poId
-      - quantityShipped
       - sku
     CreateAsnRequest:
       type: object
@@ -7140,6 +8030,18 @@ components:
           type: string
           description: Lot or batch number associated with the shipped product
           example: LOT-2026-0042
+        documentUom:
+          type: string
+          description: UoM the line was keyed in when it differed from the product's base UoM
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity as keyed in documentUom; quantityShipped holds the derived base quantity
+          example: 1
+        conversionFactor:
+          type: number
+          description: Effective base-per-document-unit conversion factor applied at derivation time
+          example: 12
       required:
       - asnLineId
       - poId
@@ -7744,6 +8646,96 @@ components:
           type: boolean
         unsorted:
           type: boolean
+    LotResponse:
+      type: object
+      description: An inventory lot master record (odoo-parity E1)
+      properties:
+        lotId:
+          type: string
+          format: uuid
+          description: Identifier of the lot
+          example: 01980003-0000-7000-8000-000000000001
+        stockItemId:
+          type: string
+          description: Stock item (catalog product id) the lot belongs to
+          example: 01980003-0000-7000-8000-000000000002
+        lotNumber:
+          type: string
+          description: Vendor/manufacturer lot or batch number
+          example: LOT-2026-0042
+        receivedAt:
+          type: string
+          format: date-time
+          description: When the lot was first received into stock
+          example: 2026-07-01 12:00:00+00:00
+        vendorId:
+          type: string
+          format: uuid
+          description: Vendor the lot was first received from, when known
+          example: 01980003-0000-7000-8000-000000000003
+        expirationDate:
+          type: string
+          format: date
+          description: Expiration date; null until the expiry flows (E3) populate it
+          example: 2027-01-31
+        status:
+          type: string
+          description: Lifecycle status of the lot
+          enum:
+          - ACTIVE
+          - QUARANTINED
+          - RECALLED
+          - CONSUMED
+          example: ACTIVE
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last modification timestamp
+      required:
+      - lotId
+      - lotNumber
+      - receivedAt
+      - status
+      - stockItemId
+    LotDetailResponse:
+      type: object
+      description: An inventory lot with its per-location on-hand balances (odoo-parity E1)
+      properties:
+        lot:
+          $ref: '#/components/schemas/LotResponse'
+        locations:
+          type: array
+          description: Per-location on-hand of this lot, from the per-lot stock summary rows; locations with fully consumed balances may report zero
+          items:
+            $ref: '#/components/schemas/LotLocationOnHand'
+      required:
+      - lot
+    LotLocationOnHand:
+      type: object
+      description: On-hand quantity of a lot at one location
+      properties:
+        locationId:
+          type: string
+          format: uuid
+          description: Location holding the lot; null for postings recorded without a location
+          example: 01980003-0000-7000-8000-000000000004
+        onHand:
+          type: integer
+          format: int64
+          description: On-hand quantity of the lot at the location
+          example: 12
+        inTransitQty:
+          type: integer
+          format: int64
+          description: Quantity of the lot in transit toward the location
+          example: 0
+      required:
+      - inTransitQty
+      - onHand
     LocationInventoryRollupResponse:
       type: object
       description: Parent-location inventory rollup aggregating site totals across all descendant sites

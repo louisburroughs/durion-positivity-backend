@@ -1,9 +1,9 @@
-generatedAt: "2026-07-23T11:15:19.209928+00:00"
+generatedAt: "2026-07-23T13:02:04.172747+00:00"
 root: "."
 summary:
   manifestCount: 20
-  permissionCount: 366
-  uniquePermissionCount: 366
+  permissionCount: 371
+  uniquePermissionCount: 371
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -271,7 +271,7 @@ manifests:
     domain: "inventory"
     serviceName: "pos-inventory"
     version: "1.0"
-    permissionCount: 46
+    permissionCount: 51
     permissions:
       - name: "inventory:adjustment:create"
         description: "Create an adjustment request (draft/pending), capture reason code, quantity, and supporting notes"
@@ -365,6 +365,16 @@ manifests:
         description: "Approve or reject a pending scrap document (posts SCRAP_OUT on approval)"
       - name: "inventory:adjustment:override"
         description: "Override the negative-stock policy for overridable postings (SCRAP_OUT below zero)"
+      - name: "inventory:transfer:create"
+        description: "Create or cancel a cross-site transfer order (DRAFT; cancel only before dispatch)"
+      - name: "inventory:transfer:view"
+        description: "View transfer orders, their lines, and lifecycle status"
+      - name: "inventory:transfer:dispatch"
+        description: "Approve and dispatch a transfer order (posts TRANSFER_OUT at the source into transit)"
+      - name: "inventory:transfer:receive"
+        description: "Receive dispatched transfer quantities at the destination (posts TRANSFER_IN)"
+      - name: "inventory:transfer:short_close"
+        description: "Short-close a dispatched transfer order with a loss/return disposition (parity-C3)"
   - module: "pos-invoice"
     path: "pos-invoice/src/main/resources/permissions.yaml"
     domain: "invoice"
@@ -1830,6 +1840,36 @@ permissions:
     source: "pos-inventory/src/main/resources/permissions.yaml"
   - name: "inventory:stock_movement:create"
     description: "Record RECEIVE, PUT_AWAY, PICK, ISSUE, RETURN, or TRANSFER movements directly in the inventory ledger"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:transfer:create"
+    description: "Create or cancel a cross-site transfer order (DRAFT; cancel only before dispatch)"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:transfer:dispatch"
+    description: "Approve and dispatch a transfer order (posts TRANSFER_OUT at the source into transit)"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:transfer:receive"
+    description: "Receive dispatched transfer quantities at the destination (posts TRANSFER_IN)"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:transfer:short_close"
+    description: "Short-close a dispatched transfer order with a loss/return disposition (parity-C3)"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:transfer:view"
+    description: "View transfer orders, their lines, and lifecycle status"
     domain: "inventory"
     serviceName: "pos-inventory"
     module: "pos-inventory"

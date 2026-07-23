@@ -32,6 +32,29 @@ public class UomConversionUndefinedException extends RuntimeException {
                 productId, uomCode, "no conversion factor to the product's base UoM");
     }
 
+    /**
+     * A document line carries a document UoM but its stock reference (free-text SKU, missing
+     * skuId, ...) does not resolve to a catalog product id, so no conversion path can even be
+     * looked up (odoo-parity B2, #1034). Deterministic 422 — never a silent 1:1 assumption.
+     */
+    public static UomConversionUndefinedException unresolvableProduct(String stockReference, String uomCode) {
+        return new UomConversionUndefinedException(
+                null,
+                uomCode,
+                "document line stock reference '" + stockReference + "' does not resolve to a catalog product id");
+    }
+
+    /**
+     * A ledger entry carries a {@code unitOfMeasure} that contradicts the product's base UoM in
+     * the catalog replica — the ledger is base-UoM only (odoo-parity B2/B4, #1034).
+     */
+    public static UomConversionUndefinedException nonBaseLedgerUom(UUID productId, String uomCode, String baseUom) {
+        return new UomConversionUndefinedException(
+                productId,
+                uomCode,
+                "ledger rows are base-UoM only; expected base UoM '" + baseUom + "' from the catalog replica");
+    }
+
     public String getErrorCode() {
         return errorCode;
     }

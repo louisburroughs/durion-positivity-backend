@@ -38,6 +38,7 @@ public class ReturnServiceImpl implements ReturnService {
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
+    private final DocumentQuantityConverter documentQuantityConverter;
     private final Clock clock;
 
     @Override
@@ -100,17 +101,23 @@ public class ReturnServiceImpl implements ReturnService {
         }
 
         List<ReturnItemLine> items = request.getItems() == null ? List.of() : request.getItems();
+        // odoo-parity B2 (#1034): convert optional document-UoM quantities to base BEFORE the
+        // consumed-quantity validation and the ledger posting.
+        List<ReturnLineComputation> computedItems = new ArrayList<>(items.size());
         for (ReturnItemLine item : items) {
-            validateReturnQuantity(request.getWorkorderId(), item);
+            computedItems.add(computeReturnLine(item));
+        }
+        for (ReturnLineComputation computed : computedItems) {
+            validateReturnQuantity(request.getWorkorderId(), computed);
         }
 
-        InventoryReturnEntity inventoryReturn = buildReturnEntity(request, items);
+        InventoryReturnEntity inventoryReturn = buildReturnEntity(request, computedItems);
         InventoryReturnEntity savedReturn = Objects.requireNonNull(
                 inventoryReturnRepository.save(inventoryReturn), "inventoryReturnRepository.save(...) returned null");
 
         List<InventoryLedgerEntry> ledgerEntries = new ArrayList<>();
-        for (ReturnItemLine item : items) {
-            ledgerEntries.add(buildReturnLedgerEntry(request, item));
+        for (ReturnLineComputation computed : computedItems) {
+            ledgerEntries.add(buildReturnLedgerEntry(request, computed));
         }
 
         List<InventoryLedgerEntry> savedLedgerEntries = ledgerPostingService.postAll(ledgerEntries);
@@ -127,16 +134,48 @@ public class ReturnServiceImpl implements ReturnService {
                 returnId,
                 request.getWorkorderId(),
                 request.getReturnReason().trim(),
-                calculateTotalItemsReturned(items),
+                calculateTotalItemsReturned(computedItems),
                 createdAt,
                 ledgerEntryIds);
     }
 
-    private int calculateTotalItemsReturned(List<ReturnItemLine> items) {
-        return items.stream().mapToInt(ReturnItemLine::getQuantityReturned).sum();
+    /**
+     * Per-line return derivation (odoo-parity B2, #1034): the optional document-UoM conversion
+     * plus the whole base quantity that validates against consumption and posts to the ledger.
+     */
+    private record ReturnLineComputation(
+            ReturnItemLine item, DocumentQuantityConverter.DocumentConversion conversion, int baseQuantity) {}
+
+    private ReturnLineComputation computeReturnLine(ReturnItemLine item) {
+        DocumentQuantityConverter.DocumentConversion conversion = documentQuantityConverter
+                .convertIfPresent(
+                        item.getSkuId(),
+                        String.valueOf(item.getSkuId()),
+                        item.getDocumentUom(),
+                        item.getDocumentQuantity())
+                .orElse(null);
+        int baseQuantity;
+        if (conversion == null) {
+            baseQuantity = item.getQuantityReturned();
+        } else {
+            try {
+                baseQuantity = conversion.baseQuantity().intValueExact();
+            } catch (ArithmeticException ex) {
+                throw new IllegalArgumentException(
+                        "converted base quantity must be a whole number within 32-bit integer range", ex);
+            }
+        }
+        if (baseQuantity <= 0) {
+            throw new IllegalArgumentException("quantityReturned must be positive");
+        }
+        return new ReturnLineComputation(item, conversion, baseQuantity);
     }
 
-    private InventoryReturnEntity buildReturnEntity(ReturnItemsRequest request, List<ReturnItemLine> items) {
+    private int calculateTotalItemsReturned(List<ReturnLineComputation> items) {
+        return items.stream().mapToInt(ReturnLineComputation::baseQuantity).sum();
+    }
+
+    private InventoryReturnEntity buildReturnEntity(ReturnItemsRequest request, List<ReturnLineComputation> items) {
         InventoryReturnEntity inventoryReturn = InventoryReturnEntity.builder()
                 .workorderId(request.getWorkorderId())
                 .returnReason(request.getReturnReason().trim())
@@ -144,11 +183,15 @@ public class ReturnServiceImpl implements ReturnService {
                 .build();
 
         List<InventoryReturnLineEntity> lines = new ArrayList<>();
-        for (ReturnItemLine item : items) {
+        for (ReturnLineComputation computed : items) {
+            DocumentQuantityConverter.DocumentConversion conversion = computed.conversion();
             InventoryReturnLineEntity line = InventoryReturnLineEntity.builder()
                     .inventoryReturn(inventoryReturn)
-                    .skuId(item.getSkuId())
-                    .quantityReturned(item.getQuantityReturned())
+                    .skuId(computed.item().getSkuId())
+                    .quantityReturned(computed.baseQuantity())
+                    .documentUom(conversion == null ? null : conversion.documentUom())
+                    .documentQuantity(conversion == null ? null : conversion.documentQuantity())
+                    .conversionFactor(conversion == null ? null : conversion.conversionFactor())
                     .build();
             lines.add(line);
         }
@@ -156,11 +199,11 @@ public class ReturnServiceImpl implements ReturnService {
         return inventoryReturn;
     }
 
-    private InventoryLedgerEntry buildReturnLedgerEntry(ReturnItemsRequest request, ReturnItemLine item) {
+    private InventoryLedgerEntry buildReturnLedgerEntry(ReturnItemsRequest request, ReturnLineComputation computed) {
         return InventoryLedgerEntry.builder()
-                .stockItemId(item.getSkuId().toString())
+                .stockItemId(computed.item().getSkuId().toString())
                 .eventType(InventoryLedgerEventType.RETURN_TO_STOCK)
-                .changeInQuantity(Math.abs(item.getQuantityReturned()))
+                .changeInQuantity(Math.abs(computed.baseQuantity()))
                 .quantityAfter(0)
                 .transactionUserId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
                 .notes("Returned to stock from workorder "
@@ -170,14 +213,10 @@ public class ReturnServiceImpl implements ReturnService {
                 .build();
     }
 
-    private void validateReturnQuantity(UUID workorderId, ReturnItemLine item) {
-        if (item.getQuantityReturned() <= 0) {
-            throw new IllegalArgumentException("quantityReturned must be positive");
-        }
-
+    private void validateReturnQuantity(UUID workorderId, ReturnLineComputation computed) {
         List<InventoryLedgerEntry> consumptionEntries =
                 inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
-                        item.getSkuId().toString(),
+                        computed.item().getSkuId().toString(),
                         InventoryLedgerEventType.WORKORDER_CONSUMPTION,
                         workorderId.toString());
 
@@ -187,8 +226,9 @@ public class ReturnServiceImpl implements ReturnService {
                 .mapToInt(value -> Math.abs(value.intValue()))
                 .sum();
 
-        if (totalConsumed < item.getQuantityReturned()) {
-            throw new ReturnQuantityExceededException(item.getSkuId(), item.getQuantityReturned(), totalConsumed);
+        if (totalConsumed < computed.baseQuantity()) {
+            throw new ReturnQuantityExceededException(
+                    computed.item().getSkuId(), computed.baseQuantity(), totalConsumed);
         }
     }
 }

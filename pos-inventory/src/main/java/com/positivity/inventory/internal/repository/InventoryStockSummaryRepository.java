@@ -18,43 +18,87 @@ import org.springframework.data.repository.query.Param;
  *
  * <p>Writes go exclusively through {@code LedgerPostingService} (row-locked
  * upsert) and {@code StockSummaryRebuildService}; everything else is read-only.
+ *
+ * <p>Since odoo-parity E1 (issue #1038) the table holds per-lot rows next to the
+ * lot-agnostic ones. Every pre-E1 read is pinned to {@code lotId IS NULL} so the
+ * lot-agnostic row keeps serving availability/rollup/inquiry exactly as before;
+ * only {@link #findByLotId} reads the per-lot rows.
  */
 public interface InventoryStockSummaryRepository extends JpaRepository<InventoryStockSummary, UUID> {
 
     /** Maximum number of location ids passed to a single {@code IN} clause. */
     int LOCATION_ID_CHUNK_SIZE = 1000;
 
+    /**
+     * Locks one summary row by its full (stockItemId, locationId, lotId) key, treating null
+     * params as IS NULL. The single lock entry point of the posting funnel.
+     */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT s FROM InventoryStockSummary s WHERE s.stockItemId = :stockItemId AND s.locationId = :locationId")
-    Optional<InventoryStockSummary> findWithLockByStockItemIdAndLocationId(
+    @Query("""
+                        SELECT s FROM InventoryStockSummary s
+                        WHERE s.stockItemId = :stockItemId
+                          AND ((:locationId IS NULL AND s.locationId IS NULL) OR s.locationId = :locationId)
+                          AND ((:lotId IS NULL AND s.lotId IS NULL) OR s.lotId = :lotId)
+                        """)
+    Optional<InventoryStockSummary> findWithLockByKey(
+            @Param("stockItemId") String stockItemId, @Param("locationId") UUID locationId, @Param("lotId") UUID lotId);
+
+    /** Non-locking variant of {@link #findWithLockByKey} for existence checks. */
+    @Query("""
+                        SELECT s FROM InventoryStockSummary s
+                        WHERE s.stockItemId = :stockItemId
+                          AND ((:locationId IS NULL AND s.locationId IS NULL) OR s.locationId = :locationId)
+                          AND ((:lotId IS NULL AND s.lotId IS NULL) OR s.lotId = :lotId)
+                        """)
+    Optional<InventoryStockSummary> findByKey(
+            @Param("stockItemId") String stockItemId, @Param("locationId") UUID locationId, @Param("lotId") UUID lotId);
+
+    /** Lot-agnostic row for one (stockItemId, locationId) — the pre-E1 balance every reader consumes. */
+    @Query("""
+                        SELECT s FROM InventoryStockSummary s
+                        WHERE s.stockItemId = :stockItemId AND s.locationId = :locationId AND s.lotId IS NULL
+                        """)
+    Optional<InventoryStockSummary> findByStockItemIdAndLocationId(
             @Param("stockItemId") String stockItemId, @Param("locationId") UUID locationId);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT s FROM InventoryStockSummary s WHERE s.stockItemId = :stockItemId AND s.locationId IS NULL")
-    Optional<InventoryStockSummary> findWithLockByStockItemIdAndLocationIdIsNull(
-            @Param("stockItemId") String stockItemId);
+    /** Lot-agnostic NULL-location row for one stock item. */
+    @Query("""
+                        SELECT s FROM InventoryStockSummary s
+                        WHERE s.stockItemId = :stockItemId AND s.locationId IS NULL AND s.lotId IS NULL
+                        """)
+    Optional<InventoryStockSummary> findByStockItemIdAndLocationIdIsNull(@Param("stockItemId") String stockItemId);
 
-    Optional<InventoryStockSummary> findByStockItemIdAndLocationId(String stockItemId, UUID locationId);
-
-    Optional<InventoryStockSummary> findByStockItemIdAndLocationIdIsNull(String stockItemId);
-
-    List<InventoryStockSummary> findByStockItemId(String stockItemId);
+    /** Lot-agnostic rows of one stock item across locations. */
+    @Query("""
+                        SELECT s FROM InventoryStockSummary s
+                        WHERE s.stockItemId = :stockItemId AND s.lotId IS NULL
+                        """)
+    List<InventoryStockSummary> findByStockItemId(@Param("stockItemId") String stockItemId);
 
     boolean existsByStockItemId(String stockItemId);
 
-    List<InventoryStockSummary> findByLocationIdAndOnHandGreaterThan(UUID locationId, long onHand);
+    /** Per-lot rows of one lot across locations (odoo-parity E1, issue #1038 lot read API). */
+    List<InventoryStockSummary> findByLotId(UUID lotId);
+
+    /** Lot-agnostic rows with positive on-hand at one location. */
+    @Query("""
+                        SELECT s FROM InventoryStockSummary s
+                        WHERE s.locationId = :locationId AND s.onHand > :onHand AND s.lotId IS NULL
+                        """)
+    List<InventoryStockSummary> findByLocationIdAndOnHandGreaterThan(
+            @Param("locationId") UUID locationId, @Param("onHand") long onHand);
 
     @Query("""
                         SELECT COALESCE(SUM(s.onHand), 0)
                         FROM InventoryStockSummary s
-                        WHERE s.locationId = :locationId
+                        WHERE s.locationId = :locationId AND s.lotId IS NULL
                         """)
     long sumOnHandAtLocation(@Param("locationId") UUID locationId);
 
     @Query("""
                         SELECT COALESCE(SUM(s.allocated), 0)
                         FROM InventoryStockSummary s
-                        WHERE s.locationId = :locationId
+                        WHERE s.locationId = :locationId AND s.lotId IS NULL
                         """)
     long sumAllocatedAtLocation(@Param("locationId") UUID locationId);
 
@@ -62,7 +106,7 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                         SELECT s.locationId AS locationId, COALESCE(SUM(s.onHand), 0) AS onHand,
                                COALESCE(SUM(s.allocated), 0) AS allocated
                         FROM InventoryStockSummary s
-                        WHERE s.locationId IN :locationIds
+                        WHERE s.locationId IN :locationIds AND s.lotId IS NULL
                         GROUP BY s.locationId
                         """)
     List<LocationSummary> sumByLocation(@Param("locationIds") Collection<UUID> locationIds);
@@ -73,6 +117,7 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                         FROM InventoryStockSummary s
                         WHERE s.stockItemId = :stockItemId
                           AND s.locationId IN :locationIds
+                          AND s.lotId IS NULL
                         GROUP BY s.locationId
                         """)
     List<LocationSummary> sumByLocationForSku(
@@ -92,56 +137,119 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
      * job never materializes either table in application memory. Emulates a
      * full outer join as a UNION of two left joins (H2-compatible). Event
      * types are passed as enum names ({@code event_type} is stored as text).
+     *
+     * <p>{@code in_transit_qty} reconstruction (odoo-parity C2, #1036) uses
+     * the same ledger-shape rule as the posting funnel: {@code TRANSFER_OUT}
+     * contributes {@code -change} (positive) at its DESTINATION
+     * ({@code to_location_id}) key, while {@code TRANSFER_IN} contributes
+     * {@code -change} (negative) at its own key.
+     *
+     * <p>Per-lot keys (odoo-parity E1, #1038) mirror the funnel's dual-row
+     * rule: every entry contributes to its lot-agnostic (NULL {@code lot_id})
+     * key, and a lot-tagged entry ADDITIONALLY contributes the same deltas to
+     * its (stock_item_id, location_id, lot_id) key — hence the doubled
+     * contribution branches filtered on {@code lot_id IS NOT NULL}.
      */
     @Query(value = """
-                        WITH ledger AS (
+                        WITH contributions AS (
                             SELECT stock_item_id,
                                    location_id,
-                                   COALESCE(SUM(CASE WHEN event_type IN (:onHandTypes) THEN change_in_quantity ELSE 0 END), 0) AS on_hand,
-                                   COALESCE(SUM(CASE WHEN event_type = :allocationCreated THEN change_in_quantity
-                                                     WHEN event_type = :allocationReleased THEN -change_in_quantity
-                                                     ELSE 0 END), 0) AS allocated,
-                                   COALESCE(SUM(CASE WHEN event_type = :reservationCreated THEN change_in_quantity
-                                                     WHEN event_type = :reservationReleased THEN -change_in_quantity
-                                                     ELSE 0 END), 0) AS reserved
+                                   CAST(NULL AS uuid) AS lot_id,
+                                   CASE WHEN event_type IN (:onHandTypes) THEN change_in_quantity ELSE 0 END AS on_hand_c,
+                                   CASE WHEN event_type = :allocationCreated THEN change_in_quantity
+                                        WHEN event_type = :allocationReleased THEN -change_in_quantity
+                                        ELSE 0 END AS allocated_c,
+                                   CASE WHEN event_type = :reservationCreated THEN change_in_quantity
+                                        WHEN event_type = :reservationReleased THEN -change_in_quantity
+                                        ELSE 0 END AS reserved_c,
+                                   CASE WHEN event_type = :transferIn THEN -change_in_quantity ELSE 0 END AS in_transit_c
                             FROM inventory_ledger_entry
                             WHERE event_type IN (:summaryTypes)
-                            GROUP BY stock_item_id, location_id
+                            UNION ALL
+                            SELECT stock_item_id,
+                                   location_id,
+                                   lot_id,
+                                   CASE WHEN event_type IN (:onHandTypes) THEN change_in_quantity ELSE 0 END,
+                                   CASE WHEN event_type = :allocationCreated THEN change_in_quantity
+                                        WHEN event_type = :allocationReleased THEN -change_in_quantity
+                                        ELSE 0 END,
+                                   CASE WHEN event_type = :reservationCreated THEN change_in_quantity
+                                        WHEN event_type = :reservationReleased THEN -change_in_quantity
+                                        ELSE 0 END,
+                                   CASE WHEN event_type = :transferIn THEN -change_in_quantity ELSE 0 END
+                            FROM inventory_ledger_entry
+                            WHERE event_type IN (:summaryTypes) AND lot_id IS NOT NULL
+                            UNION ALL
+                            SELECT stock_item_id,
+                                   to_location_id,
+                                   CAST(NULL AS uuid),
+                                   0, 0, 0,
+                                   -change_in_quantity
+                            FROM inventory_ledger_entry
+                            WHERE event_type = :transferOut AND to_location_id IS NOT NULL
+                            UNION ALL
+                            SELECT stock_item_id,
+                                   to_location_id,
+                                   lot_id,
+                                   0, 0, 0,
+                                   -change_in_quantity
+                            FROM inventory_ledger_entry
+                            WHERE event_type = :transferOut AND to_location_id IS NOT NULL AND lot_id IS NOT NULL
+                        ), ledger AS (
+                            SELECT stock_item_id,
+                                   location_id,
+                                   lot_id,
+                                   COALESCE(SUM(on_hand_c), 0) AS on_hand,
+                                   COALESCE(SUM(allocated_c), 0) AS allocated,
+                                   COALESCE(SUM(reserved_c), 0) AS reserved,
+                                   COALESCE(SUM(in_transit_c), 0) AS in_transit
+                            FROM contributions
+                            GROUP BY stock_item_id, location_id, lot_id
                         )
                         SELECT l.stock_item_id AS stockItemId,
                                CAST(l.location_id AS VARCHAR) AS locationId,
+                               CAST(l.lot_id AS VARCHAR) AS lotId,
                                l.on_hand AS ledgerOnHand,
                                l.allocated AS ledgerAllocated,
                                l.reserved AS ledgerReserved,
+                               l.in_transit AS ledgerInTransit,
                                s.on_hand AS summaryOnHand,
                                s.allocated AS summaryAllocated,
-                               s.reserved AS summaryReserved
+                               s.reserved AS summaryReserved,
+                               s.in_transit_qty AS summaryInTransit
                         FROM ledger l
                         LEFT JOIN inventory_stock_summary s
                           ON s.stock_item_id = l.stock_item_id
                          AND s.location_id IS NOT DISTINCT FROM l.location_id
+                         AND s.lot_id IS NOT DISTINCT FROM l.lot_id
                         WHERE (s.summary_id IS NULL
-                               AND (l.on_hand <> 0 OR l.allocated <> 0 OR l.reserved <> 0))
+                               AND (l.on_hand <> 0 OR l.allocated <> 0 OR l.reserved <> 0 OR l.in_transit <> 0))
                            OR (s.summary_id IS NOT NULL
                                AND (s.on_hand <> l.on_hand
                                     OR s.allocated <> l.allocated
                                     OR s.reserved <> l.reserved
+                                    OR s.in_transit_qty <> l.in_transit
                                     OR s.atp <> l.on_hand - l.allocated))
                         UNION ALL
                         SELECT s.stock_item_id AS stockItemId,
                                CAST(s.location_id AS VARCHAR) AS locationId,
+                               CAST(s.lot_id AS VARCHAR) AS lotId,
                                CAST(0 AS BIGINT) AS ledgerOnHand,
                                CAST(0 AS BIGINT) AS ledgerAllocated,
                                CAST(0 AS BIGINT) AS ledgerReserved,
+                               CAST(0 AS BIGINT) AS ledgerInTransit,
                                s.on_hand AS summaryOnHand,
                                s.allocated AS summaryAllocated,
-                               s.reserved AS summaryReserved
+                               s.reserved AS summaryReserved,
+                               s.in_transit_qty AS summaryInTransit
                         FROM inventory_stock_summary s
                         LEFT JOIN ledger l
                           ON l.stock_item_id = s.stock_item_id
                          AND l.location_id IS NOT DISTINCT FROM s.location_id
+                         AND l.lot_id IS NOT DISTINCT FROM s.lot_id
                         WHERE l.stock_item_id IS NULL
-                          AND (s.on_hand <> 0 OR s.allocated <> 0 OR s.reserved <> 0 OR s.atp <> 0)
+                          AND (s.on_hand <> 0 OR s.allocated <> 0 OR s.reserved <> 0 OR s.atp <> 0
+                               OR s.in_transit_qty <> 0)
                         """, nativeQuery = true)
     List<DriftRow> findDriftRows(
             @Param("onHandTypes") Collection<String> onHandTypes,
@@ -149,6 +257,8 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
             @Param("allocationReleased") String allocationReleased,
             @Param("reservationCreated") String reservationCreated,
             @Param("reservationReleased") String reservationReleased,
+            @Param("transferIn") String transferIn,
+            @Param("transferOut") String transferOut,
             @Param("summaryTypes") Collection<String> summaryTypes);
 
     interface DriftRow {
@@ -157,17 +267,24 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
         /** Rendered as text in SQL (log-only field; H2 returns raw UUID columns as byte[] in native projections). */
         String getLocationId();
 
+        /** Rendered as text in SQL; null on lot-agnostic keys (log-only field). */
+        String getLotId();
+
         long getLedgerOnHand();
 
         long getLedgerAllocated();
 
         long getLedgerReserved();
 
+        long getLedgerInTransit();
+
         Long getSummaryOnHand();
 
         Long getSummaryAllocated();
 
         Long getSummaryReserved();
+
+        Long getSummaryInTransit();
     }
 
     /**
@@ -178,7 +295,9 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
      * rows. Returns ONLY mismatching locations — same emulated full outer
      * join as {@link #findDriftRows} (H2-compatible; the anti-join test uses
      * {@code l.outstanding IS NULL} because {@code location_id} is nullable
-     * on both sides). Event types are passed as enum names.
+     * on both sides). Event types are passed as enum names. Restricted to the
+     * lot-agnostic rows ({@code lot_id IS NULL}) — they alone carry the
+     * authoritative allocation balances (odoo-parity E1, #1038).
      */
     @Query(value = """
                         WITH ledger AS (
@@ -192,6 +311,7 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                         ), summary AS (
                             SELECT location_id, COALESCE(SUM(allocated), 0) AS allocated
                             FROM inventory_stock_summary
+                            WHERE lot_id IS NULL
                             GROUP BY location_id
                         )
                         SELECT CAST(l.location_id AS VARCHAR) AS locationId,

@@ -75,6 +75,14 @@ public class InventoryLedgerEntry {
     @Column
     private UUID toLocationId;
 
+    /**
+     * Lot the quantity belongs to (odoo-parity E1, issue #1038): stamped by receipt postings for
+     * LOT-tracked products; null for untracked products and, until E2 wires the outbound flows,
+     * for all non-receipt event types.
+     */
+    @Column(name = "lot_id")
+    private UUID lotId;
+
     @Column(length = 100)
     private String reasonCode;
 

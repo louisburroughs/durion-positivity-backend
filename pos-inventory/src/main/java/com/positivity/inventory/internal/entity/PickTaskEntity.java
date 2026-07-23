@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.entity;
 
 import com.positivity.inventory.internal.enums.PickTaskStatus;
+import com.positivity.inventory.internal.enums.SourcingStrategy;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -58,6 +59,15 @@ public class PickTaskEntity {
 
     @Column(name = "suggested_location_id", columnDefinition = "UUID")
     private UUID suggestedLocationId;
+
+    /**
+     * Effective sourcing strategy that produced {@code suggestedLocationId}
+     * (odoo-parity H2, issue #1037) so ops can audit "why this bin". Null on
+     * tasks created before the sourcing engine or without a suggestion.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sourcing_reason", length = 32)
+    private SourcingStrategy sourcingReason;
 
     @Column(name = "sort_order", nullable = false)
     @Builder.Default

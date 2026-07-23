@@ -2,8 +2,10 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.enums.AsnStatus;
 import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
+import com.positivity.inventory.internal.enums.TransferOrderStatus;
 import com.positivity.inventory.internal.repository.AsnLineRepository;
 import com.positivity.inventory.internal.repository.PurchaseOrderLineRepository;
+import com.positivity.inventory.internal.repository.TransferOrderRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -32,8 +34,13 @@ public class ExpectedSupplyServiceImpl implements ExpectedSupplyService {
     private static final List<AsnStatus> OPEN_ASN_STATUSES =
             List.of(AsnStatus.LOADED, AsnStatus.READY_FOR_RECEIPT, AsnStatus.PARTIALLY_RECEIVED);
 
+    /** Transfer-order statuses with an in-transit remainder inbound to the destination (C2, #1036). */
+    private static final List<TransferOrderStatus> IN_TRANSIT_TRANSFER_STATUSES =
+            List.of(TransferOrderStatus.DISPATCHED, TransferOrderStatus.PARTIALLY_RECEIVED);
+
     private final PurchaseOrderLineRepository purchaseOrderLineRepository;
     private final AsnLineRepository asnLineRepository;
+    private final TransferOrderRepository transferOrderRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -56,7 +63,13 @@ public class ExpectedSupplyServiceImpl implements ExpectedSupplyService {
             asnRemainder = BigDecimal.ZERO;
         }
 
-        return poOpen.add(asnRemainder);
+        // Inbound in-transit transfers (odoo-parity C2, #1036): dispatched − received toward
+        // the destination site. Included under ANY horizon: unlike undated PO/ASN supply the
+        // goods have physically shipped, so they are the most certain supply in the sum.
+        BigDecimal inTransit = BigDecimal.valueOf(
+                transferOrderRepository.sumInboundInTransitForSku(stockItemId, IN_TRANSIT_TRANSFER_STATUSES, siteId));
+
+        return poOpen.add(asnRemainder).add(inTransit);
     }
 
     private static @Nullable UUID parseUuid(String value) {

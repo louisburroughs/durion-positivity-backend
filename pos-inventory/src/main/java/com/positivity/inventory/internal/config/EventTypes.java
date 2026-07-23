@@ -38,6 +38,36 @@ public final class EventTypes {
                 EventTypeRegistration.approval("INVENTORY_SCRAP_REJECT", "Reject a pending scrap document")
                         .build(),
 
+                // TransferOrderController - 5 events (odoo-parity C1/C2, #1035/#1036)
+                EventTypeRegistration.write("INVENTORY_TRANSFER_ORDER_CREATE", "Create a cross-site transfer order")
+                        .build(),
+                EventTypeRegistration.approval("INVENTORY_TRANSFER_ORDER_APPROVE", "Approve a DRAFT transfer order")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_TRANSFER_ORDER_CANCEL", "Cancel a transfer order before dispatch")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_TRANSFER_ORDER_DISPATCH",
+                                "Dispatch a transfer order (posts TRANSFER_OUT into transit)")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_TRANSFER_ORDER_RECEIVE",
+                                "Receive dispatched transfer quantities at the destination (posts TRANSFER_IN)")
+                        .build(),
+
+                // SourcingStrategyController - 3 events (odoo-parity H1, #1037)
+                EventTypeRegistration.fastRead(
+                                "INVENTORY_SOURCING_STRATEGY_LIST", "List sourcing strategy configurations")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_SOURCING_STRATEGY_UPSERT",
+                                "Create or update the sourcing strategy for one scope")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_SOURCING_STRATEGY_DEACTIVATE",
+                                "Deactivate a sourcing strategy configuration row")
+                        .build(),
+
                 // CycleCountController - 2 events
                 EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_SUBMIT", "Submit a count for a cycle count task")
                         .build(),
@@ -148,6 +178,10 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead("INVENTORY_PURCHASE_ORDER_GET", "Get purchase order")
                         .build(),
                 EventTypeRegistration.fastRead("INVENTORY_PURCHASE_ORDER_LIST", "List purchase orders")
+                        .build(),
+                EventTypeRegistration.fastRead("INVENTORY_LOT_LIST", "List inventory lots")
+                        .build(),
+                EventTypeRegistration.fastRead("INVENTORY_LOT_GET", "Get an inventory lot with per-location on-hand")
                         .build(),
                 EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_APPROVE", "Approve a purchase order")
                         .build(),

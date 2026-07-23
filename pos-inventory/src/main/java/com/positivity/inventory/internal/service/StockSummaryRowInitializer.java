@@ -26,29 +26,33 @@ public class StockSummaryRowInitializer {
     }
 
     /**
-     * Inserts a zero-quantity summary row for the key unless one already
-     * exists. May throw a duplicate-key exception when racing another
-     * posting; callers must treat that as "row now exists".
+     * Inserts a zero-quantity summary row for the (stockItemId, locationId,
+     * lotId) key unless one already exists ({@code lotId} null = the
+     * lot-agnostic row; odoo-parity E1, #1038). May throw a duplicate-key
+     * exception when racing another posting; callers must treat that as "row
+     * now exists".
+     *
+     * <p>Callers must serialize invocations per JVM (see
+     * {@code LedgerPostingServiceImpl}'s creation monitor): since E1 every key
+     * contains a NULL {@code lot_id} on its lot-agnostic row, and only
+     * PostgreSQL's {@code NULLS NOT DISTINCT} unique index (V18) can reject a
+     * duplicate such key — the JPA-generated H2 test schema cannot. Across
+     * instances the PostgreSQL index remains the backstop.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void createRowIfAbsent(@NonNull String stockItemId, @Nullable UUID locationId) {
-        boolean exists = locationId == null
-                ? summaryRepository
-                        .findByStockItemIdAndLocationIdIsNull(stockItemId)
-                        .isPresent()
-                : summaryRepository
-                        .findByStockItemIdAndLocationId(stockItemId, locationId)
-                        .isPresent();
-        if (exists) {
+    public void createRowIfAbsent(@NonNull String stockItemId, @Nullable UUID locationId, @Nullable UUID lotId) {
+        if (summaryRepository.findByKey(stockItemId, locationId, lotId).isPresent()) {
             return;
         }
         summaryRepository.saveAndFlush(InventoryStockSummary.builder()
                 .stockItemId(stockItemId)
                 .locationId(locationId)
+                .lotId(lotId)
                 .onHand(0L)
                 .allocated(0L)
                 .reserved(0L)
                 .atp(0L)
+                .inTransitQty(0L)
                 .build());
     }
 }

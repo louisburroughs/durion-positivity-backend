@@ -86,6 +86,11 @@ class PurchaseOrderServiceImplTest {
                 applicationContext,
                 encumbranceEventPublisher,
                 inventoryFactPublisher,
+                new com.positivity.inventory.internal.service.DocumentQuantityConverter(
+                        org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
+                // Lot gate answers "untracked" for every SKU in these unit tests (E1 #1038):
+                // a mock resolveReceiptLot returns null by default.
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryLotCaptureService.class),
                 fixedClock);
         ReflectionTestUtils.setField(purchaseOrderService, "encumbranceEnabled", false);
         ReflectionTestUtils.setField(purchaseOrderService, "defaultTaxRate", 0.10d);
@@ -102,7 +107,9 @@ class PurchaseOrderServiceImplTest {
                 BigDecimal.TEN,
                 1000L,
                 "TAX-10",
-                "GL-ACCOUNT-01");
+                "GL-ACCOUNT-01",
+                null,
+                null);
         CreatePurchaseOrderRequest request = new CreatePurchaseOrderRequest(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 LocalDate.now(fixedClock),
@@ -383,8 +390,8 @@ class PurchaseOrderServiceImplTest {
         when(purchaseOrderLineRepository.save(any(PurchaseOrderLineEntity.class)))
                 .thenAnswer(i -> i.getArgument(0));
 
-        var lineRequest =
-                new ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest(lineId, BigDecimal.valueOf(4), null);
+        var lineRequest = new ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest(
+                lineId, BigDecimal.valueOf(4), null, null, null, null);
         ReceivePurchaseOrderRequest request = new ReceivePurchaseOrderRequest(List.of(lineRequest));
 
         // Act
@@ -419,7 +426,8 @@ class PurchaseOrderServiceImplTest {
         when(purchaseOrderRepository.findById(poId)).thenReturn(Optional.of(po));
         when(purchaseOrderRepository.save(any(PurchaseOrderEntity.class))).thenAnswer(i -> i.getArgument(0));
 
-        var lineRequest = new ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest(lineId, BigDecimal.TEN, null);
+        var lineRequest = new ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest(
+                lineId, BigDecimal.TEN, null, null, null, null);
         ReceivePurchaseOrderRequest request = new ReceivePurchaseOrderRequest(List.of(lineRequest));
 
         // Act

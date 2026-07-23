@@ -243,6 +243,33 @@ public interface InventoryLedgerEntryRepository
             @Param("eventType") InventoryLedgerEventType eventType);
 
     /**
+     * Earliest receipt timestamp of one SKU per location (odoo-parity H1,
+     * issue #1037): {@code MIN(timestamp)} over {@code GOODS_RECEIPT}/
+     * {@code TRANSFER_IN} entries per location. FIFO sourcing orders
+     * candidate locations by this value — a documented approximation
+     * (per-location earliest receipt, not per-unit aging). Locations with no
+     * receipt entries are absent from the result (FIFO sorts them last).
+     */
+    @Query("""
+                        SELECT e.locationId AS locationId, MIN(e.timestamp) AS earliestReceipt
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.locationId IN :locationIds
+                          AND e.eventType IN :eventTypes
+                        GROUP BY e.locationId
+                        """)
+    List<LocationEarliestReceipt> findEarliestReceiptByLocation(
+            @Param("stockItemId") String stockItemId,
+            @Param("locationIds") Collection<UUID> locationIds,
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
+
+    interface LocationEarliestReceipt {
+        UUID getLocationId();
+
+        java.time.Instant getEarliestReceipt();
+    }
+
+    /**
      * Maximum number of location ids passed to a single {@code IN} clause.
      */
     int LOCATION_ID_CHUNK_SIZE = 1000;
@@ -352,7 +379,9 @@ public interface InventoryLedgerEntryRepository
                                                  ELSE 0 END), 0) AS allocated,
                                COALESCE(SUM(CASE WHEN e.eventType = :reservationCreated THEN e.changeInQuantity
                                                  WHEN e.eventType = :reservationReleased THEN -e.changeInQuantity
-                                                 ELSE 0 END), 0) AS reserved
+                                                 ELSE 0 END), 0) AS reserved,
+                               COALESCE(SUM(CASE WHEN e.eventType = :transferIn THEN -e.changeInQuantity
+                                                 ELSE 0 END), 0) AS inTransitArrived
                         FROM InventoryLedgerEntry e
                         WHERE e.eventType IN :summaryTypes
                         GROUP BY e.stockItemId, e.locationId
@@ -363,6 +392,7 @@ public interface InventoryLedgerEntryRepository
             @Param("allocationReleased") InventoryLedgerEventType allocationReleased,
             @Param("reservationCreated") InventoryLedgerEventType reservationCreated,
             @Param("reservationReleased") InventoryLedgerEventType reservationReleased,
+            @Param("transferIn") InventoryLedgerEventType transferIn,
             @Param("summaryTypes") Collection<InventoryLedgerEventType> summaryTypes);
 
     interface SummaryAggregate {
@@ -375,6 +405,97 @@ public interface InventoryLedgerEntryRepository
         long getAllocated();
 
         long getReserved();
+
+        /**
+         * In-transit contribution of arrivals grouped at this key: {@code Σ -change} of
+         * {@code TRANSFER_IN} entries (negative — arrivals drain transit). The outbound
+         * (positive) side keys on {@code toLocationId} and comes from
+         * {@link #aggregateOutboundInTransit} (odoo-parity C2, #1036).
+         */
+        long getInTransitArrived();
+    }
+
+    /**
+     * Outbound in-transit contributions keyed at the DESTINATION location (odoo-parity C2,
+     * issue #1036): {@code Σ -change} (positive) of {@code TRANSFER_OUT} entries per
+     * (stockItemId, toLocationId). Together with {@code SummaryAggregate#getInTransitArrived}
+     * this reconstructs {@code inTransitQty} from ledger shape alone. Rebuild/drift use only.
+     */
+    @Query("""
+                        SELECT e.stockItemId AS stockItemId, e.toLocationId AS locationId,
+                               COALESCE(SUM(-e.changeInQuantity), 0) AS inTransit
+                        FROM InventoryLedgerEntry e
+                        WHERE e.eventType = :transferOut
+                          AND e.toLocationId IS NOT NULL
+                        GROUP BY e.stockItemId, e.toLocationId
+                        """)
+    List<OutboundInTransitAggregate> aggregateOutboundInTransit(
+            @Param("transferOut") InventoryLedgerEventType transferOut);
+
+    interface OutboundInTransitAggregate {
+        String getStockItemId();
+
+        UUID getLocationId();
+
+        long getInTransit();
+    }
+
+    /**
+     * Per-lot ledger-truth aggregation (odoo-parity E1, issue #1038): the same delta rules as
+     * {@link #aggregateForStockSummary} restricted to lot-tagged entries and additionally
+     * grouped by {@code lotId}. Mirrors the posting funnel's dual-row rule — lot-tagged entries
+     * contribute to BOTH the lot-agnostic aggregation above and these per-lot keys. Rebuild
+     * use only.
+     */
+    @Query("""
+                        SELECT e.stockItemId AS stockItemId, e.locationId AS locationId, e.lotId AS lotId,
+                               COALESCE(SUM(CASE WHEN e.eventType IN :onHandTypes THEN e.changeInQuantity ELSE 0 END), 0) AS onHand,
+                               COALESCE(SUM(CASE WHEN e.eventType = :allocationCreated THEN e.changeInQuantity
+                                                 WHEN e.eventType = :allocationReleased THEN -e.changeInQuantity
+                                                 ELSE 0 END), 0) AS allocated,
+                               COALESCE(SUM(CASE WHEN e.eventType = :reservationCreated THEN e.changeInQuantity
+                                                 WHEN e.eventType = :reservationReleased THEN -e.changeInQuantity
+                                                 ELSE 0 END), 0) AS reserved,
+                               COALESCE(SUM(CASE WHEN e.eventType = :transferIn THEN -e.changeInQuantity
+                                                 ELSE 0 END), 0) AS inTransitArrived
+                        FROM InventoryLedgerEntry e
+                        WHERE e.eventType IN :summaryTypes
+                          AND e.lotId IS NOT NULL
+                        GROUP BY e.stockItemId, e.locationId, e.lotId
+                        """)
+    List<LotSummaryAggregate> aggregateForStockSummaryByLot(
+            @Param("onHandTypes") Collection<InventoryLedgerEventType> onHandTypes,
+            @Param("allocationCreated") InventoryLedgerEventType allocationCreated,
+            @Param("allocationReleased") InventoryLedgerEventType allocationReleased,
+            @Param("reservationCreated") InventoryLedgerEventType reservationCreated,
+            @Param("reservationReleased") InventoryLedgerEventType reservationReleased,
+            @Param("transferIn") InventoryLedgerEventType transferIn,
+            @Param("summaryTypes") Collection<InventoryLedgerEventType> summaryTypes);
+
+    interface LotSummaryAggregate extends SummaryAggregate {
+        UUID getLotId();
+    }
+
+    /**
+     * Per-lot outbound in-transit contributions keyed at the DESTINATION location (odoo-parity
+     * E1, issue #1038; C2 rule): lot-tagged {@code TRANSFER_OUT} entries contribute at their
+     * (stockItemId, toLocationId, lotId) key in addition to the lot-agnostic aggregation of
+     * {@link #aggregateOutboundInTransit}. Rebuild/drift use only.
+     */
+    @Query("""
+                        SELECT e.stockItemId AS stockItemId, e.toLocationId AS locationId, e.lotId AS lotId,
+                               COALESCE(SUM(-e.changeInQuantity), 0) AS inTransit
+                        FROM InventoryLedgerEntry e
+                        WHERE e.eventType = :transferOut
+                          AND e.toLocationId IS NOT NULL
+                          AND e.lotId IS NOT NULL
+                        GROUP BY e.stockItemId, e.toLocationId, e.lotId
+                        """)
+    List<LotOutboundInTransitAggregate> aggregateOutboundInTransitByLot(
+            @Param("transferOut") InventoryLedgerEventType transferOut);
+
+    interface LotOutboundInTransitAggregate extends OutboundInTransitAggregate {
+        UUID getLotId();
     }
 
     /** Latest summary-relevant entries for one key; pass a page of size 1. Rebuild use only. */
@@ -389,6 +510,27 @@ public interface InventoryLedgerEntryRepository
     List<InventoryLedgerEntry> findLatestSummaryEntries(
             @Param("stockItemId") String stockItemId,
             @Param("locationId") UUID locationId,
+            @Param("summaryTypes") Collection<InventoryLedgerEventType> summaryTypes,
+            Pageable pageable);
+
+    /**
+     * Latest summary-relevant entries for one per-lot key (odoo-parity E1, #1038); pass a page
+     * of size 1. Only lot-tagged entries touch a per-lot row, hence the {@code lotId} equality
+     * filter. Rebuild use only.
+     */
+    @Query("""
+                        SELECT e
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND ((:locationId IS NULL AND e.locationId IS NULL) OR e.locationId = :locationId)
+                          AND e.lotId = :lotId
+                          AND e.eventType IN :summaryTypes
+                        ORDER BY e.timestamp DESC, e.ledgerEntryId DESC
+                        """)
+    List<InventoryLedgerEntry> findLatestSummaryEntriesForLot(
+            @Param("stockItemId") String stockItemId,
+            @Param("locationId") UUID locationId,
+            @Param("lotId") UUID lotId,
             @Param("summaryTypes") Collection<InventoryLedgerEventType> summaryTypes,
             Pageable pageable);
 

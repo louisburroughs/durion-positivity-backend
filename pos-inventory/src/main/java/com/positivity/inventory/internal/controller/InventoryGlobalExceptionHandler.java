@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
 import com.positivity.inventory.internal.exception.AsOfInFutureException;
+import com.positivity.inventory.internal.exception.CrossSiteTransferRequiresOrderException;
 import com.positivity.inventory.internal.exception.CycleCountConflictException;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
@@ -16,6 +17,7 @@ import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.LocationServiceUnavailableException;
+import com.positivity.inventory.internal.exception.LotNumberRequiredException;
 import com.positivity.inventory.internal.exception.NegativeStockPolicyViolationException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
 import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
@@ -35,6 +37,9 @@ import com.positivity.inventory.internal.exception.ScrapNotFoundException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
+import com.positivity.inventory.internal.exception.TransferLocationNotEligibleException;
+import com.positivity.inventory.internal.exception.TransferOrderNotFoundException;
+import com.positivity.inventory.internal.exception.TransferQuantityExceededException;
 import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
@@ -209,6 +214,31 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "ADJUSTMENT_LEDGER_POST_FAILED", ex.getMessage());
     }
 
+    @ExceptionHandler(TransferQuantityExceededException.class)
+    public ResponseEntity<ApiError> handleTransferQuantityExceeded(TransferQuantityExceededException ex) {
+        // odoo-parity C2 (#1036): deterministic per-bound 422
+        // (TRANSFER_DISPATCH_EXCEEDS_REQUESTED / TRANSFER_RECEIVE_EXCEEDS_DISPATCHED).
+        return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(CrossSiteTransferRequiresOrderException.class)
+    public ResponseEntity<ApiError> handleCrossSiteTransferRequiresOrder(CrossSiteTransferRequiresOrderException ex) {
+        // odoo-parity C2/spec C7 (#1036): immediate stock movements are intra-site only.
+        return build(HttpStatus.valueOf(422), CrossSiteTransferRequiresOrderException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(TransferOrderNotFoundException.class)
+    public ResponseEntity<ApiError> handleTransferOrderNotFound(TransferOrderNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(TransferLocationNotEligibleException.class)
+    public ResponseEntity<ApiError> handleTransferLocationNotEligible(TransferLocationNotEligibleException ex) {
+        // odoo-parity C1/C5 (#1035): deterministic 422 for movement-ineligible sites
+        // (DECISION-INVENTORY-009: INACTIVE/PENDING blocked for movement).
+        return build(HttpStatus.valueOf(422), TransferLocationNotEligibleException.ERROR_CODE, ex.getMessage());
+    }
+
     @ExceptionHandler(ScrapNotFoundException.class)
     public ResponseEntity<ApiError> handleScrapNotFound(ScrapNotFoundException ex) {
         return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
@@ -266,6 +296,13 @@ public class InventoryGlobalExceptionHandler {
         // odoo-parity B1/B4 (#1033): no conversion path to base UoM is a deterministic 422,
         // never a silent 1:1 assumption.
         return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(LotNumberRequiredException.class)
+    public ResponseEntity<ApiError> handleLotNumberRequired(LotNumberRequiredException ex) {
+        // odoo-parity E1 (#1038): a receipt of a LOT-tracked product without a lot number is a
+        // deterministic 422, never a silently untracked posting.
+        return build(HttpStatus.valueOf(422), LotNumberRequiredException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(InvalidParamCombinationException.class)

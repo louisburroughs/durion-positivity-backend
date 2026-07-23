@@ -18,8 +18,10 @@ import com.positivity.inventory.internal.enums.AdjustmentRequestStatus;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.MovementType;
 import com.positivity.inventory.internal.exception.InsufficientStockException;
+import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.LocationRefRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.StockMovementServiceImpl;
 import java.time.Clock;
@@ -51,13 +53,25 @@ class StockMovementServiceImplTest {
     private InventoryAdjustmentRequestRepository adjustmentRepository;
 
     @Mock
+    private LocationRefRepository locationRefRepository;
+
+    @Mock
+    private ExtStorageLocationReplicaRepository storageLocationRepository;
+
+    @Mock
     private Clock clock;
 
     private StockMovementServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new StockMovementServiceImpl(ledgerRepository, adjustmentRepository, ledgerPostingService, clock);
+        service = new StockMovementServiceImpl(
+                ledgerRepository,
+                adjustmentRepository,
+                ledgerPostingService,
+                locationRefRepository,
+                storageLocationRepository,
+                clock);
     }
 
     private void setupClock() {

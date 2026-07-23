@@ -6,6 +6,8 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.NegativeStockPolicy;
 import com.positivity.inventory.internal.exception.InsufficientStockException;
 import com.positivity.inventory.internal.exception.NegativeStockPolicyViolationException;
+import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
+import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import java.time.Instant;
@@ -34,9 +36,19 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@link InventoryLedgerEventType#affectsOnHand() on-hand-affecting} — {@code onHand}</li>
  *   <li>{@code ALLOCATION_CREATED}/{@code ALLOCATION_RELEASED} — {@code allocated}</li>
  *   <li>{@code RESERVATION_CREATED}/{@code RESERVATION_RELEASED} — {@code reserved}</li>
+ *   <li>{@code TRANSFER_OUT} with a {@code toLocationId} — additionally {@code +qty} to the
+ *       DESTINATION key's {@code inTransitQty}; {@code TRANSFER_IN} — {@code -qty} from its own
+ *       key's {@code inTransitQty} (odoo-parity C2, issue #1036)</li>
  *   <li>anything else (backorders, pick-task markers) — no summary touch</li>
  * </ul>
  * {@code atp} is maintained as {@code onHand - allocated} (ADR-0001).
+ *
+ * <p>Dual-row lot bookkeeping (odoo-parity E1, issue #1038): every entry applies its deltas to
+ * the lot-agnostic (stockItemId, locationId, lotId=null) row exactly as before E1 — that row
+ * stays the authoritative balance for all availability/rollup/forecast readers and for the
+ * negative-stock matrix. An entry carrying a {@code lotId} ADDITIONALLY applies the same deltas
+ * to the (stockItemId, locationId, lotId) row, from which the lot read API serves per-lot
+ * on-hand. Rebuild and drift verification replay the identical rule.
  *
  * <p>Negative-stock policy (odoo-parity K1, issue #1027): before the summary
  * deltas are applied, the batch is replayed per (stockItemId, locationId) key
@@ -58,14 +70,17 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
     private final InventoryLedgerEntryRepository ledgerRepository;
     private final InventoryStockSummaryRepository summaryRepository;
     private final StockSummaryRowInitializer rowInitializer;
+    private final ExtProductReplicaRepository extProductReplicaRepository;
 
     public LedgerPostingServiceImpl(
             InventoryLedgerEntryRepository ledgerRepository,
             InventoryStockSummaryRepository summaryRepository,
-            StockSummaryRowInitializer rowInitializer) {
+            StockSummaryRowInitializer rowInitializer,
+            ExtProductReplicaRepository extProductReplicaRepository) {
         this.ledgerRepository = ledgerRepository;
         this.summaryRepository = summaryRepository;
         this.rowInitializer = rowInitializer;
+        this.extProductReplicaRepository = extProductReplicaRepository;
     }
 
     @Override
@@ -90,15 +105,37 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
     @Transactional
     public @NonNull List<InventoryLedgerEntry> postAll(
             @NonNull List<InventoryLedgerEntry> entries, boolean negativeStockOverride) {
+        entries.forEach(this::validateUnitOfMeasure);
         List<InventoryLedgerEntry> saved = ledgerRepository.saveAll(entries);
 
         Map<SummaryKey, SummaryDelta> deltas = new LinkedHashMap<>();
         for (InventoryLedgerEntry entry : saved) {
             SummaryDelta delta = deltaFor(entry);
-            if (delta == null) {
-                continue;
+            if (delta != null) {
+                // Lot-agnostic row first (pre-E1 behavior), then the additional per-lot row for
+                // lot-tagged entries — same deltas on both (odoo-parity E1, #1038).
+                deltas.merge(
+                        new SummaryKey(entry.getStockItemId(), entry.getLocationId(), null), delta, SummaryDelta::plus);
+                if (entry.getLotId() != null) {
+                    deltas.merge(
+                            new SummaryKey(entry.getStockItemId(), entry.getLocationId(), entry.getLotId()),
+                            delta,
+                            SummaryDelta::plus);
+                }
             }
-            deltas.merge(new SummaryKey(entry.getStockItemId(), entry.getLocationId()), delta, SummaryDelta::plus);
+            SummaryDelta transitDelta = outboundInTransitDeltaFor(entry);
+            if (transitDelta != null) {
+                deltas.merge(
+                        new SummaryKey(entry.getStockItemId(), entry.getToLocationId(), null),
+                        transitDelta,
+                        SummaryDelta::plus);
+                if (entry.getLotId() != null) {
+                    deltas.merge(
+                            new SummaryKey(entry.getStockItemId(), entry.getToLocationId(), entry.getLotId()),
+                            transitDelta,
+                            SummaryDelta::plus);
+                }
+            }
         }
 
         Map<SummaryKey, InventoryStockSummary> lockedRows = new LinkedHashMap<>();
@@ -111,6 +148,51 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         deltas.forEach((key, delta) -> applyDelta(lockedRows.get(key), delta));
 
         return saved;
+    }
+
+    /**
+     * Validates an entry's free-text {@code unitOfMeasure} against the catalog replica
+     * (odoo-parity B2/B4, #1034): the ledger is base-UoM only, so an entry naming a UoM that
+     * contradicts the product's replica base UoM is rejected with a deterministic 422
+     * ({@code UOM_CONVERSION_UNDEFINED}).
+     *
+     * <p>Documented tolerance — validation only applies "going forward" where the catalog
+     * contract can actually answer; each of these passes through unvalidated rather than
+     * hard-failing products that predate the contract:
+     * <ul>
+     *   <li>{@code unitOfMeasure} absent/blank (most posting paths never set it)</li>
+     *   <li>{@code stockItemId} is not a UUID (legacy free-text SKUs)</li>
+     *   <li>no {@code ext_product} replica row for the product</li>
+     *   <li>replica row exists but carries no base UoM (pre-v2 catalog facts)</li>
+     * </ul>
+     * The comparison is case-insensitive.
+     */
+    private void validateUnitOfMeasure(InventoryLedgerEntry entry) {
+        String unitOfMeasure = entry.getUnitOfMeasure();
+        if (unitOfMeasure == null || unitOfMeasure.isBlank()) {
+            return;
+        }
+        UUID productId = parseProductId(entry.getStockItemId());
+        if (productId == null) {
+            return;
+        }
+        extProductReplicaRepository.findById(productId).ifPresent(replica -> {
+            String baseUom = replica.getBaseUom();
+            if (baseUom != null && !baseUom.equalsIgnoreCase(unitOfMeasure.trim())) {
+                throw UomConversionUndefinedException.nonBaseLedgerUom(productId, unitOfMeasure, baseUom);
+            }
+        });
+    }
+
+    private @Nullable UUID parseProductId(@Nullable String stockItemId) {
+        if (stockItemId == null || stockItemId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(stockItemId.trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     /**
@@ -131,7 +213,9 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
             if (eventType == null || !eventType.affectsOnHand()) {
                 continue;
             }
-            SummaryKey key = new SummaryKey(entry.getStockItemId(), entry.getLocationId());
+            // The matrix evaluates the lot-agnostic key only: per-lot rows mirror a subset of
+            // the same postings and per-lot negative guards are the E2 story.
+            SummaryKey key = new SummaryKey(entry.getStockItemId(), entry.getLocationId(), null);
             long projected = projectedOnHand.computeIfAbsent(
                     key,
                     missing -> Objects.requireNonNull(
@@ -187,8 +271,14 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         long onHand = 0;
         long allocated = 0;
         long reserved = 0;
+        long inTransit = 0;
         if (eventType != null && eventType.affectsOnHand()) {
             onHand = change;
+            if (eventType == InventoryLedgerEventType.TRANSFER_IN) {
+                // Arrival at the destination key: goods leave transit as they land on-hand
+                // (odoo-parity C2, #1036). -change because arrivals carry a positive change.
+                inTransit = -change;
+            }
         } else if (eventType == InventoryLedgerEventType.ALLOCATION_CREATED) {
             allocated = change;
         } else if (eventType == InventoryLedgerEventType.ALLOCATION_RELEASED) {
@@ -200,7 +290,23 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         } else {
             return null;
         }
-        return new SummaryDelta(onHand, allocated, reserved, entry.getLedgerEntryId(), entry.getTimestamp());
+        return new SummaryDelta(onHand, allocated, reserved, inTransit, entry.getLedgerEntryId(), entry.getTimestamp());
+    }
+
+    /**
+     * In-transit contribution of a {@code TRANSFER_OUT} entry at the DESTINATION key
+     * (odoo-parity C2, issue #1036): goods that left the source ({@code locationId}) are
+     * inbound to {@code toLocationId} until a matching {@code TRANSFER_IN} lands there.
+     * {@code -change} because departures carry a negative change. Ledger-shape rule, no
+     * document lookup: intra-site bin moves post OUT+IN in one transaction, so their
+     * contributions cancel and only transfer orders (receive lags dispatch) leave a residual.
+     */
+    private @Nullable SummaryDelta outboundInTransitDeltaFor(InventoryLedgerEntry entry) {
+        if (entry.getEventType() != InventoryLedgerEventType.TRANSFER_OUT || entry.getToLocationId() == null) {
+            return null;
+        }
+        int change = entry.getChangeInQuantity() == null ? 0 : entry.getChangeInQuantity();
+        return new SummaryDelta(0, 0, 0, -change, entry.getLedgerEntryId(), entry.getTimestamp());
     }
 
     private void applyDelta(InventoryStockSummary row, SummaryDelta delta) {
@@ -208,45 +314,62 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         row.setAllocated(row.getAllocated() + delta.allocated());
         row.setReserved(row.getReserved() + delta.reserved());
         row.setAtp(row.getOnHand() - row.getAllocated());
+        row.setInTransitQty(row.getInTransitQty() + delta.inTransit());
         row.setLastLedgerEntryId(delta.lastLedgerEntryId());
         row.setLastEventAt(delta.lastEventAt());
         summaryRepository.save(row);
     }
 
+    /**
+     * Serializes summary-row creation in-JVM: since E1 the lot-agnostic row of every key holds a
+     * NULL {@code lot_id}, which only PostgreSQL's {@code NULLS NOT DISTINCT} unique index (V18)
+     * can reject as a duplicate — the JPA-generated H2 test schema cannot, so the constraint
+     * alone no longer closes the check-then-insert race locally. The monitor covers the
+     * initializer's whole REQUIRES_NEW transaction (the call goes through the proxy); across
+     * instances the PostgreSQL index remains the backstop.
+     */
+    private static final Object ROW_CREATION_MONITOR = new Object();
+
     private InventoryStockSummary createAndLockRow(SummaryKey key) {
         try {
-            rowInitializer.createRowIfAbsent(key.stockItemId(), key.locationId());
+            synchronized (ROW_CREATION_MONITOR) {
+                rowInitializer.createRowIfAbsent(key.stockItemId(), key.locationId(), key.lotId());
+            }
         } catch (DataIntegrityViolationException | UnexpectedRollbackException ex) {
             // Lost the creation race to a concurrent posting; the row exists now.
             log.debug(
-                    "Lost stock summary creation race for stockItemId={} locationId={}",
+                    "Lost stock summary creation race for stockItemId={} locationId={} lotId={}",
                     key.stockItemId(),
-                    key.locationId());
+                    key.locationId(),
+                    key.lotId());
         }
         return lockRow(key)
                 .orElseThrow(() ->
                         new IllegalStateException("Stock summary row missing after initialization for stockItemId="
-                                + key.stockItemId() + " locationId=" + key.locationId()));
+                                + key.stockItemId() + " locationId=" + key.locationId() + " lotId=" + key.lotId()));
     }
 
     private Optional<InventoryStockSummary> lockRow(SummaryKey key) {
-        return key.locationId() == null
-                ? summaryRepository.findWithLockByStockItemIdAndLocationIdIsNull(key.stockItemId())
-                : summaryRepository.findWithLockByStockItemIdAndLocationId(key.stockItemId(), key.locationId());
+        return summaryRepository.findWithLockByKey(key.stockItemId(), key.locationId(), key.lotId());
     }
 
-    private record SummaryKey(String stockItemId, @Nullable UUID locationId) {
+    private record SummaryKey(
+            String stockItemId,
+            @Nullable UUID locationId,
+            @Nullable UUID lotId) {
 
         /** Deterministic lock-acquisition order to avoid deadlocks between concurrent batches. */
         private static final Comparator<SummaryKey> ORDER = Comparator.comparing(SummaryKey::stockItemId)
                 .thenComparing(
-                        key -> key.locationId() == null ? "" : key.locationId().toString());
+                        key -> key.locationId() == null ? "" : key.locationId().toString())
+                .thenComparing(key -> key.lotId() == null ? "" : key.lotId().toString());
     }
 
     private record SummaryDelta(
             long onHand,
             long allocated,
             long reserved,
+            long inTransit,
             @Nullable UUID lastLedgerEntryId,
             @Nullable Instant lastEventAt) {
 
@@ -255,6 +378,7 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
                     onHand + other.onHand,
                     allocated + other.allocated,
                     reserved + other.reserved,
+                    inTransit + other.inTransit,
                     other.lastLedgerEntryId() != null ? other.lastLedgerEntryId() : lastLedgerEntryId,
                     other.lastEventAt() != null ? other.lastEventAt() : lastEventAt);
         }

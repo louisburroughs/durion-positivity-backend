@@ -117,6 +117,36 @@ public class InventoryPermissionRegistry {
      */
     public static final String PUTAWAY_OVERRIDE_LOCATION_CAPACITY = "inventory:putaway:override_location_capacity";
 
+    // ==================== TRANSFER ORDER PERMISSIONS ====================
+
+    /**
+     * Create or cancel a cross-site transfer order (odoo-parity C1, issue #1035).
+     * Cancellation is only allowed before dispatch.
+     */
+    public static final String TRANSFER_CREATE = "inventory:transfer:create";
+
+    /**
+     * View transfer orders, their lines, and lifecycle status.
+     */
+    public static final String TRANSFER_VIEW = "inventory:transfer:view";
+
+    /**
+     * Approve and dispatch a transfer order (posts TRANSFER_OUT at the source into transit).
+     * Approval (config-flagged, decision D-8) rides on the dispatch authority.
+     */
+    public static final String TRANSFER_DISPATCH = "inventory:transfer:dispatch";
+
+    /**
+     * Receive dispatched transfer quantities at the destination (posts TRANSFER_IN).
+     */
+    public static final String TRANSFER_RECEIVE = "inventory:transfer:receive";
+
+    /**
+     * Short-close a dispatched transfer order with a loss/return disposition
+     * (parity-C3; registered now so the catalog needs no second bump).
+     */
+    public static final String TRANSFER_SHORT_CLOSE = "inventory:transfer:short_close";
+
     // ==================== CYCLE COUNT PERMISSIONS ====================
 
     /**
@@ -242,6 +272,29 @@ public class InventoryPermissionRegistry {
                 permission(CYCLE_COUNT_VIEW, "View cycle count tasks and results", "LOW"),
                 permission(CYCLE_COUNT_COMPLETE, "Complete and submit cycle count results", "MEDIUM"),
 
+                // Transfer order permissions (5)
+                permission(
+                        TRANSFER_CREATE,
+                        "Create or cancel a cross-site transfer order (DRAFT; cancel only before dispatch)",
+                        "MEDIUM",
+                        "Issue #1035"),
+                permission(TRANSFER_VIEW, "View transfer orders, their lines, and lifecycle status", "LOW"),
+                permission(
+                        TRANSFER_DISPATCH,
+                        "Approve and dispatch a transfer order (posts TRANSFER_OUT at the source into transit)",
+                        "HIGH",
+                        "Issue #1035"),
+                permission(
+                        TRANSFER_RECEIVE,
+                        "Receive dispatched transfer quantities at the destination (posts TRANSFER_IN)",
+                        "HIGH",
+                        "Issue #1036"),
+                permission(
+                        TRANSFER_SHORT_CLOSE,
+                        "Short-close a dispatched transfer order with a loss/return disposition (parity-C3)",
+                        "HIGH",
+                        "Issue #1035"),
+
                 // Replenishment permissions (1)
                 permission(
                         REPLENISHMENT_MANAGE,
@@ -338,5 +391,12 @@ public class InventoryPermissionRegistry {
      */
     public static List<String> replenishmentPermissions() {
         return Arrays.asList(REPLENISHMENT_MANAGE);
+    }
+
+    /**
+     * Transfer order permissions
+     */
+    public static List<String> transferOrderPermissions() {
+        return Arrays.asList(TRANSFER_CREATE, TRANSFER_VIEW, TRANSFER_DISPATCH, TRANSFER_RECEIVE, TRANSFER_SHORT_CLOSE);
     }
 }

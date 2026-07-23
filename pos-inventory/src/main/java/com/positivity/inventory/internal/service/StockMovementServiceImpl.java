@@ -9,15 +9,19 @@ import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.AdjustmentRequestStatus;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.MovementType;
+import com.positivity.inventory.internal.exception.CrossSiteTransferRequiresOrderException;
 import com.positivity.inventory.internal.exception.InsufficientStockException;
+import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.LocationRefRepository;
 import com.positivity.inventory.service.StockMovementService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,16 +37,22 @@ public class StockMovementServiceImpl implements StockMovementService {
     private final InventoryLedgerEntryRepository ledgerRepository;
     private final InventoryAdjustmentRequestRepository adjustmentRepository;
     private final LedgerPostingService ledgerPostingService;
+    private final LocationRefRepository locationRefRepository;
+    private final ExtStorageLocationReplicaRepository storageLocationRepository;
     private final Clock clock;
 
     public StockMovementServiceImpl(
             InventoryLedgerEntryRepository ledgerRepository,
             InventoryAdjustmentRequestRepository adjustmentRepository,
             LedgerPostingService ledgerPostingService,
+            LocationRefRepository locationRefRepository,
+            ExtStorageLocationReplicaRepository storageLocationRepository,
             Clock clock) {
         this.ledgerRepository = ledgerRepository;
         this.adjustmentRepository = adjustmentRepository;
         this.ledgerPostingService = ledgerPostingService;
+        this.locationRefRepository = locationRefRepository;
+        this.storageLocationRepository = storageLocationRepository;
         this.clock = clock;
     }
 
@@ -65,6 +75,7 @@ public class StockMovementServiceImpl implements StockMovementService {
             if (request.getToLocationId() == null) {
                 throw new IllegalArgumentException("toLocationId is required for TRANSFER movements");
             }
+            rejectCrossSiteTransfer(request.getFromLocationId(), request.getToLocationId());
 
             InventoryLedgerEntry transferInEntry = InventoryLedgerEntry.builder()
                     .stockItemId(request.getProductSku())
@@ -176,6 +187,46 @@ public class StockMovementServiceImpl implements StockMovementService {
         adjustmentRepository.save(adjustmentRequest);
 
         return ledgerPostingService.post(entry);
+    }
+
+    /**
+     * Cross-site guard (odoo-parity C2/spec C7, issue #1036): the immediate paired
+     * TRANSFER_OUT/TRANSFER_IN path is retained for intra-site bin moves only. When both ends
+     * resolve to sites and the sites differ, the movement is rejected with the deterministic
+     * 422 {@code CROSS_SITE_TRANSFER_REQUIRES_ORDER} — cross-site moves must go through a
+     * transfer order so in-transit stock is represented.
+     *
+     * <p>Resolution: an id present in the {@code LocationRef} roster IS a site; otherwise the
+     * {@code ext_storage_location} replica maps a bin to its {@code siteId}. Ids resolvable to
+     * NO site (legacy/free-form location ids outside both tables) pass through unchanged —
+     * pre-C1 behavior is preserved for them because no site topology exists to judge them by.
+     */
+    private void rejectCrossSiteTransfer(UUID fromLocationId, UUID toLocationId) {
+        UUID fromSite = resolveSite(fromLocationId);
+        if (fromSite == null) {
+            return;
+        }
+        UUID toSite = resolveSite(toLocationId);
+        if (toSite == null) {
+            return;
+        }
+        if (!fromSite.equals(toSite)) {
+            throw new CrossSiteTransferRequiresOrderException(fromLocationId, fromSite, toLocationId, toSite);
+        }
+    }
+
+    /** Site owning the id: the id itself when it is a roster site, else its bin's siteId, else null. */
+    private @Nullable UUID resolveSite(UUID locationId) {
+        if (locationId == null) {
+            return null;
+        }
+        if (locationRefRepository.findByLocationId(locationId).isPresent()) {
+            return locationId;
+        }
+        return storageLocationRepository
+                .findById(locationId)
+                .map(bin -> bin.getSiteId())
+                .orElse(null);
     }
 
     private InventoryLedgerEventType mapMovementTypeToEventType(MovementType movementType) {
