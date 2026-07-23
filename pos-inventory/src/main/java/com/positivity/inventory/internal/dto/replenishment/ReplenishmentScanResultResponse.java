@@ -43,6 +43,12 @@ public class ReplenishmentScanResultResponse {
             requiredMode = REQUIRED)
     private int tasksRefreshed;
 
+    @Schema(
+            description = "Number of policies skipped without evaluation because they are inactive or snoozed",
+            example = "1",
+            requiredMode = REQUIRED)
+    private int policiesSkipped;
+
     @Schema(description = "Timestamp at which the scan ran", example = "2026-01-15T09:30:00Z", requiredMode = REQUIRED)
     @NotNull
     private String scanAt;

@@ -34,6 +34,7 @@ import com.positivity.inventory.internal.exception.RollupExpansionTooLargeExcept
 import com.positivity.inventory.internal.exception.ScrapInsufficientStockException;
 import com.positivity.inventory.internal.exception.ScrapLedgerPostingException;
 import com.positivity.inventory.internal.exception.ScrapNotFoundException;
+import com.positivity.inventory.internal.exception.SnoozeUntilNotInFutureException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
@@ -182,6 +183,12 @@ public class InventoryGlobalExceptionHandler {
     public ResponseEntity<ApiError> handleAsOfInFuture(AsOfInFutureException ex) {
         // odoo-parity A3 (#1029): deterministic 422 for future-dated point-in-time queries.
         return build(HttpStatus.valueOf(422), "AS_OF_IN_FUTURE", ex.getMessage());
+    }
+
+    @ExceptionHandler(SnoozeUntilNotInFutureException.class)
+    public ResponseEntity<ApiError> handleSnoozeUntilNotInFuture(SnoozeUntilNotInFutureException ex) {
+        // odoo-parity F3 (#1041): deterministic 422 for non-future snooze instants.
+        return build(HttpStatus.valueOf(422), SnoozeUntilNotInFutureException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(InsufficientPermissionException.class)

@@ -4,13 +4,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.inventory.internal.dto.replenishment.CreateReplenishmentPolicyRequest;
+import com.positivity.inventory.internal.dto.replenishment.ReplenishmentNeedResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentPolicyResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentScanResultResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentTaskResponse;
+import com.positivity.inventory.internal.dto.replenishment.UpdateReplenishmentPolicyRequest;
+import com.positivity.inventory.internal.exception.SnoozeUntilNotInFutureException;
 import com.positivity.inventory.service.ReplenishmentService;
 import java.time.Clock;
 import java.time.Instant;
@@ -260,6 +264,172 @@ class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
         mockMvc.perform(withCreateOnlyAuth(post("/v1/inventory/replenishment/policies"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
+                .andExpect(status().isForbidden());
+    }
+
+    // ─── F3 (#1041): snooze / update / needs endpoints ───────────────────────
+
+    /**
+     * Verifies that snoozing a policy with a future instant returns 200 with the
+     * updated snooze state when the caller holds
+     * {@code inventory:replenishment:manage}.
+     *
+     * Issue: #1041
+     */
+    @Test
+    @DisplayName("F3: POST /replenishment/policies/{id}/snooze with manage permission returns 200")
+    void snoozeReplenishmentPolicy_withManagePermission_returns200() throws Exception {
+        UUID policyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Instant snoozedUntil = Instant.parse("2024-02-01T00:00:00Z");
+        when(replenishmentService.snoozeReplenishmentPolicy(any(UUID.class), any(Instant.class)))
+                .thenReturn(ReplenishmentPolicyResponse.builder()
+                        .policyId(policyId.toString())
+                        .locationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                        .itemSKU("SKU-BOLT-M5")
+                        .minimumQuantity(20)
+                        .maximumQuantity(100)
+                        .preferredSourceType("EITHER")
+                        .snoozedUntil(snoozedUntil.toString())
+                        .active(true)
+                        .createdAt(Instant.now(TEST_CLOCK).toString())
+                        .build());
+
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/replenishment/policies/" + policyId + "/snooze"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"snoozedUntil\":\"" + snoozedUntil + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.snoozedUntil").value(snoozedUntil.toString()));
+    }
+
+    /**
+     * Verifies that a non-future snooze instant is rejected with a deterministic
+     * 422 carrying the {@code REPLENISHMENT_SNOOZE_NOT_IN_FUTURE} error code.
+     *
+     * Issue: #1041
+     */
+    @Test
+    @DisplayName("F3: POST /replenishment/policies/{id}/snooze with past instant returns 422")
+    void snoozeReplenishmentPolicy_withPastInstant_returns422() throws Exception {
+        Instant past = Instant.parse("2020-01-01T00:00:00Z");
+        when(replenishmentService.snoozeReplenishmentPolicy(any(UUID.class), any(Instant.class)))
+                .thenThrow(new SnoozeUntilNotInFutureException(past));
+
+        mockMvc.perform(withGatewayAuth(post(
+                                "/v1/inventory/replenishment/policies/00000000-0000-0000-0000-000000000001/snooze"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"snoozedUntil\":\"" + past + "\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("REPLENISHMENT_SNOOZE_NOT_IN_FUTURE"));
+    }
+
+    /**
+     * Verifies that the snooze endpoint is denied (403) without
+     * {@code inventory:replenishment:manage}.
+     *
+     * Issue: #1041
+     */
+    @Test
+    @DisplayName("F3: POST /replenishment/policies/{id}/snooze without manage permission returns 403")
+    void snoozeReplenishmentPolicy_withoutManagePermission_returns403() throws Exception {
+        mockMvc.perform(withCreateOnlyAuth(post(
+                                "/v1/inventory/replenishment/policies/00000000-0000-0000-0000-000000000001/snooze"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"snoozedUntil\":\"2024-02-01T00:00:00Z\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Verifies that the full-replace policy update returns 200 with the updated
+     * fields when the caller holds {@code inventory:replenishment:manage}.
+     *
+     * Issue: #1041
+     */
+    @Test
+    @DisplayName("F3: PUT /replenishment/policies/{id} with manage permission returns 200")
+    void updateReplenishmentPolicy_withManagePermission_returns200() throws Exception {
+        UUID policyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(replenishmentService.updateReplenishmentPolicy(
+                        any(UUID.class), any(UpdateReplenishmentPolicyRequest.class)))
+                .thenReturn(ReplenishmentPolicyResponse.builder()
+                        .policyId(policyId.toString())
+                        .locationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                        .itemSKU("SKU-BOLT-M5")
+                        .minimumQuantity(8)
+                        .maximumQuantity(40)
+                        .orderMultiple(6)
+                        .preferredSourceType("PURCHASE")
+                        .active(true)
+                        .createdAt(Instant.now(TEST_CLOCK).toString())
+                        .build());
+
+        mockMvc.perform(withGatewayAuth(put("/v1/inventory/replenishment/policies/" + policyId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"minimumQuantity\":8,\"maximumQuantity\":40,\"orderMultiple\":6,"
+                                + "\"preferredSourceType\":\"PURCHASE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderMultiple").value(6))
+                .andExpect(jsonPath("$.preferredSourceType").value("PURCHASE"));
+    }
+
+    /**
+     * Verifies that the policy update endpoint is denied (403) without
+     * {@code inventory:replenishment:manage}.
+     *
+     * Issue: #1041
+     */
+    @Test
+    @DisplayName("F3: PUT /replenishment/policies/{id} without manage permission returns 403")
+    void updateReplenishmentPolicy_withoutManagePermission_returns403() throws Exception {
+        mockMvc.perform(withCreateOnlyAuth(
+                                put("/v1/inventory/replenishment/policies/00000000-0000-0000-0000-000000000001"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"minimumQuantity\":8,\"maximumQuantity\":40}"))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Verifies that the side-effect-free needs report returns 200 with the per-policy
+     * evaluation rows for a caller holding {@code inventory:on_hand:view}.
+     *
+     * Issue: #1041
+     */
+    @Test
+    @DisplayName("F3/F6: GET /replenishment/needs returns 200 with needs rows")
+    void getReplenishmentNeeds_returns200WithNeeds() throws Exception {
+        when(replenishmentService.getReplenishmentNeeds())
+                .thenReturn(List.of(ReplenishmentNeedResponse.builder()
+                        .policyId("00000000-0000-0000-0000-000000000001")
+                        .itemSKU("SKU-BOLT-M5")
+                        .locationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                        .onHand(3)
+                        .projectedAvailable(3)
+                        .leadHorizonDate("2024-01-06")
+                        .leadTimeSource("POLICY_OVERRIDE")
+                        .minimumQuantity(5)
+                        .maximumQuantity(10)
+                        .wouldTrigger(true)
+                        .suggestedQuantity(12)
+                        .deadlineDate("2024-01-03")
+                        .preferredSourceType("EITHER")
+                        .build()));
+
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/replenishment/needs")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].wouldTrigger").value(true))
+                .andExpect(jsonPath("$[0].suggestedQuantity").value(12))
+                .andExpect(jsonPath("$[0].deadlineDate").value("2024-01-03"));
+    }
+
+    /**
+     * Verifies that the needs report is denied (403) without
+     * {@code inventory:on_hand:view}.
+     *
+     * Issue: #1041
+     */
+    @Test
+    @DisplayName("F3/F6: GET /replenishment/needs without view permission returns 403")
+    void getReplenishmentNeeds_withoutViewPermission_returns403() throws Exception {
+        mockMvc.perform(withCreateOnlyAuth(get("/v1/inventory/replenishment/needs")))
                 .andExpect(status().isForbidden());
     }
 

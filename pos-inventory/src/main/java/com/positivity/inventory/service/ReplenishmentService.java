@@ -1,9 +1,12 @@
 package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.dto.replenishment.CreateReplenishmentPolicyRequest;
+import com.positivity.inventory.internal.dto.replenishment.ReplenishmentNeedResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentPolicyResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentScanResultResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentTaskResponse;
+import com.positivity.inventory.internal.dto.replenishment.UpdateReplenishmentPolicyRequest;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -41,4 +44,30 @@ public interface ReplenishmentService {
 
     @NonNull
     ReplenishmentPolicyResponse createReplenishmentPolicy(@NonNull CreateReplenishmentPolicyRequest request);
+
+    /**
+     * Full-replace update of a policy's thresholds and F3 tuning fields (odoo-parity F3,
+     * issue #1041). PUT semantics: omitted optional fields are cleared / reset to their
+     * defaults; identity (location, SKU) and snooze state are not updatable here.
+     */
+    @NonNull
+    ReplenishmentPolicyResponse updateReplenishmentPolicy(
+            @NonNull UUID policyId, @NonNull UpdateReplenishmentPolicyRequest request);
+
+    /**
+     * Snoozes a policy until a future instant, or clears an existing snooze when
+     * {@code snoozedUntil} is {@code null} (odoo-parity F3, issue #1041 — Odoo orderpoint
+     * snooze). A non-null instant that is not in the future is rejected with
+     * {@link com.positivity.inventory.internal.exception.SnoozeUntilNotInFutureException}.
+     */
+    @NonNull
+    ReplenishmentPolicyResponse snoozeReplenishmentPolicy(@NonNull UUID policyId, @Nullable Instant snoozedUntil);
+
+    /**
+     * Side-effect-free replenishment needs report (odoo-parity F3/F6, issue #1041): the
+     * current orderpoint evaluation of every ACTIVE, non-snoozed policy — the same shared
+     * math the batch scan applies — without creating or refreshing any task.
+     */
+    @NonNull
+    List<ReplenishmentNeedResponse> getReplenishmentNeeds();
 }

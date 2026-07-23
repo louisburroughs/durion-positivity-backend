@@ -7,34 +7,28 @@ import com.positivity.inventory.internal.enums.ReplenishmentSourceType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import java.util.UUID;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Full-replace update of a replenishment policy's tunable fields (odoo-parity F3, issue
+ * #1041). PUT semantics: omitted optional fields are cleared / reset to their defaults
+ * ({@code orderMultiple} and {@code leadTimeDaysOverride} to none, {@code
+ * preferredSourceType} to EITHER, {@code active} to true). The policy's identity
+ * (location, SKU) and its snooze state are not updatable here — snooze is managed by the
+ * dedicated snooze endpoint.
+ */
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Schema(
-        description =
-                "Request to create a replenishment policy defining min/max stock thresholds for an item at a location")
-public class CreateReplenishmentPolicyRequest {
-
-    @Schema(
-            description = "Identifier of the location the replenishment policy applies to",
-            example = "01960003-0000-7000-8000-000000000001",
-            requiredMode = REQUIRED)
-    @NotNull
-    private UUID locationId;
-
-    @Schema(
-            description = "SKU of the item the replenishment policy applies to",
-            example = "SKU-10042",
-            requiredMode = REQUIRED)
-    @NotBlank
-    private String itemSKU;
+        description = "Full-replace update of a replenishment policy's thresholds and tuning fields. Omitted optional"
+                + " fields are cleared or reset to defaults; location, SKU, and snooze state are not updatable here.")
+public class UpdateReplenishmentPolicyRequest {
 
     @Schema(
             description = "Minimum on-hand quantity that triggers replenishment when reached",
@@ -53,17 +47,16 @@ public class CreateReplenishmentPolicyRequest {
     private Integer maximumQuantity;
 
     @Schema(
-            description = "Round the computed replenishment quantity up to the nearest multiple of this value."
-                    + " When omitted, defaults to the vendor-feed pack size for the SKU when one is known"
-                    + " (greater than 1); otherwise no rounding is applied.",
+            description = "Round the computed replenishment quantity up to the nearest multiple of this value;"
+                    + " omit to clear (no rounding)",
             example = "6",
             requiredMode = NOT_REQUIRED)
     @Min(1)
     private Integer orderMultiple;
 
     @Schema(
-            description = "Per-policy lead-time override in days; takes precedence over vendor-feed lead-time"
-                    + " estimates and the configured default",
+            description =
+                    "Per-policy lead-time override in days; omit to clear (vendor-feed/default lead time" + " applies)",
             example = "3",
             requiredMode = NOT_REQUIRED)
     @Min(0)
@@ -71,13 +64,13 @@ public class CreateReplenishmentPolicyRequest {
 
     @Schema(
             description =
-                    "Preferred sourcing channel for replenishing this policy's pick face;" + " defaults to EITHER",
+                    "Preferred sourcing channel for replenishing this policy's pick face;" + " omit to reset to EITHER",
             example = "EITHER",
             requiredMode = NOT_REQUIRED)
     private ReplenishmentSourceType preferredSourceType;
 
     @Schema(
-            description = "Whether the policy participates in replenishment evaluation; defaults to true",
+            description = "Whether the policy participates in replenishment evaluation; omit to reset to true",
             example = "true",
             requiredMode = NOT_REQUIRED)
     private Boolean active;

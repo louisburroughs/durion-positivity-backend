@@ -77,6 +77,14 @@ class ReplenishmentServiceImplTest {
     @Mock
     private LeadTimeResolver leadTimeResolver;
 
+    @Mock
+    private com.positivity.inventory.internal.repository.NormalizedAvailabilityRepository
+            normalizedAvailabilityRepository;
+
+    /** F3 (#1041): deadline computation is mocked out — the unit vectors here don't exercise it. */
+    @Mock
+    private com.positivity.inventory.internal.service.StockoutDeadlineCalculator stockoutDeadlineCalculator;
+
     /**
      * F2 equivalence defaults: no feed lead time (DEFAULT source, 0 days), the policy
      * location is already a site, and no open supply/demand documents — so
@@ -202,7 +210,11 @@ class ReplenishmentServiceImplTest {
     @Test
     void createReplenishmentPolicy_shouldSaveAndReturnMappedPolicy() {
         // Given
-        CreateReplenishmentPolicyRequest request = new CreateReplenishmentPolicyRequest(LOC_02, "SKUABC", 10, 50);
+        CreateReplenishmentPolicyRequest request = new CreateReplenishmentPolicyRequest();
+        request.setLocationId(LOC_02);
+        request.setItemSKU("SKUABC");
+        request.setMinimumQuantity(10);
+        request.setMaximumQuantity(50);
         UUID policyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Instant now = Instant.now(TEST_CLOCK);
 

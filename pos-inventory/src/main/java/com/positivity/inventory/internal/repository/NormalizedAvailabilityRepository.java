@@ -18,6 +18,13 @@ public interface NormalizedAvailabilityRepository extends JpaRepository<Normaliz
     Optional<NormalizedAvailability> findByProductIdAndManufacturerIdAndAsOf(
             UUID productId, UUID manufacturerId, Instant asOf);
 
+    /**
+     * Most recent availability snapshot for a product across manufacturers (odoo-parity F3,
+     * issue #1041): the pack-size seed source for a newly created replenishment policy's
+     * {@code orderMultiple} default.
+     */
+    Optional<NormalizedAvailability> findFirstByProductIdOrderByAsOfDesc(UUID productId);
+
     @Query("""
             SELECT MIN(n.leadTimeDaysMin) AS minDays,
                    MAX(n.leadTimeDaysMax) AS maxDays,

@@ -12,11 +12,10 @@ import org.springframework.stereotype.Component;
  * Resolves the replenishment lead time (in days) for one policy — the horizon the
  * forecast-aware orderpoint trigger projects to (odoo-parity F2, issue #1040; decision D-4).
  *
- * <p><b>Precedence (D-4):</b> policy {@code leadTimeDaysOverride} → vendor-feed lead time →
- * configurable default. The policy override column does not exist until parity-F3 enriches
- * {@link ReplenishmentPolicy}; this component is the resolution seam — F3 only has to add
- * the override check at the top of {@link #resolve(ReplenishmentPolicy)} (returning
- * {@code LeadTimeSource.POLICY_OVERRIDE}) without touching any caller.
+ * <p><b>Precedence (D-4):</b> policy {@code leadTimeDaysOverride} (parity-F3, issue #1041)
+ * → vendor-feed lead time → configurable default. The override is an explicit operator
+ * decision on the policy and therefore beats any feed estimate; policies without one fall
+ * through to the feed chain unchanged.
  *
  * <p><b>Feed lookup:</b> {@link InventoryLeadTimeService} aggregates MIN/MAX day estimates
  * from normalized vendor feeds, keyed by product UUID. The MAX estimate is used —
@@ -35,7 +34,7 @@ public class LeadTimeResolver {
 
     /** Where the resolved lead time came from; recorded in decision logs. */
     public enum LeadTimeSource {
-        // POLICY_OVERRIDE joins here (highest precedence) when parity-F3 adds the column (D-4).
+        POLICY_OVERRIDE,
         FEED,
         DEFAULT
     }
@@ -55,7 +54,11 @@ public class LeadTimeResolver {
 
     /** Resolves the lead time for one policy per the D-4 precedence chain. */
     public @NonNull ResolvedLeadTime resolve(@NonNull ReplenishmentPolicy policy) {
-        // F3 seam (D-4): check policy.getLeadTimeDaysOverride() first once the column exists.
+        // D-4 highest precedence (parity-F3, #1041): an explicit per-policy override.
+        Integer overrideDays = policy.getLeadTimeDaysOverride();
+        if (overrideDays != null) {
+            return new ResolvedLeadTime(Math.max(0, overrideDays), LeadTimeSource.POLICY_OVERRIDE);
+        }
         Integer feedDays = feedLeadTimeDays(policy);
         if (feedDays != null) {
             return new ResolvedLeadTime(Math.max(0, feedDays), LeadTimeSource.FEED);

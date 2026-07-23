@@ -77,6 +77,14 @@ public class ReplenishmentTaskResponse {
     private String assignedTo;
 
     @Schema(
+            description = "Earliest date at which the projected available quantity goes below zero"
+                    + " (stock-out deadline used for prioritization); absent when no stock-out is"
+                    + " projected within the lead-time horizon",
+            example = "2026-01-20",
+            requiredMode = NOT_REQUIRED)
+    private String deadlineDate;
+
+    @Schema(
             description = "Timestamp at which the replenishment task was created",
             example = "2026-01-15T09:30:00Z",
             requiredMode = REQUIRED)
