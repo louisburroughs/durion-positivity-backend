@@ -512,13 +512,17 @@ public enum PermissionCode {
     // ── Accounting (new) ───────────────────────────────────────────────────────
     ACCOUNTING__TAX_SNAPSHOT__FREEZE(392, "accounting:tax-snapshot:freeze"),
     // ── Accounting (new) ───────────────────────────────────────────────────────
-    ACCOUNTING__CREDIT_MEMO__VOID(393, "accounting:credit-memo:void");
+    ACCOUNTING__CREDIT_MEMO__VOID(393, "accounting:credit-memo:void"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__SCRAP__APPROVE(394, "inventory:scrap:approve"),
+    INVENTORY__SCRAP__CREATE(395, "inventory:scrap:create"),
+    INVENTORY__SCRAP__VIEW(396, "inventory:scrap:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 29;
+    public static final int CATALOG_VERSION = 30;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

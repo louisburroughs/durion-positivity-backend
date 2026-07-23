@@ -1,9 +1,9 @@
-generatedAt: "2026-07-23T00:00:01.978745+00:00"
+generatedAt: "2026-07-23T11:15:19.209928+00:00"
 root: "."
 summary:
   manifestCount: 20
-  permissionCount: 362
-  uniquePermissionCount: 362
+  permissionCount: 366
+  uniquePermissionCount: 366
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -271,7 +271,7 @@ manifests:
     domain: "inventory"
     serviceName: "pos-inventory"
     version: "1.0"
-    permissionCount: 42
+    permissionCount: 46
     permissions:
       - name: "inventory:adjustment:create"
         description: "Create an adjustment request (draft/pending), capture reason code, quantity, and supporting notes"
@@ -357,6 +357,14 @@ manifests:
         description: "View shortage resolution options"
       - name: "inventory:replenishment:manage"
         description: "Manage replenishment policies and run the batch replenishment scan"
+      - name: "inventory:scrap:create"
+        description: "Create a scrap (write-off) document; below-threshold scraps auto-post SCRAP_OUT"
+      - name: "inventory:scrap:view"
+        description: "View scrap documents and their approval/posting state"
+      - name: "inventory:scrap:approve"
+        description: "Approve or reject a pending scrap document (posts SCRAP_OUT on approval)"
+      - name: "inventory:adjustment:override"
+        description: "Override the negative-stock policy for overridable postings (SCRAP_OUT below zero)"
   - module: "pos-invoice"
     path: "pos-invoice/src/main/resources/permissions.yaml"
     domain: "invoice"
@@ -1562,6 +1570,12 @@ permissions:
     serviceName: "pos-inventory"
     module: "pos-inventory"
     source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:adjustment:override"
+    description: "Override the negative-stock policy for overridable postings (SCRAP_OUT below zero)"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
   - name: "inventory:adjustment:view"
     description: "View adjustment history and details"
     domain: "inventory"
@@ -1780,6 +1794,24 @@ permissions:
     source: "pos-inventory/src/main/resources/permissions.yaml"
   - name: "inventory:return:write"
     description: "Submit inventory returns to stock"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:scrap:approve"
+    description: "Approve or reject a pending scrap document (posts SCRAP_OUT on approval)"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:scrap:create"
+    description: "Create a scrap (write-off) document; below-threshold scraps auto-post SCRAP_OUT"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:scrap:view"
+    description: "View scrap documents and their approval/posting state"
     domain: "inventory"
     serviceName: "pos-inventory"
     module: "pos-inventory"
