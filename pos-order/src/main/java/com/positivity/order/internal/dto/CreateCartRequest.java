@@ -34,6 +34,12 @@ public class CreateCartRequest {
     private String label;
 
     @Schema(
+            description = "Optional order-level note",
+            example = "Customer will pick up after 5pm",
+            requiredMode = NOT_REQUIRED)
+    private String generalNote;
+
+    @Schema(
             description = "Identifier of the terminal where the cart is created",
             example = "01960003-0000-7000-8000-000000000060",
             requiredMode = REQUIRED)

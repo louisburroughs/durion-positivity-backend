@@ -81,8 +81,45 @@ public class SalesOrder {
     @Column(nullable = false)
     private SalesOrderStatus status;
 
+    /** Σ lineSubtotal: post-line-discount, pre-order-discount, pre-tax (documented in OpenAPI). */
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal subtotal;
+
+    /** Σ line discounts + the allocated order discount. */
+    @Column(nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal discountTotal = BigDecimal.ZERO;
+
+    @Column(nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal taxTotal = BigDecimal.ZERO;
+
+    /** subtotal − order-discount allocation + taxTotal. */
+    @Column(nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal grandTotal = BigDecimal.ZERO;
+
+    /** True when line mutations have invalidated {@code taxTotal}; cleared by tax recompute. */
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean taxStale = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 16)
+    private OrderDiscountType orderDiscountType;
+
+    @Column(precision = 19, scale = 4)
+    private BigDecimal orderDiscountValue;
+
+    @Column(length = 64)
+    private String orderDiscountReasonCode;
+
+    @Column(length = 2000)
+    private String generalNote;
+
+    /** Quote validity horizon; set on DRAFT→QUOTED, cleared on reopen (parity story A3). */
+    @Column
+    private Instant quoteExpiresAt;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)

@@ -37,6 +37,20 @@ public class SalesOrderExceptionHandler {
                         correlationId));
     }
 
+    @ExceptionHandler(com.positivity.order.internal.exception.TaxUnavailableException.class)
+    public ResponseEntity<ApiError> handleTaxUnavailable(
+            com.positivity.order.internal.exception.TaxUnavailableException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "ORDER_TAX_UNAVAILABLE",
+                        ex.getMessage(),
+                        HttpStatus.SERVICE_UNAVAILABLE.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
     @ExceptionHandler(com.positivity.order.internal.exception.InvalidCustomerException.class)
     public ResponseEntity<ApiError> handleInvalidCustomer(
             com.positivity.order.internal.exception.InvalidCustomerException ex, HttpServletRequest request) {

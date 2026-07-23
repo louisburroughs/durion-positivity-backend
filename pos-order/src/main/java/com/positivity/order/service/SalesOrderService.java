@@ -1,7 +1,9 @@
 package com.positivity.order.service;
 
+import com.positivity.order.service.model.AddItemCommand;
 import com.positivity.order.service.model.CreateCartCommand;
 import com.positivity.order.service.model.CreateCartResult;
+import com.positivity.order.service.model.OrderDiscountCommand;
 import com.positivity.order.service.model.SalesOrderLineSummary;
 import com.positivity.order.service.model.SalesOrderSummary;
 import java.math.BigDecimal;
@@ -15,13 +17,19 @@ public interface SalesOrderService {
     CreateCartResult createCart(@NonNull CreateCartCommand command);
 
     @NonNull
-    SalesOrderLineSummary addItem(
+    SalesOrderLineSummary addItem(@NonNull UUID orderId, @NonNull AddItemCommand command);
+
+    @NonNull
+    default SalesOrderLineSummary addItem(
             @NonNull UUID orderId,
             @NonNull String itemSku,
             int quantity,
             String reasonCode,
             BigDecimal manualPrice,
-            UUID clientLineUuid);
+            UUID clientLineUuid) {
+        return addItem(
+                orderId, new AddItemCommand(itemSku, quantity, reasonCode, manualPrice, clientLineUuid, null, null));
+    }
 
     @NonNull
     default SalesOrderLineSummary addItem(
@@ -49,4 +57,20 @@ public interface SalesOrderService {
 
     @NonNull
     SalesOrderSummary linkSource(@NonNull UUID orderId, @NonNull String sourceType, @NonNull String sourceId);
+
+    /** Apply or replace the order-level discount (parity story B2, spec R3.10). */
+    @NonNull
+    SalesOrderSummary applyOrderDiscount(@NonNull UUID orderId, @NonNull OrderDiscountCommand command);
+
+    /** Remove the order-level discount. */
+    @NonNull
+    SalesOrderSummary clearOrderDiscount(@NonNull UUID orderId);
+
+    /** DRAFT → QUOTED: final reprice + tax, expiry set; counter quotes only (parity story A3). */
+    @NonNull
+    SalesOrderSummary quote(@NonNull UUID orderId);
+
+    /** QUOTED → DRAFT: reopen for editing; best-effort reprice, tax marked stale. */
+    @NonNull
+    SalesOrderSummary reopenQuote(@NonNull UUID orderId);
 }

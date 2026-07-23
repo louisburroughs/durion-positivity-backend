@@ -6,14 +6,15 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Command for creating a sales-order cart (plan stories A2/I1).
+ * Command for creating a sales-order cart (plan stories A2/I1/B2).
  *
  * @param clerkId clerk creating the cart
  * @param terminalId terminal the cart is created at
- * @param customerId optional customer reference (UUID string; validated against pos-customer)
+ * @param customerId optional customer reference (UUID string; validated against the CRM replica)
  * @param vehicleId optional vehicle reference (UUID string; validated when a customer is present)
- * @param locationId shop location; drives order-number assignment
+ * @param locationId shop location; drives order-number assignment and tax jurisdiction
  * @param label optional parking label for resumable drafts
+ * @param generalNote optional order-level note
  * @param idempotencyKey optional client idempotency key; replays return the original cart
  */
 public record CreateCartCommand(
@@ -23,6 +24,7 @@ public record CreateCartCommand(
         @Nullable String vehicleId,
         @NonNull UUID locationId,
         @Nullable String label,
+        @Nullable String generalNote,
         @Nullable String idempotencyKey) {
 
     public CreateCartCommand {

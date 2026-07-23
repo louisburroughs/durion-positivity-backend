@@ -4,13 +4,16 @@ import com.positivity.events.EmitEvent;
 import com.positivity.order.internal.dto.AddItemRequest;
 import com.positivity.order.internal.dto.CreateCartRequest;
 import com.positivity.order.internal.dto.LinkSourceRequest;
+import com.positivity.order.internal.dto.OrderDiscountRequest;
 import com.positivity.order.internal.dto.SalesOrderLineResponse;
 import com.positivity.order.internal.dto.SalesOrderResponse;
 import com.positivity.order.internal.dto.UpdateItemRequest;
 import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.service.SalesOrderService;
+import com.positivity.order.service.model.AddItemCommand;
 import com.positivity.order.service.model.CreateCartCommand;
 import com.positivity.order.service.model.CreateCartResult;
+import com.positivity.order.service.model.OrderDiscountCommand;
 import com.positivity.order.service.model.SalesOrderLineSummary;
 import com.positivity.order.service.model.SalesOrderSummary;
 import io.swagger.v3.oas.annotations.Operation;
@@ -68,6 +71,7 @@ public class SalesOrderController {
                 request.getVehicleId(),
                 request.getLocationId(),
                 request.getLabel(),
+                request.getGeneralNote(),
                 idempotencyKey));
         HttpStatus status = result.replay() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(status).body(toResponse(result.summary()));
@@ -108,11 +112,14 @@ public class SalesOrderController {
             @PathVariable UUID orderId, @Valid @RequestBody AddItemRequest request) {
         SalesOrderLineSummary line = salesOrderService.addItem(
                 orderId,
-                request.getItemSku(),
-                request.getQuantity(),
-                request.getReasonCode(),
-                request.getManualPrice(),
-                request.getLineUuid());
+                new AddItemCommand(
+                        request.getItemSku(),
+                        request.getQuantity(),
+                        request.getReasonCode(),
+                        request.getManualPrice(),
+                        request.getLineUuid(),
+                        request.getCustomerNote(),
+                        request.getInternalNote()));
         return ResponseEntity.status(HttpStatus.CREATED).body(toLineResponse(line));
     }
 
@@ -152,6 +159,56 @@ public class SalesOrderController {
     }
 
     @Operation(
+            summary = "Apply an order-level discount",
+            description = "Apply or replace the order-level discount (PERCENT or AMOUNT), allocated pro-rata"
+                    + " across lines. DRAFT orders only.",
+            tags = {"Sales Orders"})
+    @PutMapping("/carts/{orderId}/discount")
+    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_DISCOUNT + "')")
+    @EmitEvent(id = "ORDER_CART_DISCOUNT_APPLY", apiVersion = "1")
+    public ResponseEntity<SalesOrderResponse> applyOrderDiscount(
+            @PathVariable UUID orderId, @Valid @RequestBody OrderDiscountRequest request) {
+        SalesOrderSummary updated = salesOrderService.applyOrderDiscount(
+                orderId, new OrderDiscountCommand(request.getType(), request.getValue(), request.getReasonCode()));
+        return ResponseEntity.ok(toResponse(updated));
+    }
+
+    @Operation(
+            summary = "Remove the order-level discount",
+            description = "Clear any order-level discount and recompute totals. DRAFT orders only.",
+            tags = {"Sales Orders"})
+    @DeleteMapping("/carts/{orderId}/discount")
+    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_DISCOUNT + "')")
+    @EmitEvent(id = "ORDER_CART_DISCOUNT_REMOVE", apiVersion = "1")
+    public ResponseEntity<SalesOrderResponse> clearOrderDiscount(@PathVariable UUID orderId) {
+        return ResponseEntity.ok(toResponse(salesOrderService.clearOrderDiscount(orderId)));
+    }
+
+    @Operation(
+            summary = "Convert a cart to a counter quote",
+            description = "Final reprice + tax computation, then DRAFT → QUOTED with a validity horizon."
+                    + " Counter quotes only: workorder-linked orders are quoted via pos-workorder estimates"
+                    + " and are rejected here (spec Q3).",
+            tags = {"Sales Orders"})
+    @PostMapping("/carts/{orderId}/quote")
+    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_QUOTE + "')")
+    @EmitEvent(id = "ORDER_CART_QUOTE", apiVersion = "1")
+    public ResponseEntity<SalesOrderResponse> quote(@PathVariable UUID orderId) {
+        return ResponseEntity.ok(toResponse(salesOrderService.quote(orderId)));
+    }
+
+    @Operation(
+            summary = "Reopen a counter quote",
+            description = "QUOTED → DRAFT: clears the validity horizon, best-effort reprices, and marks tax stale.",
+            tags = {"Sales Orders"})
+    @PostMapping("/carts/{orderId}/quote/reopen")
+    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_QUOTE + "')")
+    @EmitEvent(id = "ORDER_CART_QUOTE_REOPEN", apiVersion = "1")
+    public ResponseEntity<SalesOrderResponse> reopenQuote(@PathVariable UUID orderId) {
+        return ResponseEntity.ok(toResponse(salesOrderService.reopenQuote(orderId)));
+    }
+
+    @Operation(
             summary = "Link a source to a sales order",
             description = "Associate an external source reference with an existing sales order cart.",
             tags = {"Sales Orders"})
@@ -180,6 +237,15 @@ public class SalesOrderController {
                 .terminalId(summary.terminalId())
                 .status(summary.status())
                 .subtotal(summary.subtotal())
+                .discountTotal(summary.discountTotal())
+                .taxTotal(summary.taxTotal())
+                .grandTotal(summary.grandTotal())
+                .taxStale(summary.taxStale())
+                .orderDiscountType(summary.orderDiscountType())
+                .orderDiscountValue(summary.orderDiscountValue())
+                .orderDiscountReasonCode(summary.orderDiscountReasonCode())
+                .generalNote(summary.generalNote())
+                .quoteExpiresAt(summary.quoteExpiresAt())
                 .createdAt(summary.createdAt())
                 .updatedAt(summary.updatedAt())
                 .createdBy(summary.createdBy())
@@ -195,6 +261,13 @@ public class SalesOrderController {
                 .itemDescription(summary.itemDescription())
                 .quantity(summary.quantity())
                 .unitPrice(summary.unitPrice())
+                .discountPercent(summary.discountPercent())
+                .discountAmount(summary.discountAmount())
+                .lineSubtotal(summary.lineSubtotal())
+                .taxAmount(summary.taxAmount())
+                .lineTotal(summary.lineTotal())
+                .customerNote(summary.customerNote())
+                .internalNote(summary.internalNote())
                 .fulfillmentStatus(summary.fulfillmentStatus())
                 .priceSource(summary.priceSource())
                 .reasonCode(summary.reasonCode())

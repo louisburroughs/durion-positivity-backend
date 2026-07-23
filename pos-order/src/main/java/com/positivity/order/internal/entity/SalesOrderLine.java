@@ -83,6 +83,39 @@ public class SalesOrderLine {
     @Column(columnDefinition = "UUID", updatable = false)
     private UUID clientLineUuid;
 
+    /** Optional line-level discount percent (0-100, 2dp); drives {@code discountAmount}. */
+    @Column(precision = 5, scale = 2)
+    private BigDecimal discountPercent;
+
+    /** Line-level discount value plus this line's pro-rata share of the order discount. */
+    @Column(nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    /** Extended amount post-line-discount, pre-order-discount, pre-tax. */
+    @Column(nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal lineSubtotal = BigDecimal.ZERO;
+
+    @Column(nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal taxAmount = BigDecimal.ZERO;
+
+    /** lineSubtotal − order-discount allocation + taxAmount. */
+    @Column(nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal lineTotal = BigDecimal.ZERO;
+
+    @Column(length = 1000)
+    private String customerNote;
+
+    @Column(length = 1000)
+    private String internalNote;
+
+    /** pos-price rule breakdown JSON for the applied unit price (audit; parity story B1). */
+    @Column(columnDefinition = "text")
+    private String pricingBreakdown;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.order.service.SalesOrderService;
+import com.positivity.order.service.model.AddItemCommand;
 import com.positivity.order.service.model.CreateCartCommand;
 import com.positivity.order.service.model.CreateCartResult;
 import com.positivity.order.service.model.SalesOrderLineSummary;
@@ -87,6 +88,15 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 "terminal-001",
                 "DRAFT",
                 BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -98,8 +108,15 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 "Test Product",
                 1,
                 BigDecimal.TEN,
+                null,
+                BigDecimal.ZERO,
+                BigDecimal.TEN,
+                BigDecimal.ZERO,
+                BigDecimal.TEN,
                 "AVAILABLE",
                 "PRICING_SERVICE",
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -107,7 +124,7 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
 
         when(salesOrderService.createCart(any(CreateCartCommand.class)))
                 .thenReturn(new CreateCartResult(fakeOrder, false));
-        when(salesOrderService.addItem(any(), any(), anyInt(), any(), any(), any()))
+        when(salesOrderService.addItem(any(UUID.class), any(AddItemCommand.class)))
                 .thenReturn(fakeLine);
         when(salesOrderService.getOrder(any())).thenReturn(fakeOrder);
         when(salesOrderService.updateItemQuantity(any(), any(), anyInt())).thenReturn(fakeLine);
@@ -386,6 +403,15 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 "terminal-001",
                 "DRAFT",
                 BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -410,7 +436,7 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
     @DisplayName("SC-009: POST /v1/orders/carts/{orderId}/items when access denied returns 403 Forbidden")
     void addItem_whenAccessDenied_thenReturns403() throws Exception {
         UUID orderId = UUID.randomUUID();
-        when(salesOrderService.addItem(any(), any(), anyInt(), any(), any(), any()))
+        when(salesOrderService.addItem(any(UUID.class), any(AddItemCommand.class)))
                 .thenThrow(new AccessDeniedException("Insufficient permissions"));
 
         // SC-009

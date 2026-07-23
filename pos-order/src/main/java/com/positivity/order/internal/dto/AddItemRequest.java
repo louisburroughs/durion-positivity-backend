@@ -43,4 +43,13 @@ public class AddItemRequest {
             example = "01960003-0000-7000-8000-0000000000aa",
             requiredMode = NOT_REQUIRED)
     private UUID lineUuid;
+
+    @Schema(description = "Customer-visible line note", example = "Front wipers only", requiredMode = NOT_REQUIRED)
+    private String customerNote;
+
+    @Schema(
+            description = "Shop-internal line note",
+            example = "Price-matched to invoice #123",
+            requiredMode = NOT_REQUIRED)
+    private String internalNote;
 }
