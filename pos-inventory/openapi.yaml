@@ -56,6 +56,8 @@ tags:
   description: Replenishment task and policy endpoints
 - name: Cycle Count Query
   description: Query endpoints for cycle count tasks and history
+- name: Cycle Count Schedules
+  description: Recurring cycle-count schedule management endpoints
 - name: Purchase Orders
   description: Purchase order creation, lifecycle, and receiving endpoints
 - name: Cycle Count Adjustments
@@ -140,6 +142,184 @@ paths:
         - inventory:location:admin
       x-required-permissions:
       - inventory:location:admin
+  /v1/inventory/cycleCountSchedules/{scheduleId}:
+    get:
+      tags:
+      - Cycle Count Schedules
+      summary: Get cycle count schedule
+      description: Returns a cycle-count schedule by identifier.
+      operationId: getSchedule
+      parameters:
+      - name: scheduleId
+        in: path
+        description: Cycle count schedule identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Cycle count schedule returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '404':
+          description: Cycle count schedule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:view
+      x-required-permissions:
+      - inventory:cycle_count:view
+    put:
+      tags:
+      - Cycle Count Schedules
+      summary: Update cycle count schedule
+      description: Partially updates a cycle-count schedule (frequency, filters, next due date, auto-create, active flag); null fields are left unchanged.
+      operationId: updateSchedule
+      parameters:
+      - name: scheduleId
+        in: path
+        description: Cycle count schedule identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCycleCountScheduleRequest'
+        required: true
+      responses:
+        '200':
+          description: Cycle count schedule updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '404':
+          description: Cycle count schedule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:initiate
+      x-required-permissions:
+      - inventory:cycle_count:initiate
+    delete:
+      tags:
+      - Cycle Count Schedules
+      summary: Deactivate cycle count schedule
+      description: 'Soft delete: marks the schedule inactive so it stops firing; the row is never removed.'
+      operationId: deactivateSchedule
+      parameters:
+      - name: scheduleId
+        in: path
+        description: Cycle count schedule identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Cycle count schedule deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '404':
+          description: Cycle count schedule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:initiate
+      x-required-permissions:
+      - inventory:cycle_count:initiate
+  /v1/inventory/cycleCountPlans/{planId}/status:
+    put:
+      tags:
+      - Cycle Count Plans
+      summary: Transition cycle count plan status
+      description: 'Moves a plan through its lifecycle (PLANNED → STARTED → COMPLETED_PENDING_APPROVAL → APPROVED/REJECTED; PLANNED/STARTED may be CANCELLED). Approving a schedule-created plan restamps the originating schedule''s next due date (odoo-parity I1, #1031).'
+      operationId: updatePlanStatus
+      parameters:
+      - name: planId
+        in: path
+        description: Cycle count plan identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCycleCountPlanStatusRequest'
+        required: true
+      responses:
+        '200':
+          description: Cycle count plan status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountPlanResponse'
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountPlanResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountPlanResponse'
+        '404':
+          description: Cycle count plan not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountPlanResponse'
+        '409':
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountPlanResponse'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:complete
+      x-required-permissions:
+      - inventory:cycle_count:complete
   /v1/inventory/stock-movements:
     post:
       tags:
@@ -1566,6 +1746,110 @@ paths:
         - inventory:goods_receipt:create
       x-required-permissions:
       - inventory:goods_receipt:create
+  /v1/inventory/cycleCountSchedules:
+    get:
+      tags:
+      - Cycle Count Schedules
+      summary: List cycle count schedules
+      description: Lists one page of cycle-count schedules, newest first, optionally filtered by location and/or active flag. due=true restricts to active schedules whose next due date has arrived (the due-for-count view).
+      operationId: listSchedules
+      parameters:
+      - name: locationId
+        in: query
+        description: Filter by location identifier
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: active
+        in: query
+        description: Filter by active flag
+        required: false
+        schema:
+          type: boolean
+      - name: due
+        in: query
+        description: Restrict to active schedules currently due for counting
+        required: false
+        schema:
+          type: boolean
+          default: false
+      - name: page
+        in: query
+        description: Page index (0-based)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+          exclusiveMinimum: 0
+      responses:
+        '200':
+          description: Cycle count schedules returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CycleCountScheduleResponse'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:view
+      x-required-permissions:
+      - inventory:cycle_count:view
+    post:
+      tags:
+      - Cycle Count Schedules
+      summary: Create cycle count schedule
+      description: Creates a recurring cycle-count schedule for a location.
+      operationId: createSchedule
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCycleCountScheduleRequest'
+        required: true
+      responses:
+        '201':
+          description: Cycle count schedule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:initiate
+      x-required-permissions:
+      - inventory:cycle_count:initiate
   /v1/inventory/cycleCountPlans:
     get:
       tags:
@@ -3937,6 +4221,189 @@ paths:
       - inventory:adjustment:create
 components:
   schemas:
+    UpdateCycleCountScheduleRequest:
+      type: object
+      description: Partial update of a recurring cycle-count schedule; null fields are left unchanged
+      properties:
+        zoneId:
+          type: string
+          format: uuid
+          description: New single-zone filter within the location
+          example: 01960003-0000-7000-8000-000000000002
+        skuCategory:
+          type: string
+          description: New SKU-category filter
+          example: BRAKES
+          maxLength: 100
+          minLength: 0
+        frequencyDays:
+          type: integer
+          format: int32
+          description: New count frequency in days
+          example: 14
+        nextDueDate:
+          type: string
+          format: date
+          description: New next due date
+          example: 2026-09-01
+        autoCreatePlan:
+          type: boolean
+          description: Whether the scheduled runner auto-creates the next cycle-count plan when due
+          example: false
+        active:
+          type: boolean
+          description: Whether the schedule is active
+          example: true
+    CycleCountScheduleResponse:
+      type: object
+      description: A recurring cycle-count schedule and its current due state
+      properties:
+        scheduleId:
+          type: string
+          format: uuid
+          description: Unique identifier of the schedule
+          example: 01960003-0000-7000-8000-000000000001
+        locationId:
+          type: string
+          format: uuid
+          description: Identifier of the location the schedule applies to
+          example: 01960003-0000-7000-8000-000000000002
+        zoneId:
+          type: string
+          format: uuid
+          description: Optional single-zone filter within the location
+          example: 01960003-0000-7000-8000-000000000003
+        skuCategory:
+          type: string
+          description: Optional SKU-category filter
+          example: BRAKES
+        frequencyDays:
+          type: integer
+          format: int32
+          description: Count frequency in days
+          example: 30
+        nextDueDate:
+          type: string
+          format: date
+          description: Next date the schedule is due for counting
+          example: 2026-08-01
+        autoCreatePlan:
+          type: boolean
+          description: Whether the scheduled runner auto-creates the next cycle-count plan when due
+          example: true
+        active:
+          type: boolean
+          description: Whether the schedule is active
+          example: true
+        createdBy:
+          type: string
+          description: Identifier of the user who created the schedule
+          example: user-10042
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the schedule was created
+          example: 2026-07-01 09:30:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the schedule was last updated
+          example: 2026-07-15 10:05:00+00:00
+      required:
+      - active
+      - autoCreatePlan
+      - createdAt
+      - createdBy
+      - frequencyDays
+      - locationId
+      - nextDueDate
+      - scheduleId
+      - updatedAt
+    UpdateCycleCountPlanStatusRequest:
+      type: object
+      description: Request to transition a cycle count plan to a new lifecycle status
+      properties:
+        status:
+          type: string
+          description: Target lifecycle status
+          enum:
+          - PLANNED
+          - STARTED
+          - COMPLETED_PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - CANCELLED
+          example: STARTED
+      required:
+      - status
+    CycleCountPlanResponse:
+      type: object
+      description: A cycle count plan describing scheduled counts for a location and its current state
+      properties:
+        planId:
+          type: string
+          format: uuid
+          description: Unique identifier of the cycle count plan
+          example: 01960003-0000-7000-8000-000000000001
+        locationId:
+          type: string
+          format: uuid
+          description: Identifier of the location the plan applies to
+          example: 01960003-0000-7000-8000-000000000002
+        zoneIds:
+          type: array
+          description: Identifiers of the zones within the location covered by the plan
+          example:
+          - 01960003-0000-7000-8000-000000000003
+          items:
+            type: string
+            format: uuid
+        planName:
+          type: string
+          description: Human-readable name of the cycle count plan
+          example: Q1 perishables count
+        scheduledDate:
+          type: string
+          format: date
+          description: Date on which the cycle count is scheduled to occur
+          example: 2026-01-15
+        status:
+          type: string
+          description: Current lifecycle status of the plan
+          example: SCHEDULED
+        scheduleId:
+          type: string
+          format: uuid
+          description: Identifier of the recurring schedule that created this plan (null for manual plans)
+          example: 01960003-0000-7000-8000-000000000004
+        dueDate:
+          type: string
+          format: date
+          description: Due date this schedule-created plan covers (null for manual plans)
+          example: 2026-08-01
+        createdBy:
+          type: string
+          description: Identifier of the user who created the plan
+          example: user-10042
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the plan was created
+          example: 2026-01-15 09:30:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the plan was last updated
+          example: 2026-01-15 10:05:00+00:00
+      required:
+      - createdAt
+      - createdBy
+      - locationId
+      - planId
+      - planName
+      - scheduledDate
+      - status
+      - updatedAt
     RecordMovementRequest:
       type: object
       description: Request body for recording a directional stock movement in the inventory ledger
@@ -5910,6 +6377,44 @@ components:
       - poId
       - receiptId
       - receiptNumber
+    CreateCycleCountScheduleRequest:
+      type: object
+      description: Request to create a recurring cycle-count schedule for a location
+      properties:
+        locationId:
+          type: string
+          format: uuid
+          description: Identifier of the location the schedule applies to
+          example: 01960003-0000-7000-8000-000000000001
+        zoneId:
+          type: string
+          format: uuid
+          description: Optional single-zone filter within the location
+          example: 01960003-0000-7000-8000-000000000002
+        skuCategory:
+          type: string
+          description: Optional SKU-category filter (plain string, metadata-only in v1)
+          example: BRAKES
+          maxLength: 100
+          minLength: 0
+        frequencyDays:
+          type: integer
+          format: int32
+          description: Count frequency in days
+          example: 30
+        nextDueDate:
+          type: string
+          format: date
+          description: First date the schedule is due for counting
+          example: 2026-08-01
+        autoCreatePlan:
+          type: boolean
+          description: Whether the scheduled runner auto-creates the next cycle-count plan when due (false = the schedule only appears in the due-for-count view); defaults to false
+          example: true
+      required:
+      - frequencyDays
+      - locationId
+      - nextDueDate
     CreateCycleCountPlanRequest:
       type: object
       description: Request to create a cycle count plan scheduling counts across a location and zones
@@ -5941,64 +6446,6 @@ components:
       - locationId
       - planName
       - scheduledDate
-    CycleCountPlanResponse:
-      type: object
-      description: A cycle count plan describing scheduled counts for a location and its current state
-      properties:
-        planId:
-          type: string
-          format: uuid
-          description: Unique identifier of the cycle count plan
-          example: 01960003-0000-7000-8000-000000000001
-        locationId:
-          type: string
-          format: uuid
-          description: Identifier of the location the plan applies to
-          example: 01960003-0000-7000-8000-000000000002
-        zoneIds:
-          type: array
-          description: Identifiers of the zones within the location covered by the plan
-          example:
-          - 01960003-0000-7000-8000-000000000003
-          items:
-            type: string
-            format: uuid
-        planName:
-          type: string
-          description: Human-readable name of the cycle count plan
-          example: Q1 perishables count
-        scheduledDate:
-          type: string
-          format: date
-          description: Date on which the cycle count is scheduled to occur
-          example: 2026-01-15
-        status:
-          type: string
-          description: Current lifecycle status of the plan
-          example: SCHEDULED
-        createdBy:
-          type: string
-          description: Identifier of the user who created the plan
-          example: user-10042
-        createdAt:
-          type: string
-          format: date-time
-          description: Timestamp when the plan was created
-          example: 2026-01-15 09:30:00+00:00
-        updatedAt:
-          type: string
-          format: date-time
-          description: Timestamp when the plan was last updated
-          example: 2026-01-15 10:05:00+00:00
-      required:
-      - createdAt
-      - createdBy
-      - locationId
-      - planId
-      - planName
-      - scheduledDate
-      - status
-      - updatedAt
     CreateAdjustmentRequest:
       type: object
       description: Request to create a new inventory adjustment from a cycle count variance

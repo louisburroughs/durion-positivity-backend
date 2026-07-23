@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.CycleCountPlan;
 import com.positivity.inventory.internal.enums.CycleCountPlanStatus;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -18,4 +19,7 @@ public interface CycleCountPlanRepository extends JpaRepository<CycleCountPlan, 
             """)
     Page<CycleCountPlan> findByOptionalFilters(
             @Param("locationId") UUID locationId, @Param("status") CycleCountPlanStatus status, Pageable pageable);
+
+    /** Exactly-once guard for schedule-created plans (odoo-parity I1, #1031). */
+    boolean existsByScheduleIdAndDueDate(UUID scheduleId, LocalDate dueDate);
 }
