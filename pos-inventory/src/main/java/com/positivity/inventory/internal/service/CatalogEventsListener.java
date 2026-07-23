@@ -126,7 +126,6 @@ public class CatalogEventsListener {
                                 : payload.trackingLevel())
                 .substitutionGroupId(payload.substitutionGroupId())
                 .aggregateVersion(aggregateVersion)
-                .updatedAt(Instant.now(clock))
                 .build());
 
         // The fact carries the product's full UoM conversion set — replace, don't merge.
