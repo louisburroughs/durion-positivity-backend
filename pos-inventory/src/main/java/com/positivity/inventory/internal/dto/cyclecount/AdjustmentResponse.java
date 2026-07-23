@@ -26,6 +26,12 @@ import lombok.NoArgsConstructor;
 public class AdjustmentResponse {
 
     @Schema(
+            description = "Cycle count task this adjustment settles, if created from a task",
+            example = "01960003-0000-7000-8000-000000000009",
+            requiredMode = NOT_REQUIRED)
+    private UUID taskId;
+
+    @Schema(
             description = "Unique identifier of the adjustment record",
             example = "01960003-0000-7000-8000-000000000001",
             requiredMode = REQUIRED)

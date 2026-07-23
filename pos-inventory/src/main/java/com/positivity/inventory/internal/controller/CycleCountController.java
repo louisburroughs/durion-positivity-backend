@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.cyclecount.CountEntryResponse;
 import com.positivity.inventory.internal.dto.cyclecount.CountResponse;
 import com.positivity.inventory.internal.dto.cyclecount.CycleCountTaskResponse;
+import com.positivity.inventory.internal.dto.cyclecount.InterferingMovementResponse;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitCountRequest;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitRecountRequest;
 import com.positivity.inventory.service.CycleCountService;
@@ -151,6 +152,52 @@ public class CycleCountController {
             @Parameter(description = "Task ID") @PathVariable UUID taskId) {
         List<CountEntryResponse> history = cycleCountService.getCountHistory(taskId);
         return ResponseEntity.ok(history);
+    }
+
+    /**
+     * List ledger movements interfering with a task's count window
+     * (odoo-parity I2, issue #1026).
+     *
+     * <p>Design note (I3): the alternative of freezing stock movements for the
+     * duration of a count was explicitly REJECTED — blocking movements
+     * contradicts continuous shop operation. Conflict detection replaces
+     * freezing: movements stay allowed, the ledger makes them listable here,
+     * and a detected conflict forces an explicit reviewer choice (recount, or
+     * approve with the variance recomputed against current on-hand).
+     */
+    @GetMapping("/task/{taskId}/interfering-movements")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:cycle_count:view"})
+    @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
+    @Tag(name = "Cycle Count Query")
+    @Operation(
+            summary = "List interfering movements for a cycle count task",
+            description = "Returns the on-hand-affecting ledger entries for the task's SKU/location recorded"
+                    + " between task creation and now — the movements that make the task's expected-quantity"
+                    + " snapshot stale (CONFLICT). Design note: freezing stock movements during counts was"
+                    + " rejected as it contradicts continuous shop operation; conflict detection with this"
+                    + " listing replaces freezing.",
+            tags = {"Cycle Count Query"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Interfering movements retrieved successfully",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            array =
+                                    @io.swagger.v3.oas.annotations.media.ArraySchema(
+                                            schema = @Schema(implementation = InterferingMovementResponse.class))))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Task not found",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = com.positivity.shared.error.ApiError.class)))
+    public ResponseEntity<List<InterferingMovementResponse>> getInterferingMovements(
+            @Parameter(description = "Task ID") @PathVariable UUID taskId) {
+        return ResponseEntity.ok(cycleCountService.getInterferingMovements(taskId));
     }
 
     /**

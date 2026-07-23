@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import com.positivity.inventory.internal.service.LedgerPostingService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -36,9 +38,16 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     @Autowired
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
+    @Autowired
+    private InventoryStockSummaryRepository inventoryStockSummaryRepository;
+
+    @Autowired
+    private LedgerPostingService ledgerPostingService;
+
     @BeforeEach
     void setUp() {
         inventoryLedgerEntryRepository.deleteAll();
+        inventoryStockSummaryRepository.deleteAll();
     }
 
     @Test
@@ -113,7 +122,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     }
 
     private void seedOnHand(UUID productId, UUID locationId, int quantity) {
-        inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
+        ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productId.toString())
                 .locationId(locationId)
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
@@ -126,7 +135,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     }
 
     private void seedReservationCreated(UUID productId, UUID locationId, int quantity) {
-        inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
+        ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productId.toString())
                 .locationId(locationId)
                 .eventType(InventoryLedgerEventType.RESERVATION_CREATED)
@@ -139,7 +148,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     }
 
     private void seedReservationReleased(UUID productId, UUID locationId, int quantity) {
-        inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
+        ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productId.toString())
                 .locationId(locationId)
                 .eventType(InventoryLedgerEventType.RESERVATION_RELEASED)

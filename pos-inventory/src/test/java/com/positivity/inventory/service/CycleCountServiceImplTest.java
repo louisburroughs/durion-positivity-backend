@@ -51,11 +51,15 @@ class CycleCountServiceImplTest {
     @Mock
     private CountEntryRepository countEntryRepository;
 
+    @Mock
+    private com.positivity.inventory.internal.service.CycleCountConflictDetector conflictDetector;
+
     private CycleCountServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new CycleCountServiceImpl(taskRepository, countEntryRepository, Clock.systemDefaultZone());
+        service = new CycleCountServiceImpl(
+                taskRepository, countEntryRepository, Clock.systemDefaultZone(), conflictDetector);
     }
 
     @Test

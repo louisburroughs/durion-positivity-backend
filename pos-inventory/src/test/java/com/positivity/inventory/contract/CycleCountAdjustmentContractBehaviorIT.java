@@ -11,6 +11,7 @@ import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.inventory.internal.repository.ApprovalThresholdConfigRepository;
 import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,11 +53,15 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
     @Autowired
     private InventoryLedgerEntryRepository ledgerEntryRepository;
 
+    @Autowired
+    private InventoryStockSummaryRepository stockSummaryRepository;
+
     @BeforeEach
     void setUp() {
         // Issue #26: delete ledger entries before adjustments (ledger refs adjustment
         // ID)
         ledgerEntryRepository.deleteAll();
+        stockSummaryRepository.deleteAll();
         adjustmentRepository.deleteAll();
         thresholdConfigRepository.deleteAll();
     }

@@ -33,6 +33,16 @@ public class ArchitectureTest {
                 }
             };
 
+    private static final DescribedPredicate<JavaCall<?>> LEDGER_REPOSITORY_SAVE_CALL =
+            new DescribedPredicate<>("call InventoryLedgerEntryRepository.save/saveAll") {
+
+                public boolean test(JavaCall<?> input) {
+                    return "com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository"
+                                    .equals(input.getTargetOwner().getFullName())
+                            && ("save".equals(input.getName()) || "saveAll".equals(input.getName()));
+                }
+            };
+
     @ArchTest
     static final ArchRule inventory_should_not_depend_on_pos_location_classes = noClasses()
             .that()
@@ -167,6 +177,17 @@ public class ArchitectureTest {
             .haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Id")
             .allowEmptyShould(true)
             .because("ADR-0013 mandates UUID v7 generation for all entity identifiers");
+
+    @ArchTest
+    static final ArchRule ledger_entry_writes_must_go_through_posting_funnel = noClasses()
+            .that()
+            .doNotHaveFullyQualifiedName("com.positivity.inventory.internal.service.LedgerPostingServiceImpl")
+            .should()
+            .callMethodWhere(LEDGER_REPOSITORY_SAVE_CALL)
+            .allowEmptyShould(true)
+            .because("all inventory_ledger_entry appends must flow through LedgerPostingService so the"
+                    + " stock summary read model stays consistent (#1024, A1) and the negative-stock"
+                    + " policy matrix has a single enforcement point (#1027, K1)");
 
     @ArchTest
     static final ArchRule entities_should_not_call_uuid_randomUUID = noClasses()

@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -16,6 +17,14 @@ import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for {@link InventoryLedgerEntry} entities.
+ *
+ * <p>Since issue #1024 (A1) the availability/inquiry/rollup read paths are
+ * served by the {@code inventory_stock_summary} read model, not by the
+ * aggregate queries below. The {@code calculateOnHand*}/{@code sumQuantity*}
+ * aggregations remain for (a) posting-path {@code quantityAfter} and
+ * validation computations and (b) the summary rebuild/drift-verifier jobs,
+ * for which the ledger is the source of truth. Do not reintroduce them on
+ * hot read endpoints.
  */
 public interface InventoryLedgerEntryRepository
         extends JpaRepository<InventoryLedgerEntry, UUID>, JpaSpecificationExecutor<InventoryLedgerEntry> {
@@ -33,6 +42,53 @@ public interface InventoryLedgerEntryRepository
             UUID locationId, Collection<InventoryLedgerEventType> eventTypes);
 
     Optional<InventoryLedgerEntry> findByAdjustmentId(UUID adjustmentId);
+
+    // ─── Cycle-count conflict window queries (odoo-parity I2, issue #1026) ────
+
+    /**
+     * Interfering movements for a cycle-count task: on-hand-affecting entries
+     * for the task's SKU recorded after the task snapshot was taken.
+     */
+    List<InventoryLedgerEntry> findByStockItemIdAndEventTypeInAndTimestampGreaterThanOrderByTimestampAsc(
+            String stockItemId, Collection<InventoryLedgerEventType> eventTypes, java.time.Instant after);
+
+    /** Location-scoped variant of the interfering-movement listing. */
+    List<InventoryLedgerEntry> findByStockItemIdAndLocationIdAndEventTypeInAndTimestampGreaterThanOrderByTimestampAsc(
+            String stockItemId,
+            UUID locationId,
+            Collection<InventoryLedgerEventType> eventTypes,
+            java.time.Instant after);
+
+    /**
+     * Net on-hand delta for one SKU since a point in time — non-zero means
+     * movements interfered with a count window (odoo-parity I2).
+     */
+    @Query("""
+                        SELECT COALESCE(SUM(e.changeInQuantity), 0)
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.eventType IN :eventTypes
+                          AND e.timestamp > :after
+                        """)
+    Integer sumChangeForStockItemSince(
+            @Param("stockItemId") String stockItemId,
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
+            @Param("after") java.time.Instant after);
+
+    /** Location-scoped variant of {@link #sumChangeForStockItemSince}. */
+    @Query("""
+                        SELECT COALESCE(SUM(e.changeInQuantity), 0)
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.locationId = :locationId
+                          AND e.eventType IN :eventTypes
+                          AND e.timestamp > :after
+                        """)
+    Integer sumChangeForStockItemAtLocationSince(
+            @Param("stockItemId") String stockItemId,
+            @Param("locationId") UUID locationId,
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
+            @Param("after") java.time.Instant after);
 
     default Integer calculateOnHandQuantity(UUID stockItemId) {
         return calculateOnHandQuantityForEventTypes(
@@ -219,4 +275,83 @@ public interface InventoryLedgerEntryRepository
 
         long getQuantity();
     }
+
+    /**
+     * Ledger-truth aggregation per (stockItemId, locationId) for every key with
+     * summary-relevant events (issue #1024, A1). Used by the summary rebuild
+     * job and the drift verifier — not by read endpoints.
+     */
+    @Query("""
+                        SELECT e.stockItemId AS stockItemId, e.locationId AS locationId,
+                               COALESCE(SUM(CASE WHEN e.eventType IN :onHandTypes THEN e.changeInQuantity ELSE 0 END), 0) AS onHand,
+                               COALESCE(SUM(CASE WHEN e.eventType = :allocationCreated THEN e.changeInQuantity
+                                                 WHEN e.eventType = :allocationReleased THEN -e.changeInQuantity
+                                                 ELSE 0 END), 0) AS allocated,
+                               COALESCE(SUM(CASE WHEN e.eventType = :reservationCreated THEN e.changeInQuantity
+                                                 WHEN e.eventType = :reservationReleased THEN -e.changeInQuantity
+                                                 ELSE 0 END), 0) AS reserved
+                        FROM InventoryLedgerEntry e
+                        WHERE e.eventType IN :summaryTypes
+                        GROUP BY e.stockItemId, e.locationId
+                        """)
+    List<SummaryAggregate> aggregateForStockSummary(
+            @Param("onHandTypes") Collection<InventoryLedgerEventType> onHandTypes,
+            @Param("allocationCreated") InventoryLedgerEventType allocationCreated,
+            @Param("allocationReleased") InventoryLedgerEventType allocationReleased,
+            @Param("reservationCreated") InventoryLedgerEventType reservationCreated,
+            @Param("reservationReleased") InventoryLedgerEventType reservationReleased,
+            @Param("summaryTypes") Collection<InventoryLedgerEventType> summaryTypes);
+
+    interface SummaryAggregate {
+        String getStockItemId();
+
+        UUID getLocationId();
+
+        long getOnHand();
+
+        long getAllocated();
+
+        long getReserved();
+    }
+
+    /** Latest summary-relevant entries for one key; pass a page of size 1. Rebuild use only. */
+    @Query("""
+                        SELECT e
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND ((:locationId IS NULL AND e.locationId IS NULL) OR e.locationId = :locationId)
+                          AND e.eventType IN :summaryTypes
+                        ORDER BY e.timestamp DESC, e.ledgerEntryId DESC
+                        """)
+    List<InventoryLedgerEntry> findLatestSummaryEntries(
+            @Param("stockItemId") String stockItemId,
+            @Param("locationId") UUID locationId,
+            @Param("summaryTypes") Collection<InventoryLedgerEventType> summaryTypes,
+            Pageable pageable);
+
+    /**
+     * First non-blank unit of measure recorded for a stock item (oldest entry
+     * first); pass a page of size 1. Preserves the pre-#1024 availability
+     * response's derived UoM without scanning the full ledger.
+     */
+    @Query("""
+                        SELECT e.unitOfMeasure
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.unitOfMeasure IS NOT NULL AND TRIM(e.unitOfMeasure) <> ''
+                        ORDER BY e.timestamp ASC, e.ledgerEntryId ASC
+                        """)
+    List<String> findUnitsOfMeasureByStockItem(@Param("stockItemId") String stockItemId, Pageable pageable);
+
+    /** Location-scoped variant of {@link #findUnitsOfMeasureByStockItem}. */
+    @Query("""
+                        SELECT e.unitOfMeasure
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.locationId = :locationId
+                          AND e.unitOfMeasure IS NOT NULL AND TRIM(e.unitOfMeasure) <> ''
+                        ORDER BY e.timestamp ASC, e.ledgerEntryId ASC
+                        """)
+    List<String> findUnitsOfMeasureByStockItemAtLocation(
+            @Param("stockItemId") String stockItemId, @Param("locationId") UUID locationId, Pageable pageable);
 }

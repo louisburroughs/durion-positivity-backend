@@ -49,10 +49,19 @@ class CycleCountAdjustmentServiceImplTest {
     private InventoryLedgerEntryRepository ledgerRepository;
 
     @Mock
+    private LedgerPostingService ledgerPostingService;
+
+    @Mock
     private ApprovalThresholdEvaluator thresholdEvaluator;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private com.positivity.inventory.internal.repository.CycleCountTaskRepository taskRepository;
+
+    @Mock
+    private CycleCountConflictDetector conflictDetector;
 
     private CycleCountAdjustmentServiceImpl service;
     private Clock fixedClock = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
@@ -60,7 +69,14 @@ class CycleCountAdjustmentServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new CycleCountAdjustmentServiceImpl(
-                adjustmentRepository, ledgerRepository, thresholdEvaluator, eventPublisher, fixedClock);
+                adjustmentRepository,
+                ledgerRepository,
+                ledgerPostingService,
+                thresholdEvaluator,
+                eventPublisher,
+                fixedClock,
+                taskRepository,
+                conflictDetector);
     }
 
     @AfterEach
@@ -109,7 +125,7 @@ class CycleCountAdjustmentServiceImplTest {
 
             assertThat(savedAdjustment.getStatus()).isEqualTo(AdjustmentStatus.PENDING_APPROVAL);
             assertThat(savedAdjustment.getRequiredApprovalTier()).isEqualTo(ApprovalTier.TIER_1_MANAGER);
-            verify(ledgerRepository, never()).save(any());
+            verify(ledgerPostingService, never()).post(any());
         }
 
         @Test
@@ -135,7 +151,7 @@ class CycleCountAdjustmentServiceImplTest {
             });
 
             when(ledgerRepository.calculateOnHandQuantity(stockItemId)).thenReturn(10);
-            when(ledgerRepository.save(any(InventoryLedgerEntry.class))).thenAnswer(invocation -> {
+            when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(invocation -> {
                 InventoryLedgerEntry entry = invocation.getArgument(0);
                 entry.setLedgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 return entry;
@@ -146,7 +162,7 @@ class CycleCountAdjustmentServiceImplTest {
             ArgumentCaptor<CycleCountAdjustment> adjustmentCaptor = ArgumentCaptor.forClass(CycleCountAdjustment.class);
             verify(adjustmentRepository, org.mockito.Mockito.times(2)).save(adjustmentCaptor.capture());
 
-            verify(ledgerRepository).save(any(InventoryLedgerEntry.class));
+            verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
 
             CycleCountAdjustment finalSave = adjustmentCaptor.getAllValues().get(1);
 

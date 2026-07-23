@@ -10,6 +10,8 @@ servers:
 - url: http://api-gateway.local/v1/catalog
   description: API Gateway
 tags:
+- name: Substitution Group API
+  description: Groups of mutually interchangeable products; a product belongs to at most one group
 - name: UOM Conversion API
   description: Unit of measure conversion API
 - name: Catalog Bulk Ingest API
@@ -26,6 +28,8 @@ tags:
   description: API for managing catalogs
 - name: Price Book API
   description: Manage price books, pricing rules, and resolution
+- name: Product UoM API
+  description: Per-product unit-of-measure conversion set (purchase/pack UoMs with factor to base UoM)
 - name: Catalog Items API
   description: API for managing catalog items by type
 - name: Supplier Item Cost List API
@@ -105,6 +109,135 @@ paths:
                 $ref: '#/components/schemas/ProductDto'
         '409':
           description: Business conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDto'
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
+  /v1/products/{productId}/uoms/{uomId}:
+    put:
+      tags:
+      - Product UoM API
+      summary: Update product UoM conversion
+      description: Updates factor, precision scale, and optionally the UoM role. The UoM code is immutable. Re-emits the product contract event.
+      operationId: updateProductUom
+      parameters:
+      - name: productId
+        in: path
+        description: Product ID
+        required: true
+        schema:
+          type: string
+      - name: uomId
+        in: path
+        description: Product UoM ID
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUomUpdateRequestDto'
+        required: true
+      responses:
+        '200':
+          description: Product UoM updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductUomDto'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductUomDto'
+        '404':
+          description: Product or UoM not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductUomDto'
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
+    delete:
+      tags:
+      - Product UoM API
+      summary: Delete product UoM conversion
+      description: Removes a UoM from the product's conversion set and re-emits the product contract event.
+      operationId: deleteProductUom
+      parameters:
+      - name: productId
+        in: path
+        description: Product ID
+        required: true
+        schema:
+          type: string
+      - name: uomId
+        in: path
+        description: Product UoM ID
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Product UoM deleted
+        '404':
+          description: Product or UoM not found
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
+  /v1/products/{productId}/tracking-level:
+    put:
+      tags:
+      - Products API
+      summary: Set product tracking level
+      description: Sets the product's stock tracking level (NONE, LOT, or SERIAL; default NONE) and re-emits the product contract event for downstream replicas.
+      operationId: updateTrackingLevel
+      parameters:
+      - name: productId
+        in: path
+        description: ID of the product
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductTrackingLevelUpdateRequestDto'
+        required: true
+      responses:
+        '200':
+          description: Tracking level updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDto'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDto'
+        '404':
+          description: Product not found
           content:
             application/json:
               schema:
@@ -868,6 +1001,95 @@ paths:
       x-required-permissions:
       - ADMIN
       - CATALOG_VIEW
+  /v1/products/{productId}/uoms:
+    get:
+      tags:
+      - Product UoM API
+      summary: List product UoM conversions
+      description: Returns the product's UoM conversion set ordered by UoM code.
+      operationId: listProductUoms
+      parameters:
+      - name: productId
+        in: path
+        description: Product ID
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Product UoMs listed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductUomDto'
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductUomDto'
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
+    post:
+      tags:
+      - Product UoM API
+      summary: Add product UoM conversion
+      description: Adds a purchase/pack (or base) UoM with its conversion factor to the product's base UoM and a precision scale. Re-emits the product contract event.
+      operationId: addProductUom
+      parameters:
+      - name: productId
+        in: path
+        description: Product ID
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUomCreateRequestDto'
+        required: true
+      responses:
+        '201':
+          description: Product UoM created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductUomDto'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductUomDto'
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductUomDto'
+        '409':
+          description: UoM code already defined for product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductUomDto'
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
   /v1/products/{productId}/replacements:
     get:
       tags:
@@ -1112,6 +1334,113 @@ paths:
         - catalog:supplier_cost:write
       x-required-permissions:
       - catalog:supplier_cost:write
+  /v1/products/substitution-groups:
+    get:
+      tags:
+      - Substitution Group API
+      summary: List substitution groups
+      description: Returns all substitution groups with their member product ids.
+      operationId: listSubstitutionGroups
+      responses:
+        '200':
+          description: Substitution groups listed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SubstitutionGroupDto'
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
+    post:
+      tags:
+      - Substitution Group API
+      summary: Create substitution group
+      description: Creates an empty substitution group; add members afterwards.
+      operationId: createSubstitutionGroup
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubstitutionGroupCreateRequestDto'
+        required: true
+      responses:
+        '201':
+          description: Substitution group created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubstitutionGroupDto'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubstitutionGroupDto'
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
+  /v1/products/substitution-groups/{groupId}/members:
+    post:
+      tags:
+      - Substitution Group API
+      summary: Add product to substitution group
+      description: Adds a product to the group (a product belongs to at most one group) and re-emits the product contract event for every member.
+      operationId: addSubstitutionGroupMember
+      parameters:
+      - name: groupId
+        in: path
+        description: Substitution group ID
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubstitutionGroupMemberRequestDto'
+        required: true
+      responses:
+        '200':
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubstitutionGroupDto'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubstitutionGroupDto'
+        '404':
+          description: Substitution group or product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubstitutionGroupDto'
+        '409':
+          description: Product already belongs to a substitution group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubstitutionGroupDto'
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
   /v1/products/pricing/location-overrides:
     post:
       tags:
@@ -1635,6 +1964,65 @@ paths:
       x-required-permissions:
       - ADMIN
       - CATALOG_VIEW
+  /v1/products/substitution-groups/{groupId}:
+    get:
+      tags:
+      - Substitution Group API
+      summary: Get substitution group
+      description: Retrieves a substitution group with its member product ids.
+      operationId: getSubstitutionGroup
+      parameters:
+      - name: groupId
+        in: path
+        description: Substitution group ID
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Substitution group found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubstitutionGroupDto'
+        '404':
+          description: Substitution group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubstitutionGroupDto'
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_VIEW
+    delete:
+      tags:
+      - Substitution Group API
+      summary: Delete substitution group
+      description: Deletes a group and its memberships, re-emitting the product contract event for every former member.
+      operationId: deleteSubstitutionGroup
+      parameters:
+      - name: groupId
+        in: path
+        description: Substitution group ID
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Substitution group deleted
+        '404':
+          description: Substitution group not found
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
   /v1/products/services/{serviceId}:
     get:
       tags:
@@ -2080,6 +2468,46 @@ paths:
         - catalog:supplier_cost:read
       x-required-permissions:
       - catalog:supplier_cost:read
+  /v1/products/substitution-groups/{groupId}/members/{productId}:
+    delete:
+      tags:
+      - Substitution Group API
+      summary: Remove product from substitution group
+      description: Removes a product from the group and re-emits the product contract event for the removed product and every remaining member.
+      operationId: removeSubstitutionGroupMember
+      parameters:
+      - name: groupId
+        in: path
+        description: Substitution group ID
+        required: true
+        schema:
+          type: string
+      - name: productId
+        in: path
+        description: Product ID to remove
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubstitutionGroupDto'
+        '404':
+          description: Substitution group or membership not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubstitutionGroupDto'
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
+      x-required-permissions:
+      - ADMIN
+      - CATALOG_EDIT
 components:
   schemas:
     ProductUpdateRequestDto:
@@ -2281,6 +2709,14 @@ components:
           - ACTIVE
           - INACTIVE
           example: ACTIVE
+        trackingLevel:
+          type: string
+          description: Stock tracking level
+          enum:
+          - NONE
+          - LOT
+          - SERIAL
+          example: NONE
         productCode:
           type: string
           description: Product code
@@ -2376,6 +2812,101 @@ components:
           type: string
           description: Subcategory name
           example: Hand Tools
+    ProductUomUpdateRequestDto:
+      type: object
+      description: Request to update a product UoM conversion (the UoM code is immutable)
+      properties:
+        uomType:
+          type: string
+          description: New role of this UoM for the product; unchanged when omitted
+          enum:
+          - BASE
+          - PURCHASE
+          - PACK
+          - OTHER
+          example: PACK
+        factorToBase:
+          type: number
+          description: Multiplier converting one unit of this UoM into the product's base UoM
+          example: 12
+          minimum: 0
+        precisionScale:
+          type: integer
+          format: int32
+          description: Decimal precision scale for quantities expressed in this UoM (0-6)
+          example: 0
+          maximum: 6
+          minimum: 0
+      required:
+      - factorToBase
+      - precisionScale
+    ProductUomDto:
+      type: object
+      description: A per-product unit-of-measure conversion to the product's base UoM
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identifier of the product UoM row
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
+        productId:
+          type: string
+          format: uuid
+          description: Identifier of the product
+          example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+        uomCode:
+          type: string
+          description: Unit-of-measure code
+          example: CASE
+        uomType:
+          type: string
+          description: Role of this UoM for the product
+          enum:
+          - BASE
+          - PURCHASE
+          - PACK
+          - OTHER
+          example: PURCHASE
+        factorToBase:
+          type: number
+          description: Multiplier converting one unit of this UoM into the product's base UoM
+          example: 12
+        precisionScale:
+          type: integer
+          format: int32
+          description: Decimal precision scale for quantities expressed in this UoM
+          example: 0
+        createdAt:
+          type: string
+          format: date-time
+          description: Created timestamp
+          example: 2026-01-15 09:30:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Updated timestamp
+          example: 2026-01-16 11:00:00+00:00
+      required:
+      - factorToBase
+      - id
+      - precisionScale
+      - productId
+      - uomCode
+      - uomType
+    ProductTrackingLevelUpdateRequestDto:
+      type: object
+      description: Request to set a product's stock tracking level
+      properties:
+        trackingLevel:
+          type: string
+          description: Stock tracking level
+          enum:
+          - NONE
+          - LOT
+          - SERIAL
+          example: LOT
+      required:
+      - trackingLevel
     UpdateMsrpRequestDto:
       type: object
       description: Request to update the MSRP for a product
@@ -3219,6 +3750,41 @@ components:
       - name
       - sku
       - unitOfMeasure
+    ProductUomCreateRequestDto:
+      type: object
+      description: Request to add a UoM conversion to a product
+      properties:
+        uomCode:
+          type: string
+          description: Unit-of-measure code
+          example: CASE
+          minLength: 1
+        uomType:
+          type: string
+          description: Role of this UoM for the product
+          enum:
+          - BASE
+          - PURCHASE
+          - PACK
+          - OTHER
+          example: PURCHASE
+        factorToBase:
+          type: number
+          description: Multiplier converting one unit of this UoM into the product's base UoM
+          example: 12
+          minimum: 0
+        precisionScale:
+          type: integer
+          format: int32
+          description: Decimal precision scale for quantities expressed in this UoM (0-6)
+          example: 0
+          maximum: 6
+          minimum: 0
+      required:
+      - factorToBase
+      - precisionScale
+      - uomCode
+      - uomType
     ProductReplacementRequest:
       type: object
       description: Product replacement option request
@@ -3332,6 +3898,72 @@ components:
       - currencyCode
       - itemId
       - supplierId
+    SubstitutionGroupCreateRequestDto:
+      type: object
+      description: Request to create a substitution group
+      properties:
+        name:
+          type: string
+          description: Group name
+          example: 5W-30 full synthetic quarts
+          maxLength: 128
+          minLength: 0
+        notes:
+          type: string
+          description: Free-text notes
+          example: Any brand acceptable
+          maxLength: 512
+          minLength: 0
+      required:
+      - name
+    SubstitutionGroupDto:
+      type: object
+      description: 'A substitution group: a set of mutually interchangeable products'
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identifier of the substitution group
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
+        name:
+          type: string
+          description: Group name
+          example: 5W-30 full synthetic quarts
+        notes:
+          type: string
+          description: Free-text notes
+          example: Any brand acceptable
+        productIds:
+          type: array
+          description: Product ids of all group members
+          items:
+            type: string
+            format: uuid
+        createdAt:
+          type: string
+          format: date-time
+          description: Created timestamp
+          example: 2026-01-15 09:30:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Updated timestamp
+          example: 2026-01-16 11:00:00+00:00
+      required:
+      - id
+      - name
+      - productIds
+    SubstitutionGroupMemberRequestDto:
+      type: object
+      description: Request to add a product to a substitution group
+      properties:
+        productId:
+          type: string
+          format: uuid
+          description: Identifier of the product to add
+          example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      required:
+      - productId
     LocationPriceOverrideCreateRequestDto:
       type: object
       description: Request payload for creating a location price override
@@ -4199,10 +4831,10 @@ components:
         number:
           type: integer
           format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
         pageable:
           $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
         first:
           type: boolean
         last:
@@ -4218,13 +4850,13 @@ components:
         offset:
           type: integer
           format: int64
+        pageNumber:
+          type: integer
+          format: int32
         sort:
           $ref: '#/components/schemas/SortObject'
         paged:
           type: boolean
-        pageNumber:
-          type: integer
-          format: int32
         pageSize:
           type: integer
           format: int32
@@ -4258,10 +4890,10 @@ components:
         number:
           type: integer
           format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
         pageable:
           $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
         first:
           type: boolean
         last:

@@ -18,6 +18,7 @@ import com.positivity.inventory.internal.exception.WorkorderConsumptionException
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.PickTaskRepository;
 import com.positivity.inventory.internal.service.ConsumptionServiceImpl;
+import com.positivity.inventory.internal.service.LedgerPostingService;
 import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
@@ -44,6 +45,9 @@ class ConsumptionServiceImplTest {
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
     @Mock
+    private LedgerPostingService ledgerPostingService;
+
+    @Mock
     private com.positivity.inventory.internal.repository.ReservationRepository reservationRepository;
 
     @Mock
@@ -62,6 +66,7 @@ class ConsumptionServiceImplTest {
                 inventoryLedgerEntryRepository,
                 reservationRepository,
                 allocationRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 FIXED_CLOCK);
     }
@@ -92,7 +97,7 @@ class ConsumptionServiceImplTest {
                         .status(PickTaskStatus.PICKED)
                         .quantityPicked(4)
                         .build()));
-        when(inventoryLedgerEntryRepository.saveAll(any()))
+        when(ledgerPostingService.postAll(any()))
                 .thenReturn(List.of(
                         InventoryLedgerEntry.builder()
                                 .ledgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -120,7 +125,7 @@ class ConsumptionServiceImplTest {
         ConsumeItemsRequest request =
                 new ConsumeItemsRequest(workorderId, UUID.fromString("00000000-0000-0000-0000-000000000001"), null);
 
-        when(inventoryLedgerEntryRepository.saveAll(any())).thenReturn(List.of());
+        when(ledgerPostingService.postAll(any())).thenReturn(List.of());
 
         ConsumptionResponse result = inMemoryService().consumePickedItems(request);
 
@@ -222,11 +227,11 @@ class ConsumptionServiceImplTest {
                 InventoryLedgerEntry.builder().ledgerEntryId(savedId).build();
         InventoryLedgerEntry savedTwo =
                 InventoryLedgerEntry.builder().ledgerEntryId(null).build();
-        when(inventoryLedgerEntryRepository.saveAll(any())).thenReturn(List.of(savedOne, savedTwo));
+        when(ledgerPostingService.postAll(any())).thenReturn(List.of(savedOne, savedTwo));
 
         ConsumptionResponse response = service.consumePickedItems(request);
 
-        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        verify(ledgerPostingService).postAll(entriesCaptor.capture());
         assertThat(entriesCaptor.getValue()).hasSize(2);
         InventoryLedgerEntry firstEntry = entriesCaptor.getValue().getFirst();
         InventoryLedgerEntry secondEntry = entriesCaptor.getValue().get(1);
@@ -364,7 +369,7 @@ class ConsumptionServiceImplTest {
         when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
                         allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED))
                 .thenReturn(0);
-        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerPostingService.postAll(any())).thenAnswer(i -> i.getArgument(0));
         when(allocationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         ConsumeItemsRequest request = new ConsumeItemsRequest(
@@ -374,7 +379,7 @@ class ConsumptionServiceImplTest {
 
         service.consumePickedItems(request);
 
-        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        verify(ledgerPostingService).postAll(entriesCaptor.capture());
         List<InventoryLedgerEntry> entries = entriesCaptor.getValue();
         assertThat(entries).hasSize(2);
         InventoryLedgerEntry released = entries.get(1);
@@ -403,7 +408,7 @@ class ConsumptionServiceImplTest {
         when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
                         allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED))
                 .thenReturn(0);
-        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerPostingService.postAll(any())).thenAnswer(i -> i.getArgument(0));
 
         ConsumeItemsRequest request = new ConsumeItemsRequest(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
@@ -412,7 +417,7 @@ class ConsumptionServiceImplTest {
 
         service.consumePickedItems(request);
 
-        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        verify(ledgerPostingService).postAll(entriesCaptor.capture());
         InventoryLedgerEntry released = entriesCaptor.getValue().get(1);
         assertThat(released.getChangeInQuantity()).isEqualTo(2);
         assertThat(allocation.getStatus())
@@ -428,7 +433,7 @@ class ConsumptionServiceImplTest {
 
         when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(pickedTaskWithLine(pickTaskId)));
         when(reservationRepository.findByWorkorderLineId(WO_LINE_ID)).thenReturn(Optional.empty());
-        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerPostingService.postAll(any())).thenAnswer(i -> i.getArgument(0));
 
         ConsumeItemsRequest request = new ConsumeItemsRequest(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
@@ -437,7 +442,7 @@ class ConsumptionServiceImplTest {
 
         service.consumePickedItems(request);
 
-        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        verify(ledgerPostingService).postAll(entriesCaptor.capture());
         assertThat(entriesCaptor.getValue()).hasSize(1);
         assertThat(entriesCaptor.getValue().getFirst().getEventType())
                 .isEqualTo(InventoryLedgerEventType.WORKORDER_CONSUMPTION);
@@ -459,7 +464,7 @@ class ConsumptionServiceImplTest {
         when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
                         allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED))
                 .thenReturn(3);
-        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerPostingService.postAll(any())).thenAnswer(i -> i.getArgument(0));
         when(allocationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         ConsumeItemsRequest request = new ConsumeItemsRequest(
@@ -469,7 +474,7 @@ class ConsumptionServiceImplTest {
 
         service.consumePickedItems(request);
 
-        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        verify(ledgerPostingService).postAll(entriesCaptor.capture());
         InventoryLedgerEntry released = entriesCaptor.getValue().get(1);
         // invariant: total RELEASED never exceeds allocatedQuantity (3 + 2 = 5)
         assertThat(released.getChangeInQuantity()).isEqualTo(2);
@@ -512,7 +517,7 @@ class ConsumptionServiceImplTest {
                         any(String.class),
                         org.mockito.ArgumentMatchers.eq(InventoryLedgerEventType.ALLOCATION_RELEASED)))
                 .thenReturn(0);
-        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerPostingService.postAll(any())).thenAnswer(i -> i.getArgument(0));
         when(allocationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -523,7 +528,7 @@ class ConsumptionServiceImplTest {
 
         service.consumePickedItems(request);
 
-        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        verify(ledgerPostingService).postAll(entriesCaptor.capture());
         List<InventoryLedgerEntry> entries = entriesCaptor.getValue();
         assertThat(entries).hasSize(3); // 1 consumption + 2 releases
         InventoryLedgerEntry first = entries.get(1);
@@ -560,7 +565,7 @@ class ConsumptionServiceImplTest {
         when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
                         allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED))
                 .thenReturn(0);
-        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerPostingService.postAll(any())).thenAnswer(i -> i.getArgument(0));
         when(allocationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -573,7 +578,7 @@ class ConsumptionServiceImplTest {
 
         service.consumePickedItems(request);
 
-        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        verify(ledgerPostingService).postAll(entriesCaptor.capture());
         int totalReleased = entriesCaptor.getValue().stream()
                 .filter(e -> e.getEventType() == InventoryLedgerEventType.ALLOCATION_RELEASED)
                 .mapToInt(InventoryLedgerEntry::getChangeInQuantity)
@@ -594,14 +599,14 @@ class ConsumptionServiceImplTest {
                 .quantityPicked(5)
                 .build();
         when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(task));
-        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerPostingService.postAll(any())).thenAnswer(i -> i.getArgument(0));
 
         service.consumePickedItems(new ConsumeItemsRequest(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 List.of(new ConsumeItemLine(pickTaskId, STOCK_ITEM_ID, 2))));
 
-        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        verify(ledgerPostingService).postAll(entriesCaptor.capture());
         assertThat(entriesCaptor.getValue()).hasSize(1);
     }
 
@@ -623,14 +628,14 @@ class ConsumptionServiceImplTest {
         when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(pickedTaskWithLine(pickTaskId)));
         when(reservationRepository.findByWorkorderLineId(WO_LINE_ID)).thenReturn(Optional.of(reservation));
         when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(soft));
-        when(inventoryLedgerEntryRepository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerPostingService.postAll(any())).thenAnswer(i -> i.getArgument(0));
 
         service.consumePickedItems(new ConsumeItemsRequest(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 List.of(new ConsumeItemLine(pickTaskId, STOCK_ITEM_ID, 2))));
 
-        verify(inventoryLedgerEntryRepository).saveAll(entriesCaptor.capture());
+        verify(ledgerPostingService).postAll(entriesCaptor.capture());
         assertThat(entriesCaptor.getValue()).hasSize(1);
     }
 }

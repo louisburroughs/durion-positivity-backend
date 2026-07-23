@@ -29,6 +29,7 @@ import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryVarianceRepository;
 import com.positivity.inventory.internal.repository.ReceivingSessionRepository;
+import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.ReceivingServiceImpl;
 import com.positivity.inventory.internal.service.SiteDefaultsService;
 import com.positivity.inventory.internal.service.WorkorderValidationService;
@@ -74,6 +75,9 @@ class ReceivingServiceImplTest {
 
     @Mock
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+
+    @Mock
+    private LedgerPostingService ledgerPostingService;
 
     @Mock
     private SourceDocumentStubClient sourceDocumentStubClient;
@@ -569,7 +573,7 @@ class ReceivingServiceImplTest {
         line.setSession(session);
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(inventoryLedgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", STAGING_LOCATION_ID))
                 .thenReturn(7);
 
@@ -579,7 +583,7 @@ class ReceivingServiceImplTest {
         receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
 
         ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
-        verify(inventoryLedgerEntryRepository).save(ledgerCaptor.capture());
+        verify(ledgerPostingService).post(ledgerCaptor.capture());
         InventoryLedgerEntry savedLedgerEntry = ledgerCaptor.getValue();
 
         assertThat(savedLedgerEntry.getLocationId()).isEqualTo(STAGING_LOCATION_ID);
@@ -615,7 +619,7 @@ class ReceivingServiceImplTest {
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(siteDefaultsService.getDefaultStagingLocationId(siteId))
                 .thenReturn(Optional.of(siteDefaultStagingLocationId));
-        when(inventoryLedgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", siteDefaultStagingLocationId))
                 .thenReturn(7);
 
@@ -625,7 +629,7 @@ class ReceivingServiceImplTest {
         receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
 
         ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
-        verify(inventoryLedgerEntryRepository).save(ledgerCaptor.capture());
+        verify(ledgerPostingService).post(ledgerCaptor.capture());
         InventoryLedgerEntry savedLedgerEntry = ledgerCaptor.getValue();
 
         assertThat(savedLedgerEntry.getLocationId()).isEqualTo(siteDefaultStagingLocationId);
@@ -900,7 +904,7 @@ class ReceivingServiceImplTest {
                 () -> receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user"));
 
         assertThat(exception.getMessage()).contains("exceeds expected quantity");
-        verify(inventoryLedgerEntryRepository, never()).save(any());
+        verify(ledgerPostingService, never()).post(any());
         verify(receivingSessionRepository, never()).save(any(ReceivingSession.class));
     }
 
@@ -1109,7 +1113,7 @@ class ReceivingServiceImplTest {
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(inventoryLedgerEntryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
                 .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", CROSS_DOCK_LOCATION_ID))
@@ -1121,7 +1125,7 @@ class ReceivingServiceImplTest {
         receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user");
 
         ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
-        verify(inventoryLedgerEntryRepository, times(2)).save(ledgerCaptor.capture());
+        verify(ledgerPostingService, times(2)).post(ledgerCaptor.capture());
         List<InventoryLedgerEntry> savedEntries = ledgerCaptor.getAllValues();
 
         InventoryLedgerEntry receiptEntry = savedEntries.get(0);

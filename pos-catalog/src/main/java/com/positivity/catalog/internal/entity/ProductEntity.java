@@ -44,6 +44,9 @@ public class ProductEntity implements CatalogItem {
         if (lifecycleState == null) {
             lifecycleState = ProductLifecycleState.ACTIVE;
         }
+        if (trackingLevel == null) {
+            trackingLevel = ProductTrackingLevel.NONE;
+        }
     }
 
     @Schema(description = "Name of the product", example = "Heavy Duty Wrench")
@@ -58,6 +61,11 @@ public class ProductEntity implements CatalogItem {
 
     @Schema(description = "Unit of measure", example = "EA")
     private String unitOfMeasure;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tracking_level", nullable = false, length = 16)
+    @Schema(description = "Stock tracking level", implementation = ProductTrackingLevel.class)
+    private ProductTrackingLevel trackingLevel = ProductTrackingLevel.NONE;
 
     @Schema(
             description = "Short description of the product",

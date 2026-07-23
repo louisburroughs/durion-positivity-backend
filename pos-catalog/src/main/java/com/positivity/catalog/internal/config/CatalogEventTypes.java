@@ -48,6 +48,26 @@ public final class CatalogEventTypes {
                                 "CATALOG_PRODUCT_REPLACEMENT_ADD",
                                 "Add replacement recommendation for a discontinued product")
                         .build(),
+                EventTypeRegistration.write(
+                                "CATALOG_PRODUCT_TRACKING_LEVEL_UPDATE",
+                                "Set product stock tracking level (NONE, LOT, SERIAL)")
+                        .build(),
+                EventTypeRegistration.write("CATALOG_PRODUCT_UOM_CREATE", "Add per-product UOM conversion")
+                        .build(),
+                EventTypeRegistration.write("CATALOG_PRODUCT_UOM_UPDATE", "Update per-product UOM conversion")
+                        .build(),
+                EventTypeRegistration.write("CATALOG_PRODUCT_UOM_DELETE", "Delete per-product UOM conversion")
+                        .build(),
+                EventTypeRegistration.write("CATALOG_SUBSTITUTION_GROUP_CREATE", "Create substitution group")
+                        .build(),
+                EventTypeRegistration.write("CATALOG_SUBSTITUTION_GROUP_DELETE", "Delete substitution group")
+                        .build(),
+                EventTypeRegistration.write(
+                                "CATALOG_SUBSTITUTION_GROUP_MEMBER_ADD", "Add product to substitution group")
+                        .build(),
+                EventTypeRegistration.write(
+                                "CATALOG_SUBSTITUTION_GROUP_MEMBER_REMOVE", "Remove product from substitution group")
+                        .build(),
                 EventTypeRegistration.write("CATALOG_UOM_CONVERSION_CREATE", "Create UOM conversion")
                         .build(),
                 EventTypeRegistration.write("CATALOG_UOM_CONVERSION_UPDATE", "Update UOM conversion factor")

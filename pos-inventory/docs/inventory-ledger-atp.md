@@ -53,6 +53,11 @@ ATP = On-Hand - Allocations
 - `BACKORDER_CREATED` / `BACKORDER_RESOLVED`
 - `PICK_TASK_CREATED` / `PICK_TASK_COMPLETED` (unless posting GOODS_ISSUE)
 
+#### Negative-Stock Policy
+
+Whether a posting may take on-hand below zero is governed per event type by the
+negative-stock policy matrix — see [negative-stock-policy.md](negative-stock-policy.md) (odoo-parity K1, #1027).
+
 ## API Contract (Proposed)
 
 ### GET /api/inventory/availability

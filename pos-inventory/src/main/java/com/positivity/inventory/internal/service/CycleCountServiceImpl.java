@@ -3,10 +3,12 @@ package com.positivity.inventory.internal.service;
 import com.positivity.inventory.internal.dto.cyclecount.CountEntryResponse;
 import com.positivity.inventory.internal.dto.cyclecount.CountResponse;
 import com.positivity.inventory.internal.dto.cyclecount.CycleCountTaskResponse;
+import com.positivity.inventory.internal.dto.cyclecount.InterferingMovementResponse;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitCountRequest;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitRecountRequest;
 import com.positivity.inventory.internal.entity.CountEntry;
 import com.positivity.inventory.internal.entity.CycleCountTask;
+import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.TaskStatus;
 import com.positivity.inventory.internal.exception.InsufficientPermissionException;
 import com.positivity.inventory.internal.exception.InvalidCountQuantityException;
@@ -51,12 +53,17 @@ public class CycleCountServiceImpl implements CycleCountService {
     private final Clock clock;
     private final CycleCountTaskRepository taskRepository;
     private final CountEntryRepository countEntryRepository;
+    private final CycleCountConflictDetector conflictDetector;
 
     public CycleCountServiceImpl(
-            CycleCountTaskRepository taskRepository, CountEntryRepository countEntryRepository, Clock clock) {
+            CycleCountTaskRepository taskRepository,
+            CountEntryRepository countEntryRepository,
+            Clock clock,
+            CycleCountConflictDetector conflictDetector) {
         this.taskRepository = taskRepository;
         this.countEntryRepository = countEntryRepository;
         this.clock = clock;
+        this.conflictDetector = conflictDetector;
     }
 
     @Override
@@ -100,13 +107,21 @@ public class CycleCountServiceImpl implements CycleCountService {
             log.info("Created count entry: {}, variance: {}", maskForLog(countEntry.getCountEntryId()), variance);
         }
 
-        // Update task
+        // Update task; conflict detection (odoo-parity I2, #1026) decides
+        // whether the count goes to review or needs a reviewer choice first.
         task.setLatestCountEntryId(countEntry.getCountEntryId());
         task.setCountEntriesCount(1);
-        task.setStatus(TaskStatus.COUNTED_PENDING_REVIEW);
+        boolean conflict = applyConflictStatus(task);
         taskRepository.save(task);
 
-        return buildCountResponse(countEntry, task, false, "Count submitted successfully");
+        return buildCountResponse(
+                countEntry,
+                task,
+                false,
+                conflict
+                        ? "Count submitted, but stock moved during the count window; task flagged CONFLICT —"
+                                + " request a recount or approve with the variance recomputed against current on-hand"
+                        : "Count submitted successfully");
     }
 
     @Override
@@ -173,10 +188,12 @@ public class CycleCountServiceImpl implements CycleCountService {
                     variance);
         }
 
-        // Update task
+        // Update task; recounts re-run conflict detection (odoo-parity I2) —
+        // a recount from CONFLICT stays CONFLICT while movements remain in
+        // the window, because the snapshot is still stale.
         task.setLatestCountEntryId(recountEntry.getCountEntryId());
         task.setCountEntriesCount(task.getCountEntriesCount() + 1);
-        task.setStatus(TaskStatus.COUNTED_PENDING_REVIEW);
+        applyConflictStatus(task);
 
         // Check if this was the last allowed recount
         boolean limitReached = task.getCountEntriesCount() >= MAX_TOTAL_COUNTS;
@@ -221,8 +238,51 @@ public class CycleCountServiceImpl implements CycleCountService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<InterferingMovementResponse> getInterferingMovements(UUID taskId) {
+        CycleCountTask task = getTaskEntity(taskId);
+        return conflictDetector.interferingMovements(task).stream()
+                .map(this::toInterferingMovementResponse)
+                .toList();
+    }
+
     private CycleCountTask getTaskEntity(UUID taskId) {
         return taskRepository.findById(taskId).orElseThrow(() -> new TaskNotFoundException(taskId));
+    }
+
+    /**
+     * Sets the task status from conflict detection (odoo-parity I2, #1026):
+     * CONFLICT when the count window has a non-zero net movement delta,
+     * COUNTED_PENDING_REVIEW otherwise. Returns whether a conflict was found.
+     */
+    private boolean applyConflictStatus(CycleCountTask task) {
+        int movementDelta = conflictDetector.movementDeltaSinceSnapshot(task);
+        if (movementDelta != 0) {
+            if (log.isWarnEnabled()) {
+                log.warn(
+                        "Cycle count conflict detected at submission for task {}: in-window movement delta {}",
+                        maskForLog(task.getTaskId()),
+                        movementDelta);
+            }
+            task.setStatus(TaskStatus.CONFLICT);
+            return true;
+        }
+        task.setStatus(TaskStatus.COUNTED_PENDING_REVIEW);
+        return false;
+    }
+
+    private InterferingMovementResponse toInterferingMovementResponse(InventoryLedgerEntry entry) {
+        return InterferingMovementResponse.builder()
+                .ledgerEntryId(entry.getLedgerEntryId())
+                .eventType(entry.getEventType())
+                .changeInQuantity(entry.getChangeInQuantity())
+                .quantityAfter(entry.getQuantityAfter())
+                .locationId(entry.getLocationId())
+                .timestamp(entry.getTimestamp())
+                .transactionUserId(entry.getTransactionUserId())
+                .notes(entry.getNotes())
+                .build();
     }
 
     /**

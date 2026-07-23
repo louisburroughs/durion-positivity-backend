@@ -9,6 +9,7 @@ package com.positivity.inventory.internal.enums;
  * <ul>
  * <li>ASSIGNED → Auditor has been assigned the count task</li>
  * <li>COUNTED_PENDING_REVIEW → Count submitted, awaiting manager review</li>
+ * <li>CONFLICT → Stock moved between task creation and count/approval; reviewer must choose</li>
  * <li>REQUIRES_INVESTIGATION → Max recounts exceeded or threshold breach</li>
  * <li>APPROVED → Variance accepted, ready for inventory adjustment</li>
  * <li>REJECTED → Count rejected, may require new task assignment</li>
@@ -24,6 +25,15 @@ public enum TaskStatus {
      * Count has been submitted and is awaiting manager review.
      */
     COUNTED_PENDING_REVIEW,
+
+    /**
+     * Interfering stock movements were detected between task creation and
+     * count submission (or adjustment approval), so the task's expected-quantity
+     * snapshot is stale (odoo-parity I2, issue #1026 — Odoo's {@code is_outdated}).
+     * Requires an explicit reviewer choice: request a recount, or approve the
+     * adjustment with the variance recomputed against CURRENT on-hand.
+     */
+    CONFLICT,
 
     /**
      * Task requires investigation due to exceeding recount limits or high variance.

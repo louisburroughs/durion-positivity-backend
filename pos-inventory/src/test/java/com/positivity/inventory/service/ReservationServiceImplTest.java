@@ -25,6 +25,7 @@ import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.AllocationRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
+import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.ReservationServiceImpl;
 import com.positivity.inventory.internal.service.StorageLocationValidationService;
 import java.time.Clock;
@@ -79,6 +80,9 @@ class ReservationServiceImplTest {
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
     @Mock
+    private LedgerPostingService ledgerPostingService;
+
+    @Mock
     private StorageLocationValidationService storageLocationValidationService;
 
     private ReservationServiceImpl service;
@@ -100,6 +104,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
         // Default lenient stubs for the SC1–SC7 scaffold tests
@@ -136,7 +141,7 @@ class ReservationServiceImplTest {
                 .when(storageLocationValidationService.getStorageLocationValidation(any(String.class)))
                 .thenReturn(validation(true, true));
         lenient()
-                .when(inventoryLedgerEntryRepository.save(any(InventoryLedgerEntry.class)))
+                .when(ledgerPostingService.post(any(InventoryLedgerEntry.class)))
                 .thenAnswer(i -> i.getArgument(0));
     }
 
@@ -294,7 +299,7 @@ class ReservationServiceImplTest {
         // No on-hand change expected for SOFT cancel — no additional
         // repository calls beyond the standard cancel flow.
         assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
-        verify(inventoryLedgerEntryRepository, never()).save(any());
+        verify(ledgerPostingService, never()).post(any());
     }
 
     // ─── SC6: Cancel HARD allocation — ATP restored ─────────────────────────────
@@ -378,6 +383,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
@@ -410,6 +416,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
@@ -448,6 +455,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
@@ -468,6 +476,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
@@ -515,6 +524,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
@@ -565,6 +575,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
@@ -618,6 +629,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
@@ -637,6 +649,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
@@ -671,6 +684,7 @@ class ReservationServiceImplTest {
                 reservationRepository,
                 allocationRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
                 storageLocationValidationService);
 
@@ -753,7 +767,7 @@ class ReservationServiceImplTest {
         assertThat(allocation.getLocationId()).isEqualTo(STORAGE_LOCATION_ID);
 
         ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
-        verify(inventoryLedgerEntryRepository).save(ledgerCaptor.capture());
+        verify(ledgerPostingService).post(ledgerCaptor.capture());
         InventoryLedgerEntry entry = ledgerCaptor.getValue();
         assertThat(entry.getEventType()).isEqualTo(InventoryLedgerEventType.ALLOCATION_CREATED);
         assertThat(entry.getLocationId()).isEqualTo(STORAGE_LOCATION_ID);
@@ -798,7 +812,7 @@ class ReservationServiceImplTest {
                 allocation.getAllocationId(), new PromoteAllocationRequest(STORAGE_LOCATION_ID, "re-promote"));
 
         assertThat(allocation.getLocationId()).isEqualTo(STORAGE_LOCATION_ID);
-        verify(inventoryLedgerEntryRepository, never()).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService, never()).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -839,7 +853,7 @@ class ReservationServiceImplTest {
 
         assertThat(allocation.getLocationId()).isEqualTo(originalLocation);
         verify(allocationRepository, never()).save(any(AllocationEntity.class));
-        verify(inventoryLedgerEntryRepository, never()).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService, never()).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -889,7 +903,7 @@ class ReservationServiceImplTest {
         assertThatThrownBy(() -> service.promoteToHard(allocationId, request))
                 .isInstanceOf(LocationNotFoundException.class);
         verify(allocationRepository, never()).save(any(AllocationEntity.class));
-        verify(inventoryLedgerEntryRepository, never()).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService, never()).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -942,7 +956,7 @@ class ReservationServiceImplTest {
         service.cancelReservation(workorderLineId);
 
         ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
-        verify(inventoryLedgerEntryRepository).save(ledgerCaptor.capture());
+        verify(ledgerPostingService).post(ledgerCaptor.capture());
         assertThat(ledgerCaptor.getValue().getChangeInQuantity()).isEqualTo(2);
     }
 
@@ -994,7 +1008,7 @@ class ReservationServiceImplTest {
         service.cancelReservation(workorderLineId);
 
         ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
-        verify(inventoryLedgerEntryRepository).save(ledgerCaptor.capture());
+        verify(ledgerPostingService).post(ledgerCaptor.capture());
         InventoryLedgerEntry entry = ledgerCaptor.getValue();
         assertThat(entry.getEventType()).isEqualTo(InventoryLedgerEventType.ALLOCATION_RELEASED);
         assertThat(entry.getLocationId()).isEqualTo(STORAGE_LOCATION_ID);

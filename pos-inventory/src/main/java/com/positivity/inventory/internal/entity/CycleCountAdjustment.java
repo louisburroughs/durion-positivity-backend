@@ -44,6 +44,15 @@ public class CycleCountAdjustment {
     private UUID stockItemId;
 
     /**
+     * Cycle count task this adjustment settles, when created from a task
+     * (odoo-parity I2, issue #1026). Enables approval-time conflict detection
+     * and variance recomputation against current on-hand. Nullable — legacy
+     * adjustments have no task reference.
+     */
+    @Column(name = "task_id")
+    private UUID taskId;
+
+    /**
      * Reason code for the adjustment (e.g., 'CYCLE_COUNT_SHRINK',
      * 'CYCLE_COUNT_OVERAGE').
      */

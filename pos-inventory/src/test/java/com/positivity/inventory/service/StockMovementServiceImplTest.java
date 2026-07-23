@@ -20,6 +20,7 @@ import com.positivity.inventory.internal.enums.MovementType;
 import com.positivity.inventory.internal.exception.InsufficientStockException;
 import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.StockMovementServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
@@ -44,6 +45,9 @@ class StockMovementServiceImplTest {
     private InventoryLedgerEntryRepository ledgerRepository;
 
     @Mock
+    private LedgerPostingService ledgerPostingService;
+
+    @Mock
     private InventoryAdjustmentRequestRepository adjustmentRepository;
 
     @Mock
@@ -53,7 +57,7 @@ class StockMovementServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new StockMovementServiceImpl(ledgerRepository, adjustmentRepository, clock);
+        service = new StockMovementServiceImpl(ledgerRepository, adjustmentRepository, ledgerPostingService, clock);
     }
 
     private void setupClock() {
@@ -72,7 +76,7 @@ class StockMovementServiceImplTest {
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_RECEIPT);
         assertThat(result.getChangeInQuantity()).isEqualTo(5);
-        verify(ledgerRepository).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -87,7 +91,7 @@ class StockMovementServiceImplTest {
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_ISSUE);
         assertThat(result.getChangeInQuantity()).isEqualTo(-4);
-        verify(ledgerRepository).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -99,7 +103,7 @@ class StockMovementServiceImplTest {
         Throwable exception = catchThrowable(() -> service.recordMovement(request, "actor-1"));
 
         assertThat(exception).isInstanceOf(InsufficientStockException.class);
-        verify(ledgerRepository, never()).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService, never()).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -111,7 +115,7 @@ class StockMovementServiceImplTest {
         Throwable exception = catchThrowable(() -> service.recordMovement(request, "actor-1"));
 
         assertThat(exception).isInstanceOf(InsufficientStockException.class);
-        verify(ledgerRepository, never()).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService, never()).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -123,7 +127,7 @@ class StockMovementServiceImplTest {
         assertThat(exception)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("ADJUST must use adjustment workflow");
-        verify(ledgerRepository, never()).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService, never()).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -141,7 +145,7 @@ class StockMovementServiceImplTest {
         assertThat(result.getChangeInQuantity()).isEqualTo(-5);
         verify(ledgerRepository, times(2)).calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_2);
         verify(ledgerRepository, never()).calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_1);
-        verify(ledgerRepository).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -158,7 +162,7 @@ class StockMovementServiceImplTest {
         service.recordMovement(request, "actor-1");
 
         ArgumentCaptor<InventoryLedgerEntry> captor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
-        verify(ledgerRepository, times(2)).save(captor.capture());
+        verify(ledgerPostingService, times(2)).post(captor.capture());
         List<InventoryLedgerEntry> savedEntries = captor.getAllValues();
 
         InventoryLedgerEntry transferIn = savedEntries.get(0);
@@ -188,7 +192,7 @@ class StockMovementServiceImplTest {
         assertThat(exception)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("toLocationId is required for TRANSFER movements");
-        verify(ledgerRepository, never()).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService, never()).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -203,7 +207,7 @@ class StockMovementServiceImplTest {
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.PUTAWAY);
         assertThat(result.getChangeInQuantity()).isEqualTo(3);
-        verify(ledgerRepository).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -218,7 +222,7 @@ class StockMovementServiceImplTest {
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.RETURN_TO_STOCK);
         assertThat(result.getChangeInQuantity()).isEqualTo(2);
-        verify(ledgerRepository).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -232,7 +236,7 @@ class StockMovementServiceImplTest {
         service.recordMovement(request, "actor-xyz");
 
         ArgumentCaptor<InventoryLedgerEntry> captor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
-        verify(ledgerRepository).save(captor.capture());
+        verify(ledgerPostingService).post(captor.capture());
         assertThat(captor.getValue().getTransactionUserId()).isEqualTo("actor-xyz");
     }
 
@@ -280,7 +284,7 @@ class StockMovementServiceImplTest {
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.ADJUSTMENT_IN);
         assertThat(result.getChangeInQuantity()).isEqualTo(4);
-        verify(ledgerRepository).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -297,7 +301,7 @@ class StockMovementServiceImplTest {
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.ADJUSTMENT_OUT);
         assertThat(result.getChangeInQuantity()).isEqualTo(-3);
-        verify(ledgerRepository).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -308,7 +312,7 @@ class StockMovementServiceImplTest {
         Throwable exception = catchThrowable(() -> service.approveAdjustmentRequest(requestId, "approver-1"));
 
         assertThat(exception).isInstanceOf(IllegalArgumentException.class);
-        verify(ledgerRepository, never()).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService, never()).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -321,7 +325,7 @@ class StockMovementServiceImplTest {
                 catchThrowable(() -> service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1"));
 
         assertThat(exception).isInstanceOf(IllegalStateException.class);
-        verify(ledgerRepository, never()).save(any(InventoryLedgerEntry.class));
+        verify(ledgerPostingService, never()).post(any(InventoryLedgerEntry.class));
     }
 
     @Test
@@ -381,7 +385,7 @@ class StockMovementServiceImplTest {
     }
 
     private void stubLedgerSaveReturnsEntry() {
-        when(ledgerRepository.save(any(InventoryLedgerEntry.class)))
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
     }
 

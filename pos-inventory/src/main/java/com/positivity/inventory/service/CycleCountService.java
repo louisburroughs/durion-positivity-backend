@@ -3,6 +3,7 @@ package com.positivity.inventory.service;
 import com.positivity.inventory.internal.dto.cyclecount.CountEntryResponse;
 import com.positivity.inventory.internal.dto.cyclecount.CountResponse;
 import com.positivity.inventory.internal.dto.cyclecount.CycleCountTaskResponse;
+import com.positivity.inventory.internal.dto.cyclecount.InterferingMovementResponse;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitCountRequest;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitRecountRequest;
 import java.util.List;
@@ -63,4 +64,14 @@ public interface CycleCountService {
      * @return list of assigned tasks
      */
     List<CycleCountTaskResponse> getTasksByAuditor(String auditorId);
+
+    /**
+     * Ledger movements interfering with a task's count window: every
+     * on-hand-affecting entry for the task's SKU/location recorded between task
+     * creation and now (odoo-parity I2, issue #1026).
+     *
+     * @param taskId the task ID
+     * @return in-window ledger movements, oldest first
+     */
+    List<InterferingMovementResponse> getInterferingMovements(UUID taskId);
 }

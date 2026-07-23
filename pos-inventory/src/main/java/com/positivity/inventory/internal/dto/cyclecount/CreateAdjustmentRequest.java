@@ -29,6 +29,13 @@ public class CreateAdjustmentRequest {
     private UUID stockItemId;
 
     @Schema(
+            description = "Cycle count task this adjustment settles, if created from a task. Enables"
+                    + " approval-time conflict detection and variance recomputation against current on-hand.",
+            example = "01960003-0000-7000-8000-000000000009",
+            requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED)
+    private UUID taskId;
+
+    @Schema(
             description = "Reason code explaining why the adjustment is being made",
             example = "CYCLE_COUNT_VARIANCE",
             requiredMode = REQUIRED)

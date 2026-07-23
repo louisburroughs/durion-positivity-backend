@@ -89,3 +89,5 @@ permissions:
     description: "Submit inventory returns to stock"
   - name: "inventory:shortage:view"
     description: "View shortage resolution options"
+  - name: "inventory:replenishment:manage"
+    description: "Manage replenishment policies and run the batch replenishment scan"

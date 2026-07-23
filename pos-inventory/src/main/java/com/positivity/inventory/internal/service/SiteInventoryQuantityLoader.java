@@ -1,10 +1,7 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
-import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -16,19 +13,17 @@ import org.springframework.transaction.annotation.Transactional;
  * Loads bulk per-location quantity maps inside a single read-only
  * transaction, keeping the remote topology fetch outside transactional
  * scope (CAP-218 #658; see #657 handoff note on non-atomic grouped sums).
+ *
+ * <p>Since issue #1024 (A1) quantities come from the
+ * {@code inventory_stock_summary} read model rather than ledger aggregation.
  */
 @Component
 public class SiteInventoryQuantityLoader {
 
-    private static final List<InventoryLedgerEventType> ALLOCATION_CREATED_TYPES =
-            List.of(InventoryLedgerEventType.ALLOCATION_CREATED);
-    private static final List<InventoryLedgerEventType> ALLOCATION_RELEASED_TYPES =
-            List.of(InventoryLedgerEventType.ALLOCATION_RELEASED);
+    private final InventoryStockSummaryRepository stockSummaryRepository;
 
-    private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
-
-    public SiteInventoryQuantityLoader(InventoryLedgerEntryRepository inventoryLedgerEntryRepository) {
-        this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
+    public SiteInventoryQuantityLoader(InventoryStockSummaryRepository stockSummaryRepository) {
+        this.stockSummaryRepository = stockSummaryRepository;
     }
 
     /**
@@ -39,29 +34,10 @@ public class SiteInventoryQuantityLoader {
     @Transactional(readOnly = true)
     @NonNull
     public QuantitySnapshot load(@NonNull Collection<UUID> locationIds, @Nullable String sku) {
-        Collection<InventoryLedgerEventType> onHandTypes = InventoryLedgerEventType.onHandAffectingTypes();
-
-        Map<UUID, Long> onHand;
-        Map<UUID, Long> allocated;
-        if (sku == null || sku.isBlank()) {
-            onHand = inventoryLedgerEntryRepository.sumQuantityByLocationChunked(locationIds, onHandTypes);
-            allocated = inventoryLedgerEntryRepository.calculateOutstandingAllocationsByLocation(locationIds);
-        } else {
-            onHand = inventoryLedgerEntryRepository.sumQuantityByLocationForSkuChunked(sku, locationIds, onHandTypes);
-            allocated = outstandingForSku(sku, locationIds);
-        }
-        return new QuantitySnapshot(onHand, allocated);
-    }
-
-    private Map<UUID, Long> outstandingForSku(String sku, Collection<UUID> locationIds) {
-        Map<UUID, Long> created = inventoryLedgerEntryRepository.sumQuantityByLocationForSkuChunked(
-                sku, locationIds, ALLOCATION_CREATED_TYPES);
-        Map<UUID, Long> released = inventoryLedgerEntryRepository.sumQuantityByLocationForSkuChunked(
-                sku, locationIds, ALLOCATION_RELEASED_TYPES);
-
-        Map<UUID, Long> outstanding = new HashMap<>(created);
-        released.forEach((locationId, quantity) -> outstanding.merge(locationId, -quantity, Long::sum));
-        return Map.copyOf(outstanding);
+        String skuFilter = sku == null || sku.isBlank() ? null : sku;
+        InventoryStockSummaryRepository.LocationQuantityMaps maps =
+                stockSummaryRepository.sumByLocationChunked(locationIds, skuFilter);
+        return new QuantitySnapshot(maps.onHand(), maps.allocated());
     }
 
     public record QuantitySnapshot(Map<UUID, Long> onHand, Map<UUID, Long> allocated) {}

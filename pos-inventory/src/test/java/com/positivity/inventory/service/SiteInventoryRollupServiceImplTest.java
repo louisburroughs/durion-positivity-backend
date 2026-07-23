@@ -4,19 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.dto.rollup.SiteInventoryRollupResponse;
 import com.positivity.inventory.internal.dto.rollup.StorageLocationRollupNode;
-import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.LocationServiceUnavailableException;
-import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository.LocationQuantityMaps;
 import com.positivity.inventory.internal.service.SiteInventoryQuantityLoader;
 import com.positivity.inventory.internal.service.SiteInventoryRollupServiceImpl;
 import com.positivity.inventory.internal.service.StorageLocationTopologyService;
 import com.positivity.inventory.internal.service.StorageLocationTopologyService.StorageLocationNode;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,8 +31,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * Unit tests for {@link SiteInventoryRollupServiceImpl} — CAP-218 #658.
  *
  * <p>Topology client is mocked; quantities come through a real
- * {@link SiteInventoryQuantityLoader} backed by a mocked repository so the
- * loader's sku/no-sku branching is exercised too.
+ * {@link SiteInventoryQuantityLoader} backed by a mocked stock-summary
+ * repository (issue #1024, A1) so the loader's sku/no-sku branching is
+ * exercised too.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("SiteInventoryRollupServiceImpl — CAP-218 #658 unit tests")
@@ -47,14 +48,14 @@ class SiteInventoryRollupServiceImplTest {
     private StorageLocationTopologyService topologyService;
 
     @Mock
-    private InventoryLedgerEntryRepository ledgerRepository;
+    private InventoryStockSummaryRepository stockSummaryRepository;
 
     private SiteInventoryRollupServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service =
-                new SiteInventoryRollupServiceImpl(topologyService, new SiteInventoryQuantityLoader(ledgerRepository));
+        service = new SiteInventoryRollupServiceImpl(
+                topologyService, new SiteInventoryQuantityLoader(stockSummaryRepository));
     }
 
     private static List<StorageLocationNode> threeLevelTopology() {
@@ -69,10 +70,9 @@ class SiteInventoryRollupServiceImplTest {
     void rollup_threeLevelTree_correctOwnAndRolledUp() {
         // Issue #658: rolledUp = own + sum of descendants' own, depth-first
         when(topologyService.fetchSiteTopology(SITE_ID)).thenReturn(threeLevelTopology());
-        when(ledgerRepository.sumQuantityByLocationChunked(any(), any()))
-                .thenReturn(Map.of(SHELF_ID, 120L, BIN_ID, 360L));
-        when(ledgerRepository.calculateOutstandingAllocationsByLocation(any()))
-                .thenReturn(Map.of(SHELF_ID, 10L, BIN_ID, 20L));
+        when(stockSummaryRepository.sumByLocationChunked(any(), isNull()))
+                .thenReturn(new LocationQuantityMaps(
+                        Map.of(SHELF_ID, 120L, BIN_ID, 360L), Map.of(SHELF_ID, 10L, BIN_ID, 20L)));
 
         SiteInventoryRollupResponse response = service.getSiteInventoryRollup(SITE_ID, null, null, true);
 
@@ -102,17 +102,8 @@ class SiteInventoryRollupServiceImplTest {
     void rollup_skuFilter_usesSkuScopedQueries() {
         // Issue #658: when sku given, all quantities are for that SKU only
         when(topologyService.fetchSiteTopology(SITE_ID)).thenReturn(threeLevelTopology());
-        when(ledgerRepository.sumQuantityByLocationForSkuChunked(eq("SKU-1"), any(), any()))
-                .thenAnswer(invocation -> {
-                    Collection<InventoryLedgerEventType> types = invocation.getArgument(2);
-                    if (types.contains(InventoryLedgerEventType.ALLOCATION_CREATED)) {
-                        return Map.of(BIN_ID, 7L);
-                    }
-                    if (types.contains(InventoryLedgerEventType.ALLOCATION_RELEASED)) {
-                        return Map.of(BIN_ID, 2L);
-                    }
-                    return Map.of(BIN_ID, 50L); // on-hand types
-                });
+        when(stockSummaryRepository.sumByLocationChunked(any(), eq("SKU-1")))
+                .thenReturn(new LocationQuantityMaps(Map.of(BIN_ID, 50L), Map.of(BIN_ID, 5L)));
 
         SiteInventoryRollupResponse response = service.getSiteInventoryRollup(SITE_ID, "SKU-1", null, true);
 
@@ -130,8 +121,8 @@ class SiteInventoryRollupServiceImplTest {
                 .thenReturn(List.of(
                         new StorageLocationNode(FLOOR_ID, "Floor A", "FLOOR", "ACTIVE", null),
                         new StorageLocationNode(SHELF_ID, "Orphan Shelf", "SHELF", "ACTIVE", ghostParent)));
-        when(ledgerRepository.sumQuantityByLocationChunked(any(), any())).thenReturn(Map.of(SHELF_ID, 5L));
-        when(ledgerRepository.calculateOutstandingAllocationsByLocation(any())).thenReturn(Map.of());
+        when(stockSummaryRepository.sumByLocationChunked(any(), isNull()))
+                .thenReturn(new LocationQuantityMaps(Map.of(SHELF_ID, 5L), Map.of()));
 
         SiteInventoryRollupResponse response = service.getSiteInventoryRollup(SITE_ID, null, null, true);
 
@@ -145,8 +136,8 @@ class SiteInventoryRollupServiceImplTest {
         // Issue #658: available may be negative — real over-allocation signal
         when(topologyService.fetchSiteTopology(SITE_ID))
                 .thenReturn(List.of(new StorageLocationNode(BIN_ID, "Bin", "BIN", "ACTIVE", null)));
-        when(ledgerRepository.sumQuantityByLocationChunked(any(), any())).thenReturn(Map.of(BIN_ID, 3L));
-        when(ledgerRepository.calculateOutstandingAllocationsByLocation(any())).thenReturn(Map.of(BIN_ID, 8L));
+        when(stockSummaryRepository.sumByLocationChunked(any(), isNull()))
+                .thenReturn(new LocationQuantityMaps(Map.of(BIN_ID, 3L), Map.of(BIN_ID, 8L)));
 
         SiteInventoryRollupResponse response = service.getSiteInventoryRollup(SITE_ID, null, null, true);
 
@@ -163,8 +154,8 @@ class SiteInventoryRollupServiceImplTest {
                         new StorageLocationNode(FLOOR_ID, "Floor A", "FLOOR", "ACTIVE", null),
                         new StorageLocationNode(SHELF_ID, "Shelf A-1", "SHELF", "ACTIVE", FLOOR_ID),
                         new StorageLocationNode(emptyBin, "Empty Bin", "BIN", "ACTIVE", FLOOR_ID)));
-        when(ledgerRepository.sumQuantityByLocationChunked(any(), any())).thenReturn(Map.of(SHELF_ID, 9L));
-        when(ledgerRepository.calculateOutstandingAllocationsByLocation(any())).thenReturn(Map.of());
+        when(stockSummaryRepository.sumByLocationChunked(any(), isNull()))
+                .thenReturn(new LocationQuantityMaps(Map.of(SHELF_ID, 9L), Map.of()));
 
         SiteInventoryRollupResponse response = service.getSiteInventoryRollup(SITE_ID, null, null, false);
 
@@ -179,8 +170,8 @@ class SiteInventoryRollupServiceImplTest {
     void rollup_depthOne_truncatesChildrenButKeepsFullTotals() {
         // Issue #658: depth truncates the returned tree, not the math
         when(topologyService.fetchSiteTopology(SITE_ID)).thenReturn(threeLevelTopology());
-        when(ledgerRepository.sumQuantityByLocationChunked(any(), any())).thenReturn(Map.of(BIN_ID, 360L));
-        when(ledgerRepository.calculateOutstandingAllocationsByLocation(any())).thenReturn(Map.of());
+        when(stockSummaryRepository.sumByLocationChunked(any(), isNull()))
+                .thenReturn(new LocationQuantityMaps(Map.of(BIN_ID, 360L), Map.of()));
 
         SiteInventoryRollupResponse response = service.getSiteInventoryRollup(SITE_ID, null, 1, true);
 
