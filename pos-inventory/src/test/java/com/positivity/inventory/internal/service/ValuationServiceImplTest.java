@@ -371,6 +371,30 @@ class ValuationServiceImplTest {
     }
 
     @Test
+    void asOfValuation_multipleSkus_usesBulkReplayQueryOnce() {
+        when(ledgerRepository.sumOnHandBySkuAsOf(any(), eq(AS_OF)))
+                .thenReturn(List.of(ledgerSkuOnHand(SKU_A, 2L), ledgerSkuOnHand(SKU_B, 3L)));
+        when(methodResolver.resolveAll(anySet()))
+                .thenReturn(Map.of(SKU_A, CostingMethod.AVERAGE, SKU_B, CostingMethod.AVERAGE));
+        when(costStateRepository.findByStockItemIdIn(anyCollection())).thenReturn(List.of());
+        when(ledgerRepository
+                        .findByStockItemIdInAndEventTypeInAndTimestampLessThanEqualOrderByStockItemIdAscTimestampAscLedgerEntryIdAsc(
+                                anyCollection(), any(), eq(AS_OF)))
+                .thenReturn(List.of(
+                        entry(SKU_A, InventoryLedgerEventType.GOODS_RECEIPT, 2, new BigDecimal("5.0000")),
+                        entry(SKU_B, InventoryLedgerEventType.GOODS_RECEIPT, 3, new BigDecimal("7.0000"))));
+
+        ValuationReportResponse report = service.getValuationAsOf(null, null, AS_OF);
+
+        assertThat(report.getTotalOnHandValue()).isEqualByComparingTo("31.0000");
+        verify(methodResolver, times(1)).resolveAll(anySet());
+        verify(costStateRepository, times(1)).findByStockItemIdIn(anyCollection());
+        verify(ledgerRepository, times(1))
+                .findByStockItemIdInAndEventTypeInAndTimestampLessThanEqualOrderByStockItemIdAscTimestampAscLedgerEntryIdAsc(
+                        anyCollection(), any(), eq(AS_OF));
+    }
+
+    @Test
     void asOfValuation_fullCatalog_exceedingCap_throws422DomainException() {
         ValuationServiceImpl smallCapService = new ValuationServiceImpl(
                 stockSummaryRepository,
@@ -386,5 +410,33 @@ class ValuationServiceImplTest {
         assertThatThrownBy(() -> smallCapService.getValuationAsOf(null, null, AS_OF))
                 .isInstanceOf(com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException.class)
                 .hasMessageContaining("exceed cap");
+    }
+
+    @Test
+    void asOfValuation_locationScoped_exceedingCap_doesNotThrow() {
+        ValuationServiceImpl smallCapService = new ValuationServiceImpl(
+                stockSummaryRepository,
+                ledgerRepository,
+                costStateRepository,
+                methodResolver,
+                asOfQueryGuard,
+                List.of(new AverageCostingStrategy(), new StandardCostingStrategy()),
+                1);
+        when(ledgerRepository.findPositiveOnHandByLocationAsOf(eq(LOC_1), any(), eq(AS_OF)))
+                .thenReturn(List.of(ledgerSkuOnHand(SKU_A, 1L), ledgerSkuOnHand(SKU_B, 1L)));
+        when(methodResolver.resolveAll(anySet()))
+                .thenReturn(Map.of(SKU_A, CostingMethod.AVERAGE, SKU_B, CostingMethod.AVERAGE));
+        when(costStateRepository.findByStockItemIdIn(anyCollection())).thenReturn(List.of());
+        when(ledgerRepository
+                        .findByStockItemIdInAndEventTypeInAndTimestampLessThanEqualOrderByStockItemIdAscTimestampAscLedgerEntryIdAsc(
+                                anyCollection(), any(), eq(AS_OF)))
+                .thenReturn(List.of(
+                        entry(SKU_A, InventoryLedgerEventType.GOODS_RECEIPT, 1, new BigDecimal("2.0000")),
+                        entry(SKU_B, InventoryLedgerEventType.GOODS_RECEIPT, 1, new BigDecimal("3.0000"))));
+
+        ValuationReportResponse report = smallCapService.getValuationAsOf(LOC_1, null, AS_OF);
+
+        assertThat(report.getRows()).hasSize(2);
+        assertThat(report.getTotalOnHandValue()).isEqualByComparingTo("5.0000");
     }
 }
