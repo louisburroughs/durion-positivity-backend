@@ -139,6 +139,66 @@ class ToolRegistrationServiceImplTest {
         }
     }
 
+    @Test
+    @DisplayName("registerDiscoveredTools falls back to per-service Eureka discovery when aggregate is empty (#645)")
+    void registerDiscoveredTools_fallsBackToPerServiceDiscovery_whenAggregateEmpty() {
+        URI serviceBase = URI.create("http://pos-order.test");
+        OpenAPI serviceApi = new OpenAPI();
+        OpenApiDocumentFetcher.DiscoveredOpenApi serviceDoc =
+                new OpenApiDocumentFetcher.DiscoveredOpenApi("pos-order", serviceBase, serviceApi);
+        McpServerFeatures.AsyncToolSpecification spec = toolSpec("pos-order_getorder");
+
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.empty());
+        when(openApiDocumentFetcher.fallbackServiceIds()).thenReturn(List.of("pos-order"));
+        when(openApiDocumentFetcher.fetchForService("pos-order")).thenReturn(Mono.just(serviceDoc));
+        when(openApiToolMapper.toToolSpecifications("pos-order", serviceBase, serviceApi))
+                .thenReturn(List.of(spec));
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(spec)).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+
+        serviceUnderTest().registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+        verify(openApiDocumentFetcher).fetchForService("pos-order");
+        verify(mcpAsyncServer).addTool(spec);
+        verify(mcpAsyncServer).notifyToolsListChanged();
+        assertThat(meterRegistry.get("tools.discovered").counter().count()).isEqualTo(1.0);
+        assertThat(meterRegistry.get("tools.registered").counter().count()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("registerDiscoveredTools does not use the per-service fallback when the aggregate registers tools")
+    void registerDiscoveredTools_skipsFallback_whenAggregateRegistersTools() {
+        McpServerFeatures.AsyncToolSpecification spec = toolSpec("accounting_listinvoices");
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered =
+                new OpenApiDocumentFetcher.DiscoveredOpenApi("aggregate", GATEWAY_BASE_URI, new OpenAPI());
+
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
+        when(openApiToolMapper.toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi()))
+                .thenReturn(List.of(spec));
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(spec)).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+
+        serviceUnderTest().registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+        verify(openApiDocumentFetcher, never()).fallbackServiceIds();
+        verify(openApiDocumentFetcher, never()).fetchForService(any());
+    }
+
+    @Test
+    @DisplayName("registerDiscoveredTools registers nothing when both aggregate and per-service fallback are empty")
+    void registerDiscoveredTools_registersNothing_whenAggregateAndFallbackEmpty() {
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.empty());
+        when(openApiDocumentFetcher.fallbackServiceIds()).thenReturn(List.of());
+
+        serviceUnderTest().registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+        verify(openApiDocumentFetcher, never()).fetchForService(any());
+        verify(mcpAsyncServer, never()).addTool(any());
+        verify(mcpAsyncServer, never()).notifyToolsListChanged();
+    }
+
     // --- helpers ---
 
     private ToolRegistrationServiceImpl serviceUnderTest() {

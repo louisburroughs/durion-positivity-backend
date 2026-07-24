@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.discovery;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.config.McpServerProperties;
@@ -190,8 +191,49 @@ class OpenApiDocumentFetcherTest {
 
     // --- helpers ---
 
+    @Test
+    @DisplayName("fallbackServiceIds returns the configured included-services allowlist when set (#645)")
+    void fallbackServiceIds_returnsConfiguredAllowlist_whenSet() {
+        DiscoveryClient discoveryClient = mock(DiscoveryClient.class);
+        OpenApiDocumentFetcher fetcher = fetcherWith(
+                discoveryClient, webClientReturning("irrelevant"), AGGREGATE_URL, List.of("pos-order", "pos-catalog"));
+
+        assertThat(fetcher.fallbackServiceIds()).containsExactly("pos-order", "pos-catalog");
+        // The registry is not consulted when an explicit allowlist is configured.
+        verifyNoInteractions(discoveryClient);
+    }
+
+    @Test
+    @DisplayName("fallbackServiceIds falls back to registered services minus the gateway when no allowlist (#645)")
+    void fallbackServiceIds_returnsRegisteredServicesMinusGateway_whenNoAllowlist() {
+        DiscoveryClient discoveryClient = mock(DiscoveryClient.class);
+        when(discoveryClient.getServices()).thenReturn(List.of("pos-order", "pos-api-gateway", "pos-catalog"));
+        OpenApiDocumentFetcher fetcher =
+                fetcherWith(discoveryClient, webClientReturning("irrelevant"), AGGREGATE_URL, List.of());
+
+        assertThat(fetcher.fallbackServiceIds()).containsExactly("pos-order", "pos-catalog");
+    }
+
     private static OpenApiDocumentFetcher fetcherWith(WebClient webClient, String aggregateSpecUrl) {
         return fetcherWith(mock(DiscoveryClient.class), webClient, aggregateSpecUrl);
+    }
+
+    private static OpenApiDocumentFetcher fetcherWith(
+            DiscoveryClient discoveryClient,
+            WebClient webClient,
+            String aggregateSpecUrl,
+            List<String> includedServices) {
+        McpServerProperties props = new McpServerProperties(
+                "http://localhost:8086",
+                "/mcp/message",
+                "/mcp/sse",
+                "/v3/api-docs",
+                Duration.ofSeconds(5),
+                includedServices,
+                List.of(),
+                aggregateSpecUrl,
+                List.of());
+        return new OpenApiDocumentFetcher(discoveryClient, webClient, props);
     }
 
     private static OpenApiDocumentFetcher fetcherWith(

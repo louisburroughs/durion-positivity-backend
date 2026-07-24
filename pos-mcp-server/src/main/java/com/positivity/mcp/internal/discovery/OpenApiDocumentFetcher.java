@@ -323,6 +323,21 @@ public class OpenApiDocumentFetcher {
     /** A per-service OpenAPI doc discovered via swagger-config: its (gateway-relative) URL and routing prefix. */
     record ServiceDoc(@NonNull String url, @NonNull String routingPrefix) {}
 
+    /**
+     * Candidate service ids for the #645 per-service Eureka discovery fallback: the configured
+     * {@code mcp.server.included-services} allowlist when non-empty, otherwise every Eureka-registered
+     * service except the gateway itself (whose aggregate spec is what the fallback is compensating
+     * for). Returned in registry order; callers treat each as fail-soft.
+     */
+    public @NonNull List<String> fallbackServiceIds() {
+        if (!properties.includedServices().isEmpty()) {
+            return List.copyOf(properties.includedServices());
+        }
+        return discoveryClient.getServices().stream()
+                .filter(id -> id != null && !GATEWAY_SERVICE_ID.equalsIgnoreCase(id))
+                .toList();
+    }
+
     public @NonNull Mono<DiscoveredOpenApi> fetchForService(@NonNull String serviceId) {
         var instance = pickInstance(serviceId);
         if (instance.isEmpty()) {
