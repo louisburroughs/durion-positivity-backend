@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.mcp.internal.dto.ToolPermissionRequest;
 import com.positivity.mcp.internal.dto.ToolPermissionsResponse;
 import com.positivity.mcp.internal.security.McpPermissions;
@@ -54,6 +55,7 @@ class ToolPermissionController {
     }
 
     @PostMapping("/{toolName}/permissions")
+    @EmitEvent(id = "MCP_TOOL_PERMISSION_GRANT", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {McpPermissions.TOOL_MANAGE})
@@ -71,6 +73,7 @@ class ToolPermissionController {
     }
 
     @DeleteMapping("/{toolName}/permissions")
+    @EmitEvent(id = "MCP_TOOL_PERMISSION_REVOKE", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {McpPermissions.TOOL_MANAGE})
