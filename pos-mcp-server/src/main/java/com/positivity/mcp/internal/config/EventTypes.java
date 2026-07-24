@@ -34,6 +34,9 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.write("NLTI_REQUEST_SUBMIT", "Submit a NLTI natural language request")
                         .build(),
+                EventTypeRegistration.write(
+                                "NLTI_SESSION_WORKFLOW_STATE_SET", "Advance the workflow state of a NLTI session")
+                        .build(),
                 EventTypeRegistration.fastRead("NLTI_AUDIT_QUERY", "Query the NLTI audit event ledger")
                         .build(),
                 EventTypeRegistration.approval(

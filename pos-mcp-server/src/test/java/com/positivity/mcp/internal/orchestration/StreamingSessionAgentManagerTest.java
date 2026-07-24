@@ -27,6 +27,7 @@ import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFacto
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.ToolRegistryService;
@@ -40,6 +41,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -111,6 +113,9 @@ class StreamingSessionAgentManagerTest {
     @Mock
     private NltiTelemetryEmitter telemetryEmitter;
 
+    @Mock
+    private NltiWorkflowStateService workflowStateService;
+
     // Real instance required to prevent @Tool duplicate registration
     private ExaWebSearchTool exaWebSearchTool;
     private InventoryFacadeTool inventoryFacadeTool;
@@ -130,6 +135,8 @@ class StreamingSessionAgentManagerTest {
         // bleed
         when(toolRegistry.resolveDomainTools(any())).thenAnswer(inv -> new ArrayList<>());
         when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
+        // #778: default to session-less so existing tests exercise the message-heuristic path.
+        lenient().when(workflowStateService.resolveActiveState(any())).thenReturn(Optional.empty());
         lenient().when(rolePromptResolver.resolvePrompt(any())).thenReturn("Default role prompt");
         lenient()
                 .when(rolePromptResolver.assemble(any(), any()))
@@ -173,6 +180,7 @@ class StreamingSessionAgentManagerTest {
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 30,
                 500,
@@ -346,6 +354,7 @@ class StreamingSessionAgentManagerTest {
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 30,
                 500,
@@ -410,6 +419,7 @@ class StreamingSessionAgentManagerTest {
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 0,
                 500,
@@ -444,6 +454,7 @@ class StreamingSessionAgentManagerTest {
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 30,
                 500,
@@ -505,6 +516,7 @@ class StreamingSessionAgentManagerTest {
                 openApiToolProvider,
                 requestContext,
                 null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 30,
                 500,

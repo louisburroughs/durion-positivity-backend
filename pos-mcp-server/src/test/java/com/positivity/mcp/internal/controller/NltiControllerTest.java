@@ -1,14 +1,17 @@
 package com.positivity.mcp.internal.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
+import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.service.NltiRequestService;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -64,6 +67,9 @@ class NltiControllerTest {
 
     @MockitoBean
     private NltiRequestService nltiRequestService;
+
+    @MockitoBean
+    private NltiWorkflowStateService workflowStateService;
 
     // ─── AC-1: POST with valid prompt → 202 with required envelope fields ─────
 
@@ -189,6 +195,32 @@ class NltiControllerTest {
                 .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty())
                 .andExpect(jsonPath("$.timestamp").isNotEmpty());
+    }
+
+    // ─── #778: workflow-state write endpoint ──────────────────────────────────
+
+    @Test
+    @WithMockUser(authorities = "nlti:request:submit")
+    @DisplayName("POST /v1/nlt/sessions/{id}/workflow-state returns 200 with the updated state")
+    void setWorkflowState_returns200WithUpdatedState() throws Exception {
+        when(workflowStateService.advance(eq(SESSION_ID), any(), eq(WorkflowState.CREATING_PO)))
+                .thenReturn(WorkflowState.CREATING_PO);
+
+        mockMvc.perform(post("/v1/nlt/sessions/" + SESSION_ID + "/workflow-state")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workflowState\":\"CREATING_PO\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sessionId").value(SESSION_ID.toString()))
+                .andExpect(jsonPath("$.workflowState").value("CREATING_PO"));
+    }
+
+    @Test
+    @DisplayName("POST /v1/nlt/sessions/{id}/workflow-state without auth returns 401")
+    void setWorkflowState_withoutAuth_returns401() throws Exception {
+        mockMvc.perform(post("/v1/nlt/sessions/" + SESSION_ID + "/workflow-state")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workflowState\":\"CREATING_PO\"}"))
+                .andExpect(status().isUnauthorized());
     }
 
     // ─── Test slice configuration ─────────────────────────────────────────────

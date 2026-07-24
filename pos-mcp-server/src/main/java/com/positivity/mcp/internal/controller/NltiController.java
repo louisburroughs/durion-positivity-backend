@@ -1,18 +1,24 @@
 package com.positivity.mcp.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.internal.security.McpPermissions;
+import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.service.NltiRequestService;
+import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -28,9 +34,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class NltiController {
 
     private final NltiRequestService nltiRequestService;
+    private final NltiWorkflowStateService workflowStateService;
 
-    NltiController(@NonNull NltiRequestService nltiRequestService) {
+    NltiController(
+            @NonNull NltiRequestService nltiRequestService, @NonNull NltiWorkflowStateService workflowStateService) {
         this.nltiRequestService = nltiRequestService;
+        this.workflowStateService = workflowStateService;
     }
 
     @PostMapping("/requests")
@@ -54,4 +63,41 @@ public class NltiController {
                         response.correlationId().toString())
                 .body(response);
     }
+
+    /**
+     * #778: explicit write path that advances a session's operational {@link WorkflowState} as a
+     * workflow progresses (e.g. entering a purchase-order flow), so subsequent chat turns on that
+     * session receive the workflow-gated tool set. Ownership-checked: the caller may only advance
+     * their own session.
+     */
+    @PostMapping("/sessions/{sessionId}/workflow-state")
+    @EmitEvent(id = "NLTI_SESSION_WORKFLOW_STATE_SET", apiVersion = "1")
+    @PreAuthorize("hasAuthority('" + McpPermissions.NLTI_REQUEST_SUBMIT + "')")
+    @Operation(
+            summary = "Set the session workflow state",
+            description =
+                    "Advances the operational workflow state of the caller's NLTI session so subsequent chat turns receive the workflow-gated tool set.")
+    ResponseEntity<WorkflowStateResponse> setWorkflowState(
+            @PathVariable @NonNull UUID sessionId, @Valid @RequestBody @NonNull WorkflowStateUpdateRequest request) {
+        String subjectId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        WorkflowState updatedState = workflowStateService.advance(sessionId, subjectId, request.workflowState());
+        return ResponseEntity.ok(new WorkflowStateResponse(sessionId, updatedState));
+    }
+
+    @Schema(name = "WorkflowStateUpdateRequest", description = "Requested workflow state for the session")
+    public record WorkflowStateUpdateRequest(
+            @Schema(
+                    description = "The operational workflow state to set on the session",
+                    requiredMode = Schema.RequiredMode.REQUIRED)
+            @NotNull
+            @NonNull
+            WorkflowState workflowState) {}
+
+    @Schema(name = "WorkflowStateResponse", description = "The session's workflow state after the update")
+    public record WorkflowStateResponse(
+            @Schema(description = "Session identifier", requiredMode = Schema.RequiredMode.REQUIRED) @NonNull
+            UUID sessionId,
+
+            @Schema(description = "Current workflow state", requiredMode = Schema.RequiredMode.REQUIRED) @NonNull
+            WorkflowState workflowState) {}
 }

@@ -20,12 +20,14 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
+import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
@@ -36,6 +38,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -111,6 +114,9 @@ class SessionAgentManagerTest {
     @Mock
     private NltiTelemetryEmitter telemetryEmitter;
 
+    @Mock
+    private NltiWorkflowStateService workflowStateService;
+
     // Real instance required: Mockito subclasses cause @Tool duplicate registration
     // in the assistant runtime
     private ExaWebSearchTool exaWebSearchTool;
@@ -134,6 +140,8 @@ class SessionAgentManagerTest {
         lenient()
                 .when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
+        // #778: default to session-less so existing tests exercise the message-heuristic path.
+        lenient().when(workflowStateService.resolveActiveState(anyString())).thenReturn(Optional.empty());
         lenient().when(rolePromptResolver.resolvePrompt(anyString())).thenReturn("Default role prompt");
         lenient()
                 .when(rolePromptResolver.assemble(anyString(), anyString()))
@@ -180,6 +188,7 @@ class SessionAgentManagerTest {
                 null,
                 null,
                 null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 30,
                 500,
@@ -343,6 +352,28 @@ class SessionAgentManagerTest {
     }
 
     @Test
+    @DisplayName("chat threads the persisted non-IDLE session workflow state into tool selection (#778)")
+    void chat_usesPersistedWorkflowState_whenSessionPresent() {
+        String message = "create a purchase order for vendor acme";
+        when(workflowStateService.resolveActiveState("user-1")).thenReturn(Optional.of(WorkflowState.CREATING_PO));
+        when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString(), any(WorkflowState.class)))
+                .thenReturn(
+                        new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.CREATING_PO));
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("ok"));
+
+        manager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), message);
+
+        // The persisted session state (not a message heuristic) gates selection.
+        verify(toolSelectionEngine)
+                .selectRoleTools(
+                        eq("ROLE_ADMIN"),
+                        eq(Set.of("AUTHENTICATED", "mcp:chat:execute")),
+                        eq(message),
+                        eq(WorkflowState.CREATING_PO));
+        verify(toolSelectionEngine, never()).selectRoleTools(anyString(), anySet(), anyString());
+    }
+
+    @Test
     @DisplayName("getOrCreateAgent rebuilds agent after cache TTL expiry")
     void getOrCreateAgent_rebuildsAgentAfterCacheTtlExpiry() {
         SessionAgentManager expiringManager = new SessionAgentManager(
@@ -361,6 +392,7 @@ class SessionAgentManagerTest {
                 null,
                 null,
                 null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 0,
                 500,
@@ -401,6 +433,7 @@ class SessionAgentManagerTest {
                 null,
                 null,
                 null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 30,
                 500,

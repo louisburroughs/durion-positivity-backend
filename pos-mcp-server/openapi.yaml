@@ -321,6 +321,38 @@ paths:
         - mcp:system_prompt:create
       x-required-permissions:
       - mcp:system_prompt:create
+  /v1/nlt/sessions/{sessionId}/workflow-state:
+    post:
+      tags:
+      - NLTI
+      summary: Set the session workflow state
+      description: Advances the operational workflow state of the caller's NLTI session so subsequent chat turns receive the workflow-gated tool set.
+      operationId: setWorkflowState
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowStateUpdateRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowStateResponse'
+      security:
+      - bearerAuth:
+        - nlti:request:submit
+      x-required-permissions:
+      - nlti:request:submit
   /v1/nlt/requests:
     post:
       tags:
@@ -422,8 +454,11 @@ paths:
             text/event-stream:
               schema:
                 type: array
+                additionalProperties: {}
+                contains: {}
                 items:
                   $ref: '#/components/schemas/ServerSentEventString'
+                unevaluatedItems: {}
       security:
       - bearerAuth:
         - mcp:chat:stream
@@ -527,10 +562,12 @@ paths:
         required: false
         schema:
           type: array
+          contains: {}
           default:
           - timestamp,ASC
           items:
             type: string
+          unevaluatedItems: {}
       responses:
         '200':
           description: OK
@@ -733,6 +770,41 @@ components:
           description: Granted permission codes (a caller holding any one may select the tool)
           items:
             type: string
+    WorkflowStateUpdateRequest:
+      type: object
+      description: Requested workflow state for the session
+      properties:
+        workflowState:
+          type: string
+          description: The operational workflow state to set on the session
+          enum:
+          - IDLE
+          - CREATING_PO
+          - RECEIVING_ASN
+          - INVENTORY_RECON
+          - PROCESSING_RETURN
+      required:
+      - workflowState
+    WorkflowStateResponse:
+      type: object
+      description: The session's workflow state after the update
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: Session identifier
+        workflowState:
+          type: string
+          description: Current workflow state
+          enum:
+          - IDLE
+          - CREATING_PO
+          - RECEIVING_ASN
+          - INVENTORY_RECON
+          - PROCESSING_RETURN
+      required:
+      - sessionId
+      - workflowState
     NltiRequestDTO:
       type: object
       description: Natural-language task interpretation request submitted by a client

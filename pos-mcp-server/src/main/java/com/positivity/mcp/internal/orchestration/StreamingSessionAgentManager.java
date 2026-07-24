@@ -4,10 +4,12 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.client.RoleDefaultPermissionsClient;
+import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.PermissionCodes;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
@@ -24,6 +26,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -81,6 +84,8 @@ public class StreamingSessionAgentManager
     @Nullable
     private final RoleDefaultPermissionsClient roleDefaultPermissionsClient;
 
+    private final NltiWorkflowStateService workflowStateService;
+
     private final Clock clock;
 
     private final int memoryMaxMessages;
@@ -98,6 +103,7 @@ public class StreamingSessionAgentManager
             @Nullable OpenApiToolProvider openApiToolProvider,
             @Nullable RequestScopedUserContext requestScopedUserContext,
             @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient,
+            @NonNull NltiWorkflowStateService workflowStateService,
             @NonNull Clock clock,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
@@ -114,6 +120,7 @@ public class StreamingSessionAgentManager
         this.openApiToolProvider = openApiToolProvider;
         this.requestScopedUserContext = requestScopedUserContext;
         this.roleDefaultPermissionsClient = roleDefaultPermissionsClient;
+        this.workflowStateService = workflowStateService;
         this.clock = clock;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
@@ -155,8 +162,14 @@ public class StreamingSessionAgentManager
                 tokenCount(message),
                 messagePreview);
 
-        ToolSelectionEngine.ToolSelectionResult selection =
-                toolSelectionEngine.selectRoleTools(role, currentUserContext.permissionCodes(), message);
+        // #778: gate tool selection by the subject's persisted session workflow state when they have
+        // one; otherwise fall back to message-heuristic derivation (session-less callers).
+        Optional<WorkflowState> persistedState = workflowStateService.resolveActiveState(username);
+        ToolSelectionEngine.ToolSelectionResult selection = persistedState
+                .map(state ->
+                        toolSelectionEngine.selectRoleTools(role, currentUserContext.permissionCodes(), message, state))
+                .orElseGet(
+                        () -> toolSelectionEngine.selectRoleTools(role, currentUserContext.permissionCodes(), message));
         List<Object> allTools = sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
         String cacheKey = sharedOrchestrationSupport.toolCacheKey(allTools);
         LOGGER.debug(
