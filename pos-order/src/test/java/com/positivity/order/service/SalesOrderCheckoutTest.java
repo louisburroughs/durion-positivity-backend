@@ -94,6 +94,9 @@ class SalesOrderCheckoutTest {
     private com.positivity.order.internal.repository.OrderPaymentRecordRepository orderPaymentRecordRepository;
 
     @Mock
+    private com.positivity.order.internal.repository.RegisterSessionRepository registerSessionRepository;
+
+    @Mock
     private com.positivity.order.internal.config.OrderDomainEventPublisher orderDomainEventPublisher;
 
     @Mock
@@ -121,6 +124,7 @@ class SalesOrderCheckoutTest {
                 extCustomerRepository,
                 extBillingRulesRepository,
                 orderPaymentRecordRepository,
+                registerSessionRepository,
                 orderDomainEventPublisher,
                 new OrderStateMachine(orderStatusHistoryRepository, java.time.Clock.systemUTC()),
                 orderNumberService,

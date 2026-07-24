@@ -91,6 +91,9 @@ class SalesOrderServiceImplTest {
     private com.positivity.order.internal.repository.OrderPaymentRecordRepository orderPaymentRecordRepository;
 
     @Mock
+    private com.positivity.order.internal.repository.RegisterSessionRepository registerSessionRepository;
+
+    @Mock
     private com.positivity.order.internal.config.OrderDomainEventPublisher orderDomainEventPublisher;
 
     @Mock
@@ -125,6 +128,7 @@ class SalesOrderServiceImplTest {
                 extCustomerRepository,
                 extBillingRulesRepository,
                 orderPaymentRecordRepository,
+                registerSessionRepository,
                 orderDomainEventPublisher,
                 new OrderStateMachine(orderStatusHistoryRepository, java.time.Clock.systemUTC()),
                 orderNumberService,
@@ -137,7 +141,7 @@ class SalesOrderServiceImplTest {
     private SalesOrderSummary createCart(String clerkId, String terminalId, String customerId, String vehicleId) {
         return salesOrderService
                 .createCart(new CreateCartCommand(
-                        clerkId, terminalId, customerId, vehicleId, TEST_LOCATION, null, null, null))
+                        clerkId, terminalId, customerId, vehicleId, TEST_LOCATION, null, null, null, null, null))
                 .summary();
     }
 
@@ -149,6 +153,27 @@ class SalesOrderServiceImplTest {
      * Scenario 1a: Happy-path cart creation produces a DRAFT order with zero
      * subtotal.
      */
+    @Test
+    void createCart_whenTerminalSessionClosing_thenRejected() {
+        // Copilot #1093: a terminal being counted at close is frozen — no new orders.
+        when(registerSessionRepository.findFirstByTerminalIdAndStatus(
+                        "terminal-001", com.positivity.order.internal.entity.RegisterSessionStatus.CLOSING))
+                .thenReturn(java.util.Optional.of(com.positivity.order.internal.entity.RegisterSession.builder()
+                        .sessionId(UUID.randomUUID())
+                        .build()));
+
+        assertThatThrownBy(() -> createCart("clerk-001", "terminal-001", null, null))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void createCart_whenDepositSourcePairIncomplete_thenRejected() {
+        // Copilot #1093: deposit provenance is all-or-nothing.
+        assertThatThrownBy(() -> salesOrderService.createCart(new CreateCartCommand(
+                        "clerk-001", "terminal-001", null, null, TEST_LOCATION, null, null, null, "WORKORDER", null)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test
     void createCart_whenCalledWithClerkAndTerminal_thenReturnsOrderWithDraftStatus() {
         // given

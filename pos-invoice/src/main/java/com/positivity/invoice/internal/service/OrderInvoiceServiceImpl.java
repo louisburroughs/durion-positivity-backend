@@ -4,13 +4,16 @@ import com.positivity.invoice.internal.config.InvoiceEventPublisher;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.entity.PaymentIntent;
+import com.positivity.invoice.internal.enums.DepositSourceType;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
+import com.positivity.invoice.service.DepositCreditService;
 import com.positivity.invoice.service.OrderInvoiceService;
+import com.positivity.invoice.service.model.CreateDepositCommand;
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;
 import com.positivity.shared.dto.OrderInvoiceLineItem;
 import com.positivity.shared.dto.OrderInvoiceResponse;
@@ -43,15 +46,18 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final PaymentIntentRepository paymentIntentRepository;
     private final InvoiceEventPublisher invoiceEventPublisher;
+    private final DepositCreditService depositCreditService;
 
     public OrderInvoiceServiceImpl(
             @NonNull InvoiceRepository invoiceRepository,
             @NonNull PaymentIntentRepository paymentIntentRepository,
             @NonNull InvoiceEventPublisher invoiceEventPublisher,
+            @NonNull DepositCreditService depositCreditService,
             Clock clock) {
         this.invoiceRepository = invoiceRepository;
         this.paymentIntentRepository = paymentIntentRepository;
         this.invoiceEventPublisher = invoiceEventPublisher;
+        this.depositCreditService = depositCreditService;
         this.clock = clock;
     }
 
@@ -117,7 +123,37 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
         }
         invoiceEventPublisher.publishInvoiceUpdated(saved);
         log.info("Created invoice {} for order {}", saved.getId(), request.getOrderId());
-        return toResponse(saved, false);
+
+        // Story E4 (deposit take): register the deposit as a dedicated credit against its source,
+        // idempotent on the taking orderId.
+        registerDepositIfPresent(request);
+
+        // Story E4 (settlement): draw down any deposit credits held against this settlement's
+        // workorder, recording the application-audit chain and reducing what the customer owes.
+        BigDecimal depositApplied = BigDecimal.ZERO;
+        if (saved.getWorkorderId() != null) {
+            depositApplied = depositCreditService.applyAvailableCredits(
+                    DepositSourceType.WORKORDER, saved.getWorkorderId(), saved.getId(), saved.getTotal());
+        }
+        return toResponse(saved, false, depositApplied);
+    }
+
+    private void registerDepositIfPresent(@NonNull OrderInvoiceCreationRequest request) {
+        BigDecimal depositAmount = request.getDepositAmount();
+        if (depositAmount == null || depositAmount.signum() <= 0) {
+            return;
+        }
+        if (request.getDepositSourceType() == null || request.getDepositSourceId() == null) {
+            throw new IllegalArgumentException(
+                    "depositSourceType and depositSourceId are required when depositAmount is set");
+        }
+        depositCreditService.createDeposit(new CreateDepositCommand(
+                request.getOrderId(),
+                request.getDepositSourceType(),
+                request.getDepositSourceId(),
+                request.getCustomerId() == null ? null : request.getCustomerId().toString(),
+                depositAmount,
+                null));
     }
 
     @Override
@@ -196,6 +232,12 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
 
     @NonNull
     private static OrderInvoiceResponse toResponse(@NonNull Invoice invoice, boolean existing) {
+        return toResponse(invoice, existing, BigDecimal.ZERO);
+    }
+
+    @NonNull
+    private static OrderInvoiceResponse toResponse(
+            @NonNull Invoice invoice, boolean existing, @NonNull BigDecimal depositApplied) {
         return OrderInvoiceResponse.builder()
                 .invoiceId(invoice.getId())
                 .invoiceNumber(invoice.getInvoiceNumber())
@@ -203,6 +245,7 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
                 .subtotal(invoice.getSubtotal())
                 .taxAmount(invoice.getTax())
                 .totalAmount(invoice.getTotal())
+                .depositApplied(depositApplied)
                 .existing(existing)
                 .build();
     }

@@ -7,7 +7,9 @@ import com.positivity.domainevents.order.OrderCancelledV1;
 import com.positivity.domainevents.order.OrderCommissionImpactV1;
 import com.positivity.domainevents.order.OrderCompletedV1;
 import com.positivity.domainevents.order.OrderPaymentIntegrityAlertV1;
+import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.order.internal.entity.PriceOverride;
+import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderLine;
 import com.positivity.order.internal.entity.SourceType;
@@ -87,7 +89,7 @@ public class OrderDomainEventPublisher {
                 order.getOrderNumber(),
                 order.getLocationId(),
                 order.getWorkOrderId(),
-                null,
+                order.getSessionId(),
                 order.getCustomerId(),
                 order.getVehicleId(),
                 order.getClerkId(),
@@ -154,6 +156,32 @@ public class OrderDomainEventPublisher {
                 override.getApprovedAt() != null ? override.getApprovedAt() : Instant.now(clock));
         publish(writer, OrderCommissionImpactV1.EVENT_TYPE, OrderCommissionImpactV1.SCHEMA_VERSION, order, payload);
         log.debug("Queued order.line.commission-impact overrideId={}", override.getOverrideId());
+    }
+
+    /**
+     * Emits {@code order.session.closed} (story G2, spec R6.4) with the session as the aggregate.
+     * pos-accounting posts the over/short variance to GL (story G3).
+     */
+    public void publishRegisterSessionClosed(
+            @NonNull RegisterSession session, @NonNull RegisterSessionClosedV1 payload) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        long aggregateVersion = session.getVersion() == null ? 0L : session.getVersion();
+        writer.publish(
+                DomainTopics.events("order"),
+                DomainEventEnvelope.of(
+                        RegisterSessionClosedV1.EVENT_TYPE,
+                        RegisterSessionClosedV1.SCHEMA_VERSION,
+                        session.getSessionId(),
+                        aggregateVersion,
+                        SOURCE_SERVICE,
+                        null,
+                        SecurityContextHelper.getCurrentUsernameOrDefault("system"),
+                        payload,
+                        clock));
+        log.debug("Queued order.session.closed sessionId={}", session.getSessionId());
     }
 
     private void publish(

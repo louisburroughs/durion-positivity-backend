@@ -319,4 +319,32 @@ public interface GLPostingService {
             @NonNull LocalDateTime transactionDate,
             @NonNull String description,
             @Nullable String overrideJustification);
+
+    /**
+     * Post a register-session drawer over/short variance (odoo-parity G3, issue #1083): a balanced
+     * two-line entry {@code Dr debitAccount / Cr creditAccount} of {@code amount}. The caller picks
+     * the accounts by direction — a shortage debits the Cash Short expense and credits the register
+     * cash-clearing account; an overage debits cash-clearing and credits the Cash Over income
+     * account. Per-order revenue postings remain authoritative; this carries only the drawer
+     * variance (spec §14), never a consolidated closing entry.
+     *
+     * @param sourceEventId deterministic JE source id derived from the session id
+     * @param sessionId register session the variance belongs to (for the line labels)
+     * @param debitAccountId account to debit
+     * @param creditAccountId account to credit
+     * @param amount positive variance amount ({@code abs(overShort)})
+     * @param transactionDate business transaction date (the session's close time)
+     * @param description entry description
+     * @param overrideJustification optional CLOSED-period override justification
+     * @return posted journal entry
+     */
+    JournalEntry postRegisterOverShort(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID sessionId,
+            @NonNull UUID debitAccountId,
+            @NonNull UUID creditAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification);
 }

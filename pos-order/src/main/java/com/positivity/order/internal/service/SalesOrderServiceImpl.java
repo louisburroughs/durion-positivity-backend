@@ -21,6 +21,7 @@ import com.positivity.order.internal.repository.ExtBillingRulesRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
+import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.order.service.SalesOrderService;
@@ -67,6 +68,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     private final ExtCustomerRepository extCustomerRepository;
     private final ExtBillingRulesRepository extBillingRulesRepository;
     private final OrderPaymentRecordRepository paymentRecordRepository;
+    private final RegisterSessionRepository registerSessionRepository;
     private final OrderDomainEventPublisher domainEventPublisher;
     private final OrderStateMachine orderStateMachine;
     private final OrderNumberService orderNumberService;
@@ -96,14 +98,46 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         UUID vehicleId = parseReference(command.vehicleId(), "vehicleId");
         CustomerValidationStatus validationStatus = validateCustomerAndVehicle(customerId, vehicleId);
 
+        // Story E4: deposit provenance is all-or-nothing — reject a half-specified source pair
+        // (Copilot #1093 review) so an order never carries incomplete deposit provenance.
+        String depositSourceType = normalizeBlank(command.depositSourceType());
+        if ((depositSourceType == null) != (command.depositSourceId() == null)) {
+            throw new IllegalArgumentException(
+                    "depositSourceType and depositSourceId must be provided together for a deposit take");
+        }
+
+        // Story G1: orders created while a session is open on the terminal bind to it, and the
+        // session supplies the location when the caller did not (A2's param is the fallback). A
+        // terminal being counted at close (CLOSING) is frozen — no new orders (Copilot #1093 review).
+        if (registerSessionRepository
+                .findFirstByTerminalIdAndStatus(command.terminalId(), RegisterSessionStatus.CLOSING)
+                .isPresent()) {
+            throw new IllegalStateException("Terminal " + command.terminalId()
+                    + " has a register session being closed; no new orders until the close completes");
+        }
+        RegisterSession openSession = registerSessionRepository
+                .findFirstByTerminalIdAndStatus(command.terminalId(), RegisterSessionStatus.OPEN)
+                .orElse(null);
+        UUID sessionId = openSession != null ? openSession.getSessionId() : null;
+        UUID locationId = command.locationId() != null
+                ? command.locationId()
+                : (openSession != null ? openSession.getLocationId() : null);
+        if (locationId == null) {
+            throw new IllegalArgumentException(
+                    "locationId is required when no register session is open on the terminal");
+        }
+
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         SalesOrder order = SalesOrder.builder()
-                .orderNumber(orderNumberService.nextNumber(command.locationId()))
-                .locationId(command.locationId())
+                .orderNumber(orderNumberService.nextNumber(locationId))
+                .locationId(locationId)
                 .label(normalizeBlank(command.label()))
                 .generalNote(normalizeBlank(command.generalNote()))
                 .clerkId(command.clerkId())
                 .terminalId(command.terminalId())
+                .sessionId(sessionId)
+                .depositSourceType(depositSourceType)
+                .depositSourceId(command.depositSourceId())
                 .customerId(customerId)
                 .vehicleId(vehicleId)
                 .customerValidationStatus(validationStatus)
@@ -528,7 +562,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                         .type("PART")
                         .build())
                 .toList();
-        return OrderInvoiceCreationRequest.builder()
+        OrderInvoiceCreationRequest.OrderInvoiceCreationRequestBuilder builder = OrderInvoiceCreationRequest.builder()
                 .orderId(order.getOrderId())
                 .workorderId(order.getWorkOrderId())
                 .customerId(order.getCustomerId())
@@ -536,8 +570,15 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 .subtotal(order.getGrandTotal().subtract(order.getTaxTotal()))
                 .taxAmount(order.getTaxTotal())
                 .totalAmount(order.getGrandTotal())
-                .lines(lines)
-                .build();
+                .lines(lines);
+        // Story E4: a deposit-take order registers a deposit credit against its source for the
+        // order total — pos-invoice owns the credit artifact (gate V2).
+        if (order.getDepositSourceType() != null && order.getDepositSourceId() != null) {
+            builder.depositSourceType(order.getDepositSourceType())
+                    .depositSourceId(order.getDepositSourceId())
+                    .depositAmount(order.getGrandTotal());
+        }
+        return builder.build();
     }
 
     @Override

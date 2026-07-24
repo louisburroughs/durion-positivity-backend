@@ -120,6 +120,10 @@ workorder:
     invoice-manifest-topic: ${WORKORDER_INVOICE_MANIFEST_TOPIC:invoice.manifest.v1}
     invoice-manifest-consumer-group: ${WORKORDER_INVOICE_MANIFEST_CONSUMER_GROUP:pos-workorder-invoice-manifests}
     invoice-commands-topic: ${WORKORDER_INVOICE_COMMANDS_TOPIC:invoice.commands.v1}
+    # Order settlement finalize-back feed (odoo-parity E3, #1084): completing a workorder-linked
+    # order transitions the workorder to COMPLETED via its own state machine.
+    order-events-topic: ${WORKORDER_ORDER_EVENTS_TOPIC:order.events.v1}
+    order-events-consumer-group: ${WORKORDER_ORDER_EVENTS_CONSUMER_GROUP:pos-workorder-order-events}
     command-send-timeout-ms: ${WORKORDER_COMMAND_SEND_TIMEOUT_MS:10000}
     commands-topic: ${WORKORDER_KAFKA_COMMANDS_TOPIC:workorder.commands.v1}
     consumer-group: ${WORKORDER_KAFKA_CONSUMER_GROUP:${spring.application.name}-commands}

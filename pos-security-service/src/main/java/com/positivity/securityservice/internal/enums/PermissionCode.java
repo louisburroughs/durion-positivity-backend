@@ -527,13 +527,19 @@ public enum PermissionCode {
     ORDER__ORDER__QUOTE(403, "order:order:quote"),
     ORDER__ORDER__CHECKOUT(404, "order:order:checkout"),
     ORDER__ORDER__VOID(405, "order:order:void"),
-    ORDER__ORDER__CHARGE_ON_ACCOUNT(406, "order:order:charge_on_account");
+    ORDER__ORDER__CHARGE_ON_ACCOUNT(406, "order:order:charge_on_account"),
+    // ── Order register sessions & cash management (odoo-parity G1/G2) ─────────────
+    ORDER__SESSION__OPEN(407, "order:session:open"),
+    ORDER__SESSION__VIEW(408, "order:session:view"),
+    ORDER__SESSION__CASH_MOVEMENT(409, "order:session:cash_movement"),
+    ORDER__SESSION__CLOSE(410, "order:session:close"),
+    ORDER__SESSION__APPROVE_VARIANCE(411, "order:session:approve_variance");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 32;
+    public static final int CATALOG_VERSION = 33;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

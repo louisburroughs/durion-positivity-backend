@@ -5,7 +5,6 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 import lombok.Data;
 
@@ -21,10 +20,11 @@ public class CreateCartRequest {
     private String clerkId;
 
     @Schema(
-            description = "Shop location the cart is created at; drives order-number assignment",
+            description = "Shop location the cart is created at; drives order-number assignment. "
+                    + "Optional when the terminal has an open register session (the session supplies "
+                    + "the location); required otherwise.",
             example = "01960003-0000-7000-8000-000000000090",
-            requiredMode = REQUIRED)
-    @NotNull
+            requiredMode = NOT_REQUIRED)
     private UUID locationId;
 
     @Schema(
@@ -57,4 +57,17 @@ public class CreateCartRequest {
             example = "01960003-0000-7000-8000-000000000080",
             requiredMode = NOT_REQUIRED)
     private String vehicleId;
+
+    @Schema(
+            description = "When this cart takes a deposit / down payment (odoo-parity story E4), the source "
+                    + "document type it is held against; pos-invoice registers a deposit credit at checkout.",
+            allowableValues = {"ESTIMATE", "WORKORDER", "ORDER"},
+            requiredMode = NOT_REQUIRED)
+    private String depositSourceType;
+
+    @Schema(
+            description = "Source document id the deposit is held against (required with depositSourceType).",
+            example = "01960003-0000-7000-8000-000000000011",
+            requiredMode = NOT_REQUIRED)
+    private java.util.UUID depositSourceId;
 }

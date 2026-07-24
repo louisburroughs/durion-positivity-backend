@@ -12,24 +12,30 @@ import org.jspecify.annotations.Nullable;
  * @param terminalId terminal the cart is created at
  * @param customerId optional customer reference (UUID string; validated against the CRM replica)
  * @param vehicleId optional vehicle reference (UUID string; validated when a customer is present)
- * @param locationId shop location; drives order-number assignment and tax jurisdiction
+ * @param locationId shop location; drives order-number assignment and tax jurisdiction. Optional
+ *     when the terminal has an open register session (story G1): the session supplies it, and this
+ *     explicit parameter is the no-session fallback. Required when no session is open.
  * @param label optional parking label for resumable drafts
  * @param generalNote optional order-level note
  * @param idempotencyKey optional client idempotency key; replays return the original cart
+ * @param depositSourceType when this cart takes a deposit (story E4), the source document type it
+ *     is held against (ESTIMATE / WORKORDER / ORDER); null for a normal sale
+ * @param depositSourceId source document id the deposit is held against (required with the type)
  */
 public record CreateCartCommand(
         @NonNull String clerkId,
         @NonNull String terminalId,
         @Nullable String customerId,
         @Nullable String vehicleId,
-        @NonNull UUID locationId,
+        @Nullable UUID locationId,
         @Nullable String label,
         @Nullable String generalNote,
-        @Nullable String idempotencyKey) {
+        @Nullable String idempotencyKey,
+        @Nullable String depositSourceType,
+        @Nullable UUID depositSourceId) {
 
     public CreateCartCommand {
         Objects.requireNonNull(clerkId, "clerkId must not be null");
         Objects.requireNonNull(terminalId, "terminalId must not be null");
-        Objects.requireNonNull(locationId, "locationId must not be null");
     }
 }

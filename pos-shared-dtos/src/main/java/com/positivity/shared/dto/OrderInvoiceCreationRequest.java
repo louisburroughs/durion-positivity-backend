@@ -72,4 +72,22 @@ public class OrderInvoiceCreationRequest {
     @NotEmpty
     @Schema(description = "Order lines as sold.", requiredMode = Schema.RequiredMode.REQUIRED)
     private List<OrderInvoiceLineItem> lines;
+
+    @Schema(
+            description = "When this order is a deposit / down-payment take (odoo-parity story E4), the source "
+                    + "document type the deposit is held against; pos-invoice registers a deposit credit.",
+            allowableValues = {"ESTIMATE", "WORKORDER", "ORDER"},
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private String depositSourceType;
+
+    @Schema(
+            description = "Source document id the deposit is held against (required when depositSourceType is set).",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private UUID depositSourceId;
+
+    @Schema(
+            description = "Deposit amount to register as a credit; when set, the order is a deposit take.",
+            example = "200.00",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private BigDecimal depositAmount;
 }

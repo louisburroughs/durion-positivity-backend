@@ -88,6 +88,10 @@ pos:
     quote:
       # Counter-quote validity horizon (ISO-8601 duration; parity story A3)
       validity: ${POS_ORDER_QUOTE_VALIDITY:P7D}
+    session:
+      # Register session over/short (counted − theoretical cash) beyond this absolute amount at
+      # close requires the order:session:approve_variance authority (parity story G2, spec R6.4).
+      authorized-difference-limit: ${POS_ORDER_SESSION_AUTHORIZED_DIFFERENCE_LIMIT:5.00}
   price:
     base-url: ${POS_PRICE_BASE_URL:http://pos-price:8080}
   tax:
