@@ -1,13 +1,18 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.domain.ToolMetadata;
+import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,12 +26,14 @@ import org.springframework.stereotype.Component;
 public class MasterAgentRegistryLoader {
 
     private static final Logger log = LoggerFactory.getLogger(MasterAgentRegistryLoader.class);
-    private static final String DEFAULT_PRELOAD_WORKFLOW_STATE = "IDLE";
+    // #778: default to preloading the union of tools across ALL workflow states so non-IDLE tool sets
+    // have their beans available in the registry. Override with a CSV of state names if needed.
+    private static final String DEFAULT_PRELOAD_WORKFLOW_STATE = "ALL";
     private static final Set<String> MASTER_DOMAINS = Set.of("master", "shared");
 
     private final ToolMetadataRepository repository;
     private final ApplicationContext applicationContext;
-    private final String preloadWorkflowState;
+    private final Set<String> preloadStates;
 
     MasterAgentRegistryLoader(
             @NonNull ToolMetadataRepository repository, @NonNull ApplicationContext applicationContext) {
@@ -37,19 +44,27 @@ public class MasterAgentRegistryLoader {
     public MasterAgentRegistryLoader(
             @NonNull ToolMetadataRepository repository,
             @NonNull ApplicationContext applicationContext,
-            @Value("${mcp.agent.preload-workflow-state:IDLE}") @NonNull String preloadWorkflowState) {
+            @Value("${mcp.agent.preload-workflow-state:ALL}") @NonNull String preloadWorkflowState) {
         this.repository = repository;
         this.applicationContext = applicationContext;
-        this.preloadWorkflowState = sanitizeWorkflowState(preloadWorkflowState);
+        this.preloadStates = parsePreloadStates(preloadWorkflowState);
     }
 
     public @NonNull LoadedMasterAgentRegistry loadRegistryDefinition() {
-        String workflowState = resolvePreloadWorkflowState();
-        List<ToolMetadata> tools = repository.findEnabledByWorkflow(workflowState);
+        // #778: preload the union of tools enabled across the configured workflow states (default: all),
+        // deduped by tool name, so a session in a non-IDLE state (CREATING_PO, PROCESSING_RETURN, ...)
+        // finds its gated tool beans in the registry once workflow state is threaded into selection.
+        Map<String, ToolMetadata> uniqueByName = new LinkedHashMap<>();
+        for (String state : preloadStates) {
+            for (ToolMetadata tool : repository.findEnabledByWorkflow(state)) {
+                uniqueByName.putIfAbsent(tool.name(), tool);
+            }
+        }
+        List<ToolMetadata> tools = new ArrayList<>(uniqueByName.values());
         if (tools.isEmpty()) {
             log.warn(
-                    "No workflow-scoped tools found for workflowState={}; master agent registry will be empty",
-                    workflowState);
+                    "No workflow-scoped tools found for workflowStates={}; master agent registry will be empty",
+                    preloadStates);
         }
         List<Object> sharedTools = new ArrayList<>();
         Map<String, List<Object>> domainScopedTools = new TreeMap<>();
@@ -93,13 +108,35 @@ public class MasterAgentRegistryLoader {
         }
     }
 
-    private @NonNull String resolvePreloadWorkflowState() {
-        return preloadWorkflowState;
-    }
-
-    private static @NonNull String sanitizeWorkflowState(@NonNull String workflowState) {
-        String normalized = workflowState.trim().toUpperCase(Locale.ROOT);
-        return normalized.isBlank() ? DEFAULT_PRELOAD_WORKFLOW_STATE : normalized;
+    /**
+     * Parses the {@code mcp.agent.preload-workflow-state} config into the set of workflow states to
+     * preload. {@code ALL}/{@code *}/blank preloads every {@link WorkflowState}; otherwise a CSV of
+     * state names is honored (unknown names are logged and skipped). Falls back to the default state
+     * if nothing valid is supplied.
+     */
+    private static @NonNull Set<String> parsePreloadStates(@NonNull String config) {
+        String normalized = config.trim().toUpperCase(Locale.ROOT);
+        if (normalized.isBlank() || normalized.equals("ALL") || normalized.equals("*")) {
+            return Arrays.stream(WorkflowState.values())
+                    .map(Enum::name)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+        }
+        Set<String> states = new LinkedHashSet<>();
+        for (String token : normalized.split(",")) {
+            String name = token.trim();
+            if (name.isBlank()) {
+                continue;
+            }
+            try {
+                states.add(WorkflowState.valueOf(name).name());
+            } catch (IllegalArgumentException ex) {
+                log.warn("Ignoring unknown preload workflow state '{}'", name);
+            }
+        }
+        if (states.isEmpty()) {
+            states.add(WorkflowState.DEFAULT.name());
+        }
+        return states;
     }
 
     private static @NonNull String normalizeDomain(@NonNull String domain) {

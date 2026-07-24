@@ -83,6 +83,28 @@ class MasterAgentRegistryLoaderTest {
         assertThat(loaded.domainToolAssignments()).isEmpty();
     }
 
+    @Test
+    void preloadsUnionOfToolsAcrossConfiguredWorkflowStates() {
+        // #778: a session in a non-IDLE state must find its gated tool beans in the registry, so the
+        // loader preloads the union across the configured states (not just IDLE).
+        ToolMetadata idleTool = tool("OrderFacadeTool", "order", "orderFacadeTool");
+        ToolMetadata poTool = tool("InventoryFacadeTool", "inventory", "inventoryFacadeTool");
+        Object orderBean = new Object();
+        Object inventoryBean = new Object();
+        when(repository.findEnabledByWorkflow("IDLE")).thenReturn(List.of(idleTool));
+        when(repository.findEnabledByWorkflow("CREATING_PO")).thenReturn(List.of(poTool));
+        when(applicationContext.getBean("orderFacadeTool")).thenReturn(orderBean);
+        when(applicationContext.getBean("inventoryFacadeTool")).thenReturn(inventoryBean);
+
+        MasterAgentRegistryLoader loader =
+                new MasterAgentRegistryLoader(repository, applicationContext, "IDLE,CREATING_PO");
+        MasterAgentRegistryLoader.LoadedMasterAgentRegistry loaded = loader.loadRegistryDefinition();
+
+        assertThat(loaded.domainToolAssignments())
+                .containsEntry("order", List.of(orderBean))
+                .containsEntry("inventory", List.of(inventoryBean));
+    }
+
     private static ToolMetadata tool(String name, String domain, String handlerBean) {
         return new ToolMetadata(
                 UUID.randomUUID(), name, name, name + " description", domain, 1.0, "low", 50, true, handlerBean);
