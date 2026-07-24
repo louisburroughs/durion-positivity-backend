@@ -109,7 +109,7 @@ public class ValuationServiceImpl implements ValuationService {
 
         Set<InventoryLedgerEventType> onHandTypes = InventoryLedgerEventType.onHandAffectingTypes();
         List<SkuQty> onHands = asOfOnHands(locationId, sku, onHandTypes, asOf);
-        if ((sku == null || sku.isBlank()) && onHands.size() > asOfSkuCap) {
+        if (locationId == null && (sku == null || sku.isBlank()) && onHands.size() > asOfSkuCap) {
             throw new ValuationAsOfSkuCapExceededException(onHands.size(), asOfSkuCap);
         }
         Set<String> stockItemIds = stockItemIds(onHands);

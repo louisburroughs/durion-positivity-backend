@@ -86,12 +86,15 @@ public class CostingMethodResolver {
             }
         }
 
-        CostingMethod fallback = configRepository
-                .findByScopeTypeAndScopeValueIsNullAndActiveTrue(CostingScopeType.DEFAULT)
-                .map(CostingMethodConfig::getMethod)
-                .orElse(defaultMethod);
-
-        stockItemIds.forEach(skuId -> resolved.putIfAbsent(skuId, fallback));
+        Set<String> stillUnresolved = new HashSet<>(stockItemIds);
+        stillUnresolved.removeAll(resolved.keySet());
+        if (!stillUnresolved.isEmpty()) {
+            CostingMethod fallback = configRepository
+                    .findByScopeTypeAndScopeValueIsNullAndActiveTrue(CostingScopeType.DEFAULT)
+                    .map(CostingMethodConfig::getMethod)
+                    .orElse(defaultMethod);
+            stillUnresolved.forEach(skuId -> resolved.putIfAbsent(skuId, fallback));
+        }
         return Map.copyOf(resolved);
     }
 }
