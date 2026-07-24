@@ -76,6 +76,7 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
     private final StockSummaryRowInitializer rowInitializer;
     private final ExtProductReplicaRepository extProductReplicaRepository;
     private final InventoryLotStatusReconciler lotStatusReconciler;
+    private final LedgerCostingService costingService;
 
     /**
      * Availability-driven backorder resolver (odoo-parity G1, issue #1046). Held as an
@@ -91,12 +92,14 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
             StockSummaryRowInitializer rowInitializer,
             ExtProductReplicaRepository extProductReplicaRepository,
             InventoryLotStatusReconciler lotStatusReconciler,
+            LedgerCostingService costingService,
             ObjectProvider<BackorderResolutionTrigger> backorderResolutionTrigger) {
         this.ledgerRepository = ledgerRepository;
         this.summaryRepository = summaryRepository;
         this.rowInitializer = rowInitializer;
         this.extProductReplicaRepository = extProductReplicaRepository;
         this.lotStatusReconciler = lotStatusReconciler;
+        this.costingService = costingService;
         this.backorderResolutionTrigger = backorderResolutionTrigger;
     }
 
@@ -164,6 +167,13 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         enforcePerLotFloor(saved, lockedRows);
 
         deltas.forEach((key, delta) -> applyDelta(lockedRows.get(key), delta));
+
+        // odoo-parity J1 (#1048, ADR-0048): stamp a method-derived unitCost on every
+        // on-hand-affecting entry and update each SKU's running cost state, in batch order,
+        // in this same transaction. A receipt preceding an issue for the same SKU updates the
+        // running cost first, then the issue stamps it. Non-on-hand-affecting entries are skipped
+        // (no cost), so the re-entrant BACKORDER_RESOLVED post below collects none.
+        costingService.stampCosts(saved);
 
         // odoo-parity E2 (#1042): after the per-lot rows are current, reconcile the
         // ACTIVE <-> CONSUMED status of every lot this batch moved stock for.

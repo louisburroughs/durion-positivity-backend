@@ -75,6 +75,14 @@ public final class EventTypes {
                                 "Deactivate a sourcing strategy configuration row")
                         .build(),
 
+                // CostingMethodController - 2 events (odoo-parity J1, #1048)
+                EventTypeRegistration.fastRead("INVENTORY_VALUATION_METHOD_LIST", "List costing method configurations")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_VALUATION_METHOD_UPSERT",
+                                "Create or update the costing method for one scope")
+                        .build(),
+
                 // CycleCountController - 2 events
                 EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_SUBMIT", "Submit a count for a cycle count task")
                         .build(),

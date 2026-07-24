@@ -70,6 +70,8 @@ tags:
   description: Purchase order creation, lifecycle, and receiving endpoints
 - name: Cycle Count Adjustments
   description: Manage inventory adjustments from cycle counts
+- name: Valuation Methods
+  description: Costing method configuration endpoints (odoo-parity J1)
 - name: Receiving
   description: Receiving session creation, item receiving, and cross-dock execution endpoints
 - name: Sourcing Strategies
@@ -81,13 +83,76 @@ tags:
 - name: Stock Movements
   description: Inventory ledger movement recording and adjustment endpoints
 paths:
+  /v1/inventory/valuation/methods:
+    get:
+      tags:
+      - Valuation Methods
+      summary: List costing method configurations
+      description: Lists all costing method configuration rows (active and inactive), ordered by scope. Resolution precedence at posting time is SKU, then SKU_CATEGORY, then DEFAULT, then the deployment default pos.inventory.valuation.default-method (AVERAGE).
+      operationId: listConfigs
+      responses:
+        '200':
+          description: Costing method configurations returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CostingMethodConfigResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      x-required-permissions:
+      - inventory:location:admin
+    put:
+      tags:
+      - Valuation Methods
+      summary: Upsert costing method configuration
+      description: Creates or updates the costing method for one scope (SKU, SKU_CATEGORY, or DEFAULT) and reactivates it. A method change is recorded in the who/when/from/to change log. At most one row exists per scope. The new method applies going forward only; opening-value restatement is the J4 revaluation workflow.
+      operationId: upsertConfig
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CostingMethodConfigRequest'
+        required: true
+      responses:
+        '200':
+          description: Costing method configuration upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostingMethodConfigResponse'
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      x-required-permissions:
+      - inventory:location:admin
   /v1/inventory/sourcing-strategies:
     get:
       tags:
       - Sourcing Strategies
       summary: List sourcing strategy configurations
       description: Lists all sourcing strategy configuration rows (active and inactive), ordered by scope. Resolution precedence at decision time is SKU_CATEGORY, then SITE, then DEFAULT, then the platform default FIFO.
-      operationId: listConfigs
+      operationId: listConfigs_1
       responses:
         '200':
           description: Sourcing strategy configurations returned
@@ -113,7 +178,7 @@ paths:
       - Sourcing Strategies
       summary: Upsert sourcing strategy configuration
       description: Creates or updates the sourcing strategy for one scope (SKU_CATEGORY, SITE, or DEFAULT) and reactivates it. At most one row exists per scope.
-      operationId: upsertConfig
+      operationId: upsertConfig_1
       requestBody:
         content:
           application/json:
@@ -5366,6 +5431,144 @@ paths:
       - inventory:adjustment:create
 components:
   schemas:
+    CostingMethodConfigRequest:
+      type: object
+      description: Upsert of the costing method configured for one scope (odoo-parity J1)
+      properties:
+        scopeType:
+          type: string
+          description: Configuration scope kind
+          enum:
+          - SKU
+          - SKU_CATEGORY
+          - DEFAULT
+          example: DEFAULT
+        scopeValue:
+          type: string
+          description: 'Scope key: the stock item id for SKU, the category string for SKU_CATEGORY, omitted for DEFAULT'
+          example: 01960003-0000-7000-8000-000000000010
+        method:
+          type: string
+          description: Costing method applied at this scope
+          enum:
+          - STANDARD
+          - AVERAGE
+          example: AVERAGE
+      required:
+      - method
+      - scopeType
+    CostingMethodConfigResponse:
+      type: object
+      description: One costing method configuration row (odoo-parity J1)
+      properties:
+        configId:
+          type: string
+          format: uuid
+          description: Unique identifier of the configuration row
+          example: 01960003-0000-7000-8000-000000000001
+        scopeType:
+          type: string
+          description: Configuration scope kind
+          enum:
+          - SKU
+          - SKU_CATEGORY
+          - DEFAULT
+          example: DEFAULT
+        scopeValue:
+          type: string
+          description: 'Scope key: stock item id, category string, or null for DEFAULT'
+          example: 01960003-0000-7000-8000-000000000010
+        method:
+          type: string
+          description: Costing method applied at this scope
+          enum:
+          - STANDARD
+          - AVERAGE
+          example: AVERAGE
+        active:
+          type: boolean
+          description: Whether this row participates in resolution
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the row was created
+          example: 2026-07-01 00:00:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the row was last updated
+          example: 2026-07-01 00:00:00+00:00
+      required:
+      - active
+      - configId
+      - createdAt
+      - method
+      - scopeType
+      - updatedAt
+    ApiError:
+      type: object
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code
+          example: 404
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+        correlationId:
+          type: string
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          items:
+            $ref: '#/components/schemas/FieldError'
+        referenceId:
+          type: string
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+        nextAction:
+          type: string
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+        supportAction:
+          type: string
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
+      required:
+      - field
+      - message
     SourcingStrategyConfigRequest:
       type: object
       description: Upsert of the sourcing strategy configured for one scope (odoo-parity H1)
@@ -5445,69 +5648,6 @@ components:
       - scopeType
       - strategy
       - updatedAt
-    ApiError:
-      type: object
-      description: Standard error response envelope returned by all Durion backend APIs
-      properties:
-        code:
-          type: string
-          description: Machine-readable error code
-          example: ORDER_NOT_FOUND
-        message:
-          type: string
-          description: Human-readable error message
-          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
-        status:
-          type: integer
-          format: int32
-          description: HTTP status code
-          example: 404
-        timestamp:
-          type: string
-          description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
-        correlationId:
-          type: string
-          description: Unique correlation ID for distributed request tracing
-          example: 550e8400-e29b-41d4-a716-446655440000
-        fieldErrors:
-          type: array
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
-          items:
-            $ref: '#/components/schemas/FieldError'
-        referenceId:
-          type: string
-          description: Workflow or review-case reference identifier, when applicable
-          example: REVIEW-2026-000123
-        nextAction:
-          type: string
-          description: Recommended next step for the caller, when applicable
-          example: Retry the request with a valid quantity
-        supportAction:
-          type: string
-          description: Support or admin investigation guidance, when applicable
-          example: Contact support with the correlation ID for assistance
-      required:
-      - code
-      - correlationId
-      - message
-      - status
-      - timestamp
-    FieldError:
-      type: object
-      description: Validation error for a specific request field
-      properties:
-        field:
-          type: string
-          description: Field name
-          example: quantity
-        message:
-          type: string
-          description: Validation failure message
-          example: must be greater than 0
-      required:
-      - field
-      - message
     UpdateReplenishmentPolicyRequest:
       type: object
       description: Full-replace update of a replenishment policy's thresholds and tuning fields. Omitted optional fields are cleared or reset to defaults; location, SKU, and snooze state are not updatable here.
