@@ -7,9 +7,11 @@ import com.positivity.domainevents.order.OrderCancelledV1;
 import com.positivity.domainevents.order.OrderCommissionImpactV1;
 import com.positivity.domainevents.order.OrderCompletedV1;
 import com.positivity.domainevents.order.OrderPaymentIntegrityAlertV1;
+import com.positivity.domainevents.order.OrderReturnedV1;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.order.internal.entity.PriceOverride;
 import com.positivity.order.internal.entity.RegisterSession;
+import com.positivity.order.internal.entity.ReturnOrder;
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderLine;
 import com.positivity.order.internal.entity.SourceType;
@@ -156,6 +158,52 @@ public class OrderDomainEventPublisher {
                 override.getApprovedAt() != null ? override.getApprovedAt() : Instant.now(clock));
         publish(writer, OrderCommissionImpactV1.EVENT_TYPE, OrderCommissionImpactV1.SCHEMA_VERSION, order, payload);
         log.debug("Queued order.line.commission-impact overrideId={}", override.getOverrideId());
+    }
+
+    /**
+     * Emits {@code order.order.returned} (story F2, spec R5.3) with the return as the aggregate.
+     * pos-inventory restocks RESTOCK-condition lines (SCRAP skipped); the fact is the durable record
+     * of the completed return.
+     */
+    public void publishOrderReturned(@NonNull ReturnOrder returnOrder) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        List<OrderReturnedV1.Line> lines = returnOrder.getLines().stream()
+                .filter(Objects::nonNull)
+                .map(l -> new OrderReturnedV1.Line(
+                        l.getOriginalOrderLineId(),
+                        l.getItemSku(),
+                        l.getReturnQty(),
+                        l.getCondition().name(),
+                        l.getLineRefund(),
+                        l.getSerialNumbers() == null ? List.of() : List.copyOf(l.getSerialNumbers())))
+                .toList();
+        OrderReturnedV1 payload = new OrderReturnedV1(
+                returnOrder.getReturnOrderId(),
+                returnOrder.getOriginalOrderId(),
+                returnOrder.getOriginalOrderNumber(),
+                returnOrder.getLocationId(),
+                returnOrder.getCustomerId(),
+                returnOrder.getRefundMethod().name(),
+                returnOrder.getTotalRefund(),
+                lines,
+                Instant.now(clock));
+        long aggregateVersion = returnOrder.getVersion() == null ? 0L : returnOrder.getVersion();
+        writer.publish(
+                DomainTopics.events("order"),
+                DomainEventEnvelope.of(
+                        OrderReturnedV1.EVENT_TYPE,
+                        OrderReturnedV1.SCHEMA_VERSION,
+                        returnOrder.getReturnOrderId(),
+                        aggregateVersion,
+                        SOURCE_SERVICE,
+                        null,
+                        SecurityContextHelper.getCurrentUsernameOrDefault("system"),
+                        payload,
+                        clock));
+        log.debug("Queued order.order.returned returnOrderId={}", returnOrder.getReturnOrderId());
     }
 
     /**

@@ -28,6 +28,11 @@ public final class OrderPermissions {
     public static final String ORDER_SESSION_CLOSE = "order:session:close";
     public static final String ORDER_SESSION_APPROVE_VARIANCE = "order:session:approve_variance";
 
+    // Returns & refunds (odoo-parity F1/F2)
+    public static final String ORDER_RETURN_CREATE = "order:return:create";
+    public static final String ORDER_RETURN_APPROVE = "order:return:approve";
+    public static final String ORDER_RETURN_VIEW = "order:return:view";
+
     private OrderPermissions() {
         // Utility class
     }

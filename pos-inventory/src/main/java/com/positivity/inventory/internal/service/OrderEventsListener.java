@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.service;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.inventory.CounterSaleConsumptionFailedV1;
 import com.positivity.domainevents.order.OrderCompletedV1;
+import com.positivity.domainevents.order.OrderReturnedV1;
 import com.positivity.inventory.internal.config.OutboxEventWriter;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
@@ -47,6 +48,8 @@ public class OrderEventsListener {
     static final String OWNER = "order";
 
     private static final String COUNTER_SALE_REASON = "COUNTER_SALE";
+    private static final String COUNTER_RETURN_REASON = "COUNTER_RETURN";
+    private static final String RESTOCK_CONDITION = "RESTOCK";
 
     private final Clock clock;
     private final ObjectMapper objectMapper;
@@ -82,6 +85,8 @@ public class OrderEventsListener {
         try {
             if (OrderCompletedV1.EVENT_TYPE.equals(eventType)) {
                 applyOrderCompleted(envelope.path("payload"));
+            } else if (OrderReturnedV1.EVENT_TYPE.equals(eventType)) {
+                applyOrderReturned(envelope.path("payload"));
             } else {
                 log.debug("Ignoring order event type={} eventId={}", eventType, eventId);
             }
@@ -137,6 +142,48 @@ public class OrderEventsListener {
                 // The sale already happened; stock truth reconciles by hand (spec R8.2).
                 log.warn("Counter-sale consumption failed for order {} sku {}: {}", orderId, sku, e.getMessage());
                 publishConsumptionFailed(orderId, orderNumber, orderLineId, sku, quantity, locationId, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Return restock (order parity story F2, #1087): consumes {@code order.order.returned} and posts
+     * a {@code RETURN_TO_STOCK} movement per RESTOCK-condition line. SCRAP / WARRANTY lines skip
+     * inventory (no on-hand change). Per-line idempotency keys on the return + original line so two
+     * returns of the same sold line never collide.
+     */
+    private void applyOrderReturned(JsonNode payload) {
+        UUID returnOrderId = uuid(payload, "returnOrderId");
+        UUID originalOrderId = uuid(payload, "originalOrderId");
+        UUID locationId = uuid(payload, "locationId");
+        for (JsonNode line : payload.path("lines")) {
+            if (!RESTOCK_CONDITION.equals(line.path("condition").stringValue(null))) {
+                continue; // SCRAP / WARRANTY do not return to sellable stock
+            }
+            UUID originalOrderLineId = uuid(line, "originalOrderLineId");
+            String sku = line.path("sku").stringValue(null);
+            int quantity = line.path("quantity").intValue(0);
+            if (sku == null || quantity <= 0 || originalOrderLineId == null || returnOrderId == null) {
+                continue;
+            }
+            String sourceTransactionId = returnOrderId + ":" + originalOrderLineId;
+            try {
+                counterSaleIssuePoster.post(InventoryLedgerEntry.builder()
+                        .stockItemId(sku)
+                        .eventType(InventoryLedgerEventType.RETURN_TO_STOCK)
+                        .changeInQuantity(quantity)
+                        .quantityAfter(0)
+                        .locationId(locationId)
+                        .reasonCode(COUNTER_RETURN_REASON)
+                        .sourceTransactionId(sourceTransactionId)
+                        .transactionUserId("pos-order")
+                        .notes("Return to stock, return " + returnOrderId + " (order " + originalOrderId + ")")
+                        .build());
+            } catch (TransientDataAccessException e) {
+                throw e;
+            } catch (Exception e) {
+                // The refund already happened; stock truth reconciles by hand, as for consumption.
+                log.warn("Return restock failed for return {} sku {}: {}", returnOrderId, sku, e.getMessage());
             }
         }
     }
