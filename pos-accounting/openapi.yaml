@@ -34,6 +34,8 @@ tags:
   description: Manage chart of accounts including lifecycle actions.
 - name: Bank Reconciliation
   description: 'Manual CSV bank reconciliation: import a statement, match lines to posted GL entries, record adjustments, and finalize when balanced.'
+- name: Financial Reporting for Tax Liability
+  description: Period-close-aligned freeze of the Sales-Tax Liability report
 - name: Accounting Periods
   description: 'Accounting period lifecycle: list periods, close a period, reopen a closed period, and manage the org-level hard-lock date.'
 - name: Settlement Reconciliation
@@ -54,8 +56,6 @@ tags:
   description: Manage default GL account mappings for event types without explicit posting rules
 - name: Accounting Events
   description: Ingest and manage accounting events for journal processing.
-- name: Financial Reporting
-  description: Period-close-aligned freeze of the Sales-Tax Liability report
 paths:
   /v1/accounting/posting-rules/{postingRuleSetId}:
     get:
@@ -878,6 +878,7 @@ paths:
     get:
       tags:
       - Financial Reporting
+      - Financial Reporting for Tax Liability
       summary: List Sales-Tax Liability snapshots
       description: List snapshot summaries (no rows), newest freeze first, optionally filtered by period code.
       operationId: listSnapshots
@@ -919,6 +920,7 @@ paths:
     post:
       tags:
       - Financial Reporting
+      - Financial Reporting for Tax Liability
       summary: Freeze the Sales-Tax Liability report for a closed period
       description: Generate the Sales-Tax Liability report over the accounting period's exact date range and persist it as an immutable snapshot with a canonical SHA-256 content hash. The period must be CLOSED. If an ACTIVE snapshot already exists for the period the request fails with 409 unless supersede=true, which demotes the prior snapshot to SUPERSEDED (reopen → adjust → re-close flow) and preserves history.
       operationId: freezeSnapshot
@@ -984,6 +986,7 @@ paths:
     post:
       tags:
       - Financial Reporting
+      - Financial Reporting for Tax Liability
       summary: Verify a snapshot against live data
       description: 'Re-derive the Sales-Tax Liability report for the snapshot''s period from the live replicas and compare canonical hashes. Read-only: the snapshot is never mutated. Inconsistency means underlying data moved after the freeze (e.g. postings into a reopened period); re-freeze with supersede=true once the period is closed again.'
       operationId: verifySnapshot
@@ -3712,6 +3715,7 @@ paths:
     get:
       tags:
       - Financial Reporting
+      - Financial Reporting for Tax Liability
       summary: Get a Sales-Tax Liability snapshot
       description: Full frozen snapshot including per-jurisdiction rows, totals, reconciliation, and hash.
       operationId: getSnapshot
