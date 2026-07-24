@@ -219,6 +219,7 @@ public class OpenApiToolMapper {
                 .title(title)
                 .description(description)
                 .inputSchema(inputSchema)
+                .annotations(annotationsForMethod(method))
                 .build();
 
         var handler = proxyFactory.handlerForBaseUri(gatewayBaseUri, method, path);
@@ -236,6 +237,22 @@ public class OpenApiToolMapper {
             return segment;
         }
         return "unknown";
+    }
+
+    /**
+     * Maps an operation's HTTP method to MCP {@link McpSchema.ToolAnnotations} behavioral hints so
+     * clients can reason about tool effects (e.g. gate writes behind confirmation): GET is read-only
+     * and idempotent; PUT/DELETE mutate but are idempotent and destructive; POST is additive and
+     * non-idempotent; PATCH is destructive and non-idempotent. Every discovered op calls the backend,
+     * so openWorldHint is always true. Hints are advisory, not security guarantees — gating is still
+     * enforced by permission codes.
+     */
+    private static McpSchema.ToolAnnotations annotationsForMethod(@NonNull HttpMethod method) {
+        boolean readOnly = method == HttpMethod.GET;
+        boolean idempotent = method == HttpMethod.GET || method == HttpMethod.PUT || method == HttpMethod.DELETE;
+        boolean destructive = method == HttpMethod.PUT || method == HttpMethod.DELETE || method == HttpMethod.PATCH;
+        // title left null (the Tool already carries a title); returnDirect left default (null).
+        return new McpSchema.ToolAnnotations(null, readOnly, destructive, idempotent, true, null);
     }
 
     private void addOperation(
@@ -260,6 +277,7 @@ public class OpenApiToolMapper {
                 .title(title)
                 .description(description)
                 .inputSchema(inputSchema)
+                .annotations(annotationsForMethod(method))
                 .build();
 
         var handler = proxyFactory.handler(serviceId, method, path);

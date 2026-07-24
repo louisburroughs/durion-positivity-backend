@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.mcp.internal.config.McpServerProperties;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import io.modelcontextprotocol.server.McpServerFeatures;
+import io.modelcontextprotocol.spec.McpSchema;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
@@ -39,6 +40,47 @@ class OpenApiToolMapperTest {
 
         assertThat(specs).hasSize(1);
         assertThat(specs.getFirst().tool().name()).isEqualTo("accounting_listinvoices");
+    }
+
+    @Test
+    @DisplayName("aggregate tools carry MCP annotations derived from the HTTP method")
+    void toAggregateToolSpecifications_setsAnnotationsFromMethod() {
+        OperationProxyFactory mockFactory = mock(OperationProxyFactory.class);
+        when(mockFactory.handlerForBaseUri(any(), any(), any())).thenReturn((ex, req) -> Mono.empty());
+        OpenApiToolMapper mapper = new OpenApiToolMapper(propertiesWithExclusions(List.of()), mockFactory);
+
+        Operation post = new Operation();
+        post.setOperationId("createInvoice");
+        post.setSummary("Create invoice");
+        PathItem postItem = new PathItem();
+        postItem.setPost(post);
+        OpenAPI openApi = openApiWith(Map.of(
+                "/v1/accounting/invoices",
+                getItem("listInvoices", "List invoices"),
+                "/v1/accounting/invoices/new",
+                postItem));
+
+        List<McpServerFeatures.AsyncToolSpecification> specs =
+                mapper.toAggregateToolSpecifications(GATEWAY_URI, openApi);
+
+        McpSchema.Tool getTool = specs.stream()
+                .map(McpServerFeatures.AsyncToolSpecification::tool)
+                .filter(t -> t.name().equals("accounting_listinvoices"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(getTool.annotations().readOnlyHint()).isTrue();
+        assertThat(getTool.annotations().idempotentHint()).isTrue();
+        assertThat(getTool.annotations().openWorldHint()).isTrue();
+
+        McpSchema.Tool postTool = specs.stream()
+                .map(McpServerFeatures.AsyncToolSpecification::tool)
+                .filter(t -> t.name().equals("accounting_createinvoice"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(postTool.annotations().readOnlyHint()).isFalse();
+        assertThat(postTool.annotations().destructiveHint()).isFalse();
+        assertThat(postTool.annotations().idempotentHint()).isFalse();
+        assertThat(postTool.annotations().openWorldHint()).isTrue();
     }
 
     @Test
