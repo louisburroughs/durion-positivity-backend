@@ -127,7 +127,10 @@ public class PutawayDestinationResolver {
     private boolean hasCapacity(UUID locationId, int quantity) {
         try {
             ValidationResult result = putawayValidationService.validateLocationCapacity(locationId, quantity);
-            return result == null || result.isValid();
+            // Fail closed: validateLocationCapacity is contractually non-null, so a null here means
+            // a broken contract (bad mock / future refactor) — treat the bin as unavailable rather
+            // than silently admitting a possibly over-capacity destination.
+            return result != null && result.isValid();
         } catch (LocationAtCapacityException e) {
             return false;
         } catch (IllegalArgumentException e) {

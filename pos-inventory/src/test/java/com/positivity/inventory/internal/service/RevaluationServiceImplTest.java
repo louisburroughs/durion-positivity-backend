@@ -18,6 +18,7 @@ import com.positivity.inventory.internal.entity.SkuCostState;
 import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.inventory.internal.enums.RevaluationStatus;
+import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.RevaluationRecordRepository;
 import com.positivity.inventory.internal.repository.SkuCostStateRepository;
 import com.positivity.inventory.service.ApprovalThresholdEvaluator;
@@ -243,6 +244,17 @@ class RevaluationServiceImplTest {
         assertThatThrownBy(() -> service.createRevaluation(request(new BigDecimal("5.0000"), new BigDecimal("1.0000"))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("exactly one");
+    }
+
+    @Test
+    void missingRevaluationThrowsNotFound() {
+        UUID unknown = UUID.fromString("00000000-0000-0000-0000-0000000000ff");
+        when(revaluationRepository.findById(unknown)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.approveRevaluation(unknown)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.rejectRevaluation(unknown, new RejectRevaluationRequest("no")))
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.getRevaluation(unknown)).isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test

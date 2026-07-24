@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.entity.SkuCostState;
 import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.inventory.internal.enums.RevaluationStatus;
+import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.RevaluationRecordRepository;
 import com.positivity.inventory.internal.repository.SkuCostStateRepository;
 import com.positivity.inventory.service.ApprovalThresholdEvaluator;
@@ -124,7 +125,7 @@ public class RevaluationServiceImpl implements RevaluationService {
         String actor = currentActor();
         RevaluationRecord record = revaluationRepository
                 .findById(revaluationId)
-                .orElseThrow(() -> new IllegalArgumentException("Revaluation not found: " + revaluationId));
+                .orElseThrow(() -> new ResourceNotFoundException("Revaluation", revaluationId.toString()));
 
         if (record.getStatus() != RevaluationStatus.PENDING_APPROVAL) {
             throw new IllegalStateException("Cannot approve revaluation in status: " + record.getStatus());
@@ -145,7 +146,7 @@ public class RevaluationServiceImpl implements RevaluationService {
         String actor = currentActor();
         RevaluationRecord record = revaluationRepository
                 .findById(revaluationId)
-                .orElseThrow(() -> new IllegalArgumentException("Revaluation not found: " + revaluationId));
+                .orElseThrow(() -> new ResourceNotFoundException("Revaluation", revaluationId.toString()));
 
         if (record.getStatus() != RevaluationStatus.PENDING_APPROVAL) {
             throw new IllegalStateException("Cannot reject revaluation in status: " + record.getStatus());
@@ -165,7 +166,7 @@ public class RevaluationServiceImpl implements RevaluationService {
     public @NonNull RevaluationResponse getRevaluation(@NonNull UUID revaluationId) {
         return toResponse(revaluationRepository
                 .findById(revaluationId)
-                .orElseThrow(() -> new IllegalArgumentException("Revaluation not found: " + revaluationId)));
+                .orElseThrow(() -> new ResourceNotFoundException("Revaluation", revaluationId.toString())));
     }
 
     @Override
