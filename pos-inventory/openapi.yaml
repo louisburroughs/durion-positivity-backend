@@ -74,6 +74,8 @@ tags:
   description: Costing method configuration endpoints (odoo-parity J1)
 - name: Receiving
   description: Receiving session creation, item receiving, and cross-dock execution endpoints
+- name: Serial Units
+  description: Serial unit master records enumerated on inbound receipts for SERIAL-tracked SKUs
 - name: Sourcing Strategies
   description: Sourcing/removal strategy configuration endpoints
 - name: Inventory Sites
@@ -3759,6 +3761,96 @@ paths:
         - inventory:shortage:view
       x-required-permissions:
       - inventory:shortage:view
+  /v1/inventory/serial-units:
+    get:
+      tags:
+      - Serial Units
+      summary: List serial units
+      description: Lists serial unit master records filtered by stock item, status, and serial number, newest first
+      operationId: listSerialUnits
+      parameters:
+      - name: stockItemId
+        in: query
+        description: Filter by stock item (catalog product id)
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - IN_STOCK
+          - ISSUED
+          - RETURNED
+          - SCRAPPED
+      - name: serialNumber
+        in: query
+        description: Filter by exact serial number
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Serial units retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SerialUnitResponse'
+        '403':
+          description: Missing inventory:on_hand:view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
+  /v1/inventory/serial-units/{serialUnitId}:
+    get:
+      tags:
+      - Serial Units
+      summary: Get serial unit
+      description: Retrieves one serial unit master record with its current status, location, lot linkage, and consumption/workorder linkage
+      operationId: getSerialUnit
+      parameters:
+      - name: serialUnitId
+        in: path
+        description: Serial unit ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Serial unit found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SerialUnitResponse'
+        '403':
+          description: Missing inventory:on_hand:view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Serial unit not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
   /v1/inventory/scraps/{scrapId}:
     get:
       tags:
@@ -7091,6 +7183,14 @@ components:
           format: date
           description: Optional expiration date of the received lot (odoo-parity E3). Stamped on the lot on first receipt for LOT-tracked products; ignored for untracked products and for lots that already exist (correct an existing lot via the lot-management endpoint)
           example: 2027-01-31
+        serialNumbers:
+          type: array
+          description: 'Serial numbers of the received units (odoo-parity E4). Required for SERIAL-tracked products: the list size must equal the received base quantity (422 SERIAL_COUNT_MISMATCH otherwise), and each serial is enumerated as an in-stock unit. Ignored for untracked and LOT-tracked products'
+          example:
+          - SN-0001
+          - SN-0002
+          items:
+            type: string
       required:
       - lineId
     ReceiveItemsResponse:
@@ -8414,6 +8514,14 @@ components:
           type: number
           description: Quantity received expressed in documentUom; must be supplied together with documentUom
           example: 1
+        serialNumbers:
+          type: array
+          description: 'Serial numbers of the received units (odoo-parity E4). Required for SERIAL-tracked products: the list size must equal the received base quantity (422 SERIAL_COUNT_MISMATCH otherwise), and each serial is enumerated as an in-stock unit. Ignored for untracked and LOT-tracked products'
+          example:
+          - SN-0001
+          - SN-0002
+          items:
+            type: string
       required:
       - sku
       - unitCostMinor
@@ -9755,6 +9863,71 @@ components:
       - allocationId
       - description
       - optionType
+    SerialUnitResponse:
+      type: object
+      description: A serial unit master record for a SERIAL-tracked stock item (odoo-parity E4)
+      properties:
+        serialUnitId:
+          type: string
+          format: uuid
+          description: Identifier of the serial unit
+          example: 01990003-0000-7000-8000-000000000001
+        stockItemId:
+          type: string
+          description: Stock item (catalog product id) the unit belongs to
+          example: 01990003-0000-7000-8000-000000000002
+        serialNumber:
+          type: string
+          description: Manufacturer/vendor serial number, unique per stock item
+        status:
+          type: string
+          description: Lifecycle status of the unit
+          enum:
+          - IN_STOCK
+          - ISSUED
+          - RETURNED
+          - SCRAPPED
+          example: IN_STOCK
+        locationId:
+          type: string
+          format: uuid
+          description: Current location while IN_STOCK; null once the unit has left stock
+        lotId:
+          type: string
+          format: uuid
+          description: Optional lot linkage
+        workorderId:
+          type: string
+          description: Workorder the unit was consumed to, when known
+        receiptLedgerEntryId:
+          type: string
+          format: uuid
+          description: The receipt ledger entry that enumerated (or last re-stocked) this unit
+        consumptionLedgerEntryId:
+          type: string
+          format: uuid
+          description: The outbound ledger entry that last consumed this unit
+        receivedAt:
+          type: string
+          format: date-time
+          description: When the unit was received into stock
+        consumedAt:
+          type: string
+          format: date-time
+          description: When the unit last left stock
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+      - serialNumber
+      - serialUnitId
+      - status
+      - stockItemId
     ReturnableItemDto:
       type: object
       description: An item eligible to be returned, with the quantity still returnable

@@ -175,7 +175,13 @@ public class ReceivingServiceImpl implements ReceivingService {
             }
 
             createGoodsReceiptLedgerEntry(
-                    sessionId, line.getLineId(), line.getProductId(), receivedQty, lotId, actorUserId);
+                    sessionId,
+                    line.getLineId(),
+                    line.getProductId(),
+                    receivedQty,
+                    lotId,
+                    lineReq.getSerialNumbers(),
+                    actorUserId);
 
             if (cmp != 0) {
                 InventoryVarianceType varianceType =
@@ -371,7 +377,13 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     private void createGoodsReceiptLedgerEntry(
-            UUID sessionId, UUID lineId, String productId, BigDecimal quantity, UUID lotId, String actorUserId) {
+            UUID sessionId,
+            UUID lineId,
+            String productId,
+            BigDecimal quantity,
+            UUID lotId,
+            java.util.List<String> serialNumbers,
+            String actorUserId) {
         int quantityDelta = toWholeLedgerQuantity(quantity, "receivedQuantity");
         UUID stagingLocationId = resolveStagingLocationId();
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
@@ -382,6 +394,9 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .changeInQuantity(quantityDelta)
                 .quantityAfter(calculateQuantityAfter(productId, stagingLocationId, quantityDelta))
                 .lotId(lotId)
+                // odoo-parity E4 (#1050): the funnel enumerates these serials for SERIAL-tracked
+                // products (422 SERIAL_COUNT_MISMATCH if the count != received qty); ignored otherwise.
+                .serialNumbers(serialNumbers == null ? java.util.List.of() : serialNumbers)
                 .transactionUserId(actorUserId)
                 .sourceTransactionId(sessionId + ":" + lineId)
                 .notes("Receiving session " + sessionId + " line " + lineId)

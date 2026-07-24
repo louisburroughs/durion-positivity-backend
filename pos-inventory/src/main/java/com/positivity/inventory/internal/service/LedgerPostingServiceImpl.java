@@ -76,6 +76,7 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
     private final StockSummaryRowInitializer rowInitializer;
     private final ExtProductReplicaRepository extProductReplicaRepository;
     private final InventoryLotStatusReconciler lotStatusReconciler;
+    private final SerialUnitPostingService serialUnitPostingService;
     private final LedgerCostingService costingService;
 
     /**
@@ -92,6 +93,7 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
             StockSummaryRowInitializer rowInitializer,
             ExtProductReplicaRepository extProductReplicaRepository,
             InventoryLotStatusReconciler lotStatusReconciler,
+            SerialUnitPostingService serialUnitPostingService,
             LedgerCostingService costingService,
             ObjectProvider<BackorderResolutionTrigger> backorderResolutionTrigger) {
         this.ledgerRepository = ledgerRepository;
@@ -99,6 +101,7 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         this.rowInitializer = rowInitializer;
         this.extProductReplicaRepository = extProductReplicaRepository;
         this.lotStatusReconciler = lotStatusReconciler;
+        this.serialUnitPostingService = serialUnitPostingService;
         this.costingService = costingService;
         this.backorderResolutionTrigger = backorderResolutionTrigger;
     }
@@ -188,6 +191,12 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         if (!touchedLotIds.isEmpty()) {
             lotStatusReconciler.reconcile(touchedLotIds);
         }
+
+        // odoo-parity E4 (#1050): enforce the serial=quantity invariant and enumerate/consume the
+        // named serial units for every SERIAL-tracked, on-hand-affecting entry in this batch. A
+        // count mismatch or a double-issue rolls back the whole posting (this same transaction).
+        // Untracked and LOT-tracked stock items are never touched — byte-identical to pre-E4.
+        serialUnitPostingService.applyPostings(saved);
 
         triggerBackorderResolution(saved);
 

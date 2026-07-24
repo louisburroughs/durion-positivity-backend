@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import lombok.Data;
 
@@ -73,6 +74,14 @@ public class CreateGoodsReceiptLineRequest {
             requiredMode = NOT_REQUIRED)
     @Positive
     private BigDecimal documentQuantity;
+
+    @Schema(
+            description = "Serial numbers of the received units (odoo-parity E4). Required for SERIAL-tracked products:"
+                    + " the list size must equal the received base quantity (422 SERIAL_COUNT_MISMATCH otherwise), and"
+                    + " each serial is enumerated as an in-stock unit. Ignored for untracked and LOT-tracked products",
+            example = "[\"SN-0001\", \"SN-0002\"]",
+            requiredMode = NOT_REQUIRED)
+    private List<String> serialNumbers;
 
     @JsonIgnore
     @AssertTrue(message = "quantityReceived is required when documentUom/documentQuantity are absent")
