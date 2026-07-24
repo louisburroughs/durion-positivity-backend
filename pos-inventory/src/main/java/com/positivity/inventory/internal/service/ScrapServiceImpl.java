@@ -77,6 +77,7 @@ public class ScrapServiceImpl implements ScrapService {
     private final InventoryFactPublisher inventoryFactPublisher;
     private final ReplenishmentService replenishmentService;
     private final Clock clock;
+    private final CostingMethodResolver methodResolver;
     private final @Nullable InventoryLotOutboundService lotOutboundService;
 
     /**
@@ -92,7 +93,8 @@ public class ScrapServiceImpl implements ScrapService {
             ApprovalThresholdEvaluator thresholdEvaluator,
             InventoryFactPublisher inventoryFactPublisher,
             ReplenishmentService replenishmentService,
-            Clock clock) {
+            Clock clock,
+            CostingMethodResolver methodResolver) {
         this(
                 scrapRepository,
                 ledgerRepository,
@@ -101,6 +103,7 @@ public class ScrapServiceImpl implements ScrapService {
                 inventoryFactPublisher,
                 replenishmentService,
                 clock,
+                methodResolver,
                 null);
     }
 
@@ -334,6 +337,17 @@ public class ScrapServiceImpl implements ScrapService {
         scrap.setPostedAt(postedAt);
         scrapRepository.save(scrap);
 
+        // odoo-parity J3 (#1053): the fact carries the J1 engine's method-derived cost stamped on
+        // the SCRAP_OUT entry by LedgerCostingService during the posting above (ADR-0048) — the
+        // authoritative cost at the moment of the movement — not the interim approval-time
+        // latest-receipt snapshot (that snapshot still gates the value-based approval tier). When
+        // the engine could not cost the movement (uncosted SKU) the fact stays null-cost / NONE,
+        // and the accounting shrinkage consumer record-and-skips it (odoo-parity D2).
+        BigDecimal engineUnitCost = saved.getUnitCost();
+        String factCostSource = engineUnitCost == null
+                ? ScrapCostSource.NONE.name()
+                : methodResolver.resolve(scrap.getStockItemId()).name();
+
         inventoryFactPublisher.recordScrapPosted(new ScrapPostedV1(
                 scrap.getScrapId(),
                 scrap.getStockItemId(),
@@ -341,8 +355,8 @@ public class ScrapServiceImpl implements ScrapService {
                 scrap.getStorageLocationId(),
                 scrap.getQuantity(),
                 scrap.getReasonCode().name(),
-                scrap.getUnitCostSnapshot(),
-                scrap.getCostSource().name(),
+                engineUnitCost,
+                factCostSource,
                 scrap.getWorkorderId(),
                 postedAt));
 

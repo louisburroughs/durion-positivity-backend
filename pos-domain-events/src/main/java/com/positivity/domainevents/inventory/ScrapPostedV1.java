@@ -14,10 +14,16 @@ import org.jspecify.annotations.Nullable;
  * occurrence, not a snapshot: it is never re-emitted). pos-accounting consumes it for shrinkage
  * GL posting (odoo-parity D2).
  *
- * <p>Cost semantics (ADR-0048 interim rule): {@code unitCost} is the snapshot taken at scrap
- * creation from the SKU's latest receipt cost; {@code costSource} labels the snapshot's origin
- * ({@code LATEST_RECEIPT}) or {@code NONE} when no cost could be derived ({@code unitCost} is
- * then {@code null}). odoo-parity J1 replaces this with the authoritative cost source.
+ * <p><b>Cost semantics — schema v2 (odoo-parity J3, issue #1053):</b> {@code unitCost} is now the
+ * J1 costing engine's method-derived unit cost stamped on the {@code SCRAP_OUT} ledger entry at
+ * the moment of the movement (ADR-0048), not the interim latest-receipt snapshot. {@code
+ * costSource} labels its origin — the resolved costing method ({@code "AVERAGE"} or {@code
+ * "STANDARD"}) when the engine costed the movement, or {@code "NONE"} when the SKU was uncosted
+ * ({@code unitCost} is then {@code null}). Schema v1 emitted the interim latest-receipt snapshot
+ * ({@code costSource = "LATEST_RECEIPT"}); the field shape is unchanged, so v1 and v2 events
+ * deserialize identically and consumers read {@code unitCost}/{@code costSource} without
+ * branching on {@code schemaVersion}. An uncosted scrap remains a null-cost, record-and-skip
+ * fact for the accounting shrinkage consumer (odoo-parity D2).
  *
  * @param scrapId scrap document identifier (aggregate id of the fact)
  * @param sku stock-item identifier that was scrapped (ledger stock-item string)
@@ -26,8 +32,9 @@ import org.jspecify.annotations.Nullable;
  * @param quantity quantity written off (positive)
  * @param reasonCode scrap reason taxonomy value (DAMAGED, EXPIRED, LOST, RECALLED,
  *     CONTAMINATED, WARRANTY_DESTROYED, OTHER)
- * @param unitCost unit cost snapshot at scrap time, {@code null} when unknown
- * @param costSource origin of the cost snapshot: {@code LATEST_RECEIPT} or {@code NONE}
+ * @param unitCost engine method-derived unit cost at scrap posting, {@code null} when uncosted
+ * @param costSource origin of the cost: {@code "AVERAGE"}/{@code "STANDARD"} (engine method),
+ *     {@code "NONE"} (uncosted), or {@code "LATEST_RECEIPT"} on a legacy v1 event
  * @param workorderId workorder the scrapped part belonged to, when linked
  * @param occurredAt when the scrap was posted to the ledger
  */
@@ -44,7 +51,7 @@ public record ScrapPostedV1(
         @NonNull Instant occurredAt) {
 
     public static final String EVENT_TYPE = "inventory.scrap.posted";
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
 
     public ScrapPostedV1 {
         if (scrapId == null) {
