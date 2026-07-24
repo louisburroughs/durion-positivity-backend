@@ -9,6 +9,8 @@ import com.positivity.inventory.internal.exception.LotNumberRequiredException;
 import com.positivity.inventory.internal.exception.LotUnknownException;
 import com.positivity.inventory.internal.repository.InventoryLotRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.UUID;
@@ -44,13 +46,12 @@ import org.springframework.stereotype.Component;
  * {@link InventoryLotStatusReconciler} flips {@code CONSUMED → ACTIVE} once the returned
  * quantity lands on the per-lot rows.
  *
- * <p>Lot suggestion ({@link #suggestFifoLotNumber}) is FIFO by lot {@code receivedAt} over the
- * ACTIVE lots with positive per-lot on-hand at the pick location (spec E2: "FEFO when expiry
- * present, else FIFO by receivedAt" — expiry data does not exist until E3, so this is plain
- * FIFO for now; E3 upgrades the ordering to FEFO automatically through the
- * {@link LotExpiryProvider} SPI without touching the callers). The suggestion is advisory:
- * pick confirmation may override it with any valid ACTIVE lot, and the lot actually keyed at
- * confirm is what the postings carry.
+ * <p>Lot suggestion ({@link #suggestLotNumber}) orders the ACTIVE, non-expired lots with positive
+ * per-lot on-hand at the pick location by expiry (FEFO) when an expiration is present and by
+ * {@code receivedAt} (FIFO) otherwise (spec E2/E3). Expired lots are guarded out on read
+ * (decision D-7) so an expired lot is never suggested even before the daily expiry job runs. The
+ * suggestion is advisory: pick confirmation may override it with any valid ACTIVE lot, and the lot
+ * actually keyed at confirm is what the postings carry.
  */
 @Component
 @RequiredArgsConstructor
@@ -59,6 +60,7 @@ public class InventoryLotOutboundService {
     private final InventoryLotRepository lotRepository;
     private final InventoryStockSummaryRepository summaryRepository;
     private final ProductTrackingLevelService trackingLevelService;
+    private final Clock clock;
 
     /** Whether the stock item is LOT-tracked per the catalog replica gate. */
     public boolean isLotTracked(@NonNull String stockItemId) {
@@ -103,12 +105,21 @@ public class InventoryLotOutboundService {
     }
 
     /**
-     * FIFO lot suggestion for a pick task (spec E2): among the per-lot summary rows with
-     * positive on-hand at the given location, the ACTIVE lot with the earliest
-     * {@code receivedAt} (lot id as deterministic tie-breaker). Null when the product is
-     * untracked, the location is unknown, or no ACTIVE lot has stock there.
+     * Lot suggestion for a pick task (spec E2/E3): among the per-lot summary rows with positive
+     * on-hand at the given location, the best ACTIVE, non-expired lot. Ordering is FEFO when
+     * expiry is present and FIFO otherwise — {@code expirationDate} ascending (nulls last),
+     * then {@code receivedAt}, then lot id as a deterministic tie-breaker — so a lot carrying an
+     * expiration is drawn earliest-expiry-first and lots without one fall back to earliest
+     * received. Null when the product is untracked, the location is unknown, or no eligible lot
+     * has stock there.
+     *
+     * <p>On-read expiry guard (odoo-parity E3, decision D-7): expired lots
+     * ({@code expirationDate < today}) are filtered out here, so a pick is never suggested from
+     * an expired lot even before the daily {@code LotExpiryScheduler} has run. QUARANTINED and
+     * RECALLED lots are likewise excluded (only ACTIVE lots are candidates), so a blocked lot is
+     * never proposed within one cycle of the status flip.
      */
-    public @Nullable String suggestFifoLotNumber(@NonNull String stockItemId, @Nullable UUID locationId) {
+    public @Nullable String suggestLotNumber(@NonNull String stockItemId, @Nullable UUID locationId) {
         if (locationId == null || !isLotTracked(stockItemId)) {
             return null;
         }
@@ -118,9 +129,15 @@ public class InventoryLotOutboundService {
         if (rowsByLotId.isEmpty()) {
             return null;
         }
+        LocalDate today = LocalDate.now(clock);
         return lotRepository.findAllById(rowsByLotId.keySet()).stream()
                 .filter(lot -> lot.getStatus() == InventoryLotStatus.ACTIVE)
-                .min(Comparator.comparing(InventoryLot::getReceivedAt).thenComparing(InventoryLot::getLotId))
+                .filter(lot -> lot.getExpirationDate() == null
+                        || !lot.getExpirationDate().isBefore(today))
+                .min(Comparator.comparing(
+                                InventoryLot::getExpirationDate, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(InventoryLot::getReceivedAt)
+                        .thenComparing(InventoryLot::getLotId))
                 .map(InventoryLot::getLotNumber)
                 .orElse(null);
     }

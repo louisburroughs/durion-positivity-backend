@@ -152,9 +152,13 @@ public class ReceivingServiceImpl implements ReceivingService {
 
             // odoo-parity E1 (#1038): LOT-tracked products require a lotNumber (422
             // LOT_NUMBER_REQUIRED) and find-or-create the lot; untracked products pass
-            // through with a null lot, byte-identical to pre-E1 behavior.
+            // through with a null lot, byte-identical to pre-E1 behavior. odoo-parity E3
+            // (#1047): an optional line expirationDate is stamped on first lot creation.
             UUID lotId = lotCaptureService.resolveReceiptLot(
-                    line.getProductId(), lineReq.getLotNumber(), parseSupplierVendorId(session.getSupplierId()));
+                    line.getProductId(),
+                    lineReq.getLotNumber(),
+                    parseSupplierVendorId(session.getSupplierId()),
+                    lineReq.getExpirationDate());
 
             line.setReceivedQuantity(receivedQty);
             line.setLotNumber(lineReq.getLotNumber());

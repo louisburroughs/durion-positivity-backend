@@ -8,10 +8,10 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
 
 /**
- * Default no-op {@link LotExpiryProvider}: the lot master exists (odoo-parity
- * E1) but expiry dates are not populated until E3, so FEFO always falls back
- * to FIFO ordering for now. The E2/E3 lot stories replace this by registering
- * a lot-aware {@code @Primary} bean.
+ * Fallback no-op {@link LotExpiryProvider}. Since odoo-parity E3 (issue #1047) the lot-aware
+ * {@link LotExpiryLotProvider} is registered {@code @Primary} and is the bean the
+ * {@link FefoSourcingStrategy} actually injects; this bean remains only as the always-empty
+ * fallback that keeps FEFO on its FIFO ordering when no lot-expiry data is available.
  */
 @Component
 public class NoOpLotExpiryProvider implements LotExpiryProvider {

@@ -75,6 +75,14 @@ public final class EventTypes {
                                 "Deactivate a sourcing strategy configuration row")
                         .build(),
 
+                // CostingMethodController - 2 events (odoo-parity J1, #1048)
+                EventTypeRegistration.fastRead("INVENTORY_VALUATION_METHOD_LIST", "List costing method configurations")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_VALUATION_METHOD_UPSERT",
+                                "Create or update the costing method for one scope")
+                        .build(),
+
                 // CycleCountController - 2 events
                 EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_SUBMIT", "Submit a count for a cycle count task")
                         .build(),
@@ -165,6 +173,21 @@ public final class EventTypes {
                                 "Run the batch replenishment scan over all replenishment policies")
                         .build(),
 
+                // PurchaseSuggestionController - 3 events (odoo-parity F4, #1044)
+                EventTypeRegistration.write(
+                                "INVENTORY_PURCHASE_SUGGESTION_ACCEPT",
+                                "Accept a purchase suggestion (human-mandatory gate, plan D-3)")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_PURCHASE_SUGGESTION_DISMISS",
+                                "Dismiss a purchase suggestion with a mandatory reason")
+                        .build(),
+                // Approval preset: conversion opens spend (a DRAFT PO) against the PO domain.
+                EventTypeRegistration.approval(
+                                "INVENTORY_PURCHASE_SUGGESTION_CONVERT",
+                                "Convert accepted purchase suggestions into a single DRAFT purchase order")
+                        .build(),
+
                 // StockMovementController - 3 events
                 EventTypeRegistration.write(
                                 "INVENTORY_STOCK_MOVEMENT_CREATE", "Record an inventory stock movement in the ledger")
@@ -200,6 +223,13 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead("INVENTORY_LOT_LIST", "List inventory lots")
                         .build(),
                 EventTypeRegistration.fastRead("INVENTORY_LOT_GET", "Get an inventory lot with per-location on-hand")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_LOT_STATUS_UPDATE", "Quarantine, recall, or release an inventory lot")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_LOT_EXPIRATION_SET",
+                                "Set or clear an inventory lot's expiration/alert dates")
                         .build(),
                 EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_APPROVE", "Approve a purchase order")
                         .build(),

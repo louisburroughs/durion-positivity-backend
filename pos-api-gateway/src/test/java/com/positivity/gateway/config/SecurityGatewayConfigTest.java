@@ -1142,9 +1142,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 34")
+    @DisplayName("CATALOG_VERSION is 35")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(34);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(35);
     }
 
     @Test
@@ -1245,8 +1245,9 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(412)).isEqualTo("PERM_order:return:create");
         assertThat(GatewayPermissionCatalog.authorityForBit(413)).isEqualTo("PERM_order:return:approve");
         assertThat(GatewayPermissionCatalog.authorityForBit(414)).isEqualTo("PERM_order:return:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(415)).isEqualTo("PERM_inventory:lot:manage");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(415)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(416)).isNull();
     }
 
     @Test

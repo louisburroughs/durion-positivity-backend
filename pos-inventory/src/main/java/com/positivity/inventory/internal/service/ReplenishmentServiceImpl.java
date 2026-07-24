@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.dto.replenishment.ReplenishmentPolicyRe
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentScanResultResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentTaskResponse;
 import com.positivity.inventory.internal.dto.replenishment.UpdateReplenishmentPolicyRequest;
+import com.positivity.inventory.internal.entity.PurchaseSuggestion;
 import com.positivity.inventory.internal.entity.ReplenishmentPolicy;
 import com.positivity.inventory.internal.entity.ReplenishmentTask;
 import com.positivity.inventory.internal.enums.ReplenishmentDecisionReason;
@@ -54,6 +55,8 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
     private final ForecastSiteResolver forecastSiteResolver;
     private final LeadTimeResolver leadTimeResolver;
     private final StockoutDeadlineCalculator stockoutDeadlineCalculator;
+    private final PurchaseSuggestionCreationService purchaseSuggestionCreationService;
+    private final ReplenishmentSourcingService replenishmentSourcingService;
     private final Clock clock;
 
     @Override
@@ -214,6 +217,32 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                     .build();
         }
 
+        // F4 (#1044): PURCHASE-preferring policies produce a purchase suggestion, never a
+        // task — same routing as the batch scan (the two paths must not diverge).
+        if (policy.get().getPreferredSourceType() == ReplenishmentSourceType.PURCHASE) {
+            Projection purchaseProjection = project(policy.get());
+            if (!purchaseProjection.triggered()) {
+                return ReplenishmentTaskResponse.builder()
+                        .taskId(null)
+                        .status("NO_ACTION")
+                        .build();
+            }
+            SuggestionOutcome outcome = evaluatePurchaseSuggestion(policy.get(), purchaseProjection, null);
+            return ReplenishmentTaskResponse.builder()
+                    .taskId(null)
+                    .status(outcome == SuggestionOutcome.NONE ? "NO_ACTION" : "PURCHASE_SUGGESTED")
+                    .build();
+        }
+
+        // F5 (#1045): an open source TransferOrder already covers this SKU→site need — do not
+        // re-source (a DRAFT transfer is not yet netted by the forecast).
+        if (replenishmentSourcingService.hasOpenSourceTransfer(policy.get())) {
+            return ReplenishmentTaskResponse.builder()
+                    .taskId(null)
+                    .status("SOURCING_IN_PROGRESS")
+                    .build();
+        }
+
         if (hasOpenTask(productId, pickFaceLocationId)) {
             return ReplenishmentTaskResponse.builder()
                     .taskId(null)
@@ -237,9 +266,21 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                     .build();
         }
 
-        ReplenishmentTask saved = replenishmentTaskRepository.save(
-                newTask(policy.get(), quantityNeeded, ReplenishmentTriggerType.EVENT, deadlineFor(projection)));
-        logDecision("created", ReplenishmentTriggerType.EVENT, policy.get(), projection, quantityNeeded);
+        // F5 (#1045): resolve real sourcing. EITHER with no internal surplus but a selectable
+        // vendor routes to a purchase suggestion instead of a task.
+        ReplenishmentSourcingService.SourcingResolution resolution =
+                replenishmentSourcingService.resolve(policy.get(), quantityNeeded);
+        if (resolution.kind() == ReplenishmentSourcingService.Kind.PURCHASE_FALLBACK) {
+            SuggestionOutcome outcome = evaluatePurchaseSuggestion(policy.get(), projection, null);
+            return ReplenishmentTaskResponse.builder()
+                    .taskId(null)
+                    .status(outcome == SuggestionOutcome.NONE ? "NO_ACTION" : "PURCHASE_SUGGESTED")
+                    .build();
+        }
+
+        ReplenishmentTask saved = replenishmentTaskRepository.save(newTask(
+                policy.get(), quantityNeeded, ReplenishmentTriggerType.EVENT, deadlineFor(projection), resolution));
+        logDecision("created", ReplenishmentTriggerType.EVENT, policy.get(), projection, quantityNeeded, resolution);
         return toTaskResponse(saved);
     }
 
@@ -272,6 +313,8 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
         int tasksCreated = 0;
         int tasksRefreshed = 0;
         int policiesSkipped = 0;
+        int suggestionsCreated = 0;
+        int suggestionsRefreshed = 0;
 
         for (ReplenishmentPolicy policy : replenishmentPolicyRepository.findAll()) {
             String suspensionReason = suspensionReason(policy, now);
@@ -287,6 +330,29 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
             }
             belowMinimum++;
 
+            // F4 (#1044): PURCHASE-preferring policies produce a purchase suggestion, not a
+            // ReplenishmentTask — see evaluatePurchaseSuggestion for guards and netting.
+            if (policy.getPreferredSourceType() == ReplenishmentSourceType.PURCHASE) {
+                switch (evaluatePurchaseSuggestion(policy, projection, startOfDayUtc)) {
+                    case CREATED -> suggestionsCreated++;
+                    case REFRESHED -> suggestionsRefreshed++;
+                    case NONE -> {
+                        /* covered by in-progress supply or same-day guard */
+                    }
+                }
+                continue;
+            }
+
+            // F5 (#1045): an open source TransferOrder already covers this SKU→site need — do
+            // not re-source it (a DRAFT transfer is not yet netted by the forecast).
+            if (replenishmentSourcingService.hasOpenSourceTransfer(policy)) {
+                log.debug(
+                        "Batch scan skip (open source transfer covers the need): sku={} locationId={}",
+                        policy.getItemSKU(),
+                        policy.getLocationId());
+                continue;
+            }
+
             Optional<ReplenishmentTask> openTask =
                     replenishmentTaskRepository
                             .findFirstByItemSKUAndDestinationLocationIdAndStatusInOrderByCreatedAtAsc(
@@ -298,7 +364,7 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                 int quantityNeeded =
                         quantityToReplenish(policy, projection, openTask.get().getTaskId());
                 if (quantityNeeded > 0 && refreshOpenTask(openTask.get(), quantityNeeded, deadlineFor(projection))) {
-                    logDecision("refreshed", ReplenishmentTriggerType.BATCH, policy, projection, quantityNeeded);
+                    logRefresh(policy, projection, quantityNeeded, openTask.get());
                     tasksRefreshed++;
                 }
                 continue;
@@ -328,19 +394,38 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                 continue;
             }
 
-            replenishmentTaskRepository.save(
-                    newTask(policy, quantityNeeded, ReplenishmentTriggerType.BATCH, deadlineFor(projection)));
-            logDecision("created", ReplenishmentTriggerType.BATCH, policy, projection, quantityNeeded);
+            // F5 (#1045): resolve real sourcing. A triggered EITHER policy with no internal
+            // surplus but a selectable vendor routes to a purchase suggestion (F4) instead of
+            // a task; everything else materializes a task (same-site bin move, cross-site
+            // transfer, or BACKSTOCK_UNAVAILABLE).
+            ReplenishmentSourcingService.SourcingResolution resolution =
+                    replenishmentSourcingService.resolve(policy, quantityNeeded);
+            if (resolution.kind() == ReplenishmentSourcingService.Kind.PURCHASE_FALLBACK) {
+                switch (evaluatePurchaseSuggestion(policy, projection, startOfDayUtc)) {
+                    case CREATED -> suggestionsCreated++;
+                    case REFRESHED -> suggestionsRefreshed++;
+                    case NONE -> {
+                        /* covered by in-progress supply or same-day guard */
+                    }
+                }
+                continue;
+            }
+
+            replenishmentTaskRepository.save(newTask(
+                    policy, quantityNeeded, ReplenishmentTriggerType.BATCH, deadlineFor(projection), resolution));
+            logDecision("created", ReplenishmentTriggerType.BATCH, policy, projection, quantityNeeded, resolution);
             tasksCreated++;
         }
 
         log.info(
                 "Batch replenishment scan complete: policiesEvaluated={} belowMinimum={} tasksCreated={}"
-                        + " tasksRefreshed={} policiesSkipped={}",
+                        + " tasksRefreshed={} suggestionsCreated={} suggestionsRefreshed={} policiesSkipped={}",
                 policiesEvaluated,
                 belowMinimum,
                 tasksCreated,
                 tasksRefreshed,
+                suggestionsCreated,
+                suggestionsRefreshed,
                 policiesSkipped);
 
         return ReplenishmentScanResultResponse.builder()
@@ -348,9 +433,72 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                 .policiesBelowMinimum(belowMinimum)
                 .tasksCreated(tasksCreated)
                 .tasksRefreshed(tasksRefreshed)
+                .suggestionsCreated(suggestionsCreated)
+                .suggestionsRefreshed(suggestionsRefreshed)
                 .policiesSkipped(policiesSkipped)
                 .scanAt(now.toString())
                 .build();
+    }
+
+    /** Outcome of one PURCHASE-policy suggestion evaluation (F4, #1044). */
+    private enum SuggestionOutcome {
+        CREATED,
+        REFRESHED,
+        NONE
+    }
+
+    /**
+     * Suggestion path for a triggered PURCHASE-preferring policy (odoo-parity F4, issue
+     * #1044; plan D-3): creates or refreshes the AT MOST ONE open (SUGGESTED/ACCEPTED)
+     * suggestion for the policy, mirroring the task guards — duplicate-open guard, quantity
+     * refresh netting other in-progress supply, and (scan only) the per-(policy, day)
+     * created-today guard. The scan never accepts or converts (D-3: human ACCEPT is
+     * mandatory; the existing PO approval workflow is the second spend gate).
+     *
+     * <p><b>EITHER seam (F5):</b> policies with {@code preferredSourceType == EITHER} are
+     * deliberately NOT routed here and keep producing ReplenishmentTasks (current
+     * behavior). Parity-F5's sourcing engine will call this method for an EITHER policy
+     * after internal sourcing finds no surplus — the method is already source-agnostic, so
+     * F5 only needs to add that routing decision.
+     *
+     * @param startOfDayUtc UTC day boundary for the created-today guard; {@code null} on
+     *     the event path (which, like the event task path, has no per-day guard)
+     */
+    private SuggestionOutcome evaluatePurchaseSuggestion(
+            ReplenishmentPolicy policy, Projection projection, @Nullable Instant startOfDayUtc) {
+        Optional<PurchaseSuggestion> openSuggestion =
+                purchaseSuggestionCreationService.findOpenForPolicy(policy.getPolicyId());
+        if (openSuggestion.isPresent()) {
+            // Re-derive the open suggestion's quantity, netting any OTHER in-progress
+            // supply (its own quantity is replaced, not subtracted).
+            long rawNeed = rawQuantityToReplenish(
+                    policy, projection, null, openSuggestion.get().getSuggestionId());
+            boolean refreshed = purchaseSuggestionCreationService.refreshSuggestion(
+                    openSuggestion.get(), policy, rawNeed, projection.leadTime().days());
+            return refreshed ? SuggestionOutcome.REFRESHED : SuggestionOutcome.NONE;
+        }
+
+        long rawNeed = rawQuantityToReplenish(policy, projection, null, null);
+        if (rawNeed <= 0) {
+            log.debug(
+                    "Purchase suggestion skip (in-progress supply covers to max): sku={} locationId={}",
+                    policy.getItemSKU(),
+                    policy.getLocationId());
+            return SuggestionOutcome.NONE;
+        }
+        if (startOfDayUtc != null
+                && purchaseSuggestionCreationService.suggestionAlreadyCreatedToday(
+                        policy.getPolicyId(), startOfDayUtc)) {
+            log.debug(
+                    "Purchase suggestion skip (already created today): sku={} locationId={}",
+                    policy.getItemSKU(),
+                    policy.getLocationId());
+            return SuggestionOutcome.NONE;
+        }
+
+        purchaseSuggestionCreationService.createSuggestion(
+                policy, rawNeed, projection.leadTime().days());
+        return SuggestionOutcome.CREATED;
     }
 
     /**
@@ -444,9 +592,29 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
      *     its own quantity is replaced rather than double-counted; {@code null} otherwise
      */
     private int quantityToReplenish(ReplenishmentPolicy policy, Projection projection, @Nullable UUID excludeTaskId) {
-        long inProgress = inProgressQuantity(policy.getItemSKU(), policy.getLocationId(), excludeTaskId);
-        long raw = Math.max(0L, policy.getMaximumQuantity() - projection.projectedAvailable() - inProgress);
+        long raw = rawQuantityToReplenish(policy, projection, excludeTaskId, null);
         return (int) roundUpToMultiple(raw, policy.getOrderMultiple());
+    }
+
+    /**
+     * The un-rounded F2 need: {@code max(0, maximumQuantity − projectedAvailable(leadHorizon)
+     * − inProgress)}. The task path rounds it with the policy's {@code orderMultiple}
+     * ({@link #quantityToReplenish}); the purchase-suggestion path (F4, #1044) rounds it with
+     * the combined MOQ/pack/order-multiple interplay in
+     * {@link PurchaseSuggestionCreationService} instead — the raw need is shared so the two
+     * paths never diverge on the netting math.
+     *
+     * @param excludeSuggestionId open purchase suggestion being refreshed, excluded from the
+     *     in-progress sum so its own quantity is replaced rather than double-counted
+     */
+    private long rawQuantityToReplenish(
+            ReplenishmentPolicy policy,
+            Projection projection,
+            @Nullable UUID excludeTaskId,
+            @Nullable UUID excludeSuggestionId) {
+        long inProgress =
+                inProgressQuantity(policy.getItemSKU(), policy.getLocationId(), excludeTaskId, excludeSuggestionId);
+        return Math.max(0L, policy.getMaximumQuantity() - projection.projectedAvailable() - inProgress);
     }
 
     /** Rounds a positive quantity UP to the nearest multiple; zero and no-multiple pass through. */
@@ -501,20 +669,32 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
     }
 
     /**
-     * Open replenishment-task quantity already in flight for one SKU/destination — the
-     * in-progress supply netted out of {@link #quantityToReplenish}.
+     * In-progress supply already in flight for one SKU/destination, netted out of
+     * {@link #rawQuantityToReplenish}: open replenishment-task quantities PLUS open
+     * purchase-suggestion quantities (the F4 seam, filled in #1044) — a
+     * suggested-but-unordered buy also prevents double-ordering across both paths.
      *
-     * <p>F4 seam: open {@code PurchaseSuggestion} quantities (SUGGESTED/ACCEPTED, not yet
-     * CONVERTED) join this sum once purchase suggestions exist, so a suggested-but-unordered
-     * buy also prevents double-ordering.
+     * <p>Suggestion netting hand-off (no double-count with A2 expected supply): SUGGESTED
+     * and ACCEPTED always net; a CONVERTED suggestion nets only while its purchase order is
+     * still DRAFT, and stops the moment approval moves the PO's open quantity into
+     * {@code ExpectedSupplyServiceImpl}'s sum (which counts APPROVED/PARTIALLY_RECEIVED
+     * only) — exactly one of the two is ever counted. See
+     * {@link PurchaseSuggestionCreationService#openSuggestionQuantity}.
      */
-    private long inProgressQuantity(String itemSKU, UUID destinationLocationId, @Nullable UUID excludeTaskId) {
-        return replenishmentTaskRepository
+    private long inProgressQuantity(
+            String itemSKU,
+            UUID destinationLocationId,
+            @Nullable UUID excludeTaskId,
+            @Nullable UUID excludeSuggestionId) {
+        long openTasks = replenishmentTaskRepository
                 .findByItemSKUAndDestinationLocationIdAndStatusIn(itemSKU, destinationLocationId, OPEN_STATUSES)
                 .stream()
                 .filter(task -> excludeTaskId == null || !excludeTaskId.equals(task.getTaskId()))
                 .mapToLong(task -> task.getQuantity() != null ? task.getQuantity() : 0L)
                 .sum();
+        long openSuggestions = purchaseSuggestionCreationService.openSuggestionQuantity(
+                itemSKU, destinationLocationId, excludeSuggestionId);
+        return openTasks + openSuggestions;
     }
 
     /**
@@ -528,14 +708,19 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
             ReplenishmentTriggerType triggerType,
             ReplenishmentPolicy policy,
             Projection projection,
-            int quantityNeeded) {
+            int quantityNeeded,
+            ReplenishmentSourcingService.SourcingResolution resolution) {
         log.info(
-                "Replenishment task {}: triggerType={} decisionReason={} sku={} locationId={} onHand={}"
-                        + " projectedAvailable={} leadHorizon={} leadTimeDays={} leadTimeSource={} min={} max={}"
-                        + " quantity={}",
+                "Replenishment task {}: triggerType={} decisionReason={} sourcingReason={} sourceTransferOrderId={}"
+                        + " sku={} locationId={} onHand={} projectedAvailable={} leadHorizon={} leadTimeDays={}"
+                        + " leadTimeSource={} min={} max={} quantity={}",
                 action,
                 triggerType,
-                ReplenishmentDecisionReason.BELOW_MIN,
+                resolution.decisionReason() != null
+                        ? resolution.decisionReason()
+                        : ReplenishmentDecisionReason.BELOW_MIN,
+                resolution.sourcingReason(),
+                resolution.transferOrderId(),
                 policy.getItemSKU(),
                 policy.getLocationId(),
                 projection.onHand(),
@@ -543,6 +728,25 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                 projection.leadHorizon(),
                 projection.leadTime().days(),
                 projection.leadTime().source(),
+                policy.getMinimumQuantity(),
+                policy.getMaximumQuantity(),
+                quantityNeeded);
+    }
+
+    /** Refresh-path logging: the task keeps its original sourcing decision, only quantity moves. */
+    private void logRefresh(
+            ReplenishmentPolicy policy, Projection projection, int quantityNeeded, ReplenishmentTask task) {
+        log.info(
+                "Replenishment task refreshed: triggerType={} decisionReason={} sourcingReason={} sku={}"
+                        + " locationId={} onHand={} projectedAvailable={} leadHorizon={} min={} max={} quantity={}",
+                ReplenishmentTriggerType.BATCH,
+                task.getDecisionReason(),
+                task.getSourcingReason(),
+                policy.getItemSKU(),
+                policy.getLocationId(),
+                projection.onHand(),
+                projection.projectedAvailable(),
+                projection.leadHorizon(),
                 policy.getMinimumQuantity(),
                 policy.getMaximumQuantity(),
                 quantityNeeded);
@@ -589,22 +793,33 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
         return true;
     }
 
+    /**
+     * Materializes a task from the F5 sourcing resolution (odoo-parity F5, issue #1045). The
+     * source location, decision reason, sourcing reason, and cross-site transfer link all come
+     * from {@link ReplenishmentSourcingService}; the task's destination is always the policy's
+     * pick face.
+     */
     private ReplenishmentTask newTask(
             ReplenishmentPolicy policy,
             int quantityNeeded,
             ReplenishmentTriggerType triggerType,
-            @Nullable LocalDate deadlineDate) {
-        // Source selection is a placeholder until odoo-parity F5 (internal
-        // sourcing): the policy's own location stands in for the backstock
-        // source because the column is non-null and no sourcing engine exists yet.
+            @Nullable LocalDate deadlineDate,
+            ReplenishmentSourcingService.SourcingResolution resolution) {
+        UUID sourceLocationId =
+                resolution.sourceLocationId() != null ? resolution.sourceLocationId() : policy.getLocationId();
+        ReplenishmentDecisionReason decisionReason = resolution.decisionReason() != null
+                ? resolution.decisionReason()
+                : ReplenishmentDecisionReason.BELOW_MIN;
         return ReplenishmentTask.builder()
                 .itemSKU(policy.getItemSKU())
                 .quantity(quantityNeeded)
-                .sourceLocationId(policy.getLocationId())
+                .sourceLocationId(sourceLocationId)
                 .destinationLocationId(policy.getLocationId())
                 .status(ReplenishmentStatus.PENDING)
                 .triggerType(triggerType)
-                .decisionReason(ReplenishmentDecisionReason.BELOW_MIN)
+                .decisionReason(decisionReason)
+                .sourcingReason(resolution.sourcingReason())
+                .sourceTransferOrderId(resolution.transferOrderId())
                 .deadlineDate(deadlineDate)
                 .build();
     }

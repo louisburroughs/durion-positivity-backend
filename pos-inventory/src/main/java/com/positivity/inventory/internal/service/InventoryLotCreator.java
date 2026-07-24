@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.enums.InventoryLotStatus;
 import com.positivity.inventory.internal.repository.InventoryLotRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -33,15 +34,24 @@ public class InventoryLotCreator {
         this.clock = clock;
     }
 
-    /** Inserts the lot row; throws {@code DataIntegrityViolationException} on a lost race. */
+    /**
+     * Inserts the lot row; throws {@code DataIntegrityViolationException} on a lost race.
+     * {@code expirationDate} (odoo-parity E3, issue #1047) is stamped on first creation when the
+     * receiving document carries one; null otherwise (set later via the lot-management endpoint).
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @NonNull
-    public InventoryLot create(@NonNull String stockItemId, @NonNull String lotNumber, @Nullable UUID vendorId) {
+    public InventoryLot create(
+            @NonNull String stockItemId,
+            @NonNull String lotNumber,
+            @Nullable UUID vendorId,
+            @Nullable LocalDate expirationDate) {
         InventoryLot created = lotRepository.saveAndFlush(InventoryLot.builder()
                 .stockItemId(stockItemId)
                 .lotNumber(lotNumber)
                 .receivedAt(Instant.now(clock))
                 .vendorId(vendorId)
+                .expirationDate(expirationDate)
                 .status(InventoryLotStatus.ACTIVE)
                 .build());
         log.info(

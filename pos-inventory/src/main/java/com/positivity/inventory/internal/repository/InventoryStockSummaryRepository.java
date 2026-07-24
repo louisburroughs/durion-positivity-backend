@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import jakarta.persistence.LockModeType;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -106,6 +107,75 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                         WHERE s.lotId = :lotId
                         """)
     long sumLotStockAcrossLocations(@Param("lotId") UUID lotId);
+
+    /**
+     * Σ per-lot on-hand of the SKU's EXPIRED, ACTIVE lots at the given scope (odoo-parity E3,
+     * issue #1047; spec §6 E3, decision D-7 on-read guard): the quantity to subtract from the
+     * lot-agnostic ATP so expired lots drop out of availability while staying in on-hand. A null
+     * {@code locationId} sums across every location. Only ACTIVE lots are deducted (a
+     * QUARANTINED/RECALLED lot is already blocked at the outbound/suggestion boundary), matching
+     * the daily {@code LotExpiryScheduler}'s selection.
+     */
+    @Query(value = """
+                    SELECT COALESCE(SUM(s.on_hand), 0)
+                    FROM inventory_stock_summary s
+                    JOIN inventory_lot l ON l.lot_id = s.lot_id
+                    WHERE s.stock_item_id = :stockItemId
+                      AND s.lot_id IS NOT NULL
+                      AND s.on_hand > 0
+                      AND (CAST(:locationId AS uuid) IS NULL OR s.location_id = :locationId)
+                      AND l.status = 'ACTIVE'
+                      AND l.expiration_date IS NOT NULL
+                      AND l.expiration_date < :today
+                    """, nativeQuery = true)
+    long sumExpiredActiveLotOnHand(
+            @Param("stockItemId") String stockItemId,
+            @Param("locationId") UUID locationId,
+            @Param("today") LocalDate today);
+
+    /**
+     * Earliest lot expiry per location for the SKU over its ACTIVE, non-expired, positive-on-hand
+     * per-lot rows (odoo-parity E3, issue #1047): the data behind the FEFO sourcing strategy's
+     * per-location ordering. Locations with no such lot are absent from the result.
+     */
+    @Query(value = """
+                    SELECT s.location_id AS locationId, MIN(l.expiration_date) AS earliestExpiry
+                    FROM inventory_stock_summary s
+                    JOIN inventory_lot l ON l.lot_id = s.lot_id
+                    WHERE s.stock_item_id = :stockItemId
+                      AND s.lot_id IS NOT NULL
+                      AND s.on_hand > 0
+                      AND s.location_id IN (:locationIds)
+                      AND l.status = 'ACTIVE'
+                      AND l.expiration_date IS NOT NULL
+                      AND l.expiration_date >= :today
+                    GROUP BY s.location_id
+                    """, nativeQuery = true)
+    List<LocationExpiry> earliestExpiryByLocation(
+            @Param("stockItemId") String stockItemId,
+            @Param("locationIds") Collection<UUID> locationIds,
+            @Param("today") LocalDate today);
+
+    /** Whether the SKU has any ACTIVE, non-expired lot carrying an expiration date. */
+    @Query(value = """
+                    SELECT CASE WHEN COUNT(*) > 0 THEN true ELSE false END
+                    FROM inventory_stock_summary s
+                    JOIN inventory_lot l ON l.lot_id = s.lot_id
+                    WHERE s.stock_item_id = :stockItemId
+                      AND s.lot_id IS NOT NULL
+                      AND s.on_hand > 0
+                      AND l.status = 'ACTIVE'
+                      AND l.expiration_date IS NOT NULL
+                      AND l.expiration_date >= :today
+                    """, nativeQuery = true)
+    boolean hasExpiryData(@Param("stockItemId") String stockItemId, @Param("today") LocalDate today);
+
+    /** One location's earliest lot expiry (native projection for the FEFO provider). */
+    interface LocationExpiry {
+        UUID getLocationId();
+
+        LocalDate getEarliestExpiry();
+    }
 
     /** Lot-agnostic rows with positive on-hand at one location. */
     @Query("""

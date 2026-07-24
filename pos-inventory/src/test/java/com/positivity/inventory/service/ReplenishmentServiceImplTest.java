@@ -85,6 +85,21 @@ class ReplenishmentServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.StockoutDeadlineCalculator stockoutDeadlineCalculator;
 
+    /** F4 (#1044): open-suggestion netting — defaulted to 0 so pre-F4 vectors are unaffected. */
+    @Mock
+    private com.positivity.inventory.internal.service.PurchaseSuggestionCreationService
+            purchaseSuggestionCreationService;
+
+    /**
+     * F5 (#1045): sourcing resolution. Defaulted to the pre-F5 behaviour — no open source
+     * transfer, and every triggered need materializes a same-site BELOW_MIN task sourced from
+     * the policy's own location — so the pre-F5 unit vectors (quantity / decision reason /
+     * location assertions) are unaffected. The real internal-sourcing branches are covered by
+     * {@code ReplenishmentSourcingServiceTest} and the F5 scan integration tests.
+     */
+    @Mock
+    private com.positivity.inventory.internal.service.ReplenishmentSourcingService replenishmentSourcingService;
+
     /**
      * F2 equivalence defaults: no feed lead time (DEFAULT source, 0 days), the policy
      * location is already a site, and no open supply/demand documents — so
@@ -107,6 +122,24 @@ class ReplenishmentServiceImplTest {
         Mockito.lenient()
                 .when(replenishmentTaskRepository.findByItemSKUAndDestinationLocationIdAndStatusIn(any(), any(), any()))
                 .thenReturn(Collections.emptyList());
+        Mockito.lenient()
+                .when(purchaseSuggestionCreationService.openSuggestionQuantity(any(), any(), any()))
+                .thenReturn(0L);
+        Mockito.lenient()
+                .when(replenishmentSourcingService.hasOpenSourceTransfer(any()))
+                .thenReturn(false);
+        Mockito.lenient()
+                .when(replenishmentSourcingService.resolve(any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenAnswer(invocation ->
+                        new com.positivity.inventory.internal.service.ReplenishmentSourcingService.SourcingResolution(
+                                com.positivity.inventory.internal.service.ReplenishmentSourcingService.Kind
+                                        .MATERIALIZE_TASK,
+                                invocation
+                                        .getArgument(0, ReplenishmentPolicy.class)
+                                        .getLocationId(),
+                                null,
+                                null,
+                                ReplenishmentDecisionReason.BELOW_MIN));
     }
 
     @Test

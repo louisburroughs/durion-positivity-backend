@@ -1,10 +1,13 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.domainevents.inventory.BackorderCreatedV1;
+import com.positivity.domainevents.inventory.BackorderResolvedV1;
 import com.positivity.domainevents.inventory.ConsumptionRecordedV1;
 import com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1;
 import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
 import com.positivity.domainevents.inventory.LeadTimeUpdatedV1;
+import com.positivity.domainevents.inventory.LotExpiryAlertV1;
 import com.positivity.domainevents.inventory.PickListUpdatedV1;
 import com.positivity.domainevents.inventory.PickTaskUpdatedV1;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
@@ -182,6 +185,46 @@ public class InventoryFactPublisher {
         pending.transferOrderUpdates.add(fact);
     }
 
+    /**
+     * Record a backorder-created occurrence fact (odoo-parity G1, issue #1046): a backorder was
+     * opened for short demand. Queued as-is — this is an occurrence, not a snapshot, and is never
+     * re-emitted. pos-workorder consumes it read-side for workorder-line shortage visibility.
+     */
+    public void recordBackorderCreated(@NonNull BackorderCreatedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.backorderCreations.add(fact);
+    }
+
+    /**
+     * Record a backorder-resolved occurrence fact (odoo-parity G1, issue #1046): an open backorder
+     * was resolved. Queued as-is — this is an occurrence, not a snapshot, and is never re-emitted; a
+     * backorder resolves at most once, so the fact is emitted exactly once per backorder.
+     */
+    public void recordBackorderResolved(@NonNull BackorderResolvedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.backorderResolutions.add(fact);
+    }
+
+    /**
+     * Record a lot-expiry alert occurrence fact (odoo-parity E3, issue #1047): the daily
+     * {@code LotExpiryScheduler} raised an EXPIRING/EXPIRED transition for a lot. Queued as-is —
+     * this is an occurrence, not a snapshot, and the scheduler's emit-once bookkeeping guarantees
+     * exactly one fact per lot per transition.
+     */
+    public void recordLotExpiryAlert(@NonNull LotExpiryAlertV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.lotExpiryAlerts.add(fact);
+    }
+
     private @Nullable Pending pending() {
         if (outboxEventWriter.getIfAvailable() == null
                 || !TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -346,6 +389,43 @@ public class InventoryFactPublisher {
                 log.warn("Skipping transfer-order fact for {}: {}", transferUpdate.transferOrderId(), e.getMessage());
             }
         }
+        for (BackorderCreatedV1 backorderCreated : pending.backorderCreations) {
+            try {
+                publish(
+                        writer,
+                        BackorderCreatedV1.EVENT_TYPE,
+                        BackorderCreatedV1.SCHEMA_VERSION,
+                        backorderCreated.backorderId(),
+                        backorderCreated);
+            } catch (Exception e) {
+                log.warn("Skipping backorder-created fact for {}: {}", backorderCreated.backorderId(), e.getMessage());
+            }
+        }
+        for (BackorderResolvedV1 backorderResolved : pending.backorderResolutions) {
+            try {
+                publish(
+                        writer,
+                        BackorderResolvedV1.EVENT_TYPE,
+                        BackorderResolvedV1.SCHEMA_VERSION,
+                        backorderResolved.backorderId(),
+                        backorderResolved);
+            } catch (Exception e) {
+                log.warn(
+                        "Skipping backorder-resolved fact for {}: {}", backorderResolved.backorderId(), e.getMessage());
+            }
+        }
+        for (LotExpiryAlertV1 lotExpiryAlert : pending.lotExpiryAlerts) {
+            try {
+                publish(
+                        writer,
+                        LotExpiryAlertV1.EVENT_TYPE,
+                        LotExpiryAlertV1.SCHEMA_VERSION,
+                        lotExpiryAlert.lotId(),
+                        lotExpiryAlert);
+            } catch (Exception e) {
+                log.warn("Skipping lot-expiry-alert fact for {}: {}", lotExpiryAlert.lotId(), e.getMessage());
+            }
+        }
         for (UUID productId : pending.leadTimeProductIds) {
             try {
                 LeadTimeView view = inventoryLeadTimeService.queryLeadTime(productId, null, null);
@@ -410,5 +490,8 @@ public class InventoryFactPublisher {
         private final List<ExpectedSupplyDroppedV1> expectedSupplyDrops = new ArrayList<>();
         private final List<ScrapPostedV1> scrapPosts = new ArrayList<>();
         private final List<TransferOrderUpdatedV1> transferOrderUpdates = new ArrayList<>();
+        private final List<BackorderCreatedV1> backorderCreations = new ArrayList<>();
+        private final List<BackorderResolvedV1> backorderResolutions = new ArrayList<>();
+        private final List<LotExpiryAlertV1> lotExpiryAlerts = new ArrayList<>();
     }
 }

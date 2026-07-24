@@ -44,6 +44,20 @@ public class ReplenishmentScanResultResponse {
     private int tasksRefreshed;
 
     @Schema(
+            description =
+                    "Number of new purchase suggestions created for PURCHASE-preferring policies" + " (odoo-parity F4)",
+            example = "1",
+            requiredMode = REQUIRED)
+    private int suggestionsCreated;
+
+    @Schema(
+            description = "Number of already-open purchase suggestions whose quantity was refreshed to the"
+                    + " current need (odoo-parity F4)",
+            example = "0",
+            requiredMode = REQUIRED)
+    private int suggestionsRefreshed;
+
+    @Schema(
             description = "Number of policies skipped without evaluation because they are inactive or snoozed",
             example = "1",
             requiredMode = REQUIRED)

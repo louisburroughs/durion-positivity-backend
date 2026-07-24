@@ -73,6 +73,11 @@ springdoc:
   default-produces-media-type: application/json
 pos:
   inventory:
+    valuation:
+      # Deployment default costing method (odoo-parity J1, #1048; ADR-0048). Resolution order is
+      # per-SKU config -> per-SKU-category config (unresolvable until the catalog replica carries a
+      # category) -> DEFAULT config row -> this value. STANDARD or AVERAGE in v1; FIFO is v2.
+      default-method: ${POS_INVENTORY_VALUATION_DEFAULT_METHOD:AVERAGE}
     receiving:
       # Optional explicit upstream name (query param: service) for source document line lookups.
       # If blank, ReceivingServiceImpl falls back by source document type:

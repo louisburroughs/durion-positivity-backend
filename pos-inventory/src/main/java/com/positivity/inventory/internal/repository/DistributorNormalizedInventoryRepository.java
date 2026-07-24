@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.DistributorNormalizedInventory;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,6 +18,13 @@ public interface DistributorNormalizedInventoryRepository extends JpaRepository<
 
     Optional<DistributorNormalizedInventory> findByDistributorIdAndDistributorSku(
             String distributorId, String distributorSku);
+
+    /**
+     * Current distributor rows for a product (odoo-parity F4, issue #1044): rows are
+     * upserted per (distributor, distributorSku), so each row IS the latest state —
+     * vendor selection keeps the freshest ({@code updatedAt}) row per distributor.
+     */
+    List<DistributorNormalizedInventory> findByProductId(UUID productId);
 
     @Query("""
             SELECT MIN(d.leadTimeDaysMin) AS minDays,

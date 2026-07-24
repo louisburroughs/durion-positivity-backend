@@ -141,13 +141,13 @@ public class PickListGenerationServiceImpl implements PickListGenerationService 
                 ? null
                 : decision.orderedCandidates().getFirst().locationId();
 
-        // odoo-parity E2 (#1042): advisory FIFO lot suggestion for LOT-tracked SKUs at the
-        // suggested location (earliest lot receivedAt among ACTIVE lots with per-lot stock).
-        // Confirm may override with any valid ACTIVE lot. E3's LotExpiryProvider upgrades the
-        // ordering to FEFO without touching this call site.
+        // odoo-parity E2/E3 (#1042/#1047): advisory lot suggestion for LOT-tracked SKUs at the
+        // suggested location — FEFO (earliest expiry) when the lots carry expiration, else FIFO by
+        // receivedAt, with expired lots guarded out on read. Confirm may override with any valid
+        // ACTIVE lot.
         String suggestedLotNumber = lotOutboundService == null
                 ? null
-                : lotOutboundService.suggestFifoLotNumber(line.getSku(), suggestedLocationId);
+                : lotOutboundService.suggestLotNumber(line.getSku(), suggestedLocationId);
 
         return PickTaskEntity.builder()
                 .pickList(pickList)
