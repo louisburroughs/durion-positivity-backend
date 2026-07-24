@@ -5,6 +5,7 @@ import com.positivity.vehicle.internal.dto.VehicleLegacyMapper;
 import com.positivity.vehicle.internal.dto.VehicleLegacyRequest;
 import com.positivity.vehicle.internal.dto.VehicleLegacyResponse;
 import com.positivity.vehicle.service.VehicleLegacyService;
+import java.time.Clock;
 import java.time.Year;
 import java.util.List;
 import java.util.Locale;
@@ -26,10 +27,11 @@ public class VehicleLegacyServiceImpl implements VehicleLegacyService {
 
     private static final int MIN_MODEL_YEAR = 1886;
     private static final int FUTURE_YEAR_BUFFER = 1;
-    private static final Set<String> ALLOWED_VEHICLE_TYPES =
-            Set.of("CAR", "VAN", "COMMERCIAL_TRUCK", "PASSENGER_TRUCK", "TRUCK");
+    private static final Set<String> ALLOWED_VEHICLE_TYPES = Set.of("CAR", "VAN", "COMMERCIAL_TRUCK", "PASSENGER_TRUCK",
+            "TRUCK");
 
     private final VehicleDao vehicleDao;
+    private final Clock clock;
 
     @Override
     @NonNull
@@ -172,7 +174,7 @@ public class VehicleLegacyServiceImpl implements VehicleLegacyService {
             throw new IllegalArgumentException("year is required");
         }
 
-        int maxYear = Year.now().getValue() + FUTURE_YEAR_BUFFER;
+        int maxYear = Year.now(clock).getValue() + FUTURE_YEAR_BUFFER;
         if (year < MIN_MODEL_YEAR || year > maxYear) {
             throw new IllegalArgumentException("year must be between " + MIN_MODEL_YEAR + " and " + maxYear);
         }

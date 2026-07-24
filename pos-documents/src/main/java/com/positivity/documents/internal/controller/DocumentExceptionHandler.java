@@ -6,6 +6,7 @@ import com.positivity.documents.internal.exception.UnsupportedFormatException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.Clock;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +22,11 @@ public class DocumentExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentExceptionHandler.class);
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
+    private final Clock clock;
+
+    public DocumentExceptionHandler(Clock clock) {
+        this.clock = clock;
+    }
 
     @ExceptionHandler(UnsupportedFormatException.class)
     public ResponseEntity<ApiError> handleUnsupportedFormat(UnsupportedFormatException ex, HttpServletRequest request) {
@@ -51,7 +57,9 @@ public class DocumentExceptionHandler {
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(
-                ApiError.of(code, message, status.value(), Instant.now().toString(), correlationId), headers, status);
+                ApiError.of(code, message, status.value(), Instant.now(clock).toString(), correlationId),
+                headers,
+                status);
     }
 
     private String resolveCorrelationId(HttpServletRequest request) {

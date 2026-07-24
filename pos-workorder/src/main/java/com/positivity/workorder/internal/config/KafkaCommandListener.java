@@ -143,7 +143,7 @@ public class KafkaCommandListener {
         UUID workorderId;
         try {
             workorderId = UUID.fromString(rawWorkorderId);
-        } catch (Exception e) {
+        } catch (Exception _) {
             log.warn("Ignoring invoice regeneration command with missing/malformed workorderId: {}", root);
             return;
         }
@@ -202,7 +202,7 @@ public class KafkaCommandListener {
         }
         try {
             return Instant.parse(value);
-        } catch (Exception e) {
+        } catch (Exception _) {
             log.warn("Malformed payload.{}={} on outbox replay command", field, value);
             return null;
         }

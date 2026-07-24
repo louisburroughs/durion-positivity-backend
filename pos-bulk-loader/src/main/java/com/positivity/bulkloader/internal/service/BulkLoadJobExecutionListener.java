@@ -3,6 +3,7 @@ package com.positivity.bulkloader.internal.service;
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.JobStatus;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Component;
 public class BulkLoadJobExecutionListener implements JobExecutionListener {
 
     private final BulkLoadJobRepository bulkLoadJobRepository;
+    private final Clock clock;
 
     @Override
     public void afterJob(JobExecution jobExecution) {
@@ -48,7 +50,7 @@ public class BulkLoadJobExecutionListener implements JobExecutionListener {
         bulkLoadJob.setProcessedRows(processedRows);
         bulkLoadJob.setSuccessCount(successCount);
         bulkLoadJob.setFailureCount(failureCount);
-        bulkLoadJob.setCompletedAt(Instant.now());
+        bulkLoadJob.setCompletedAt(Instant.now(clock));
         bulkLoadJob.setStatus(
                 jobExecution.getStatus() == BatchStatus.COMPLETED ? JobStatus.COMPLETED : JobStatus.FAILED);
         bulkLoadJobRepository.save(bulkLoadJob);

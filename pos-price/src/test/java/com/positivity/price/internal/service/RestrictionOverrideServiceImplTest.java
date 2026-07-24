@@ -14,7 +14,10 @@ import com.positivity.price.internal.enums.ServiceTag;
 import com.positivity.price.internal.repository.RestrictionOverrideAuditRepository;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;
 import com.positivity.security.common.GatewaySecurityConstants;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,6 +53,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 @DisplayName("RestrictionOverrideServiceImpl – override issuance and actor resolution")
 class RestrictionOverrideServiceImplTest {
 
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-06-15T10:15:30Z"), ZoneOffset.UTC);
+
     @Mock
     private RestrictionOverrideAuditRepository auditRepository;
 
@@ -69,7 +74,7 @@ class RestrictionOverrideServiceImplTest {
      */
     @BeforeEach
     void setUp() {
-        service = new RestrictionOverrideServiceImpl(auditRepository, ruleRepository);
+        service = new RestrictionOverrideServiceImpl(auditRepository, ruleRepository, FIXED_CLOCK);
         when(auditRepository.save(any(RestrictionOverrideAudit.class))).thenAnswer(invocation -> {
             RestrictionOverrideAudit input = invocation.getArgument(0);
             if (input.getOverrideId() == null) {

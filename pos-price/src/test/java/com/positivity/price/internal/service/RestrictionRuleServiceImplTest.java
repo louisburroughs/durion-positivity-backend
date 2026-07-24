@@ -11,7 +11,10 @@ import com.positivity.price.internal.enums.LocationTag;
 import com.positivity.price.internal.enums.ServiceTag;
 import com.positivity.price.internal.exception.RestrictionRuleNotFoundException;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,6 +42,8 @@ import org.mockito.quality.Strictness;
 @DisplayName("RestrictionRuleServiceImpl – rule lifecycle")
 class RestrictionRuleServiceImplTest {
 
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-06-15T10:15:30Z"), ZoneOffset.UTC);
+
     @Mock
     private RestrictionRuleRepository repository;
 
@@ -50,7 +55,7 @@ class RestrictionRuleServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new RestrictionRuleServiceImpl(repository);
+        service = new RestrictionRuleServiceImpl(repository, FIXED_CLOCK);
         when(repository.findById(knownActiveId)).thenReturn(Optional.of(activeRule()));
         when(repository.findById(knownInactiveId)).thenReturn(Optional.of(inactiveRule()));
         when(repository.findById(unknownId)).thenReturn(Optional.empty());
@@ -151,7 +156,7 @@ class RestrictionRuleServiceImplTest {
 
         var result = service.deactivateRule(ruleId);
 
-        assertThat(result.effectiveTo()).isEqualTo(LocalDate.now());
+        assertThat(result.effectiveTo()).isEqualTo(LocalDate.now(FIXED_CLOCK));
         assertThat(result.active()).isFalse();
     }
 

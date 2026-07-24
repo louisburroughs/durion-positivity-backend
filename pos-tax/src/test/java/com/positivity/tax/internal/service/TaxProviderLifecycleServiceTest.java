@@ -13,6 +13,7 @@ import com.positivity.tax.internal.exception.TaxCalculationException;
 import com.positivity.tax.internal.repository.TaxProviderTransactionRepository;
 import com.positivity.tax.service.TaxProviderClient;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,24 +26,28 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Story T6 / decision D-T3: the lifecycle service records commit/void rows, is idempotent
- * on {@code referenceId}, records PENDING_COMMIT when the provider fails (never blocking the
- * sale) and the re-commit job promotes PENDING_COMMIT → COMMITTED when the provider recovers.
+ * Story T6 / decision D-T3: the lifecycle service records commit/void rows, is
+ * idempotent
+ * on {@code referenceId}, records PENDING_COMMIT when the provider fails (never
+ * blocking the
+ * sale) and the re-commit job promotes PENDING_COMMIT → COMMITTED when the
+ * provider recovers.
  *
- * <p>Exercised against H2 with the real Flyway {@code V2__tax_provider_transaction.sql}
+ * <p>
+ * Exercised against H2 with the real Flyway
+ * {@code V2__tax_provider_transaction.sql}
  * migration and Hibernate schema validation.
  */
-@DataJpaTest(
-        properties = {
-            "spring.datasource.url=jdbc:h2:mem:pos_tax_lifecycle;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-            "spring.datasource.driver-class-name=org.h2.Driver",
-            "spring.datasource.username=sa",
-            "spring.datasource.password=",
-            "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate",
-            "spring.flyway.enabled=true",
-            "spring.flyway.locations=classpath:db/migration"
-        })
+@DataJpaTest(properties = {
+        "spring.datasource.url=jdbc:h2:mem:pos_tax_lifecycle;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
+        "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
+        "spring.jpa.hibernate.ddl-auto=validate",
+        "spring.flyway.enabled=true",
+        "spring.flyway.locations=classpath:db/migration"
+})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 class TaxProviderLifecycleServiceTest {
@@ -61,7 +66,7 @@ class TaxProviderLifecycleServiceTest {
         when(selector.select()).thenReturn(provider);
         ObjectProvider<MeterRegistry> meterRegistry = mock(ObjectProvider.class);
         when(meterRegistry.getIfAvailable()).thenReturn(null);
-        TaxProviderTransactionResolver resolver = new TaxProviderTransactionResolver(repository);
+        TaxProviderTransactionResolver resolver = new TaxProviderTransactionResolver(repository, Clock.systemUTC());
         service = new TaxProviderLifecycleService(selector, repository, resolver, meterRegistry);
     }
 

@@ -8,6 +8,7 @@ import com.positivity.bulkloader.internal.exception.JobOwnershipViolationExcepti
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
 import com.positivity.bulkloader.service.BulkLoadBatchLauncher;
 import com.positivity.bulkloader.service.BulkLoadJobService;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -37,6 +38,7 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
 
     private final BulkLoadJobRepository jobRepository;
     private final BulkLoadBatchLauncher bulkLoadBatchLauncher;
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -167,7 +169,7 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         }
         bulkLoadBatchLauncher.launch(job, authorizationHeader);
         job.setStatus(JobStatus.PROCESSING);
-        job.setStartedAt(Instant.now());
+        job.setStartedAt(Instant.now(clock));
         jobRepository.save(job);
     }
 

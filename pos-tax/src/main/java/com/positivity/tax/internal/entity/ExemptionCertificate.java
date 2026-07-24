@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -23,13 +24,18 @@ import lombok.NoArgsConstructor;
  * Tax exemption certificate registry entry (story T3, decision D-T1).
  * <p>
  * pos-tax owns this small table because an exemption is tax semantics, not CRM
- * identity. The calculate path stays a pure function of request + config + a registry
- * lookup: given a {@code customerId} (or a line/request certificate id), an active,
- * effective, non-expired certificate drives an honored exemption; otherwise a claimed
+ * identity. The calculate path stays a pure function of request + config + a
+ * registry
+ * lookup: given a {@code customerId} (or a line/request certificate id), an
+ * active,
+ * effective, non-expired certificate drives an honored exemption; otherwise a
+ * claimed
  * exemption is denied and the line taxed anyway (D-T2).
  * <p>
- * Audit timestamps are maintained by JPA lifecycle callbacks so persistence works
- * without Spring Data auditing infrastructure (this is a utility service with no user
+ * Audit timestamps are maintained by JPA lifecycle callbacks so persistence
+ * works
+ * without Spring Data auditing infrastructure (this is a utility service with
+ * no user
  * security context on the calculate path).
  */
 @Data
@@ -46,12 +52,16 @@ public class ExemptionCertificate {
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
-    /** Customer this certificate belongs to (matches {@code TaxCalculationRequest.customerId}). */
+    /**
+     * Customer this certificate belongs to (matches
+     * {@code TaxCalculationRequest.customerId}).
+     */
     @Column(name = "customer_id", nullable = false, length = 100)
     private String customerId;
 
     /**
-     * State/region scope this certificate applies to (subdivision code, e.g. CA). When
+     * State/region scope this certificate applies to (subdivision code, e.g. CA).
+     * When
      * {@code null}, the certificate applies in any state.
      */
     @Column(name = "state_scope", length = 10)
@@ -89,7 +99,7 @@ public class ExemptionCertificate {
 
     @PrePersist
     void onCreate() {
-        Instant now = Instant.now();
+        Instant now = Instant.now(Clock.systemUTC());
         if (createdAt == null) {
             createdAt = now;
         }
@@ -98,6 +108,6 @@ public class ExemptionCertificate {
 
     @PreUpdate
     void onUpdate() {
-        updatedAt = Instant.now();
+        updatedAt = Instant.now(Clock.systemUTC());
     }
 }
