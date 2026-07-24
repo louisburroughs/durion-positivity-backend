@@ -166,7 +166,7 @@ class TaxProviderTransactionResolverPersistenceTest {
                 now);
 
         assertThat(winner).isEqualTo(1);
-        assertThat(loser).isEqualTo(0); // ON CONFLICT DO NOTHING: no second row, no exception.
+        assertThat(loser).isZero(); // ON CONFLICT DO NOTHING: no second row, no exception.
         assertThat(repository.count()).isEqualTo(1L);
 
         UUID surviving = repository.findByReferenceId(ref).orElseThrow().getId();
