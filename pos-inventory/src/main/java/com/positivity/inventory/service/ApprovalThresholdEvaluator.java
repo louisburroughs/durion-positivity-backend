@@ -29,4 +29,15 @@ public interface ApprovalThresholdEvaluator {
      * @return optional approval tier, empty if auto-approval is allowed
      */
     Optional<ApprovalTier> evaluateScrapApprovalTier(@NonNull BigDecimal scrapValue);
+
+    /**
+     * Evaluates a manual cost-revaluation's absolute inventory value delta
+     * (|Δunit-cost| × on-hand) against the revaluation flow's value-based
+     * thresholds (odoo-parity J4, issue #1054). Unit and percentage thresholds
+     * do not apply to revaluations.
+     *
+     * @param absValueDelta absolute inventory value change the revaluation causes
+     * @return optional approval tier, empty if auto-approval is allowed
+     */
+    Optional<ApprovalTier> evaluateRevaluationApprovalTier(@NonNull BigDecimal absValueDelta);
 }

@@ -83,6 +83,18 @@ public final class EventTypes {
                                 "Create or update the costing method for one scope")
                         .build(),
 
+                // RevaluationController - 3 events (odoo-parity J4, #1054)
+                EventTypeRegistration.write(
+                                "INVENTORY_REVALUATION_CREATE",
+                                "Submit a manual cost revaluation (auto-applies below threshold)")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "INVENTORY_REVALUATION_APPROVE",
+                                "Approve a pending cost revaluation and restate the SKU cost state")
+                        .build(),
+                EventTypeRegistration.approval("INVENTORY_REVALUATION_REJECT", "Reject a pending cost revaluation")
+                        .build(),
+
                 // CycleCountController - 2 events
                 EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_SUBMIT", "Submit a count for a cycle count task")
                         .build(),
