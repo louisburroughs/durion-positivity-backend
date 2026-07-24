@@ -6,6 +6,8 @@ import com.positivity.mcp.internal.discovery.OpenApiToolMapper;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import com.positivity.mcp.service.ToolRegistrationService;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.modelcontextprotocol.server.McpAsyncServer;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -34,6 +36,10 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
     private final McpAsyncServer mcpAsyncServer;
     private final ToolMetadataRepository toolMetadataRepository;
     private final String gatewayBaseUrl;
+    // #645: discovery/registration metrics. Meter names are dot-cased so Prometheus exposes them as
+    // tools_discovered_total / tools_registered_total.
+    private final Counter toolsDiscoveredTotal;
+    private final Counter toolsRegisteredTotal;
 
     public ToolRegistrationServiceImpl(
             @NonNull McpServerProperties properties,
@@ -41,7 +47,8 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
             @NonNull OpenApiToolMapper openApiToolMapper,
             @NonNull McpAsyncServer mcpAsyncServer,
             @NonNull ToolMetadataRepository toolMetadataRepository,
-            @Value("${mcp.server.gateway-base-url:http://api-gateway:8080}") @NonNull String gatewayBaseUrl) {
+            @Value("${mcp.server.gateway-base-url:http://api-gateway:8080}") @NonNull String gatewayBaseUrl,
+            @NonNull MeterRegistry meterRegistry) {
         this.properties = properties;
         this.openApiDocumentFetcher = openApiDocumentFetcher;
         this.openApiToolMapper = openApiToolMapper;
@@ -51,6 +58,12 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
         // Eureka service id): alpha's Eureka registry is empty, and facade tools already reach the
         // gateway by base URL. The Gate 3 executor (G3.2) will call handlerForBaseUri(this).
         this.gatewayBaseUrl = gatewayBaseUrl;
+        this.toolsDiscoveredTotal = Counter.builder("tools.discovered")
+                .description("OpenAPI operations discovered from the gateway aggregate and matched to MCP tools")
+                .register(meterRegistry);
+        this.toolsRegisteredTotal = Counter.builder("tools.registered")
+                .description("MCP tools successfully registered from discovery")
+                .register(meterRegistry);
     }
 
     @Override
@@ -77,6 +90,7 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                             .map(specification -> specification.tool().name())
                             .collect(Collectors.joining(", "));
 
+                    toolsDiscoveredTotal.increment(specifications.size());
                     log.info(
                             "Registering {} MCP tools from gateway aggregate spec: {}",
                             specifications.size(),
@@ -151,9 +165,10 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
     private @NonNull Mono<Void> addToolWithTiming(McpServerFeatures.AsyncToolSpecification specification) {
         long startNanos = System.nanoTime();
         String toolName = specification.tool().name();
-        return mcpAsyncServer
-                .addTool(specification)
-                .doOnSuccess(ignored -> log.info("Registered MCP tool {} in {} ms", toolName, elapsedMs(startNanos)));
+        return mcpAsyncServer.addTool(specification).doOnSuccess(ignored -> {
+            toolsRegisteredTotal.increment();
+            log.info("Registered MCP tool {} in {} ms", toolName, elapsedMs(startNanos));
+        });
     }
 
     private static long elapsedMs(long startNanos) {

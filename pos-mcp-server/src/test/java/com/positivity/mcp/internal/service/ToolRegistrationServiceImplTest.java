@@ -14,6 +14,7 @@ import com.positivity.mcp.internal.config.McpServerProperties;
 import com.positivity.mcp.internal.discovery.OpenApiDocumentFetcher;
 import com.positivity.mcp.internal.discovery.OpenApiToolMapper;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.modelcontextprotocol.server.McpAsyncServer;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
@@ -41,6 +42,8 @@ class ToolRegistrationServiceImplTest {
     @Mock
     private McpAsyncServer mcpAsyncServer;
 
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+
     private static final URI GATEWAY_BASE_URI = URI.create("http://gateway.test");
 
     @Test
@@ -63,6 +66,10 @@ class ToolRegistrationServiceImplTest {
         verify(openApiToolMapper).toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi());
         verify(mcpAsyncServer).addTool(spec);
         verify(mcpAsyncServer).notifyToolsListChanged();
+        // #645: discovery/registration counters increment (Prometheus: tools_discovered_total /
+        // tools_registered_total).
+        assertThat(meterRegistry.get("tools.discovered").counter().count()).isEqualTo(1.0);
+        assertThat(meterRegistry.get("tools.registered").counter().count()).isEqualTo(1.0);
     }
 
     @Test
@@ -150,7 +157,8 @@ class ToolRegistrationServiceImplTest {
                 openApiToolMapper,
                 mcpAsyncServer,
                 mock(ToolMetadataRepository.class),
-                "http://api-gateway:8080");
+                "http://api-gateway:8080",
+                meterRegistry);
     }
 
     private ToolRegistrationServiceImpl serviceWithIncludedServices(List<String> includedServices) {
@@ -170,7 +178,8 @@ class ToolRegistrationServiceImplTest {
                 openApiToolMapper,
                 mcpAsyncServer,
                 mock(ToolMetadataRepository.class),
-                "http://api-gateway:8080");
+                "http://api-gateway:8080",
+                meterRegistry);
     }
 
     private static ListAppender<ILoggingEvent> attachLogAppender() {
