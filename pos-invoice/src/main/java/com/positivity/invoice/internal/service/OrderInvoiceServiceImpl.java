@@ -3,9 +3,17 @@ package com.positivity.invoice.internal.service;
 import com.positivity.invoice.internal.config.InvoiceEventPublisher;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.InvoiceItem;
+import com.positivity.invoice.internal.entity.PaymentIntent;
+import com.positivity.invoice.internal.enums.DepositSourceType;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.invoice.internal.enums.PaymentIntentStatus;
+import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.invoice.internal.repository.PaymentIntentRepository;
+import com.positivity.invoice.service.DepositCreditService;
 import com.positivity.invoice.service.OrderInvoiceService;
+import com.positivity.invoice.service.model.CreateDepositCommand;
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;
 import com.positivity.shared.dto.OrderInvoiceLineItem;
 import com.positivity.shared.dto.OrderInvoiceResponse;
@@ -15,6 +23,7 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -35,14 +44,20 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
 
     private final Clock clock;
     private final InvoiceRepository invoiceRepository;
+    private final PaymentIntentRepository paymentIntentRepository;
     private final InvoiceEventPublisher invoiceEventPublisher;
+    private final DepositCreditService depositCreditService;
 
     public OrderInvoiceServiceImpl(
             @NonNull InvoiceRepository invoiceRepository,
+            @NonNull PaymentIntentRepository paymentIntentRepository,
             @NonNull InvoiceEventPublisher invoiceEventPublisher,
+            @NonNull DepositCreditService depositCreditService,
             Clock clock) {
         this.invoiceRepository = invoiceRepository;
+        this.paymentIntentRepository = paymentIntentRepository;
         this.invoiceEventPublisher = invoiceEventPublisher;
+        this.depositCreditService = depositCreditService;
         this.clock = clock;
     }
 
@@ -108,6 +123,66 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
         }
         invoiceEventPublisher.publishInvoiceUpdated(saved);
         log.info("Created invoice {} for order {}", saved.getId(), request.getOrderId());
+
+        // Story E4 (deposit take): register the deposit as a dedicated credit against its source,
+        // idempotent on the taking orderId.
+        registerDepositIfPresent(request);
+
+        // Story E4 (settlement): draw down any deposit credits held against this settlement's
+        // workorder, recording the application-audit chain and reducing what the customer owes.
+        BigDecimal depositApplied = BigDecimal.ZERO;
+        if (saved.getWorkorderId() != null) {
+            depositApplied = depositCreditService.applyAvailableCredits(
+                    DepositSourceType.WORKORDER, saved.getWorkorderId(), saved.getId(), saved.getTotal());
+        }
+        return toResponse(saved, false, depositApplied);
+    }
+
+    private void registerDepositIfPresent(@NonNull OrderInvoiceCreationRequest request) {
+        BigDecimal depositAmount = request.getDepositAmount();
+        if (depositAmount == null || depositAmount.signum() <= 0) {
+            return;
+        }
+        if (request.getDepositSourceType() == null || request.getDepositSourceId() == null) {
+            throw new IllegalArgumentException(
+                    "depositSourceType and depositSourceId are required when depositAmount is set");
+        }
+        depositCreditService.createDeposit(new CreateDepositCommand(
+                request.getOrderId(),
+                request.getDepositSourceType(),
+                request.getDepositSourceId(),
+                request.getCustomerId() == null ? null : request.getCustomerId().toString(),
+                depositAmount,
+                null));
+    }
+
+    @Override
+    @NonNull
+    public OrderInvoiceResponse cancelInvoice(@NonNull UUID invoiceId) {
+        Invoice invoice =
+                invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
+        if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
+            return toResponse(invoice, true);
+        }
+        if (invoice.getStatus() != InvoiceStatus.DRAFT) {
+            throw new InvalidInvoiceStateException(invoiceId, invoice.getStatus(), InvoiceStatus.DRAFT);
+        }
+        // No money may have moved: an authorized hold or captured payment blocks the cancel —
+        // that flow belongs to the cancellation saga's payment reversal, not a void.
+        boolean hasLivePayment = paymentIntentRepository.findByInvoice_Id(invoiceId).stream()
+                .map(PaymentIntent::getStatus)
+                .anyMatch(status -> status == PaymentIntentStatus.AUTHORIZED
+                        || status == PaymentIntentStatus.CAPTURED
+                        || status == PaymentIntentStatus.PENDING);
+        if (hasLivePayment) {
+            throw new IllegalStateException("Invoice " + invoiceId
+                    + " has authorized/captured payments and cannot be cancelled; reverse the payments first"
+                    + " (order cancellation saga)");
+        }
+        invoice.setStatus(InvoiceStatus.CANCELLED);
+        Invoice saved = invoiceRepository.save(invoice);
+        invoiceEventPublisher.publishInvoiceUpdated(saved);
+        log.info("Cancelled invoice {} (order {})", invoiceId, invoice.getOrderId());
         return toResponse(saved, false);
     }
 
@@ -157,6 +232,12 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
 
     @NonNull
     private static OrderInvoiceResponse toResponse(@NonNull Invoice invoice, boolean existing) {
+        return toResponse(invoice, existing, BigDecimal.ZERO);
+    }
+
+    @NonNull
+    private static OrderInvoiceResponse toResponse(
+            @NonNull Invoice invoice, boolean existing, @NonNull BigDecimal depositApplied) {
         return OrderInvoiceResponse.builder()
                 .invoiceId(invoice.getId())
                 .invoiceNumber(invoice.getInvoiceNumber())
@@ -164,6 +245,7 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
                 .subtotal(invoice.getSubtotal())
                 .taxAmount(invoice.getTax())
                 .totalAmount(invoice.getTotal())
+                .depositApplied(depositApplied)
                 .existing(existing)
                 .build();
     }

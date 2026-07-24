@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.dto.lot;
 
 import com.positivity.inventory.internal.enums.InventoryLotStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -30,6 +31,6 @@ public class LotStatusUpdateRequest {
             description = "Reason for the status change (mandatory; recorded for traceability)",
             example = "Supplier recall notice R-2026-014",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotNull(message = "reason is required")
+    @NotBlank(message = "reason is required")
     private String reason;
 }

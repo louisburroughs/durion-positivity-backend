@@ -107,6 +107,51 @@ public class WorkorderStateMachine {
         log.info("Workorder {} transitioned from {} to {} by user {}", workorderId, fromStatus, toStatus, actorId);
     }
 
+    /**
+     * Finalize a workorder back to COMPLETED when the counter order settling it completes
+     * (odoo-parity story E3, issue #1084, spec R7.3). No synchronous write from pos-order: this is
+     * driven by the {@code order.order.completed} fact.
+     *
+     * <p>Only workorders in a completion-eligible status ({@code WORK_IN_PROGRESS},
+     * {@code AWAITING_PARTS}, {@code AWAITING_APPROVAL}, {@code READY_FOR_PICKUP}) are transitioned;
+     * an already-COMPLETED workorder is a no-op (idempotent under fact replay) and a terminal or
+     * pre-work status is left untouched with a warning. Completion preconditions still apply — a
+     * workorder that cannot yet complete (pending approval-gated change requests, non-terminal
+     * items) stays open and the block is logged rather than propagated, so settlement of the order
+     * is never undone by an unfinished workorder.
+     */
+    @Transactional
+    public void finalizeFromOrderSettlement(UUID workorderId, UUID orderId, String actorId) {
+        Workorder workorder = workorderRepository.findById(workorderId).orElse(null);
+        if (workorder == null) {
+            log.warn("Order {} settled unknown workorder {}; nothing to finalize", orderId, workorderId);
+            return;
+        }
+        WorkorderStatus from = workorder.getStatus();
+        if (from == WorkorderStatus.COMPLETED) {
+            log.info("Workorder {} already COMPLETED when order {} settled it; no transition", workorderId, orderId);
+            return;
+        }
+        if (!COMPLETION_ELIGIBLE_STATUSES.contains(from)) {
+            log.warn(
+                    "Workorder {} settled by order {} is in {} (not completion-eligible); left as-is",
+                    workorderId,
+                    orderId,
+                    from);
+            return;
+        }
+        try {
+            transitionWorkorder(workorderId, WorkorderStatus.COMPLETED, actorId, "order-settlement:" + orderId);
+        } catch (IllegalStateException e) {
+            log.warn(
+                    "Workorder {} settled by order {} could not auto-complete from {}: {}",
+                    workorderId,
+                    orderId,
+                    from,
+                    e.getMessage());
+        }
+    }
+
     private void autoCompleteOutstandingItems(UUID workorderId, String actorId) {
         int updated = 0;
         for (com.positivity.workorder.internal.entity.WorkorderServiceLine service :

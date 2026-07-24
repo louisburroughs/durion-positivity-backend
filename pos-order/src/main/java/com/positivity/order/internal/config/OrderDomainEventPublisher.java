@@ -7,7 +7,11 @@ import com.positivity.domainevents.order.OrderCancelledV1;
 import com.positivity.domainevents.order.OrderCommissionImpactV1;
 import com.positivity.domainevents.order.OrderCompletedV1;
 import com.positivity.domainevents.order.OrderPaymentIntegrityAlertV1;
+import com.positivity.domainevents.order.OrderReturnedV1;
+import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.order.internal.entity.PriceOverride;
+import com.positivity.order.internal.entity.RegisterSession;
+import com.positivity.order.internal.entity.ReturnOrder;
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderLine;
 import com.positivity.order.internal.entity.SourceType;
@@ -87,7 +91,7 @@ public class OrderDomainEventPublisher {
                 order.getOrderNumber(),
                 order.getLocationId(),
                 order.getWorkOrderId(),
-                null,
+                order.getSessionId(),
                 order.getCustomerId(),
                 order.getVehicleId(),
                 order.getClerkId(),
@@ -156,6 +160,79 @@ public class OrderDomainEventPublisher {
         log.debug("Queued order.line.commission-impact overrideId={}", override.getOverrideId());
     }
 
+    /**
+     * Emits {@code order.order.returned} (story F2, spec R5.3) with the return as the aggregate.
+     * pos-inventory restocks RESTOCK-condition lines (SCRAP skipped); the fact is the durable record
+     * of the completed return.
+     */
+    public void publishOrderReturned(@NonNull ReturnOrder returnOrder) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        List<OrderReturnedV1.Line> lines = returnOrder.getLines().stream()
+                .filter(Objects::nonNull)
+                .map(l -> new OrderReturnedV1.Line(
+                        l.getOriginalOrderLineId(),
+                        l.getItemSku(),
+                        l.getReturnQty(),
+                        l.getCondition().name(),
+                        l.getLineRefund(),
+                        l.getSerialNumbers() == null ? List.of() : List.copyOf(l.getSerialNumbers())))
+                .toList();
+        OrderReturnedV1 payload = new OrderReturnedV1(
+                returnOrder.getReturnOrderId(),
+                returnOrder.getOriginalOrderId(),
+                returnOrder.getOriginalOrderNumber(),
+                returnOrder.getLocationId(),
+                returnOrder.getCustomerId(),
+                returnOrder.getRefundMethod().name(),
+                returnOrder.getTotalRefund(),
+                lines,
+                // Carry the persisted completion timestamp so the fact matches the aggregate state.
+                returnOrder.getReturnedAt() != null ? returnOrder.getReturnedAt() : Instant.now(clock));
+        long aggregateVersion = returnOrder.getVersion() == null ? 0L : returnOrder.getVersion();
+        writer.publish(
+                DomainTopics.events("order"),
+                DomainEventEnvelope.of(
+                        OrderReturnedV1.EVENT_TYPE,
+                        OrderReturnedV1.SCHEMA_VERSION,
+                        returnOrder.getReturnOrderId(),
+                        aggregateVersion,
+                        SOURCE_SERVICE,
+                        null,
+                        SecurityContextHelper.getCurrentUsernameOrDefault("system"),
+                        payload,
+                        clock));
+        log.debug("Queued order.order.returned returnOrderId={}", returnOrder.getReturnOrderId());
+    }
+
+    /**
+     * Emits {@code order.session.closed} (story G2, spec R6.4) with the session as the aggregate.
+     * pos-accounting posts the over/short variance to GL (story G3).
+     */
+    public void publishRegisterSessionClosed(
+            @NonNull RegisterSession session, @NonNull RegisterSessionClosedV1 payload) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        long aggregateVersion = session.getVersion() == null ? 0L : session.getVersion();
+        writer.publish(
+                DomainTopics.events("order"),
+                DomainEventEnvelope.of(
+                        RegisterSessionClosedV1.EVENT_TYPE,
+                        RegisterSessionClosedV1.SCHEMA_VERSION,
+                        session.getSessionId(),
+                        aggregateVersion,
+                        SOURCE_SERVICE,
+                        null,
+                        SecurityContextHelper.getCurrentUsernameOrDefault("system"),
+                        payload,
+                        clock));
+        log.debug("Queued order.session.closed sessionId={}", session.getSessionId());
+    }
+
     private void publish(
             OutboxEventWriter writer, String eventType, int schemaVersion, SalesOrder order, Object payload) {
         writer.publish(
@@ -190,8 +267,8 @@ public class OrderDomainEventPublisher {
                 line.getSourceType() == null ? null : line.getSourceType().name(),
                 line.getSourceId(),
                 line.getSourceLineId(),
-                null,
-                List.of(),
+                line.getReturnable(),
+                line.getSerialNumbers() == null ? List.of() : List.copyOf(line.getSerialNumbers()),
                 // Spec R7.5: WORKORDER-sourced lines are fulfilled by the source document —
                 // pos-inventory must not double-consume them.
                 !workorderSourced);

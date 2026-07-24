@@ -159,15 +159,33 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    public static final EventTypeRegistration INVOICE_CANCEL = EventTypeRegistration.write(
+                    "INVOICE_CANCEL", "Cancel a draft invoice before any money moved (order void)")
+            .apiVersion("1")
+            .build();
+
+    public static final EventTypeRegistration INVOICE_DEPOSIT_CREATE = EventTypeRegistration.write(
+                    "INVOICE_DEPOSIT_CREATE", "Register a deposit / down-payment credit taken by a sales order")
+            .apiVersion("1")
+            .build();
+
+    public static final EventTypeRegistration INVOICE_DEPOSIT_REFUND = EventTypeRegistration.write(
+                    "INVOICE_DEPOSIT_REFUND", "Refund the remaining balance of a deposit credit")
+            .apiVersion("1")
+            .build();
+
     /**
      * Returns all event type registrations for the Invoice module.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
+                INVOICE_DEPOSIT_CREATE,
+                INVOICE_DEPOSIT_REFUND,
                 BILLING_RULES_GET,
                 BILLING_RULES_UPSERT,
                 INVOICE_CREATE,
                 INVOICE_CREATE_FROM_ORDER,
+                INVOICE_CANCEL,
                 INVOICE_GET,
                 INVOICE_SEARCH,
                 INVOICE_ITEM_SEARCH,

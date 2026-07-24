@@ -36,6 +36,14 @@ public class ExtCustomer {
     @Column
     private String displayName;
 
+    /** Owner's party type name (PERSON / COMMERCIAL); gates on-account tender (story C4). */
+    @Column(length = 32)
+    private String partyType;
+
+    /** Owner-computed work-authorization verdict (ACTIVE and, for commercial, no credit hold). */
+    @Column(nullable = false)
+    private boolean requirementsMet;
+
     /** Envelope aggregateVersion of the last applied event — stale-event guard. */
     @Column(nullable = false)
     private long aggregateVersion;

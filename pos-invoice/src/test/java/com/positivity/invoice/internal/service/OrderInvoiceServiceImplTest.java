@@ -49,13 +49,21 @@ class OrderInvoiceServiceImplTest {
     @Mock
     private InvoiceEventPublisher invoiceEventPublisher;
 
+    @Mock
+    private com.positivity.invoice.internal.repository.PaymentIntentRepository paymentIntentRepository;
+
+    @Mock
+    private com.positivity.invoice.service.DepositCreditService depositCreditService;
+
     private OrderInvoiceServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new OrderInvoiceServiceImpl(
                 invoiceRepository,
+                paymentIntentRepository,
                 invoiceEventPublisher,
+                depositCreditService,
                 Clock.fixed(Instant.parse("2026-07-23T12:00:00Z"), ZoneOffset.UTC));
         when(invoiceRepository.findByOrderId(any())).thenReturn(Optional.empty());
         when(invoiceRepository.save(any())).thenAnswer(inv -> {
@@ -65,6 +73,8 @@ class OrderInvoiceServiceImplTest {
             }
             return invoice;
         });
+        when(depositCreditService.applyAvailableCredits(any(), any(), any(), any()))
+                .thenReturn(java.math.BigDecimal.ZERO);
     }
 
     private OrderInvoiceCreationRequest request(UUID workorderId) {
@@ -85,6 +95,39 @@ class OrderInvoiceServiceImplTest {
                         .type("PART")
                         .build()))
                 .build();
+    }
+
+    @Test
+    @DisplayName("OIS-E4a: a deposit-take order registers a deposit credit against its source")
+    void depositTake_registersCredit() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        OrderInvoiceCreationRequest depositTake = request(null);
+        depositTake.setDepositSourceType("WORKORDER");
+        depositTake.setDepositSourceId(workorderId);
+        depositTake.setDepositAmount(new BigDecimal("108.00"));
+
+        service.createInvoiceForOrder(depositTake);
+
+        org.mockito.ArgumentCaptor<com.positivity.invoice.service.model.CreateDepositCommand> cmd =
+                org.mockito.ArgumentCaptor.forClass(com.positivity.invoice.service.model.CreateDepositCommand.class);
+        verify(depositCreditService).createDeposit(cmd.capture());
+        assertThat(cmd.getValue().orderId()).isEqualTo(ORDER_ID);
+        assertThat(cmd.getValue().sourceType()).isEqualTo("WORKORDER");
+        assertThat(cmd.getValue().sourceId()).isEqualTo(workorderId);
+        assertThat(cmd.getValue().amount()).isEqualByComparingTo("108.00");
+    }
+
+    @Test
+    @DisplayName("OIS-E4b: a workorder settlement applies available deposit credits and reports the amount")
+    void settlement_appliesDepositCredits() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        when(depositCreditService.applyAvailableCredits(any(), any(), any(), any()))
+                .thenReturn(new BigDecimal("50.00"));
+
+        OrderInvoiceResponse response = service.createInvoiceForOrder(request(workorderId));
+
+        assertThat(response.getDepositApplied()).isEqualByComparingTo("50.00");
+        verify(depositCreditService).applyAvailableCredits(any(), any(), any(), any());
     }
 
     @Test
@@ -163,6 +206,43 @@ class OrderInvoiceServiceImplTest {
         OrderInvoiceCreationRequest negative = request(null);
         negative.setTotalAmount(new BigDecimal("-1.00"));
         assertThatThrownBy(() -> service.createInvoiceForOrder(negative)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("OIS-007: cancel — DRAFT with no live payments → CANCELLED; idempotent replay")
+    void cancelInvoice_draftNoPayments_cancels() {
+        Invoice invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setStatus(InvoiceStatus.DRAFT);
+        invoice.setInvoiceNumber("INV-1");
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(paymentIntentRepository.findByInvoice_Id(invoice.getId())).thenReturn(List.of());
+
+        OrderInvoiceResponse cancelled = service.cancelInvoice(invoice.getId());
+
+        assertThat(cancelled.getStatus()).isEqualTo(InvoiceStatus.CANCELLED.name());
+        assertThat(cancelled.isExisting()).isFalse();
+        verify(invoiceEventPublisher).publishInvoiceUpdated(any(Invoice.class));
+
+        OrderInvoiceResponse replay = service.cancelInvoice(invoice.getId());
+        assertThat(replay.isExisting()).isTrue();
+    }
+
+    @Test
+    @DisplayName("OIS-008: cancel with a captured payment → 409")
+    void cancelInvoice_withCapturedPayment_rejected() {
+        Invoice invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setStatus(InvoiceStatus.DRAFT);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        com.positivity.invoice.internal.entity.PaymentIntent intent =
+                new com.positivity.invoice.internal.entity.PaymentIntent();
+        intent.setStatus(com.positivity.invoice.internal.enums.PaymentIntentStatus.CAPTURED);
+        when(paymentIntentRepository.findByInvoice_Id(invoice.getId())).thenReturn(List.of(intent));
+
+        assertThatThrownBy(() -> service.cancelInvoice(invoice.getId()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("payments");
     }
 
     @Test

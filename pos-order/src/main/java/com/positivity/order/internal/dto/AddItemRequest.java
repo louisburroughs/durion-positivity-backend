@@ -52,4 +52,11 @@ public class AddItemRequest {
             example = "Price-matched to invoice #123",
             requiredMode = NOT_REQUIRED)
     private String internalNote;
+
+    @Schema(
+            description = "Captured lot/serial numbers for tracked products (count must not exceed quantity;"
+                    + " SERIAL-tracked products require one per unit at checkout, LOT-tracked at least one)",
+            example = "[\"SN-0001\", \"SN-0002\"]",
+            requiredMode = NOT_REQUIRED)
+    private java.util.List<String> serialNumbers;
 }

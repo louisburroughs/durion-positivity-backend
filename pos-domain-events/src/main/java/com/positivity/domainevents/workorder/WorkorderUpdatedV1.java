@@ -60,6 +60,9 @@ public record WorkorderUpdatedV1(
      * @param unitPrice snapshotted unit price (additive, #924)
      * @param lineTotal snapshotted line total = quantity × unitPrice (additive, #924)
      * @param photoEvidenceUrl photo evidence captured on the part line (additive, #924)
+     * @param declined customer declined the line (additive, order parity story E1 #1077)
+     * @param returnable explicit settled-line returnability (resolved order-spec Q6; additive,
+     *     story E1) — never inferred by consumers, null means "not marked"
      */
     public record PartLine(
             @NonNull UUID workorderLineId,
@@ -68,11 +71,34 @@ public record WorkorderUpdatedV1(
             @Nullable BigDecimal quantity,
             @Nullable BigDecimal unitPrice,
             @Nullable BigDecimal lineTotal,
-            @Nullable String photoEvidenceUrl) {
+            @Nullable String photoEvidenceUrl,
+            @Nullable Boolean declined,
+            @Nullable Boolean returnable) {
 
         /** Pre-#924 arity (product reference + quantity only). */
         public PartLine(@NonNull UUID workorderLineId, @Nullable UUID productEntityId, @Nullable BigDecimal quantity) {
-            this(workorderLineId, productEntityId, null, quantity, null, null, null);
+            this(workorderLineId, productEntityId, null, quantity, null, null, null, null, null);
+        }
+
+        /** Pre-#1077 arity (no declined/returnable). */
+        public PartLine(
+                @NonNull UUID workorderLineId,
+                @Nullable UUID productEntityId,
+                @Nullable String description,
+                @Nullable BigDecimal quantity,
+                @Nullable BigDecimal unitPrice,
+                @Nullable BigDecimal lineTotal,
+                @Nullable String photoEvidenceUrl) {
+            this(
+                    workorderLineId,
+                    productEntityId,
+                    description,
+                    quantity,
+                    unitPrice,
+                    lineTotal,
+                    photoEvidenceUrl,
+                    null,
+                    null);
         }
     }
 
@@ -86,6 +112,7 @@ public record WorkorderUpdatedV1(
      * @param unitPrice snapshotted unit price (hourly rate for labor)
      * @param lineTotal snapshotted line total = quantity × unitPrice
      * @param photoEvidenceUrl photo evidence captured on the service line
+     * @param declined customer declined the line (additive, order parity story E1 #1077)
      */
     public record ServiceLine(
             @NonNull UUID workorderLineId,
@@ -93,7 +120,20 @@ public record WorkorderUpdatedV1(
             @Nullable BigDecimal quantity,
             @Nullable BigDecimal unitPrice,
             @Nullable BigDecimal lineTotal,
-            @Nullable String photoEvidenceUrl) {}
+            @Nullable String photoEvidenceUrl,
+            @Nullable Boolean declined) {
+
+        /** Pre-#1077 arity (no declined). */
+        public ServiceLine(
+                @NonNull UUID workorderLineId,
+                @Nullable String description,
+                @Nullable BigDecimal quantity,
+                @Nullable BigDecimal unitPrice,
+                @Nullable BigDecimal lineTotal,
+                @Nullable String photoEvidenceUrl) {
+            this(workorderLineId, description, quantity, unitPrice, lineTotal, photoEvidenceUrl, null);
+        }
+    }
 
     public WorkorderUpdatedV1 {
         if (workorderId == null) {

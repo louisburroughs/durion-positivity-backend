@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 32")
+    @DisplayName("CATALOG_VERSION is 35")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(32);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(35);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 402")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 401")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1231,10 +1231,23 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(399)).isEqualTo("PERM_inventory:transfer:receive");
         assertThat(GatewayPermissionCatalog.authorityForBit(400)).isEqualTo("PERM_inventory:transfer:short_close");
         assertThat(GatewayPermissionCatalog.authorityForBit(401)).isEqualTo("PERM_inventory:transfer:view");
-        // catalog v32 (#1047/inventory wave-5): lot-management authority appended (bit 402)
-        assertThat(GatewayPermissionCatalog.authorityForBit(402)).isEqualTo("PERM_inventory:lot:manage");
+        // catalog v32 (odoo-parity waves 2-4, #1092): order tender/lifecycle authorities (bits 402-406)
+        assertThat(GatewayPermissionCatalog.authorityForBit(402)).isEqualTo("PERM_order:order:discount");
+        assertThat(GatewayPermissionCatalog.authorityForBit(403)).isEqualTo("PERM_order:order:quote");
+        assertThat(GatewayPermissionCatalog.authorityForBit(404)).isEqualTo("PERM_order:order:checkout");
+        assertThat(GatewayPermissionCatalog.authorityForBit(405)).isEqualTo("PERM_order:order:void");
+        assertThat(GatewayPermissionCatalog.authorityForBit(406)).isEqualTo("PERM_order:order:charge_on_account");
+        assertThat(GatewayPermissionCatalog.authorityForBit(407)).isEqualTo("PERM_order:session:open");
+        assertThat(GatewayPermissionCatalog.authorityForBit(408)).isEqualTo("PERM_order:session:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(409)).isEqualTo("PERM_order:session:cash_movement");
+        assertThat(GatewayPermissionCatalog.authorityForBit(410)).isEqualTo("PERM_order:session:close");
+        assertThat(GatewayPermissionCatalog.authorityForBit(411)).isEqualTo("PERM_order:session:approve_variance");
+        assertThat(GatewayPermissionCatalog.authorityForBit(412)).isEqualTo("PERM_order:return:create");
+        assertThat(GatewayPermissionCatalog.authorityForBit(413)).isEqualTo("PERM_order:return:approve");
+        assertThat(GatewayPermissionCatalog.authorityForBit(414)).isEqualTo("PERM_order:return:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(415)).isEqualTo("PERM_inventory:lot:manage");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(403)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(416)).isNull();
     }
 
     @Test

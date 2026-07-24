@@ -40,14 +40,17 @@ public class LedgerCostingService {
 
     private final CostingMethodResolver methodResolver;
     private final SkuCostStateRepository costStateRepository;
+    private final SkuCostStateInitializer costStateInitializer;
     private final Map<CostingMethod, CostingStrategy> strategies;
 
     public LedgerCostingService(
             CostingMethodResolver methodResolver,
             SkuCostStateRepository costStateRepository,
+            SkuCostStateInitializer costStateInitializer,
             List<CostingStrategy> costingStrategies) {
         this.methodResolver = methodResolver;
         this.costStateRepository = costStateRepository;
+        this.costStateInitializer = costStateInitializer;
         this.strategies = new EnumMap<>(CostingMethod.class);
         for (CostingStrategy strategy : costingStrategies) {
             this.strategies.put(strategy.method(), strategy);
@@ -94,14 +97,18 @@ public class LedgerCostingService {
     }
 
     private SkuCostState loadOrSeedState(String stockItemId) {
-        return costStateRepository
-                .findByStockItemId(stockItemId)
-                .orElseGet(() -> SkuCostState.builder()
-                        .stockItemId(stockItemId)
-                        .avgCost(null)
-                        .onHandQty(0L)
-                        .standardCost(null)
-                        .build());
+        return costStateRepository.findByStockItemId(stockItemId).orElseGet(() -> {
+            // Establish the master row in a REQUIRES_NEW transaction so a concurrent first
+            // posting of the same new SKU loses the stock_item_id unique-index race in the
+            // inner transaction only — this posting then re-reads the winner's committed row
+            // as a managed entity to advance, instead of both seeding and one poisoning the
+            // whole ledger append on flush.
+            costStateInitializer.createRowIfAbsent(stockItemId);
+            return costStateRepository
+                    .findByStockItemId(stockItemId)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "sku_cost_state row missing after initialization for " + stockItemId));
+        });
     }
 
     private void applyState(SkuCostState state, CostingStrategy.CostState next) {

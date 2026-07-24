@@ -79,6 +79,24 @@ class SalesOrderServiceImplTest {
     private com.positivity.order.internal.client.InvoicingPort invoicingPort;
 
     @Mock
+    private com.positivity.order.internal.repository.ExtProductRepository extProductRepository;
+
+    @Mock
+    private com.positivity.order.internal.repository.ExtCustomerRepository extCustomerRepository;
+
+    @Mock
+    private com.positivity.order.internal.repository.ExtBillingRulesRepository extBillingRulesRepository;
+
+    @Mock
+    private com.positivity.order.internal.repository.OrderPaymentRecordRepository orderPaymentRecordRepository;
+
+    @Mock
+    private com.positivity.order.internal.repository.RegisterSessionRepository registerSessionRepository;
+
+    @Mock
+    private com.positivity.order.internal.config.OrderDomainEventPublisher orderDomainEventPublisher;
+
+    @Mock
     private OrderNumberService orderNumberService;
 
     @Mock
@@ -106,6 +124,12 @@ class SalesOrderServiceImplTest {
                 sourceDocumentPort,
                 customerPort,
                 invoicingPort,
+                extProductRepository,
+                extCustomerRepository,
+                extBillingRulesRepository,
+                orderPaymentRecordRepository,
+                registerSessionRepository,
+                orderDomainEventPublisher,
                 new OrderStateMachine(orderStatusHistoryRepository, java.time.Clock.systemUTC()),
                 orderNumberService,
                 new com.positivity.order.internal.service.OrderTotalsCalculator(),
@@ -117,7 +141,7 @@ class SalesOrderServiceImplTest {
     private SalesOrderSummary createCart(String clerkId, String terminalId, String customerId, String vehicleId) {
         return salesOrderService
                 .createCart(new CreateCartCommand(
-                        clerkId, terminalId, customerId, vehicleId, TEST_LOCATION, null, null, null))
+                        clerkId, terminalId, customerId, vehicleId, TEST_LOCATION, null, null, null, null, null))
                 .summary();
     }
 
@@ -129,6 +153,27 @@ class SalesOrderServiceImplTest {
      * Scenario 1a: Happy-path cart creation produces a DRAFT order with zero
      * subtotal.
      */
+    @Test
+    void createCart_whenTerminalSessionClosing_thenRejected() {
+        // Copilot #1093: a terminal being counted at close is frozen — no new orders.
+        when(registerSessionRepository.findFirstByTerminalIdAndStatus(
+                        "terminal-001", com.positivity.order.internal.entity.RegisterSessionStatus.CLOSING))
+                .thenReturn(java.util.Optional.of(com.positivity.order.internal.entity.RegisterSession.builder()
+                        .sessionId(UUID.randomUUID())
+                        .build()));
+
+        assertThatThrownBy(() -> createCart("clerk-001", "terminal-001", null, null))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void createCart_whenDepositSourcePairIncomplete_thenRejected() {
+        // Copilot #1093: deposit provenance is all-or-nothing.
+        assertThatThrownBy(() -> salesOrderService.createCart(new CreateCartCommand(
+                        "clerk-001", "terminal-001", null, null, TEST_LOCATION, null, null, null, "WORKORDER", null)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test
     void createCart_whenCalledWithClerkAndTerminal_thenReturnsOrderWithDraftStatus() {
         // given
@@ -567,7 +612,7 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(mergedOrder);
         when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, estimateId))
                 .thenReturn(List.of(
-                        new SourceDocumentLine("TIRE-001", "Tire", 3, new BigDecimal("100.00"), "EST-LINE-001")));
+                        new SourceDocumentLine("TIRE-001", "Tire", 3, new BigDecimal("100.00"), "EST-LINE-001", null)));
 
         // when
         SalesOrderSummary result = salesOrderService.linkSource(orderId, "ESTIMATE", estimateId);
@@ -618,8 +663,8 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(mergedOrder);
         when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, estimateId))
-                .thenReturn(
-                        List.of(new SourceDocumentLine("OIL-001", "Oil", 1, new BigDecimal("25.00"), "EST-LINE-002")));
+                .thenReturn(List.of(
+                        new SourceDocumentLine("OIL-001", "Oil", 1, new BigDecimal("25.00"), "EST-LINE-002", null)));
 
         // when
         SalesOrderSummary result = salesOrderService.linkSource(orderId, "ESTIMATE", estimateId);
@@ -672,7 +717,7 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(mergedOrder);
         when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, estimateId))
                 .thenReturn(List.of(
-                        new SourceDocumentLine("TIRE-001", "Tire", 3, new BigDecimal("100.00"), estimateLineId)));
+                        new SourceDocumentLine("TIRE-001", "Tire", 3, new BigDecimal("100.00"), estimateLineId, null)));
 
         // when
         SalesOrderSummary result = salesOrderService.linkSource(orderId, "ESTIMATE", estimateId);
@@ -1070,8 +1115,8 @@ class SalesOrderServiceImplTest {
         // source document returns the same line that is already linked → should be
         // deduped
         when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, estimateId))
-                .thenReturn(List.of(
-                        new SourceDocumentLine("TIRE-001", "Tire", 1, new BigDecimal("100.00"), existingSourceLineId)));
+                .thenReturn(List.of(new SourceDocumentLine(
+                        "TIRE-001", "Tire", 1, new BigDecimal("100.00"), existingSourceLineId, null)));
 
         // when
         SalesOrderSummary result = salesOrderService.linkSource(orderId, "ESTIMATE", estimateId);

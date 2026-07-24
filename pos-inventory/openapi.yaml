@@ -8173,6 +8173,7 @@ components:
           type: string
           description: Reason for the status change (mandatory; recorded for traceability)
           example: Supplier recall notice R-2026-014
+          minLength: 1
       required:
       - reason
       - status

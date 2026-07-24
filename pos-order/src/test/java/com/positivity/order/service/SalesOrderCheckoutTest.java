@@ -82,6 +82,24 @@ class SalesOrderCheckoutTest {
     private InvoicingPort invoicingPort;
 
     @Mock
+    private com.positivity.order.internal.repository.ExtProductRepository extProductRepository;
+
+    @Mock
+    private com.positivity.order.internal.repository.ExtCustomerRepository extCustomerRepository;
+
+    @Mock
+    private com.positivity.order.internal.repository.ExtBillingRulesRepository extBillingRulesRepository;
+
+    @Mock
+    private com.positivity.order.internal.repository.OrderPaymentRecordRepository orderPaymentRecordRepository;
+
+    @Mock
+    private com.positivity.order.internal.repository.RegisterSessionRepository registerSessionRepository;
+
+    @Mock
+    private com.positivity.order.internal.config.OrderDomainEventPublisher orderDomainEventPublisher;
+
+    @Mock
     private com.positivity.order.internal.service.OrderNumberService orderNumberService;
 
     @Mock
@@ -102,12 +120,21 @@ class SalesOrderCheckoutTest {
                 sourceDocumentPort,
                 customerPort,
                 invoicingPort,
+                extProductRepository,
+                extCustomerRepository,
+                extBillingRulesRepository,
+                orderPaymentRecordRepository,
+                registerSessionRepository,
+                orderDomainEventPublisher,
                 new OrderStateMachine(orderStatusHistoryRepository, java.time.Clock.systemUTC()),
                 orderNumberService,
                 new OrderTotalsCalculator(),
                 orderTaxService,
                 java.time.Clock.systemUTC());
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(extProductRepository.findFirstBySkuIgnoreCaseAndActiveTrue(anyString()))
+                .thenReturn(java.util.Optional.empty());
+        when(orderPaymentRecordRepository.findByOrderId(any())).thenReturn(java.util.List.of());
         when(salesOrderRepository.findByCheckoutIdempotencyKey(anyString())).thenReturn(Optional.empty());
         when(inventoryPort.checkAvailability(anyString(), anyInt())).thenReturn(new InventoryResult(true, 999));
         when(pricingPort.quoteForSku(anyString(), anyInt(), any(), any()))

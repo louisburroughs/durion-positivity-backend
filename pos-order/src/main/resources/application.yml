@@ -78,6 +78,9 @@ pos:
       # Settlement handshake (parity story C3): pos-invoice per-payment settlement facts
       payment-events-topic: ${POS_ORDER_PAYMENT_EVENTS_TOPIC:payment.events.v1}
       payment-events-consumer-group: ${POS_ORDER_PAYMENT_EVENTS_CONSUMER_GROUP:pos-order-payment-events}
+      # Source-document replicas (parity story E1): estimate/workorder snapshots
+      workorder-events-topic: ${POS_ORDER_WORKORDER_EVENTS_TOPIC:workorder.events.v1}
+      workorder-events-consumer-group: ${POS_ORDER_WORKORDER_EVENTS_CONSUMER_GROUP:pos-order-workorder-events}
     pricing:
       # PriceQuoteRequest requires a customerTierId; served from config until a customer→tier
       # mapping feed exists (the ext_customer replica carries only the tier name). Story B1.
@@ -85,6 +88,10 @@ pos:
     quote:
       # Counter-quote validity horizon (ISO-8601 duration; parity story A3)
       validity: ${POS_ORDER_QUOTE_VALIDITY:P7D}
+    session:
+      # Register session over/short (counted − theoretical cash) beyond this absolute amount at
+      # close requires the order:session:approve_variance authority (parity story G2, spec R6.4).
+      authorized-difference-limit: ${POS_ORDER_SESSION_AUTHORIZED_DIFFERENCE_LIMIT:5.00}
   price:
     base-url: ${POS_PRICE_BASE_URL:http://pos-price:8080}
   tax:

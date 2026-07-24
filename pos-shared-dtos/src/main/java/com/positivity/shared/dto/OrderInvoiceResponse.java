@@ -42,6 +42,12 @@ public class OrderInvoiceResponse {
     private BigDecimal totalAmount;
 
     @Schema(
+            description = "Deposit / down-payment credit applied to this invoice at creation "
+                    + "(odoo-parity story E4); zero when no deposit was held against the source.",
+            example = "50.00")
+    private BigDecimal depositApplied;
+
+    @Schema(
             description = "True when an existing invoice was returned (orderId replay or workorder dedupe).",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private boolean existing;

@@ -492,3 +492,61 @@ ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system
 INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
 VALUES ('5eed0acc-0000-4000-8000-00000000d205'::uuid, 'ACCOUNTING', 'INVENTORY_SHRINKAGE_INVENTORY_ASSET', '5eed0acc-0000-4000-8000-00000000d201'::uuid, '5eed0acc-0000-4000-8000-00000000d203'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '1300'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
 ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+
+-- ============================================================================
+-- Odoo-parity G3 (Issue #1083): register-session drawer over/short GL posting.
+-- On session close, the counted drawer is reconciled against theoretical cash
+-- and any variance posts a balanced JE:
+--   shortage (counted < theoretical): Dr 6115 Cash Short / Cr 1095 Register Cash Clearing
+--   overage  (counted > theoretical): Dr 1095 Register Cash Clearing / Cr 4930 Cash Over
+-- Accounts resolve through the REGISTER_OVER_SHORT category's mapping keys
+-- (CASH_SHORT / CASH_OVER / CASH_CLEARING) — never hardcoded. Per-order revenue
+-- postings remain authoritative; this carries only the drawer variance (spec §14).
+-- gl_mapping.gl_account_id is resolved by account_code SELECT (mirrors the F2/D2
+-- pattern) so the FK binds to whichever id won the ON CONFLICT (account_code) upsert.
+-- ============================================================================
+
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-000000006115'::uuid, '6115', 'Cash Short', 'EXPENSE', 'OPERATING_EXPENSE', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (account_code) DO UPDATE SET
+    account_name = EXCLUDED.account_name, account_type = EXCLUDED.account_type, account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable, modified_at = NOW(), modified_by = 'seed-generator';
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-000000004930'::uuid, '4930', 'Cash Over', 'REVENUE', 'OTHER', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (account_code) DO UPDATE SET
+    account_name = EXCLUDED.account_name, account_type = EXCLUDED.account_type, account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable, modified_at = NOW(), modified_by = 'seed-generator';
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-000000001095'::uuid, '1095', 'Register Cash Clearing', 'ASSET', 'CURRENT_ASSET', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (account_code) DO UPDATE SET
+    account_name = EXCLUDED.account_name, account_type = EXCLUDED.account_type, account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable, modified_at = NOW(), modified_by = 'seed-generator';
+
+-- Posting category: REGISTER_OVER_SHORT.
+INSERT INTO posting_category (posting_category_id, category_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d301'::uuid, 'REGISTER_OVER_SHORT', 'Register-session drawer over/short variance (odoo-parity G3)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (posting_category_id) DO UPDATE SET
+    category_name = EXCLUDED.category_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active,
+    modified_at = NOW(), modified_by = 'seed-generator';
+
+-- Mapping keys (resolved by name at posting time).
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d302'::uuid, '5eed0acc-0000-4000-8000-00000000d301'::uuid, 'CASH_SHORT', 'Cash shortage expense (debit on shortage)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d303'::uuid, '5eed0acc-0000-4000-8000-00000000d301'::uuid, 'CASH_OVER', 'Cash overage income (credit on overage)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d304'::uuid, '5eed0acc-0000-4000-8000-00000000d301'::uuid, 'CASH_CLEARING', 'Register cash clearing counter (the drawer)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+
+-- GL mappings (fixed effective_start_date for idempotent re-runs).
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d311'::uuid, 'ACCOUNTING', 'REGISTER_OVER_SHORT_CASH_SHORT', '5eed0acc-0000-4000-8000-00000000d301'::uuid, '5eed0acc-0000-4000-8000-00000000d302'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '6115'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d312'::uuid, 'ACCOUNTING', 'REGISTER_OVER_SHORT_CASH_OVER', '5eed0acc-0000-4000-8000-00000000d301'::uuid, '5eed0acc-0000-4000-8000-00000000d303'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '4930'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d313'::uuid, 'ACCOUNTING', 'REGISTER_OVER_SHORT_CASH_CLEARING', '5eed0acc-0000-4000-8000-00000000d301'::uuid, '5eed0acc-0000-4000-8000-00000000d304'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '1095'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';

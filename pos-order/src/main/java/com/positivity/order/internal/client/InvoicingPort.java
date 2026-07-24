@@ -23,4 +23,11 @@ public interface InvoicingPort {
     @NonNull
     PaymentReversalResult reversePayment(
             @NonNull UUID invoiceId, @NonNull UUID paymentIntentId, @NonNull ReversePaymentCommand command);
+
+    /**
+     * Cancel the DRAFT invoice fronting an order being voided (parity story C5, spec R2.4) —
+     * pos-invoice {@code POST /v1/invoices/{invoiceId}/cancel}. Must fail loudly: a void without
+     * the invoice cancelled would leave a live financial document behind.
+     */
+    void cancelInvoice(@NonNull UUID invoiceId);
 }
