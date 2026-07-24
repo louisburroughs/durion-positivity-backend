@@ -19,21 +19,32 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 /**
- * ADR-0044 domain-wall check: {@code internal.client} (and client-config) sources must not target
- * other <em>domain</em> modules — synchronous REST is allowed only toward the utility whitelist.
+ * ADR-0044 domain-wall check: {@code internal.client} (and client-config)
+ * sources must not target
+ * other <em>domain</em> modules — synchronous REST is allowed only toward the
+ * utility whitelist.
  *
- * <p>Detection is source-based (RestClient base URLs, {@code *.service-id} / {@code *.base-url}
- * config keys, {@code lb://} URIs) because the targets live in string literals and {@code @Value}
+ * <p>
+ * Detection is source-based (RestClient base URLs, {@code *.service-id} /
+ * {@code *.base-url}
+ * config keys, {@code lb://} URIs) because the targets live in string literals
+ * and {@code @Value}
  * defaults rather than in the type graph.
  *
- * <p><strong>Build-failing since Phase 5.6 (#902):</strong> the ADR-0044 migration is complete
- * and any new synchronous domain→domain client fails the build. The utility whitelist below is
- * the single source of truth; changing it — or adding a scoped per-module exception — requires
+ * <p>
+ * <strong>Build-failing since Phase 5.6 (#902):</strong> the ADR-0044 migration
+ * is complete
+ * and any new synchronous domain→domain client fails the build. The utility
+ * whitelist below is
+ * the single source of truth; changing it — or adding a scoped per-module
+ * exception — requires
  * amending ADR-0044.
  */
 class DomainWallsTest {
 
-    /** ADR-0044 §1 utility modules (plus this repo's module-name aliases for them). */
+    /**
+     * ADR-0044 §1 utility modules (plus this repo's module-name aliases for them).
+     */
     private static final Set<String> UTILITY_MODULES = Set.of(
             "pos-api-gateway",
             "pos-security-service",
@@ -49,36 +60,55 @@ class DomainWallsTest {
             "pos-document-helper");
 
     /**
-     * Scoped per-consumer exceptions to ADR-0044 R1: origin module → the exact set of domain
-     * modules its {@code internal.client} sources may target synchronously. NOT a widening of the
-     * utility whitelist — every entry requires an ADR-0044 amendment, and any other module (or any
+     * Scoped per-consumer exceptions to ADR-0044 R1: origin module → the exact set
+     * of domain
+     * modules its {@code internal.client} sources may target synchronously. NOT a
+     * widening of the
+     * utility whitelist — every entry requires an ADR-0044 amendment, and any other
+     * module (or any
      * other target) still fails.
      *
-     * <p>pos-warranty: warranty v2 (#924) migrated its candidate-line/eligibility/vehicle-snapshot
-     * reads to event-fed {@code ext_*} replicas (ext_vehicle, ext_workorder, ext_invoice,
-     * ext_catalog) and pos-customer's dead client was deleted. The sole remaining synchronous target
-     * is pos-invoice: settlement adjustment/refund writes plus their reconciliation reads stay
-     * synchronous permanently per the <b>ADR-0044 amendment 2026-07-22</b> ("Pos-warranty settlement
-     * remains synchronous against pos-invoice") — a money-moving counter-flow that must fail loudly
-     * in the request path, with reconciliation reading authoritative post-write state. Widening any
+     * <p>
+     * pos-warranty: warranty v2 (#924) migrated its
+     * candidate-line/eligibility/vehicle-snapshot
+     * reads to event-fed {@code ext_*} replicas (ext_vehicle, ext_workorder,
+     * ext_invoice,
+     * ext_catalog) and pos-customer's dead client was deleted. The sole remaining
+     * synchronous target
+     * is pos-invoice: settlement adjustment/refund writes plus their reconciliation
+     * reads stay
+     * synchronous permanently per the <b>ADR-0044 amendment 2026-07-22</b>
+     * ("Pos-warranty settlement
+     * remains synchronous against pos-invoice") — a money-moving counter-flow that
+     * must fail loudly
+     * in the request path, with reconciliation reading authoritative post-write
+     * state. Widening any
      * edge requires a further ADR-0044 amendment.
      *
-     * <p>pos-order: the counter-sale checkout handshake (order parity stories C1–C3, #1071/#1072)
-     * creates the fronting invoice at checkout and reverses settled payments in the cancellation
-     * saga — the same money-moving counter-flow class, permitted per the <b>ADR-0044 amendment
-     * 2026-07-23</b> ("Pos-order checkout/cancellation is synchronous against pos-invoice").
+     * <p>
+     * pos-order: the counter-sale checkout handshake (order parity stories C1–C3,
+     * #1071/#1072)
+     * creates the fronting invoice at checkout and reverses settled payments in the
+     * cancellation
+     * saga — the same money-moving counter-flow class, permitted per the
+     * <b>ADR-0044 amendment
+     * 2026-07-23</b> ("Pos-order checkout/cancellation is synchronous against
+     * pos-invoice").
      * Settlement signals stay asynchronous on {@code payment.events.v1}.
      */
     private static final Map<String, Set<String>> SCOPED_MODULE_EXCEPTIONS = Map.of(
             "pos-warranty", Set.of("pos-invoice"),
             "pos-order", Set.of("pos-invoice"));
 
-    /** Startup-infra classes exempt per ADR-0044 R2 (registration calls, best-effort at boot). */
-    private static final Pattern EXEMPT_FILES =
-            Pattern.compile(".*(EventTypeInitializer|PermissionRegistration|PermissionInitializer|PermissionRegistry"
+    /**
+     * Startup-infra classes exempt per ADR-0044 R2 (registration calls, best-effort
+     * at boot).
+     */
+    private static final Pattern EXEMPT_FILES = Pattern
+            .compile(".*(EventTypeInitializer|PermissionRegistration|PermissionInitializer|PermissionRegistry"
                     + "|TemplateInitializer|PermissionVersionStartupCheck)\\.java$");
 
-    private static final Pattern POS_SERVICE_TOKEN = Pattern.compile("\"[^\"]*?(pos-[a-z][a-z0-9-]*+)[^\"]*?\"");
+    private static final Pattern POS_SERVICE_TOKEN = Pattern.compile("pos-[a-z][a-z0-9-]*");
     private static final Pattern SERVICE_ID_DEFAULT = Pattern.compile("\\$\\{[a-z0-9.-]*service-id:([a-z][a-z0-9-]*)}");
     private static final Pattern LOAD_BALANCED_URI = Pattern.compile("lb://([A-Za-z0-9-]+)");
 
@@ -126,7 +156,10 @@ class DomainWallsTest {
                 violations.isEmpty(), "ADR-0044: internal.client sources may only target utility modules\n" + report);
     }
 
-    /** internal/client sources plus internal/config client wiring (base URLs often live there). */
+    /**
+     * internal/client sources plus internal/config client wiring (base URLs often
+     * live there).
+     */
     private static List<Path> clientSources(Path module) throws IOException {
         Path srcRoot = module.resolve("src/main/java");
         if (!Files.isDirectory(srcRoot)) {
@@ -147,7 +180,10 @@ class DomainWallsTest {
         return sources;
     }
 
-    /** Extract pos-* service references from code lines (comments stripped to reduce noise). */
+    /**
+     * Extract pos-* service references from code lines (comments stripped to reduce
+     * noise).
+     */
     private static Set<String> referencedServices(Path source) throws IOException {
         Set<String> targets = new LinkedHashSet<>();
         for (String line : Files.readAllLines(source)) {
@@ -157,7 +193,7 @@ class DomainWallsTest {
             }
             Matcher pos = POS_SERVICE_TOKEN.matcher(code);
             while (pos.find()) {
-                targets.add(pos.group(1));
+                targets.add(pos.group());
             }
             Matcher serviceId = SERVICE_ID_DEFAULT.matcher(code);
             while (serviceId.find()) {

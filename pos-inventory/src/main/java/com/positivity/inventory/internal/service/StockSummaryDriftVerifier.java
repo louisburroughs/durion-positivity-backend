@@ -29,9 +29,8 @@ public class StockSummaryDriftVerifier {
         this.driftCounter = meterRegistry.counter("inventory.stock_summary.drift.total");
     }
 
-    @Scheduled(
-            fixedDelayString = "${pos.inventory.stock-summary.verify-interval-ms:3600000}",
-            initialDelayString = "${pos.inventory.stock-summary.verify-initial-delay-ms:600000}")
+    @Scheduled(fixedDelayString = "${pos.inventory.stock-summary.verify-interval-ms:3600000}", initialDelayString = "${pos.inventory.stock-summary.verify-initial-delay-ms:600000}")
+    @Transactional(readOnly = true)
     public void verifyScheduled() {
         try {
             verify();
@@ -41,24 +40,26 @@ public class StockSummaryDriftVerifier {
         }
     }
 
-    /** Cap on per-key WARN lines per pass; the total always lands in the summary ERROR + counter. */
+    /**
+     * Cap on per-key WARN lines per pass; the total always lands in the summary
+     * ERROR + counter.
+     */
     private static final int MAX_DETAILED_DRIFT_LOGS = 50;
 
     /**
      * Runs one full comparison pass and returns the number of drifted keys.
      *
-     * <p>The diff is computed set-based in the database
+     * <p>
+     * The diff is computed set-based in the database
      * ({@link InventoryStockSummaryRepository#findDriftRows}) and returns only
      * mismatching keys, so this job holds no table-sized state in application
      * memory regardless of catalog × location cardinality.
      */
-    @Transactional(readOnly = true)
     public int verify() {
         List<String> onHandTypes = InventoryLedgerEventType.onHandAffectingTypes().stream()
                 .map(Enum::name)
                 .toList();
-        List<String> summaryTypes =
-                StockSummaryEventSets.SUMMARY_TYPES.stream().map(Enum::name).toList();
+        List<String> summaryTypes = StockSummaryEventSets.SUMMARY_TYPES.stream().map(Enum::name).toList();
 
         List<InventoryStockSummaryRepository.DriftRow> drifted = summaryRepository.findDriftRows(
                 onHandTypes,

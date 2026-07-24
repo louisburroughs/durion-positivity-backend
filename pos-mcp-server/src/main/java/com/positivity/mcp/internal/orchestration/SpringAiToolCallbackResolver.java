@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -23,9 +24,11 @@ import org.springframework.ai.tool.metadata.ToolMetadata;
 final class SpringAiToolCallbackResolver {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
+    };
 
-    private SpringAiToolCallbackResolver() {}
+    private SpringAiToolCallbackResolver() {
+    }
 
     static @NonNull List<ToolCallback> fromObjects(@NonNull List<Object> toolObjects) {
         List<ToolCallback> callbacks = new ArrayList<>();
@@ -65,7 +68,7 @@ final class SpringAiToolCallbackResolver {
             this.toolDefinition = DefaultToolDefinition.builder()
                     .name(method.getName())
                     .description(description)
-                .inputSchema(buildInputSchema(parameterBindings, method.getName()))
+                    .inputSchema(buildInputSchema(parameterBindings, method.getName()))
                     .build();
         }
 
@@ -99,13 +102,13 @@ final class SpringAiToolCallbackResolver {
             Object[] resolved = new Object[parameters.length];
             for (ParameterBinding binding : bindings) {
                 Object rawValue = firstPresent(arguments, binding.candidateNames());
-                resolved[binding.index()] =
-                        rawValue == null ? null : OBJECT_MAPPER.convertValue(rawValue, binding.parameterType());
+                resolved[binding.index()] = rawValue == null ? null
+                        : OBJECT_MAPPER.convertValue(rawValue, binding.parameterType());
             }
             return resolved;
         }
 
-        private static @NonNull Object firstPresent(
+        private static @Nullable Object firstPresent(
                 @NonNull Map<String, Object> arguments, @NonNull List<String> candidateNames) {
             for (String candidateName : candidateNames) {
                 if (arguments.containsKey(candidateName)) {
