@@ -37,8 +37,10 @@ import org.springframework.stereotype.Component;
  * <p><strong>Leakage prevention:</strong> {@link #resolveToolCallbacks(String)} is invoked per request
  * and reads the current caller from {@link RequestScopedUserContext}.
  * Permissions are never captured at agent-build time, so a cached agent cannot expose a prior,
- * higher-permission caller's tools. If no request context is present (e.g. the streaming/Reactor
- * path, whose context propagation is not yet wired), it returns <em>no</em> tools — fail-closed.
+ * higher-permission caller's tools. Both the synchronous and streaming managers publish the caller on
+ * the calling thread before tool resolution runs (the streaming assistant resolves callbacks
+ * synchronously at Flux-assembly time, while the context is still set), and clear it afterwards. If no
+ * request context is present, this returns <em>no</em> tools — fail-closed.
  */
 @Component
 public class OpenApiToolProvider {
