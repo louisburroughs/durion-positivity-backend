@@ -159,4 +159,49 @@ class OrderEventsListenerTest {
         assertThat(posted).isEmpty();
         verify(processedEventRepository).save(any());
     }
+
+    // ── F2 return restock (#1087) ────────────────────────────────────────────
+
+    private static final UUID RETURN_ID = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
+
+    private static String returnedEnvelope(String eventId, String linesJson) {
+        return """
+                {"eventId":"%s","eventType":"order.order.returned","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":1,"sourceService":"pos-order",
+                 "payload":{"returnOrderId":"%s","originalOrderId":"%s","orderNumber":"SO-1",
+                   "locationId":"%s","customerId":null,"refundMethod":"ORIGINAL_TENDER",
+                   "totalRefund":10.0,"lines":[%s],"returnedAt":"2026-07-24T12:00:00Z"}}
+                """.formatted(eventId, RETURN_ID, RETURN_ID, ORDER_ID, LOCATION_ID, linesJson);
+    }
+
+    private static String returnLine(String sku, int qty, String condition) {
+        return """
+                {"originalOrderLineId":"%s","sku":"%s","quantity":%d,"condition":"%s",
+                 "amount":10.0,"serialNumbers":[]}""".formatted(UUID.randomUUID(), sku, qty, condition);
+    }
+
+    @Test
+    @DisplayName("HIL-006: a RESTOCK return line posts a positive RETURN_TO_STOCK movement")
+    void restockLine_postsReturnToStock() {
+        listener.onOrderEvent(returnedEnvelope("evt-r1", returnLine("SKU-1", 2, "RESTOCK")));
+
+        assertThat(posted).hasSize(1);
+        InventoryLedgerEntry entry = posted.getFirst();
+        assertThat(entry.getEventType()).isEqualTo(InventoryLedgerEventType.RETURN_TO_STOCK);
+        assertThat(entry.getStockItemId()).isEqualTo("SKU-1");
+        assertThat(entry.getChangeInQuantity()).isEqualTo(2);
+        assertThat(entry.getLocationId()).isEqualTo(LOCATION_ID);
+        verify(processedEventRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("HIL-007: SCRAP and WARRANTY return lines move no inventory")
+    void scrapAndWarrantyLines_skipped() {
+        String lines = returnLine("SKU-1", 1, "SCRAP") + "," + returnLine("SKU-2", 1, "WARRANTY");
+
+        listener.onOrderEvent(returnedEnvelope("evt-r2", lines));
+
+        assertThat(posted).isEmpty();
+        verify(processedEventRepository).save(any());
+    }
 }

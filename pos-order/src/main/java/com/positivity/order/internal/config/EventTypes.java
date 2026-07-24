@@ -102,5 +102,30 @@ public final class EventTypes {
                     .build(),
             EventTypeRegistration.write("ORDER_SESSION_CONFIRM_CLOSE", "Register session closed and drawer reconciled")
                     .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.write("ORDER_RETURN_CREATE", "Return created against a completed order")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.fastRead("ORDER_RETURN_GET", "Return read by id")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.search("ORDER_RETURN_LIST", "Returns listed for an original order")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.fastRead(
+                            "ORDER_RETURN_RETURNABLE", "Per-line returnable quantities read for a completed order")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.approval("ORDER_RETURN_APPROVE", "Return above threshold approved")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.approval("ORDER_RETURN_REJECT", "Return above threshold rejected")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.write("ORDER_RETURN_PROCESS", "Return orchestration saga run (refund + restock)")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.write("ORDER_RETURN_RETRY", "Return saga retried after a refund failure")
+                    .apiVersion("1")
                     .build());
 }
