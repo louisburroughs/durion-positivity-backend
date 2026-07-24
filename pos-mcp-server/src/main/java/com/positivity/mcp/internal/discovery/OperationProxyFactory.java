@@ -1,5 +1,9 @@
 package com.positivity.mcp.internal.discovery;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.server.McpAsyncServerExchange;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.net.URI;
@@ -10,6 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.client.ServiceInstance;
@@ -26,6 +31,7 @@ import reactor.core.publisher.Mono;
 public class OperationProxyFactory {
 
     private static final Logger log = LoggerFactory.getLogger(OperationProxyFactory.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final LoadBalancerClient loadBalancerClient;
     private final WebClient webClient;
@@ -38,6 +44,19 @@ public class OperationProxyFactory {
     @NonNull
     BiFunction<McpAsyncServerExchange, McpSchema.CallToolRequest, Mono<McpSchema.CallToolResult>> handler(
             @NonNull String serviceId, @NonNull HttpMethod method, @NonNull String pathTemplate) {
+        return handler(serviceId, method, pathTemplate, false);
+    }
+
+    /**
+     * @param structuredOutput when true the tool declared an MCP {@code outputSchema}, so a successful
+     *     result must also carry an object {@code structuredContent} (see {@link #successResult}).
+     */
+    @NonNull
+    BiFunction<McpAsyncServerExchange, McpSchema.CallToolRequest, Mono<McpSchema.CallToolResult>> handler(
+            @NonNull String serviceId,
+            @NonNull HttpMethod method,
+            @NonNull String pathTemplate,
+            boolean structuredOutput) {
         return (exchange, request) -> {
             var arguments = Optional.ofNullable(request.arguments()).orElse(Map.of());
             Map<String, Object> pathParams = asMap(arguments.get("pathParams"));
@@ -65,7 +84,7 @@ public class OperationProxyFactory {
             }
 
             URI targetUri = buildUriFromBase(instance.getUri(), pathTemplate, pathParams, queryParams);
-            return executeRequest(method, targetUri, headers, body, serviceId + " " + pathTemplate);
+            return executeRequest(method, targetUri, headers, body, serviceId + " " + pathTemplate, structuredOutput);
         };
     }
 
@@ -77,6 +96,16 @@ public class OperationProxyFactory {
     @NonNull
     BiFunction<McpAsyncServerExchange, McpSchema.CallToolRequest, Mono<McpSchema.CallToolResult>> handlerForBaseUri(
             @NonNull URI baseUri, @NonNull HttpMethod method, @NonNull String pathTemplate) {
+        return handlerForBaseUri(baseUri, method, pathTemplate, false);
+    }
+
+    /**
+     * @param structuredOutput when true the tool declared an MCP {@code outputSchema}, so a successful
+     *     result must also carry an object {@code structuredContent} (see {@link #successResult}).
+     */
+    @NonNull
+    BiFunction<McpAsyncServerExchange, McpSchema.CallToolRequest, Mono<McpSchema.CallToolResult>> handlerForBaseUri(
+            @NonNull URI baseUri, @NonNull HttpMethod method, @NonNull String pathTemplate, boolean structuredOutput) {
         return (exchange, request) -> {
             var arguments = Optional.ofNullable(request.arguments()).orElse(Map.of());
             Map<String, Object> pathParams = asMap(arguments.get("pathParams"));
@@ -85,7 +114,7 @@ public class OperationProxyFactory {
             Object body = arguments.get("body");
 
             URI targetUri = buildUriFromBase(baseUri, pathTemplate, pathParams, queryParams);
-            return executeRequest(method, targetUri, headers, body, baseUri + " " + pathTemplate);
+            return executeRequest(method, targetUri, headers, body, baseUri + " " + pathTemplate, structuredOutput);
         };
     }
 
@@ -94,7 +123,8 @@ public class OperationProxyFactory {
             @NonNull URI targetUri,
             @NonNull Map<String, Object> headers,
             Object body,
-            @NonNull String logContext) {
+            @NonNull String logContext,
+            boolean structuredOutput) {
         var requestSpec = webClient.method(method).uri(targetUri);
         headers.forEach((key, value) -> requestSpec.header(key, String.valueOf(value)));
         if (body != null) {
@@ -115,7 +145,7 @@ public class OperationProxyFactory {
                                 targetUri,
                                 responseEntity.getStatusCode().value());
                     }
-                    return successResult(responseEntity.getBody());
+                    return successResult(responseEntity.getBody(), structuredOutput);
                 })
                 .onErrorResume(ex -> {
                     log.warn("Tool proxy failed for {} {}: {}", logContext, targetUri, ex.getMessage());
@@ -161,12 +191,43 @@ public class OperationProxyFactory {
         return Collections.emptyMap();
     }
 
-    private McpSchema.CallToolResult successResult(@NonNull String body) {
+    /**
+     * Builds a non-error result carrying the raw response body as text. When {@code structuredOutput}
+     * is true (the tool declared an MCP {@code outputSchema}) it also attaches an object
+     * {@code structuredContent}: the parsed JSON body when it is an object, otherwise an empty object.
+     * The empty-object fallback is required because the async server validates structuredContent
+     * against the (object) outputSchema on every successful result and rewrites it to an error if it
+     * is missing or non-conforming — the full body is always still available in the text block.
+     */
+    private McpSchema.CallToolResult successResult(@Nullable String body, boolean structuredOutput) {
+        var builder = McpSchema.CallToolResult.builder()
+                .content(List.of(new McpSchema.TextContent(body == null ? "" : body)))
+                .isError(false);
+        if (structuredOutput) {
+            builder.structuredContent(parseStructuredContent(body));
+        }
+        return builder.build();
+    }
 
-        return McpSchema.CallToolResult.builder()
-                .content(List.of(new McpSchema.TextContent(body)))
-                .isError(false)
-                .build();
+    /**
+     * Parses a JSON object response body for MCP {@code structuredContent}. Returns an empty object
+     * for a null/blank/non-object/unparseable body so structured-output validation always passes.
+     */
+    @NonNull
+    static Map<String, Object> parseStructuredContent(@Nullable String body) {
+        if (body == null || body.isBlank()) {
+            return Map.of();
+        }
+        try {
+            JsonNode node = MAPPER.readTree(body);
+            if (node != null && node.isObject()) {
+                Map<String, Object> map = MAPPER.convertValue(node, new TypeReference<Map<String, Object>>() {});
+                return map == null ? Map.of() : map;
+            }
+        } catch (JsonProcessingException | IllegalArgumentException e) {
+            log.debug("Structured content parse failed; emitting empty object: {}", e.getMessage());
+        }
+        return Map.of();
     }
 
     private McpSchema.CallToolResult errorResult(@NonNull String message) {
