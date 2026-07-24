@@ -7,99 +7,101 @@ info:
     email: platform@durionpos.org
   version: v1
 servers:
-- url: http://localhost:8086
-  description: Generated server url
+  - url: http://localhost:8086
+    description: Generated server url
 tags:
-- name: Billing Authorization
-  description: Manager-approval elevation for controlled finalization
-- name: Payment
-  description: Card payment initiation and capture endpoints
-- name: Invoice
-  description: Invoice generation and lifecycle management
-- name: Invoice Search
-  description: Invoice finder search and retrieval
-- name: Billing Rules
-  description: Manage billing rules for commercial accounts
-- name: Receipt
-  description: Invoice receipt generation and reprint endpoints
+  - name: Billing Authorization
+    description: Manager-approval elevation for controlled finalization
+  - name: Payment
+    description: Card payment initiation and capture endpoints
+  - name: Deposit Credits
+    description: Deposit / down-payment credits and their application to settlements
+  - name: Invoice
+    description: Invoice generation and lifecycle management
+  - name: Invoice Search
+    description: Invoice finder search and retrieval
+  - name: Billing Rules
+    description: Manage billing rules for commercial accounts
+  - name: Receipt
+    description: Invoice receipt generation and reprint endpoints
 paths:
   /v1/billing/rules/{partyId}:
     get:
       tags:
-      - Billing Rules
+        - Billing Rules
       summary: Get billing rules for a party/customer
       description: Retrieve the current billing rules configuration for a commercial account
       operationId: getBillingRules
       parameters:
-      - name: partyId
-        in: path
-        required: true
-        schema:
-          type: string
+        - name: partyId
+          in: path
+          required: true
+          schema:
+            type: string
       responses:
-        '200':
+        "200":
           description: Billing rules found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRulesDTO'
-        '404':
+                $ref: "#/components/schemas/BillingRulesDTO"
+        "404":
           description: No billing rules configured for this party
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRulesDTO'
+                $ref: "#/components/schemas/BillingRulesDTO"
       security:
-      - bearerAuth:
-        - invoice:billing-rules
+        - bearerAuth:
+            - invoice:billing-rules
       x-required-permissions:
-      - invoice:billing-rules
+        - invoice:billing-rules
     put:
       tags:
-      - Billing Rules
+        - Billing Rules
       summary: Create or update billing rules
       description: Idempotent upsert of billing rules for a commercial account
       operationId: upsertBillingRules
       parameters:
-      - name: partyId
-        in: path
-        required: true
-        schema:
-          type: string
+        - name: partyId
+          in: path
+          required: true
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BillingRulesDTO'
+              $ref: "#/components/schemas/BillingRulesDTO"
         required: true
       responses:
-        '200':
+        "200":
           description: Billing rules updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRulesDTO'
-        '201':
+                $ref: "#/components/schemas/BillingRulesDTO"
+        "201":
           description: Billing rules created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRulesDTO'
-        '400':
+                $ref: "#/components/schemas/BillingRulesDTO"
+        "400":
           description: Invalid billing rules data
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRulesDTO'
+                $ref: "#/components/schemas/BillingRulesDTO"
       security:
-      - bearerAuth:
-        - invoice:billing-rules
+        - bearerAuth:
+            - invoice:billing-rules
       x-required-permissions:
-      - invoice:billing-rules
+        - invoice:billing-rules
   /v1/refunds:
     post:
       tags:
-      - StandaloneRefund
+        - StandaloneRefund
       summary: Record standalone refund for a customer party
       description: Record a refund anchored to a customer party when no invoice exists in the system; the disbursement itself happens out of band
       operationId: refundPartyStandalone
@@ -107,29 +109,29 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PartyStandaloneRefundRequest'
+              $ref: "#/components/schemas/PartyStandaloneRefundRequest"
         required: true
       responses:
-        '201':
+        "201":
           description: Refund recorded
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
-        '400':
+                $ref: "#/components/schemas/RefundPaymentResponse"
+        "400":
           description: Missing party anchor
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: "#/components/schemas/RefundPaymentResponse"
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/invoices:
     post:
       tags:
-      - Invoice
+        - Invoice
       summary: Create invoice
       description: Create invoice draft from completed workorder data
       operationId: createInvoice
@@ -137,589 +139,737 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/InvoiceCreationRequest'
+              $ref: "#/components/schemas/InvoiceCreationRequest"
         required: true
       responses:
-        '201':
+        "201":
           description: Invoice created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InvoiceGenerationResponse'
+                $ref: "#/components/schemas/InvoiceGenerationResponse"
       security:
-      - bearerAuth:
-        - invoice:manage
+        - bearerAuth:
+            - invoice:manage
       x-required-permissions:
-      - invoice:manage
+        - invoice:manage
   /v1/invoices/{invoiceId}/revert:
     post:
       tags:
-      - Invoice
+        - Invoice
       summary: Revert finalized invoice
-      description: 'Revert a FINALIZED invoice back to DRAFT within 24h of finalization and before GL posting (Story #13, AC6)'
+      description: "Revert a FINALIZED invoice back to DRAFT within 24h of finalization and before GL posting (Story #13, AC6)"
       operationId: revertInvoice
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RevertRequest'
+              $ref: "#/components/schemas/RevertRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: Invoice reverted to DRAFT
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InvoiceDetailsResponse'
+                $ref: "#/components/schemas/InvoiceDetailsResponse"
       security:
-      - bearerAuth:
-        - invoice:finalize
+        - bearerAuth:
+            - invoice:finalize
       x-required-permissions:
-      - invoice:manage
-      - invoice:finalize
+        - invoice:manage
+        - invoice:finalize
   /v1/invoices/{invoiceId}/refunds:
     get:
       tags:
-      - PaymentReversal
+        - PaymentReversal
       summary: List refunds for an invoice
       description: Return every refund record anchored to the invoice — payment-intent refunds whose intent belongs to the invoice and standalone invoice-anchored refunds alike — for warranty settlement reconciliation
       operationId: listRefunds
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        "200":
           description: Refund records returned
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/InvoiceRefundResponse'
-        '404':
+                  $ref: "#/components/schemas/InvoiceRefundResponse"
+        "404":
           description: Invoice not found
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/InvoiceRefundResponse'
+                  $ref: "#/components/schemas/InvoiceRefundResponse"
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       x-required-permissions:
-      - invoice:manage
+        - invoice:manage
     post:
       tags:
-      - StandaloneRefund
+        - StandaloneRefund
       summary: Record standalone refund for an invoice
       description: Record a refund against an invoice whose original payment is not in the system; the disbursement itself happens out of band
       operationId: refundInvoiceStandalone
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StandaloneRefundRequest'
+              $ref: "#/components/schemas/StandaloneRefundRequest"
         required: true
       responses:
-        '201':
+        "201":
           description: Refund recorded
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
-        '404':
+                $ref: "#/components/schemas/RefundPaymentResponse"
+        "404":
           description: Invoice not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
-        '422':
+                $ref: "#/components/schemas/RefundPaymentResponse"
+        "422":
           description: Insufficient refundable amount
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: "#/components/schemas/RefundPaymentResponse"
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/invoices/{invoiceId}/receipts:
     post:
       tags:
-      - Receipt
+        - Receipt
       summary: Generate invoice receipt
       description: Generate a receipt for an invoice payment using the requested terminal and template
       operationId: generateReceipt
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenerateReceiptRequest'
+              $ref: "#/components/schemas/GenerateReceiptRequest"
         required: true
       responses:
-        '201':
+        "201":
           description: Receipt generated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReceiptResponse'
-        '404':
+                $ref: "#/components/schemas/ReceiptResponse"
+        "404":
           description: Invoice not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReceiptResponse'
+                $ref: "#/components/schemas/ReceiptResponse"
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/invoices/{invoiceId}/receipts/{receiptId}/reprint:
     post:
       tags:
-      - Receipt
+        - Receipt
       summary: Reprint invoice receipt
       description: Create a reprint of an existing receipt and record the reason for the reprint
       operationId: reprintReceipt
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: receiptId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: receiptId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ReprintReceiptRequest'
+              $ref: "#/components/schemas/ReprintReceiptRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: Receipt reprinted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReceiptResponse'
-        '404':
+                $ref: "#/components/schemas/ReceiptResponse"
+        "404":
           description: Receipt not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReceiptResponse'
-        '409':
+                $ref: "#/components/schemas/ReceiptResponse"
+        "409":
           description: Reprint limit exceeded
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReceiptResponse'
+                $ref: "#/components/schemas/ReceiptResponse"
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/invoices/{invoiceId}/receipts/{receiptId}/print:
     post:
       tags:
-      - Receipt
+        - Receipt
       summary: Record printed receipt delivery
       description: Record the delivery status for a printed receipt associated with an invoice
       operationId: recordPrintDelivery
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: receiptId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: receiptId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PrintDeliveryRequest'
+              $ref: "#/components/schemas/PrintDeliveryRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: Print delivery recorded
-        '404':
+        "404":
           description: Receipt not found
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/invoices/{invoiceId}/receipts/{receiptId}/email:
     post:
       tags:
-      - Receipt
+        - Receipt
       summary: Email invoice receipt
       description: Send an invoice receipt by email and record the delivery status for the attempt
       operationId: sendEmailReceipt
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: receiptId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: receiptId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/EmailDeliveryRequest'
+              $ref: "#/components/schemas/EmailDeliveryRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: Email delivery recorded
-        '404':
+        "404":
           description: Receipt not found
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/invoices/{invoiceId}/payments:
     post:
       tags:
-      - Payment
+        - Payment
       summary: Initiate card payment
       description: Initiate a SALE_CAPTURE or AUTH_ONLY card payment against an invoice
       operationId: initiatePayment
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/InitiatePaymentRequest'
+              $ref: "#/components/schemas/InitiatePaymentRequest"
         required: true
       responses:
-        '201':
+        "201":
           description: Payment intent created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
-        '400':
+                $ref: "#/components/schemas/InitiatePaymentResponse"
+        "400":
           description: Invalid or missing required fields
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
-        '403':
+                $ref: "#/components/schemas/InitiatePaymentResponse"
+        "403":
           description: Insufficient permissions
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
-        '422':
+                $ref: "#/components/schemas/InitiatePaymentResponse"
+        "422":
           description: Payment method declined
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
-        '503':
+                $ref: "#/components/schemas/InitiatePaymentResponse"
+        "503":
           description: Payment gateway unavailable
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
+                $ref: "#/components/schemas/InitiatePaymentResponse"
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/invoices/{invoiceId}/payments/{paymentId}/void:
     post:
       tags:
-      - PaymentReversal
+        - PaymentReversal
       summary: Void authorized payment
       description: Void a previously authorized invoice payment before it is captured
       operationId: voidPayment
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: paymentId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VoidPaymentRequest'
+              $ref: "#/components/schemas/VoidPaymentRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: Payment voided
-        '404':
+        "404":
           description: Payment intent not found
-        '409':
+        "409":
           description: Invalid payment state
-        '422':
+        "422":
           description: Void window expired
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/invoices/{invoiceId}/payments/{paymentId}/refunds:
     post:
       tags:
-      - PaymentReversal
+        - PaymentReversal
       summary: Refund captured payment
       description: Create a refund for a captured invoice payment and record the refund details
       operationId: refundPayment
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: paymentId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RefundPaymentRequest'
+              $ref: "#/components/schemas/RefundPaymentRequest"
         required: true
       responses:
-        '201':
+        "201":
           description: Refund created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
-        '404':
+                $ref: "#/components/schemas/RefundPaymentResponse"
+        "404":
           description: Payment intent not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
-        '409':
+                $ref: "#/components/schemas/RefundPaymentResponse"
+        "409":
           description: Invalid payment state
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
-        '422':
+                $ref: "#/components/schemas/RefundPaymentResponse"
+        "422":
           description: Refund window expired or insufficient refundable amount
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: "#/components/schemas/RefundPaymentResponse"
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/invoices/{invoiceId}/payments/{paymentId}/capture:
     post:
       tags:
-      - Payment
+        - Payment
       summary: Capture authorized payment hold
       description: Capture all or part of a previously authorized invoice payment hold
       operationId: capturePayment
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: paymentId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CaptureAmountRequest'
+              $ref: "#/components/schemas/CaptureAmountRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: Payment captured
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
-        '403':
+                $ref: "#/components/schemas/InitiatePaymentResponse"
+        "403":
           description: Insufficient permissions
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
-        '404':
+                $ref: "#/components/schemas/InitiatePaymentResponse"
+        "404":
           description: Payment intent not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
+                $ref: "#/components/schemas/InitiatePaymentResponse"
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/invoices/{invoiceId}/finalize:
     post:
       tags:
-      - Invoice
+        - Invoice
       summary: Finalize invoice
-      description: 'Transition invoice from DRAFT to FINALIZED; enforces permission matrix and emits InvoiceFinalized event for async GL posting (Story #13)'
+      description: "Transition invoice from DRAFT to FINALIZED; enforces permission matrix and emits InvoiceFinalized event for async GL posting (Story #13)"
       operationId: finalizeInvoice
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/FinalizationRequest'
+              $ref: "#/components/schemas/FinalizationRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: Invoice finalized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InvoiceDetailsResponse'
+                $ref: "#/components/schemas/InvoiceDetailsResponse"
       security:
-      - bearerAuth:
-        - invoice:finalize
+        - bearerAuth:
+            - invoice:finalize
       x-required-permissions:
-      - invoice:manage
-      - invoice:finalize
+        - invoice:manage
+        - invoice:finalize
+  /v1/invoices/{invoiceId}/cancel:
+    post:
+      tags:
+        - Invoice
+      summary: Cancel a draft invoice
+      description: Terminal cancel of a DRAFT invoice before any money moved (order-void path). Rejected with 409 when the invoice has left DRAFT or carries an authorized/captured payment. Idempotent — cancelling a CANCELLED invoice returns 200.
+      operationId: cancelInvoice
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Invoice cancelled (or already cancelled)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderInvoiceResponse"
+        "409":
+          description: Invoice not cancellable in its current state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderInvoiceResponse"
+      security:
+        - bearerAuth:
+            - invoice:manage
+      x-required-permissions:
+        - invoice:manage
   /v1/invoices/{invoiceId}/artifacts/{artifactRefId}/download-token:
     post:
       tags:
-      - invoice-artifact-controller
+        - invoice-artifact-controller
       summary: Create a short-lived download token for an invoice artifact
       description: Issues a short-lived signed token bound to the invoice and artifact. The token is presented to the public download endpoint so a browser can fetch the file via a direct link.
       operationId: createDownloadToken
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: artifactRefId
-        in: path
-        required: true
-        schema:
-          type: string
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: artifactRefId
+          in: path
+          required: true
+          schema:
+            type: string
       responses:
-        '200':
+        "200":
           description: Token issued
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ArtifactDownloadToken'
-        '404':
+                $ref: "#/components/schemas/ArtifactDownloadToken"
+        "404":
           description: Invoice or artifact not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ArtifactDownloadToken'
+                $ref: "#/components/schemas/ArtifactDownloadToken"
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/invoices/{invoiceId}/adjustments:
     post:
       tags:
-      - Invoice
+        - Invoice
       summary: Apply invoice adjustment
       description: Apply discount, fee, correction, or warranty credit to a draft invoice
       operationId: applyAdjustment
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AdjustmentRequest'
+              $ref: "#/components/schemas/AdjustmentRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: Adjustment applied
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InvoiceDetailsResponse'
+                $ref: "#/components/schemas/InvoiceDetailsResponse"
       security:
-      - bearerAuth:
-        - invoice:manage
+        - bearerAuth:
+            - invoice:manage
       x-required-permissions:
-      - invoice:manage
+        - invoice:manage
+  /v1/invoices/from-order:
+    post:
+      tags:
+        - Invoice
+      summary: Create invoice from a sales order
+      description: Create the invoice fronting a sales order at checkout (counter sale). Idempotent on orderId — a replay returns the existing invoice with 200. When workorderId is present and a workorder invoice already exists, that invoice is returned for tender instead of creating a duplicate.
+      operationId: createInvoiceFromOrder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderInvoiceCreationRequest"
+        required: true
+      responses:
+        "201":
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderInvoiceResponse"
+        "200":
+          description: Existing invoice returned (replay or workorder dedupe)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderInvoiceResponse"
+      security:
+        - bearerAuth:
+            - invoice:manage
+      x-required-permissions:
+        - invoice:manage
+  /v1/invoices/deposits:
+    get:
+      tags:
+        - Deposit Credits
+      summary: List deposit credits held against a source document
+      description: Returns all deposit credits linked to the provided source type and source id.
+      operationId: listBySource
+      parameters:
+        - name: sourceType
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: sourceId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DepositCreditResponse"
+      security:
+        - bearerAuth: []
+      x-required-permissions:
+        - invoice:manage
+    post:
+      tags:
+        - Deposit Credits
+      summary: Register a deposit credit taken by a sales order
+      description: Creates and records a deposit credit entry for the referenced source transaction.
+      operationId: createDeposit
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDepositRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepositCreditResponse"
+      security:
+        - bearerAuth: []
+      x-required-permissions:
+        - invoice:manage
+  /v1/invoices/deposits/{depositCreditId}/refund:
+    post:
+      tags:
+        - Deposit Credits
+      summary: Refund a deposit credit's remaining balance
+      description: Used when the deposit's source is cancelled after the deposit was taken (spec R7.4).
+      operationId: refundDeposit
+      parameters:
+        - name: depositCreditId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: reason
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepositCreditResponse"
+      security:
+        - bearerAuth: []
+      x-required-permissions:
+        - invoice:manage
   /v1/billing/auth/elevate:
     post:
       tags:
-      - Billing Authorization
+        - Billing Authorization
       summary: Mint a manager-approval elevation token
       description: Verifies the named manager (by employee number) holds invoice:finalize:override and mints a short-lived token scoped to the given invoice, returned as the managerApprovalCode for finalize.
       operationId: elevate
@@ -727,133 +877,133 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ElevateRequest'
+              $ref: "#/components/schemas/ElevateRequest"
         required: true
       responses:
-        '200':
+        "200":
           description: Elevation token minted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ElevateResponse'
-        '400':
+                $ref: "#/components/schemas/ElevateResponse"
+        "400":
           description: Invalid request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ElevateResponse'
-        '401':
+                $ref: "#/components/schemas/ElevateResponse"
+        "401":
           description: Manager approval denied
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ElevateResponse'
+                $ref: "#/components/schemas/ElevateResponse"
       security:
-      - bearerAuth:
-        - invoice:finalize
+        - bearerAuth:
+            - invoice:finalize
       x-required-permissions:
-      - invoice:finalize
+        - invoice:finalize
   /v1/invoices/{invoiceId}:
     get:
       tags:
-      - Invoice
+        - Invoice
       summary: Get invoice
       description: Get invoice details
       operationId: getInvoice
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        "200":
           description: Invoice found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InvoiceDetailsResponse'
+                $ref: "#/components/schemas/InvoiceDetailsResponse"
       security:
-      - bearerAuth:
-        - invoice:manage
+        - bearerAuth:
+            - invoice:manage
       x-required-permissions:
-      - invoice:manage
+        - invoice:manage
   /v1/invoices/{invoiceId}/artifacts:
     get:
       tags:
-      - invoice-artifact-controller
+        - invoice-artifact-controller
       summary: List the downloadable artifacts (documents) for an invoice
       description: Returns the documents available for the invoice (the invoice itself and any receipts) as opaque, URL-safe artifact references with suggested file names and MIME types.
       operationId: listArtifacts
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
+        "200":
           description: Artifacts listed
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/InvoiceArtifact'
-        '404':
+                  $ref: "#/components/schemas/InvoiceArtifact"
+        "404":
           description: Invoice not found
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/InvoiceArtifact'
+                  $ref: "#/components/schemas/InvoiceArtifact"
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/invoices/{invoiceId}/artifacts/{artifactRefId}/download:
     get:
       tags:
-      - invoice-artifact-download-controller
+        - invoice-artifact-download-controller
       summary: Download an invoice artifact as PDF using a signed download token
       description: Streams the artifact as application/pdf. Public endpoint authorized solely by the signed download token (query parameter); intended for browser direct-download links.
       operationId: download
       parameters:
-      - name: invoiceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: artifactRefId
-        in: path
-        required: true
-        schema:
-          type: string
-      - name: token
-        in: query
-        required: true
-        schema:
-          type: string
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: artifactRefId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
       responses:
-        '200':
+        "200":
           description: PDF returned
           content:
             application/json:
               schema:
                 type: string
                 format: byte
-        '403':
+        "403":
           description: Missing, invalid, or expired token
           content:
             application/json:
               schema:
                 type: string
                 format: byte
-        '404':
+        "404":
           description: Invoice or artifact not found
           content:
             application/json:
@@ -863,92 +1013,117 @@ paths:
   /v1/invoices/search:
     get:
       tags:
-      - Invoice Search
+        - Invoice Search
       summary: Search invoices
       description: Paginated free-text search for invoices matching the invoice number, customer name, or workorder number.
       operationId: searchInvoices
       parameters:
-      - name: q
-        in: query
-        description: Free-text query matching invoice number, customer name, or workorder number (optional)
-        required: false
-        schema:
-          type: string
-      - name: pageable
-        in: query
-        required: true
-        schema:
-          $ref: '#/components/schemas/Pageable'
+        - name: q
+          in: query
+          description: Free-text query matching invoice number, customer name, or workorder number (optional)
+          required: false
+          schema:
+            type: string
+        - name: pageable
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/Pageable"
       responses:
-        '200':
+        "200":
           description: Page of invoice search results returned.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageInvoiceSearchResult'
-        '400':
+                $ref: "#/components/schemas/PageInvoiceSearchResult"
+        "400":
           description: Invalid pagination parameters.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
-        '403':
+                $ref: "#/components/schemas/ApiError"
+        "403":
           description: Caller lacks the invoice:manage authority.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
+                $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - invoice:manage
+        - bearerAuth:
+            - invoice:manage
       x-required-permissions:
-      - invoice:manage
+        - invoice:manage
   /v1/invoices/items/search:
     get:
       tags:
-      - Invoice Search
+        - Invoice Search
       summary: Search invoice line items by customer party
       description: Returns invoice line items belonging to the given customer party, optionally narrowed by a SKU/description term, flattened with the owning invoice's number, status, and creation time. Newest invoice first, bounded to the newest 200 lines. Built for warranty-claim correlation.
       operationId: searchInvoiceLines
       parameters:
-      - name: partyId
-        in: query
-        description: Customer party identifier owning the invoices (required)
-        required: true
-        schema:
-          type: string
-      - name: q
-        in: query
-        description: SKU / description term narrowing the lines (optional)
-        required: false
-        schema:
-          type: string
+        - name: partyId
+          in: query
+          description: Customer party identifier owning the invoices (required)
+          required: true
+          schema:
+            type: string
+        - name: q
+          in: query
+          description: SKU / description term narrowing the lines (optional)
+          required: false
+          schema:
+            type: string
       responses:
-        '200':
+        "200":
           description: List of matching invoice line items returned.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/InvoiceLineSearchResult'
-        '400':
+                  $ref: "#/components/schemas/InvoiceLineSearchResult"
+        "400":
           description: Missing or malformed partyId.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
-        '403':
+                $ref: "#/components/schemas/ApiError"
+        "403":
           description: Caller lacks the invoice:manage authority.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
+                $ref: "#/components/schemas/ApiError"
       security:
-      - bearerAuth:
-        - invoice:manage
+        - bearerAuth:
+            - invoice:manage
       x-required-permissions:
-      - invoice:manage
+        - invoice:manage
+  /v1/invoices/deposits/{depositCreditId}:
+    get:
+      tags:
+        - Deposit Credits
+      summary: Get a deposit credit by id
+      description: Retrieves a single deposit credit record by its identifier.
+      operationId: getDeposit
+      parameters:
+        - name: depositCreditId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepositCreditResponse"
+      security:
+        - bearerAuth: []
+      x-required-permissions:
+        - invoice:manage
 components:
   schemas:
     BillingRulesDTO:
@@ -977,17 +1152,17 @@ components:
           type: string
           description: Preferred method for delivering invoices
           enum:
-          - EMAIL
-          - PORTAL
-          - MAIL
+            - EMAIL
+            - PORTAL
+            - MAIL
           example: EMAIL
         invoiceGroupingStrategy:
           type: string
           description: Strategy for grouping line items into invoices
           enum:
-          - PER_WORKORDER
-          - PER_VEHICLE
-          - SINGLE_INVOICE
+            - PER_WORKORDER
+            - PER_VEHICLE
+            - SINGLE_INVOICE
           example: PER_WORKORDER
         version:
           type: integer
@@ -1009,15 +1184,15 @@ components:
           description: Identifier of the actor who last updated the record
           example: jdoe
       required:
-      - createdAt
-      - invoiceDeliveryMethod
-      - invoiceGroupingStrategy
-      - partyId
-      - paymentTermsCode
-      - purchaseOrderRequired
-      - updatedAt
-      - updatedBy
-      - version
+        - createdAt
+        - invoiceDeliveryMethod
+        - invoiceGroupingStrategy
+        - partyId
+        - paymentTermsCode
+        - purchaseOrderRequired
+        - updatedAt
+        - updatedBy
+        - version
     PartyStandaloneRefundRequest:
       type: object
       description: Request to record a standalone refund anchored to a customer party
@@ -1036,15 +1211,15 @@ components:
           type: string
           description: Reason the refund is being issued
           enum:
-          - CUSTOMER_RETURN
-          - SERVICE_ERROR
-          - OVERCHARGE
-          - DAMAGED_GOODS
-          - GOODWILL
-          - CHARGEBACK_AVOIDANCE
-          - FRAUD_PREVENTION
-          - MANAGER_DISCRETION
-          - OTHER
+            - CUSTOMER_RETURN
+            - SERVICE_ERROR
+            - OVERCHARGE
+            - DAMAGED_GOODS
+            - GOODWILL
+            - CHARGEBACK_AVOIDANCE
+            - FRAUD_PREVENTION
+            - MANAGER_DISCRETION
+            - OTHER
           example: CUSTOMER_RETURN
         notes:
           type: string
@@ -1057,9 +1232,9 @@ components:
           maxLength: 64
           minLength: 0
       required:
-      - amount
-      - partyId
-      - reason
+        - amount
+        - partyId
+        - reason
     RefundPaymentResponse:
       type: object
       description: Result of processing a refund against an invoice payment
@@ -1091,15 +1266,15 @@ components:
           type: string
           description: Reason for the refund
           enum:
-          - CUSTOMER_RETURN
-          - SERVICE_ERROR
-          - OVERCHARGE
-          - DAMAGED_GOODS
-          - GOODWILL
-          - CHARGEBACK_AVOIDANCE
-          - FRAUD_PREVENTION
-          - MANAGER_DISCRETION
-          - OTHER
+            - CUSTOMER_RETURN
+            - SERVICE_ERROR
+            - OVERCHARGE
+            - DAMAGED_GOODS
+            - GOODWILL
+            - CHARGEBACK_AVOIDANCE
+            - FRAUD_PREVENTION
+            - MANAGER_DISCRETION
+            - OTHER
           example: CUSTOMER_REQUEST
         notes:
           type: string
@@ -1109,9 +1284,9 @@ components:
           type: string
           description: Current status of the refund
           enum:
-          - PENDING
-          - COMPLETED
-          - FAILED
+            - PENDING
+            - COMPLETED
+            - FAILED
           example: COMPLETED
         gatewayReference:
           type: string
@@ -1127,8 +1302,8 @@ components:
           description: Timestamp when the refund completed
           example: 2026-01-17 10:15:00+00:00
       required:
-      - refundId
-      - status
+        - refundId
+        - status
     InvoiceCreationRequest:
       type: object
       description: Internal service payload for creating invoice drafts.
@@ -1166,7 +1341,7 @@ components:
           type: array
           description: Line items to include on the invoice.
           items:
-            $ref: '#/components/schemas/InvoiceLineItem'
+            $ref: "#/components/schemas/InvoiceLineItem"
     InvoiceLineItem:
       type: object
       description: Invoice line item details.
@@ -1192,10 +1367,10 @@ components:
           description: Line item type (e.g. PART, LABOR, FEE, TAX).
           example: LABOR
       required:
-      - amount
-      - description
-      - quantity
-      - unitPrice
+        - amount
+        - description
+        - quantity
+        - unitPrice
     InvoiceGenerationResponse:
       type: object
       description: Response payload returned after invoice generation.
@@ -1242,13 +1417,13 @@ components:
           description: Creation timestamp (UTC).
           example: 2026-02-27 12:00:00+00:00
       required:
-      - createdAt
-      - invoiceId
-      - status
-      - subtotal
-      - taxAmount
-      - totalAmount
-      - workorderId
+        - createdAt
+        - invoiceId
+        - status
+        - subtotal
+        - taxAmount
+        - totalAmount
+        - workorderId
     RevertRequest:
       type: object
       description: Request payload for reverting a finalized invoice back to DRAFT
@@ -1264,8 +1439,8 @@ components:
           example: Incorrect line item billed
           minLength: 1
       required:
-      - managerApprovalCode
-      - reason
+        - managerApprovalCode
+        - reason
     InvoiceAdjustmentResponse:
       type: object
       description: A monetary adjustment applied to an invoice
@@ -1279,10 +1454,10 @@ components:
           type: string
           description: Type of adjustment applied
           enum:
-          - DISCOUNT
-          - FEE
-          - CORRECTION
-          - WARRANTY
+            - DISCOUNT
+            - FEE
+            - CORRECTION
+            - WARRANTY
           example: DISCOUNT
         amount:
           type: number
@@ -1345,10 +1520,11 @@ components:
           type: string
           description: Current lifecycle status of the invoice
           enum:
-          - DRAFT
-          - FINALIZED
-          - POSTED
-          - ERROR
+            - DRAFT
+            - FINALIZED
+            - POSTED
+            - ERROR
+            - CANCELLED
           example: FINALIZED
         subtotal:
           type: number
@@ -1407,15 +1583,15 @@ components:
           type: array
           description: Line items belonging to the invoice
           items:
-            $ref: '#/components/schemas/InvoiceItemResponse'
+            $ref: "#/components/schemas/InvoiceItemResponse"
         adjustmentEntries:
           type: array
           description: Monetary adjustment entries applied to the invoice
           items:
-            $ref: '#/components/schemas/InvoiceAdjustmentResponse'
+            $ref: "#/components/schemas/InvoiceAdjustmentResponse"
       required:
-      - adjustmentEntries
-      - items
+        - adjustmentEntries
+        - items
     InvoiceItemResponse:
       type: object
       description: A single line item on an invoice
@@ -1462,15 +1638,15 @@ components:
           type: string
           description: Reason the refund is being issued
           enum:
-          - CUSTOMER_RETURN
-          - SERVICE_ERROR
-          - OVERCHARGE
-          - DAMAGED_GOODS
-          - GOODWILL
-          - CHARGEBACK_AVOIDANCE
-          - FRAUD_PREVENTION
-          - MANAGER_DISCRETION
-          - OTHER
+            - CUSTOMER_RETURN
+            - SERVICE_ERROR
+            - OVERCHARGE
+            - DAMAGED_GOODS
+            - GOODWILL
+            - CHARGEBACK_AVOIDANCE
+            - FRAUD_PREVENTION
+            - MANAGER_DISCRETION
+            - OTHER
           example: CUSTOMER_RETURN
         notes:
           type: string
@@ -1483,8 +1659,8 @@ components:
           maxLength: 64
           minLength: 0
       required:
-      - amount
-      - reason
+        - amount
+        - reason
     GenerateReceiptRequest:
       type: object
       description: Request to generate a receipt for an invoice payment
@@ -1507,13 +1683,13 @@ components:
         templateVersion:
           type: string
           description: Receipt template version
-          example: '1'
+          example: "1"
           minLength: 1
       required:
-      - paymentIntentId
-      - templateId
-      - templateVersion
-      - terminalId
+        - paymentIntentId
+        - templateId
+        - templateVersion
+        - terminalId
     ReceiptResponse:
       type: object
       description: Result of generating a payment receipt
@@ -1531,11 +1707,11 @@ components:
           type: string
           description: Current status of the receipt
           enum:
-          - GENERATED
+            - GENERATED
           example: GENERATED
       required:
-      - receiptId
-      - status
+        - receiptId
+        - status
     ReprintReceiptRequest:
       type: object
       description: Request to reprint an existing receipt
@@ -1546,7 +1722,7 @@ components:
           example: Customer requested a duplicate copy
           minLength: 1
       required:
-      - reason
+        - reason
     PrintDeliveryRequest:
       type: object
       description: Request to record the delivery status of a printed receipt
@@ -1555,11 +1731,11 @@ components:
           type: string
           description: Print delivery outcome status
           enum:
-          - SUCCESS
-          - FAILED
+            - SUCCESS
+            - FAILED
           example: SUCCESS
       required:
-      - status
+        - status
     EmailDeliveryRequest:
       type: object
       description: Request to email a receipt and record the delivery status
@@ -1573,22 +1749,22 @@ components:
           type: string
           description: Email delivery outcome status
           enum:
-          - SUCCESS
-          - FAILED
+            - SUCCESS
+            - FAILED
           example: SUCCESS
       required:
-      - emailAddress
-      - status
+        - emailAddress
+        - status
     InitiatePaymentRequest:
       type: object
       description: Request to initiate a card payment
       properties:
         paymentFlow:
           type: string
-          description: 'Payment flow: SALE_CAPTURE (default one-step) or AUTH_ONLY (two-step)'
+          description: "Payment flow: SALE_CAPTURE (default one-step) or AUTH_ONLY (two-step)"
           enum:
-          - SALE_CAPTURE
-          - AUTH_ONLY
+            - SALE_CAPTURE
+            - AUTH_ONLY
           example: SALE_CAPTURE
         amount:
           type: number
@@ -1605,10 +1781,10 @@ components:
           example: tok_1NXyZ2eZvKYlo2Cabc12345
           minLength: 1
       required:
-      - amount
-      - idempotencyKey
-      - paymentFlow
-      - paymentToken
+        - amount
+        - idempotencyKey
+        - paymentFlow
+        - paymentToken
     InitiatePaymentResponse:
       type: object
       description: Payment intent result
@@ -1622,12 +1798,12 @@ components:
           type: string
           description: Current lifecycle status of the payment intent
           enum:
-          - PENDING
-          - AUTHORIZED
-          - CAPTURED
-          - CAPTURE_FAILED
-          - VOIDED
-          - EXPIRED
+            - PENDING
+            - AUTHORIZED
+            - CAPTURED
+            - CAPTURE_FAILED
+            - VOIDED
+            - EXPIRED
           example: AUTHORIZED
         authorizedAmount:
           type: number
@@ -1652,8 +1828,8 @@ components:
             id: pi_3NXyZ2eZvKYlo2Ca
             status: requires_capture
       required:
-      - paymentIntentId
-      - status
+        - paymentIntentId
+        - status
     VoidPaymentRequest:
       type: object
       description: Request to void an authorized payment before capture
@@ -1662,19 +1838,19 @@ components:
           type: string
           description: Reason the payment is being voided
           enum:
-          - CUSTOMER_REQUEST
-          - DUPLICATE_AUTHORIZATION
-          - ENTRY_ERROR
-          - FRAUD_PREVENTION
-          - MANAGER_DISCRETION
-          - OTHER
+            - CUSTOMER_REQUEST
+            - DUPLICATE_AUTHORIZATION
+            - ENTRY_ERROR
+            - FRAUD_PREVENTION
+            - MANAGER_DISCRETION
+            - OTHER
           example: CUSTOMER_REQUEST
         notes:
           type: string
           description: Optional free-text notes explaining the void
           example: Customer cancelled before pickup
       required:
-      - reason
+        - reason
     RefundPaymentRequest:
       type: object
       description: Request to refund a captured payment
@@ -1687,15 +1863,15 @@ components:
           type: string
           description: Reason the payment is being refunded
           enum:
-          - CUSTOMER_RETURN
-          - SERVICE_ERROR
-          - OVERCHARGE
-          - DAMAGED_GOODS
-          - GOODWILL
-          - CHARGEBACK_AVOIDANCE
-          - FRAUD_PREVENTION
-          - MANAGER_DISCRETION
-          - OTHER
+            - CUSTOMER_RETURN
+            - SERVICE_ERROR
+            - OVERCHARGE
+            - DAMAGED_GOODS
+            - GOODWILL
+            - CHARGEBACK_AVOIDANCE
+            - FRAUD_PREVENTION
+            - MANAGER_DISCRETION
+            - OTHER
           example: CUSTOMER_RETURN
         notes:
           type: string
@@ -1708,8 +1884,8 @@ components:
           maxLength: 64
           minLength: 0
       required:
-      - amount
-      - reason
+        - amount
+        - reason
     CaptureAmountRequest:
       type: object
       description: Request to capture all or part of an authorized payment hold
@@ -1724,8 +1900,8 @@ components:
           example: capture-550e8400-1
           minLength: 1
       required:
-      - amount
-      - captureIdempotencyKey
+        - amount
+        - captureIdempotencyKey
     FinalizationRequest:
       type: object
       description: Request payload for finalizing an invoice
@@ -1738,6 +1914,46 @@ components:
           type: string
           description: Free-text reason for overriding the amount limit
           example: Customer pre-approved by branch manager
+    OrderInvoiceResponse:
+      type: object
+      description: Response returned after creating (or replaying) an invoice from a sales order.
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+          description: Invoice identifier.
+        invoiceNumber:
+          type: string
+          description: Human-facing invoice number.
+          example: INV-1770000000000-01960003
+        status:
+          type: string
+          description: Invoice status.
+          example: DRAFT
+        subtotal:
+          type: number
+          description: Invoice subtotal.
+          example: 120.0
+        taxAmount:
+          type: number
+          description: Invoice tax amount.
+          example: 9.6
+        totalAmount:
+          type: number
+          description: Invoice total.
+          example: 129.6
+        depositApplied:
+          type: number
+          description: Deposit / down-payment credit applied to this invoice at creation (odoo-parity story E4); zero when no deposit was held against the source.
+          example: 50.0
+        existing:
+          type: boolean
+          default: false
+          description: True when an existing invoice was returned (orderId replay or workorder dedupe).
+      required:
+        - existing
+        - invoiceId
+        - status
     ArtifactDownloadToken:
       type: object
       description: Short-lived signed token for downloading an invoice artifact
@@ -1757,10 +1973,10 @@ components:
           type: string
           description: Type of adjustment applied to the invoice
           enum:
-          - DISCOUNT
-          - FEE
-          - CORRECTION
-          - WARRANTY
+            - DISCOUNT
+            - FEE
+            - CORRECTION
+            - WARRANTY
           example: DISCOUNT
         amount:
           type: number
@@ -1784,10 +2000,191 @@ components:
           maxLength: 64
           minLength: 0
       required:
-      - amount
-      - authorizedBy
-      - reason
-      - type
+        - amount
+        - authorizedBy
+        - reason
+        - type
+    OrderInvoiceCreationRequest:
+      type: object
+      description: Payload for creating an invoice from a sales order at checkout.
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          description: Sales order the invoice fronts; idempotency anchor (one invoice per order).
+          example: 01960003-0000-7000-8000-000000000010
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder being settled through this order, when the order fronts a workorder settlement; the existing workorder invoice is returned instead of creating a duplicate.
+          example: 01960003-0000-7000-8000-000000000011
+        customerId:
+          type: string
+          format: uuid
+          description: Customer party; null for anonymous counter sales.
+          example: 01960003-0000-7000-8000-000000000012
+        locationId:
+          type: string
+          format: uuid
+          description: Shop location of the sale.
+          example: 01960003-0000-7000-8000-000000000013
+        subtotal:
+          type: number
+          description: Order subtotal (post-discount, pre-tax).
+          example: 120.0
+        taxAmount:
+          type: number
+          description: Order tax total (pos-tax authoritative).
+          example: 9.6
+        totalAmount:
+          type: number
+          description: Order grand total.
+          example: 129.6
+        lines:
+          type: array
+          description: Order lines as sold.
+          items:
+            $ref: "#/components/schemas/OrderInvoiceLineItem"
+          minItems: 1
+        depositSourceType:
+          type: string
+          description: When this order is a deposit / down-payment take (odoo-parity story E4), the source document type the deposit is held against; pos-invoice registers a deposit credit.
+          enum:
+            - ESTIMATE
+            - WORKORDER
+            - ORDER
+        depositSourceId:
+          type: string
+          format: uuid
+          description: Source document id the deposit is held against (required when depositSourceType is set).
+        depositAmount:
+          type: number
+          description: Deposit amount to register as a credit; when set, the order is a deposit take.
+          example: 200.0
+      required:
+        - lines
+        - orderId
+        - subtotal
+        - taxAmount
+        - totalAmount
+    OrderInvoiceLineItem:
+      type: object
+      description: Sales order line for invoice creation.
+      properties:
+        orderLineId:
+          type: string
+          format: uuid
+          description: Sales order line identifier, carried for settlement reconciliation.
+          example: 01960003-0000-7000-8000-000000000020
+        description:
+          type: string
+          description: Line description as sold.
+          example: Brake pad set
+        quantity:
+          type: number
+          description: Quantity sold.
+          example: 2
+        unitPrice:
+          type: number
+          description: Applied unit price.
+          example: 45.0
+        amount:
+          type: number
+          description: Extended line amount (post-line-discount, pre-tax).
+          example: 90.0
+        taxAmount:
+          type: number
+          description: Per-line tax amount.
+          example: 7.2
+        type:
+          type: string
+          description: Line item type (e.g. PART, LABOR, FEE).
+          example: PART
+      required:
+        - amount
+        - description
+        - quantity
+        - unitPrice
+    CreateDepositRequest:
+      type: object
+      description: Request payload for registering a deposit / down-payment credit
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          description: Sales order that took the deposit (idempotency anchor)
+        sourceType:
+          type: string
+          description: Source document type the deposit is held against
+          enum:
+            - ESTIMATE
+            - WORKORDER
+            - ORDER
+          minLength: 1
+        sourceId:
+          type: string
+          format: uuid
+          description: Source document id
+        partyId:
+          type: string
+          description: Bill-to party, when known
+        amount:
+          type: number
+          description: Deposit amount
+          example: 200.0
+        currencyCode:
+          type: string
+          description: ISO-4217 currency; defaults to USD
+          example: USD
+      required:
+        - amount
+        - orderId
+        - sourceId
+        - sourceType
+    Application:
+      type: object
+      description: One draw-down of the credit against a settlement invoice
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+        amountApplied:
+          type: number
+        appliedAt:
+          type: string
+          format: date-time
+    DepositCreditResponse:
+      type: object
+      description: A deposit / down-payment credit and its application-audit trail
+      properties:
+        depositCreditId:
+          type: string
+          format: uuid
+        sourceType:
+          type: string
+        sourceId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        partyId:
+          type: string
+        currencyCode:
+          type: string
+        originalAmount:
+          type: number
+        remainingBalance:
+          type: number
+        status:
+          type: string
+        applications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Application"
+        createdAt:
+          type: string
+          format: date-time
     ElevateRequest:
       type: object
       description: Request payload for minting a manager-approval elevation token
@@ -1803,8 +2200,8 @@ components:
           description: Invoice the elevation token will authorise
           example: 123e4567-e89b-12d3-a456-426614174000
       required:
-      - invoiceId
-      - managerEmployeeNumber
+        - invoiceId
+        - managerEmployeeNumber
     ElevateResponse:
       type: object
       description: Minted manager-approval elevation token
@@ -1817,8 +2214,8 @@ components:
           format: date-time
           description: Instant at which the token expires
       required:
-      - elevationToken
-      - expiresAt
+        - elevationToken
+        - expiresAt
     InvoiceRefundResponse:
       type: object
       properties:
@@ -1833,21 +2230,21 @@ components:
         status:
           type: string
           enum:
-          - PENDING
-          - COMPLETED
-          - FAILED
+            - PENDING
+            - COMPLETED
+            - FAILED
         reason:
           type: string
           enum:
-          - CUSTOMER_RETURN
-          - SERVICE_ERROR
-          - OVERCHARGE
-          - DAMAGED_GOODS
-          - GOODWILL
-          - CHARGEBACK_AVOIDANCE
-          - FRAUD_PREVENTION
-          - MANAGER_DISCRETION
-          - OTHER
+            - CUSTOMER_RETURN
+            - SERVICE_ERROR
+            - OVERCHARGE
+            - DAMAGED_GOODS
+            - GOODWILL
+            - CHARGEBACK_AVOIDANCE
+            - FRAUD_PREVENTION
+            - MANAGER_DISCRETION
+            - OTHER
         externalReference:
           type: string
         gatewayReference:
@@ -1922,7 +2319,7 @@ components:
           type: array
           description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
           items:
-            $ref: '#/components/schemas/FieldError'
+            $ref: "#/components/schemas/FieldError"
         referenceId:
           type: string
           description: Workflow or review-case reference identifier, when applicable
@@ -1936,11 +2333,11 @@ components:
           description: Support or admin investigation guidance, when applicable
           example: Contact support with the correlation ID for assistance
       required:
-      - code
-      - correlationId
-      - message
-      - status
-      - timestamp
+        - code
+        - correlationId
+        - message
+        - status
+        - timestamp
     FieldError:
       type: object
       description: Validation error for a specific request field
@@ -1954,8 +2351,8 @@ components:
           description: Validation failure message
           example: must be greater than 0
       required:
-      - field
-      - message
+        - field
+        - message
     InvoiceSearchResult:
       type: object
       description: Lightweight invoice search result enriched with customer name and workorder number
@@ -1985,10 +2382,11 @@ components:
           type: string
           description: Current invoice status
           enum:
-          - DRAFT
-          - FINALIZED
-          - POSTED
-          - ERROR
+            - DRAFT
+            - FINALIZED
+            - POSTED
+            - ERROR
+            - CANCELLED
           example: DRAFT
         total:
           type: number
@@ -2000,8 +2398,8 @@ components:
           description: Creation timestamp
           example: 2026-01-15 09:30:00+00:00
       required:
-      - invoiceId
-      - status
+        - invoiceId
+        - status
     PageInvoiceSearchResult:
       type: object
       properties:
@@ -2017,14 +2415,14 @@ components:
         content:
           type: array
           items:
-            $ref: '#/components/schemas/InvoiceSearchResult'
+            $ref: "#/components/schemas/InvoiceSearchResult"
         number:
           type: integer
           format: int32
         pageable:
-          $ref: '#/components/schemas/PageableObject'
+          $ref: "#/components/schemas/PageableObject"
         sort:
-          $ref: '#/components/schemas/SortObject'
+          $ref: "#/components/schemas/SortObject"
         first:
           type: boolean
         last:
@@ -2049,7 +2447,7 @@ components:
           type: integer
           format: int32
         sort:
-          $ref: '#/components/schemas/SortObject'
+          $ref: "#/components/schemas/SortObject"
         unpaged:
           type: boolean
     SortObject:
@@ -2113,8 +2511,8 @@ components:
           description: Creation timestamp of the owning invoice
           example: 2026-01-15 09:30:00+00:00
       required:
-      - invoiceId
-      - invoiceItemId
+        - invoiceId
+        - invoiceItemId
   securitySchemes:
     bearerAuth:
       type: http

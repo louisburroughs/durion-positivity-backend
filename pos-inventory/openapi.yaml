@@ -3621,7 +3621,7 @@ paths:
       tags:
       - Inventory Valuation
       summary: Get inventory valuation
-      description: Returns on-hand value (on-hand × current unit cost) per SKU with a total. Optionally site-scoped via 'locationId' and/or restricted to one SKU via 'sku'. The unit cost is sourced from each SKU's running cost state per its resolved costing method (AVERAGE or STANDARD); uncosted SKUs report a null unit cost and zero value. With 'asOf', the valuation is reconstructed from the ledger as of that instant (on-hand and unit cost both replayed); as-of requests additionally require 'inventory:ledger:view' and reject future instants with 422.
+      description: Returns on-hand value (on-hand × current unit cost) per SKU with a total. Optionally site-scoped via 'locationId' and/or restricted to one SKU via 'sku'. The unit cost is sourced from each SKU's running cost state per its resolved costing method (AVERAGE or STANDARD); uncosted SKUs report a null unit cost and zero value. With 'asOf', the valuation is reconstructed from the ledger as of that instant (on-hand and unit cost both replayed); as-of requests additionally require 'inventory:ledger:view', reject future instants with 422, and may reject uncapped full-catalog requests with 422 when the SKU fan-out exceeds the configured safety cap.
       operationId: getInventoryValuation
       parameters:
       - name: locationId

@@ -66,9 +66,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
     put:
       tags:
       - Products API
@@ -117,9 +114,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
   /v1/products/{productId}/uoms/{uomId}:
     put:
       tags:
@@ -169,9 +163,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
     delete:
       tags:
       - Product UoM API
@@ -200,9 +191,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
   /v1/products/{productId}/tracking-level:
     put:
       tags:
@@ -246,9 +234,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
   /v1/products/{productId}/msrp/{msrpId}:
     put:
       tags:
@@ -342,8 +327,6 @@ paths:
         - ROLE_CATALOG_VIEW
         - product:lifecycle:update
       x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
       - product:lifecycle:update
     put:
       tags:
@@ -401,8 +384,6 @@ paths:
         - ROLE_CATALOG_EDIT
         - product:lifecycle:update
       x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
       - product:lifecycle:update
   /v1/products/uom-conversions/{id}:
     get:
@@ -435,9 +416,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
     put:
       tags:
       - UOM Conversion API
@@ -480,9 +458,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
     delete:
       tags:
       - UOM Conversion API
@@ -505,9 +480,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
   /v1/products/supplier-costs/{id}:
     get:
       tags:
@@ -769,8 +741,6 @@ paths:
         - ROLE_MANAGER
         - inventory.cost.standard.update
       x-required-permissions:
-      - ADMIN
-      - MANAGER
       - inventory.cost.standard.update
   /v1/catalogs/{catalogId}:
     get:
@@ -803,9 +773,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
     put:
       tags:
       - Catalog API
@@ -849,9 +816,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
     delete:
       tags:
       - Catalog API
@@ -874,9 +838,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_DELETE
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_DELETE
   /v1/catalog-items/{type}/{catalogId}:
     put:
       tags:
@@ -926,9 +887,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
     delete:
       tags:
       - Catalog Items API
@@ -959,9 +917,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_DELETE
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_DELETE
   /v1/products:
     post:
       tags:
@@ -998,9 +953,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
   /v1/products/{productId}/uoms:
     get:
       tags:
@@ -1036,9 +988,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
     post:
       tags:
       - Product UoM API
@@ -1087,9 +1036,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
   /v1/products/{productId}/replacements:
     get:
       tags:
@@ -1119,8 +1065,6 @@ paths:
         - ROLE_CATALOG_VIEW
         - product:lifecycle:update
       x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
       - product:lifecycle:update
     post:
       tags:
@@ -1166,8 +1110,6 @@ paths:
         - ROLE_CATALOG_EDIT
         - product:lifecycle:update
       x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
       - product:lifecycle:update
   /v1/products/{productId}/msrp:
     get:
@@ -1262,9 +1204,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
     post:
       tags:
       - UOM Conversion API
@@ -1294,9 +1233,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
   /v1/products/supplier-costs:
     post:
       tags:
@@ -1354,9 +1290,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
     post:
       tags:
       - Substitution Group API
@@ -1386,9 +1319,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
   /v1/products/substitution-groups/{groupId}/members:
     post:
       tags:
@@ -1438,9 +1368,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
   /v1/products/pricing/location-overrides:
     post:
       tags:
@@ -1477,9 +1404,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
   /v1/products/pricing/location-overrides/{overrideId}/reject:
     post:
       tags:
@@ -1530,7 +1454,6 @@ paths:
         - ROLE_ADMIN
         - pricing:override:approve
       x-required-permissions:
-      - ADMIN
       - pricing:override:approve
   /v1/products/pricing/location-overrides/{overrideId}/approve:
     post:
@@ -1582,7 +1505,6 @@ paths:
         - ROLE_ADMIN
         - pricing:override:approve
       x-required-permissions:
-      - ADMIN
       - pricing:override:approve
   /v1/products/pricing/guardrail-policies:
     post:
@@ -1614,9 +1536,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
   /v1/products/price-books:
     post:
       tags:
@@ -1765,9 +1684,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
   /v1/catalog/bulk-ingest:
     post:
       tags:
@@ -1836,9 +1752,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
   /v1/products/{productId}/substitutes:
     get:
       tags:
@@ -1872,9 +1785,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
   /v1/products/{productId}/msrp/active:
     get:
       tags:
@@ -1961,9 +1871,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
   /v1/products/substitution-groups/{groupId}:
     get:
       tags:
@@ -1995,9 +1902,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
     delete:
       tags:
       - Substitution Group API
@@ -2020,9 +1924,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
   /v1/products/services/{serviceId}:
     get:
       tags:
@@ -2054,9 +1955,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
   /v1/products/services/search:
     get:
       tags:
@@ -2090,9 +1988,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
   /v1/products/services/name/{name}:
     get:
       tags:
@@ -2118,9 +2013,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
   /v1/products/search:
     get:
       tags:
@@ -2188,9 +2080,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
   /v1/products/pricing/effective-price/{locationId}/{productId}:
     get:
       tags:
@@ -2228,9 +2117,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
   /v1/products/noninventory/{productId}:
     get:
       tags:
@@ -2262,9 +2148,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
   /v1/products/noninventory/name/{name}:
     get:
       tags:
@@ -2290,9 +2173,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
   /v1/products/name/{name}:
     get:
       tags:
@@ -2318,9 +2198,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
   /v1/products/items/{itemId}/costs:
     get:
       tags:
@@ -2346,10 +2223,6 @@ paths:
         - ROLE_ADMIN
         - ROLE_MANAGER
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - MANAGER
-      - CATALOG_VIEW
   /v1/products/items/{itemId}/costs/audit:
     get:
       tags:
@@ -2375,10 +2248,6 @@ paths:
         - ROLE_ADMIN
         - ROLE_MANAGER
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - MANAGER
-      - CATALOG_VIEW
   /v1/catalogs/name/{name}:
     get:
       tags:
@@ -2404,9 +2273,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_VIEW
   /v1/catalog/supplier-item-costs:
     get:
       tags:
@@ -2505,9 +2371,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-      x-required-permissions:
-      - ADMIN
-      - CATALOG_EDIT
 components:
   schemas:
     ProductUpdateRequestDto:
@@ -4850,13 +4713,13 @@ components:
         offset:
           type: integer
           format: int64
-        pageNumber:
-          type: integer
-          format: int32
         sort:
           $ref: '#/components/schemas/SortObject'
         paged:
           type: boolean
+        pageNumber:
+          type: integer
+          format: int32
         pageSize:
           type: integer
           format: int32

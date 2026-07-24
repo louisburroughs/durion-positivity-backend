@@ -31,8 +31,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Returns & refunds endpoints (parity stories F1/F2, spec R5.1–R5.5): create a capped return
- * against a completed order, read per-line returnable quantities, and run the approval workflow.
+ * Returns & refunds endpoints (parity stories F1/F2, spec R5.1–R5.5): create a
+ * capped return
+ * against a completed order, read per-line returnable quantities, and run the
+ * approval workflow.
  */
 @RestController
 @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
@@ -43,113 +45,102 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Returns", description = "Returns & refunds against completed orders")
 public class ReturnOrderController {
 
-    private final ReturnOrderService returnOrderService;
+        private final ReturnOrderService returnOrderService;
 
-    @Operation(
-            summary = "Create a return against a completed order",
-            description = "Idempotency-Key header supported: a replayed key returns the original return. Over-cap "
-                    + "requests return 422 listing each line's returnableQty.",
-            tags = {"Returns"})
-    @PostMapping
-    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_CREATE + "')")
-    @EmitEvent(id = "ORDER_RETURN_CREATE", apiVersion = "1")
-    public ResponseEntity<ReturnOrderResponse> createReturn(
-            @Parameter(description = "Client idempotency key; replays return the original return")
-                    @RequestHeader(name = "Idempotency-Key", required = false)
-                    String idempotencyKey,
-            @Valid @RequestBody CreateReturnRequest request) {
-        List<ReturnLineCommand> lines = request.getLines().stream()
-                .map(ReturnOrderController::toLineCommand)
-                .toList();
-        ReturnOrderResponse response = ReturnOrderResponse.from(returnOrderService.createReturn(new CreateReturnCommand(
-                request.getOriginalOrderId(),
-                request.getRefundMethod(),
-                request.getReasonCode(),
-                lines,
-                idempotencyKey)));
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
+        @Operation(summary = "Create a return against a completed order", description = "Idempotency-Key header supported: a replayed key returns the original return. Over-cap "
+                        + "requests return 422 listing each line's returnableQty.", tags = { "Returns" })
+        @PostMapping
+        @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_CREATE + "')")
+        @EmitEvent(id = "ORDER_RETURN_CREATE", apiVersion = "1")
+        public ResponseEntity<ReturnOrderResponse> createReturn(
+                        @Parameter(description = "Client idempotency key; replays return the original return") @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+                        @Valid @RequestBody CreateReturnRequest request) {
+                List<ReturnLineCommand> lines = request.getLines().stream()
+                                .map(ReturnOrderController::toLineCommand)
+                                .toList();
+                ReturnOrderResponse response = ReturnOrderResponse
+                                .from(returnOrderService.createReturn(new CreateReturnCommand(
+                                                request.getOriginalOrderId(),
+                                                request.getRefundMethod(),
+                                                request.getReasonCode(),
+                                                lines,
+                                                idempotencyKey)));
+                return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        }
 
-    @Operation(
-            summary = "Get a return by id",
-            tags = {"Returns"})
-    @GetMapping("/{returnOrderId}")
-    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_VIEW + "')")
-    @EmitEvent(id = "ORDER_RETURN_GET", apiVersion = "1")
-    public ResponseEntity<ReturnOrderResponse> getReturn(@PathVariable UUID returnOrderId) {
-        return ResponseEntity.ok(ReturnOrderResponse.from(returnOrderService.getReturn(returnOrderId)));
-    }
+        @Operation(summary = "Get a return by id", description = "Fetches a return order by return order identifier.", tags = {
+                        "Returns" })
+        @GetMapping("/{returnOrderId}")
+        @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_VIEW + "')")
+        @EmitEvent(id = "ORDER_RETURN_GET", apiVersion = "1")
+        public ResponseEntity<ReturnOrderResponse> getReturn(@PathVariable UUID returnOrderId) {
+                return ResponseEntity.ok(ReturnOrderResponse.from(returnOrderService.getReturn(returnOrderId)));
+        }
 
-    @Operation(
-            summary = "List returns for an original order",
-            tags = {"Returns"})
-    @GetMapping
-    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_VIEW + "')")
-    @EmitEvent(id = "ORDER_RETURN_LIST", apiVersion = "1")
-    public ResponseEntity<List<ReturnOrderResponse>> listReturns(@RequestParam UUID originalOrderId) {
-        return ResponseEntity.ok(returnOrderService.listByOriginalOrder(originalOrderId).stream()
-                .map(ReturnOrderResponse::from)
-                .toList());
-    }
+        @Operation(summary = "List returns for an original order", description = "Lists return orders created from the specified original order.", tags = {
+                        "Returns" })
+        @GetMapping
+        @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_VIEW + "')")
+        @EmitEvent(id = "ORDER_RETURN_LIST", apiVersion = "1")
+        public ResponseEntity<List<ReturnOrderResponse>> listReturns(@RequestParam UUID originalOrderId) {
+                return ResponseEntity.ok(returnOrderService.listByOriginalOrder(originalOrderId).stream()
+                                .map(ReturnOrderResponse::from)
+                                .toList());
+        }
 
-    @Operation(
-            summary = "Per-line returnable quantities for a completed order",
-            tags = {"Returns"})
-    @GetMapping("/returnable")
-    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_VIEW + "')")
-    @EmitEvent(id = "ORDER_RETURN_RETURNABLE", apiVersion = "1")
-    public ResponseEntity<List<ReturnableLineResponse>> returnableLines(@RequestParam UUID orderId) {
-        return ResponseEntity.ok(returnOrderService.returnableLines(orderId).stream()
-                .map(ReturnableLineResponse::from)
-                .toList());
-    }
+        @Operation(summary = "Per-line returnable quantities for a completed order", description = "Returns each completed-order line with its currently returnable quantity.", tags = {
+                        "Returns" })
+        @GetMapping("/returnable")
+        @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_VIEW + "')")
+        @EmitEvent(id = "ORDER_RETURN_RETURNABLE", apiVersion = "1")
+        public ResponseEntity<List<ReturnableLineResponse>> returnableLines(@RequestParam UUID orderId) {
+                return ResponseEntity.ok(returnOrderService.returnableLines(orderId).stream()
+                                .map(ReturnableLineResponse::from)
+                                .toList());
+        }
 
-    @Operation(
-            summary = "Approve a pending return",
-            tags = {"Returns"})
-    @PostMapping("/{returnOrderId}/approve")
-    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_APPROVE + "')")
-    @EmitEvent(id = "ORDER_RETURN_APPROVE", apiVersion = "1")
-    public ResponseEntity<ReturnOrderResponse> approveReturn(@PathVariable UUID returnOrderId) {
-        return ResponseEntity.ok(ReturnOrderResponse.from(returnOrderService.approveReturn(returnOrderId)));
-    }
+        @Operation(summary = "Approve a pending return", description = "Approves a pending return so it can continue through the return workflow.", tags = {
+                        "Returns" })
+        @PostMapping("/{returnOrderId}/approve")
+        @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_APPROVE + "')")
+        @EmitEvent(id = "ORDER_RETURN_APPROVE", apiVersion = "1")
+        public ResponseEntity<ReturnOrderResponse> approveReturn(@PathVariable UUID returnOrderId) {
+                return ResponseEntity.ok(ReturnOrderResponse.from(returnOrderService.approveReturn(returnOrderId)));
+        }
 
-    @Operation(
-            summary = "Reject a pending return",
-            tags = {"Returns"})
-    @PostMapping("/{returnOrderId}/reject")
-    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_APPROVE + "')")
-    @EmitEvent(id = "ORDER_RETURN_REJECT", apiVersion = "1")
-    public ResponseEntity<ReturnOrderResponse> rejectReturn(
-            @PathVariable UUID returnOrderId, @Valid @RequestBody RejectReturnRequest request) {
-        return ResponseEntity.ok(
-                ReturnOrderResponse.from(returnOrderService.rejectReturn(returnOrderId, request.getReason())));
-    }
+        @Operation(summary = "Reject a pending return", description = "Rejects a pending return with a provided rejection reason.", tags = {
+                        "Returns" })
+        @PostMapping("/{returnOrderId}/reject")
+        @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_APPROVE + "')")
+        @EmitEvent(id = "ORDER_RETURN_REJECT", apiVersion = "1")
+        public ResponseEntity<ReturnOrderResponse> rejectReturn(
+                        @PathVariable UUID returnOrderId, @Valid @RequestBody RejectReturnRequest request) {
+                return ResponseEntity.ok(
+                                ReturnOrderResponse.from(
+                                                returnOrderService.rejectReturn(returnOrderId, request.getReason())));
+        }
 
-    @Operation(
-            summary = "Run the return orchestration saga (refund + restock signal)",
-            description = "From RETURN_REQUESTED: issues the refund and emits order.order.returned. A refund "
-                    + "failure parks the return at REFUND_FAILED before any stock movement.",
-            tags = {"Returns"})
-    @PostMapping("/{returnOrderId}/process")
-    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_CREATE + "')")
-    @EmitEvent(id = "ORDER_RETURN_PROCESS", apiVersion = "1")
-    public ResponseEntity<ReturnOrderResponse> processReturn(@PathVariable UUID returnOrderId) {
-        return ResponseEntity.ok(ReturnOrderResponse.from(returnOrderService.processReturn(returnOrderId)));
-    }
+        @Operation(summary = "Run the return orchestration saga (refund + restock signal)", description = "From RETURN_REQUESTED: issues the refund and emits order.order.returned. A refund "
+                        + "failure parks the return at REFUND_FAILED before any stock movement.", tags = { "Returns" })
+        @PostMapping("/{returnOrderId}/process")
+        @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_CREATE + "')")
+        @EmitEvent(id = "ORDER_RETURN_PROCESS", apiVersion = "1")
+        public ResponseEntity<ReturnOrderResponse> processReturn(@PathVariable UUID returnOrderId) {
+                return ResponseEntity.ok(ReturnOrderResponse.from(returnOrderService.processReturn(returnOrderId)));
+        }
 
-    @Operation(
-            summary = "Retry a return saga after a refund failure",
-            tags = {"Returns"})
-    @PostMapping("/{returnOrderId}/retry")
-    @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_CREATE + "')")
-    @EmitEvent(id = "ORDER_RETURN_RETRY", apiVersion = "1")
-    public ResponseEntity<ReturnOrderResponse> retryReturn(@PathVariable UUID returnOrderId) {
-        return ResponseEntity.ok(ReturnOrderResponse.from(returnOrderService.retryReturn(returnOrderId)));
-    }
+        @Operation(summary = "Retry a return saga after a refund failure", description = "Retries return processing for a return currently in a retryable failed state.", tags = {
+                        "Returns" })
+        @PostMapping("/{returnOrderId}/retry")
+        @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_CREATE + "')")
+        @EmitEvent(id = "ORDER_RETURN_RETRY", apiVersion = "1")
+        public ResponseEntity<ReturnOrderResponse> retryReturn(@PathVariable UUID returnOrderId) {
+                return ResponseEntity.ok(ReturnOrderResponse.from(returnOrderService.retryReturn(returnOrderId)));
+        }
 
-    private static ReturnLineCommand toLineCommand(ReturnLineRequest line) {
-        return new ReturnLineCommand(
-                line.getOriginalOrderLineId(), line.getReturnQty(), line.getCondition(), line.getSerialNumbers());
-    }
+        private static ReturnLineCommand toLineCommand(ReturnLineRequest line) {
+                return new ReturnLineCommand(
+                                line.getOriginalOrderLineId(), line.getReturnQty(), line.getCondition(),
+                                line.getSerialNumbers());
+        }
 }

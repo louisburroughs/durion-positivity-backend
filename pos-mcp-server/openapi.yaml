@@ -49,6 +49,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:system_prompt:view
+      x-required-permissions:
+      - mcp:system_prompt:view
     put:
       tags:
       - System Prompts
@@ -84,6 +86,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:system_prompt:update
+      x-required-permissions:
+      - mcp:system_prompt:update
     delete:
       tags:
       - System Prompts
@@ -105,6 +109,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:system_prompt:delete
+      x-required-permissions:
+      - mcp:system_prompt:delete
   /v1/llm-apis/{id}:
     get:
       tags:
@@ -129,6 +135,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:llm_api:view
+      x-required-permissions:
+      - mcp:llm_api:view
     put:
       tags:
       - LLM API Configuration
@@ -158,6 +166,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:llm_api:update
+      x-required-permissions:
+      - mcp:llm_api:update
     delete:
       tags:
       - LLM API Configuration
@@ -177,6 +187,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:llm_api:delete
+      x-required-permissions:
+      - mcp:llm_api:delete
   /v1/tools/{toolName}/permissions:
     get:
       tags:
@@ -200,6 +212,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:tool:view
+      x-required-permissions:
+      - mcp:tool:view
     post:
       tags:
       - MCP Tool Permissions
@@ -228,6 +242,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:tool:manage
+      x-required-permissions:
+      - mcp:tool:manage
     delete:
       tags:
       - MCP Tool Permissions
@@ -252,6 +268,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:tool:manage
+      x-required-permissions:
+      - mcp:tool:manage
   /v1/prompts:
     get:
       tags:
@@ -271,6 +289,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:system_prompt:view
+      x-required-permissions:
+      - mcp:system_prompt:view
     post:
       tags:
       - System Prompts
@@ -299,6 +319,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:system_prompt:create
+      x-required-permissions:
+      - mcp:system_prompt:create
   /v1/nlt/requests:
     post:
       tags:
@@ -328,6 +350,8 @@ paths:
       security:
       - bearerAuth:
         - nlti:request:submit
+      x-required-permissions:
+      - nlti:request:submit
   /v1/mcp/documents:
     post:
       tags:
@@ -351,6 +375,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:document:ingest
+      x-required-permissions:
+      - mcp:document:ingest
   /v1/mcp/chat:
     post:
       tags:
@@ -374,6 +400,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:chat:execute
+      x-required-permissions:
+      - mcp:chat:execute
   /v1/mcp/chat/stream:
     post:
       tags:
@@ -399,6 +427,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:chat:stream
+      x-required-permissions:
+      - mcp:chat:stream
   /v1/llm-apis:
     get:
       tags:
@@ -418,6 +448,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:llm_api:view
+      x-required-permissions:
+      - mcp:llm_api:view
     post:
       tags:
       - LLM API Configuration
@@ -440,6 +472,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:llm_api:create
+      x-required-permissions:
+      - mcp:llm_api:create
   /v1/nlt/audit:
     get:
       tags:
@@ -507,6 +541,8 @@ paths:
       security:
       - bearerAuth:
         - nlti:audit:read
+      x-required-permissions:
+      - nlti:audit:read
   /v1/mcp/documents/jobs/{jobId}:
     get:
       tags:
@@ -531,6 +567,8 @@ paths:
       security:
       - bearerAuth:
         - mcp:document:ingest
+      x-required-permissions:
+      - mcp:document:ingest
 components:
   schemas:
     SystemPromptRequest:
