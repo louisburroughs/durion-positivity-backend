@@ -18,6 +18,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -79,7 +80,12 @@ public class NltiController {
                     "Advances the operational workflow state of the caller's NLTI session so subsequent chat turns receive the workflow-gated tool set.")
     ResponseEntity<WorkflowStateResponse> setWorkflowState(
             @PathVariable @NonNull UUID sessionId, @Valid @RequestBody @NonNull WorkflowStateUpdateRequest request) {
-        String subjectId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        // Fail fast on a missing authenticated principal rather than defaulting to a sentinel subject:
+        // subjectId is the ownership key for this session-mutating call, so an unresolved username must
+        // never silently pass through (or mis-attribute the ownership check).
+        String subjectId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new AuthenticationCredentialsNotFoundException(
+                        "No authenticated username available for workflow-state update"));
         WorkflowState updatedState = workflowStateService.advance(sessionId, subjectId, request.workflowState());
         return ResponseEntity.ok(new WorkflowStateResponse(sessionId, updatedState));
     }
@@ -90,7 +96,6 @@ public class NltiController {
                     description = "The operational workflow state to set on the session",
                     requiredMode = Schema.RequiredMode.REQUIRED)
             @NotNull
-            @NonNull
             WorkflowState workflowState) {}
 
     @Schema(name = "WorkflowStateResponse", description = "The session's workflow state after the update")
