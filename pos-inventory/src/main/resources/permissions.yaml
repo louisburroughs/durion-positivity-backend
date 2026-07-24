@@ -106,3 +106,5 @@ permissions:
     description: "Short-close a dispatched transfer order with a loss/return disposition (parity-C3)"
   - name: "inventory:transfer:view"
     description: "View transfer orders, their lines, and lifecycle status"
+  - name: "inventory:valuation:view"
+    description: "View valuation"

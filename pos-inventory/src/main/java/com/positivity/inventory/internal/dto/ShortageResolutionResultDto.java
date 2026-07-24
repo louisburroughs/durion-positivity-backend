@@ -1,7 +1,9 @@
 package com.positivity.inventory.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.positivity.inventory.internal.enums.ShortageResolutionOption;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
@@ -10,7 +12,13 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.jspecify.annotations.Nullable;
 
+/**
+ * Result of executing a shortage resolution option (odoo-parity G2, issue #1049). References the
+ * created artifact (backorder / reservation / transfer order / purchase suggestion); CANCEL_LINE
+ * creates no artifact.
+ */
 @Schema(description = "Result of applying a resolution to an inventory shortage")
 @Data
 @Builder
@@ -25,9 +33,28 @@ public class ShortageResolutionResultDto {
     @NotNull
     private UUID allocationId;
 
-    @Schema(description = "Resolution strategy that was applied", example = "SUBSTITUTE", requiredMode = REQUIRED)
+    @Schema(description = "The resolution option that was executed", example = "BACKORDER", requiredMode = REQUIRED)
     @NotNull
-    private String resolution;
+    private ShortageResolutionOption optionType;
+
+    @Schema(description = "Idempotency key the resolution was recorded under", requiredMode = REQUIRED)
+    @NotNull
+    private String idempotencyKey;
+
+    @Schema(
+            description =
+                    "Kind of artifact created (BACKORDER, RESERVATION, TRANSFER_ORDER, PURCHASE_SUGGESTION, NONE)",
+            example = "BACKORDER",
+            requiredMode = REQUIRED)
+    @NotNull
+    private String artifactType;
+
+    @Schema(
+            description = "Identifier of the created artifact; null for CANCEL_LINE",
+            example = "01960003-0000-7000-8000-0000000000aa",
+            requiredMode = NOT_REQUIRED)
+    @Nullable
+    private UUID artifactId;
 
     @Schema(
             description = "Timestamp when the shortage was resolved",
@@ -36,10 +63,7 @@ public class ShortageResolutionResultDto {
     @NotNull
     private Instant resolvedAt;
 
-    @Schema(
-            description = "Resulting status of the allocation after resolution",
-            example = "RESOLVED",
-            requiredMode = REQUIRED)
+    @Schema(description = "Resulting status of the resolution", example = "RESOLVED", requiredMode = REQUIRED)
     @NotNull
     private String status;
 }

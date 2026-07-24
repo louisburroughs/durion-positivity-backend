@@ -26,6 +26,7 @@ import com.positivity.inventory.internal.service.SourcingStrategyService.Sourcin
 import com.positivity.inventory.service.ConsumptionService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -64,6 +65,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class ConsumptionServiceImpl implements ConsumptionService {
+
+    /** costSource label when the J1 engine costed at least one consumed line (odoo-parity J3). */
+    static final String ENGINE_COST_SOURCE = "ENGINE";
+
+    /** costSource label when no consumed line could be engine-costed (odoo-parity J3). */
+    static final String NONE_COST_SOURCE = "NONE";
+
     private final Clock clock;
 
     private final PickTaskRepository pickTaskRepository;
@@ -194,16 +202,36 @@ public class ConsumptionServiceImpl implements ConsumptionService {
         UUID consumptionId = UUIDv7Generator.generate();
         Instant consumedAt = Instant.now(clock);
         // #901: workorder's ext_pick_task replica accumulates consumed quantities from this fact.
+        // odoo-parity J3 (#1053): the fact also carries the J1 engine's method-derived cost. Each
+        // item produced exactly one WORKORDER_CONSUMPTION entry (in item order), which the funnel's
+        // LedgerCostingService stamped with the engine unitCost — zip them back by position.
+        List<InventoryLedgerEntry> consumptionEntries = savedEntries.stream()
+                .filter(entry -> entry.getEventType() == InventoryLedgerEventType.WORKORDER_CONSUMPTION)
+                .toList();
+        List<ConsumptionRecordedV1.Line> lines = new ArrayList<>();
+        boolean anyCosted = false;
+        for (int i = 0; i < items.size(); i++) {
+            ConsumeItemLine item = items.get(i);
+            BigDecimal unitCost =
+                    i < consumptionEntries.size() ? consumptionEntries.get(i).getUnitCost() : null;
+            BigDecimal extendedCost =
+                    unitCost == null ? null : unitCost.multiply(BigDecimal.valueOf(Math.abs(item.getQuantity())));
+            if (unitCost != null) {
+                anyCosted = true;
+            }
+            lines.add(new ConsumptionRecordedV1.Line(
+                    item.getPickTaskId(), item.getSkuId(), item.getQuantity(), unitCost, extendedCost));
+        }
+        String costSource = anyCosted ? ENGINE_COST_SOURCE : NONE_COST_SOURCE;
+
         inventoryFactPublisher.recordConsumption(new ConsumptionRecordedV1(
                 consumptionId,
                 request.getWorkorderId(),
                 request.getPickListId(),
                 totalItemsConsumed,
                 consumedAt,
-                items.stream()
-                        .map(item -> new ConsumptionRecordedV1.Line(
-                                item.getPickTaskId(), item.getSkuId(), item.getQuantity()))
-                        .toList()));
+                lines,
+                costSource));
 
         return new ConsumptionResponse(
                 consumptionId,

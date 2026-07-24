@@ -39,6 +39,10 @@ import com.positivity.inventory.internal.exception.RollupExpansionTooLargeExcept
 import com.positivity.inventory.internal.exception.ScrapInsufficientStockException;
 import com.positivity.inventory.internal.exception.ScrapLedgerPostingException;
 import com.positivity.inventory.internal.exception.ScrapNotFoundException;
+import com.positivity.inventory.internal.exception.SerialAlreadyInStockException;
+import com.positivity.inventory.internal.exception.SerialCountMismatchException;
+import com.positivity.inventory.internal.exception.SerialNotAvailableException;
+import com.positivity.inventory.internal.exception.ShortageResolutionException;
 import com.positivity.inventory.internal.exception.SnoozeUntilNotInFutureException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
@@ -337,6 +341,25 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.valueOf(422), LotInsufficientStockException.ERROR_CODE, ex.getMessage());
     }
 
+    @ExceptionHandler(SerialCountMismatchException.class)
+    public ResponseEntity<ApiError> handleSerialCountMismatch(SerialCountMismatchException ex) {
+        // odoo-parity E4 (#1050): a serialized posting must enumerate exactly |quantity| serials —
+        // a deterministic 422, the whole posting rolls back.
+        return build(HttpStatus.valueOf(422), SerialCountMismatchException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(SerialAlreadyInStockException.class)
+    public ResponseEntity<ApiError> handleSerialAlreadyInStock(SerialAlreadyInStockException ex) {
+        return build(HttpStatus.valueOf(422), SerialAlreadyInStockException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(SerialNotAvailableException.class)
+    public ResponseEntity<ApiError> handleSerialNotAvailable(SerialNotAvailableException ex) {
+        // odoo-parity E4 (#1050): an outbound posting naming an unknown or already-consumed serial
+        // (double-issue) is a deterministic 422.
+        return build(HttpStatus.valueOf(422), SerialNotAvailableException.ERROR_CODE, ex.getMessage());
+    }
+
     @ExceptionHandler(PurchaseSuggestionConversionException.class)
     public ResponseEntity<ApiError> handlePurchaseSuggestionConversion(PurchaseSuggestionConversionException ex) {
         // odoo-parity F4 (#1044): deterministic per-case 422 for convert preconditions
@@ -353,6 +376,13 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(InvalidParamCombinationException.class)
     public ResponseEntity<ApiError> handleInvalidParamCombination(InvalidParamCombinationException ex) {
         return build(HttpStatus.BAD_REQUEST, "INVALID_PARAM_COMBINATION", ex.getMessage());
+    }
+
+    @ExceptionHandler(ShortageResolutionException.class)
+    public ResponseEntity<ApiError> handleShortageResolution(ShortageResolutionException ex) {
+        // odoo-parity G2 (#1049): deterministic per-case 422 for resolve preconditions
+        // (MISSING_FIELD / SUBSTITUTE_UNAVAILABLE / INVALID_IDENTIFIER).
+        return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

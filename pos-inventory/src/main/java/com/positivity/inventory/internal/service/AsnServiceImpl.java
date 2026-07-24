@@ -277,6 +277,12 @@ public class AsnServiceImpl implements AsnService {
                     .quantityAfter(calculateQuantityAfter(
                             computed.request().getSku(), request.getLocationId(), computed.baseQuantity()))
                     .lotId(computed.lotId())
+                    // odoo-parity E4 (#1050): the funnel enumerates these serials for SERIAL-tracked
+                    // products (422 SERIAL_COUNT_MISMATCH if the count != received qty); ignored otherwise.
+                    .serialNumbers(
+                            computed.request().getSerialNumbers() == null
+                                    ? java.util.List.of()
+                                    : computed.request().getSerialNumbers())
                     .transactionUserId(actorId)
                     .sourceTransactionId(persistedReceipt.getReceiptId().toString())
                     .notes("Goods receipt " + persistedReceipt.getReceiptNumber())

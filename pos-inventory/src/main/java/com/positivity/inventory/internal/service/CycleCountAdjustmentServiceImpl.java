@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.entity.CycleCountTask;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.AdjustmentStatus;
 import com.positivity.inventory.internal.enums.ApprovalTier;
+import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.TaskStatus;
 import com.positivity.inventory.internal.event.AuditActorRef;
@@ -20,10 +21,12 @@ import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
 import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.SkuCostStateRepository;
 import com.positivity.inventory.service.ApprovalThresholdEvaluator;
 import com.positivity.inventory.service.CycleCountAdjustmentService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -56,6 +59,8 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     private final Clock clock;
     private final CycleCountTaskRepository taskRepository;
     private final CycleCountConflictDetector conflictDetector;
+    private final SkuCostStateRepository costStateRepository;
+    private final CostingMethodResolver methodResolver;
 
     @Override
     @Transactional
@@ -75,12 +80,19 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
             throw new TaskNotFoundException(request.getTaskId());
         }
 
+        // odoo-parity J3 (#1053): source costAtTimeOfAdjustment from the J1 costing engine's
+        // per-SKU running cost (ADR-0048) instead of the interim client/latest-receipt source.
+        // The engine value is authoritative when present; a request-supplied cost is the fallback
+        // for a SKU the engine has not yet costed (no sku_cost_state row / null running cost).
+        BigDecimal engineCost = resolveEngineCost(request.getStockItemId());
+        BigDecimal costAtTimeOfAdjustment = engineCost != null ? engineCost : request.getCostAtTimeOfAdjustment();
+
         CycleCountAdjustment adjustment = CycleCountAdjustment.builder()
                 .stockItemId(request.getStockItemId())
                 .taskId(request.getTaskId())
                 .reasonCode(request.getReasonCode())
                 .quantityChange(quantityChange)
-                .costAtTimeOfAdjustment(request.getCostAtTimeOfAdjustment())
+                .costAtTimeOfAdjustment(costAtTimeOfAdjustment)
                 .quantityOnHandBefore(request.getQuantityOnHandBefore())
                 .countedQuantity(request.getCountedQuantity())
                 .createdByUserId(request.getCreatedByUserId())
@@ -326,6 +338,23 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
             throw new AdjustmentLedgerPostingException(
                     adjustment.getAdjustmentId(), "Failed to post adjustment to ledger", e);
         }
+    }
+
+    /**
+     * The J1 engine's per-SKU running cost at adjustment time (odoo-parity J3, ADR-0048): the
+     * configured {@code standardCost} under STANDARD (falling back to the running
+     * average/latest-receipt memo when unset), otherwise the running weighted-average cost. Returns
+     * {@code null} when the SKU has no {@code sku_cost_state} row or no derivable cost, so the
+     * caller can fall back to the request-supplied cost.
+     */
+    private @Nullable BigDecimal resolveEngineCost(@NonNull UUID stockItemId) {
+        String sku = stockItemId.toString();
+        return costStateRepository
+                .findByStockItemId(sku)
+                .map(state -> methodResolver.resolve(sku) == CostingMethod.STANDARD
+                        ? (state.getStandardCost() != null ? state.getStandardCost() : state.getAvgCost())
+                        : state.getAvgCost())
+                .orElse(null);
     }
 
     private void publishMovementAdjustedEvent(

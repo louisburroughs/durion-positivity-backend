@@ -61,6 +61,25 @@ class InventoryEventsListenerTest {
                 """.formatted(eventId, SCRAP_ID, SCRAP_ID, LOCATION_ID, STORAGE_LOCATION_ID, WORKORDER_ID);
     }
 
+    /**
+     * odoo-parity J3 (#1053) engine-costed variant: schemaVersion 2, {@code costSource} labeled
+     * with the resolved costing method (AVERAGE/STANDARD), {@code unitCost} the engine's
+     * method-derived cost. The field shape is unchanged from v1 — the consumer reads it the same
+     * way and posts a costed shrinkage JE.
+     */
+    private String engineCostedScrapV2(String eventId, String costSource, String unitCost) {
+        return """
+                {"eventId":"%s","eventType":"inventory.scrap.posted","schemaVersion":2,
+                 "aggregateId":"%s","aggregateVersion":0,
+                 "occurredAtUtc":"2026-07-21T09:15:00Z","sourceService":"pos-inventory",
+                 "payload":{"scrapId":"%s","sku":"BRAKE-PAD-22","locationId":"%s",
+                            "storageLocationId":"%s","quantity":3,"reasonCode":"DAMAGED",
+                            "unitCost":%s,"costSource":"%s","workorderId":"%s",
+                            "occurredAt":"2026-07-21T09:15:00Z"}}
+                """.formatted(
+                eventId, SCRAP_ID, SCRAP_ID, LOCATION_ID, STORAGE_LOCATION_ID, unitCost, costSource, WORKORDER_ID);
+    }
+
     /** ADR-0048 interim uncosted variant: unitCost null, costSource NONE, nullable ids absent. */
     private String uncostedScrap(String eventId) {
         return """
@@ -98,6 +117,24 @@ class InventoryEventsListenerTest {
         verify(processedEvents).save(processed.capture());
         assertThat(processed.getValue().getEventId()).isEqualTo("e-1");
         assertThat(processed.getValue().getProcessedAt()).isEqualTo(Instant.now(TEST_CLOCK));
+    }
+
+    @Test
+    @DisplayName("J3: engine-costed v2 scrap (schemaVersion 2, method costSource) posts a costed shrinkage JE")
+    void engineCostedV2ScrapPostsShrinkage() {
+        when(processedEvents.existsById("e-1a")).thenReturn(false);
+        when(processedEvents.existsById("e-1b")).thenReturn(false);
+
+        listener.onInventoryEvent(engineCostedScrapV2("e-1a", "AVERAGE", "4.25"));
+        listener.onInventoryEvent(engineCostedScrapV2("e-1b", "STANDARD", "6.00"));
+
+        ArgumentCaptor<ScrapPostedV1> fact = ArgumentCaptor.forClass(ScrapPostedV1.class);
+        verify(postingService, org.mockito.Mockito.times(2)).postShrinkage(fact.capture());
+        assertThat(fact.getAllValues().get(0).costSource()).isEqualTo("AVERAGE");
+        assertThat(fact.getAllValues().get(0).unitCost()).isEqualByComparingTo(new BigDecimal("4.25"));
+        assertThat(fact.getAllValues().get(1).costSource()).isEqualTo("STANDARD");
+        assertThat(fact.getAllValues().get(1).unitCost()).isEqualByComparingTo(new BigDecimal("6.00"));
+        verify(processedEvents, org.mockito.Mockito.times(2)).save(any());
     }
 
     @Test

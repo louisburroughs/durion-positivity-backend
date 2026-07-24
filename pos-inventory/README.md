@@ -40,8 +40,8 @@ Inventory management service for the Durion Positivity ETSMS platform. Manages s
 - `GET /v1/inventory/returns/returnable-items` — returnable item lookup for a workorder
 - `GET /v1/inventory/returns/reason-codes` — return reason code catalog
 - `POST /v1/inventory/returns/submit-to-stock` — submit return lines to stock (async accepted)
-- `GET /v1/inventory/shortage/options` — list shortage resolution options
-- `POST /v1/inventory/shortage/resolve` — resolve shortage with selected strategy
+- `GET /v1/inventory/shortage/options` — compute shortage resolution options (BACKORDER, SUBSTITUTE, TRANSFER_IN, EMERGENCY_PURCHASE, CANCEL_LINE), each with an expected-resolution date and cost delta where computable (params: `allocationId`, `sku`, `shortQuantity`, optional `workorderLineId`, `locationId`)
+- `POST /v1/inventory/shortage/resolve` — execute the chosen option atomically, creating the backing artifact (backorder / substitute reservation / transfer order / purchase suggestion); requires an `idempotencyKey` (retry-safe)
 - `GET /v1/inventory/backorders` — list backorders (filters: status, sku, location, workorderLine)
 - `GET /v1/inventory/backorders/{backorderId}` — retrieve a backorder
 - `GET /v1/inventory/locations` — paged location reference data

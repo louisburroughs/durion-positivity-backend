@@ -539,13 +539,15 @@ public enum PermissionCode {
     ORDER__RETURN__APPROVE(413, "order:return:approve"),
     ORDER__RETURN__VIEW(414, "order:return:view"),
     // ── Inventory (new) ────────────────────────────────────────────────────────
-    INVENTORY__LOT__MANAGE(415, "inventory:lot:manage");
+    INVENTORY__LOT__MANAGE(415, "inventory:lot:manage"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__VALUATION__VIEW(416, "inventory:valuation:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 35;
+    public static final int CATALOG_VERSION = 36;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

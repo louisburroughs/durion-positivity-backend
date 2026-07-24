@@ -16,7 +16,8 @@ class ScrapPostedV1Test {
     @Test
     void carriesSchemaIdentity() {
         assertThat(ScrapPostedV1.EVENT_TYPE).isEqualTo("inventory.scrap.posted");
-        assertThat(ScrapPostedV1.SCHEMA_VERSION).isEqualTo(1);
+        // odoo-parity J3 (#1053): engine-derived cost bumps the schema to v2 (additive semantics).
+        assertThat(ScrapPostedV1.SCHEMA_VERSION).isEqualTo(2);
     }
 
     @Test
@@ -27,6 +28,38 @@ class ScrapPostedV1Test {
         assertThat(fact.unitCost()).isNull();
         assertThat(fact.costSource()).isEqualTo("NONE");
         assertThat(fact.workorderId()).isNull();
+    }
+
+    @Test
+    void carriesEngineDerivedCostAndMethodCostSource() {
+        // odoo-parity J3 (#1053): a costed scrap carries the engine method-derived unit cost and
+        // labels its costSource with the resolved costing method (AVERAGE / STANDARD).
+        ScrapPostedV1 avco = new ScrapPostedV1(
+                SCRAP_ID,
+                "OIL-5W30-5QT",
+                null,
+                null,
+                2,
+                "DAMAGED",
+                new BigDecimal("4.2500"),
+                "AVERAGE",
+                null,
+                OCCURRED_AT);
+        assertThat(avco.unitCost()).isEqualByComparingTo("4.25");
+        assertThat(avco.costSource()).isEqualTo("AVERAGE");
+
+        ScrapPostedV1 std = new ScrapPostedV1(
+                SCRAP_ID,
+                "OIL-5W30-5QT",
+                null,
+                null,
+                2,
+                "DAMAGED",
+                new BigDecimal("6.0000"),
+                "STANDARD",
+                null,
+                OCCURRED_AT);
+        assertThat(std.costSource()).isEqualTo("STANDARD");
     }
 
     @Test

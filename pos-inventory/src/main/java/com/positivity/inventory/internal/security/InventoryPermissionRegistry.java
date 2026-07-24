@@ -194,6 +194,16 @@ public class InventoryPermissionRegistry {
      */
     public static final String INVENTORY_SEARCH = "inventory:on_hand:search";
 
+    // ==================== VALUATION PERMISSIONS ====================
+
+    /**
+     * View inventory valuation (on-hand × current unit cost) at SKU level, including the as-of
+     * variant (odoo-parity J2, issue #1052). Quantities × cost are doubly sensitive
+     * (DECISION-INVENTORY-011), so valuation is gated separately from on-hand view and never
+     * exposed under {@link #INVENTORY_VIEW} alone.
+     */
+    public static final String VALUATION_VIEW = "inventory:valuation:view";
+
     // ==================== PERMISSION REGISTRATION ====================
 
     /**
@@ -319,7 +329,14 @@ public class InventoryPermissionRegistry {
 
                 // Inventory view permissions (2)
                 permission(INVENTORY_VIEW, "View on-hand inventory levels at locations", "LOW"),
-                permission(INVENTORY_SEARCH, "Search inventory across multiple locations", "LOW"));
+                permission(INVENTORY_SEARCH, "Search inventory across multiple locations", "LOW"),
+
+                // Valuation permissions (1)
+                permission(
+                        VALUATION_VIEW,
+                        "View inventory valuation (on-hand x current unit cost) at SKU level, including as-of",
+                        "MEDIUM",
+                        "Issue #1052"));
     }
 
     /**
@@ -399,6 +416,13 @@ public class InventoryPermissionRegistry {
      */
     public static List<String> inventoryViewPermissions() {
         return Arrays.asList(INVENTORY_VIEW, INVENTORY_SEARCH);
+    }
+
+    /**
+     * Valuation permissions
+     */
+    public static List<String> valuationPermissions() {
+        return Arrays.asList(VALUATION_VIEW);
     }
 
     /**

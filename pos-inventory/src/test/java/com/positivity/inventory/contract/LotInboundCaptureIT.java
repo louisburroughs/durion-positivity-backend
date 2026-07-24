@@ -70,7 +70,8 @@ import tools.jackson.databind.ObjectMapper;
  *   <li>untracked products (replica NONE, no replica, free-text SKU) are byte-identical to
  *       pre-E1: no validation, null {@code lotId} everywhere, a single lot-agnostic summary
  *       row</li>
- *   <li>SERIAL-tracked products are treated as NONE for now (E4)</li>
+ *   <li>SERIAL-tracked products enumerate serial units on receipt (E4, #1050); the lot gate stays
+ *       inert for them (null lotId)</li>
  *   <li>the lot read API serves list filters and per-location on-hand from the per-lot rows
  *       under {@code inventory:on_hand:view}</li>
  * </ul>
@@ -313,18 +314,35 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("SERIAL-tracked products are treated as NONE for now (E4): no lot gate, null lotId")
-    void serialTracked_treatedAsNone() {
+    @DisplayName("SERIAL-tracked receipt enumerates one serial unit per received unit; null lotId (serials != lots)")
+    void serialTracked_enumeratesSerials() {
         UUID productId = seedProduct("SERIAL");
         PurchaseOrderResponse po = createApprovedPo(productId, 3, 1_000L);
         CreateGoodsReceiptRequest request = receiptRequest(po.getPurchaseOrderId(), UUID.randomUUID());
-        request.setLines(List.of(receiptLine(productId.toString(), new BigDecimal("3"), 1_000L, null)));
+        CreateGoodsReceiptLineRequest line = receiptLine(productId.toString(), new BigDecimal("3"), 1_000L, null);
+        line.setSerialNumbers(List.of("SN-E4-1", "SN-E4-2", "SN-E4-3"));
+        request.setLines(List.of(line));
 
         asnService.createGoodsReceipt(request, ACTOR);
 
         List<InventoryLedgerEntry> entries = ledgerEntriesFor(productId);
         assertThat(entries).hasSize(1);
         assertThat(entries.getFirst().getLotId()).isNull();
+    }
+
+    @Test
+    @DisplayName("SERIAL-tracked receipt whose serial count != quantity is rejected 422 SERIAL_COUNT_MISMATCH")
+    void serialTracked_countMismatchRejected() {
+        UUID productId = seedProduct("SERIAL");
+        PurchaseOrderResponse po = createApprovedPo(productId, 3, 1_000L);
+        CreateGoodsReceiptRequest request = receiptRequest(po.getPurchaseOrderId(), UUID.randomUUID());
+        CreateGoodsReceiptLineRequest line = receiptLine(productId.toString(), new BigDecimal("3"), 1_000L, null);
+        line.setSerialNumbers(List.of("SN-ONLY-1"));
+        request.setLines(List.of(line));
+
+        assertThatThrownBy(() -> asnService.createGoodsReceipt(request, ACTOR))
+                .isInstanceOf(com.positivity.inventory.internal.exception.SerialCountMismatchException.class);
+        assertThat(ledgerEntriesFor(productId)).isEmpty();
     }
 
     // ─── read API ───────────────────────────────────────────────────────────────

@@ -228,6 +228,46 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
         long getAllocated();
     }
 
+    // ─── Valuation read model on-hand aggregation (odoo-parity J2, issue #1052) ──
+    // Per-SKU on-hand over the lot-agnostic rows (lotId IS NULL) — the authoritative
+    // balances every reader consumes. Non-zero keys only; the valuation service pairs
+    // each with the SKU's current unit cost. Value is per-SKU (cost is per-SKU), so
+    // on-hand is summed across locations unless a site filter is applied.
+
+    /** Per-SKU on-hand summed across all sites (lot-agnostic rows), non-zero keys only. */
+    @Query("""
+                        SELECT s.stockItemId AS stockItemId, COALESCE(SUM(s.onHand), 0) AS onHand
+                        FROM InventoryStockSummary s
+                        WHERE s.lotId IS NULL
+                        GROUP BY s.stockItemId
+                        HAVING COALESCE(SUM(s.onHand), 0) <> 0
+                        """)
+    List<SkuOnHand> sumOnHandBySku();
+
+    /** Per-SKU on-hand at one site (lot-agnostic rows), non-zero keys only. */
+    @Query("""
+                        SELECT s.stockItemId AS stockItemId, COALESCE(SUM(s.onHand), 0) AS onHand
+                        FROM InventoryStockSummary s
+                        WHERE s.locationId = :locationId AND s.lotId IS NULL
+                        GROUP BY s.stockItemId
+                        HAVING COALESCE(SUM(s.onHand), 0) <> 0
+                        """)
+    List<SkuOnHand> sumOnHandBySkuAtLocation(@Param("locationId") UUID locationId);
+
+    /** On-hand of one SKU summed across all sites (lot-agnostic rows). */
+    @Query("""
+                        SELECT COALESCE(SUM(s.onHand), 0)
+                        FROM InventoryStockSummary s
+                        WHERE s.stockItemId = :stockItemId AND s.lotId IS NULL
+                        """)
+    long sumOnHandForSku(@Param("stockItemId") String stockItemId);
+
+    interface SkuOnHand {
+        String getStockItemId();
+
+        long getOnHand();
+    }
+
     /**
      * Set-based drift diff between ledger truth and the summary table (issue
      * #1024 drift verifier): returns ONLY mismatching keys, so the scheduled

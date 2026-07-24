@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.inventory.internal.dto.ShortageResolutionResultDto;
 import com.positivity.inventory.internal.dto.ShortageResolveRequest;
+import com.positivity.inventory.internal.enums.ShortageResolutionOption;
 import com.positivity.inventory.service.ShortageResolutionService;
 import java.time.Instant;
 import java.util.UUID;
@@ -45,7 +46,10 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
 
         ShortageResolutionResultDto mockResponse = ShortageResolutionResultDto.builder()
                 .allocationId(allocationId)
-                .resolution("BACKORDER")
+                .optionType(ShortageResolutionOption.BACKORDER)
+                .idempotencyKey("k-contract-1")
+                .artifactType("BACKORDER")
+                .artifactId(UUID.fromString("00000000-0000-0000-0000-0000000000e1"))
                 .resolvedAt(Instant.parse("2024-01-01T00:00:00Z"))
                 .status("RESOLVED")
                 .build();
@@ -54,8 +58,12 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
                 .thenReturn(mockResponse);
 
         ShortageResolveRequest request = ShortageResolveRequest.builder()
+                .idempotencyKey("k-contract-1")
                 .allocationId(allocationId)
-                .resolution("BACKORDER")
+                .optionType(ShortageResolutionOption.BACKORDER)
+                .sku("00000000-0000-0000-0000-0000000000c1")
+                .shortQuantity(3)
+                .workorderLineId(UUID.fromString("00000000-0000-0000-0000-0000000000b1"))
                 .build();
 
         mockMvc.perform(withShortageAuth(post("/v1/inventory/shortage/resolve"))
@@ -63,7 +71,8 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.allocationId").value(allocationId.toString()))
-                .andExpect(jsonPath("$.resolution").value("BACKORDER"))
+                .andExpect(jsonPath("$.optionType").value("BACKORDER"))
+                .andExpect(jsonPath("$.artifactType").value("BACKORDER"))
                 .andExpect(jsonPath("$.resolvedAt").isNotEmpty())
                 .andExpect(jsonPath("$.status").value("RESOLVED"));
     }
@@ -72,8 +81,8 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("POST /v1/inventory/shortage/resolve with missing allocationId → 400 Bad Request")
     void resolveShortage_missingAllocationId_returns400() throws Exception {
         String requestBody = """
-                                {"resolution":"BACKORDER"}
-                                """;
+                {"idempotencyKey":"k","optionType":"BACKORDER","sku":"00000000-0000-0000-0000-0000000000c1","shortQuantity":3}
+                """;
 
         mockMvc.perform(withShortageAuth(post("/v1/inventory/shortage/resolve"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -82,12 +91,12 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("POST /v1/inventory/shortage/resolve with missing resolution → 400 Bad Request")
-    void resolveShortage_missingResolution_returns400() throws Exception {
+    @DisplayName("POST /v1/inventory/shortage/resolve with missing optionType → 400 Bad Request")
+    void resolveShortage_missingOptionType_returns400() throws Exception {
         UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         String requestBody = String.format("""
-                                                                {"allocationId":"%s"}
-                                """, allocationId);
+                {"idempotencyKey":"k","allocationId":"%s","sku":"00000000-0000-0000-0000-0000000000c1","shortQuantity":3}
+                """, allocationId);
 
         mockMvc.perform(withShortageAuth(post("/v1/inventory/shortage/resolve"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -99,8 +108,11 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("POST /v1/inventory/shortage/resolve without required authority → 403 Forbidden")
     void resolveShortage_missingRequiredAuthority_returns403() throws Exception {
         ShortageResolveRequest request = ShortageResolveRequest.builder()
+                .idempotencyKey("k")
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .resolution("BACKORDER")
+                .optionType(ShortageResolutionOption.BACKORDER)
+                .sku("00000000-0000-0000-0000-0000000000c1")
+                .shortQuantity(3)
                 .build();
 
         mockMvc.perform(post("/v1/inventory/shortage/resolve")

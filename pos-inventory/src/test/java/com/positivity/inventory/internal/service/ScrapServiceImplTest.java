@@ -20,6 +20,7 @@ import com.positivity.inventory.internal.dto.scrap.ScrapResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.ScrapRecord;
 import com.positivity.inventory.internal.enums.ApprovalTier;
+import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.ScrapCostSource;
 import com.positivity.inventory.internal.enums.ScrapReasonCode;
@@ -80,6 +81,9 @@ class ScrapServiceImplTest {
     @Mock
     private com.positivity.inventory.service.ReplenishmentService replenishmentService;
 
+    @Mock
+    private CostingMethodResolver methodResolver;
+
     private final Clock fixedClock = Clock.fixed(Instant.parse("2026-07-23T00:00:00Z"), ZoneOffset.UTC);
 
     private ScrapServiceImpl service;
@@ -93,8 +97,12 @@ class ScrapServiceImplTest {
                 thresholdEvaluator,
                 inventoryFactPublisher,
                 replenishmentService,
-                fixedClock);
+                fixedClock,
+                methodResolver);
         setUpAuthenticatedActor("inventory:scrap:create");
+        // odoo-parity J3: the fact labels costSource with the resolved costing method whenever the
+        // engine stamped a cost. Default AVERAGE; STANDARD-specific tests override this.
+        lenient().when(methodResolver.resolve(SKU)).thenReturn(CostingMethod.AVERAGE);
         lenient().when(scrapRepository.save(any(ScrapRecord.class))).thenAnswer(invocation -> {
             ScrapRecord record = invocation.getArgument(0);
             if (record.getScrapId() == null) {
@@ -196,7 +204,64 @@ class ScrapServiceImplTest {
         verify(inventoryFactPublisher).recordScrapPosted(factCaptor.capture());
         assertThat(factCaptor.getValue().sku()).isEqualTo(SKU);
         assertThat(factCaptor.getValue().quantity()).isEqualTo(3);
-        assertThat(factCaptor.getValue().costSource()).isEqualTo("LATEST_RECEIPT");
+        // odoo-parity J3: fact cost + source come from the engine, labeled by the resolved method.
+        assertThat(factCaptor.getValue().costSource()).isEqualTo("AVERAGE");
+    }
+
+    @Test
+    @DisplayName("J3: fact carries the engine-stamped SCRAP_OUT cost, not the interim snapshot; AVERAGE method")
+    void createScrap_factCarriesEngineCost_avco() {
+        // Interim snapshot (2.00) gates the approval tier; the engine stamps a distinct 2.50 on the
+        // SCRAP_OUT entry during posting, and THAT is what the fact must carry (odoo-parity J3).
+        stubCosts(new BigDecimal("2.0000"), null);
+        stubBelowThreshold();
+        stubPostingWithEngineCost(new BigDecimal("2.5000"));
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(SKU, LOCATION_ID))
+                .thenReturn(10);
+
+        service.createScrap(createRequest(ScrapReasonCode.DAMAGED, null));
+
+        ArgumentCaptor<ScrapPostedV1> factCaptor = ArgumentCaptor.forClass(ScrapPostedV1.class);
+        verify(inventoryFactPublisher).recordScrapPosted(factCaptor.capture());
+        assertThat(factCaptor.getValue().unitCost()).isEqualByComparingTo("2.50");
+        assertThat(factCaptor.getValue().costSource()).isEqualTo("AVERAGE");
+    }
+
+    @Test
+    @DisplayName("J3: STANDARD-costed SKU labels the fact costSource STANDARD")
+    void createScrap_factCarriesEngineCost_standard() {
+        stubCosts(new BigDecimal("2.0000"), null);
+        stubBelowThreshold();
+        stubPostingWithEngineCost(new BigDecimal("6.0000"));
+        when(methodResolver.resolve(SKU)).thenReturn(CostingMethod.STANDARD);
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(SKU, LOCATION_ID))
+                .thenReturn(10);
+
+        service.createScrap(createRequest(ScrapReasonCode.DAMAGED, null));
+
+        ArgumentCaptor<ScrapPostedV1> factCaptor = ArgumentCaptor.forClass(ScrapPostedV1.class);
+        verify(inventoryFactPublisher).recordScrapPosted(factCaptor.capture());
+        assertThat(factCaptor.getValue().unitCost()).isEqualByComparingTo("6.00");
+        assertThat(factCaptor.getValue().costSource()).isEqualTo("STANDARD");
+    }
+
+    @Test
+    @DisplayName("J3: an uncosted SKU (engine stamped no cost) still emits a null-cost / NONE fact")
+    void createScrap_uncostedEngine_emitsNoneCostFact() {
+        // The approval snapshot exists (auto-posts), but the engine has no running cost yet, so the
+        // stamped SCRAP_OUT cost is null — the fact stays record-and-skip for the D2 consumer.
+        stubCosts(new BigDecimal("2.0000"), null);
+        stubBelowThreshold();
+        stubPostingWithEngineCost(null);
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(SKU, LOCATION_ID))
+                .thenReturn(10);
+
+        service.createScrap(createRequest(ScrapReasonCode.DAMAGED, null));
+
+        ArgumentCaptor<ScrapPostedV1> factCaptor = ArgumentCaptor.forClass(ScrapPostedV1.class);
+        verify(inventoryFactPublisher).recordScrapPosted(factCaptor.capture());
+        assertThat(factCaptor.getValue().unitCost()).isNull();
+        assertThat(factCaptor.getValue().costSource()).isEqualTo("NONE");
     }
 
     @Test
@@ -371,6 +436,30 @@ class ScrapServiceImplTest {
                     InventoryLedgerEntry entry = invocation.getArgument(0);
                     entry.setLedgerEntryId(ledgerEntryId);
                     return entry;
+                });
+        return ledgerEntryId;
+    }
+
+    /**
+     * Posting stub that simulates the J1 funnel's {@code LedgerCostingService} stamping a
+     * method-derived {@code engineCost} on the SCRAP_OUT entry: returns a fresh persisted entry
+     * carrying {@code engineCost} (which may differ from the interim snapshot the service set),
+     * leaving the captured POST argument untouched so cost provenance is testable.
+     */
+    private UUID stubPostingWithEngineCost(BigDecimal engineCost) {
+        UUID ledgerEntryId = UUID.randomUUID();
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class), anyBoolean()))
+                .thenAnswer(invocation -> {
+                    InventoryLedgerEntry arg = invocation.getArgument(0);
+                    return InventoryLedgerEntry.builder()
+                            .ledgerEntryId(ledgerEntryId)
+                            .stockItemId(arg.getStockItemId())
+                            .eventType(arg.getEventType())
+                            .changeInQuantity(arg.getChangeInQuantity())
+                            .quantityAfter(arg.getQuantityAfter())
+                            .unitCost(engineCost)
+                            .locationId(arg.getLocationId())
+                            .build();
                 });
         return ledgerEntryId;
     }
