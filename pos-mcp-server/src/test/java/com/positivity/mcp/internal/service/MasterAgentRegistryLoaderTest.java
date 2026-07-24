@@ -14,8 +14,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationContext;
 
 /**
- * Gate 2B / #780: the loader no longer consults mcp_role / mcp_tool_role. roleToolAssignments is
- * always empty; tool visibility is determined by permission gating at request time.
+ * Gate 2B / #780: the loader no longer consults mcp_role / mcp_tool_role, and role->tool
+ * preassignment is removed; tool visibility is determined by permission gating at request time.
  */
 @ExtendWith(MockitoExtension.class)
 class MasterAgentRegistryLoaderTest {
@@ -51,8 +51,6 @@ class MasterAgentRegistryLoaderTest {
         assertThat(loaded.domainToolAssignments())
                 .containsEntry("inventory", List.of(inventoryBean, inventoryLookupBean))
                 .containsEntry("order", List.of(orderBean));
-        // Legacy role-scoped preassignment retired — always empty.
-        assertThat(loaded.roleToolAssignments()).isEmpty();
     }
 
     @Test
@@ -83,7 +81,28 @@ class MasterAgentRegistryLoaderTest {
 
         assertThat(loaded.sharedTools()).containsExactly(sharedBean);
         assertThat(loaded.domainToolAssignments()).isEmpty();
-        assertThat(loaded.roleToolAssignments()).isEmpty();
+    }
+
+    @Test
+    void preloadsUnionOfToolsAcrossConfiguredWorkflowStates() {
+        // #778: a session in a non-IDLE state must find its gated tool beans in the registry, so the
+        // loader preloads the union across the configured states (not just IDLE).
+        ToolMetadata idleTool = tool("OrderFacadeTool", "order", "orderFacadeTool");
+        ToolMetadata poTool = tool("InventoryFacadeTool", "inventory", "inventoryFacadeTool");
+        Object orderBean = new Object();
+        Object inventoryBean = new Object();
+        when(repository.findEnabledByWorkflow("IDLE")).thenReturn(List.of(idleTool));
+        when(repository.findEnabledByWorkflow("CREATING_PO")).thenReturn(List.of(poTool));
+        when(applicationContext.getBean("orderFacadeTool")).thenReturn(orderBean);
+        when(applicationContext.getBean("inventoryFacadeTool")).thenReturn(inventoryBean);
+
+        MasterAgentRegistryLoader loader =
+                new MasterAgentRegistryLoader(repository, applicationContext, "IDLE,CREATING_PO");
+        MasterAgentRegistryLoader.LoadedMasterAgentRegistry loaded = loader.loadRegistryDefinition();
+
+        assertThat(loaded.domainToolAssignments())
+                .containsEntry("order", List.of(orderBean))
+                .containsEntry("inventory", List.of(inventoryBean));
     }
 
     private static ToolMetadata tool(String name, String domain, String handlerBean) {

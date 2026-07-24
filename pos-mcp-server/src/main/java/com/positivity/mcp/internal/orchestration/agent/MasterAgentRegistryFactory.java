@@ -2,7 +2,6 @@ package com.positivity.mcp.internal.orchestration.agent;
 
 import com.positivity.mcp.internal.service.MasterAgentRegistryLoader;
 import java.util.List;
-import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
 
@@ -20,18 +19,9 @@ public final class MasterAgentRegistryFactory {
         List<DomainAgentDefinition> domainAgents = loadedRegistry.domainToolAssignments().entrySet().stream()
                 .map(entry -> new DomainAgentDefinition(entry.getKey(), entry.getKey(), entry.getValue()))
                 .toList();
-        return new LoadedMasterAgentRegistry(
-                loadedRegistry.sharedTools(), domainAgents, loadedRegistry.roleToolAssignments());
+        return new LoadedMasterAgentRegistry(loadedRegistry.sharedTools(), domainAgents);
     }
 
     public record LoadedMasterAgentRegistry(
-            @NonNull List<Object> sharedTools,
-            @NonNull List<DomainAgentDefinition> domainAgents,
-            @NonNull Map<String, List<Object>> roleToolAssignments) {
-
-        public LoadedMasterAgentRegistry(
-                @NonNull List<Object> sharedTools, @NonNull List<DomainAgentDefinition> domainAgents) {
-            this(sharedTools, domainAgents, Map.of());
-        }
-    }
+            @NonNull List<Object> sharedTools, @NonNull List<DomainAgentDefinition> domainAgents) {}
 }

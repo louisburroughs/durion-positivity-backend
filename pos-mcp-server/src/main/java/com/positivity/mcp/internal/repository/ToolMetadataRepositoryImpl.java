@@ -16,7 +16,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
-@Profile({ "!test", "openapi" })
+@Profile({"!test", "openapi"})
 public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
 
     private final JdbcTemplate jdbcTemplate;
@@ -237,7 +237,9 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 rs.getString("http_method"),
                 rs.getString("http_path"),
                 rs.getString("service_id"),
-                rs.getString("input_schema"));
+                rs.getString("input_schema"),
+                // Execution reconstruction: permissions live in mcp_tool_permission, not on the row.
+                java.util.List.of());
     }
 
     @Override

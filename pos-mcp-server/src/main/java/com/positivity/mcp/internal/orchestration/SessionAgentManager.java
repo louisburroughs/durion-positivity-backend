@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
+import com.positivity.mcp.internal.client.RoleDefaultPermissionsClient;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
@@ -24,6 +25,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -33,9 +35,9 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -63,7 +65,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private final Cache<String, AtomicInteger> requestCountCache;
     private final ChatModel chatModel;
     private final EmbeddingModel embeddingModel;
-        private final PgVectorStore embeddingStore;
+    private final PgVectorStore embeddingStore;
     private final MasterAgentRegistry toolRegistry;
     private final SharedOrchestrationSupport sharedOrchestrationSupport;
     private final ToolSelectionEngine toolSelectionEngine;
@@ -80,6 +82,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private final @Nullable NltiTelemetryEmitter telemetryEmitter;
     private final @Nullable OpenApiToolProvider openApiToolProvider;
     private final @Nullable RequestScopedUserContext requestScopedUserContext;
+    private final @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient;
     private final Clock clock;
 
     private final int memoryMaxMessages;
@@ -100,6 +103,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @Nullable NltiTelemetryEmitter telemetryEmitter,
             @Nullable OpenApiToolProvider openApiToolProvider,
             @Nullable RequestScopedUserContext requestScopedUserContext,
+            @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient,
             @NonNull Clock clock,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
@@ -119,6 +123,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         this.telemetryEmitter = telemetryEmitter;
         this.openApiToolProvider = openApiToolProvider;
         this.requestScopedUserContext = requestScopedUserContext;
+        this.roleDefaultPermissionsClient = roleDefaultPermissionsClient;
         this.clock = clock;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
@@ -311,12 +316,12 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         // Currently applied at chat boundary where user context is available.
 
         PosAssistant agent = new SpringAiPosAssistant(
-            chatModel,
-            () -> rolePromptResolver.assemble(role, ragScope).text(),
-            tools,
-            resilientContentRetriever,
-            this::chatMemoryFor,
-            openApiToolProvider);
+                chatModel,
+                () -> rolePromptResolver.assemble(role, ragScope).text(),
+                tools,
+                resilientContentRetriever,
+                this::chatMemoryFor,
+                openApiToolProvider);
         LOGGER.debug(
                 "Built MCP role agent role={} promptName={} ragScope={} toolNames={}",
                 role,
@@ -356,13 +361,13 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         int prebuilt = 0;
         for (String role : toolRegistry.preloadableRoleIdentifiers()) {
             try {
-                // No CurrentUserContext is available during startup warm-up, so
-                // prebuild
-                // with the AUTHENTICATED-only permission set; callers whose actual
-                // permissionCodes differ get a cache miss and build on demand via
-                // getOrCreateAgent (its key already varies with toolCacheKey).
+                // No CurrentUserContext is available during startup warm-up. #782: seed the role's
+                // real default permissions from pos-security-service (fail-soft — empty on error) so
+                // the warm cache matches the role's actual gated tool set; always include AUTHENTICATED.
+                // Callers whose actual permissionCodes still differ get a cache miss and build on
+                // demand via getOrCreateAgent (its key already varies with toolCacheKey).
                 ToolSelectionEngine.ToolSelectionResult selection =
-                        toolSelectionEngine.selectRoleTools(role, Set.of(PermissionCodes.AUTHENTICATED), role);
+                        toolSelectionEngine.selectRoleTools(role, prebuildPermissionCodes(role), role);
                 List<Object> selectedTools =
                         sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
                 String warmCacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
@@ -380,6 +385,15 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         LOGGER.info("Prebuilt {} MCP role agents in {} ms", prebuilt, elapsedMs(startNanos));
     }
 
+    private @NonNull Set<String> prebuildPermissionCodes(@NonNull String role) {
+        Set<String> permissionCodes = new HashSet<>();
+        permissionCodes.add(PermissionCodes.AUTHENTICATED);
+        if (roleDefaultPermissionsClient != null) {
+            permissionCodes.addAll(roleDefaultPermissionsClient.defaultPermissions(role));
+        }
+        return permissionCodes;
+    }
+
     private @NonNull ChatMemory chatMemoryFor(@NonNull Object memoryId) {
         // Tier 3: Replace MessageWindowChatMemory with SemanticChatMemoryStore
         // for persistent semantic memory and session summarization
@@ -395,7 +409,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         String prompt = rolePromptResolver.resolvePrompt(SystemPromptDefaults.MASTER_PROMPT_NAME)
                 + System.lineSeparator()
                 + formatUserContext(currentUserContext);
-        String response = chatModel.call(new Prompt(new SystemMessage(prompt), new UserMessage(message)))
+        String response = chatModel
+                .call(new Prompt(new SystemMessage(prompt), new UserMessage(message)))
                 .getResult()
                 .getOutput()
                 .getText();

@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
+import com.positivity.mcp.internal.client.RoleDefaultPermissionsClient;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
@@ -21,6 +22,7 @@ import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -76,6 +78,9 @@ public class StreamingSessionAgentManager
     @Nullable
     private final RequestScopedUserContext requestScopedUserContext;
 
+    @Nullable
+    private final RoleDefaultPermissionsClient roleDefaultPermissionsClient;
+
     private final Clock clock;
 
     private final int memoryMaxMessages;
@@ -92,6 +97,7 @@ public class StreamingSessionAgentManager
             @Nullable NltiTelemetryEmitter telemetryEmitter,
             @Nullable OpenApiToolProvider openApiToolProvider,
             @Nullable RequestScopedUserContext requestScopedUserContext,
+            @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient,
             @NonNull Clock clock,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
@@ -107,6 +113,7 @@ public class StreamingSessionAgentManager
         this.telemetryEmitter = telemetryEmitter;
         this.openApiToolProvider = openApiToolProvider;
         this.requestScopedUserContext = requestScopedUserContext;
+        this.roleDefaultPermissionsClient = roleDefaultPermissionsClient;
         this.clock = clock;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
@@ -259,12 +266,12 @@ public class StreamingSessionAgentManager
                 new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
 
         StreamingPosAssistant agent = new SpringAiStreamingPosAssistant(
-            streamingChatModel,
-            () -> rolePromptResolver.assemble(role, ragScope).text(),
-            tools,
-            resilientContentRetriever,
-            this::chatMemoryFor,
-            openApiToolProvider);
+                streamingChatModel,
+                () -> rolePromptResolver.assemble(role, ragScope).text(),
+                tools,
+                resilientContentRetriever,
+                this::chatMemoryFor,
+                openApiToolProvider);
         LOGGER.debug(
                 "Built MCP streaming role agent role={} promptName={} ragScope={} toolNames={}",
                 role,
@@ -318,12 +325,13 @@ public class StreamingSessionAgentManager
         int prebuilt = 0;
         for (String role : toolRegistry.preloadableRoleIdentifiers()) {
             try {
-                // No CurrentUserContext is available during startup warm-up, so prebuild
-                // with the AUTHENTICATED-only permission set; callers whose actual
-                // permissionCodes differ get a cache miss and build on demand (its key
-                // already varies with toolCacheKey).
+                // No CurrentUserContext is available during startup warm-up. #782: seed the role's
+                // real default permissions from pos-security-service (fail-soft — empty on error) so
+                // the warm cache matches the role's actual gated tool set; always include AUTHENTICATED.
+                // Callers whose actual permissionCodes still differ get a cache miss and build on
+                // demand (its key already varies with toolCacheKey).
                 ToolSelectionEngine.ToolSelectionResult selection =
-                        toolSelectionEngine.selectRoleTools(role, Set.of(PermissionCodes.AUTHENTICATED), role);
+                        toolSelectionEngine.selectRoleTools(role, prebuildPermissionCodes(role), role);
                 List<Object> selectedTools =
                         sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
                 String warmCacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
@@ -339,10 +347,21 @@ public class StreamingSessionAgentManager
         LOGGER.info("Prebuilt {} MCP streaming role agents in {} ms", prebuilt, elapsedMs(startNanos));
     }
 
+    private @NonNull Set<String> prebuildPermissionCodes(@NonNull String role) {
+        Set<String> permissionCodes = new HashSet<>();
+        permissionCodes.add(PermissionCodes.AUTHENTICATED);
+        if (roleDefaultPermissionsClient != null) {
+            permissionCodes.addAll(roleDefaultPermissionsClient.defaultPermissions(role));
+        }
+        return permissionCodes;
+    }
+
     private @NonNull ChatMemory chatMemoryFor(@NonNull Object memoryId) {
         return chatMemoryCache.get(
                 String.valueOf(memoryId),
-                ignored -> MessageWindowChatMemory.builder().maxMessages(memoryMaxMessages).build());
+                ignored -> MessageWindowChatMemory.builder()
+                        .maxMessages(memoryMaxMessages)
+                        .build());
     }
 
     private static @NonNull String memoryKey(@NonNull String userId, @NonNull String role) {

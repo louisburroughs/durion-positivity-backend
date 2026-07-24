@@ -18,10 +18,12 @@ import org.springframework.stereotype.Component;
  * permission caller's tools; relaying the token is what lets a discovered op call the gateway as
  * the caller (otherwise the gateway rejects it with 401).
  *
- * <p><strong>Threading:</strong> backed by a {@link ThreadLocal}, correct for the synchronous
- * blocking path only. The streaming (Reactor) path executes on different threads; until Reactor-
- * context propagation is implemented, the provider treats an empty holder as "no discovered tools"
- * (fail-closed).
+ * <p><strong>Threading:</strong> backed by a {@link ThreadLocal}. Both the synchronous and the
+ * streaming managers publish the caller on the calling thread before invoking the agent and clear it
+ * in a {@code finally} on that same thread. This is correct for streaming too: the streaming assistant
+ * resolves tool callbacks synchronously at Flux-assembly time (before {@code subscribe()} and before
+ * any async token callback), while the holder is still set. An empty holder always fail-closes to
+ * "no discovered tools".
  */
 @Component
 public class RequestScopedUserContext {

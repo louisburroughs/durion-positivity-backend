@@ -12,6 +12,7 @@ import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -128,7 +129,37 @@ public class OpenApiToolMapper {
         String title = Optional.ofNullable(operation.getSummary()).orElse(operationId);
         String description = Optional.ofNullable(operation.getDescription()).orElse(title);
         operations.add(new DiscoveredOperation(
-                toolName, description, method.name(), path, serviceId, buildQueryParamSchemaJson(operation)));
+                toolName,
+                description,
+                method.name(),
+                path,
+                serviceId,
+                buildQueryParamSchemaJson(operation),
+                extractRequiredPermissions(operation)));
+    }
+
+    /**
+     * Reads the {@code x-required-permissions} vendor extension emitted by each service's
+     * {@code requiredPermissionsOperationCustomizer} (#781). Fail-closed: when the extension is
+     * absent (or not a list), returns an empty list so the discovered op is never selected until a
+     * permission is granted — there is <strong>no</strong> {@code AUTHENTICATED} default here.
+     */
+    private static @NonNull List<String> extractRequiredPermissions(@NonNull Operation operation) {
+        Map<String, Object> extensions = operation.getExtensions();
+        if (extensions == null) {
+            return List.of();
+        }
+        Object value = extensions.get("x-required-permissions");
+        if (!(value instanceof Collection<?> codes)) {
+            return List.of();
+        }
+        return codes.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(Object::toString)
+                .map(String::trim)
+                .filter(code -> !code.isBlank())
+                .distinct()
+                .toList();
     }
 
     /**
@@ -188,6 +219,7 @@ public class OpenApiToolMapper {
                 .title(title)
                 .description(description)
                 .inputSchema(inputSchema)
+                .annotations(annotationsForMethod(method))
                 .build();
 
         var handler = proxyFactory.handlerForBaseUri(gatewayBaseUri, method, path);
@@ -205,6 +237,22 @@ public class OpenApiToolMapper {
             return segment;
         }
         return "unknown";
+    }
+
+    /**
+     * Maps an operation's HTTP method to MCP {@link McpSchema.ToolAnnotations} behavioral hints so
+     * clients can reason about tool effects (e.g. gate writes behind confirmation): GET is read-only
+     * and idempotent; PUT/DELETE mutate but are idempotent and destructive; POST is additive and
+     * non-idempotent; PATCH is destructive and non-idempotent. Every discovered op calls the backend,
+     * so openWorldHint is always true. Hints are advisory, not security guarantees — gating is still
+     * enforced by permission codes.
+     */
+    private static McpSchema.ToolAnnotations annotationsForMethod(@NonNull HttpMethod method) {
+        boolean readOnly = method == HttpMethod.GET;
+        boolean idempotent = method == HttpMethod.GET || method == HttpMethod.PUT || method == HttpMethod.DELETE;
+        boolean destructive = method == HttpMethod.PUT || method == HttpMethod.DELETE || method == HttpMethod.PATCH;
+        // title left null (the Tool already carries a title); returnDirect left default (null).
+        return new McpSchema.ToolAnnotations(null, readOnly, destructive, idempotent, true, null);
     }
 
     private void addOperation(
@@ -229,6 +277,7 @@ public class OpenApiToolMapper {
                 .title(title)
                 .description(description)
                 .inputSchema(inputSchema)
+                .annotations(annotationsForMethod(method))
                 .build();
 
         var handler = proxyFactory.handler(serviceId, method, path);

@@ -21,7 +21,10 @@ eval/
 
 ## Gate 0 exit status
 - Structural harness: **active**.
-- Minimum counts (≥100 tool-selection / ≥50 rag-retrieval / ≥30 write-safety): **NOT met** —
-  currently seed-only (4/4/4). The `minimumFixtureCountsMet` test is `@Disabled` until authored;
-  it must be enabled and green before Gate 0 is signed Pass.
-- Baseline metrics: **pending** live backend.
+- Minimum counts (≥100 tool-selection / ≥50 rag-retrieval / ≥30 write-safety): **met** —
+  105 / 56 / 34 (seed + `generated.json`). The `minimumFixtureCountsMet` test is **enabled** and green.
+  Generated fixtures are grounded in the 16 facade tool names + their V18 gating permissions, the RAG
+  doc ids/scopes, and the `KNOWN_ROLES` allowlist; regenerate with `scripts`-style tooling if the tool
+  set or permission seeds change.
+- Baseline metrics (hit@5 / MRR / recall@k): **pending** live backend — captured by `BaselineCaptureIT`
+  against a running model + pgvector, not part of the structural CI test.

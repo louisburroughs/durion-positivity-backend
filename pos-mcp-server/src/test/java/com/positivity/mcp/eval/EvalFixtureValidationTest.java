@@ -12,7 +12,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -119,8 +118,6 @@ class EvalFixtureValidationTest {
     }
 
     @Test
-    @Disabled("Gate 0 exit criterion: author fixtures to >=100/50/30. Currently seed-only; "
-            + "this test must be enabled and pass before Gate 0 can be signed Pass.")
     @DisplayName("Gate 0 exit: fixture suites meet minimum counts")
     void minimumFixtureCountsMet() throws IOException {
         assertThat(countFixtures("tool-selection")).isGreaterThanOrEqualTo(MIN_TOOL_SELECTION);

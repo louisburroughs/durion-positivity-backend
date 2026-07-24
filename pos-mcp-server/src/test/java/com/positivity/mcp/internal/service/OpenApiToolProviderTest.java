@@ -60,9 +60,10 @@ class OpenApiToolProviderTest {
                 "GET",
                 "/v1/workorders/{workorderId}",
                 "pos-workorder",
-                "{\"query\":[{\"name\":\"status\",\"type\":\"string\",\"required\":true}]}");
+                "{\"query\":[{\"name\":\"status\",\"type\":\"string\",\"required\":true}]}",
+                List.of());
         DiscoveredOperation notExecutable =
-                new DiscoveredOperation("broken_op", "missing coords", null, null, null, null);
+                new DiscoveredOperation("broken_op", "missing coords", null, null, null, null, List.of());
         lenient()
                 .when(repository.findDiscoveredCandidatesForPermissions(any(), anyInt(), any(), anyString()))
                 .thenReturn(List.of(executable, notExecutable));
@@ -79,5 +80,42 @@ class OpenApiToolProviderTest {
         assertThat(spec.inputSchema()).contains("\"workorderId\"", "\"status\"", "\"required\"");
         // Provider publishes the surfaced openapi tool names for telemetry (facade vs openapi source).
         assertThat(userContext.currentDiscoveredOpenapiToolNames()).containsExactly("workorders_getallworkorders");
+    }
+
+    @Test
+    @DisplayName("#779: shared provider does not leak a high-permission tool to a low-permission caller")
+    void doesNotLeakAcrossCallersViaSharedProvider() {
+        when(embeddingModel.embed(anyString())).thenReturn(new float[] {0.1f, 0.2f});
+        DiscoveredOperation highPermOp = new DiscoveredOperation(
+                "accounting_listinvoices",
+                "List invoices",
+                "GET",
+                "/v1/accounting/invoices",
+                "pos-accounting",
+                null,
+                List.of());
+        // Repo gates on the caller's permission codes: the tool is returned only when the caller
+        // actually holds accounting:invoice:view (mirrors the fail-closed SQL filter).
+        when(repository.findDiscoveredCandidatesForPermissions(any(), anyInt(), any(), anyString()))
+                .thenAnswer(inv -> {
+                    Set<String> permissionCodes = inv.getArgument(2);
+                    return permissionCodes.contains("accounting:invoice:view") ? List.of(highPermOp) : List.of();
+                });
+
+        // High-permission caller sees the discovered tool.
+        userContext.set(callerWithPermissions("accountant", Set.of("AUTHENTICATED", "accounting:invoice:view")));
+        assertThat(provider.resolveToolCallbacks("show invoices"))
+                .extracting(cb -> cb.getToolDefinition().name())
+                .containsExactly("accounting_listinvoices");
+        userContext.clear();
+
+        // Same provider instance (as held by a shared cached agent), a low-permission caller: no leak.
+        userContext.set(callerWithPermissions("cashier", Set.of("AUTHENTICATED")));
+        assertThat(provider.resolveToolCallbacks("show invoices")).isEmpty();
+    }
+
+    private static CurrentUserContext callerWithPermissions(String username, Set<String> permissionCodes) {
+        return new CurrentUserContext(
+                username, UUID.randomUUID(), "ROLE_X", Set.of("ROLE_X"), Set.of("AUTHENTICATED"), permissionCodes);
     }
 }

@@ -91,7 +91,7 @@ class SessionAgentManagerTest {
     private EmbeddingModel embeddingModel;
 
     @Mock
-        private PgVectorStore embeddingStore;
+    private PgVectorStore embeddingStore;
 
     @Mock
     private MasterAgentRegistry toolRegistry;
@@ -179,6 +179,7 @@ class SessionAgentManagerTest {
                 telemetryEmitter,
                 null,
                 null,
+                null, // roleDefaultPermissionsClient
                 FIXED_CLOCK,
                 30,
                 500,
@@ -359,6 +360,7 @@ class SessionAgentManagerTest {
                 telemetryEmitter,
                 null,
                 null,
+                null, // roleDefaultPermissionsClient
                 FIXED_CLOCK,
                 0,
                 500,
@@ -398,6 +400,7 @@ class SessionAgentManagerTest {
                 telemetryEmitter,
                 null,
                 null,
+                null, // roleDefaultPermissionsClient
                 FIXED_CLOCK,
                 30,
                 500,
