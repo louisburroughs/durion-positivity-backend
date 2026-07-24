@@ -4,7 +4,10 @@ import com.positivity.inventory.internal.entity.CostingMethodConfig;
 import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.inventory.internal.enums.CostingScopeType;
 import com.positivity.inventory.internal.repository.CostingMethodConfigRepository;
-import java.util.Optional;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -48,25 +51,50 @@ public class CostingMethodResolver {
 
     /** Resolves the effective costing method for one SKU. */
     public @NonNull CostingMethod resolve(@NonNull String stockItemId) {
-        Optional<CostingMethod> bySku = configRepository
-                .findByScopeTypeAndScopeValueAndActiveTrue(CostingScopeType.SKU, stockItemId)
-                .map(CostingMethodConfig::getMethod);
-        if (bySku.isPresent()) {
-            return bySku.get();
+        return resolveAll(Set.of(stockItemId)).get(stockItemId);
+    }
+
+    /** Resolves the effective costing method for many SKUs in one repository round-trip per scope. */
+    public @NonNull Map<String, CostingMethod> resolveAll(@NonNull Set<String> stockItemIds) {
+        if (stockItemIds.isEmpty()) {
+            return Map.of();
         }
 
-        Optional<CostingMethod> byCategory = skuCategoryProvider
-                .categoryOf(stockItemId)
-                .flatMap(category -> configRepository.findByScopeTypeAndScopeValueAndActiveTrue(
-                        CostingScopeType.SKU_CATEGORY, category))
-                .map(CostingMethodConfig::getMethod);
-        if (byCategory.isPresent()) {
-            return byCategory.get();
+        Map<String, CostingMethod> resolved = new HashMap<>(stockItemIds.size());
+
+        configRepository
+                .findByScopeTypeAndScopeValueInAndActiveTrue(CostingScopeType.SKU, stockItemIds)
+                .forEach(config -> resolved.put(config.getScopeValue(), config.getMethod()));
+
+        Set<String> unresolved = new HashSet<>(stockItemIds);
+        unresolved.removeAll(resolved.keySet());
+
+        if (!unresolved.isEmpty()) {
+            Map<String, String> categoryBySku = skuCategoryProvider.categoryOfAll(unresolved);
+            if (!categoryBySku.isEmpty()) {
+                Set<String> categories = new HashSet<>(categoryBySku.values());
+                Map<String, CostingMethod> categoryMethods = new HashMap<>(categories.size());
+                configRepository
+                        .findByScopeTypeAndScopeValueInAndActiveTrue(CostingScopeType.SKU_CATEGORY, categories)
+                        .forEach(config -> categoryMethods.put(config.getScopeValue(), config.getMethod()));
+                categoryBySku.forEach((skuId, category) -> {
+                    CostingMethod method = categoryMethods.get(category);
+                    if (method != null) {
+                        resolved.putIfAbsent(skuId, method);
+                    }
+                });
+            }
         }
 
-        return configRepository
-                .findByScopeTypeAndScopeValueIsNullAndActiveTrue(CostingScopeType.DEFAULT)
-                .map(CostingMethodConfig::getMethod)
-                .orElse(defaultMethod);
+        Set<String> stillUnresolved = new HashSet<>(stockItemIds);
+        stillUnresolved.removeAll(resolved.keySet());
+        if (!stillUnresolved.isEmpty()) {
+            CostingMethod fallback = configRepository
+                    .findByScopeTypeAndScopeValueIsNullAndActiveTrue(CostingScopeType.DEFAULT)
+                    .map(CostingMethodConfig::getMethod)
+                    .orElse(defaultMethod);
+            stillUnresolved.forEach(skuId -> resolved.putIfAbsent(skuId, fallback));
+        }
+        return Map.copyOf(resolved);
     }
 }

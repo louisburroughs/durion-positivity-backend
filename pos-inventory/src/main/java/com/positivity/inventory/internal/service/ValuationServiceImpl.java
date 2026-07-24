@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.SkuCostState;
 import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.SkuCostStateRepository;
@@ -15,12 +16,15 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,6 +60,7 @@ public class ValuationServiceImpl implements ValuationService {
     private final SkuCostStateRepository costStateRepository;
     private final CostingMethodResolver methodResolver;
     private final AsOfQueryGuard asOfQueryGuard;
+    private final int asOfSkuCap;
     private final Map<CostingMethod, CostingStrategy> strategies;
 
     public ValuationServiceImpl(
@@ -64,12 +69,14 @@ public class ValuationServiceImpl implements ValuationService {
             SkuCostStateRepository costStateRepository,
             CostingMethodResolver methodResolver,
             AsOfQueryGuard asOfQueryGuard,
-            List<CostingStrategy> costingStrategies) {
+            List<CostingStrategy> costingStrategies,
+            @Value("${pos.inventory.valuation.as-of-sku-cap:1000}") int asOfSkuCap) {
         this.stockSummaryRepository = stockSummaryRepository;
         this.ledgerRepository = ledgerRepository;
         this.costStateRepository = costStateRepository;
         this.methodResolver = methodResolver;
         this.asOfQueryGuard = asOfQueryGuard;
+        this.asOfSkuCap = asOfSkuCap;
         this.strategies = new EnumMap<>(CostingMethod.class);
         for (CostingStrategy strategy : costingStrategies) {
             this.strategies.put(strategy.method(), strategy);
@@ -81,10 +88,13 @@ public class ValuationServiceImpl implements ValuationService {
     @NonNull
     public ValuationReportResponse getValuation(@Nullable UUID locationId, @Nullable String sku) {
         List<SkuQty> onHands = currentOnHands(locationId, sku);
+        Set<String> stockItemIds = stockItemIds(onHands);
+        Map<String, CostingMethod> methods = methodResolver.resolveAll(stockItemIds);
+        Map<String, SkuCostState> costStates = findCostStatesByStockItemId(stockItemIds);
         List<ValuationRow> rows = new ArrayList<>(onHands.size());
         for (SkuQty item : onHands) {
-            CostingMethod method = methodResolver.resolve(item.stockItemId());
-            BigDecimal unitCost = currentUnitCost(item.stockItemId(), method);
+            CostingMethod method = methods.get(item.stockItemId());
+            BigDecimal unitCost = currentUnitCost(costStates.get(item.stockItemId()), method);
             rows.add(buildRow(item.stockItemId(), item.onHand(), method, unitCost));
         }
         return report(locationId, null, rows);
@@ -99,10 +109,20 @@ public class ValuationServiceImpl implements ValuationService {
 
         Set<InventoryLedgerEventType> onHandTypes = InventoryLedgerEventType.onHandAffectingTypes();
         List<SkuQty> onHands = asOfOnHands(locationId, sku, onHandTypes, asOf);
+        enforceFullCatalogAsOfCap(locationId, sku, onHands.size());
+        Set<String> stockItemIds = stockItemIds(onHands);
+        Map<String, CostingMethod> methods = methodResolver.resolveAll(stockItemIds);
+        Map<String, SkuCostState> costStates = findCostStatesByStockItemId(stockItemIds);
+        Map<String, List<InventoryLedgerEntry>> entriesBySku =
+                asOfEntriesByStockItemId(stockItemIds, onHandTypes, asOf);
         List<ValuationRow> rows = new ArrayList<>(onHands.size());
         for (SkuQty item : onHands) {
-            CostingMethod method = methodResolver.resolve(item.stockItemId());
-            BigDecimal unitCost = unitCostAsOf(item.stockItemId(), method, onHandTypes, asOf);
+            CostingMethod method = methods.get(item.stockItemId());
+            BigDecimal standardCost = costStates.containsKey(item.stockItemId())
+                    ? costStates.get(item.stockItemId()).getStandardCost()
+                    : null;
+            BigDecimal unitCost = unitCostAsOf(
+                    item.stockItemId(), method, standardCost, entriesBySku.getOrDefault(item.stockItemId(), List.of()));
             rows.add(buildRow(item.stockItemId(), item.onHand(), method, unitCost));
         }
         return report(locationId, asOf, rows);
@@ -159,8 +179,7 @@ public class ValuationServiceImpl implements ValuationService {
 
     // ─── Unit cost derivation ────────────────────────────────────────────────
 
-    private @Nullable BigDecimal currentUnitCost(String sku, CostingMethod method) {
-        SkuCostState state = costStateRepository.findByStockItemId(sku).orElse(null);
+    private @Nullable BigDecimal currentUnitCost(@Nullable SkuCostState state, CostingMethod method) {
         if (state == null) {
             return null;
         }
@@ -168,25 +187,61 @@ public class ValuationServiceImpl implements ValuationService {
     }
 
     private @Nullable BigDecimal unitCostAsOf(
-            String sku, CostingMethod method, Set<InventoryLedgerEventType> onHandTypes, Instant asOf) {
+            String sku, CostingMethod method, @Nullable BigDecimal standardCost, List<InventoryLedgerEntry> entries) {
         CostingStrategy strategy = strategy(method);
-        // The standard price is not carried on the ledger; seed it from the current cost state.
-        BigDecimal standardCost = costStateRepository
-                .findByStockItemId(sku)
-                .map(SkuCostState::getStandardCost)
-                .orElse(null);
-
         CostingStrategy.CostState state = new CostingStrategy.CostState(null, 0L, standardCost);
-        for (InventoryLedgerEntry entry :
-                ledgerRepository
-                        .findByStockItemIdAndEventTypeInAndTimestampLessThanEqualOrderByTimestampAscLedgerEntryIdAsc(
-                                sku, onHandTypes, asOf)) {
+        for (InventoryLedgerEntry entry : entries) {
             int change = entry.getChangeInQuantity() == null ? 0 : entry.getChangeInQuantity();
             CostingStrategy.CostingInput input =
                     new CostingStrategy.CostingInput(sku, entry.getEventType(), change, entry.getUnitCost(), state);
             state = strategy.cost(input).state();
         }
         return deriveUnitCost(state.avgCost(), state.standardCost(), method);
+    }
+
+    private static Set<String> stockItemIds(List<SkuQty> onHands) {
+        Set<String> stockItemIds = new HashSet<>(onHands.size());
+        for (SkuQty onHand : onHands) {
+            stockItemIds.add(onHand.stockItemId());
+        }
+        return stockItemIds;
+    }
+
+    private void enforceFullCatalogAsOfCap(@Nullable UUID locationId, @Nullable String sku, int skuCount) {
+        if (isFullCatalogAsOf(locationId, sku) && skuCount > asOfSkuCap) {
+            throw new ValuationAsOfSkuCapExceededException(skuCount, asOfSkuCap);
+        }
+    }
+
+    private static boolean isFullCatalogAsOf(@Nullable UUID locationId, @Nullable String sku) {
+        return locationId == null && (sku == null || sku.isBlank());
+    }
+
+    private Map<String, SkuCostState> findCostStatesByStockItemId(Set<String> stockItemIds) {
+        if (stockItemIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, SkuCostState> costStates = new HashMap<>(stockItemIds.size());
+        for (SkuCostState state : costStateRepository.findByStockItemIdIn(stockItemIds)) {
+            costStates.put(state.getStockItemId(), state);
+        }
+        return Map.copyOf(costStates);
+    }
+
+    private Map<String, List<InventoryLedgerEntry>> asOfEntriesByStockItemId(
+            Set<String> stockItemIds, Set<InventoryLedgerEventType> onHandTypes, Instant asOf) {
+        if (stockItemIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, List<InventoryLedgerEntry>> entriesBySku = new HashMap<>(stockItemIds.size());
+        for (InventoryLedgerEntry entry : ledgerRepository
+                .findByStockItemIdInAndEventTypeInAndTimestampLessThanEqualOrderByStockItemIdAscTimestampAscLedgerEntryIdAsc(
+                        stockItemIds, onHandTypes, asOf)) {
+            entriesBySku
+                    .computeIfAbsent(entry.getStockItemId(), ignored -> new ArrayList<>())
+                    .add(entry);
+        }
+        return Map.copyOf(entriesBySku);
     }
 
     /**

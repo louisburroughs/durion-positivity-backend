@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.CostingMethodConfig;
 import com.positivity.inventory.internal.enums.CostingScopeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,6 +17,9 @@ public interface CostingMethodConfigRepository extends JpaRepository<CostingMeth
 
     Optional<CostingMethodConfig> findByScopeTypeAndScopeValueAndActiveTrue(
             CostingScopeType scopeType, String scopeValue);
+
+    List<CostingMethodConfig> findByScopeTypeAndScopeValueInAndActiveTrue(
+            CostingScopeType scopeType, Collection<String> scopeValues);
 
     Optional<CostingMethodConfig> findByScopeTypeAndScopeValueIsNullAndActiveTrue(CostingScopeType scopeType);
 

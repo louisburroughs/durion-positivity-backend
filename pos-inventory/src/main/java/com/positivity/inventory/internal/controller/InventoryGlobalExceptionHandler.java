@@ -51,6 +51,7 @@ import com.positivity.inventory.internal.exception.TransferLocationNotEligibleEx
 import com.positivity.inventory.internal.exception.TransferOrderNotFoundException;
 import com.positivity.inventory.internal.exception.TransferQuantityExceededException;
 import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
+import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
 import com.positivity.shared.error.ApiError;
@@ -192,6 +193,11 @@ public class InventoryGlobalExceptionHandler {
     public ResponseEntity<ApiError> handleAsOfInFuture(AsOfInFutureException ex) {
         // odoo-parity A3 (#1029): deterministic 422 for future-dated point-in-time queries.
         return build(HttpStatus.valueOf(422), "AS_OF_IN_FUTURE", ex.getMessage());
+    }
+
+    @ExceptionHandler(ValuationAsOfSkuCapExceededException.class)
+    public ResponseEntity<ApiError> handleValuationAsOfSkuCapExceeded(ValuationAsOfSkuCapExceededException ex) {
+        return build(HttpStatus.valueOf(422), ValuationAsOfSkuCapExceededException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(SnoozeUntilNotInFutureException.class)
