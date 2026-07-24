@@ -33,7 +33,14 @@ import org.springframework.web.method.HandlerMethod;
 @ConditionalOnClass(OperationCustomizer.class)
 public class RequiredPermissionsOpenApiAutoConfiguration {
 
-    private static final Pattern AUTHORITY_PATTERN = Pattern.compile("'([^']+)'");
+    // Capture only the quoted arguments of hasAuthority(...) / hasAnyAuthority(...). Role checks
+    // (hasRole/hasAnyRole) are deliberately ignored: role names are not permission codes, so emitting
+    // them into x-required-permissions would grant a discovered op a non-existent code and make it
+    // permanently unselectable (#1102 review). A role-only endpoint therefore emits no extension and
+    // stays fail-closed — it is never broadened to AUTHENTICATED.
+    private static final Pattern AUTHORITY_CALL_PATTERN =
+            Pattern.compile("hasAnyAuthority\\s*\\(([^)]*)\\)|hasAuthority\\s*\\(([^)]*)\\)");
+    private static final Pattern QUOTED_ARG_PATTERN = Pattern.compile("'([^']+)'");
 
     @Bean
     @ConditionalOnMissingBean(OperationCustomizer.class)
@@ -76,9 +83,13 @@ public class RequiredPermissionsOpenApiAutoConfiguration {
         if (preAuthorize == null) {
             return;
         }
-        Matcher matcher = AUTHORITY_PATTERN.matcher(preAuthorize.value());
-        while (matcher.find()) {
-            requiredPermissions.add(matcher.group(1));
+        Matcher call = AUTHORITY_CALL_PATTERN.matcher(preAuthorize.value());
+        while (call.find()) {
+            String args = call.group(1) != null ? call.group(1) : call.group(2);
+            Matcher arg = QUOTED_ARG_PATTERN.matcher(args);
+            while (arg.find()) {
+                requiredPermissions.add(arg.group(1));
+            }
         }
     }
 }

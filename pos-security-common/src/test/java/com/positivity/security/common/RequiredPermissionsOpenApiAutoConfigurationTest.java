@@ -23,6 +23,12 @@ class RequiredPermissionsOpenApiAutoConfigurationTest {
         @PreAuthorize("isAuthenticated()")
         public void authenticatedOnly() {}
 
+        @PreAuthorize("hasAnyAuthority('order:order:view', 'order:order:edit')")
+        public void anyAuthority() {}
+
+        @PreAuthorize("hasRole('ADMIN')")
+        public void roleOnly() {}
+
         public void noAnnotation() {}
     }
 
@@ -49,5 +55,17 @@ class RequiredPermissionsOpenApiAutoConfigurationTest {
     @Test
     void emitsAuthenticatedSentinelWhenUnguarded() throws Exception {
         assertThat(requiredPermissions("noAnnotation")).containsExactly("AUTHENTICATED");
+    }
+
+    @Test
+    void extractsAllHasAnyAuthorityArguments() throws Exception {
+        assertThat(requiredPermissions("anyAuthority")).containsExactly("order:order:view", "order:order:edit");
+    }
+
+    @Test
+    void roleOnlyExpressionStaysFailClosed() throws Exception {
+        // hasRole is not a permission code; the op emits no x-required-permissions (fail-closed),
+        // rather than leaking "ADMIN" or being broadened to AUTHENTICATED.
+        assertThat(requiredPermissions("roleOnly")).isNull();
     }
 }

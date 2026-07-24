@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.discovery;
 
 import com.positivity.mcp.service.ToolRegistrationService;
+import java.time.Duration;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Component;
 public class DiscoveryRefreshScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(DiscoveryRefreshScheduler.class);
+    private static final Duration REFRESH_TIMEOUT = Duration.ofMinutes(2);
 
     private final ToolRegistrationService toolRegistrationService;
 
@@ -35,10 +37,14 @@ public class DiscoveryRefreshScheduler {
             initialDelayString = "${mcp.server.discovery-refresh.interval-ms:300000}")
     public void refresh() {
         log.debug("Periodic MCP tool discovery refresh starting");
-        toolRegistrationService
-                .registerDiscoveredTools()
-                .doOnError(ex -> log.warn("Periodic MCP tool discovery refresh failed: {}", ex.getMessage()))
-                .onErrorComplete()
-                .subscribe();
+        try {
+            // Block (fail-soft) so @Scheduled fixedDelay serializes cycles and a slow refresh cannot
+            // overlap the next one — overlapping cycles could concurrently remove/re-add the same
+            // tool (#1102 review). registerDiscoveredTools is itself fail-soft; the timeout bounds a
+            // hung fetch.
+            toolRegistrationService.registerDiscoveredTools().block(REFRESH_TIMEOUT);
+        } catch (RuntimeException ex) {
+            log.warn("Periodic MCP tool discovery refresh failed: {}", ex.getMessage());
+        }
     }
 }
