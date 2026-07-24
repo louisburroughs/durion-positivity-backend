@@ -1,0 +1,1117 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "fixture_id": "rag-admin-governance-pos-1",
+      "query": "who can approve a permission change",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "security:permission:view",
+          "workorder:approval_config:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "admin.governance"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "admin.governance (scope perms ['security:permission:view', 'workorder:approval_config:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-admin-governance-pos-2",
+      "query": "what are the admin approval gates",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "security:permission:view",
+          "workorder:approval_config:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "admin.governance"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "admin.governance (scope perms ['security:permission:view', 'workorder:approval_config:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-admin-governance-pos-3",
+      "query": "how are governance approvals configured",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "security:permission:view",
+          "workorder:approval_config:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "admin.governance"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "admin.governance (scope perms ['security:permission:view', 'workorder:approval_config:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-admin-governance-pos-4",
+      "query": "which roles can change permissions",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "security:permission:view",
+          "workorder:approval_config:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "admin.governance"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "admin.governance (scope perms ['security:permission:view', 'workorder:approval_config:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-platform-capability-catalog-pos-1",
+      "query": "what can the assistant do",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "platform.capability-catalog"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "public"
+      ],
+      "notes": "platform.capability-catalog (scope perms ['AUTHENTICATED']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-platform-capability-catalog-pos-2",
+      "query": "list the assistant capabilities",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "platform.capability-catalog"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "public"
+      ],
+      "notes": "platform.capability-catalog (scope perms ['AUTHENTICATED']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-platform-capability-catalog-pos-3",
+      "query": "what tasks can I ask the assistant to perform",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "platform.capability-catalog"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "public"
+      ],
+      "notes": "platform.capability-catalog (scope perms ['AUTHENTICATED']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-platform-capability-catalog-pos-4",
+      "query": "which domains does the assistant cover",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "platform.capability-catalog"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "public"
+      ],
+      "notes": "platform.capability-catalog (scope perms ['AUTHENTICATED']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-workflow-cross-domain-playbooks-pos-1",
+      "query": "how does a workorder become an invoice",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "workflow.cross-domain-playbooks"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "public"
+      ],
+      "notes": "workflow.cross-domain-playbooks (scope perms ['AUTHENTICATED']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-workflow-cross-domain-playbooks-pos-2",
+      "query": "walk me through the estimate to invoice flow",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "workflow.cross-domain-playbooks"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "public"
+      ],
+      "notes": "workflow.cross-domain-playbooks (scope perms ['AUTHENTICATED']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-workflow-cross-domain-playbooks-pos-3",
+      "query": "what are the cross-domain workflows",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "workflow.cross-domain-playbooks"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "public"
+      ],
+      "notes": "workflow.cross-domain-playbooks (scope perms ['AUTHENTICATED']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-workflow-cross-domain-playbooks-pos-4",
+      "query": "how do customer, vehicle and workorder connect",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "workflow.cross-domain-playbooks"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "public"
+      ],
+      "notes": "workflow.cross-domain-playbooks (scope perms ['AUTHENTICATED']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-crm-customer-vehicle-pos-1",
+      "query": "how do I find a customer's vehicles",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:party:view",
+          "crm:vehicle:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "crm.customer-vehicle"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "crm.customer-vehicle (scope perms ['crm:party:view', 'crm:vehicle:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-crm-customer-vehicle-pos-2",
+      "query": "how are customers and vehicles linked",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:party:view",
+          "crm:vehicle:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "crm.customer-vehicle"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "crm.customer-vehicle (scope perms ['crm:party:view', 'crm:vehicle:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-crm-customer-vehicle-pos-3",
+      "query": "how do I search for a fleet account",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:party:view",
+          "crm:vehicle:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "crm.customer-vehicle"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "crm.customer-vehicle (scope perms ['crm:party:view', 'crm:vehicle:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-crm-customer-vehicle-pos-4",
+      "query": "what identifies a vehicle in the system",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:party:view",
+          "crm:vehicle:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "crm.customer-vehicle"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "crm.customer-vehicle (scope perms ['crm:party:view', 'crm:vehicle:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-events-observability-pos-1",
+      "query": "how do I read the assistant audit log",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "nlti:audit:read"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "events.observability"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "events.observability (scope perms ['nlti:audit:read']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-events-observability-pos-2",
+      "query": "where are events observed",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "nlti:audit:read"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "events.observability"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "events.observability (scope perms ['nlti:audit:read']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-events-observability-pos-3",
+      "query": "how is assistant activity audited",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "nlti:audit:read"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "events.observability"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "events.observability (scope perms ['nlti:audit:read']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-events-observability-pos-4",
+      "query": "what observability data is available",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "nlti:audit:read"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "events.observability"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "events.observability (scope perms ['nlti:audit:read']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-glossary-identifiers-pos-1",
+      "query": "what does WO mean",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "glossary.identifiers"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "public"
+      ],
+      "notes": "glossary.identifiers (scope perms ['AUTHENTICATED']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-glossary-identifiers-pos-2",
+      "query": "what is a VIN",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "glossary.identifiers"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "public"
+      ],
+      "notes": "glossary.identifiers (scope perms ['AUTHENTICATED']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-glossary-identifiers-pos-3",
+      "query": "explain the identifier formats",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "glossary.identifiers"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "public"
+      ],
+      "notes": "glossary.identifiers (scope perms ['AUTHENTICATED']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-glossary-identifiers-pos-4",
+      "query": "what is a claim code",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "glossary.identifiers"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "public"
+      ],
+      "notes": "glossary.identifiers (scope perms ['AUTHENTICATED']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-order-guide-pos-1",
+      "query": "how do orders work",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "order:order:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "order.guide"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "order.guide (scope perms ['order:order:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-order-guide-pos-2",
+      "query": "what is the order lifecycle",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "order:order:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "order.guide"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "order.guide (scope perms ['order:order:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-order-guide-pos-3",
+      "query": "how do carts become orders",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "order:order:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "order.guide"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "order.guide (scope perms ['order:order:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-order-guide-pos-4",
+      "query": "how do I apply an order discount",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "order:order:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "order.guide"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "order.guide (scope perms ['order:order:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-pricing-guide-pos-1",
+      "query": "how does pricing work",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "pricing:price_book:view",
+          "pricing:rule:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "pricing.guide"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "pricing.guide (scope perms ['pricing:price_book:view', 'pricing:rule:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-pricing-guide-pos-2",
+      "query": "how are price books structured",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "pricing:price_book:view",
+          "pricing:rule:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "pricing.guide"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "pricing.guide (scope perms ['pricing:price_book:view', 'pricing:rule:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-pricing-guide-pos-3",
+      "query": "how do pricing rules apply",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "pricing:price_book:view",
+          "pricing:rule:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "pricing.guide"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "pricing.guide (scope perms ['pricing:price_book:view', 'pricing:rule:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-pricing-guide-pos-4",
+      "query": "how are fleet discounts computed",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "pricing:price_book:view",
+          "pricing:rule:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "pricing.guide"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "pricing.guide (scope perms ['pricing:price_book:view', 'pricing:rule:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-reporting-metrics-pos-1",
+      "query": "what reports are available",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "accounting:report:export",
+          "workorder:dashboard:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "reporting.metrics"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "reporting.metrics (scope perms ['accounting:report:export', 'workorder:dashboard:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-reporting-metrics-pos-2",
+      "query": "how do I export revenue metrics",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "accounting:report:export",
+          "workorder:dashboard:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "reporting.metrics"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "reporting.metrics (scope perms ['accounting:report:export', 'workorder:dashboard:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-reporting-metrics-pos-3",
+      "query": "what dashboards exist",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "accounting:report:export",
+          "workorder:dashboard:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "reporting.metrics"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "reporting.metrics (scope perms ['accounting:report:export', 'workorder:dashboard:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-reporting-metrics-pos-4",
+      "query": "how is technician productivity measured",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "accounting:report:export",
+          "workorder:dashboard:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "reporting.metrics"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "reporting.metrics (scope perms ['accounting:report:export', 'workorder:dashboard:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-security-role-permission-matrix-pos-1",
+      "query": "what permissions does a service advisor have",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "security:role:view",
+          "security:permission:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "security.role-permission-matrix"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "security.role-permission-matrix (scope perms ['security:role:view', 'security:permission:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-security-role-permission-matrix-pos-2",
+      "query": "show the role to permission mapping",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "security:role:view",
+          "security:permission:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "security.role-permission-matrix"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "security.role-permission-matrix (scope perms ['security:role:view', 'security:permission:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-security-role-permission-matrix-pos-3",
+      "query": "which role can cancel an order",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "security:role:view",
+          "security:permission:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "security.role-permission-matrix"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "security.role-permission-matrix (scope perms ['security:role:view', 'security:permission:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-security-role-permission-matrix-pos-4",
+      "query": "how are permissions assigned to roles",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "security:role:view",
+          "security:permission:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "security.role-permission-matrix"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "security.role-permission-matrix (scope perms ['security:role:view', 'security:permission:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-tax-guide-pos-1",
+      "query": "how is tax calculated",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "tax:mode:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "tax.guide"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "tax.guide (scope perms ['tax:mode:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-tax-guide-pos-2",
+      "query": "what tax modes exist",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "tax:mode:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "tax.guide"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "tax.guide (scope perms ['tax:mode:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-tax-guide-pos-3",
+      "query": "how is labor taxed",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "tax:mode:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "tax.guide"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "tax.guide (scope perms ['tax:mode:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-tax-guide-pos-4",
+      "query": "how are tax categories configured",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "tax:mode:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [
+          "tax.guide"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "gated"
+      ],
+      "notes": "tax.guide (scope perms ['tax:mode:view']); caller holds them, so the doc should be recalled."
+    },
+    {
+      "fixture_id": "rag-admin-governance-neg-technician",
+      "query": "who can approve a permission change",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [],
+        "forbidden_doc_ids": [
+          "admin.governance"
+        ]
+      },
+      "tags": [
+        "negative",
+        "visibility-negative"
+      ],
+      "notes": "Technician lacks ['security:permission:view', 'workorder:approval_config:view']; admin.governance must not surface (permission-aware filter)."
+    },
+    {
+      "fixture_id": "rag-crm-customer-vehicle-neg-technician",
+      "query": "how do I find a customer's vehicles",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [],
+        "forbidden_doc_ids": [
+          "crm.customer-vehicle"
+        ]
+      },
+      "tags": [
+        "negative",
+        "visibility-negative"
+      ],
+      "notes": "Technician lacks ['crm:party:view', 'crm:vehicle:view']; crm.customer-vehicle must not surface (permission-aware filter)."
+    },
+    {
+      "fixture_id": "rag-events-observability-neg-technician",
+      "query": "how do I read the assistant audit log",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [],
+        "forbidden_doc_ids": [
+          "events.observability"
+        ]
+      },
+      "tags": [
+        "negative",
+        "visibility-negative"
+      ],
+      "notes": "Technician lacks ['nlti:audit:read']; events.observability must not surface (permission-aware filter)."
+    },
+    {
+      "fixture_id": "rag-order-guide-neg-technician",
+      "query": "how do orders work",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [],
+        "forbidden_doc_ids": [
+          "order.guide"
+        ]
+      },
+      "tags": [
+        "negative",
+        "visibility-negative"
+      ],
+      "notes": "Technician lacks ['order:order:view']; order.guide must not surface (permission-aware filter)."
+    },
+    {
+      "fixture_id": "rag-pricing-guide-neg-technician",
+      "query": "how does pricing work",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [],
+        "forbidden_doc_ids": [
+          "pricing.guide"
+        ]
+      },
+      "tags": [
+        "negative",
+        "visibility-negative"
+      ],
+      "notes": "Technician lacks ['pricing:price_book:view', 'pricing:rule:view']; pricing.guide must not surface (permission-aware filter)."
+    },
+    {
+      "fixture_id": "rag-reporting-metrics-neg-technician",
+      "query": "what reports are available",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [],
+        "forbidden_doc_ids": [
+          "reporting.metrics"
+        ]
+      },
+      "tags": [
+        "negative",
+        "visibility-negative"
+      ],
+      "notes": "Technician lacks ['accounting:report:export', 'workorder:dashboard:view']; reporting.metrics must not surface (permission-aware filter)."
+    },
+    {
+      "fixture_id": "rag-security-role-permission-matrix-neg-technician",
+      "query": "what permissions does a service advisor have",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [],
+        "forbidden_doc_ids": [
+          "security.role-permission-matrix"
+        ]
+      },
+      "tags": [
+        "negative",
+        "visibility-negative"
+      ],
+      "notes": "Technician lacks ['security:role:view', 'security:permission:view']; security.role-permission-matrix must not surface (permission-aware filter)."
+    },
+    {
+      "fixture_id": "rag-tax-guide-neg-technician",
+      "query": "how is tax calculated",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "doc_ids": [],
+        "forbidden_doc_ids": [
+          "tax.guide"
+        ]
+      },
+      "tags": [
+        "negative",
+        "visibility-negative"
+      ],
+      "notes": "Technician lacks ['tax:mode:view']; tax.guide must not surface (permission-aware filter)."
+    }
+  ]
+}

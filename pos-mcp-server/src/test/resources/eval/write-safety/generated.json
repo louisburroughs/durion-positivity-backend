@@ -1,0 +1,874 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "fixture_id": "ws-workorders-createworkorder-1",
+      "utterance": "Create a workorder for the Silverado for a tire rotation.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "workorder:workorder:create",
+          "crm:vehicle:view"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "workorders_createworkorder",
+        "required_args": [
+          "customerId",
+          "vehicleId",
+          "serviceType"
+        ],
+        "disclosed_inferred_args": [
+          "priority"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "plan_args_equal_executed_args": true,
+        "provenance_present_on_all_args": true,
+        "inferred_defaults_disclosed": true
+      },
+      "tags": [
+        "write",
+        "medium"
+      ],
+      "notes": "workorders_createworkorder: MEDIUM write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-workorders-cancelworkorder-2",
+      "utterance": "Cancel workorder WO-1042.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "workorder:workorder:cancel"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "workorders_cancelworkorder",
+        "required_args": [
+          "workorderId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "idempotency_single_execution": true
+      },
+      "tags": [
+        "write",
+        "medium"
+      ],
+      "notes": "workorders_cancelworkorder: MEDIUM write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-workorders-approveestimate-3",
+      "utterance": "Approve the estimate on workorder WO-1042.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "workorder:approval:approve"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "workorders_approveestimate",
+        "required_args": [
+          "workorderId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "expires_after_ttl": true
+      },
+      "tags": [
+        "write",
+        "high"
+      ],
+      "notes": "workorders_approveestimate: HIGH write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-workorders-addline-4",
+      "utterance": "Add a cabin air filter line to workorder WO-1042.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "workorder:line:add"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "LOW",
+        "tool_id": "workorders_addline",
+        "required_args": [
+          "workorderId",
+          "productId",
+          "quantity"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "plan_args_equal_executed_args": true
+      },
+      "tags": [
+        "write",
+        "low"
+      ],
+      "notes": "workorders_addline: LOW write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-orders-createorder-5",
+      "utterance": "Create an order for ACME Fleet.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "order:order:create"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "orders_createorder",
+        "required_args": [
+          "customerId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "provenance_present_on_all_args": true
+      },
+      "tags": [
+        "write",
+        "medium"
+      ],
+      "notes": "orders_createorder: MEDIUM write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-orders-applyorderdiscount-6",
+      "utterance": "Apply a 10% discount to order ORD-5521.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "order:order:discount"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "orders_applyorderdiscount",
+        "required_args": [
+          "orderId",
+          "discountType",
+          "amount"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "plan_args_equal_executed_args": true
+      },
+      "tags": [
+        "write",
+        "medium"
+      ],
+      "notes": "orders_applyorderdiscount: MEDIUM write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-orders-cancelorder-7",
+      "utterance": "Cancel order ORD-5521.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "order:order:cancel"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "orders_cancelorder",
+        "required_args": [
+          "orderId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "expires_after_ttl": true
+      },
+      "tags": [
+        "write",
+        "high"
+      ],
+      "notes": "orders_cancelorder: HIGH write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-orders-refundorder-8",
+      "utterance": "Refund order ORD-5521.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "order:order:refund"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "orders_refundorder",
+        "required_args": [
+          "orderId",
+          "amount"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "expires_after_ttl": true
+      },
+      "tags": [
+        "write",
+        "high"
+      ],
+      "notes": "orders_refundorder: HIGH write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-invoices-createinvoice-9",
+      "utterance": "Create an invoice for order ORD-5521.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "invoice:invoice:create"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "invoices_createinvoice",
+        "required_args": [
+          "orderId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "provenance_present_on_all_args": true
+      },
+      "tags": [
+        "write",
+        "medium"
+      ],
+      "notes": "invoices_createinvoice: MEDIUM write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-invoices-revertinvoice-10",
+      "utterance": "Revert invoice INV-9921.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "invoice:manage"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "invoices_revertinvoice",
+        "required_args": [
+          "invoiceId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "expires_after_ttl": true
+      },
+      "tags": [
+        "write",
+        "high"
+      ],
+      "notes": "invoices_revertinvoice: HIGH write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-invoices-voidinvoice-11",
+      "utterance": "Void invoice INV-9921.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "invoice:manage"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "invoices_voidinvoice",
+        "required_args": [
+          "invoiceId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "expires_after_ttl": true
+      },
+      "tags": [
+        "write",
+        "high"
+      ],
+      "notes": "invoices_voidinvoice: HIGH write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-inventory-createadjustment-12",
+      "utterance": "Adjust on-hand quantity for SKU BRK-9920 by -2.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:adjustment:create"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "inventory_createadjustment",
+        "required_args": [
+          "sku",
+          "delta",
+          "reason"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "provenance_present_on_all_args": true
+      },
+      "tags": [
+        "write",
+        "medium"
+      ],
+      "notes": "inventory_createadjustment: MEDIUM write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-inventory-receivegoods-13",
+      "utterance": "Receive the ASN for PO-3321 into stock.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:goods_receipt:create"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "inventory_receivegoods",
+        "required_args": [
+          "poId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "plan_args_equal_executed_args": true
+      },
+      "tags": [
+        "write",
+        "medium"
+      ],
+      "notes": "inventory_receivegoods: MEDIUM write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-inventory-submitreturntostock-14",
+      "utterance": "Put these returned parts back into stock.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:goods_receipt:create"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "inventory_submitreturntostock",
+        "required_args": [
+          "returnId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "stale_data_forces_repreview": true
+      },
+      "tags": [
+        "write",
+        "medium"
+      ],
+      "notes": "inventory_submitreturntostock: MEDIUM write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-inventory-createtransfer-15",
+      "utterance": "Transfer 5 brake pads from downtown to uptown.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:transfer:create"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "inventory_createtransfer",
+        "required_args": [
+          "sku",
+          "quantity",
+          "fromLocationId",
+          "toLocationId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "plan_args_equal_executed_args": true
+      },
+      "tags": [
+        "write",
+        "medium"
+      ],
+      "notes": "inventory_createtransfer: MEDIUM write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-pricing-createoverride-16",
+      "utterance": "Override the price of a tire rotation to $19.99.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "pricing:override:create"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "pricing_createoverride",
+        "required_args": [
+          "productId",
+          "price"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "expires_after_ttl": true
+      },
+      "tags": [
+        "write",
+        "high"
+      ],
+      "notes": "pricing_createoverride: HIGH write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-pricing-createrule-17",
+      "utterance": "Create a fleet discount pricing rule.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "pricing:rule:create"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "pricing_createrule",
+        "required_args": [
+          "name",
+          "condition",
+          "action"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "provenance_present_on_all_args": true
+      },
+      "tags": [
+        "write",
+        "medium"
+      ],
+      "notes": "pricing_createrule: MEDIUM write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-customers-createcustomer-18",
+      "utterance": "Add a new customer named Delgado Logistics.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:party:create"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "LOW",
+        "tool_id": "customers_createcustomer",
+        "required_args": [
+          "name"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "provenance_present_on_all_args": true
+      },
+      "tags": [
+        "write",
+        "low"
+      ],
+      "notes": "customers_createcustomer: LOW write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-customers-mergecustomers-19",
+      "utterance": "Merge customer C-3391 into C-1002.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "crm:party:merge"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "customers_mergecustomers",
+        "required_args": [
+          "sourceId",
+          "targetId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "expires_after_ttl": true
+      },
+      "tags": [
+        "write",
+        "high"
+      ],
+      "notes": "customers_mergecustomers: HIGH write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-vehicles-createvehicle-20",
+      "utterance": "Register a new Silverado for ACME Fleet.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:vehicle:create"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "LOW",
+        "tool_id": "vehicles_createvehicle",
+        "required_args": [
+          "customerId",
+          "vin"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "provenance_present_on_all_args": true
+      },
+      "tags": [
+        "write",
+        "low"
+      ],
+      "notes": "vehicles_createvehicle: LOW write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-appointments-rescheduleappointment-21",
+      "utterance": "Reschedule appointment APPT-5512 to tomorrow at 9am.",
+      "actor": {
+        "role": "ROLE_DISPATCHER",
+        "permission_codes": [
+          "appointments:reschedule"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "appointments_rescheduleappointment",
+        "required_args": [
+          "appointmentId",
+          "newStartTime"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "stale_data_forces_repreview": true
+      },
+      "tags": [
+        "write",
+        "medium"
+      ],
+      "notes": "appointments_rescheduleappointment: MEDIUM write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-appointments-cancelappointment-22",
+      "utterance": "Cancel appointment APPT-5512.",
+      "actor": {
+        "role": "ROLE_DISPATCHER",
+        "permission_codes": [
+          "appointments:cancel"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "appointments_cancelappointment",
+        "required_args": [
+          "appointmentId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "idempotency_single_execution": true
+      },
+      "tags": [
+        "write",
+        "medium"
+      ],
+      "notes": "appointments_cancelappointment: MEDIUM write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-accounting-postjournalentry-23",
+      "utterance": "Post journal entry JE-4000.",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "accounting:je:post"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "accounting_postjournalentry",
+        "required_args": [
+          "journalEntryId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "expires_after_ttl": true
+      },
+      "tags": [
+        "write",
+        "high"
+      ],
+      "notes": "accounting_postjournalentry: HIGH write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-accounting-closeperiod-24",
+      "utterance": "Close the current accounting period.",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "accounting:period:close"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "accounting_closeperiod",
+        "required_args": [
+          "periodId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "expires_after_ttl": true
+      },
+      "tags": [
+        "write",
+        "high"
+      ],
+      "notes": "accounting_closeperiod: HIGH write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-hr-createemployee-25",
+      "utterance": "Create an employee record for Maria Ruiz.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "people:employee:create"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "hr_createemployee",
+        "required_args": [
+          "name",
+          "role"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "provenance_present_on_all_args": true
+      },
+      "tags": [
+        "write",
+        "medium"
+      ],
+      "notes": "hr_createemployee: MEDIUM write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-hr-terminateemployee-26",
+      "utterance": "Terminate employee E-2201.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "people:employee:terminate"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "hr_terminateemployee",
+        "required_args": [
+          "employeeId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "expires_after_ttl": true
+      },
+      "tags": [
+        "write",
+        "high"
+      ],
+      "notes": "hr_terminateemployee: HIGH write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-locations-createlocation-27",
+      "utterance": "Create a new service location.",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "location:location:create"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "LOW",
+        "tool_id": "locations_createlocation",
+        "required_args": [
+          "name",
+          "address"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "provenance_present_on_all_args": true
+      },
+      "tags": [
+        "write",
+        "low"
+      ],
+      "notes": "locations_createlocation: LOW write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-tax-settaxmode-28",
+      "utterance": "Set the tax mode for this location to inclusive.",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "tax:mode:manage"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "tax_settaxmode",
+        "required_args": [
+          "locationId",
+          "mode"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "plan_args_equal_executed_args": true
+      },
+      "tags": [
+        "write",
+        "medium"
+      ],
+      "notes": "tax_settaxmode: MEDIUM write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-mcp-grants-toolpermission-29",
+      "utterance": "Grant the mcp:tool:manage permission on the AccountingFacadeTool.",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "mcp:tool:manage"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "mcp_grants_toolpermission",
+        "required_args": [
+          "toolName",
+          "permissionCode"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "expires_after_ttl": true
+      },
+      "tags": [
+        "write",
+        "high"
+      ],
+      "notes": "mcp_grants_toolpermission: HIGH write; preview/confirm/execute invariants must hold."
+    },
+    {
+      "fixture_id": "ws-events-emitevent-30",
+      "utterance": "Emit a manual audit event for order ORD-5521.",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "nlti:audit:write"
+        ]
+      },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "LOW",
+        "tool_id": "events_emitevent",
+        "required_args": [
+          "eventType",
+          "subjectId"
+        ]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true,
+        "provenance_present_on_all_args": true
+      },
+      "tags": [
+        "write",
+        "low"
+      ],
+      "notes": "events_emitevent: LOW write; preview/confirm/execute invariants must hold."
+    }
+  ]
+}
