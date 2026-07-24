@@ -10,8 +10,10 @@ import java.net.URI;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BiFunction;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -32,6 +34,13 @@ public class OperationProxyFactory {
 
     private static final Logger log = LoggerFactory.getLogger(OperationProxyFactory.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    // Gateway-injected trust headers. The gateway derives these from a validated JWT and downstream
+    // services trust them (GatewayAuthoritiesFilter). A tool caller must never be able to supply them:
+    // forwarding client-supplied copies — especially on the per-service fallback path, which reaches a
+    // service directly via LoadBalancerClient rather than through the gateway — would let a forged
+    // X-Authorities bypass gateway JWT validation. Stripped on every proxied request (#1104 review).
+    private static final Set<String> GATEWAY_AUTH_HEADERS = Set.of("x-authorities", "x-user", "x-user-id");
 
     private final LoadBalancerClient loadBalancerClient;
     private final WebClient webClient;
@@ -126,7 +135,7 @@ public class OperationProxyFactory {
             @NonNull String logContext,
             boolean structuredOutput) {
         var requestSpec = webClient.method(method).uri(targetUri);
-        headers.forEach((key, value) -> requestSpec.header(key, String.valueOf(value)));
+        stripGatewayAuthHeaders(headers).forEach((key, value) -> requestSpec.header(key, String.valueOf(value)));
         if (body != null) {
             requestSpec.contentType(MediaType.APPLICATION_JSON);
         }
@@ -176,6 +185,23 @@ public class OperationProxyFactory {
             resolved = resolved.replace("{" + entry.getKey() + "}", String.valueOf(entry.getValue()));
         }
         return resolved;
+    }
+
+    /**
+     * Returns a copy of {@code headers} with the gateway trust headers ({@code X-Authorities},
+     * {@code X-User}, {@code X-User-Id}, case-insensitive) removed, so a tool caller can never forge
+     * them into a proxied request. {@code Authorization} (bearer token) and all other headers pass
+     * through — the gateway derives the trust headers from the token itself.
+     */
+    @NonNull
+    static Map<String, Object> stripGatewayAuthHeaders(@NonNull Map<String, Object> headers) {
+        Map<String, Object> sanitized = new HashMap<>();
+        headers.forEach((key, value) -> {
+            if (key != null && !GATEWAY_AUTH_HEADERS.contains(key.toLowerCase(Locale.ROOT))) {
+                sanitized.put(key, value);
+            }
+        });
+        return sanitized;
     }
 
     private Map<String, Object> asMap(Object value) {

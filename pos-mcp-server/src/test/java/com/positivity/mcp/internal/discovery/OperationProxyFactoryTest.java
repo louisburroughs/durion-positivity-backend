@@ -34,4 +34,23 @@ class OperationProxyFactoryTest {
         assertThat(OperationProxyFactory.parseStructuredContent(null)).isEmpty();
         assertThat(OperationProxyFactory.parseStructuredContent("{not json")).isEmpty();
     }
+
+    @Test
+    @DisplayName("gateway trust headers are stripped (case-insensitive); other headers pass through")
+    void stripGatewayAuthHeaders_removesTrustHeaders_keepsOthers() {
+        Map<String, Object> headers = new java.util.LinkedHashMap<>();
+        headers.put("X-Authorities", "order:order:discount");
+        headers.put("X-User", "attacker");
+        headers.put("x-user-id", "00000000-0000-0000-0000-000000000000");
+        headers.put("Authorization", "Bearer legit-token");
+        headers.put("X-Correlation-Id", "abc-123");
+
+        Map<String, Object> sanitized = OperationProxyFactory.stripGatewayAuthHeaders(headers);
+
+        // A forged gateway trust header can never reach a service directly via the fallback path.
+        assertThat(sanitized).doesNotContainKeys("X-Authorities", "X-User", "x-user-id");
+        assertThat(sanitized)
+                .containsEntry("Authorization", "Bearer legit-token")
+                .containsEntry("X-Correlation-Id", "abc-123");
+    }
 }

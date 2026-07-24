@@ -9,28 +9,37 @@ parentheses):
   from either the gateway aggregate spec or the per-service Eureka fallback.
 - `tools.registered` (`tools_registered_total`) — tools successfully added to the MCP server.
 
-Both are cumulative counters that advance during each discovery run (startup + each refresh cycle).
+Both are **cumulative counters** that only ever advance, incrementing during each discovery run
+(startup + each refresh cycle). Their raw values are not comparable across time — alert on their
+*change over a window* with `increase(...)`, never on the raw value or a raw difference (which stays
+permanently true after the first-ever failure).
 
 1. Name: McpToolDiscoveryProducedNoTools
    - Trigger: the server has been up past its discovery grace period but has registered no tools —
-     `max_over_time(tools_registered_total[15m]) == 0` while the instance is `up`. Indicates the
-     gateway aggregate spec was unavailable/empty **and** the per-service Eureka fallback found no
-     reachable service specs.
+     `max_over_time(tools_registered_total[15m]) == 0` while the instance is `up`. (Comparing the raw
+     value to zero is valid here: a counter that never left zero means nothing ever registered.)
+     Indicates the gateway aggregate spec was unavailable/empty **and** the per-service Eureka fallback
+     found no reachable service specs.
    - Severity: P1 (the assistant can call no discovered gateway tools)
    - Runbook: pos-mcp-server/docs/runbooks/tool-discovery-failure.md
 
 2. Name: McpToolRegistrationLaggingDiscovery
-   - Trigger: a sustained gap between discovered and registered tools —
-     `(tools_discovered_total - tools_registered_total) > 0` for 10 minutes. Some matched operations
-     repeatedly fail to register (e.g. `McpAsyncServer.addTool` errors).
+   - Trigger: within a discovery run, more operations were discovered than were registered —
+     `increase(tools_discovered_total[10m]) > increase(tools_registered_total[10m])`. Comparing
+     per-window *increases* (not the raw cumulative difference) means the alert reflects the current
+     run, not a single historical failure. Fires when matched operations repeatedly fail to register
+     (e.g. `McpAsyncServer.addTool` errors). Only evaluates meaningfully in windows containing a
+     discovery run (startup or, with `discovery-refresh.enabled=true`, a refresh cycle).
    - Severity: P2
    - Runbook: pos-mcp-server/docs/runbooks/tool-discovery-failure.md
 
-3. Name: McpToolCountDroppedSharply
-   - Trigger: registered tool count falls well below its recent norm across a refresh —
-     `tools_registered_total < 0.5 * max_over_time(tools_registered_total[1h])`. A refresh cycle
-     discovered far fewer tools than usual (partial gateway outage, spec regression, or many services
-     de-registered from Eureka). Only meaningful when `discovery-refresh.enabled=true`.
+3. Name: McpToolRegistrationDroppedSharply
+   - Trigger: a refresh cycle registered far fewer tools than the previous cycle — comparing
+     consecutive per-window increments:
+     `increase(tools_registered_total[15m]) < 0.5 * increase(tools_registered_total[15m] offset 15m)`
+     while the earlier window's increase was non-zero. Signals a partial gateway outage, a spec
+     regression, or many services de-registering from Eureka. Requires `discovery-refresh.enabled=true`
+     (otherwise there is only the one startup run to measure); tune the window to the refresh interval.
    - Severity: P2
    - Runbook: pos-mcp-server/docs/runbooks/tool-discovery-failure.md
 

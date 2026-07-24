@@ -21,14 +21,18 @@ aborting the batch.
 ## Symptoms
 
 - Assistant reports it cannot perform gateway-backed actions; only static facade tools work.
-- `tools_registered_total` is 0, or well below its usual value.
+- `tools_registered_total` and `tools_discovered_total` are cumulative counters — read them as
+  *change over time*, not absolute values. Trouble looks like: the counter never left zero
+  (`max_over_time(tools_registered_total[15m]) == 0`), or a discovery run added little/nothing
+  (`increase(tools_registered_total[15m])` is zero or far below a prior window), or discovered
+  outran registered (`increase(tools_discovered_total[…]) > increase(tools_registered_total[…])`).
 - Logs show `Aggregate OpenAPI spec unavailable`, `No MCP tools matched the configured allowlist`,
   `falling back to per-service Eureka discovery`, or `Per-service Eureka fallback registered no tools`.
 
 ## Detection
 
 - Alerts: `McpToolDiscoveryProducedNoTools` (P1), `McpToolRegistrationLaggingDiscovery` (P2),
-  `McpToolCountDroppedSharply` (P2), `McpPerServiceFallbackEngaged` (P3).
+  `McpToolRegistrationDroppedSharply` (P2), `McpPerServiceFallbackEngaged` (P3).
 - Metrics: `tools_discovered_total`, `tools_registered_total`.
 - Logs in `ToolRegistrationServiceImpl` and `OpenApiDocumentFetcher`.
 
