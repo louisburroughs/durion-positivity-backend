@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
+import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.service.NltiRequestService;
 import jakarta.validation.ConstraintViolationException;
 import java.util.Set;
@@ -58,6 +59,9 @@ class NltiExceptionHandlerTest {
 
     @MockitoBean
     private NltiRequestService nltiRequestService;
+
+    @MockitoBean
+    private NltiWorkflowStateService workflowStateService;
 
     private String validRequestBody() throws Exception {
         return objectMapper.writeValueAsString(new NltiRequestDTO("test prompt for handler", null, null));

@@ -1,14 +1,17 @@
 package com.positivity.mcp.internal.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
+import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.service.NltiRequestService;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -64,6 +67,9 @@ class NltiControllerTest {
 
     @MockitoBean
     private NltiRequestService nltiRequestService;
+
+    @MockitoBean
+    private NltiWorkflowStateService workflowStateService;
 
     // ─── AC-1: POST with valid prompt → 202 with required envelope fields ─────
 
@@ -191,6 +197,34 @@ class NltiControllerTest {
                 .andExpect(jsonPath("$.timestamp").isNotEmpty());
     }
 
+    // ─── #778: workflow-state write endpoint ──────────────────────────────────
+
+    @Test
+    @WithGatewayUser(username = "alice", authorities = "nlti:request:submit")
+    @DisplayName("POST /v1/nlt/sessions/{id}/workflow-state returns 200 with the updated state")
+    void setWorkflowState_returns200WithUpdatedState() throws Exception {
+        // A gateway-style principal (username in the details map) so the controller resolves the
+        // subject the same way session creation does — the ownership key must match.
+        when(workflowStateService.advance(eq(SESSION_ID), eq("alice"), eq(WorkflowState.CREATING_PO)))
+                .thenReturn(WorkflowState.CREATING_PO);
+
+        mockMvc.perform(post("/v1/nlt/sessions/" + SESSION_ID + "/workflow-state")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workflowState\":\"CREATING_PO\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sessionId").value(SESSION_ID.toString()))
+                .andExpect(jsonPath("$.workflowState").value("CREATING_PO"));
+    }
+
+    @Test
+    @DisplayName("POST /v1/nlt/sessions/{id}/workflow-state without auth returns 401")
+    void setWorkflowState_withoutAuth_returns401() throws Exception {
+        mockMvc.perform(post("/v1/nlt/sessions/" + SESSION_ID + "/workflow-state")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workflowState\":\"CREATING_PO\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
     // ─── Test slice configuration ─────────────────────────────────────────────
 
     /**
@@ -203,6 +237,37 @@ class NltiControllerTest {
      *
      * Issue: NLTI-001
      */
+    /**
+     * A gateway-style authenticated principal: puts the username in the authentication details map
+     * (as {@code GatewayAuthoritiesFilter} does in production) so {@code SecurityContextHelper
+     * .getCurrentUsername()} resolves it. Uses the {@code @WithSecurityContext} listener mechanism
+     * (like {@code @WithMockUser}) so method security and the details lookup both see the same context.
+     */
+    @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+    @org.springframework.security.test.context.support.WithSecurityContext(factory = GatewayUserFactory.class)
+    @interface WithGatewayUser {
+        String username();
+
+        String[] authorities() default {};
+    }
+
+    static class GatewayUserFactory
+            implements org.springframework.security.test.context.support.WithSecurityContextFactory<WithGatewayUser> {
+        @Override
+        public org.springframework.security.core.context.SecurityContext createSecurityContext(WithGatewayUser user) {
+            var authorities = java.util.Arrays.stream(user.authorities())
+                    .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                    .toList();
+            var token = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                    user.username(), "n/a", authorities);
+            token.setDetails(java.util.Map.of(
+                    com.positivity.security.common.GatewaySecurityConstants.DETAIL_USERNAME, user.username()));
+            var context = org.springframework.security.core.context.SecurityContextHolder.createEmptyContext();
+            context.setAuthentication(token);
+            return context;
+        }
+    }
+
     @TestConfiguration
     @EnableMethodSecurity(prePostEnabled = true)
     static class SliceTestConfig {

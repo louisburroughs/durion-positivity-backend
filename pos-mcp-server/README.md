@@ -90,9 +90,11 @@ sentinel marks operations available to any authenticated caller.
 **Permission-code extraction:** `CurrentUserContextResolver` derives bare `domain:resource:action` codes from the
 `Authentication` authorities (mixed `ROLE_*`, `PERM_*`, and bare forms) and always includes `AUTHENTICATED`.
 
-> **Known limitation — workflow state:** managers currently always evaluate with `WORKFLOW_IDLE`. Deriving workflow
-> state from session context to activate non-IDLE tool sets (`CREATING_PO`, `PROCESSING_RETURN`, …) is not yet
-> implemented — tracked as a backlog item.
+> **Workflow state (#778):** both session managers resolve the caller's persisted `NltiSession.workflowState`
+> (their most-recently-updated session) and thread it into tool selection, so non-IDLE tool sets (`CREATING_PO`,
+> `RECEIVING_ASN`, `INVENTORY_RECON`, `PROCESSING_RETURN`) activate when a session is in that state. Callers with no
+> session fall back to message-heuristic derivation. Advance a session's state explicitly via
+> `POST /v1/nlt/sessions/{sessionId}/workflow-state` (ownership-checked; guarded by `nlti:request:submit`).
 
 ### Facade tools
 
@@ -221,8 +223,6 @@ docker compose up
 
 Tracked separately as GitHub issues. Open items not yet implemented in code:
 
-- **Workflow-state derivation beyond `IDLE`** — persist workflow state on `NltiSession` and thread it through both
-  session managers so non-IDLE tool sets activate.
 - **Legacy role-gating cleanup** — drop `mcp_role` / `mcp_tool_role`, `ToolRegistryRoleMapper`, and the role-gated
   repository queries now superseded by permission gating.
 - **`AUTHENTICATED` sentinel everywhere** — promote `requiredPermissionsOperationCustomizer` to `pos-security-common`
