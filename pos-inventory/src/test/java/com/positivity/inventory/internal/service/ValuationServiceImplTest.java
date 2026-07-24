@@ -1,9 +1,14 @@
 package com.positivity.inventory.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.dto.valuation.ValuationReportResponse;
@@ -19,6 +24,7 @@ import com.positivity.inventory.internal.repository.SkuCostStateRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,7 +72,15 @@ class ValuationServiceImplTest {
                 costStateRepository,
                 methodResolver,
                 asOfQueryGuard,
-                List.of(new AverageCostingStrategy(), new StandardCostingStrategy()));
+                List.of(new AverageCostingStrategy(), new StandardCostingStrategy()),
+                1000);
+        lenient().when(methodResolver.resolveAll(anySet())).thenReturn(Map.of());
+        lenient().when(costStateRepository.findByStockItemIdIn(anyCollection())).thenReturn(List.of());
+        lenient()
+                .when(ledgerRepository
+                        .findByStockItemIdInAndEventTypeInAndTimestampLessThanEqualOrderByStockItemIdAscTimestampAscLedgerEntryIdAsc(
+                                anyCollection(), any(), any()))
+                .thenReturn(List.of());
     }
 
     private static SkuCostState costState(String sku, BigDecimal avg, BigDecimal std, long qty) {
@@ -106,8 +120,10 @@ class ValuationServiceImplTest {
         };
     }
 
-    private static InventoryLedgerEntry entry(InventoryLedgerEventType type, int change, BigDecimal unitCost) {
+    private static InventoryLedgerEntry entry(
+            String sku, InventoryLedgerEventType type, int change, BigDecimal unitCost) {
         return InventoryLedgerEntry.builder()
+                .stockItemId(sku)
                 .eventType(type)
                 .changeInQuantity(change)
                 .unitCost(unitCost)
@@ -119,9 +135,9 @@ class ValuationServiceImplTest {
     @Test
     void currentValuation_average_valueIsOnHandTimesAvgCost() {
         when(stockSummaryRepository.sumOnHandBySku()).thenReturn(List.of(skuOnHand(SKU_A, 20L)));
-        when(methodResolver.resolve(SKU_A)).thenReturn(CostingMethod.AVERAGE);
-        when(costStateRepository.findByStockItemId(SKU_A))
-                .thenReturn(Optional.of(costState(SKU_A, new BigDecimal("6.000000"), null, 20L)));
+        when(methodResolver.resolveAll(anySet())).thenReturn(Map.of(SKU_A, CostingMethod.AVERAGE));
+        when(costStateRepository.findByStockItemIdIn(anyCollection()))
+                .thenReturn(List.of(costState(SKU_A, new BigDecimal("6.000000"), null, 20L)));
 
         ValuationReportResponse report = service.getValuation(null, null);
 
@@ -142,9 +158,9 @@ class ValuationServiceImplTest {
     @Test
     void currentValuation_standard_usesStandardPrice() {
         when(stockSummaryRepository.sumOnHandBySku()).thenReturn(List.of(skuOnHand(SKU_A, 10L)));
-        when(methodResolver.resolve(SKU_A)).thenReturn(CostingMethod.STANDARD);
-        when(costStateRepository.findByStockItemId(SKU_A))
-                .thenReturn(Optional.of(costState(SKU_A, new BigDecimal("6.500000"), new BigDecimal("8.000000"), 10L)));
+        when(methodResolver.resolveAll(anySet())).thenReturn(Map.of(SKU_A, CostingMethod.STANDARD));
+        when(costStateRepository.findByStockItemIdIn(anyCollection()))
+                .thenReturn(List.of(costState(SKU_A, new BigDecimal("6.500000"), new BigDecimal("8.000000"), 10L)));
 
         ValuationReportResponse report = service.getValuation(null, null);
 
@@ -156,9 +172,9 @@ class ValuationServiceImplTest {
     @Test
     void currentValuation_standard_fallsBackToLatestReceiptMemoWhenNoStandardPrice() {
         when(stockSummaryRepository.sumOnHandBySku()).thenReturn(List.of(skuOnHand(SKU_A, 10L)));
-        when(methodResolver.resolve(SKU_A)).thenReturn(CostingMethod.STANDARD);
-        when(costStateRepository.findByStockItemId(SKU_A))
-                .thenReturn(Optional.of(costState(SKU_A, new BigDecimal("6.500000"), null, 10L)));
+        when(methodResolver.resolveAll(anySet())).thenReturn(Map.of(SKU_A, CostingMethod.STANDARD));
+        when(costStateRepository.findByStockItemIdIn(anyCollection()))
+                .thenReturn(List.of(costState(SKU_A, new BigDecimal("6.500000"), null, 10L)));
 
         ValuationReportResponse report = service.getValuation(null, null);
 
@@ -172,8 +188,8 @@ class ValuationServiceImplTest {
     @Test
     void currentValuation_uncostedSku_surfacesZeroNotCrash() {
         when(stockSummaryRepository.sumOnHandBySku()).thenReturn(List.of(skuOnHand(SKU_A, 5L)));
-        when(methodResolver.resolve(SKU_A)).thenReturn(CostingMethod.AVERAGE);
-        when(costStateRepository.findByStockItemId(SKU_A)).thenReturn(Optional.empty());
+        when(methodResolver.resolveAll(anySet())).thenReturn(Map.of(SKU_A, CostingMethod.AVERAGE));
+        when(costStateRepository.findByStockItemIdIn(anyCollection())).thenReturn(List.of());
 
         ValuationReportResponse report = service.getValuation(null, null);
 
@@ -187,8 +203,9 @@ class ValuationServiceImplTest {
     @Test
     void currentValuation_standardWithNullAvgAndNullStandard_isUncosted() {
         when(stockSummaryRepository.sumOnHandBySku()).thenReturn(List.of(skuOnHand(SKU_A, 5L)));
-        when(methodResolver.resolve(SKU_A)).thenReturn(CostingMethod.STANDARD);
-        when(costStateRepository.findByStockItemId(SKU_A)).thenReturn(Optional.of(costState(SKU_A, null, null, 5L)));
+        when(methodResolver.resolveAll(anySet())).thenReturn(Map.of(SKU_A, CostingMethod.STANDARD));
+        when(costStateRepository.findByStockItemIdIn(anyCollection()))
+                .thenReturn(List.of(costState(SKU_A, null, null, 5L)));
 
         ValuationReportResponse report = service.getValuation(null, null);
 
@@ -202,12 +219,12 @@ class ValuationServiceImplTest {
     void currentValuation_siteFiltered_aggregatesOnlyThatSite() {
         when(stockSummaryRepository.sumOnHandBySkuAtLocation(LOC_1))
                 .thenReturn(List.of(skuOnHand(SKU_A, 7L), skuOnHand(SKU_B, 3L)));
-        when(methodResolver.resolve(SKU_A)).thenReturn(CostingMethod.AVERAGE);
-        when(methodResolver.resolve(SKU_B)).thenReturn(CostingMethod.AVERAGE);
-        when(costStateRepository.findByStockItemId(SKU_A))
-                .thenReturn(Optional.of(costState(SKU_A, new BigDecimal("2.000000"), null, 7L)));
-        when(costStateRepository.findByStockItemId(SKU_B))
-                .thenReturn(Optional.of(costState(SKU_B, new BigDecimal("10.000000"), null, 3L)));
+        when(methodResolver.resolveAll(anySet()))
+                .thenReturn(Map.of(SKU_A, CostingMethod.AVERAGE, SKU_B, CostingMethod.AVERAGE));
+        when(costStateRepository.findByStockItemIdIn(anyCollection()))
+                .thenReturn(List.of(
+                        costState(SKU_A, new BigDecimal("2.000000"), null, 7L),
+                        costState(SKU_B, new BigDecimal("10.000000"), null, 3L)));
 
         ValuationReportResponse report = service.getValuation(LOC_1, null);
 
@@ -226,9 +243,9 @@ class ValuationServiceImplTest {
                 .build();
         when(stockSummaryRepository.findByStockItemIdAndLocationId(SKU_A, LOC_1))
                 .thenReturn(Optional.of(row));
-        when(methodResolver.resolve(SKU_A)).thenReturn(CostingMethod.AVERAGE);
-        when(costStateRepository.findByStockItemId(SKU_A))
-                .thenReturn(Optional.of(costState(SKU_A, new BigDecimal("5.000000"), null, 4L)));
+        when(methodResolver.resolveAll(anySet())).thenReturn(Map.of(SKU_A, CostingMethod.AVERAGE));
+        when(costStateRepository.findByStockItemIdIn(anyCollection()))
+                .thenReturn(List.of(costState(SKU_A, new BigDecimal("5.000000"), null, 4L)));
 
         ValuationReportResponse report = service.getValuation(LOC_1, SKU_A);
 
@@ -253,14 +270,14 @@ class ValuationServiceImplTest {
     void asOfValuation_average_reconstructsRunningCostByReplay() {
         // Receipt 10 @ 5, then receipt 10 @ 7 → running average 6; on-hand 20.
         when(ledgerRepository.sumOnHandBySkuAsOf(any(), eq(AS_OF))).thenReturn(List.of(ledgerSkuOnHand(SKU_A, 20L)));
-        when(methodResolver.resolve(SKU_A)).thenReturn(CostingMethod.AVERAGE);
-        lenient().when(costStateRepository.findByStockItemId(SKU_A)).thenReturn(Optional.empty());
+        when(methodResolver.resolveAll(anySet())).thenReturn(Map.of(SKU_A, CostingMethod.AVERAGE));
+        when(costStateRepository.findByStockItemIdIn(anyCollection())).thenReturn(List.of());
         when(ledgerRepository
-                        .findByStockItemIdAndEventTypeInAndTimestampLessThanEqualOrderByTimestampAscLedgerEntryIdAsc(
-                                eq(SKU_A), any(), eq(AS_OF)))
+                        .findByStockItemIdInAndEventTypeInAndTimestampLessThanEqualOrderByStockItemIdAscTimestampAscLedgerEntryIdAsc(
+                                anyCollection(), any(), eq(AS_OF)))
                 .thenReturn(List.of(
-                        entry(InventoryLedgerEventType.GOODS_RECEIPT, 10, new BigDecimal("5.0000")),
-                        entry(InventoryLedgerEventType.GOODS_RECEIPT, 10, new BigDecimal("7.0000"))));
+                        entry(SKU_A, InventoryLedgerEventType.GOODS_RECEIPT, 10, new BigDecimal("5.0000")),
+                        entry(SKU_A, InventoryLedgerEventType.GOODS_RECEIPT, 10, new BigDecimal("7.0000"))));
 
         ValuationReportResponse report = service.getValuationAsOf(null, null, AS_OF);
 
@@ -274,15 +291,15 @@ class ValuationServiceImplTest {
     void asOfValuation_average_afterSubsequentIssue_keepsRunningAverage() {
         // Receipt 10 @ 5, receipt 10 @ 7 (avg 6), then issue 5 → on-hand 15, avg stays 6.
         when(ledgerRepository.sumOnHandBySkuAsOf(any(), eq(AS_OF))).thenReturn(List.of(ledgerSkuOnHand(SKU_A, 15L)));
-        when(methodResolver.resolve(SKU_A)).thenReturn(CostingMethod.AVERAGE);
-        lenient().when(costStateRepository.findByStockItemId(SKU_A)).thenReturn(Optional.empty());
+        when(methodResolver.resolveAll(anySet())).thenReturn(Map.of(SKU_A, CostingMethod.AVERAGE));
+        when(costStateRepository.findByStockItemIdIn(anyCollection())).thenReturn(List.of());
         when(ledgerRepository
-                        .findByStockItemIdAndEventTypeInAndTimestampLessThanEqualOrderByTimestampAscLedgerEntryIdAsc(
-                                eq(SKU_A), any(), eq(AS_OF)))
+                        .findByStockItemIdInAndEventTypeInAndTimestampLessThanEqualOrderByStockItemIdAscTimestampAscLedgerEntryIdAsc(
+                                anyCollection(), any(), eq(AS_OF)))
                 .thenReturn(List.of(
-                        entry(InventoryLedgerEventType.GOODS_RECEIPT, 10, new BigDecimal("5.0000")),
-                        entry(InventoryLedgerEventType.GOODS_RECEIPT, 10, new BigDecimal("7.0000")),
-                        entry(InventoryLedgerEventType.GOODS_ISSUE, -5, new BigDecimal("6.0000"))));
+                        entry(SKU_A, InventoryLedgerEventType.GOODS_RECEIPT, 10, new BigDecimal("5.0000")),
+                        entry(SKU_A, InventoryLedgerEventType.GOODS_RECEIPT, 10, new BigDecimal("7.0000")),
+                        entry(SKU_A, InventoryLedgerEventType.GOODS_ISSUE, -5, new BigDecimal("6.0000"))));
 
         ValuationReportResponse report = service.getValuationAsOf(null, null, AS_OF);
 
@@ -295,13 +312,14 @@ class ValuationServiceImplTest {
     @Test
     void asOfValuation_standard_seedsStandardPriceFromCurrentState() {
         when(ledgerRepository.sumOnHandBySkuAsOf(any(), eq(AS_OF))).thenReturn(List.of(ledgerSkuOnHand(SKU_A, 10L)));
-        when(methodResolver.resolve(SKU_A)).thenReturn(CostingMethod.STANDARD);
-        when(costStateRepository.findByStockItemId(SKU_A))
-                .thenReturn(Optional.of(costState(SKU_A, new BigDecimal("5.000000"), new BigDecimal("9.000000"), 10L)));
+        when(methodResolver.resolveAll(anySet())).thenReturn(Map.of(SKU_A, CostingMethod.STANDARD));
+        when(costStateRepository.findByStockItemIdIn(anyCollection()))
+                .thenReturn(List.of(costState(SKU_A, new BigDecimal("5.000000"), new BigDecimal("9.000000"), 10L)));
         when(ledgerRepository
-                        .findByStockItemIdAndEventTypeInAndTimestampLessThanEqualOrderByTimestampAscLedgerEntryIdAsc(
-                                eq(SKU_A), any(), eq(AS_OF)))
-                .thenReturn(List.of(entry(InventoryLedgerEventType.GOODS_RECEIPT, 10, new BigDecimal("5.0000"))));
+                        .findByStockItemIdInAndEventTypeInAndTimestampLessThanEqualOrderByStockItemIdAscTimestampAscLedgerEntryIdAsc(
+                                anyCollection(), any(), eq(AS_OF)))
+                .thenReturn(
+                        List.of(entry(SKU_A, InventoryLedgerEventType.GOODS_RECEIPT, 10, new BigDecimal("5.0000"))));
 
         ValuationReportResponse report = service.getValuationAsOf(null, null, AS_OF);
 
@@ -323,16 +341,50 @@ class ValuationServiceImplTest {
     void asOfValuation_siteFiltered_usesPositiveOnHandByLocation() {
         when(ledgerRepository.findPositiveOnHandByLocationAsOf(eq(LOC_2), any(), eq(AS_OF)))
                 .thenReturn(List.of(ledgerSkuOnHand(SKU_A, 8L)));
-        when(methodResolver.resolve(SKU_A)).thenReturn(CostingMethod.AVERAGE);
-        lenient().when(costStateRepository.findByStockItemId(SKU_A)).thenReturn(Optional.empty());
+        when(methodResolver.resolveAll(anySet())).thenReturn(Map.of(SKU_A, CostingMethod.AVERAGE));
+        when(costStateRepository.findByStockItemIdIn(anyCollection())).thenReturn(List.of());
         when(ledgerRepository
-                        .findByStockItemIdAndEventTypeInAndTimestampLessThanEqualOrderByTimestampAscLedgerEntryIdAsc(
-                                eq(SKU_A), any(), eq(AS_OF)))
-                .thenReturn(List.of(entry(InventoryLedgerEventType.GOODS_RECEIPT, 8, new BigDecimal("4.0000"))));
+                        .findByStockItemIdInAndEventTypeInAndTimestampLessThanEqualOrderByStockItemIdAscTimestampAscLedgerEntryIdAsc(
+                                anyCollection(), any(), eq(AS_OF)))
+                .thenReturn(List.of(entry(SKU_A, InventoryLedgerEventType.GOODS_RECEIPT, 8, new BigDecimal("4.0000"))));
 
         ValuationReportResponse report = service.getValuationAsOf(LOC_2, null, AS_OF);
 
         assertThat(report.getLocationId()).isEqualTo(LOC_2);
         assertThat(report.getRows().get(0).getOnHandValue()).isEqualByComparingTo("32.0000");
+    }
+
+    @Test
+    void currentValuation_multipleSkus_usesBulkRepositoryCalls() {
+        when(stockSummaryRepository.sumOnHandBySku()).thenReturn(List.of(skuOnHand(SKU_A, 2L), skuOnHand(SKU_B, 3L)));
+        when(methodResolver.resolveAll(anySet()))
+                .thenReturn(Map.of(SKU_A, CostingMethod.AVERAGE, SKU_B, CostingMethod.STANDARD));
+        when(costStateRepository.findByStockItemIdIn(anyCollection()))
+                .thenReturn(List.of(
+                        costState(SKU_A, new BigDecimal("2.000000"), null, 2L),
+                        costState(SKU_B, new BigDecimal("3.000000"), new BigDecimal("4.000000"), 3L)));
+
+        service.getValuation(null, null);
+
+        verify(methodResolver, times(1)).resolveAll(anySet());
+        verify(costStateRepository, times(1)).findByStockItemIdIn(anyCollection());
+    }
+
+    @Test
+    void asOfValuation_fullCatalog_exceedingCap_throws422DomainException() {
+        ValuationServiceImpl smallCapService = new ValuationServiceImpl(
+                stockSummaryRepository,
+                ledgerRepository,
+                costStateRepository,
+                methodResolver,
+                asOfQueryGuard,
+                List.of(new AverageCostingStrategy(), new StandardCostingStrategy()),
+                1);
+        when(ledgerRepository.sumOnHandBySkuAsOf(any(), eq(AS_OF)))
+                .thenReturn(List.of(ledgerSkuOnHand(SKU_A, 1L), ledgerSkuOnHand(SKU_B, 1L)));
+
+        assertThatThrownBy(() -> smallCapService.getValuationAsOf(null, null, AS_OF))
+                .isInstanceOf(com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException.class)
+                .hasMessageContaining("exceed cap");
     }
 }

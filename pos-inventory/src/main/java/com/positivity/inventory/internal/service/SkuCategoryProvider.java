@@ -1,5 +1,8 @@
 package com.positivity.inventory.internal.service;
 
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 
@@ -18,4 +21,16 @@ public interface SkuCategoryProvider {
     /** The SKU's category, or empty when no category source exists. */
     @NonNull
     Optional<String> categoryOf(@NonNull String stockItemId);
+
+    /** Batch variant for callers that need categories for many SKUs. */
+    default @NonNull Map<String, String> categoryOfAll(@NonNull Collection<String> stockItemIds) {
+        if (stockItemIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> categories = new HashMap<>();
+        for (String stockItemId : stockItemIds) {
+            categoryOf(stockItemId).ifPresent(category -> categories.put(stockItemId, category));
+        }
+        return Map.copyOf(categories);
+    }
 }

@@ -56,8 +56,9 @@ public class ValuationController {
                     + " sourced from each SKU's running cost state per its resolved costing method (AVERAGE or"
                     + " STANDARD); uncosted SKUs report a null unit cost and zero value. With 'asOf', the"
                     + " valuation is reconstructed from the ledger as of that instant (on-hand and unit cost both"
-                    + " replayed); as-of requests additionally require 'inventory:ledger:view' and reject future"
-                    + " instants with 422.",
+                    + " replayed); as-of requests additionally require 'inventory:ledger:view', reject future"
+                    + " instants with 422, and may reject uncapped full-catalog requests with 422 when the"
+                    + " SKU fan-out exceeds the configured safety cap.",
             tags = {"Inventory Valuation"})
     @ApiResponse(
             responseCode = "200",

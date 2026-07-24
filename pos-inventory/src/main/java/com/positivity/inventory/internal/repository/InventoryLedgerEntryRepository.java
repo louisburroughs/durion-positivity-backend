@@ -266,6 +266,16 @@ public interface InventoryLedgerEntryRepository
                     String stockItemId, Collection<InventoryLedgerEventType> eventTypes, java.time.Instant asOf);
 
     /**
+     * Ordered on-hand-affecting entry stream for multiple SKUs up to an instant (timestamp
+     * inclusive), grouped by stock item id and ordered deterministically within each SKU.
+     */
+    List<InventoryLedgerEntry>
+            findByStockItemIdInAndEventTypeInAndTimestampLessThanEqualOrderByStockItemIdAscTimestampAscLedgerEntryIdAsc(
+                    Collection<String> stockItemIds,
+                    Collection<InventoryLedgerEventType> eventTypes,
+                    java.time.Instant asOf);
+
+    /**
      * Sum of {@code changeInQuantity} for one event type attributed to a source
      * transaction (allocation ledger events carry the allocation id as
      * {@code sourceTransactionId}). Used to derive how much of an allocation
