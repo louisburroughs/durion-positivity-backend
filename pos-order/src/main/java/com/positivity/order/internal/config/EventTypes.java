@@ -106,6 +106,16 @@ public final class EventTypes {
             EventTypeRegistration.write("ORDER_RETURN_CREATE", "Return created against a completed order")
                     .apiVersion("1")
                     .build(),
+            EventTypeRegistration.fastRead("ORDER_RETURN_GET", "Return read by id")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.search("ORDER_RETURN_LIST", "Returns listed for an original order")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.fastRead(
+                            "ORDER_RETURN_RETURNABLE", "Per-line returnable quantities read for a completed order")
+                    .apiVersion("1")
+                    .build(),
             EventTypeRegistration.approval("ORDER_RETURN_APPROVE", "Return above threshold approved")
                     .apiVersion("1")
                     .build(),

@@ -75,6 +75,7 @@ public class ReturnOrderController {
             tags = {"Returns"})
     @GetMapping("/{returnOrderId}")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_VIEW + "')")
+    @EmitEvent(id = "ORDER_RETURN_GET", apiVersion = "1")
     public ResponseEntity<ReturnOrderResponse> getReturn(@PathVariable UUID returnOrderId) {
         return ResponseEntity.ok(ReturnOrderResponse.from(returnOrderService.getReturn(returnOrderId)));
     }
@@ -84,6 +85,7 @@ public class ReturnOrderController {
             tags = {"Returns"})
     @GetMapping
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_VIEW + "')")
+    @EmitEvent(id = "ORDER_RETURN_LIST", apiVersion = "1")
     public ResponseEntity<List<ReturnOrderResponse>> listReturns(@RequestParam UUID originalOrderId) {
         return ResponseEntity.ok(returnOrderService.listByOriginalOrder(originalOrderId).stream()
                 .map(ReturnOrderResponse::from)
@@ -95,6 +97,7 @@ public class ReturnOrderController {
             tags = {"Returns"})
     @GetMapping("/returnable")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_VIEW + "')")
+    @EmitEvent(id = "ORDER_RETURN_RETURNABLE", apiVersion = "1")
     public ResponseEntity<List<ReturnableLineResponse>> returnableLines(@RequestParam UUID orderId) {
         return ResponseEntity.ok(returnOrderService.returnableLines(orderId).stream()
                 .map(ReturnableLineResponse::from)

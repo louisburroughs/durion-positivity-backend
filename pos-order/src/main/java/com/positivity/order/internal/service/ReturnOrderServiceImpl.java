@@ -34,11 +34,13 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -122,8 +124,16 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
 
         BigDecimal totalRefund = BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
         List<OverCapReturnException.LineCap> overCap = new ArrayList<>();
+        Set<UUID> seenLineIds = new HashSet<>();
 
         for (ReturnLineCommand lineCommand : command.lines()) {
+            // One return line per sold line: duplicates would each cap-check against the same
+            // remainder (letting the combined qty exceed the cap) and collide on the inventory
+            // restock idempotency key (returnOrderId:originalOrderLineId).
+            if (!seenLineIds.add(lineCommand.originalOrderLineId())) {
+                throw new IllegalArgumentException("Duplicate return line for order line "
+                        + lineCommand.originalOrderLineId() + "; combine the quantity into a single line");
+            }
             SalesOrderLine sold = soldLines.get(lineCommand.originalOrderLineId());
             if (sold == null) {
                 throw new IllegalArgumentException(
@@ -205,6 +215,10 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
         SalesOrder original = salesOrderRepository
                 .findById(originalOrderId)
                 .orElseThrow(() -> new SalesOrderNotFoundException(originalOrderId));
+        if (original.getStatus() != SalesOrderStatus.COMPLETED) {
+            throw new IllegalStateException("Returnable lines are only available for COMPLETED orders; order "
+                    + original.getOrderId() + " is " + original.getStatus());
+        }
         List<SalesOrderLine> soldLines = salesOrderLineRepository.findByOrder_OrderId(original.getOrderId());
         List<UUID> lineIds =
                 soldLines.stream().map(SalesOrderLine::getOrderLineId).toList();
@@ -300,12 +314,15 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
         returnOrder.setUpdatedBy(actor);
         returnOrderRepository.save(returnOrder);
 
-        domainEventPublisher.publishOrderReturned(returnOrder);
-
         returnOrder.setStatus(ReturnOrderStatus.COMPLETED);
         returnOrder.setReturnedAt(clock.instant());
         returnOrder.setUpdatedBy(actor);
         ReturnOrder saved = returnOrderRepository.save(returnOrder);
+
+        // Emit after the final COMPLETED state is persisted so the fact carries the completed
+        // aggregate's version and returnedAt. The outbox write shares this transaction, so a publish
+        // failure rolls the whole saga back to RETURN_REQUESTED (retryable via process).
+        domainEventPublisher.publishOrderReturned(saved);
         log.info(
                 "Return {} completed (refund {} via {})",
                 saved.getReturnOrderId(),

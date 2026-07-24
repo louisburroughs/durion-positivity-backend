@@ -96,7 +96,7 @@ public class ReturnOrder {
     @Column(name = "rejection_reason", length = 2000)
     private String rejectionReason;
 
-    /** Saga failure detail parked on REFUND_FAILED / STOCK_FAILED (story F2). */
+    /** Saga failure detail parked on REFUND_FAILED (story F2). */
     @Column(name = "failure_reason", length = 2000)
     private String failureReason;
 

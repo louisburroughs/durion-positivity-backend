@@ -189,7 +189,8 @@ public class OrderDomainEventPublisher {
                 returnOrder.getRefundMethod().name(),
                 returnOrder.getTotalRefund(),
                 lines,
-                Instant.now(clock));
+                // Carry the persisted completion timestamp so the fact matches the aggregate state.
+                returnOrder.getReturnedAt() != null ? returnOrder.getReturnedAt() : Instant.now(clock));
         long aggregateVersion = returnOrder.getVersion() == null ? 0L : returnOrder.getVersion();
         writer.publish(
                 DomainTopics.events("order"),

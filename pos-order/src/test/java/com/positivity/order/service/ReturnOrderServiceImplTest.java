@@ -271,6 +271,27 @@ class ReturnOrderServiceImplTest {
         assertThat(pending.getRejectionReason()).isEqualTo("not eligible");
     }
 
+    @Test
+    @DisplayName("ROS-010: duplicate return lines for the same sold line are rejected (422)")
+    void createReturn_duplicateLinesRejected() {
+        stubOrder(soldLine(5, "500.0000", null, null));
+        CreateReturnCommand duplicated = new CreateReturnCommand(
+                ORDER_ID,
+                "ORIGINAL_TENDER",
+                "DEFECT",
+                List.of(
+                        new ReturnLineCommand(LINE_ID, 2, "RESTOCK", null),
+                        new ReturnLineCommand(LINE_ID, 2, "RESTOCK", null)),
+                "idem-dup");
+        lenient()
+                .when(returnOrderRepository.findByCreationIdempotencyKey("idem-dup"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createReturn(duplicated))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Duplicate return line");
+    }
+
     // ── F2 saga (#1087) ──────────────────────────────────────────────────────
 
     private static final UUID INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-0000000000c1");

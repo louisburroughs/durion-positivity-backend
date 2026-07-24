@@ -34,5 +34,5 @@ public class ReturnLineRequest {
     private String condition;
 
     @Schema(description = "Returned serials, when the sale captured them", requiredMode = NOT_REQUIRED)
-    private List<String> serialNumbers;
+    private List<@NotBlank String> serialNumbers;
 }
