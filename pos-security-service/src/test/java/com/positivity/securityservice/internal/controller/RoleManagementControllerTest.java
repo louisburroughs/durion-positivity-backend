@@ -16,6 +16,7 @@ import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
+import com.positivity.securityservice.service.RoleAuthorityService;
 import com.positivity.securityservice.service.RoleManagementService;
 import com.positivity.securityservice.service.RolePermissionService;
 import jakarta.servlet.FilterChain;
@@ -147,6 +148,9 @@ class RoleManagementControllerTest {
 
     @MockitoBean
     private RolePermissionService rolePermissionService;
+
+    @MockitoBean
+    private RoleAuthorityService roleAuthorityService;
 
     // Security infrastructure beans required by SecurityConfig
     @MockitoBean
