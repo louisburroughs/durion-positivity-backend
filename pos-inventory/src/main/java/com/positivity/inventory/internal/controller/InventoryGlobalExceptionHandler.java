@@ -39,6 +39,7 @@ import com.positivity.inventory.internal.exception.RollupExpansionTooLargeExcept
 import com.positivity.inventory.internal.exception.ScrapInsufficientStockException;
 import com.positivity.inventory.internal.exception.ScrapLedgerPostingException;
 import com.positivity.inventory.internal.exception.ScrapNotFoundException;
+import com.positivity.inventory.internal.exception.SerialAlreadyInStockException;
 import com.positivity.inventory.internal.exception.SerialCountMismatchException;
 import com.positivity.inventory.internal.exception.SerialNotAvailableException;
 import com.positivity.inventory.internal.exception.ShortageResolutionException;
@@ -345,6 +346,11 @@ public class InventoryGlobalExceptionHandler {
         // odoo-parity E4 (#1050): a serialized posting must enumerate exactly |quantity| serials —
         // a deterministic 422, the whole posting rolls back.
         return build(HttpStatus.valueOf(422), SerialCountMismatchException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(SerialAlreadyInStockException.class)
+    public ResponseEntity<ApiError> handleSerialAlreadyInStock(SerialAlreadyInStockException ex) {
+        return build(HttpStatus.valueOf(422), SerialAlreadyInStockException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(SerialNotAvailableException.class)

@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.entity.InventorySerialUnit;
 import com.positivity.inventory.internal.entity.WarrantyPartReturnHold;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.InventorySerialStatus;
+import com.positivity.inventory.internal.exception.SerialAlreadyInStockException;
 import com.positivity.inventory.internal.exception.SerialCountMismatchException;
 import com.positivity.inventory.internal.exception.SerialNotAvailableException;
 import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
@@ -180,6 +181,8 @@ class InventorySerialTrackingTest {
         assertThat(issued.getWorkorderId()).isEqualTo(workorderId);
         assertThat(issued.getConsumptionLedgerEntryId()).isNotNull();
         assertThat(issued.getConsumedAt()).isNotNull();
+        // locationId is only meaningful while IN_STOCK; a unit that has left stock carries none.
+        assertThat(issued.getLocationId()).isNull();
 
         // The other unit stays in stock; serial on-hand drops to 1.
         assertThat(serialRepository.countByStockItemIdAndStatus(product.toString(), InventorySerialStatus.IN_STOCK))
@@ -189,6 +192,18 @@ class InventorySerialTrackingTest {
                         .orElseThrow()
                         .getOnHand())
                 .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Receiving a serial that is already IN_STOCK is rejected (SERIAL_ALREADY_IN_STOCK, 422)")
+    void duplicateReceiveRejected() {
+        UUID product = seedProduct("SERIAL");
+        UUID location = UUID.randomUUID();
+
+        ledgerPostingService.post(receipt(product.toString(), location, 1, List.of("SN-DUP")));
+
+        assertThatThrownBy(() -> ledgerPostingService.post(receipt(product.toString(), location, 1, List.of("SN-DUP"))))
+                .isInstanceOf(SerialAlreadyInStockException.class);
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.entity.InventorySerialUnit;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.InventorySerialStatus;
 import com.positivity.inventory.internal.enums.ProductTrackingLevel;
+import com.positivity.inventory.internal.exception.SerialAlreadyInStockException;
 import com.positivity.inventory.internal.exception.SerialCountMismatchException;
 import com.positivity.inventory.internal.exception.SerialNotAvailableException;
 import com.positivity.inventory.internal.repository.InventorySerialUnitRepository;
@@ -114,9 +115,7 @@ public class SerialUnitPostingService {
                 continue;
             }
             if (existing.getStatus() == InventorySerialStatus.IN_STOCK) {
-                throw new IllegalStateException(
-                        "SERIAL_ALREADY_IN_STOCK: serial number " + serialNumber + " of stock item "
-                                + entry.getStockItemId() + " is already in stock and cannot be received again");
+                throw new SerialAlreadyInStockException(entry.getStockItemId(), serialNumber);
             }
             // Return / re-receipt: an already-known serial re-lands in stock.
             existing.setStatus(InventorySerialStatus.IN_STOCK);
@@ -144,6 +143,9 @@ public class SerialUnitPostingService {
                 throw new SerialNotAvailableException(entry.getStockItemId(), serialNumber);
             }
             unit.setStatus(target);
+            // locationId is only meaningful while IN_STOCK; a unit that has left stock has no
+            // location. Clearing it keeps the persisted state consistent with the entity contract.
+            unit.setLocationId(null);
             unit.setConsumptionLedgerEntryId(entry.getLedgerEntryId());
             unit.setWorkorderId(entry.getSerialWorkorderId());
             unit.setConsumedAt(now);
