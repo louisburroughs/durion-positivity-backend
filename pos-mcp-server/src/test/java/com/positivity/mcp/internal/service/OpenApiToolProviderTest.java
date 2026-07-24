@@ -60,9 +60,10 @@ class OpenApiToolProviderTest {
                 "GET",
                 "/v1/workorders/{workorderId}",
                 "pos-workorder",
-                "{\"query\":[{\"name\":\"status\",\"type\":\"string\",\"required\":true}]}");
+                "{\"query\":[{\"name\":\"status\",\"type\":\"string\",\"required\":true}]}",
+                List.of());
         DiscoveredOperation notExecutable =
-                new DiscoveredOperation("broken_op", "missing coords", null, null, null, null);
+                new DiscoveredOperation("broken_op", "missing coords", null, null, null, null, List.of());
         lenient()
                 .when(repository.findDiscoveredCandidatesForPermissions(any(), anyInt(), any(), anyString()))
                 .thenReturn(List.of(executable, notExecutable));

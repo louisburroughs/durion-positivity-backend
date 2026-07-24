@@ -42,7 +42,8 @@ class OpenApiOperationExecutorTest {
                 "GET",
                 "/v1/accounting/invoices",
                 "http://api-gateway:8080",
-                null);
+                null,
+                List.of());
         OpenApiOperationExecutor executor =
                 new OpenApiOperationExecutor(proxyFactory, operation, new ObjectMapper(), TIMEOUT, null);
 
@@ -73,7 +74,8 @@ class OpenApiOperationExecutorTest {
                 "GET",
                 "/v1/accounting/invoices",
                 "http://api-gateway:8080",
-                null);
+                null,
+                List.of());
         OpenApiOperationExecutor executor =
                 new OpenApiOperationExecutor(proxyFactory, operation, new ObjectMapper(), TIMEOUT, "Bearer test-token");
 
@@ -92,7 +94,7 @@ class OpenApiOperationExecutorTest {
     void execute_missingServiceId_returnsControlledError() {
         OperationProxyFactory proxyFactory = mock(OperationProxyFactory.class);
         DiscoveredOperation operation = new DiscoveredOperation(
-                "accounting_listinvoices", "List invoices", "GET", "/v1/accounting/invoices", null, null);
+                "accounting_listinvoices", "List invoices", "GET", "/v1/accounting/invoices", null, null, List.of());
         OpenApiOperationExecutor executor =
                 new OpenApiOperationExecutor(proxyFactory, operation, new ObjectMapper(), TIMEOUT, null);
 

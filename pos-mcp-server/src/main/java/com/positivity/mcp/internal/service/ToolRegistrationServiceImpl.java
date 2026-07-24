@@ -117,8 +117,9 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
      * Gate 3 (G3.1): persists each discovered operation as a {@code source='openapi'} {@code mcp_tool}
      * row and maps it to the IDLE workflow so it can be selected. Runs off the event loop
      * (boundedElastic) because the upsert is blocking JDBC. Embeddings are backfilled by
-     * {@code ToolEmbeddingInitializer}; required permissions are seeded separately (admin / #785), so
-     * until then discovered ops are fail-closed (never selected without a permission grant).
+     * {@code ToolEmbeddingInitializer}; required permissions are granted from each op's
+     * {@code x-required-permissions} extension (#781, fail-closed — an op with no extension gets no
+     * grant and is never selected until curated via the #785 admin surface).
      */
     private @NonNull Mono<Void> persistDiscoveredOperations(@NonNull OpenAPI openApi) {
         return Mono.fromRunnable(() -> {
@@ -134,6 +135,11 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                             UUID toolId = toolMetadataRepository.upsertDiscoveredOperation(
                                     operation, OpenApiToolMapper.extractDomain(path));
                             toolMetadataRepository.linkToolToWorkflow(toolId, DISCOVERED_WORKFLOW_STATE);
+                            // #781: grant the op's x-required-permissions (fail-closed — absent extension
+                            // grants nothing, so the op stays unselectable until curated via #785 admin).
+                            for (String permissionCode : operation.requiredPermissions()) {
+                                toolMetadataRepository.addToolPermission(toolId, permissionCode);
+                            }
                             persisted++;
                         } catch (RuntimeException exception) {
                             log.warn(
@@ -144,7 +150,8 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                     }
                     log.info(
                             "Persisted {} discovered openapi ops (source='openapi', {} workflow); "
-                                    + "embeddings backfilled by ToolEmbeddingInitializer, permissions seeded separately",
+                                    + "embeddings backfilled by ToolEmbeddingInitializer, permissions granted from "
+                                    + "x-required-permissions (fail-closed when absent)",
                             persisted,
                             DISCOVERED_WORKFLOW_STATE);
                 })

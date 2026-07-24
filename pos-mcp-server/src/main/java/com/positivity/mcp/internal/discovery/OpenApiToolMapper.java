@@ -12,6 +12,7 @@ import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -128,7 +129,37 @@ public class OpenApiToolMapper {
         String title = Optional.ofNullable(operation.getSummary()).orElse(operationId);
         String description = Optional.ofNullable(operation.getDescription()).orElse(title);
         operations.add(new DiscoveredOperation(
-                toolName, description, method.name(), path, serviceId, buildQueryParamSchemaJson(operation)));
+                toolName,
+                description,
+                method.name(),
+                path,
+                serviceId,
+                buildQueryParamSchemaJson(operation),
+                extractRequiredPermissions(operation)));
+    }
+
+    /**
+     * Reads the {@code x-required-permissions} vendor extension emitted by each service's
+     * {@code requiredPermissionsOperationCustomizer} (#781). Fail-closed: when the extension is
+     * absent (or not a list), returns an empty list so the discovered op is never selected until a
+     * permission is granted — there is <strong>no</strong> {@code AUTHENTICATED} default here.
+     */
+    private static @NonNull List<String> extractRequiredPermissions(@NonNull Operation operation) {
+        Map<String, Object> extensions = operation.getExtensions();
+        if (extensions == null) {
+            return List.of();
+        }
+        Object value = extensions.get("x-required-permissions");
+        if (!(value instanceof Collection<?> codes)) {
+            return List.of();
+        }
+        return codes.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(Object::toString)
+                .map(String::trim)
+                .filter(code -> !code.isBlank())
+                .distinct()
+                .toList();
     }
 
     /**

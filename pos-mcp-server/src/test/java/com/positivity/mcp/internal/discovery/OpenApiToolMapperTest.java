@@ -136,6 +136,37 @@ class OpenApiToolMapperTest {
     }
 
     @Test
+    @DisplayName("toDiscoveredOperations reads the x-required-permissions extension (#781)")
+    void toDiscoveredOperations_readsRequiredPermissions() {
+        OpenApiToolMapper mapper =
+                new OpenApiToolMapper(propertiesWithExclusions(List.of()), mock(OperationProxyFactory.class));
+        Operation op = new Operation();
+        op.setOperationId("listInvoices");
+        op.setSummary("List invoices");
+        op.addExtension("x-required-permissions", List.of("accounting:invoice:view", "AUTHENTICATED"));
+        PathItem item = new PathItem();
+        item.setGet(op);
+        OpenAPI openApi = openApiWith(Map.of("/v1/accounting/invoices", item));
+
+        List<DiscoveredOperation> ops = mapper.toDiscoveredOperations("pos-api-gateway", openApi);
+
+        assertThat(ops).hasSize(1);
+        assertThat(ops.getFirst().requiredPermissions()).containsExactly("accounting:invoice:view", "AUTHENTICATED");
+    }
+
+    @Test
+    @DisplayName("toDiscoveredOperations is fail-closed: no x-required-permissions => empty (#781)")
+    void toDiscoveredOperations_failClosedWhenNoRequiredPermissions() {
+        OpenApiToolMapper mapper =
+                new OpenApiToolMapper(propertiesWithExclusions(List.of()), mock(OperationProxyFactory.class));
+        OpenAPI openApi = openApiWith(Map.of("/v1/accounting/invoices", getItem("listInvoices", "List invoices")));
+
+        List<DiscoveredOperation> ops = mapper.toDiscoveredOperations("pos-api-gateway", openApi);
+
+        assertThat(ops.getFirst().requiredPermissions()).isEmpty();
+    }
+
+    @Test
     @DisplayName("toDiscoveredOperations applies the same exclusion filtering as spec generation")
     void toDiscoveredOperations_excludesConfiguredFragments() {
         OperationProxyFactory mockFactory = mock(OperationProxyFactory.class);
