@@ -14,6 +14,7 @@ import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
 import com.positivity.inventory.service.PutawayGenerationService;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
     private final PutawayRuleRepository putawayRuleRepository;
     private final PutawayTaskRepository putawayTaskRepository;
     private final GoodsReceiptRepository goodsReceiptRepository;
+    private final PutawayDestinationResolver putawayDestinationResolver;
 
     @Override
     @Transactional
@@ -45,20 +47,13 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
                 .orElseThrow(() -> new ResourceNotFoundException("GoodsReceipt", sourceReceiptId.toString()));
 
         List<PutawayRule> enabledRules = putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc();
-        UUID suggestedDestination =
-                enabledRules.isEmpty() ? DEFAULT_LOCATION : enabledRules.get(0).getDestinationLocationId();
+        Optional<PutawayRule> winningRule =
+                enabledRules.isEmpty() ? Optional.empty() : Optional.of(enabledRules.get(0));
 
         List<ParsedPutawayLineItem> lineItems = resolveLineItems(request);
 
         List<PutawayTask> tasks = lineItems.stream()
-                .map(lineItem -> PutawayTask.builder()
-                        .sourceReceipt(sourceReceipt)
-                        .productId(lineItem.productId())
-                        .quantity(lineItem.quantity())
-                        .sourceLocationId(STAGING_LOCATION)
-                        .suggestedDestinationLocationId(suggestedDestination)
-                        .status(PutawayTaskStatus.UNASSIGNED)
-                        .build())
+                .map(lineItem -> toTask(sourceReceipt, lineItem, winningRule))
                 .toList();
 
         return putawayTaskRepository.saveAll(tasks).stream()
@@ -102,6 +97,32 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
 
         PutawayTask savedTask = putawayTaskRepository.save(task);
         return toResponse(savedTask);
+    }
+
+    /**
+     * Builds an unassigned putaway task for one received line, resolving the
+     * suggested destination via the winning rule's destination strategy
+     * (odoo-parity K2, issue #1055). With no matching rule the pre-K2 default
+     * location is used; a {@code FIXED} rule yields byte-identical pre-K2
+     * behavior (fixed destination, no fallback metadata).
+     */
+    private PutawayTask toTask(
+            GoodsReceiptEntity sourceReceipt, ParsedPutawayLineItem lineItem, Optional<PutawayRule> winningRule) {
+        PutawayDestinationResolver.ResolvedDestination destination = winningRule
+                .map(rule -> putawayDestinationResolver.resolve(rule, lineItem.productId(), lineItem.quantity()))
+                .orElseGet(() -> new PutawayDestinationResolver.ResolvedDestination(DEFAULT_LOCATION, null, null));
+
+        return PutawayTask.builder()
+                .sourceReceipt(sourceReceipt)
+                .productId(lineItem.productId())
+                .quantity(lineItem.quantity())
+                .sourceLocationId(STAGING_LOCATION)
+                .suggestedDestinationLocationId(destination.destinationLocationId())
+                .originalSuggestedLocationId(destination.originalSuggestedLocationId())
+                .finalSuggestedLocationId(destination.isFallback() ? destination.destinationLocationId() : null)
+                .fallbackReason(destination.fallbackReason())
+                .status(PutawayTaskStatus.UNASSIGNED)
+                .build();
     }
 
     private UUID parseRequiredUuid(String rawValue, String fieldName) {

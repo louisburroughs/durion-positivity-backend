@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -15,9 +16,12 @@ import com.positivity.inventory.internal.entity.PutawayRule;
 import com.positivity.inventory.internal.entity.PutawayTask;
 import com.positivity.inventory.internal.enums.PutawayTaskStatus;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
+import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
+import com.positivity.inventory.internal.service.ProximitySourcingStrategy;
+import com.positivity.inventory.internal.service.PutawayDestinationResolver;
 import com.positivity.inventory.internal.service.PutawayGenerationServiceImpl;
 import java.util.Collections;
 import java.util.List;
@@ -43,12 +47,26 @@ class PutawayGenerationServiceImplTest {
     @Mock
     private GoodsReceiptRepository goodsReceiptRepository;
 
+    @Mock
+    private ExtStorageLocationReplicaRepository extStorageLocationReplicaRepository;
+
+    @Mock
+    private ProximitySourcingStrategy proximitySourcingStrategy;
+
+    @Mock
+    private PutawayValidationService putawayValidationService;
+
     private PutawayGenerationServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service =
-                new PutawayGenerationServiceImpl(putawayRuleRepository, putawayTaskRepository, goodsReceiptRepository);
+        PutawayDestinationResolver destinationResolver = new PutawayDestinationResolver(
+                putawayTaskRepository,
+                extStorageLocationReplicaRepository,
+                proximitySourcingStrategy,
+                putawayValidationService);
+        service = new PutawayGenerationServiceImpl(
+                putawayRuleRepository, putawayTaskRepository, goodsReceiptRepository, destinationResolver);
         lenient()
                 .when(goodsReceiptRepository.findById(any(UUID.class)))
                 .thenAnswer(inv -> Optional.of(receipt(inv.getArgument(0))));
@@ -74,6 +92,67 @@ class PutawayGenerationServiceImplTest {
         PutawayTaskResponse response = responses.get(0);
         assertThat(response.getStatus()).isEqualTo(PutawayTaskStatus.UNASSIGNED.toString());
         assertThat(response.getSuggestedDestinationLocationId()).isEqualTo(DEST_A);
+    }
+
+    @Test
+    void generateTasksForReceipt_lastUsedRule_suggestsMostRecentlyUsedBin() {
+        UUID lastUsedBin = UUID.fromString("00000000-0000-0000-0000-0000000000d0");
+        GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
+                .sourceReceiptId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .productId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .quantity(5)
+                .build();
+        PutawayRule rule = PutawayRule.builder()
+                .priority(1)
+                .destinationLocationId(DEST_A)
+                .destinationStrategy(com.positivity.inventory.internal.enums.PutawayDestinationStrategy.LAST_USED)
+                .build();
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(List.of(rule));
+        when(putawayTaskRepository
+                        .findFirstByProductIdAndStatusAndActualDestinationLocationIdIsNotNullOrderByUpdatedAtDesc(
+                                any(UUID.class), eq(PutawayTaskStatus.COMPLETED)))
+                .thenReturn(Optional.of(PutawayTask.builder()
+                        .actualDestinationLocationId(lastUsedBin)
+                        .status(PutawayTaskStatus.COMPLETED)
+                        .build()));
+        when(putawayTaskRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+
+        List<PutawayTaskResponse> responses = service.generateTasksForReceipt(request);
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).getSuggestedDestinationLocationId()).isEqualTo(lastUsedBin);
+        assertThat(responses.get(0).getFallbackReason()).isNull();
+    }
+
+    @Test
+    void generateTasksForReceipt_lastUsedRuleNeverUsed_fallsBackToFixedWithReason() {
+        GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
+                .sourceReceiptId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .productId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .quantity(5)
+                .build();
+        PutawayRule rule = PutawayRule.builder()
+                .priority(1)
+                .destinationLocationId(DEST_A)
+                .destinationStrategy(com.positivity.inventory.internal.enums.PutawayDestinationStrategy.LAST_USED)
+                .build();
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(List.of(rule));
+        when(putawayTaskRepository
+                        .findFirstByProductIdAndStatusAndActualDestinationLocationIdIsNotNullOrderByUpdatedAtDesc(
+                                any(UUID.class), eq(PutawayTaskStatus.COMPLETED)))
+                .thenReturn(Optional.empty());
+        when(putawayTaskRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+
+        List<PutawayTaskResponse> responses = service.generateTasksForReceipt(request);
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).getSuggestedDestinationLocationId()).isEqualTo(DEST_A);
+        assertThat(responses.get(0).getFallbackReason())
+                .isEqualTo(com.positivity.inventory.internal.enums.PutawayFallbackReason.UNAVAILABLE.name());
     }
 
     @Test
