@@ -49,8 +49,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.chat.model.StreamingChatModel;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClient;
@@ -91,7 +91,7 @@ class StreamingSessionAgentManagerTest {
     private EmbeddingModel embeddingModel;
 
     @Mock
-        private PgVectorStore embeddingStore;
+    private PgVectorStore embeddingStore;
 
     @Mock
     private MasterAgentRegistry toolRegistry;
@@ -172,6 +172,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                null, // roleDefaultPermissionsClient
                 FIXED_CLOCK,
                 30,
                 500,
@@ -344,6 +345,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                null, // roleDefaultPermissionsClient
                 FIXED_CLOCK,
                 30,
                 500,
@@ -407,6 +409,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                null, // roleDefaultPermissionsClient
                 FIXED_CLOCK,
                 0,
                 500,
@@ -440,6 +443,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                null, // roleDefaultPermissionsClient
                 FIXED_CLOCK,
                 30,
                 500,
@@ -500,6 +504,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 openApiToolProvider,
                 requestContext,
+                null, // roleDefaultPermissionsClient
                 FIXED_CLOCK,
                 30,
                 500,
