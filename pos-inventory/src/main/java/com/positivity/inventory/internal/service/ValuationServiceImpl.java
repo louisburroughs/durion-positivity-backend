@@ -109,9 +109,7 @@ public class ValuationServiceImpl implements ValuationService {
 
         Set<InventoryLedgerEventType> onHandTypes = InventoryLedgerEventType.onHandAffectingTypes();
         List<SkuQty> onHands = asOfOnHands(locationId, sku, onHandTypes, asOf);
-        if (locationId == null && (sku == null || sku.isBlank()) && onHands.size() > asOfSkuCap) {
-            throw new ValuationAsOfSkuCapExceededException(onHands.size(), asOfSkuCap);
-        }
+        enforceFullCatalogAsOfCap(locationId, sku, onHands.size());
         Set<String> stockItemIds = stockItemIds(onHands);
         Map<String, CostingMethod> methods = methodResolver.resolveAll(stockItemIds);
         Map<String, SkuCostState> costStates = findCostStatesByStockItemId(stockItemIds);
@@ -207,6 +205,16 @@ public class ValuationServiceImpl implements ValuationService {
             stockItemIds.add(onHand.stockItemId());
         }
         return stockItemIds;
+    }
+
+    private void enforceFullCatalogAsOfCap(@Nullable UUID locationId, @Nullable String sku, int skuCount) {
+        if (isFullCatalogAsOf(locationId, sku) && skuCount > asOfSkuCap) {
+            throw new ValuationAsOfSkuCapExceededException(skuCount, asOfSkuCap);
+        }
+    }
+
+    private static boolean isFullCatalogAsOf(@Nullable UUID locationId, @Nullable String sku) {
+        return locationId == null && (sku == null || sku.isBlank());
     }
 
     private Map<String, SkuCostState> findCostStatesByStockItemId(Set<String> stockItemIds) {
