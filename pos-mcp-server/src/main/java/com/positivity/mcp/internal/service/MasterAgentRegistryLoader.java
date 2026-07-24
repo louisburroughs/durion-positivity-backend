@@ -70,7 +70,6 @@ public class MasterAgentRegistryLoader {
         // Tool visibility is now fully determined by permission gating at request time
         // (permissionCodes ∩ mcp_tool_permission ∩ workflow state — ToolMetadataRepository
         // .findTopKByEmbeddingForPermissions), so role-scoped preassignment is no longer built.
-        // roleToolAssignments is intentionally empty.
         return new LoadedMasterAgentRegistry(List.copyOf(sharedTools), immutableCopy(domainScopedTools));
     }
 
@@ -114,13 +113,5 @@ public class MasterAgentRegistryLoader {
     }
 
     public record LoadedMasterAgentRegistry(
-            @NonNull List<Object> sharedTools,
-            @NonNull Map<String, List<Object>> domainToolAssignments,
-            @NonNull Map<String, List<Object>> roleToolAssignments) {
-
-        public LoadedMasterAgentRegistry(
-                @NonNull List<Object> sharedTools, @NonNull Map<String, List<Object>> domainToolAssignments) {
-            this(sharedTools, domainToolAssignments, Map.of());
-        }
-    }
+            @NonNull List<Object> sharedTools, @NonNull Map<String, List<Object>> domainToolAssignments) {}
 }

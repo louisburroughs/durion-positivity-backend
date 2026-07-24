@@ -8,7 +8,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
@@ -26,7 +25,6 @@ public final class MasterAgentRegistry {
 
     private final List<Object> sharedTools;
     private final List<DomainAgentDefinition> domainAgents;
-    private final Map<String, List<Object>> roleToolAssignments;
 
     @Autowired
     public MasterAgentRegistry(@NonNull MasterAgentRegistryFactory registryFactory) {
@@ -34,20 +32,12 @@ public final class MasterAgentRegistry {
     }
 
     private MasterAgentRegistry(MasterAgentRegistryFactory.LoadedMasterAgentRegistry loadedRegistry) {
-        this(loadedRegistry.sharedTools(), loadedRegistry.domainAgents(), loadedRegistry.roleToolAssignments());
+        this(loadedRegistry.sharedTools(), loadedRegistry.domainAgents());
     }
 
     public MasterAgentRegistry(@NonNull List<Object> sharedTools, @NonNull List<DomainAgentDefinition> domainAgents) {
-        this(sharedTools, domainAgents, Map.of());
-    }
-
-    public MasterAgentRegistry(
-            @NonNull List<Object> sharedTools,
-            @NonNull List<DomainAgentDefinition> domainAgents,
-            @NonNull Map<String, List<Object>> roleToolAssignments) {
         this.sharedTools = List.copyOf(sharedTools);
         this.domainAgents = List.copyOf(domainAgents);
-        this.roleToolAssignments = Map.copyOf(roleToolAssignments);
     }
 
     public @NonNull List<Object> sharedTools() {
@@ -69,50 +59,16 @@ public final class MasterAgentRegistry {
     }
 
     public @NonNull List<Object> resolveDomainTools(@NonNull String agentName) {
+        // Gate 2B / #780: legacy role->tool preassignment (mcp_role / mcp_tool_role) retired. Tools are
+        // bucketed by domain only; per-request visibility is enforced upstream by permission gating
+        // (permissionCodes ∩ mcp_tool_permission ∩ workflow state). Resolution is purely by domain agent.
         List<Object> resolvedTools = new ArrayList<>();
-        // Gate 2B / #780: ToolRegistryRoleMapper (legacy role aliasing) retired. roleToolAssignments
-        // is empty under permission gating; lookup retained defensively and resolves via domain agent.
-        String normalizedAgentName = agentName;
-        List<Object> assignedTools = roleToolAssignments.get(normalizedAgentName);
-        if (assignedTools != null) {
-            resolvedTools.addAll(assignedTools);
-        } else {
-            findDomainAgent(agentName).ifPresent(agent -> resolvedTools.addAll(agent.tools()));
-        }
+        findDomainAgent(agentName).ifPresent(agent -> resolvedTools.addAll(agent.tools()));
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
                     "MCP master registry resolve-all agentName={} sharedTools={} resolvedTools={}",
-                    normalizedAgentName,
-                    sharedTools.stream()
-                            .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
-                            .toList(),
-                    resolvedTools.stream()
-                            .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
-                            .toList());
-        }
-        return resolvedTools;
-    }
-
-    public @NonNull List<Object> resolveDomainTools(@NonNull String agentName, @NonNull Collection<String> toolNames) {
-        Set<String> selectedNames = new HashSet<>();
-        for (String toolName : toolNames) {
-            selectedNames.add(toolName.toLowerCase(Locale.ROOT));
-        }
-        if (selectedNames.isEmpty()) {
-            LOGGER.debug(
-                    "MCP master registry resolve-selected agentName={} selectedNames=[] resolvedTools=[]", agentName);
-            return new ArrayList<>();
-        }
-        List<Object> availableTools = resolveDomainTools(agentName);
-        List<Object> resolvedTools = availableTools.stream()
-                .filter(tool -> matchesSelectedTool(tool, selectedNames))
-                .toList();
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug(
-                    "MCP master registry resolve-selected agentName={} selectedNames={} availableTools={} resolvedTools={}",
                     agentName,
-                    new TreeSet<>(selectedNames),
-                    availableTools.stream()
+                    sharedTools.stream()
                             .map(tool -> ClassUtils.getUserClass(tool).getSimpleName())
                             .toList(),
                     resolvedTools.stream()
@@ -129,9 +85,8 @@ public final class MasterAgentRegistry {
      * <p>Permission gating and semantic scoring already happened upstream in {@code
      * ToolRegistryService} (permissionCodes ∩ {@code mcp_tool_permission} ∩ workflow state), so the
      * name→bean step must search the full registered set. Tools are bucketed by <em>domain</em>
-     * (never by role), so the role-scoped {@link #resolveDomainTools(String, Collection)} overload
-     * can never match a role caller such as {@code ROLE_ADMIN} and always resolves empty. See Gate 2B
-     * / #780: the legacy role→tool preassignment was retired without repointing name resolution.
+     * (never by role), which is why name resolution is not role-scoped. See Gate 2B / #780: the
+     * legacy role→tool preassignment was retired.
      */
     public @NonNull List<Object> resolveToolsByName(@NonNull Collection<String> toolNames) {
         Set<String> selectedNames = new HashSet<>();
@@ -200,9 +155,9 @@ public final class MasterAgentRegistry {
 
     public @NonNull Set<String> preloadableRoleIdentifiers() {
         // Gate 2A / #639: always cover the canonical role set (MCP_ROLE_PRIORITY + ROLE_USER) so
-        // ROLE_TECHNICIAN and ROLE_USER are never omitted, unioned with any configured assignments.
+        // ROLE_TECHNICIAN and ROLE_USER are never omitted. Gate 2B / #780: role->tool preassignment is
+        // retired, so there are no configured assignments to union in.
         Set<String> roleIdentifiers = new TreeSet<>(SystemPromptDefaults.PRELOADABLE_ROLE_IDENTIFIERS);
-        roleIdentifiers.addAll(roleToolAssignments.keySet());
         if (!roleIdentifiers.isEmpty()) {
             return roleIdentifiers;
         }
