@@ -36,6 +36,14 @@ public interface InventoryLedgerEntryRepository
     /** Per-line idempotency guard for event-driven postings (order parity story H2, #1079). */
     boolean existsByEventTypeAndSourceTransactionId(InventoryLedgerEventType eventType, String sourceTransactionId);
 
+    /**
+     * Full movement chain of one lot, oldest first (odoo-parity E5, issue #1051): every ledger
+     * entry the posting funnel stamped with this {@code lotId} — the receipt, putaway, picks,
+     * consumption, returns, scraps, and transfers — chronologically ordered, ledger id breaking
+     * timestamp ties deterministically. The read basis for lot traceability.
+     */
+    List<InventoryLedgerEntry> findByLotIdOrderByTimestampAscLedgerEntryIdAsc(UUID lotId);
+
     List<InventoryLedgerEntry> findByStockItemIdOrderByTimestampDesc(String stockItemId);
 
     List<InventoryLedgerEntry> findByStockItemIdOrderByTimestampAsc(String stockItemId);

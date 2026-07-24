@@ -28,6 +28,8 @@ tags:
   description: Location roster sync trigger and audit log endpoints
 - name: Inventory Reservations
   description: Reserve, promote, and cancel inventory allocations for workorder lines
+- name: Traceability
+  description: Upstream/downstream traceability for lots and serial units
 - name: Shortage Resolution
   description: Shortage resolution recommendation endpoints
 - name: Inventory Rollup
@@ -3851,6 +3853,45 @@ paths:
         - inventory:on_hand:view
       x-required-permissions:
       - inventory:on_hand:view
+  /v1/inventory/serial-units/{serialUnitId}/traceability:
+    get:
+      tags:
+      - Traceability
+      summary: Serial traceability
+      description: Returns a serial unit's upstream origin (PO / ASN / goods receipt via its lot) and its downstream chain (receipt → issue → workorder → return/scrap) from the serial's receipt and consumption ledger linkages, plus any warranty-hold linkage joined by serial number
+      operationId: getSerialTraceability
+      parameters:
+      - name: serialUnitId
+        in: path
+        description: Serial unit ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Serial traceability assembled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SerialTraceabilityResponse'
+        '403':
+          description: Missing inventory:ledger:view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Serial unit not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:ledger:view
+      x-required-permissions:
+      - inventory:ledger:view
   /v1/inventory/scraps/{scrapId}:
     get:
       tags:
@@ -4431,6 +4472,45 @@ paths:
         - inventory:on_hand:view
       x-required-permissions:
       - inventory:on_hand:view
+  /v1/inventory/lots/{lotId}/traceability:
+    get:
+      tags:
+      - Traceability
+      summary: Lot traceability
+      description: Returns a lot's upstream origin (PO / ASN / goods receipt, vendor, receipt date) and its downstream movement chain (putaway → pick → consumption → return → scrap → transfer), reconstructed from the lot-tagged ledger entries in chronological order
+      operationId: getLotTraceability
+      parameters:
+      - name: lotId
+        in: path
+        description: Lot ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Lot traceability assembled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotTraceabilityResponse'
+        '403':
+          description: Missing inventory:ledger:view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Lot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:ledger:view
+      x-required-permissions:
+      - inventory:ledger:view
   /v1/inventory/locations:
     get:
       tags:
@@ -9928,6 +10008,200 @@ components:
       - serialUnitId
       - status
       - stockItemId
+    SerialTraceabilityResponse:
+      type: object
+      description: Upstream/downstream traceability for a serial unit (odoo-parity E5)
+      properties:
+        serialUnitId:
+          type: string
+          format: uuid
+          description: Identifier of the serial unit
+        stockItemId:
+          type: string
+          description: Stock item (catalog product id) the unit belongs to
+        serialNumber:
+          type: string
+          description: Manufacturer/vendor serial number
+        serialStatus:
+          type: string
+          description: Lifecycle status of the unit
+          enum:
+          - IN_STOCK
+          - ISSUED
+          - RETURNED
+          - SCRAPPED
+          example: ISSUED
+        lotId:
+          type: string
+          format: uuid
+          description: Lot the unit belongs to, when lot-linked
+        workorderId:
+          type: string
+          description: Workorder the unit was consumed to, when known
+        upstream:
+          $ref: '#/components/schemas/TraceabilityUpstream'
+        downstream:
+          type: array
+          description: Downstream movement chain, oldest first
+          items:
+            $ref: '#/components/schemas/TraceabilityMovement'
+        warrantyHolds:
+          type: array
+          description: Warranty part-return holds joined by serial number
+          items:
+            $ref: '#/components/schemas/WarrantyHoldRef'
+      required:
+      - downstream
+      - serialNumber
+      - serialUnitId
+      - stockItemId
+      - upstream
+      - warrantyHolds
+    TraceabilityDocumentRef:
+      type: object
+      description: An upstream source-document reference (PO / ASN / goods receipt)
+      properties:
+        documentType:
+          type: string
+          description: Kind of source document
+          enum:
+          - PURCHASE_ORDER
+          - ASN
+          - GOODS_RECEIPT
+          example: PURCHASE_ORDER
+        documentId:
+          type: string
+          format: uuid
+          description: Identifier of the source document
+        reference:
+          type: string
+          description: Human-readable document reference (PO number, ASN reference, receipt number)
+          example: PO-000123
+      required:
+      - documentId
+      - documentType
+    TraceabilityMovement:
+      type: object
+      description: One ledger movement in a lot/serial downstream chain
+      properties:
+        ledgerEntryId:
+          type: string
+          format: uuid
+          description: Identifier of the ledger entry
+        eventType:
+          type: string
+          description: Ledger event type
+          enum:
+          - GOODS_RECEIPT
+          - TRANSFER_IN
+          - PUTAWAY
+          - RETURN_TO_STOCK
+          - ADJUSTMENT_IN
+          - COUNT_VARIANCE_IN
+          - GOODS_ISSUE
+          - WORKORDER_CONSUMPTION
+          - TRANSFER_OUT
+          - SCRAP_OUT
+          - ADJUSTMENT_OUT
+          - COUNT_VARIANCE_OUT
+          - ADJUST_CYCLE_COUNT
+          - RESERVATION_CREATED
+          - RESERVATION_RELEASED
+          - ALLOCATION_CREATED
+          - ALLOCATION_RELEASED
+          - BACKORDER_CREATED
+          - BACKORDER_RESOLVED
+          - PICK_TASK_CREATED
+          - PICK_TASK_COMPLETED
+          example: PUTAWAY
+        timestamp:
+          type: string
+          format: date-time
+          description: When the movement was posted
+        changeInQuantity:
+          type: integer
+          format: int32
+          description: Signed quantity change (positive inbound, negative outbound)
+        quantityAfter:
+          type: integer
+          format: int32
+          description: On-hand quantity after this movement at its location
+        locationId:
+          type: string
+          format: uuid
+          description: Location the movement affected
+        fromLocationId:
+          type: string
+          format: uuid
+          description: Source location for a paired move (putaway/transfer out)
+        toLocationId:
+          type: string
+          format: uuid
+          description: Destination location for a paired move (putaway/transfer in)
+        lotId:
+          type: string
+          format: uuid
+          description: Lot stamped on the movement, when lot-tracked
+        sourceTransactionId:
+          type: string
+          description: Source transaction/document reference the posting carried
+        notes:
+          type: string
+          description: Free-text note recorded on the ledger entry
+      required:
+      - changeInQuantity
+      - eventType
+      - ledgerEntryId
+      - timestamp
+    TraceabilityUpstream:
+      type: object
+      description: 'Upstream origin: vendor, receipt date, and source documents (PO / ASN / goods receipt)'
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+          description: Vendor the lot/serial was first received from, when known
+        receivedAt:
+          type: string
+          format: date-time
+          description: When the lot/serial was first received into stock
+        documents:
+          type: array
+          description: Upstream source documents, PO first then ASN then goods receipt
+          items:
+            $ref: '#/components/schemas/TraceabilityDocumentRef'
+      required:
+      - documents
+    WarrantyHoldRef:
+      type: object
+      description: A warranty part-return hold linked to the serial
+      properties:
+        partReturnId:
+          type: string
+          format: uuid
+          description: Identifier of the warranty part-return hold
+        claimId:
+          type: string
+          format: uuid
+          description: Warranty claim the part return belongs to
+        status:
+          type: string
+          description: Hold status
+          example: REQUESTED
+        disposition:
+          type: string
+          description: Disposition of the returned part, when known
+        requestedAt:
+          type: string
+          format: date-time
+          description: When the part return was requested
+        shippedAt:
+          type: string
+          format: date-time
+          description: When the part was shipped back to the provider
+      required:
+      - partReturnId
+      - status
     ReturnableItemDto:
       type: object
       description: An item eligible to be returned, with the quantity still returnable
@@ -10243,6 +10517,42 @@ components:
       required:
       - inTransitQty
       - onHand
+    LotTraceabilityResponse:
+      type: object
+      description: Upstream/downstream traceability for a lot (odoo-parity E5)
+      properties:
+        lotId:
+          type: string
+          format: uuid
+          description: Identifier of the lot
+        stockItemId:
+          type: string
+          description: Stock item (catalog product id) the lot belongs to
+        lotNumber:
+          type: string
+          description: Vendor/manufacturer lot number
+        lotStatus:
+          type: string
+          description: Lifecycle status of the lot
+          enum:
+          - ACTIVE
+          - QUARANTINED
+          - RECALLED
+          - CONSUMED
+          example: ACTIVE
+        upstream:
+          $ref: '#/components/schemas/TraceabilityUpstream'
+        downstream:
+          type: array
+          description: Downstream movement chain, oldest first
+          items:
+            $ref: '#/components/schemas/TraceabilityMovement'
+      required:
+      - downstream
+      - lotId
+      - lotNumber
+      - stockItemId
+      - upstream
     LocationInventoryRollupResponse:
       type: object
       description: Parent-location inventory rollup aggregating site totals across all descendant sites
