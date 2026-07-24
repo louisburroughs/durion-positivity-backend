@@ -12,14 +12,20 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Scheduled report-only reconciliation of serial-derived on-hand against the ledger read model
+ * Scheduled report-only reconciliation of serial-derived on-hand against the
+ * ledger read model
  * (odoo-parity E4, issue #1050; spec §6 E4 verifier) — the serial analogue of
- * {@link StockSummaryDriftVerifier}. For every (stockItemId, locationId) with serial units, it
- * compares the count of {@code IN_STOCK} units to the lot-agnostic {@code inventory_stock_summary}
+ * {@link StockSummaryDriftVerifier}. For every (stockItemId, locationId) with
+ * serial units, it
+ * compares the count of {@code IN_STOCK} units to the lot-agnostic
+ * {@code inventory_stock_summary}
  * on-hand and logs/counts any mismatch. NEVER mutates either table.
  *
- * <p>A SERIAL-tracked SKU maintains the serial=quantity invariant on every posting, so a drift
- * here means a serial row was tampered with or a posting bypassed the funnel — an alerting signal,
+ * <p>
+ * A SERIAL-tracked SKU maintains the serial=quantity invariant on every
+ * posting, so a drift
+ * here means a serial row was tampered with or a posting bypassed the funnel —
+ * an alerting signal,
  * not an auto-repair trigger.
  */
 @Component
@@ -39,9 +45,8 @@ public class SerialUnitOnHandVerifier {
         this.driftCounter = meterRegistry.counter("inventory.serial_unit.drift.total");
     }
 
-    @Scheduled(
-            fixedDelayString = "${pos.inventory.serial-unit.verify-interval-ms:3600000}",
-            initialDelayString = "${pos.inventory.serial-unit.verify-initial-delay-ms:600000}")
+    @Scheduled(fixedDelayString = "${pos.inventory.serial-unit.verify-interval-ms:3600000}", initialDelayString = "${pos.inventory.serial-unit.verify-initial-delay-ms:600000}")
+    @Transactional(readOnly = true)
     public void verifyScheduled() {
         try {
             verify();
@@ -51,20 +56,24 @@ public class SerialUnitOnHandVerifier {
         }
     }
 
-    /** Cap on per-key WARN lines per pass; the total always lands in the summary ERROR + counter. */
+    /**
+     * Cap on per-key WARN lines per pass; the total always lands in the summary
+     * ERROR + counter.
+     */
     private static final int MAX_DETAILED_DRIFT_LOGS = 50;
 
     /**
-     * Runs one full comparison pass and returns the number of drifted (stockItemId, locationId)
-     * keys: keys where the count of {@code IN_STOCK} serial units disagrees with the lot-agnostic
+     * Runs one full comparison pass and returns the number of drifted (stockItemId,
+     * locationId)
+     * keys: keys where the count of {@code IN_STOCK} serial units disagrees with
+     * the lot-agnostic
      * summary on-hand.
      *
      * @return number of drifted keys
      */
-    @Transactional(readOnly = true)
     public int verify() {
-        List<InventorySerialUnitRepository.SerialOnHandRow> rows =
-                serialRepository.serialOnHandByStockItemAndLocation(InventorySerialStatus.IN_STOCK);
+        List<InventorySerialUnitRepository.SerialOnHandRow> rows = serialRepository
+                .serialOnHandByStockItemAndLocation(InventorySerialStatus.IN_STOCK);
 
         int driftedKeys = 0;
         for (InventorySerialUnitRepository.SerialOnHandRow row : rows) {

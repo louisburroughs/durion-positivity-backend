@@ -28,11 +28,15 @@ import tools.jackson.databind.ObjectMapper;
  * Current supported command types:
  * <ul>
  * <li>{@code ASSIGNMENT_UPDATED}</li>
- * <li>{@code workorder.outbox.replay-requested} — consumer-initiated drift repair (ADR-0044 §4):
- * re-queues published outbox events created at or after {@code payload.since} for
+ * <li>{@code workorder.outbox.replay-requested} — consumer-initiated drift
+ * repair (ADR-0044 §4):
+ * re-queues published outbox events created at or after {@code payload.since}
+ * for
  * re-publication; consumers dedupe by eventId so replay is idempotent.</li>
- * <li>{@code workorder.invoice.regenerate-requested} — async invoice regeneration (ADR-0044 R4,
- * #842): generates the invoice draft for {@code payload.workorderId}; idempotent per workorder,
+ * <li>{@code workorder.invoice.regenerate-requested} — async invoice
+ * regeneration (ADR-0044 R4,
+ * #842): generates the invoice draft for {@code payload.workorderId};
+ * idempotent per workorder,
  * and the result flows back to callers via {@code invoice.events.v1}.</li>
  * </ul>
  * </p>
@@ -45,16 +49,28 @@ public class KafkaCommandListener {
 
     private static final String PAYLOAD = "payload";
     private static final String COMMAND_ASSIGNMENT_UPDATED = "ASSIGNMENT_UPDATED";
-    /** Canonical dotted name normalized to command-type form: WORKORDER_OUTBOX_REPLAY_REQUESTED. */
+    /**
+     * Canonical dotted name normalized to command-type form:
+     * WORKORDER_OUTBOX_REPLAY_REQUESTED.
+     */
     private static final String COMMAND_OUTBOX_REPLAY_REQUESTED = "WORKORDER_OUTBOX_REPLAY_REQUESTED";
 
-    /** Canonical dotted name normalized: workorder.invoice.regenerate-requested (#842). */
+    /**
+     * Canonical dotted name normalized: workorder.invoice.regenerate-requested
+     * (#842).
+     */
     private static final String COMMAND_INVOICE_REGENERATE_REQUESTED = "WORKORDER_INVOICE_REGENERATE_REQUESTED";
 
-    /** Covers the sub-millisecond skew between outbox createdAt and the eventId timestamp. */
+    /**
+     * Covers the sub-millisecond skew between outbox createdAt and the eventId
+     * timestamp.
+     */
     private static final Duration REPLAY_WINDOW_SLACK = Duration.ofSeconds(1);
 
-    /** Replay commands older than this are rejected (PR #849 review — bound repair cost). */
+    /**
+     * Replay commands older than this are rejected (PR #849 review — bound repair
+     * cost).
+     */
     @Value("${workorder.outbox.replay.max-lookback:P30D}")
     private Duration replayMaxLookback;
 
@@ -64,9 +80,7 @@ public class KafkaCommandListener {
     private final OutboxReplayService outboxReplayService;
     private final WorkorderInvoiceService workorderInvoiceService;
 
-    @KafkaListener(
-            topics = "${workorder.kafka.commands-topic:workorder.commands.v1}",
-            groupId = "${workorder.kafka.consumer-group:workorder-commands}")
+    @KafkaListener(topics = "${workorder.kafka.commands-topic:workorder.commands.v1}", groupId = "${workorder.kafka.consumer-group:workorder-commands}")
     public void onCommand(@NonNull String message) {
         try {
             JsonNode root = objectMapper.readTree(message);
@@ -99,8 +113,9 @@ public class KafkaCommandListener {
                 return;
             }
 
-            JsonNode payloadNode =
-                    hasCommandType && root.has(PAYLOAD) && !root.get(PAYLOAD).isNull() ? root.get(PAYLOAD) : root;
+            JsonNode payloadNode = hasCommandType && root.has(PAYLOAD) && !root.get(PAYLOAD).isNull()
+                    ? root.get(PAYLOAD)
+                    : root;
 
             AssignmentUpdatedEvent event = objectMapper.treeToValue(payloadNode, AssignmentUpdatedEvent.class);
             if (event.getWorkorderId() == null || event.getPayload() == null) {
@@ -124,8 +139,7 @@ public class KafkaCommandListener {
 
     private void handleInvoiceRegenerateRequested(@NonNull JsonNode root) {
         JsonNode payloadNode = root.get(PAYLOAD);
-        String rawWorkorderId =
-                payloadNode == null ? null : payloadNode.path("workorderId").stringValue(null);
+        String rawWorkorderId = payloadNode == null ? null : payloadNode.path("workorderId").stringValue(null);
         UUID workorderId;
         try {
             workorderId = UUID.fromString(rawWorkorderId);
@@ -133,10 +147,12 @@ public class KafkaCommandListener {
             log.warn("Ignoring invoice regeneration command with missing/malformed workorderId: {}", root);
             return;
         }
-        String idempotencyKey = payloadNode.path("idempotencyKey").stringValue(null);
+        String idempotencyKey = payloadNode == null ? null : payloadNode.path("idempotencyKey").stringValue(null);
         try {
-            // Idempotent per workorder: generateInvoice returns the existing invoice on replay,
-            // so command redelivery is harmless. Business failures (workorder missing or not
+            // Idempotent per workorder: generateInvoice returns the existing invoice on
+            // replay,
+            // so command redelivery is harmless. Business failures (workorder missing or
+            // not
             // COMPLETED) are permanent — log and drop rather than poison the partition.
             var response = workorderInvoiceService.generateInvoice(workorderId, idempotencyKey);
             log.info(
@@ -158,7 +174,8 @@ public class KafkaCommandListener {
         }
         Instant lookbackLimit = Instant.now(clock).minus(replayMaxLookback);
         if (since.isBefore(lookbackLimit)) {
-            // PR #849 review: a malformed or ancient `since` must not trigger a huge re-emit.
+            // PR #849 review: a malformed or ancient `since` must not trigger a huge
+            // re-emit.
             log.warn(
                     "Ignoring outbox replay command: since={} exceeds max lookback {} (limit {})",
                     since,

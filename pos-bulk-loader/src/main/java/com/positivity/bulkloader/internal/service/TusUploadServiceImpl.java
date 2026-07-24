@@ -88,7 +88,7 @@ public class TusUploadServiceImpl implements TusUploadService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = IOException.class)
     public long appendChunk(@NonNull UUID uploadId, long expectedOffset, @NonNull InputStream data, long chunkLength)
             throws IOException {
         TusUpload upload = findOrThrow(uploadId);
