@@ -18,6 +18,8 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -69,12 +71,14 @@ public class SettlementReconciliationController {
         @ApiResponse(responseCode = "200", description = "Settlement lines listed", content = @Content(array = @ArraySchema(schema = @Schema(implementation = SettlementLineResponse.class))))
         @ApiResponse(responseCode = "403", description = "Caller lacks the accounting:reconciliation:view permission", content = @Content(schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<List<SettlementLineResponse>> listSettlementLines(
-                        @Parameter(description = "Provider settlement (payout) id", required = true, example = "stl_1Mx3k2eZvKYlo2C0") @PathVariable String settlementId,
+                        @Parameter(description = "Provider settlement (payout) id", required = true, example = "stl_1Mx3k2eZvKYlo2C0") @PathVariable @NonNull String settlementId,
                         @Parameter(description = "When true, return only UNMATCHED lines", example = "true") @RequestParam(name = "unmatchedOnly", defaultValue = "false") boolean unmatchedOnly) {
-                log.info(
-                                "List settlement lines for {} (unmatchedOnly={})",
-                                sanitizeForLog(settlementId),
-                                sanitizeForLog(unmatchedOnly));
+                if (log.isInfoEnabled()) {
+                        log.info(
+                                        "List settlement lines for {} (unmatchedOnly={})",
+                                        sanitizeForLog(settlementId),
+                                        sanitizeForLog(unmatchedOnly));
+                }
                 List<SettlementLineResponse> response = settlementReconciliationService
                                 .listLines(settlementId, unmatchedOnly).stream()
                                 .map(SettlementLineResponse::from)
@@ -107,12 +111,14 @@ public class SettlementReconciliationController {
         @ApiResponse(responseCode = "422", description = "Reclass entry is dated into a CLOSED or hard-locked accounting period"
                         + " (PERIOD_CLOSED / PERIOD_HARD_LOCKED)", content = @Content(schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<SettlementLineResponse> matchSettlementLine(
-                        @Parameter(description = "Settlement line id", required = true) @PathVariable UUID lineId,
-                        @Valid @RequestBody SettlementManualMatchRequest request) {
-                log.info(
-                                "Manual match settlement line {} to receivable payment {}",
-                                sanitizeForLog(lineId),
-                                sanitizeForLog(request.getReceivablePaymentId()));
+                        @Parameter(description = "Settlement line id", required = true) @PathVariable @NonNull UUID lineId,
+                        @Valid @RequestBody @NonNull SettlementManualMatchRequest request) {
+                if (log.isInfoEnabled()) {
+                        log.info(
+                                        "Manual match settlement line {} to receivable payment {}",
+                                        sanitizeForLog(lineId),
+                                        sanitizeForLog(request.getReceivablePaymentId()));
+                }
                 SettlementLineResponse response = SettlementLineResponse.from(
                                 settlementReconciliationService.manualMatchToReceivable(lineId,
                                                 request.getReceivablePaymentId()));
@@ -146,15 +152,17 @@ public class SettlementReconciliationController {
                         + " manual match or escalate — or the adjustment entry is dated into a CLOSED or hard-locked"
                         + " accounting period (PERIOD_CLOSED / PERIOD_HARD_LOCKED)", content = @Content(schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<SettlementLineResponse> writeOffSettlementLine(
-                        @Parameter(description = "Settlement line id", required = true) @PathVariable UUID lineId,
-                        @Valid @RequestBody SettlementWriteOffRequest request) {
-                log.info("Write off settlement line {}", sanitizeForLog(lineId));
+                        @Parameter(description = "Settlement line id", required = true) @PathVariable @NonNull UUID lineId,
+                        @Valid @RequestBody @NonNull SettlementWriteOffRequest request) {
+                if (log.isInfoEnabled()) {
+                        log.info("Write off settlement line {}", sanitizeForLog(lineId));
+                }
                 SettlementLineResponse response = SettlementLineResponse
                                 .from(settlementReconciliationService.writeOffLine(lineId, request.getReason()));
                 return ResponseEntity.ok(response);
         }
 
-        private static String sanitizeForLog(Object value) {
+        private static String sanitizeForLog(@Nullable Object value) {
                 if (value == null) {
                         return "null";
                 }

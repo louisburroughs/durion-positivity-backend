@@ -27,6 +27,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -84,8 +86,10 @@ public class BankReconciliationController {
         @ApiResponse(responseCode = "403", description = "Caller lacks the accounting:reconciliation:adjust permission", content = @Content(schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "422", description = "GL account is not reconcilable (ACCOUNT_NOT_RECONCILABLE)", content = @Content(schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<BankReconciliationResponse> importReconciliation(
-                        @Valid @RequestBody BankReconciliationImportRequest request) {
-                log.info("Import bank reconciliation for account {}", sanitizeForLog(request.getGlAccountId()));
+                        @Valid @RequestBody @NonNull BankReconciliationImportRequest request) {
+                if (log.isInfoEnabled()) {
+                        log.info("Import bank reconciliation for account {}", sanitizeForLog(request.getGlAccountId()));
+                }
                 return ResponseEntity.ok(bankReconciliationService.importStatement(request));
         }
 
@@ -155,9 +159,11 @@ public class BankReconciliationController {
                         + " (RECONCILIATION_LINE_INELIGIBLE)", content = @Content(schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "422", description = "Matched sets do not net to equal amounts (MATCH_AMOUNT_MISMATCH)", content = @Content(schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<BankReconciliationResponse> matchReconciliation(
-                        @Parameter(description = "Reconciliation id", required = true) @PathVariable UUID reconciliationId,
-                        @Valid @RequestBody ReconciliationMatchRequest request) {
-                log.info("Match lines in reconciliation {}", sanitizeForLog(reconciliationId));
+                        @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
+                        @Valid @RequestBody @NonNull ReconciliationMatchRequest request) {
+                if (log.isInfoEnabled()) {
+                        log.info("Match lines in reconciliation {}", sanitizeForLog(reconciliationId));
+                }
                 return ResponseEntity.ok(bankReconciliationService.match(reconciliationId, request));
         }
 
@@ -175,9 +181,11 @@ public class BankReconciliationController {
         @ApiResponse(responseCode = "404", description = "Reconciliation or match group not found (RECONCILIATION_NOT_FOUND)", content = @Content(schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "409", description = "Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED)", content = @Content(schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<BankReconciliationResponse> unmatchReconciliation(
-                        @Parameter(description = "Reconciliation id", required = true) @PathVariable UUID reconciliationId,
-                        @Valid @RequestBody ReconciliationUnmatchRequest request) {
-                log.info("Unmatch in reconciliation {}", sanitizeForLog(reconciliationId));
+                        @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
+                        @Valid @RequestBody @NonNull ReconciliationUnmatchRequest request) {
+                if (log.isInfoEnabled()) {
+                        log.info("Unmatch in reconciliation {}", sanitizeForLog(reconciliationId));
+                }
                 return ResponseEntity.ok(bankReconciliationService.unmatch(reconciliationId, request));
         }
 
@@ -200,12 +208,14 @@ public class BankReconciliationController {
                         + " or the amount sign is not permitted for the type — BANK_FEE/NSF_FEE must be negative,"
                         + " INTEREST_EARNED must be positive (RECONCILIATION_ADJUSTMENT_SIGN_INVALID)", content = @Content(schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<BankReconciliationResponse> addReconciliationAdjustment(
-                        @Parameter(description = "Reconciliation id", required = true) @PathVariable UUID reconciliationId,
-                        @Valid @RequestBody ReconciliationAdjustmentRequest request) {
-                log.info(
-                                "Record {} adjustment on reconciliation {}",
-                                sanitizeForLog(request.getType()),
-                                sanitizeForLog(reconciliationId));
+                        @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
+                        @Valid @RequestBody @NonNull ReconciliationAdjustmentRequest request) {
+                if (log.isInfoEnabled()) {
+                        log.info(
+                                        "Record {} adjustment on reconciliation {}",
+                                        sanitizeForLog(request.getType()),
+                                        sanitizeForLog(reconciliationId));
+                }
                 return ResponseEntity.ok(bankReconciliationService.addAdjustment(reconciliationId, request));
         }
 
@@ -226,12 +236,14 @@ public class BankReconciliationController {
         @ApiResponse(responseCode = "409", description = "Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED)", content = @Content(schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "422", description = "Reconciliation does not balance (RECONCILIATION_NOT_BALANCED)", content = @Content(schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<BankReconciliationResponse> finalizeReconciliation(
-                        @Parameter(description = "Reconciliation id", required = true) @PathVariable UUID reconciliationId) {
-                log.info("Finalize reconciliation {}", sanitizeForLog(reconciliationId));
+                        @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId) {
+                if (log.isInfoEnabled()) {
+                        log.info("Finalize reconciliation {}", sanitizeForLog(reconciliationId));
+                }
                 return ResponseEntity.ok(bankReconciliationService.finalizeReconciliation(reconciliationId));
         }
 
-        private static String sanitizeForLog(Object value) {
+        private static String sanitizeForLog(@Nullable Object value) {
                 if (value == null) {
                         return "null";
                 }

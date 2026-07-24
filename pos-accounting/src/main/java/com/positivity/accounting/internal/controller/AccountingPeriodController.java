@@ -20,6 +20,8 @@ import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -100,8 +102,10 @@ public class AccountingPeriodController {
         @ApiResponse(responseCode = "422", description = "DRAFT journal entries are dated inside the period (PERIOD_HAS_DRAFT_ENTRIES);"
                         + " fieldErrors lists the blocking draftJournalEntryIds", content = @Content(schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<AccountingPeriodResponse> closeAccountingPeriod(
-                        @Parameter(description = "Period code in YYYY-MM format", required = true, example = "2026-06") @PathVariable String periodCode) {
-                log.info("Close accounting period {}", sanitizeForLog(periodCode));
+                        @Parameter(description = "Period code in YYYY-MM format", required = true, example = "2026-06") @PathVariable @NonNull String periodCode) {
+                if (log.isInfoEnabled()) {
+                        log.info("Close accounting period {}", sanitizeForLog(periodCode));
+                }
                 AccountingPeriodResponse response = accountingPeriodService.closePeriod(periodCode);
                 return ResponseEntity.ok(response);
         }
@@ -125,9 +129,11 @@ public class AccountingPeriodController {
         @ApiResponse(responseCode = "404", description = "No period row exists for the code (PERIOD_NOT_FOUND)", content = @Content(schema = @Schema(implementation = ApiError.class)))
         @ApiResponse(responseCode = "409", description = "Period is already open (PERIOD_ALREADY_OPEN)", content = @Content(schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<AccountingPeriodResponse> reopenAccountingPeriod(
-                        @Parameter(description = "Period code in YYYY-MM format", required = true, example = "2026-06") @PathVariable String periodCode,
-                        @Valid @RequestBody AccountingPeriodReopenRequest request) {
-                log.info("Reopen accounting period {}", sanitizeForLog(periodCode));
+                        @Parameter(description = "Period code in YYYY-MM format", required = true, example = "2026-06") @PathVariable @NonNull String periodCode,
+                        @Valid @RequestBody @NonNull AccountingPeriodReopenRequest request) {
+                if (log.isInfoEnabled()) {
+                        log.info("Reopen accounting period {}", sanitizeForLog(periodCode));
+                }
                 AccountingPeriodResponse response = accountingPeriodService.reopenPeriod(periodCode,
                                 request.getJustification());
                 return ResponseEntity.ok(response);
@@ -177,14 +183,16 @@ public class AccountingPeriodController {
         @ApiResponse(responseCode = "422", description = "Requested date is before the currently stored hard-lock date"
                         + " (HARD_LOCK_DATE_REGRESSION) — the hard lock only moves forward", content = @Content(schema = @Schema(implementation = ApiError.class)))
         public ResponseEntity<HardLockDateResponse> setHardLockDate(
-                        @Valid @RequestBody HardLockDateUpdateRequest request) {
-                log.info("Set accounting hard-lock date to {}", sanitizeForLog(request.getHardLockDate()));
+                        @Valid @RequestBody @NonNull HardLockDateUpdateRequest request) {
+                if (log.isInfoEnabled()) {
+                        log.info("Set accounting hard-lock date to {}", sanitizeForLog(request.getHardLockDate()));
+                }
                 LocalDate stored = accountingConfigurationService.setHardLockDate(request.getHardLockDate(),
                                 request.getJustification());
                 return ResponseEntity.ok(new HardLockDateResponse(stored));
         }
 
-        private static String sanitizeForLog(Object value) {
+        private static String sanitizeForLog(@Nullable Object value) {
                 if (value == null) {
                         return "null";
                 }
