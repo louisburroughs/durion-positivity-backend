@@ -10,6 +10,11 @@ encoding: "utf-8"
 # This does not affect Serena's own files (e.g. memories and configuration files), which always use native line endings.
 line_ending:
 
+# Programming language(s) used by this project.
+# Serena now requires this key in project configuration.
+languages:
+- java
+
 # The language backend to use for this project.
 # If not set, the global setting from serena_config.yml is used.
 # Valid values: LSP, JetBrains
