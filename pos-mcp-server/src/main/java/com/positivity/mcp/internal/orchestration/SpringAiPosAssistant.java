@@ -62,13 +62,16 @@ final class SpringAiPosAssistant implements PosAssistant {
             toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
         }
 
+        DefaultToolCallingChatOptions.Builder optionsBuilder =
+                DefaultToolCallingChatOptions.builder().toolCallbacks(toolCallbacks);
+        // Only override the model when we resolved one; a null/blank override would clobber the
+        // chat model's configured default and fail with "model cannot be null or empty".
+        if (modelName != null && !modelName.isBlank()) {
+            optionsBuilder.model(modelName);
+        }
+
         String response = chatModel
-                .call(new Prompt(
-                        promptMessages,
-                        DefaultToolCallingChatOptions.builder()
-                                .toolCallbacks(toolCallbacks)
-                                .model(modelName)
-                                .build()))
+                .call(new Prompt(promptMessages, optionsBuilder.build()))
                 .getResult()
                 .getOutput()
                 .getText();

@@ -67,12 +67,14 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
             toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
         }
         AtomicReference<StringBuilder> responseText = new AtomicReference<>(new StringBuilder());
-        return streamingChatModel.stream(new Prompt(
-                        promptMessages,
-                        DefaultToolCallingChatOptions.builder()
-                                .toolCallbacks(toolCallbacks)
-                                .model(modelName)
-                                .build()))
+        DefaultToolCallingChatOptions.Builder optionsBuilder =
+                DefaultToolCallingChatOptions.builder().toolCallbacks(toolCallbacks);
+        // Only override the model when we resolved one; a null/blank override would clobber the
+        // chat model's configured default and fail with "model cannot be null or empty".
+        if (modelName != null && !modelName.isBlank()) {
+            optionsBuilder.model(modelName);
+        }
+        return streamingChatModel.stream(new Prompt(promptMessages, optionsBuilder.build()))
                 .map(response -> {
                     if (response.getResult() == null || response.getResult().getOutput() == null) {
                         return "";
