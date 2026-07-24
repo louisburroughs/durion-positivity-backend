@@ -172,10 +172,17 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
     private @NonNull Mono<Void> addToolWithTiming(McpServerFeatures.AsyncToolSpecification specification) {
         long startNanos = System.nanoTime();
         String toolName = specification.tool().name();
-        return mcpAsyncServer.addTool(specification).doOnSuccess(ignored -> {
-            toolsRegisteredTotal.increment();
-            log.info("Registered MCP tool {} in {} ms", toolName, elapsedMs(startNanos));
-        });
+        // Idempotent (re)registration so periodic refresh can re-add a tool without the server
+        // rejecting it as already-registered: remove any existing tool of the same name first
+        // (no-op / swallowed if absent), then add the current specification.
+        return mcpAsyncServer
+                .removeTool(toolName)
+                .onErrorResume(ignored -> Mono.empty())
+                .then(mcpAsyncServer.addTool(specification))
+                .doOnSuccess(ignored -> {
+                    toolsRegisteredTotal.increment();
+                    log.info("Registered MCP tool {} in {} ms", toolName, elapsedMs(startNanos));
+                });
     }
 
     private static long elapsedMs(long startNanos) {

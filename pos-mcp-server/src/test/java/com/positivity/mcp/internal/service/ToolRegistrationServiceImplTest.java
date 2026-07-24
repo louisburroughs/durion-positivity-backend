@@ -56,6 +56,7 @@ class ToolRegistrationServiceImplTest {
         when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
         when(openApiToolMapper.toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi()))
                 .thenReturn(List.of(spec));
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
         when(mcpAsyncServer.addTool(spec)).thenReturn(Mono.empty());
         when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
 

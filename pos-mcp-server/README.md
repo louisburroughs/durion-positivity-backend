@@ -109,6 +109,10 @@ maps operations to `mcp_tool` rows, and `OperationProxyFactory` builds the HTTP 
 `OpenApiToolProvider` then resolves permission-gated discovered operations into dynamic Spring AI `ToolCallback`s per
 request. These expand the candidate pool beyond the 17 facades.
 
+Discovery runs once at startup. Set `mcp.server.discovery-refresh.enabled=true` (interval
+`mcp.server.discovery-refresh.interval-ms`, default 5 min) to periodically re-discover and pick up new or changed
+backend operations without a restart — re-registration is idempotent (each tool is removed then re-added).
+
 ## Audit & Adaptive Tuning
 
 Every tool decision is logged (selected tool, semantic rank, final score, `selected`, `success`, `fallback_invoked`,
