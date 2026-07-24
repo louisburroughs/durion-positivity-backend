@@ -103,6 +103,33 @@ public class ApprovalThresholdEvaluatorImpl implements ApprovalThresholdEvaluato
         return Optional.ofNullable(requiredTier);
     }
 
+    @Override
+    public Optional<ApprovalTier> evaluateRevaluationApprovalTier(@NonNull BigDecimal absValueDelta) {
+        List<ApprovalThresholdConfig> configs =
+                thresholdConfigRepository.findByFlowTypeAndActiveTrueOrderByApprovalTierAsc(
+                        ApprovalFlowType.REVALUATION);
+
+        if (configs.isEmpty()) {
+            log.warn(
+                    "No active REVALUATION approval threshold configurations found. Auto-approving revaluation delta {}",
+                    absValueDelta);
+            return Optional.empty();
+        }
+
+        // Revaluation thresholds are value-based only (odoo-parity J4): the highest tier whose value
+        // threshold is met wins; below all thresholds means auto-approval.
+        ApprovalTier requiredTier = null;
+        for (ApprovalThresholdConfig config : configs) {
+            if (absValueDelta.compareTo(config.getValueVarianceThreshold()) >= 0) {
+                requiredTier = config.getApprovalTier();
+            }
+        }
+        if (requiredTier != null) {
+            log.info("Revaluation value delta {} requires {} approval", absValueDelta, requiredTier);
+        }
+        return Optional.ofNullable(requiredTier);
+    }
+
     /**
      * Checks if variance exceeds ANY threshold in the configuration (OR logic).
      */

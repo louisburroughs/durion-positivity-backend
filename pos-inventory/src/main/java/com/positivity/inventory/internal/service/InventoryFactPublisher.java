@@ -10,6 +10,7 @@ import com.positivity.domainevents.inventory.LeadTimeUpdatedV1;
 import com.positivity.domainevents.inventory.LotExpiryAlertV1;
 import com.positivity.domainevents.inventory.PickListUpdatedV1;
 import com.positivity.domainevents.inventory.PickTaskUpdatedV1;
+import com.positivity.domainevents.inventory.ProductValueChangedV1;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
 import com.positivity.domainevents.inventory.StorageLocationOnHandUpdatedV1;
 import com.positivity.domainevents.inventory.TransferOrderUpdatedV1;
@@ -170,6 +171,19 @@ public class InventoryFactPublisher {
             return;
         }
         pending.scrapPosts.add(fact);
+    }
+
+    /**
+     * Record a product-value-changed occurrence fact (odoo-parity J4, issue #1054): a manual cost
+     * revaluation was applied to a SKU's cost state. Queued as-is — this is an occurrence, not a
+     * snapshot, and is never re-emitted. pos-accounting consumes it to post the revaluation JE.
+     */
+    public void recordProductValueChanged(@NonNull ProductValueChangedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.productValueChanges.add(fact);
     }
 
     /**
@@ -377,6 +391,18 @@ public class InventoryFactPublisher {
                 log.warn("Skipping scrap-posted fact for {}: {}", scrapPost.scrapId(), e.getMessage());
             }
         }
+        for (ProductValueChangedV1 valueChange : pending.productValueChanges) {
+            try {
+                publish(
+                        writer,
+                        ProductValueChangedV1.EVENT_TYPE,
+                        ProductValueChangedV1.SCHEMA_VERSION,
+                        valueChange.revaluationId(),
+                        valueChange);
+            } catch (Exception e) {
+                log.warn("Skipping product-value-changed fact for {}: {}", valueChange.revaluationId(), e.getMessage());
+            }
+        }
         for (TransferOrderUpdatedV1 transferUpdate : pending.transferOrderUpdates) {
             try {
                 publish(
@@ -489,6 +515,7 @@ public class InventoryFactPublisher {
         private final List<ConsumptionRecordedV1> consumptions = new ArrayList<>();
         private final List<ExpectedSupplyDroppedV1> expectedSupplyDrops = new ArrayList<>();
         private final List<ScrapPostedV1> scrapPosts = new ArrayList<>();
+        private final List<ProductValueChangedV1> productValueChanges = new ArrayList<>();
         private final List<TransferOrderUpdatedV1> transferOrderUpdates = new ArrayList<>();
         private final List<BackorderCreatedV1> backorderCreations = new ArrayList<>();
         private final List<BackorderResolvedV1> backorderResolutions = new ArrayList<>();

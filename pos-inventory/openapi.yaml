@@ -40,6 +40,8 @@ tags:
   description: Inventory return-to-stock endpoints
 - name: Inventory Reference Data
   description: Inventory reference-data read endpoints
+- name: Inventory Revaluation
+  description: Approval-gated manual cost revaluation (odoo-parity J4)
 - name: Cycle Count Operations
   description: Cycle count submission and recount operations
 - name: Inventory Management
@@ -554,6 +556,173 @@ paths:
         - inventory:cycle_count:complete
       x-required-permissions:
       - inventory:cycle_count:complete
+  /v1/inventory/valuation/revaluations:
+    get:
+      tags:
+      - Inventory Revaluation
+      summary: List revaluations
+      description: Lists revaluation documents filtered by SKU and lifecycle status, newest first
+      operationId: listRevaluations
+      parameters:
+      - name: stockItemId
+        in: query
+        description: Filter by SKU / stock item identifier
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - AUTO_APPLIED
+          - APPLIED
+          - REJECTED
+      responses:
+        '200':
+          description: Revaluations retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RevaluationResponse'
+      security:
+      - bearerAuth:
+        - inventory:valuation:view
+        - inventory:valuation:adjust
+      x-required-permissions:
+      - inventory:valuation:view
+      - inventory:valuation:adjust
+    post:
+      tags:
+      - Inventory Revaluation
+      summary: Submit cost revaluation
+      description: Submits a manual cost revaluation for a SKU. Below the configured value-delta thresholds the revaluation is auto-applied (cost state restated and ProductValueChangedV1 emitted) in the same transaction; at or above them it enters PENDING_APPROVAL with no cost change.
+      operationId: createRevaluation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRevaluationRequest'
+        required: true
+      responses:
+        '201':
+          description: Revaluation created (AUTO_APPLIED or PENDING_APPROVAL)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevaluationResponse'
+        '400':
+          description: Invalid request (e.g. neither/both of newUnitCost and costDelta, or a negative result)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:valuation:adjust
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:valuation:adjust
+      x-required-permissions:
+      - inventory:valuation:adjust
+  /v1/inventory/valuation/revaluations/{revaluationId}/reject:
+    post:
+      tags:
+      - Inventory Revaluation
+      summary: Reject cost revaluation
+      description: Rejects a pending revaluation with a reason. The SKU cost state is untouched.
+      operationId: rejectRevaluation
+      parameters:
+      - name: revaluationId
+        in: path
+        description: Revaluation document ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectRevaluationRequest'
+        required: true
+      responses:
+        '200':
+          description: Revaluation rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevaluationResponse'
+        '404':
+          description: Revaluation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Revaluation is not in a rejectable state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:valuation:adjust
+      x-required-permissions:
+      - inventory:valuation:adjust
+  /v1/inventory/valuation/revaluations/{revaluationId}/approve:
+    post:
+      tags:
+      - Inventory Revaluation
+      summary: Approve cost revaluation
+      description: Approves a pending revaluation, restating the SKU cost state and emitting ProductValueChangedV1
+      operationId: approveRevaluation
+      parameters:
+      - name: revaluationId
+        in: path
+        description: Revaluation document ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Revaluation approved and applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevaluationResponse'
+        '403':
+          description: Missing inventory:valuation:adjust
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Revaluation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Revaluation is not in an approvable state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:valuation:adjust
+      x-required-permissions:
+      - inventory:valuation:adjust
   /v1/inventory/transfer-orders:
     get:
       tags:
@@ -3505,6 +3674,41 @@ paths:
         - inventory:valuation:view
       x-required-permissions:
       - inventory:valuation:view
+  /v1/inventory/valuation/revaluations/{revaluationId}:
+    get:
+      tags:
+      - Inventory Revaluation
+      summary: Get revaluation details
+      description: Retrieves one revaluation document
+      operationId: getRevaluation
+      parameters:
+      - name: revaluationId
+        in: path
+        description: Revaluation document ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Revaluation found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevaluationResponse'
+        '404':
+          description: Revaluation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:valuation:view
+        - inventory:valuation:adjust
+      x-required-permissions:
+      - inventory:valuation:view
+      - inventory:valuation:adjust
   /v1/inventory/transfer-orders/{transferOrderId}:
     get:
       tags:
@@ -6269,6 +6473,119 @@ components:
       - scheduledDate
       - status
       - updatedAt
+    CreateRevaluationRequest:
+      type: object
+      description: Request to manually revalue a SKU's inventory unit cost
+      properties:
+        stockItemId:
+          type: string
+          description: SKU / stock item identifier to revalue
+          example: OIL-5W30-5QT
+          minLength: 1
+        newUnitCost:
+          type: number
+          description: Absolute corrected unit cost. Supply exactly one of newUnitCost or costDelta. Must be zero or positive
+          example: 5.5
+        costDelta:
+          type: number
+          description: Signed adjustment applied to the SKU's current cost (may be negative for a write-down). Supply exactly one of newUnitCost or costDelta
+          example: -0.75
+        reason:
+          type: string
+          description: Justification for the correction; recorded in the audit log
+          example: Q3 physical recount valuation correction
+          maxLength: 1000
+          minLength: 0
+      required:
+      - reason
+      - stockItemId
+    RevaluationResponse:
+      type: object
+      description: A manual cost-revaluation document with its approval/application state
+      properties:
+        revaluationId:
+          type: string
+          format: uuid
+          description: Revaluation document identifier
+        stockItemId:
+          type: string
+          description: SKU / stock item identifier that was revalued
+        costingMethod:
+          type: string
+          description: Resolved costing method whose cost was corrected
+          enum:
+          - STANDARD
+          - AVERAGE
+        previousUnitCost:
+          type: number
+          description: Unit cost before the revaluation; null when the SKU was uncosted
+        newUnitCost:
+          type: number
+          description: Corrected unit cost
+        onHandQuantity:
+          type: integer
+          format: int64
+          description: On-hand quantity the engine had costed at revaluation time (delta basis)
+        valueDelta:
+          type: number
+          description: 'Signed inventory value change: (newUnitCost - previousUnitCost) x onHandQuantity'
+        reason:
+          type: string
+          description: Justification for the correction
+        status:
+          type: string
+          description: Lifecycle status
+          enum:
+          - PENDING_APPROVAL
+          - AUTO_APPLIED
+          - APPLIED
+          - REJECTED
+        requiredApprovalTier:
+          type: string
+          description: Required approval tier; null when auto-applied
+          enum:
+          - TIER_1_MANAGER
+          - TIER_2_DIRECTOR
+        createdBy:
+          type: string
+          description: Actor who submitted the revaluation
+        approvedBy:
+          type: string
+          description: Actor who approved and applied the revaluation
+        rejectedBy:
+          type: string
+          description: Actor who rejected the revaluation
+        rejectionReason:
+          type: string
+          description: Reason the revaluation was rejected
+        createdAt:
+          type: string
+          format: date-time
+          description: When the document was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the document was last updated
+        appliedAt:
+          type: string
+          format: date-time
+          description: When the revaluation was applied to the cost state
+        rejectedAt:
+          type: string
+          format: date-time
+          description: When the revaluation was rejected
+    RejectRevaluationRequest:
+      type: object
+      description: Request to reject a pending revaluation; the SKU cost state is untouched
+      properties:
+        rejectionReason:
+          type: string
+          description: Reason explaining why the revaluation is being rejected
+          example: Recount disputed; leave standard price unchanged
+          maxLength: 1000
+          minLength: 0
+      required:
+      - rejectionReason
     CreateTransferOrderRequest:
       type: object
       description: Request to create a cross-site transfer order in DRAFT

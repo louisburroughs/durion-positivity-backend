@@ -204,6 +204,14 @@ public class InventoryPermissionRegistry {
      */
     public static final String VALUATION_VIEW = "inventory:valuation:view";
 
+    /**
+     * Submit, approve, or reject a manual cost revaluation (standard-price / AVCO correction),
+     * odoo-parity J4 (issue #1054). Distinct from the read-only {@link #VALUATION_VIEW}: revaluation
+     * restates inventory value and posts a revaluation JE, so it gates all mutating revaluation
+     * actions.
+     */
+    public static final String VALUATION_ADJUST = "inventory:valuation:adjust";
+
     // ==================== PERMISSION REGISTRATION ====================
 
     /**
@@ -331,12 +339,17 @@ public class InventoryPermissionRegistry {
                 permission(INVENTORY_VIEW, "View on-hand inventory levels at locations", "LOW"),
                 permission(INVENTORY_SEARCH, "Search inventory across multiple locations", "LOW"),
 
-                // Valuation permissions (1)
+                // Valuation permissions (2)
                 permission(
                         VALUATION_VIEW,
                         "View inventory valuation (on-hand x current unit cost) at SKU level, including as-of",
                         "MEDIUM",
-                        "Issue #1052"));
+                        "Issue #1052"),
+                permission(
+                        VALUATION_ADJUST,
+                        "Submit, approve, or reject a manual cost revaluation (standard-price / AVCO correction)",
+                        "HIGH",
+                        "Issue #1054"));
     }
 
     /**
@@ -422,7 +435,7 @@ public class InventoryPermissionRegistry {
      * Valuation permissions
      */
     public static List<String> valuationPermissions() {
-        return Arrays.asList(VALUATION_VIEW);
+        return Arrays.asList(VALUATION_VIEW, VALUATION_ADJUST);
     }
 
     /**

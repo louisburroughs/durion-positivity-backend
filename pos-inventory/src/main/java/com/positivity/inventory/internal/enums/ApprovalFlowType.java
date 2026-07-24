@@ -15,5 +15,11 @@ public enum ApprovalFlowType {
     CYCLE_COUNT,
 
     /** Scrap/write-off approvals (value-based thresholds via cost snapshot). */
-    SCRAP
+    SCRAP,
+
+    /**
+     * Manual cost-revaluation approvals (odoo-parity J4, issue #1054). Value-based thresholds via
+     * the absolute inventory value delta (|Δunit-cost| × on-hand).
+     */
+    REVALUATION
 }
