@@ -39,6 +39,7 @@ import com.positivity.inventory.internal.exception.RollupExpansionTooLargeExcept
 import com.positivity.inventory.internal.exception.ScrapInsufficientStockException;
 import com.positivity.inventory.internal.exception.ScrapLedgerPostingException;
 import com.positivity.inventory.internal.exception.ScrapNotFoundException;
+import com.positivity.inventory.internal.exception.ShortageResolutionException;
 import com.positivity.inventory.internal.exception.SnoozeUntilNotInFutureException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
@@ -353,6 +354,13 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(InvalidParamCombinationException.class)
     public ResponseEntity<ApiError> handleInvalidParamCombination(InvalidParamCombinationException ex) {
         return build(HttpStatus.BAD_REQUEST, "INVALID_PARAM_COMBINATION", ex.getMessage());
+    }
+
+    @ExceptionHandler(ShortageResolutionException.class)
+    public ResponseEntity<ApiError> handleShortageResolution(ShortageResolutionException ex) {
+        // odoo-parity G2 (#1049): deterministic per-case 422 for resolve preconditions
+        // (MISSING_FIELD / SUBSTITUTE_UNAVAILABLE / INVALID_IDENTIFIER).
+        return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

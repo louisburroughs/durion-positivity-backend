@@ -3693,13 +3693,43 @@ paths:
     get:
       tags:
       - Shortage Resolution
-      summary: List shortage options
-      description: Returns available shortage resolution options for an allocation.
+      summary: List computed shortage options
+      description: Computes the resolution options (backorder, substitute, transfer-in, emergency purchase, cancel) for a shortage, each with an expected-resolution date and a cost delta where computable.
       operationId: listShortageOptions
       parameters:
       - name: allocationId
         in: query
+        description: Allocation experiencing the shortage
         required: true
+        schema:
+          type: string
+          format: uuid
+      - name: sku
+        in: query
+        description: SKU / stock-item identifier that is short
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - name: shortQuantity
+        in: query
+        description: Quantity that is short
+        required: true
+        schema:
+          type: integer
+          format: int32
+          exclusiveMinimum: 0
+      - name: workorderLineId
+        in: query
+        description: Workorder line whose demand is short
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: locationId
+        in: query
+        description: Site the demand is short at
+        required: false
         schema:
           type: string
           format: uuid
@@ -6298,34 +6328,67 @@ components:
       - quantity
     ShortageResolveRequest:
       type: object
-      description: Request to resolve an inventory shortage on an allocation
+      description: Request to resolve an inventory shortage by executing a chosen option
       properties:
+        idempotencyKey:
+          type: string
+          description: Retry-safe idempotency key; a replay with the same key returns the original result
+          example: shortage-resolve-01960003-0001
+          minLength: 1
         allocationId:
           type: string
           format: uuid
           description: Identifier of the allocation to resolve
           example: 01960003-0000-7000-8000-000000000001
-        allocationLineId:
+        optionType:
+          type: string
+          description: The resolution option to execute
+          enum:
+          - BACKORDER
+          - SUBSTITUTE
+          - TRANSFER_IN
+          - EMERGENCY_PURCHASE
+          - CANCEL_LINE
+          example: BACKORDER
+        sku:
+          type: string
+          description: SKU / stock-item identifier that is short
+          example: 01960003-0000-7000-8000-000000000002
+          minLength: 1
+        shortQuantity:
+          type: integer
+          format: int32
+          description: Quantity that is short and to be resolved
+          example: 3
+        locationId:
           type: string
           format: uuid
-          description: Identifier of the specific allocation line to resolve, when line-scoped
-          example: 01960003-0000-7000-8000-000000000002
-        resolution:
+          description: Site the demand is short at (required for BACKORDER / TRANSFER_IN)
+          example: 01960004-0001-7000-8000-00000000000c
+        workorderLineId:
           type: string
-          description: Resolution strategy to apply to the shortage
-          example: SUBSTITUTE
-          minLength: 1
+          format: uuid
+          description: Workorder line whose demand was short (required for BACKORDER / SUBSTITUTE / CANCEL_LINE)
+          example: 01960003-0000-7000-8000-000000000003
         substituteSku:
           type: string
-          description: Substitute stock-keeping unit to use, when the resolution is a substitution
-          example: SKU-10043
+          description: Substitute SKU to reserve; required when optionType is SUBSTITUTE
+          example: 01960003-0000-7000-8000-000000000099
+        sourceLocationId:
+          type: string
+          format: uuid
+          description: Source site to pull surplus from; required when optionType is TRANSFER_IN
+          example: 01960004-0001-7000-8000-00000000000a
         notes:
           type: string
           description: Optional free-text notes explaining the resolution
           example: Customer approved substitute item
       required:
       - allocationId
-      - resolution
+      - idempotencyKey
+      - optionType
+      - shortQuantity
+      - sku
     ShortageResolutionResultDto:
       type: object
       description: Result of applying a resolution to an inventory shortage
@@ -6335,10 +6398,28 @@ components:
           format: uuid
           description: Identifier of the allocation that was resolved
           example: 01960003-0000-7000-8000-000000000001
-        resolution:
+        optionType:
           type: string
-          description: Resolution strategy that was applied
-          example: SUBSTITUTE
+          description: The resolution option that was executed
+          enum:
+          - BACKORDER
+          - SUBSTITUTE
+          - TRANSFER_IN
+          - EMERGENCY_PURCHASE
+          - CANCEL_LINE
+          example: BACKORDER
+        idempotencyKey:
+          type: string
+          description: Idempotency key the resolution was recorded under
+        artifactType:
+          type: string
+          description: Kind of artifact created (BACKORDER, RESERVATION, TRANSFER_ORDER, PURCHASE_SUGGESTION, NONE)
+          example: BACKORDER
+        artifactId:
+          type: string
+          format: uuid
+          description: Identifier of the created artifact; null for CANCEL_LINE
+          example: 01960003-0000-7000-8000-0000000000aa
         resolvedAt:
           type: string
           format: date-time
@@ -6346,11 +6427,13 @@ components:
           example: 2026-01-15 09:30:00+00:00
         status:
           type: string
-          description: Resulting status of the allocation after resolution
+          description: Resulting status of the resolution
           example: RESOLVED
       required:
       - allocationId
-      - resolution
+      - artifactType
+      - idempotencyKey
+      - optionType
       - resolvedAt
       - status
     CreateScrapRequest:
@@ -9624,40 +9707,54 @@ components:
       - storageLocationId
     ShortageOptionDto:
       type: object
-      description: A candidate option for resolving an inventory shortage on an allocation
+      description: A computed option for resolving an inventory shortage on an allocation
       properties:
         allocationId:
           type: string
           format: uuid
           description: Identifier of the allocation the option applies to
           example: 01960003-0000-7000-8000-000000000001
-        allocationLineId:
+        optionType:
           type: string
-          format: uuid
-          description: Identifier of the specific allocation line, when the option is line-scoped
-          example: 01960003-0000-7000-8000-000000000002
-        resolution:
-          type: string
-          description: Resolution strategy offered for the shortage
+          description: The computed resolution strategy
+          enum:
+          - BACKORDER
+          - SUBSTITUTE
+          - TRANSFER_IN
+          - EMERGENCY_PURCHASE
+          - CANCEL_LINE
           example: SUBSTITUTE
         description:
           type: string
           description: Human-readable description of the resolution option
-          example: Substitute with equivalent SKU available at main warehouse
+          example: Substitute with group member 0196... (12 available at site)
         substituteSku:
           type: string
-          description: Substitute stock-keeping unit offered, when the resolution is a substitution
-          example: SKU-10043
-        estimatedDays:
+          description: Substitute stock-keeping unit offered, when the option is SUBSTITUTE
+          example: 01960003-0000-7000-8000-000000000099
+        sourceLocationId:
+          type: string
+          format: uuid
+          description: Source site surplus can be pulled from, when the option is TRANSFER_IN
+          example: 01960004-0001-7000-8000-00000000000a
+        availableQuantity:
           type: integer
-          format: int32
-          description: Estimated number of days to fulfill using this option
-          example: 3
+          format: int64
+          description: Quantity available toward the shortage for SUBSTITUTE / TRANSFER_IN options
+          example: 12
+        expectedResolutionDate:
+          type: string
+          format: date
+          description: Estimated date the shortage would be resolved via this option
+          example: 2026-08-01
+        costDelta:
+          type: number
+          description: Per-unit cost delta versus the original SKU, when computable (positive = costs more)
+          example: 4.5
       required:
       - allocationId
       - description
-      - estimatedDays
-      - resolution
+      - optionType
     ReturnableItemDto:
       type: object
       description: An item eligible to be returned, with the quantity still returnable
