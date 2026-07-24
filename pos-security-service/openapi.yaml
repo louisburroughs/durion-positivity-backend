@@ -3049,6 +3049,128 @@ paths:
         - security:user_account_state:view
       x-required-permissions:
       - security:user_account_state:view
+  /v1/users/roles/{role}/default-permissions:
+    get:
+      tags:
+      - Role Management
+      summary: Get a role's default permissions
+      description: Returns the authority codes (ROLE_* plus domain permission codes) that the given role expands to, used by clients to prebuild per-role tool/permission caches.
+      operationId: getRoleDefaultPermissions
+      parameters:
+      - name: role
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '200':
+          description: Role default permissions returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDefaultPermissionsResponse'
+      security:
+      - bearerAuth:
+        - security:role:view
+      x-required-permissions:
+      - security:role:view
+  /v1/roles/{role}/default-permissions:
+    get:
+      tags:
+      - Role Management
+      summary: Get a role's default permissions
+      description: Returns the authority codes (ROLE_* plus domain permission codes) that the given role expands to, used by clients to prebuild per-role tool/permission caches.
+      operationId: getRoleDefaultPermissions_1
+      parameters:
+      - name: role
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '200':
+          description: Role default permissions returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDefaultPermissionsResponse'
+      security:
+      - bearerAuth:
+        - security:role:view
+      x-required-permissions:
+      - security:role:view
   /v1/roles/{id}:
     get:
       tags:
@@ -6524,6 +6646,25 @@ components:
       - enabled
       - failedLoginAttempts
       - userId
+    RoleDefaultPermissionsResponse:
+      type: object
+      description: Default authority codes granted by a role
+      properties:
+        role:
+          type: string
+          description: Role name as requested (with or without the ROLE_ prefix)
+          example: MANAGER
+        permissions:
+          type: array
+          description: Sorted authority codes the role expands to (ROLE_* plus domain permission codes)
+          example:
+          - ROLE_MANAGER
+          - crm:party:view
+          items:
+            type: string
+      required:
+      - permissions
+      - role
     CatalogVersionResponse:
       type: object
       description: Current permission catalog version and size
