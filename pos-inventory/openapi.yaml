@@ -44,6 +44,8 @@ tags:
   description: Cycle count submission and recount operations
 - name: Inventory Management
   description: Operations related to inventory location management
+- name: Inventory Valuation
+  description: On-hand valuation read endpoints (odoo-parity J2)
 - name: Transfer Orders
   description: Cross-site transfer orders with in-transit tracking
 - name: Scraps
@@ -3445,6 +3447,64 @@ paths:
         - inventory:pick_list:execute
       x-required-permissions:
       - inventory:pick_list:execute
+  /v1/inventory/valuation:
+    get:
+      tags:
+      - Inventory Valuation
+      summary: Get inventory valuation
+      description: Returns on-hand value (on-hand × current unit cost) per SKU with a total. Optionally site-scoped via 'locationId' and/or restricted to one SKU via 'sku'. The unit cost is sourced from each SKU's running cost state per its resolved costing method (AVERAGE or STANDARD); uncosted SKUs report a null unit cost and zero value. With 'asOf', the valuation is reconstructed from the ledger as of that instant (on-hand and unit cost both replayed); as-of requests additionally require 'inventory:ledger:view' and reject future instants with 422.
+      operationId: getInventoryValuation
+      parameters:
+      - name: locationId
+        in: query
+        description: Restrict valuation to one site
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: sku
+        in: query
+        description: Restrict valuation to one SKU / stock-item identifier
+        required: false
+        schema:
+          type: string
+      - name: asOf
+        in: query
+        description: Optional historical instant (ISO-8601). Reconstructs on-hand and unit cost from the ledger as of this instant. Requires 'inventory:ledger:view'; future instants are rejected (422).
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: Valuation report returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValuationReportResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: User lacks required valuation view authority (or ledger view for as-of)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: As-of instant is in the future
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:valuation:view
+      x-required-permissions:
+      - inventory:valuation:view
   /v1/inventory/transfer-orders/{transferOrderId}:
     get:
       tags:
@@ -9720,6 +9780,64 @@ components:
           example: IN_PROGRESS
       required:
       - status
+    ValuationReportResponse:
+      type: object
+      description: Inventory valuation report with SKU-level rows and a total
+      properties:
+        locationId:
+          type: string
+          format: uuid
+          description: Location filter applied, or null for all sites
+        asOf:
+          type: string
+          format: date-time
+          description: Historical instant the valuation was reconstructed at, or null for current state
+        rows:
+          type: array
+          description: SKU-level valuation rows
+          items:
+            $ref: '#/components/schemas/ValuationRow'
+        totalOnHandValue:
+          type: number
+          description: Sum of onHandValue across all rows (uncosted rows contribute 0)
+          example: 120.0
+      required:
+      - rows
+      - totalOnHandValue
+    ValuationRow:
+      type: object
+      description: SKU-level inventory valuation row
+      properties:
+        stockItemId:
+          type: string
+          description: SKU / stock-item identifier
+        onHand:
+          type: integer
+          format: int64
+          description: On-hand quantity contributing to the value (site-scoped when a location filter is applied)
+          example: 20
+        costingMethod:
+          type: string
+          description: Resolved costing method for the SKU (AVERAGE or STANDARD)
+          example: AVERAGE
+        unitCostCurrent:
+          type: number
+          description: Current unit cost per the resolved method; null when the SKU is uncosted
+          example: 6.0
+        onHandValue:
+          type: number
+          description: 'On-hand value: onHand × unitCostCurrent (0 when uncosted)'
+          example: 120.0
+        uncosted:
+          type: boolean
+          description: True when the SKU has no derivable unit cost, so its value is reported as 0
+          example: false
+      required:
+      - costingMethod
+      - onHand
+      - onHandValue
+      - stockItemId
+      - uncosted
     SyncLogResponse:
       type: object
       description: Location sync audit log entry

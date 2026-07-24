@@ -237,6 +237,34 @@ public interface InventoryLedgerEntryRepository
             @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
             @Param("asOf") java.time.Instant asOf);
 
+    // ─── Valuation as-of reconstruction (odoo-parity J2, issue #1052) ─────────
+    // Pairs with the A3 as-of on-hand replay: per-SKU on-hand as of an instant,
+    // plus the ordered on-hand-affecting entry stream a SKU's costing strategy is
+    // replayed over to reconstruct the running unit cost at that instant.
+
+    /** Per-SKU on-hand across all sites as of an instant (timestamp inclusive), non-zero keys only. */
+    @Query("""
+                        SELECT e.stockItemId AS stockItemId, COALESCE(SUM(e.changeInQuantity), 0) AS onHandQuantity
+                        FROM InventoryLedgerEntry e
+                        WHERE e.eventType IN :eventTypes
+                          AND e.timestamp <= :asOf
+                        GROUP BY e.stockItemId
+                        HAVING COALESCE(SUM(e.changeInQuantity), 0) <> 0
+                        """)
+    List<LocationOnHand> sumOnHandBySkuAsOf(
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
+            @Param("asOf") java.time.Instant asOf);
+
+    /**
+     * Ordered on-hand-affecting entry stream for one SKU up to an instant (timestamp inclusive),
+     * across all locations — costing is per-SKU, not per-location. Ordered by timestamp then ledger
+     * id so the costing replay sees exactly the order the posting funnel processed them, so the
+     * reconstructed running cost matches the live {@code sku_cost_state}.
+     */
+    List<InventoryLedgerEntry>
+            findByStockItemIdAndEventTypeInAndTimestampLessThanEqualOrderByTimestampAscLedgerEntryIdAsc(
+                    String stockItemId, Collection<InventoryLedgerEventType> eventTypes, java.time.Instant asOf);
+
     /**
      * Sum of {@code changeInQuantity} for one event type attributed to a source
      * transaction (allocation ledger events carry the allocation id as

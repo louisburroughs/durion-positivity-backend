@@ -1,9 +1,9 @@
-generatedAt: "2026-07-24T02:20:49.968913+00:00"
+generatedAt: "2026-07-24T04:03:11.573928+00:00"
 root: "."
 summary:
   manifestCount: 20
-  permissionCount: 385
-  uniquePermissionCount: 385
+  permissionCount: 386
+  uniquePermissionCount: 386
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -271,7 +271,7 @@ manifests:
     domain: "inventory"
     serviceName: "pos-inventory"
     version: "1.0"
-    permissionCount: 52
+    permissionCount: 53
     permissions:
       - name: "inventory:adjustment:approve"
         description: "Approve and post an adjustment to the ledger (creates ADJUSTMENT_IN/OUT events)"
@@ -377,6 +377,8 @@ manifests:
         description: "Short-close a dispatched transfer order with a loss/return disposition (parity-C3)"
       - name: "inventory:transfer:view"
         description: "View transfer orders, their lines, and lifecycle status"
+      - name: "inventory:valuation:view"
+        description: "View valuation"
   - module: "pos-invoice"
     path: "pos-invoice/src/main/resources/permissions.yaml"
     domain: "invoice"
@@ -1904,6 +1906,12 @@ permissions:
     source: "pos-inventory/src/main/resources/permissions.yaml"
   - name: "inventory:transfer:view"
     description: "View transfer orders, their lines, and lifecycle status"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:valuation:view"
+    description: "View valuation"
     domain: "inventory"
     serviceName: "pos-inventory"
     module: "pos-inventory"
