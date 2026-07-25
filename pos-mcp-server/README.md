@@ -144,7 +144,9 @@ Retrieval is role-aware (`RoleAwareMetadataFilter`, `ScopedContentRetrieverFacto
 
 | Property                                   | Env / Default                               | Description                                                                               |
 | ------------------------------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `spring.ai.ollama.chat.options.model`      | `OLLAMA_CHAT_MODEL` `qwen3.5:cloud`         | Deliberate default executor model (single default; tier routing may override per request) |
+| `spring.ai.ollama.chat.options.model`      | `OLLAMA_CHAT_MODEL` `gpt-oss:120b`          | Deliberate default executor model (single default; tier routing may override per request) |
+| `mcp.model.fallback.secondary-model-name`  | `OLLAMA_FALLBACK_MODEL` `gpt-oss:20b`       | Secondary model used when `mcp.model.fallback.enabled=true`                                |
+| `OLLAMA_CHAT_THINK`                         | _(unset)_                                   | `false`/`true` to force Ollama thinking off/on; unset leaves the model default. Set `false` for reasoning models that would otherwise return the answer in the `thinking` channel (blank `content`) |
 | `spring.ai.ollama.embedding.options.model` | `OLLAMA_EMBEDDING_MODEL` `nomic-embed-text` | Embedding model for RAG                                                                   |
 | `mcp.agent.cache-ttl-minutes`              | `30`                                        | Agent cache TTL (role agents + sessions)                                                  |
 | `mcp.agent.candidate-tool-limit`           | `MCP_AGENT_CANDIDATE_TOOL_LIMIT` `8`        | Max candidate tools per chat request                                                      |

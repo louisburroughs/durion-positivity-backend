@@ -61,11 +61,11 @@ final class SpringAiPosAssistant implements PosAssistant {
             toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
         }
 
-        String response = chatModel
+        AssistantMessage output = chatModel
                 .call(new Prompt(promptMessages, toolCallingOptions(chatModel.getDefaultOptions(), toolCallbacks)))
                 .getResult()
-                .getOutput()
-                .getText();
+                .getOutput();
+        String response = ChatResponseText.extract(output);
         chatMemory.add(memoryId, List.of(new UserMessage(userMessage), new AssistantMessage(response)));
         return response;
     }

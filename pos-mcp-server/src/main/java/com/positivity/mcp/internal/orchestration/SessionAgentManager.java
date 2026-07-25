@@ -421,11 +421,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         String prompt = rolePromptResolver.resolvePrompt(SystemPromptDefaults.MASTER_PROMPT_NAME)
                 + System.lineSeparator()
                 + formatUserContext(currentUserContext);
-        String response = chatModel
+        String response = ChatResponseText.extract(chatModel
                 .call(new Prompt(new SystemMessage(prompt), new UserMessage(message)))
                 .getResult()
-                .getOutput()
-                .getText();
+                .getOutput());
         int elapsedMs = (int) (System.currentTimeMillis() - requestStartMs);
         LOGGER.info(
                 "MCP simple chat completed role={} modelElapsedMs={} totalElapsedMs={}",

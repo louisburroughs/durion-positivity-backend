@@ -12,7 +12,7 @@ spring:
         options:
           # Deliberate default executor model (Gate 0 config-hygiene). Documented in README.
           # Tier routing (Gate 4) may select a smaller/larger model per request; this is the single default.
-          model: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
+          model: ${OLLAMA_CHAT_MODEL:gpt-oss:120b}
           temperature: 0.2
         timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
         streaming-timeout: ${OLLAMA_STREAMING_CHAT_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
@@ -123,7 +123,7 @@ mcp:
   model:
     fallback:
       enabled: ${MCP_MODEL_FALLBACK_ENABLED:false}
-      secondary-model-name: ${OLLAMA_FALLBACK_MODEL:gpt-oss:120b}
+      secondary-model-name: ${OLLAMA_FALLBACK_MODEL:gpt-oss:20b}
       timeout: ${OLLAMA_FALLBACK_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
 
 exa:
