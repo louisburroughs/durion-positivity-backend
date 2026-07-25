@@ -18,7 +18,6 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.model.tool.DefaultToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import reactor.core.publisher.Flux;
 
@@ -29,7 +28,6 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
     private static final int MAX_CONTEXT_CHARS = 4_000;
 
     private final StreamingChatModel streamingChatModel;
-    private final @Nullable String modelName;
     private final Supplier<String> systemPromptSupplier;
     private final List<ToolCallback> staticToolCallbacks;
     private final QueryDocumentRetriever ragRetriever;
@@ -44,7 +42,6 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
             @NonNull Function<String, ChatMemory> chatMemoryProvider,
             @Nullable OpenApiToolProvider openApiToolProvider) {
         this.streamingChatModel = streamingChatModel;
-        this.modelName = resolveModelName(streamingChatModel);
         this.systemPromptSupplier = systemPromptSupplier;
         this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools);
         this.ragRetriever = ragRetriever;
@@ -67,14 +64,8 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
             toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
         }
         AtomicReference<StringBuilder> responseText = new AtomicReference<>(new StringBuilder());
-        DefaultToolCallingChatOptions.Builder optionsBuilder =
-                DefaultToolCallingChatOptions.builder().toolCallbacks(toolCallbacks);
-        // Only override the model when we resolved one; a null/blank override would clobber the
-        // chat model's configured default and fail with "model cannot be null or empty".
-        if (modelName != null && !modelName.isBlank()) {
-            optionsBuilder.model(modelName);
-        }
-        return streamingChatModel.stream(new Prompt(promptMessages, optionsBuilder.build()))
+        return streamingChatModel.stream(new Prompt(
+                        promptMessages, SpringAiPosAssistant.toolCallingOptions(defaultOptions(), toolCallbacks)))
                 .map(response -> {
                     if (response.getResult() == null || response.getResult().getOutput() == null) {
                         return "";
@@ -129,17 +120,11 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
     }
 
     /**
-     * Resolves the model configured on the streaming chat model's default options so that the
-     * per-request tool-calling options carry it explicitly. Ollama's option merge treats the runtime
-     * options' null {@code model} as an override and clobbers the configured default, which would fail
-     * with "model cannot be null or empty"; passing the model through avoids that.
+     * Returns the streaming chat model's configured default options, used as the base for the
+     * per-request tool-calling options. Only {@link ChatModel} exposes {@code getDefaultOptions()};
+     * the concrete Ollama bean implements both {@link StreamingChatModel} and {@link ChatModel}.
      */
-    private static @Nullable String resolveModelName(@NonNull StreamingChatModel streamingChatModel) {
-        // Only ChatModel exposes getDefaultOptions(); the concrete Ollama bean implements both.
-        if (streamingChatModel instanceof ChatModel chatModel) {
-            ChatOptions defaultOptions = chatModel.getDefaultOptions();
-            return defaultOptions != null ? defaultOptions.getModel() : null;
-        }
-        return null;
+    private @Nullable ChatOptions defaultOptions() {
+        return streamingChatModel instanceof ChatModel chatModel ? chatModel.getDefaultOptions() : null;
     }
 }
