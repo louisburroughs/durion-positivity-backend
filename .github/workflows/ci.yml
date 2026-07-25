@@ -642,8 +642,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        # This `verify` on the -am reactor takes the domain modules through package, where
+        # spring-boot:repackage swaps their jars for fat jars whose classes hide under
+        # BOOT-INF/classes. pos-archunit's cross-module rules (and ClasspathVisibilityGuardTest)
+        # would then see nothing and fail (#909), exactly as in the integration-tests job. Skip
+        # pos-archunit's tests here (-Darchunit.skipTests=true): it has no production code so it
+        # adds no coverage, and its rules are enforced at the `test` phase in the per-module
+        # unit/integration jobs.
         run: |
-          ./mvnw -pl ${{ env.COVERAGE_AGGREGATE_MODULE }} -am -DskipITs verify -T 1C -B \
+          ./mvnw -pl ${{ env.COVERAGE_AGGREGATE_MODULE }} -am -DskipITs -Darchunit.skipTests=true verify -T 1C -B \
             org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
             -Dsonar.projectKey=louisburroughs_durion-positivity-backend \
             -Dsonar.organization=louisburroughs \
