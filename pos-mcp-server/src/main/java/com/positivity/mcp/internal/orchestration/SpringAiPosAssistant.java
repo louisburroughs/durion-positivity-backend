@@ -1,22 +1,23 @@
 package com.positivity.mcp.internal.orchestration;
 
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
-import java.util.function.Supplier;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.model.tool.DefaultToolCallingChatOptions;
-import org.springframework.ai.tool.ToolCallback;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
+import java.util.function.Supplier;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.DefaultToolCallingChatOptions;
+import org.springframework.ai.tool.ToolCallback;
 
 final class SpringAiPosAssistant implements PosAssistant {
 
@@ -25,6 +26,7 @@ final class SpringAiPosAssistant implements PosAssistant {
     private static final int MAX_CONTEXT_CHARS = 4_000;
 
     private final ChatModel chatModel;
+    private final @Nullable String modelName;
     private final Supplier<String> systemPromptSupplier;
     private final List<ToolCallback> staticToolCallbacks;
     private final QueryDocumentRetriever ragRetriever;
@@ -39,6 +41,7 @@ final class SpringAiPosAssistant implements PosAssistant {
             @NonNull Function<String, ChatMemory> chatMemoryProvider,
             @Nullable OpenApiToolProvider openApiToolProvider) {
         this.chatModel = chatModel;
+        this.modelName = resolveModelName(chatModel);
         this.systemPromptSupplier = systemPromptSupplier;
         this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools);
         this.ragRetriever = ragRetriever;
@@ -59,9 +62,16 @@ final class SpringAiPosAssistant implements PosAssistant {
             toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
         }
 
-        String response = chatModel.call(new Prompt(
-                        promptMessages,
-                        DefaultToolCallingChatOptions.builder().toolCallbacks(toolCallbacks).build()))
+        DefaultToolCallingChatOptions.Builder optionsBuilder =
+                DefaultToolCallingChatOptions.builder().toolCallbacks(toolCallbacks);
+        // Only override the model when we resolved one; a null/blank override would clobber the
+        // chat model's configured default and fail with "model cannot be null or empty".
+        if (modelName != null && !modelName.isBlank()) {
+            optionsBuilder.model(modelName);
+        }
+
+        String response = chatModel
+                .call(new Prompt(promptMessages, optionsBuilder.build()))
                 .getResult()
                 .getOutput()
                 .getText();
@@ -104,5 +114,16 @@ final class SpringAiPosAssistant implements PosAssistant {
             }
         }
         return builder.toString();
+    }
+
+    /**
+     * Resolves the model configured on the chat model's default options so that the per-request
+     * tool-calling options carry it explicitly. Ollama's option merge treats the runtime options'
+     * null {@code model} as an override and clobbers the configured default, which would fail with
+     * "model cannot be null or empty"; passing the model through avoids that.
+     */
+    private static @Nullable String resolveModelName(@NonNull ChatModel chatModel) {
+        ChatOptions defaultOptions = chatModel.getDefaultOptions();
+        return defaultOptions != null ? defaultOptions.getModel() : null;
     }
 }

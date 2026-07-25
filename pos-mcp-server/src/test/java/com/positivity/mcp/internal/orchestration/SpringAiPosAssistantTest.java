@@ -12,15 +12,16 @@ import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.ollama.api.OllamaChatOptions;
 
 class SpringAiPosAssistantTest {
 
@@ -35,11 +36,12 @@ class SpringAiPosAssistantTest {
         QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
         OpenApiToolProvider openApiToolProvider = mock(OpenApiToolProvider.class);
+        when(chatModel.getDefaultOptions())
+                .thenReturn(OllamaChatOptions.builder().model("qwen3.5:cloud").build());
         when(openApiToolProvider.resolveToolCallbacks(any())).thenReturn(List.of());
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("resolved answer"));
         when(ragRetriever.retrieve("where is stock")).thenReturn(List.of(new Document("Inventory policy A")));
-        when(chatMemory.get("user-1::ROLE_TECH"))
-                .thenReturn(List.of(new AssistantMessage("previous assistant turn")));
+        when(chatMemory.get("user-1::ROLE_TECH")).thenReturn(List.of(new AssistantMessage("previous assistant turn")));
 
         SpringAiPosAssistant assistant = new SpringAiPosAssistant(
                 chatModel,
@@ -57,6 +59,8 @@ class SpringAiPosAssistantTest {
 
         ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(promptCaptor.capture());
+        assertThat(promptCaptor.getValue().getOptions()).isNotNull();
+        assertThat(promptCaptor.getValue().getOptions().getModel()).isEqualTo("qwen3.5:cloud");
         List<Message> promptMessages = promptCaptor.getValue().getInstructions();
         assertThat(promptMessages).hasSize(3);
         assertThat(promptMessages.getFirst().getText()).isEqualTo("previous assistant turn");
