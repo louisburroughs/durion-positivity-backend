@@ -16,15 +16,23 @@
         <!--
             Module-scoped switch to skip this module's ArchUnit tests without disabling tests
             reactor-wide. The cross-module rules (and ClasspathVisibilityGuardTest) only work when
-            sibling modules resolve to target/classes; a full-reactor `verify` first repackages the
-            domain modules into Spring Boot fat jars (classes under BOOT-INF/classes) where ArchUnit
-            cannot see them, so the guard fails vacuous-pass detection (#909). The nightly
-            "Full Coverage SonarCloud Analysis" job runs exactly such a `-pl pos-coverage-aggregate
-            -am verify`, so it sets -Darchunit.skipTests=true. pos-archunit has no production code,
-            so skipping its tests there costs no coverage; the rules stay enforced in the per-module
-            unit/integration jobs, which run pos-archunit at the `test` phase.
+            sibling modules resolve to target/classes; a full-reactor `verify`/`install` first
+            repackages the domain modules into Spring Boot fat jars (classes under BOOT-INF/classes)
+            where ArchUnit cannot see them, so the guard fails vacuous-pass detection (#909).
+
+            It defaults to the standard ${skipTests} so that any reactor bootstrap that already
+            passes -DskipTests (e.g. the CI "Install all modules" step,
+            `./mvnw install -DskipTests -T 1C`) also skips pos-archunit and avoids the fat-jar
+            visibility failure — a plugin-level <skipTests> otherwise wins over the -DskipTests
+            user property. The nightly "Full Coverage SonarCloud Analysis" job runs a
+            `-pl pos-coverage-aggregate -am verify` without -DskipTests, so it still sets
+            -Darchunit.skipTests=true explicitly to opt out. pos-archunit has no production code, so
+            skipping its tests in those aggregate builds costs no coverage; the rules stay enforced
+            in the dedicated per-module unit/integration jobs, which run pos-archunit at the `test`
+            phase (no -DskipTests) as an isolated `-pl pos-archunit -am` reactor.
         -->
-        <archunit.skipTests>false</archunit.skipTests>
+        <skipTests>false</skipTests>
+        <archunit.skipTests>${skipTests}</archunit.skipTests>
     </properties>
 
     <dependencies>
