@@ -17,6 +17,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.DefaultToolCallingChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 
 final class SpringAiPosAssistant implements PosAssistant {
@@ -26,7 +27,6 @@ final class SpringAiPosAssistant implements PosAssistant {
     private static final int MAX_CONTEXT_CHARS = 4_000;
 
     private final ChatModel chatModel;
-    private final @Nullable String modelName;
     private final Supplier<String> systemPromptSupplier;
     private final List<ToolCallback> staticToolCallbacks;
     private final QueryDocumentRetriever ragRetriever;
@@ -41,7 +41,6 @@ final class SpringAiPosAssistant implements PosAssistant {
             @NonNull Function<String, ChatMemory> chatMemoryProvider,
             @Nullable OpenApiToolProvider openApiToolProvider) {
         this.chatModel = chatModel;
-        this.modelName = resolveModelName(chatModel);
         this.systemPromptSupplier = systemPromptSupplier;
         this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools);
         this.ragRetriever = ragRetriever;
@@ -62,16 +61,8 @@ final class SpringAiPosAssistant implements PosAssistant {
             toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
         }
 
-        DefaultToolCallingChatOptions.Builder optionsBuilder =
-                DefaultToolCallingChatOptions.builder().toolCallbacks(toolCallbacks);
-        // Only override the model when we resolved one; a null/blank override would clobber the
-        // chat model's configured default and fail with "model cannot be null or empty".
-        if (modelName != null && !modelName.isBlank()) {
-            optionsBuilder.model(modelName);
-        }
-
         String response = chatModel
-                .call(new Prompt(promptMessages, optionsBuilder.build()))
+                .call(new Prompt(promptMessages, toolCallingOptions(chatModel.getDefaultOptions(), toolCallbacks)))
                 .getResult()
                 .getOutput()
                 .getText();
@@ -117,13 +108,27 @@ final class SpringAiPosAssistant implements PosAssistant {
     }
 
     /**
-     * Resolves the model configured on the chat model's default options so that the per-request
-     * tool-calling options carry it explicitly. Ollama's option merge treats the runtime options'
-     * null {@code model} as an override and clobbers the configured default, which would fail with
-     * "model cannot be null or empty"; passing the model through avoids that.
+     * Builds the per-request tool-calling options by copying the chat model's configured default
+     * options and attaching the resolved tool callbacks.
+     *
+     * <p>The copy must retain the provider-specific options type: {@code OllamaChatModel} casts the
+     * prompt's runtime options directly to {@code OllamaChatOptions}, so a generic
+     * {@link DefaultToolCallingChatOptions} would fail with {@code ClassCastException}. Copying the
+     * default options via {@code mutate()} also preserves the configured model, avoiding the
+     * "model cannot be null or empty" failure that a fresh options object (with a null model) would
+     * trigger through Ollama's option merge.
      */
-    private static @Nullable String resolveModelName(@NonNull ChatModel chatModel) {
-        ChatOptions defaultOptions = chatModel.getDefaultOptions();
-        return defaultOptions != null ? defaultOptions.getModel() : null;
+    static @NonNull ChatOptions toolCallingOptions(
+            @Nullable ChatOptions defaultOptions, @NonNull List<ToolCallback> toolCallbacks) {
+        if (defaultOptions instanceof ToolCallingChatOptions toolCallingDefaults) {
+            return toolCallingDefaults.mutate().toolCallbacks(toolCallbacks).build();
+        }
+        DefaultToolCallingChatOptions.Builder builder =
+                DefaultToolCallingChatOptions.builder().toolCallbacks(toolCallbacks);
+        String model = defaultOptions != null ? defaultOptions.getModel() : null;
+        if (model != null && !model.isBlank()) {
+            builder.model(model);
+        }
+        return builder.build();
     }
 }

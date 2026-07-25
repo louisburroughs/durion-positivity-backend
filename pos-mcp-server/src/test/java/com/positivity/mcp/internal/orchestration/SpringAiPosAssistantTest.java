@@ -59,8 +59,13 @@ class SpringAiPosAssistantTest {
 
         ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(promptCaptor.capture());
-        assertThat(promptCaptor.getValue().getOptions()).isNotNull();
+        // Runtime options must be the provider-specific OllamaChatOptions: OllamaChatModel casts the
+        // prompt options directly to OllamaChatOptions, so a generic DefaultToolCallingChatOptions
+        // would throw ClassCastException at request time.
+        assertThat(promptCaptor.getValue().getOptions()).isInstanceOf(OllamaChatOptions.class);
         assertThat(promptCaptor.getValue().getOptions().getModel()).isEqualTo("qwen3.5:cloud");
+        assertThat(((OllamaChatOptions) promptCaptor.getValue().getOptions()).getToolCallbacks())
+                .hasSize(1);
         List<Message> promptMessages = promptCaptor.getValue().getInstructions();
         assertThat(promptMessages).hasSize(3);
         assertThat(promptMessages.getFirst().getText()).isEqualTo("previous assistant turn");
@@ -86,7 +91,7 @@ class SpringAiPosAssistantTest {
 
     static final class PingTool {
         @org.springframework.ai.tool.annotation.Tool(description = "Health check")
-        String ping() {
+        public String ping() {
             return "pong";
         }
     }

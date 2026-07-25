@@ -25,6 +25,19 @@ class RagScopeMigrationScriptsTest {
     }
 
     @Test
+    void postgresMigrationRenamesEmbeddingColumnsToPgVectorSchema() throws IOException {
+        String sql = new String(
+                Objects.requireNonNull(getClass()
+                                .getResourceAsStream("/db/migration/V24__align_pgvector_document_columns.sql"))
+                        .readAllBytes(),
+                UTF_8);
+
+        assertThat(sql)
+                .contains("ALTER TABLE mcp_document_embedding RENAME COLUMN embedding_id TO id")
+                .contains("ALTER TABLE mcp_document_embedding RENAME COLUMN text TO content");
+    }
+
+    @Test
     void h2MigrationExistsForFlywayVersionAlignment() throws IOException {
         String sql = new String(
                 Objects.requireNonNull(getClass()
