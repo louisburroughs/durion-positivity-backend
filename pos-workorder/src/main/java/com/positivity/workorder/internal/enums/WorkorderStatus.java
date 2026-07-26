@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.enums;
 
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -45,5 +46,18 @@ public enum WorkorderStatus {
 
     public static Set<WorkorderStatus> getInProgressSubStatuses() {
         return Set.of(WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL);
+    }
+
+    /** Terminal statuses — a workorder in one of these is finished and no longer "open". */
+    public static Set<WorkorderStatus> getTerminalStatuses() {
+        return Set.of(COMPLETED, CANCELLED);
+    }
+
+    /**
+     * "Open" workorders — every non-terminal status. Derived as the complement of
+     * {@link #getTerminalStatuses()} so it stays correct if a new status is added.
+     */
+    public static Set<WorkorderStatus> getOpenStatuses() {
+        return EnumSet.complementOf(EnumSet.copyOf(getTerminalStatuses()));
     }
 }
