@@ -21,6 +21,7 @@ import static org.mockito.Mockito.when;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
+import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
@@ -276,6 +277,25 @@ class StreamingSessionAgentManagerTest {
         verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
         assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
         assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_CASHIER::InventoryFacadeTool");
+    }
+
+    @Test
+    @DisplayName("streamChat threads the persisted non-IDLE session workflow state into tool selection (#778)")
+    void streamChat_usesPersistedWorkflowState_whenSessionPresent() {
+        String message = "create a purchase order for vendor acme";
+        when(workflowStateService.resolveActiveState("user-1")).thenReturn(Optional.of(WorkflowState.CREATING_PO));
+        when(toolSelectionEngine.selectRoleTools(
+                        eq("ROLE_CASHIER"), eq(PERMISSION_CODES), eq(message), eq(WorkflowState.CREATING_PO)))
+                .thenReturn(
+                        new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.CREATING_PO));
+
+        Flux<String> result = manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), message);
+
+        assertThat(result).isNotNull();
+        // The persisted session state (not a message heuristic) gates selection, via the 4-arg overload.
+        verify(toolSelectionEngine)
+                .selectRoleTools(eq("ROLE_CASHIER"), eq(PERMISSION_CODES), eq(message), eq(WorkflowState.CREATING_PO));
+        verify(toolSelectionEngine, never()).selectRoleTools("ROLE_CASHIER", PERMISSION_CODES, message);
     }
 
     @Test
