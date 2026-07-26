@@ -3820,6 +3820,38 @@ paths:
         - workorder:estimate:view
       x-required-permissions:
       - workorder:estimate:view
+  /v1/workorders/count:
+    get:
+      tags:
+      - Work Order API
+      summary: Count work orders by status
+      description: Count work orders, optionally restricted to specific statuses or to open (non-terminal) work orders only. "Open" means any status except COMPLETED or CANCELLED. Returns a grand total plus a per-status breakdown, computed server-side without listing the work orders.
+      operationId: countWorkorders
+      parameters:
+      - name: openOnly
+        in: query
+        description: Count only open (non-terminal) work orders. Ignored when 'status' is supplied. Defaults to false (count all statuses).
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: Exact statuses to count; repeatable. Takes precedence over 'openOnly'.
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Count returned successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountResponse'
+      security:
+      - bearerAuth:
+        - workorder:workorder:view
+      x-required-permissions:
+      - workorder:workorder:view
   /v1/workorders/changeRequests/{changeId}:
     get:
       tags:
@@ -7687,6 +7719,33 @@ components:
       - estimateNumber
       - id
       - status
+    CountGroup:
+      type: object
+      description: A single keyed count within a breakdown.
+      properties:
+        key:
+          type: string
+          description: Group key (e.g. a status name).
+          example: WORK_IN_PROGRESS
+        count:
+          type: integer
+          format: int64
+          description: Count for this key.
+          example: 7
+    CountResponse:
+      type: object
+      description: Aggregate count result with an optional per-key breakdown.
+      properties:
+        total:
+          type: integer
+          format: int64
+          description: Grand total across all groups.
+          example: 42
+        groups:
+          type: array
+          description: Optional per-key breakdown; empty when only a total is requested.
+          items:
+            $ref: '#/components/schemas/CountGroup'
     PageWorkorderStatusView:
       type: object
       properties:
