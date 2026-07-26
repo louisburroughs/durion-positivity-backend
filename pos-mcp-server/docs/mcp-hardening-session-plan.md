@@ -52,8 +52,10 @@ synchronously at Flux-assembly time).
   against live pgvector with DB-derived fixtures: fail-closed with no context; a caller lacking a tool's
   permission never receives it; granting it does. Compiles in CI; **runs on the alpha stack** (can't
   execute in the offline sandbox — gated off by default).
-- **Close when:** the IT is run green on alpha (owner confirmed the stack exists) and Gate 3
-  live verification is recorded → Batch D.
+- **Verified live 2026-07-26 — closeable.** Gate 3 permission-gating ran green on the alpha stack via
+  `scripts/eval_live.py` (`permission_gating_779: PASS` — a single-permission openapi tool is absent for an
+  `AUTHENTICATED`-only caller and present once the permission is granted), reproducing the
+  `OpenApiToolPermissionGatingIT` invariant against live pgvector. Stale comments already fixed. **#779 closed.**
 
 ---
 
@@ -99,10 +101,15 @@ synchronously at Flux-assembly time).
   (`-Dmcp.eval.min-hit5`/`-Dmcp.eval.min-mrr` overridable) and enforced with a non-zero exit in
   `eval_live.py` (`EVAL_MIN_HIT5`/`EVAL_MIN_MRR`) so a Python-only host can gate CI. Wiring the run into
   the CI pipeline still needs a CI-reachable embedding backend (or recorded-fixture mode).
-- **AC3 (recall@k live capture): remaining — live-gated.** Metadata keys identified (`document_id`,
-  `rag_scope` from `DocumentEmbeddingIngestor` / `ScopedContentRetrieverFactory`). Blocker: the rag
-  fixtures carry no explicit `rag_scope`, so a correct capture needs a small design choice (add a scope
-  field to the rag fixtures, or a default) validated against the live corpus.
+- **AC3 (recall@k live capture): fixtures ready — capture remaining, live-gated.** Metadata keys identified
+  (`document_id`, `rag_scope` from `DocumentEmbeddingIngestor` / `ScopedContentRetrieverFactory`). The scope
+  design choice is resolved: every rag fixture (`rag-retrieval/{seed,generated}.json`, 56 total) now carries a
+  top-level `rag_scope`, derived from its expected docs' configured scope in `application.yml` static-preload
+  (e.g. `admin.governance→admin`, `crm.customer-vehicle→customer`, `tax.guide→tax`), defaulting to `master`
+  for negative or cross-scope fixtures — matching `RagScope.normalize(null)` and
+  `MasterAgentRegistry.resolveRagScopeForTools` fallback. Schema updated (`schema/rag-retrieval.schema.json`).
+  Remaining: wire recall@k into `eval_live.py` + `BaselineCaptureIT` using `rag_scope` (scope filter) + the
+  `document_id` metadata key, and run it against the live corpus.
 - **Close when:** AC3 recall@k is captured and the threshold run is wired into CI.
 
 ### #784 — Hybrid dense + BM25 retrieval  · effort L · **depends on #783** · priority low

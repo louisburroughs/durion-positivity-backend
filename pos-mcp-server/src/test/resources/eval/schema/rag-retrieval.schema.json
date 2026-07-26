@@ -36,6 +36,12 @@
             "k": { "type": "integer", "minimum": 1, "default": 5 }
           }
         },
+        "rag_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+$",
+          "default": "master",
+          "description": "Scope the recall@k retriever queries (rag_scope metadata filter). Derived from the expected docs' configured scope; defaults to 'master' for negative or cross-scope fixtures, matching RagScope.normalize(null) and MasterAgentRegistry.resolveRagScopeForTools fallback."
+        },
         "tags": { "type": "array", "items": { "type": "string" } },
         "notes": { "type": "string" }
       }
