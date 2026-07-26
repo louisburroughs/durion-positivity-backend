@@ -22,6 +22,7 @@ import com.positivity.workorder.service.WorkorderInvoiceService;
 import com.positivity.workorder.service.WorkorderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -83,7 +84,9 @@ public class WorkorderController {
                             schema = @Schema(type = "boolean", defaultValue = "false"))
                     @RequestParam(defaultValue = "false")
                     boolean openOnly,
-            @Parameter(description = "Exact statuses to count; repeatable. Takes precedence over 'openOnly'.")
+            @Parameter(
+                            description = "Exact statuses to count; repeatable. Takes precedence over 'openOnly'.",
+                            array = @ArraySchema(schema = @Schema(implementation = WorkorderStatus.class)))
                     @RequestParam(required = false)
                     @Nullable
                     Set<WorkorderStatus> status) {

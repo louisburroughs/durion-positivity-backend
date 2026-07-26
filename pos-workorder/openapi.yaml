@@ -3840,7 +3840,19 @@ paths:
         description: Exact statuses to count; repeatable. Takes precedence over 'openOnly'.
         required: false
         schema:
-          type: string
+          type: array
+          items:
+            type: string
+            enum:
+            - DRAFT
+            - APPROVED
+            - ASSIGNED
+            - WORK_IN_PROGRESS
+            - AWAITING_PARTS
+            - AWAITING_APPROVAL
+            - READY_FOR_PICKUP
+            - COMPLETED
+            - CANCELLED
       responses:
         '200':
           description: Count returned successfully.
