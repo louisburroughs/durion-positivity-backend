@@ -45,7 +45,15 @@ public class AnswerResolutionLadderImpl implements AnswerResolutionLadder {
         Set<String> permissions = callerPermissions();
         // No structured entity extraction yet (v1): pass no params, so the screen's url_template
         // resolves to its base path with optional filters dropped.
-        Optional<ScreenLink> link = screenLinkResolver.resolve(userMessage, null, permissions, Map.of());
+        // Screen resolution is best-effort: this is the graceful-degradation tail, so any failure
+        // (embedding-model outage, DB error) must degrade to the hand-off, never fail the chat.
+        Optional<ScreenLink> link;
+        try {
+            link = screenLinkResolver.resolve(userMessage, null, permissions, Map.of());
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Screen resolution failed; falling back to hand-off", exception);
+            link = Optional.empty();
+        }
         if (link.isPresent()) {
             ScreenLink resolved = link.get();
             LOGGER.debug("Ladder rung=DEEP_LINK screenKey={} score={}", resolved.screenKey(), resolved.score());

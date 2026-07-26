@@ -72,6 +72,19 @@ class AnswerResolutionLadderImplTest {
     }
 
     @Test
+    @DisplayName("a screen-resolver failure degrades to HANDOFF instead of propagating")
+    void resolverFailureDegradesToHandoff() {
+        when(requestScopedUserContext.current()).thenReturn(Optional.empty());
+        when(screenLinkResolver.resolve(any(), nullable(String.class), any(), any()))
+                .thenThrow(new RuntimeException("embedding backend down"));
+
+        LadderResult result = ladder().resolveFallback("how many workorders are open");
+
+        assertThat(result.rung()).isEqualTo(Rung.HANDOFF);
+        assertThat(result.text()).isEqualTo(AnswerResolutionLadderImpl.HANDOFF_MESSAGE);
+    }
+
+    @Test
     @DisplayName("caller permissions from the request context are passed to the screen resolver")
     void passesCallerPermissions() {
         Set<String> perms = Set.of("workorder:workorder:view", "invoice:invoice:view");
