@@ -214,10 +214,15 @@ public class ProductController {
                     String sku,
             @Parameter(description = "Pagination cursor from previous response") @RequestParam(required = false)
                     String cursor,
-            @Parameter(description = "Maximum number of results (1–100)") @RequestParam(defaultValue = "20") int limit,
+            @Parameter(
+                            description = "Maximum number of results (1–100)",
+                            schema = @Schema(type = "integer", format = "int32", defaultValue = "20"))
+                    @RequestParam(defaultValue = "20")
+                    int limit,
             @Parameter(
                             description =
-                                    "When true, enrich each row with lifecycle state, effective instant, and active MSRP")
+                                    "When true, enrich each row with lifecycle state, effective instant, and active MSRP",
+                            schema = @Schema(type = "boolean", defaultValue = "false"))
                     @RequestParam(defaultValue = "false")
                     boolean detailed) {
         return ResponseEntity.ok(productSearchService.searchProducts(q, brand, category, sku, cursor, limit, detailed));
@@ -380,7 +385,10 @@ public class ProductController {
             @Parameter(description = "Free-text query matching service name (case-insensitive substring)")
                     @RequestParam(required = false)
                     String q,
-            @Parameter(description = "Maximum number of results (1–100)") @RequestParam(defaultValue = "20")
+            @Parameter(
+                            description = "Maximum number of results (1–100)",
+                            schema = @Schema(type = "integer", format = "int32", defaultValue = "20"))
+                    @RequestParam(defaultValue = "20")
                     int limit) {
         return ResponseEntity.ok(catalogService.searchServices(q, limit));
     }

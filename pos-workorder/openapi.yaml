@@ -3833,7 +3833,8 @@ paths:
         description: Count only open (non-terminal) work orders. Ignored when 'status' is supplied. Defaults to false (count all statuses).
         required: false
         schema:
-          type: string
+          type: boolean
+          default: false
       - name: status
         in: query
         description: Exact statuses to count; repeatable. Takes precedence over 'openOnly'.
@@ -3925,7 +3926,8 @@ paths:
         description: Request cross-location results; requires workorder:wip:view_all_locations
         required: false
         schema:
-          type: string
+          type: boolean
+          default: false
       - name: pageable
         in: query
         required: true

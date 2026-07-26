@@ -80,7 +80,9 @@ public class KafkaCommandListener {
     private final OutboxReplayService outboxReplayService;
     private final WorkorderInvoiceService workorderInvoiceService;
 
-    @KafkaListener(topics = "${workorder.kafka.commands-topic:workorder.commands.v1}", groupId = "${workorder.kafka.consumer-group:workorder-commands}")
+    @KafkaListener(
+            topics = "${workorder.kafka.commands-topic:workorder.commands.v1}",
+            groupId = "${workorder.kafka.consumer-group:workorder-commands}")
     public void onCommand(@NonNull String message) {
         try {
             JsonNode root = objectMapper.readTree(message);
@@ -113,9 +115,8 @@ public class KafkaCommandListener {
                 return;
             }
 
-            JsonNode payloadNode = hasCommandType && root.has(PAYLOAD) && !root.get(PAYLOAD).isNull()
-                    ? root.get(PAYLOAD)
-                    : root;
+            JsonNode payloadNode =
+                    hasCommandType && root.has(PAYLOAD) && !root.get(PAYLOAD).isNull() ? root.get(PAYLOAD) : root;
 
             AssignmentUpdatedEvent event = objectMapper.treeToValue(payloadNode, AssignmentUpdatedEvent.class);
             if (event.getWorkorderId() == null || event.getPayload() == null) {
@@ -139,7 +140,8 @@ public class KafkaCommandListener {
 
     private void handleInvoiceRegenerateRequested(@NonNull JsonNode root) {
         JsonNode payloadNode = root.get(PAYLOAD);
-        String rawWorkorderId = payloadNode == null ? null : payloadNode.path("workorderId").stringValue(null);
+        String rawWorkorderId =
+                payloadNode == null ? null : payloadNode.path("workorderId").stringValue(null);
         UUID workorderId;
         try {
             workorderId = UUID.fromString(rawWorkorderId);
@@ -147,7 +149,8 @@ public class KafkaCommandListener {
             log.warn("Ignoring invoice regeneration command with missing/malformed workorderId: {}", root);
             return;
         }
-        String idempotencyKey = payloadNode == null ? null : payloadNode.path("idempotencyKey").stringValue(null);
+        String idempotencyKey =
+                payloadNode == null ? null : payloadNode.path("idempotencyKey").stringValue(null);
         try {
             // Idempotent per workorder: generateInvoice returns the existing invoice on
             // replay,
