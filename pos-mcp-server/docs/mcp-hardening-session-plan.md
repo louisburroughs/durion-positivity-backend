@@ -59,15 +59,19 @@ synchronously at Flux-assembly time).
 
 ## Batch B — Discovery hardening (#645, mostly code)  · effort M · risk med
 
-- Wire `OpenApiDocumentFetcher.fetchForService(serviceId)` (exists, no prod caller) into
-  `ToolRegistrationServiceImpl.registerDiscoveredTools()` as the **per-service Eureka fallback** when the
-  aggregate fetch returns empty.
-- `@Scheduled` periodic refresh that re-runs discovery and diffs against currently-registered tools
-  (configurable interval); must be idempotent (no duplicate/rogue re-registration).
-- Micrometer counters `tools_discovered_total` / `tools_registered_total`; alert rules under
-  `docs/alerts/`; ops runbook section under `docs/runbooks/`.
-- **Close when:** fallback + scheduled refresh land with tests, metrics emit, docs added. (Alpha 404
-  check → Batch D.)
+**Verified 2026-07-26 — all code items already implemented and tested:**
+- **Per-service Eureka fallback: done.** `ToolRegistrationServiceImpl.registerViaPerServiceFallback`
+  wires `fetchForService` / `fallbackServiceIds` when the aggregate is empty/matches no tools; fail-soft
+  per service. Tested (`ToolRegistrationServiceImplTest` fallback / no-fallback-on-success / both-empty).
+- **Periodic refresh: done.** `DiscoveryRefreshScheduler` (`@Scheduled fixedDelay`, opt-in via
+  `mcp.server.discovery-refresh.enabled`, timeout-bounded, serialized) + `SchedulingConfiguration`
+  (`@EnableScheduling`). Re-registration is idempotent (`addToolWithTiming` removes-then-adds). Note the
+  issue lists **dynamic unregistration (stale-tool pruning) as out of scope**, so re-adding new/changed
+  tools without pruning is the intended behavior. Tested (`DiscoveryRefreshSchedulerTest`).
+- **Metrics + alerting + runbook: done.** Counters `tools.discovered` / `tools.registered` (both
+  incremented); `docs/alerts/tool-discovery-alerts.md`; `docs/runbooks/tool-discovery-failure.md`.
+- **Only remaining:** alpha end-to-end 404 verification → **Batch D** (live).
+- **Close when:** the alpha 404 check passes on the live stack.
 
 ---
 
