@@ -130,7 +130,7 @@ def main():
         return [r[0] for r in rows]
 
     # ---- #783: tool-selection hit@5 / MRR ---------------------------------
-    hits, rr, forbidden_violations, scored = [], [], 0, 0
+    hits, rr, violations, scored = [], [], [], 0
     for fx in suite("tool-selection"):
         actor = fx["actor"]
         perms = actor.get("permission_codes", [])
@@ -139,8 +139,16 @@ def main():
         expected_tools = expected.get("tool_ids", [])
         forbidden = set(expected.get("forbidden_tool_ids", []))
         ranked = ann_facade(embed(fx["utterance"]), perms, wf, max(K, 10)) if perms else []
-        if forbidden and any(t in forbidden for t in ranked[:K]):
-            forbidden_violations += 1
+        selected_forbidden = [t for t in ranked[:K] if t in forbidden]
+        if selected_forbidden:
+            violations.append({
+                "fixture_id": fx.get("fixture_id"),
+                "utterance": fx.get("utterance"),
+                "forbidden_selected": selected_forbidden,
+                "permission_codes": perms,
+                "workflow": wf,
+                "top_k": ranked[:K],
+            })
         if expected_tools:
             primary = expected_tools[0]
             top = ranked[:K]
@@ -190,7 +198,8 @@ def main():
 
     result = {
         "tool_selection": {"hit_at_5": round(hit_at_5, 4), "mrr": round(mrr, 4),
-                            "scored": scored, "forbidden_violations": forbidden_violations},
+                            "scored": scored, "forbidden_violations": len(violations),
+                            "forbidden_violation_detail": violations},
         "permission_gating_779": gating,
     }
     out = ROOT / "pos-mcp-server/target/eval/baseline-live-python.json"
