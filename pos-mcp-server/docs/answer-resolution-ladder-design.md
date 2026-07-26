@@ -236,10 +236,15 @@ tool or screen entry.
 
 ## Rollout order
 
-1. **R1 workorder count + `getOpenStatuses()` + `CountResponse`** — makes the original question
-   answerable; smallest, highest-value slice.
+1. **[DONE] R1 workorder count + `getOpenStatuses()` + `CountResponse`** — makes the original
+   question answerable; smallest, highest-value slice. Shipped: `GET /v1/workorders/count`,
+   `WorkorderCountService`, `CountResponse` (pos-shared-dtos), `WORKORDER_COUNT` event.
 2. **RL trigger in `ChatResponseText`** → rung 4 hand-off — stops the leak immediately.
-3. **R3 screen registry + resolver** — turns misses into deep links (needs frontend route reconcile).
+3. **[DONE] R3 screen registry + resolver** — turns misses into deep links. Shipped as a
+   standalone, unit-tested component (`mcp_screen_registry` + `ScreenRegistryRepository` +
+   `ScreenLinkResolver` + `ScreenEmbeddingInitializer`); **not yet wired into orchestration** —
+   that wiring is the rung-4 trigger step (item 2). Needs frontend route reconcile before the
+   seeded `url_template`s are load-bearing.
 4. **R2 prerequisite edges** — composes `locationId`-style gaps (fixes `listwip`).
 5. **R1 remaining domains** (people, invoice, accounting) — widen coverage.
 6. Evals per rung (`reference/evaluation.md`).
