@@ -115,6 +115,13 @@ mcp:
     cache-ttl-minutes: 30
     max-cached-agents: 500
     memory-max-messages: 50
+  # Answer resolution ladder: on a turn that produced no direct answer, fall through to a
+  # deep link (rung 3) or an honest hand-off (rung 4) instead of surfacing the thinking channel.
+  ladder:
+    enabled: ${MCP_LADDER_ENABLED:true}
+  screen:
+    # Minimum cosine similarity for a screen to be offered as a deep link.
+    min-score: ${MCP_SCREEN_MIN_SCORE:0.6}
   tuning:
     # Gate 0 (NL-interface plan): adaptive tuning disabled until the retrieval-quality
     # regression harness exists. Re-enable only via shadow→controlled-live promotion (Gate 7).

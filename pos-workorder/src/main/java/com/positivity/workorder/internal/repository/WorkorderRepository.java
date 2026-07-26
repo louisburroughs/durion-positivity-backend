@@ -50,6 +50,26 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
     @NonNull
     Page<Workorder> findByStatusIn(@NonNull Collection<WorkorderStatus> statuses, @NonNull Pageable pageable);
 
+    /** Projection row for {@link #countGroupedByStatus(Collection)} — one status and its count. */
+    interface StatusCount {
+        WorkorderStatus getStatus();
+
+        long getCount();
+    }
+
+    /**
+     * Server-side grouped count of workorders whose status is in {@code statuses}. Returns one row
+     * per status that actually has matching rows (statuses with zero matches are absent). Backs the
+     * {@code GET /v1/workorders/count} endpoint without loading any workorder rows.
+     *
+     * @param statuses statuses to include (must be non-empty for the JPQL {@code IN} clause)
+     * @return per-status counts for the matching statuses
+     */
+    @Query("SELECT w.status AS status, COUNT(w) AS count FROM Workorder w "
+            + "WHERE w.status IN :statuses GROUP BY w.status")
+    @NonNull
+    List<StatusCount> countGroupedByStatus(@Param("statuses") @NonNull Collection<WorkorderStatus> statuses);
+
     /**
      * Find all workorders for a given scheduled date and location.
      * Used by the Daily Dispatch Board Dashboard (CAP-142) to populate the day

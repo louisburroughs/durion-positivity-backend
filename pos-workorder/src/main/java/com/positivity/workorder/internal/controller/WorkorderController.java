@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.dto.CountResponse;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.workorder.internal.dto.ApproveWorkorderRequest;
 import com.positivity.workorder.internal.dto.CompleteWorkorderRequest;
@@ -14,7 +15,9 @@ import com.positivity.workorder.internal.dto.WorkorderItemCompletionResponse;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
 import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
+import com.positivity.workorder.service.WorkorderCountService;
 import com.positivity.workorder.service.WorkorderInvoiceService;
 import com.positivity.workorder.service.WorkorderService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,9 +29,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -43,6 +48,7 @@ public class WorkorderController {
 
     private final WorkorderService workorderService;
     private final WorkorderInvoiceService workorderInvoiceService;
+    private final WorkorderCountService workorderCountService;
 
     @Operation(summary = "Get all work orders", description = "Retrieve a list of all work orders.")
     @ApiResponse(responseCode = "200", description = "List of work orders returned successfully.")
@@ -56,6 +62,39 @@ public class WorkorderController {
         return workorderService.getAllWorkorders().stream()
                 .map(WorkorderResponse::fromEntity)
                 .toList();
+    }
+
+    @Operation(
+            summary = "Count work orders by status",
+            description = "Count work orders, optionally restricted to specific statuses or to open (non-terminal) "
+                    + "work orders only. \"Open\" means any status except COMPLETED or CANCELLED. Returns a grand "
+                    + "total plus a per-status breakdown, computed server-side without listing the work orders.")
+    @ApiResponse(responseCode = "200", description = "Count returned successfully.")
+    @GetMapping("/count")
+    @EmitEvent(id = "WORKORDER_COUNT", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:workorder:view"})
+    @PreAuthorize("hasAuthority('workorder:workorder:view')")
+    public CountResponse countWorkorders(
+            @Parameter(
+                            description = "Count only open (non-terminal) work orders. Ignored when 'status' is "
+                                    + "supplied. Defaults to false (count all statuses).")
+                    @RequestParam(defaultValue = "false")
+                    boolean openOnly,
+            @Parameter(description = "Exact statuses to count; repeatable. Takes precedence over 'openOnly'.")
+                    @RequestParam(required = false)
+                    @Nullable
+                    Set<WorkorderStatus> status) {
+        Set<WorkorderStatus> statuses;
+        if (status != null && !status.isEmpty()) {
+            statuses = status;
+        } else if (openOnly) {
+            statuses = WorkorderStatus.getOpenStatuses();
+        } else {
+            statuses = null; // count every status
+        }
+        return workorderCountService.countByStatuses(statuses);
     }
 
     @Operation(summary = "Get work order by ID", description = "Retrieve a work order by its unique ID.")

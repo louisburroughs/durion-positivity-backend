@@ -26,24 +26,46 @@ final class ChatResponseText {
 
     private ChatResponseText() {}
 
+    /** Where the extracted text came from — lets callers detect a turn that produced no direct answer. */
+    enum Source {
+        /** The model's {@code content} field — a genuine direct answer. */
+        CONTENT,
+        /** Recovered from the {@code thinking} channel because {@code content} was blank. */
+        THINKING,
+        /** Neither channel had text; the fixed fallback string is used. */
+        BLANK
+    }
+
+    /** The extracted user-facing text plus its {@link Source}. */
+    record Extracted(@NonNull String text, @NonNull Source source) {}
+
     static @NonNull String extract(@Nullable AssistantMessage message) {
+        return extractDetailed(message).text();
+    }
+
+    /**
+     * Like {@link #extract} but reports the {@link Source}. A source other than {@link Source#CONTENT}
+     * means the model did not produce a direct answer — the caller (e.g. the answer resolution ladder)
+     * may choose a fallback rather than surface the thinking channel.
+     */
+    static @NonNull Extracted extractDetailed(@Nullable AssistantMessage message) {
         if (message == null) {
             LOGGER.warn("Chat model returned no assistant message; using blank-response fallback");
-            return BLANK_RESPONSE_FALLBACK;
+            return new Extracted(BLANK_RESPONSE_FALLBACK, Source.BLANK);
         }
         String content = stripThinkBlocks(message.getText());
         if (!content.isBlank()) {
-            return content;
+            return new Extracted(content, Source.CONTENT);
         }
         // content was empty: the model routed its answer into the reasoning channel.
         String thinking = stripThinkBlocks(thinkingChannel(message));
         if (!thinking.isBlank()) {
             LOGGER.warn("Chat model returned blank content; recovered answer from thinking channel. "
                     + "Set OLLAMA_CHAT_THINK=false for reasoning models to return the answer in content.");
-            return thinking;
+            return new Extracted(thinking, Source.THINKING);
         }
         LOGGER.warn("Chat model returned blank content and no thinking channel; using blank-response fallback");
-        return BLANK_RESPONSE_FALLBACK;
+        return new Extracted(BLANK_RESPONSE_FALLBACK, Source.BLANK);
     }
 
     private static @NonNull String stripThinkBlocks(@Nullable String text) {

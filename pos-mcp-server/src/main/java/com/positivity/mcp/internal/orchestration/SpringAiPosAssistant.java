@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.orchestration;
 
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
+import com.positivity.mcp.internal.service.AnswerResolutionLadder;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +33,7 @@ final class SpringAiPosAssistant implements PosAssistant {
     private final QueryDocumentRetriever ragRetriever;
     private final Function<String, ChatMemory> chatMemoryProvider;
     private final @Nullable OpenApiToolProvider openApiToolProvider;
+    private final @Nullable AnswerResolutionLadder answerResolutionLadder;
 
     SpringAiPosAssistant(
             @NonNull ChatModel chatModel,
@@ -39,13 +41,15 @@ final class SpringAiPosAssistant implements PosAssistant {
             @NonNull List<Object> staticTools,
             @NonNull QueryDocumentRetriever ragRetriever,
             @NonNull Function<String, ChatMemory> chatMemoryProvider,
-            @Nullable OpenApiToolProvider openApiToolProvider) {
+            @Nullable OpenApiToolProvider openApiToolProvider,
+            @Nullable AnswerResolutionLadder answerResolutionLadder) {
         this.chatModel = chatModel;
         this.systemPromptSupplier = systemPromptSupplier;
         this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools);
         this.ragRetriever = ragRetriever;
         this.chatMemoryProvider = chatMemoryProvider;
         this.openApiToolProvider = openApiToolProvider;
+        this.answerResolutionLadder = answerResolutionLadder;
     }
 
     @Override
@@ -65,9 +69,24 @@ final class SpringAiPosAssistant implements PosAssistant {
                 .call(new Prompt(promptMessages, toolCallingOptions(chatModel.getDefaultOptions(), toolCallbacks)))
                 .getResult()
                 .getOutput();
-        String response = ChatResponseText.extract(output);
+        ChatResponseText.Extracted extracted = ChatResponseText.extractDetailed(output);
+        String response = resolveResponse(userMessage, extracted);
         chatMemory.add(memoryId, List.of(new UserMessage(userMessage), new AssistantMessage(response)));
         return response;
+    }
+
+    /**
+     * Returns the model's direct answer when it produced one. When it did not (blank {@code content},
+     * so the text would otherwise be recovered thinking or the blank fallback) and a ladder is wired,
+     * hand off to the ladder rather than surface the reasoning channel. With no ladder, behaviour is
+     * unchanged — the extracted text (including thinking recovery) is returned.
+     */
+    private @NonNull String resolveResponse(
+            @NonNull String userMessage, ChatResponseText.@NonNull Extracted extracted) {
+        if (answerResolutionLadder != null && extracted.source() != ChatResponseText.Source.CONTENT) {
+            return answerResolutionLadder.resolveFallback(userMessage).text();
+        }
+        return extracted.text();
     }
 
     private @NonNull String buildSystemPrompt(@NonNull String userMessage, @NonNull String userContext) {
