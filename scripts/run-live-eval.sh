@@ -26,7 +26,13 @@ cd "$ROOT_DIR"
 # Timescale superuser (POSTGRES_USER/PASSWORD). Spring itself does not read .env, so map it here.
 # Precedence: explicit POS_MCP_DB_* env > .env SPRING_DATASOURCE_* > .env POSTGRES_* fallback.
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env}"
-env_get() { [ -f "$ENV_FILE" ] && grep -E "^$1=" "$ENV_FILE" | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//'; }
+# Trailing `|| true`: a missing key makes grep exit 1, which under `pipefail` would abort the whole
+# script (via the `export ...=$(env_get ...)` calls below) before the actionable `:?` checks run.
+# Swallow it so a missing key yields empty output and the fallbacks / `:?` messages take over.
+env_get() {
+  [ -f "$ENV_FILE" ] || return 0
+  grep -E "^$1=" "$ENV_FILE" | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true
+}
 
 export POS_MCP_DB_HOST="${POS_MCP_DB_HOST:-localhost}"
 export POS_MCP_DB_PORT="${POS_MCP_DB_PORT:-5432}"

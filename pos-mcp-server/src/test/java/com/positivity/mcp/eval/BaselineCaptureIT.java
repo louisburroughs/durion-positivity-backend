@@ -153,6 +153,11 @@ class BaselineCaptureIT {
         List<Map.Entry<String, Boolean>> forbiddenViolations = new ArrayList<>();
         int scored = 0;
 
+        // Match production's cosine similarity floor so recall@k isn't over-reported: the assistant's
+        // scoped retrievers use 0.6 (primary) / 0.55 (broad) in SessionAgentManager. Score at the
+        // loosest value a doc must clear to enter the pipeline (0.55). Override -Dmcp.eval.rag-min-score.
+        double ragMinScore = Double.parseDouble(System.getProperty("mcp.eval.rag-min-score", "0.55"));
+
         for (Path file : suiteFiles("rag-retrieval")) {
             JsonNode root = MAPPER.readTree(file.toFile());
             for (JsonNode fx : root.get("fixtures")) {
@@ -169,7 +174,8 @@ class BaselineCaptureIT {
 
                 // Reproduce the production RAG path: scope-filtered ANN + permission-aware visibility.
                 QueryDocumentRetriever retriever = new PermissionAwareMetadataFilter(
-                        scopedContentRetrieverFactory.create(scope, Math.max(k * 10, 50), 0.0), permissionCodes);
+                        scopedContentRetrieverFactory.create(scope, Math.max(k * 10, 50), ragMinScore),
+                        permissionCodes);
                 List<String> docs = distinctDocIds(retriever.retrieve(query));
                 List<String> topK = docs.subList(0, Math.min(k, docs.size()));
 
@@ -205,8 +211,9 @@ class BaselineCaptureIT {
                 .as("forbidden (permission-negative) RAG docs must never be visible")
                 .isEmpty();
 
-        // AC3 (#783) recall floor — calibrated from the live alpha baseline (recall@k 0.96 on the
-        // 17-doc corpus), set ~10% below observed. Override with -Dmcp.eval.min-recall.
+        // AC3 (#783) recall floor. NOTE: 0.85 was measured at similarity 0.0; re-confirm against a
+        // fresh live run now that the retriever scores at the production floor (0.55, above).
+        // Override with -Dmcp.eval.min-recall.
         double minRecall = Double.parseDouble(System.getProperty("mcp.eval.min-recall", "0.85"));
         assertThat(recallAtK).as("RAG recall@k floor").isGreaterThanOrEqualTo(minRecall);
     }

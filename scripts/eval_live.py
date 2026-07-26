@@ -42,6 +42,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 EVAL = ROOT / "pos-mcp-server/src/test/resources/eval"
 K = 5
+# Production RAG retrieval applies a cosine similarity floor (SessionAgentManager:
+# ScopedContentRetrieverFactory.create(scope, 10, 0.6) and (scope, 20, 0.55)). Score at the loosest
+# value a doc must clear to enter the pipeline (0.55) so recall@k isn't over-reported vs the live path.
+RAG_MIN_SCORE = float(os.environ.get("EVAL_RAG_MIN_SCORE", "0.55"))
 
 
 def env_file(key):
@@ -136,18 +140,20 @@ def main():
 
     def rag_visible_docs(query_vec, scope, caller_perms, want):
         """Reproduce the production RAG path: ScopedContentRetrieverFactory (ANN filtered by the
-        rag_scope metadata) + PermissionAwareMetadataFilter (drop docs whose required_permissions the
-        caller lacks). Returns ordered distinct document_ids (chunks collapsed to their document)."""
+        rag_scope metadata + a cosine similarity floor RAG_MIN_SCORE) + PermissionAwareMetadataFilter
+        (drop docs whose required_permissions the caller lacks). Returns ordered distinct document_ids
+        (chunks collapsed to their document)."""
         rows = con.run(
             """
             SELECT metadata->>'document_id'        AS document_id,
                    metadata->>'required_permissions' AS required_permissions
             FROM mcp_document_embedding
             WHERE metadata->>'rag_scope' = :scope AND embedding IS NOT NULL
+              AND (1 - (embedding <=> CAST(:q AS vector))) >= :min_score
             ORDER BY embedding <=> CAST(:q AS vector), id
             LIMIT :limit
             """,
-            scope=scope, q=vec_literal(query_vec), limit=max(want * 10, 50),
+            scope=scope, q=vec_literal(query_vec), min_score=RAG_MIN_SCORE, limit=max(want * 10, 50),
         )
         caller = set(caller_perms) | {"AUTHENTICATED"}  # any authenticated caller holds AUTHENTICATED
         ordered = []
@@ -260,9 +266,10 @@ def main():
 
     # AC4 (#783) thresholds — calibrated from the live baseline (hit@5 0.84 / MRR 0.77),
     # set with margin below observed. Override with EVAL_MIN_HIT5 / EVAL_MIN_MRR.
-    # Floors calibrated from the live alpha baseline (17-doc corpus): hit@5 0.84, MRR 0.77,
-    # recall@k 0.96 — each set ~10% below observed. RAG forbidden leaks are always a hard fail.
-    # Override with EVAL_MIN_HIT5 / EVAL_MIN_MRR / EVAL_MIN_RECALL.
+    # Floors calibrated from the live alpha baseline (17-doc corpus): hit@5 0.84, MRR 0.77 — each set
+    # ~10% below observed. RAG forbidden leaks are always a hard fail. Override with EVAL_MIN_HIT5 /
+    # EVAL_MIN_MRR / EVAL_MIN_RECALL. NOTE: the recall floor (0.85) was measured at similarity 0.0;
+    # re-confirm it against a fresh live run now that RAG_MIN_SCORE defaults to the production 0.55.
     floor_hit5 = float(os.environ.get("EVAL_MIN_HIT5", "0.75"))
     floor_mrr = float(os.environ.get("EVAL_MIN_MRR", "0.65"))
     floor_recall = float(os.environ.get("EVAL_MIN_RECALL", "0.85"))
