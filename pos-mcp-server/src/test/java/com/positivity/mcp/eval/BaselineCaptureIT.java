@@ -31,17 +31,29 @@ import org.springframework.test.context.ActiveProfiles;
  * {@link EvalMetrics} (hit@5, MRR), writing the result to {@code target/eval/baseline-tool-selection.json}.
  *
  * <p>Requires the live stack (Postgres+pgvector with seeded tools/embeddings + the embedding model).
- * Enabled only with {@code -Dmcp.eval.live=true}; it neither starts a context nor runs in offline CI.
+ * Enabled only with {@code -Dmcp.eval.live=true}; disabled by default, so offline CI never starts a
+ * context. Runs read-only: Flyway is disabled (no migrations applied to the target schema), and the
+ * web server, Eureka client, and permission registration are off — so only the alpha Postgres/pgvector
+ * and the embedding model need to be reachable. Required env vars: {@code POS_MCP_DB_HOST},
+ * {@code POS_MCP_DB_PASSWORD} (and {@code POS_MCP_DB_USER} if not {@code pos_mcp}), and
+ * {@code OLLAMA_EMBEDDING_BASE_URL}.
  *
  * <pre>
- *   ./mvnw -o -pl pos-mcp-server test -Dtest=BaselineCaptureIT \
+ *   POS_MCP_DB_HOST=... POS_MCP_DB_PASSWORD=... OLLAMA_EMBEDDING_BASE_URL=... \
+ *   ./mvnw -pl pos-mcp-server test -Dtest=BaselineCaptureIT \
  *       -Dmcp.eval.live=true -Dspring.profiles.active=alpha
  * </pre>
  *
  * <p>RAG recall@k capture is a follow-up (needs the retriever + the doc-id metadata key) — see the
  * TODO below; tool-selection hit@5/MRR is the primary Gate 0 baseline.
  */
-@SpringBootTest
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = {
+            "spring.flyway.enabled=false",
+            "pos.security.permission-registration.enabled=false",
+            "eureka.client.enabled=false"
+        })
 @ActiveProfiles("alpha")
 @EnabledIfSystemProperty(named = "mcp.eval.live", matches = "true")
 class BaselineCaptureIT {
