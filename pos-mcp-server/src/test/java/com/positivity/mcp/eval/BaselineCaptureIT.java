@@ -211,7 +211,7 @@ class BaselineCaptureIT {
                 .as("forbidden (permission-negative) RAG docs must never be visible")
                 .isEmpty();
 
-        // AC3 (#783) recall floor — 0.85, ~10% below the live baseline recall@k 0.9574. Confirmed at
+        // AC3 (#783) recall floor — 0.85, ~11% below the live baseline recall@k 0.9574. Confirmed at
         // the production similarity floor (0.55, above) on the preload-repopulated corpus: identical to
         // the 0.0-threshold run, so the floor holds. Override with -Dmcp.eval.min-recall.
         double minRecall = Double.parseDouble(System.getProperty("mcp.eval.min-recall", "0.85"));

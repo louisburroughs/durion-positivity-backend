@@ -116,9 +116,9 @@ synchronously at Flux-assembly time).
     hard-fail (security invariant); the recall floor is report-only (`EVAL_MIN_RECALL` /
     `-Dmcp.eval.min-recall`, default 0.0) until calibrated.
   - **Captured live on alpha 2026-07-26: recall@k = 0.9574** (47 scored, forbidden_violations = 0),
-    alongside hit@5 0.84 / MRR 0.77 / permission_gating_779 PASS. Floor set to **0.85** (~10% below
-    observed, matching the hit@5/MRR convention) in `eval_live.py` (`EVAL_MIN_RECALL`) and
-    `BaselineCaptureIT` (`-Dmcp.eval.min-recall`).
+    alongside hit@5 0.84 / MRR 0.77 / permission_gating_779 PASS. Floor set to **0.85** (~11% below the
+    observed 0.9574 — same margin as hit@5 0.84→0.75; MRR uses a wider 0.77→0.65 as it's rank-sensitive)
+    in `eval_live.py` (`EVAL_MIN_RECALL`) and `BaselineCaptureIT` (`-Dmcp.eval.min-recall`).
   - **Corpus fix:** alpha preloaded only 6 of the 17 catalog docs (`application-alpha.yml` lagged
     `application.yml`); synced to full parity. Baseline first captured on a Python-seeded corpus
     (`scripts/rag_seed.py`, faithful to `DocumentEmbeddingIngestor` chunking + metadata) to validate
