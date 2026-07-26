@@ -266,10 +266,11 @@ def main():
 
     # AC4 (#783) thresholds — calibrated from the live baseline (hit@5 0.84 / MRR 0.77),
     # set with margin below observed. Override with EVAL_MIN_HIT5 / EVAL_MIN_MRR.
-    # Floors calibrated from the live alpha baseline (17-doc corpus): hit@5 0.84, MRR 0.77 — each set
-    # ~10% below observed. RAG forbidden leaks are always a hard fail. Override with EVAL_MIN_HIT5 /
-    # EVAL_MIN_MRR / EVAL_MIN_RECALL. NOTE: the recall floor (0.85) was measured at similarity 0.0;
-    # re-confirm it against a fresh live run now that RAG_MIN_SCORE defaults to the production 0.55.
+    # Floors calibrated from the live alpha baseline (17-doc corpus): hit@5 0.84, MRR 0.77, recall@k
+    # 0.9574 — each set ~10% below observed. Recall confirmed at the production RAG_MIN_SCORE=0.55 floor
+    # on the preload-repopulated corpus (identical to the 0.0-threshold run: expected docs clear 0.55
+    # comfortably). RAG forbidden leaks are always a hard fail. Override with EVAL_MIN_HIT5 /
+    # EVAL_MIN_MRR / EVAL_MIN_RECALL.
     floor_hit5 = float(os.environ.get("EVAL_MIN_HIT5", "0.75"))
     floor_mrr = float(os.environ.get("EVAL_MIN_MRR", "0.65"))
     floor_recall = float(os.environ.get("EVAL_MIN_RECALL", "0.85"))

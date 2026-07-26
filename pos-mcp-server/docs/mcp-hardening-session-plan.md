@@ -120,9 +120,14 @@ synchronously at Flux-assembly time).
     observed, matching the hit@5/MRR convention) in `eval_live.py` (`EVAL_MIN_RECALL`) and
     `BaselineCaptureIT` (`-Dmcp.eval.min-recall`).
   - **Corpus fix:** alpha preloaded only 6 of the 17 catalog docs (`application-alpha.yml` lagged
-    `application.yml`); synced to full parity. Baseline captured on a Python-seeded corpus
+    `application.yml`); synced to full parity. Baseline first captured on a Python-seeded corpus
     (`scripts/rag_seed.py`, faithful to `DocumentEmbeddingIngestor` chunking + metadata) to validate
-    pre-merge; matches what the preload will produce once the config change is merged and redeployed.
+    pre-merge.
+  - **Confirmed post-merge (#1117 deployed to alpha):** preload repopulated all 17 docs cleanly (each
+    once under its own scope, no `master` duplicates), and recall@k re-ran at the **production
+    similarity floor 0.55** = **0.9574** — identical to the 0.0-threshold run, so expected docs clear
+    0.55 comfortably. The **0.85 floor holds** (default made non-report-only in `eval_live.py` /
+    `BaselineCaptureIT`).
 - **Threshold gate (close item 2): scheduled runner wired (option C).** `scripts/eval-cron.sh` runs
   `eval_live.py` on a cron on the alpha host — the only place with network access to alpha's localhost
   pgvector + Ollama (GitHub-hosted runners can't reach them, and there's no self-hosted runner). Quiet
@@ -130,9 +135,9 @@ synchronously at Flux-assembly time).
   on any floor breach or forbidden leak. A per-PR blocking gate (ephemeral pgvector+Ollama services, or
   a recorded-fixture snapshot) remains a follow-up — recall@k is seedable in CI today via
   `rag_seed.py`; tool-selection needs a `mcp_tool` embedding seed first.
-- **Close when:** the config sync is merged + redeployed to alpha (preload repopulates the 17-doc
-  corpus, confirmed by re-running the eval), and the scheduled gate is installed on alpha (crontab
-  entry per `eval-cron.sh`).
+- **Close when:** ~~config sync merged + redeployed to alpha (preload repopulates the 17-doc corpus,
+  confirmed by re-running the eval)~~ **done (#1117, recall@k 0.9574 @ 0.55)** — only the scheduled
+  gate install on alpha remains (crontab entry per `eval-cron.sh`).
 
 ### #784 — Hybrid dense + BM25 retrieval  · effort L · **depends on #783** · priority low
 - Add a lexical `QueryDocumentRetriever` (Postgres FTS `tsvector` + `ts_rank` / `websearch_to_tsquery`),
