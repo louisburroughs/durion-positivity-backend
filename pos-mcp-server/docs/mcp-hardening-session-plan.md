@@ -77,14 +77,26 @@ synchronously at Flux-assembly time).
 
 ## Batch C — Retrieval eval, then hybrid (ordered: #783 → #784)
 
-### #783 — Retrieval-quality regression (hit@5, MRR)  · effort M–L
-- Author fixtures to volume (≥100 tool-selection / ≥50 rag / ≥30 write-safety); enable the `@Disabled`
-  `minimumFixtureCountsMet` gate.
-- Retarget seed fixtures to the **live facade tool names** (current mismatch → `baseline.json` hit@5 = 0).
-- Implement RAG **recall@k live capture** in `BaselineCaptureIT` (`rag_recall_at_k` currently null).
-- Threshold assertions (hit@5 / MRR / recall@k floors) wired into CI — **needs the embedding backend or a
-  recorded-fixture mode**.
-- **Close when:** fixtures at volume, hit@5 > 0 on retargeted names, recall@k captured, thresholds
+### #783 — Retrieval-quality regression (hit@5, MRR)  · partly done
+**Verified 2026-07-26:**
+- **AC1 (volume + gate): done.** `generated.json` fixtures bring the suites to 105 tool-selection /
+  56 rag / 34 write-safety (≥ 100/50/30). `EvalFixtureValidationTest.minimumFixtureCountsMet` is active
+  (no `@Disabled`) and green — validated offline this session.
+- **AC2 (retarget seed to live facade names): done this session.** The 101 generated fixtures already
+  used the 16 registered facade class names; two **seed** fixtures still used the pre-discovery op-id
+  form and were the documented `baseline.json` hit@5 = 0 cause. Retargeted:
+  `crm_getallcustomers→CustomerFacadeTool`, `crm_listvehiclesforcustomer→VehicleFacadeTool`,
+  `workorders_createworkorder→WorkorderFacadeTool`, `inventory_submitreturntostock→InventoryFacadeTool`.
+  Structurally validated; the hit@5 > 0 improvement itself is confirmed by a live `BaselineCaptureIT`
+  run (Batch D).
+- **AC3 (recall@k live capture): remaining — live-gated.** Metadata keys identified (`document_id`,
+  `rag_scope` from `DocumentEmbeddingIngestor` / `ScopedContentRetrieverFactory`). Blocker: the rag
+  fixtures carry no explicit `rag_scope`, so a correct capture needs a small design choice (add a scope
+  field to the rag fixtures, or a default) that can only be validated against the live corpus — not
+  author-able correctly in an offline sandbox.
+- **AC4 (thresholds + CI): remaining — needs a CI-reachable embedding backend** (Ollama + pgvector) or a
+  recorded-fixture mode.
+- **Close when:** a live `BaselineCaptureIT` run shows hit@5 > 0 and captured recall@k, with thresholds
   asserted in CI.
 
 ### #784 — Hybrid dense + BM25 retrieval  · effort L · **depends on #783** · priority low
