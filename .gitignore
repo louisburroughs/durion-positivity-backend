@@ -82,3 +82,7 @@ pos-mcp-server/src/main/resources/exa.prompt.md
 
 .tokensave
 repomix-output.*
+
+# Python bytecode (e.g. scripts/eval_live.py cache)
+__pycache__/
+*.pyc
