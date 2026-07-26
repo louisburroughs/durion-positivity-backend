@@ -25,9 +25,9 @@ anywhere; `LoadedMasterAgentRegistry` does not exist; the two-arg `resolveDomain
 Collection)` overload does not exist (only the 1-arg domain resolver); `MasterAgentRegistry.
 resolveDomainTools` has no role branch; `findEnabledByRoleAndWorkflow`/`findAllRoleNames`/
 `ToolRegistryRoleMapper` are gone. Scenario suites (cashier/manager/admin/`ROLE_USER`) pass.
-- **Only remaining:** migration `V27` dropping `mcp_role_deprecated` / `mcp_tool_role_deprecated` —
-  **blocked** on the V19 retention-window decision (owner). Do NOT drop without confirmation.
-- **Close when:** owner confirms the window has passed and the drop migration lands.
+- **Done this session:** owner confirmed the V19 retention window has passed; migration
+  `V27__drop_legacy_role_gating.sql` drops both deprecated tables (validated: full Flyway chain
+  V1→V27 boots clean on H2). **Closeable on merge.**
 
 ### #778 — Workflow state beyond IDLE for gating  · **done**
 **Verified 2026-07-26 — all functional ACs implemented:**
@@ -47,12 +47,13 @@ resolveDomainTools` has no role branch; `findEnabledByRoleAndWorkflow`/`findAllR
 **Verified 2026-07-26 — the stale comments are already fixed:** `OpenApiToolProvider` (~33–43) and
 `RequestScopedUserContext` (~12–27) both now correctly describe streaming as wired (caller published
 synchronously at Flux-assembly time).
-- **Only remaining (code):** integration test (`*IT`): low-permission caller → chat endpoint → assert a
-  high-permission openapi tool is neither offered nor executed, and an authorized op executes through a
-  **stubbed gateway** (WireMock). **Note:** this `*IT` needs an integration harness (Testcontainers
-  Postgres/pgvector + a stubbed embedding backend or recorded mode) that may not run in a code-only
-  sandbox — pair with Batch D's live verification if it can't be exercised here.
-- **Close when:** the IT passes (and Gate 3 live verification → Batch D).
+- **Done this session:** authored `OpenApiToolPermissionGatingIT` (live-gated, `@ActiveProfiles("alpha")`
+  + `-Dmcp.eval.live=true`, mirroring `BaselineCaptureIT`). It drives the real `OpenApiToolProvider`
+  against live pgvector with DB-derived fixtures: fail-closed with no context; a caller lacking a tool's
+  permission never receives it; granting it does. Compiles in CI; **runs on the alpha stack** (can't
+  execute in the offline sandbox — gated off by default).
+- **Close when:** the IT is run green on alpha (owner confirmed the stack exists) and Gate 3
+  live verification is recorded → Batch D.
 
 ---
 
