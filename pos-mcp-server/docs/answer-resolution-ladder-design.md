@@ -245,6 +245,9 @@ tool or screen entry.
    `ScreenLinkResolver` + `ScreenEmbeddingInitializer`); **not yet wired into orchestration** —
    that wiring is the rung-4 trigger step (item 2). Needs frontend route reconcile before the
    seeded `url_template`s are load-bearing.
-4. **R2 prerequisite edges** — composes `locationId`-style gaps (fixes `listwip`).
+4. **[DONE] R2 prerequisite edges** — composes `locationId`-style gaps (fixes `listwip`). Shipped
+   as a standalone, unit-tested component (`mcp_tool_prerequisite` + `ToolPrerequisiteRepository` +
+   `PrerequisiteResolver`); one-hop, **not yet wired into orchestration** (same trigger step as
+   item 2). Seeded with `workorder_listwip`/`getestimatesbylocation` → `locationId`.
 5. **R1 remaining domains** (people, invoice, accounting) — widen coverage.
 6. Evals per rung (`reference/evaluation.md`).
