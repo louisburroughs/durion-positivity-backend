@@ -196,11 +196,27 @@ def main():
             "present_without_permission": without, "present_with_permission": with_perm,
         }
 
+    # AC4 (#783) thresholds — calibrated from the live baseline (hit@5 0.84 / MRR 0.77),
+    # set with margin below observed. Override with EVAL_MIN_HIT5 / EVAL_MIN_MRR.
+    floor_hit5 = float(os.environ.get("EVAL_MIN_HIT5", "0.75"))
+    floor_mrr = float(os.environ.get("EVAL_MIN_MRR", "0.65"))
+    failures = []
+    if hit_at_5 < floor_hit5:
+        failures.append(f"hit@5 {hit_at_5:.4f} < {floor_hit5}")
+    if mrr < floor_mrr:
+        failures.append(f"mrr {mrr:.4f} < {floor_mrr}")
+    if violations:
+        failures.append(f"forbidden_violations {len(violations)} > 0")
+    if gating.get("status") == "FAIL":
+        failures.append("permission_gating_779 FAIL")
+
     result = {
         "tool_selection": {"hit_at_5": round(hit_at_5, 4), "mrr": round(mrr, 4),
                             "scored": scored, "forbidden_violations": len(violations),
                             "forbidden_violation_detail": violations},
         "permission_gating_779": gating,
+        "thresholds": {"min_hit_at_5": floor_hit5, "min_mrr": floor_mrr,
+                       "passed": not failures, "failures": failures},
     }
     out = ROOT / "pos-mcp-server/target/eval/baseline-live-python.json"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -208,6 +224,10 @@ def main():
     print(json.dumps(result, indent=2))
     print(f"\nwrote {out}")
     con.close()
+    if failures:
+        print("\nTHRESHOLD FAIL: " + "; ".join(failures))
+        sys.exit(1)
+    print("\nTHRESHOLDS OK")
 
 
 if __name__ == "__main__":

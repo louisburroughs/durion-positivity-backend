@@ -125,6 +125,13 @@ class BaselineCaptureIT {
         assertThat(forbiddenViolations)
                 .as("forbidden (permission-negative) tools must never be selected")
                 .isEmpty();
+
+        // AC4 (#783) quality floors — calibrated from the live baseline (hit@5 0.84 / MRR 0.77),
+        // set with margin below observed. Override with -Dmcp.eval.min-hit5 / -Dmcp.eval.min-mrr.
+        double minHit5 = Double.parseDouble(System.getProperty("mcp.eval.min-hit5", "0.75"));
+        double minMrr = Double.parseDouble(System.getProperty("mcp.eval.min-mrr", "0.65"));
+        assertThat(hitAt5).as("tool-selection hit@5 floor").isGreaterThanOrEqualTo(minHit5);
+        assertThat(mrr).as("tool-selection MRR floor").isGreaterThanOrEqualTo(minMrr);
     }
 
     private static List<Path> suiteFiles(String suite) throws Exception {
