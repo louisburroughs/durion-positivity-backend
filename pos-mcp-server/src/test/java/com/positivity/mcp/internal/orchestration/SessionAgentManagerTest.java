@@ -185,8 +185,9 @@ class SessionAgentManagerTest {
                 rolePromptResolver,
                 simpleChatClassifier,
                 telemetryEmitter,
-                null,
-                null,
+                null, // openApiToolProvider
+                null, // answerResolutionLadder
+                null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
                 workflowStateService,
                 FIXED_CLOCK,
@@ -389,8 +390,9 @@ class SessionAgentManagerTest {
                 rolePromptResolver,
                 simpleChatClassifier,
                 telemetryEmitter,
-                null,
-                null,
+                null, // openApiToolProvider
+                null, // answerResolutionLadder
+                null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
                 workflowStateService,
                 FIXED_CLOCK,
@@ -430,8 +432,9 @@ class SessionAgentManagerTest {
                 rolePromptResolver,
                 simpleChatClassifier,
                 telemetryEmitter,
-                null,
-                null,
+                null, // openApiToolProvider
+                null, // answerResolutionLadder
+                null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
                 workflowStateService,
                 FIXED_CLOCK,

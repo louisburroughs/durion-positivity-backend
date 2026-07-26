@@ -239,7 +239,13 @@ tool or screen entry.
 1. **[DONE] R1 workorder count + `getOpenStatuses()` + `CountResponse`** — makes the original
    question answerable; smallest, highest-value slice. Shipped: `GET /v1/workorders/count`,
    `WorkorderCountService`, `CountResponse` (pos-shared-dtos), `WORKORDER_COUNT` event.
-2. **RL trigger in `ChatResponseText`** → rung 4 hand-off — stops the leak immediately.
+2. **[DONE] RL orchestrator + trigger** — `AnswerResolutionLadder(+Impl)` wired into
+   `SpringAiPosAssistant`. Trigger is structural: when the model's `content` is blank (the leak
+   scenario), the ladder owns the response (rung 3 deep link → rung 4 hand-off) instead of
+   surfacing the thinking channel. Feature-flagged via bean presence (`mcp.ladder.enabled`,
+   default true); with it off, behaviour is exactly as before. A non-blank `content` answer never
+   triggers the ladder — no regression. Structured entity extraction for url_template params is a
+   follow-up (v1 passes no params → screens resolve to their base path).
 3. **[DONE] R3 screen registry + resolver** — turns misses into deep links. Shipped as a
    standalone, unit-tested component (`mcp_screen_registry` + `ScreenRegistryRepository` +
    `ScreenLinkResolver` + `ScreenEmbeddingInitializer`); **not yet wired into orchestration** —

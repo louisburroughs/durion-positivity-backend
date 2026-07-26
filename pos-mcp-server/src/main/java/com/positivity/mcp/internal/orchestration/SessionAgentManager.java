@@ -11,6 +11,7 @@ import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
 import com.positivity.mcp.internal.orchestration.memory.SessionSummary;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.service.AnswerResolutionLadder;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.PermissionCodes;
@@ -84,6 +85,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private final SimpleChatClassifier simpleChatClassifier;
     private final @Nullable NltiTelemetryEmitter telemetryEmitter;
     private final @Nullable OpenApiToolProvider openApiToolProvider;
+    private final @Nullable AnswerResolutionLadder answerResolutionLadder;
     private final @Nullable RequestScopedUserContext requestScopedUserContext;
     private final @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient;
     private final NltiWorkflowStateService workflowStateService;
@@ -106,6 +108,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @NonNull SimpleChatClassifier simpleChatClassifier,
             @Nullable NltiTelemetryEmitter telemetryEmitter,
             @Nullable OpenApiToolProvider openApiToolProvider,
+            @Nullable AnswerResolutionLadder answerResolutionLadder,
             @Nullable RequestScopedUserContext requestScopedUserContext,
             @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient,
             @NonNull NltiWorkflowStateService workflowStateService,
@@ -127,6 +130,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         this.simpleChatClassifier = simpleChatClassifier;
         this.telemetryEmitter = telemetryEmitter;
         this.openApiToolProvider = openApiToolProvider;
+        this.answerResolutionLadder = answerResolutionLadder;
         this.requestScopedUserContext = requestScopedUserContext;
         this.roleDefaultPermissionsClient = roleDefaultPermissionsClient;
         this.workflowStateService = workflowStateService;
@@ -333,7 +337,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 tools,
                 resilientContentRetriever,
                 this::chatMemoryFor,
-                openApiToolProvider);
+                openApiToolProvider,
+                answerResolutionLadder);
         LOGGER.debug(
                 "Built MCP role agent role={} promptName={} ragScope={} toolNames={}",
                 role,

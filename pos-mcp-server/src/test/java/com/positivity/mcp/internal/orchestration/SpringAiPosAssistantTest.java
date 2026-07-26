@@ -5,11 +5,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
+import com.positivity.mcp.internal.service.AnswerResolutionLadder;
+import com.positivity.mcp.internal.service.AnswerResolutionLadder.LadderResult;
+import com.positivity.mcp.internal.service.AnswerResolutionLadder.Rung;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -49,7 +54,8 @@ class SpringAiPosAssistantTest {
                 List.of(new PingTool()),
                 ragRetriever,
                 ignored -> chatMemory,
-                openApiToolProvider);
+                openApiToolProvider,
+                null);
 
         String response = assistant.chat("user-1::ROLE_TECH", "where is stock", "ctx:role=TECH");
 
@@ -85,8 +91,65 @@ class SpringAiPosAssistantTest {
         assertThat(persistedMessages.getValue().get(1).getText()).isEqualTo("resolved answer");
     }
 
+    @Test
+    void chat_handsOffToLadderWhenContentBlank() {
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        AnswerResolutionLadder ladder = mock(AnswerResolutionLadder.class);
+        when(chatModel.getDefaultOptions())
+                .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+        // Blank content, answer routed to the thinking channel — the leak scenario.
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponseWithThinking("", "We should call some tool..."));
+        when(ladder.resolveFallback("how many workorders are open"))
+                .thenReturn(
+                        new LadderResult("View them here — Work Orders: /workorders", Rung.DEEP_LINK, "/workorders"));
+
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel, () -> "base prompt", List.of(), ragRetriever, ignored -> chatMemory, null, ladder);
+
+        String response = assistant.chat("user-1::ROLE_ADMIN", "how many workorders are open", "ctx");
+
+        // The reasoning monologue is never surfaced; the ladder result is returned and persisted.
+        assertThat(response).isEqualTo("View them here — Work Orders: /workorders");
+        ArgumentCaptor<List<Message>> persisted = messageListCaptor();
+        verify(chatMemory).add(eq("user-1::ROLE_ADMIN"), persisted.capture());
+        assertThat(persisted.getValue().get(1).getText()).isEqualTo("View them here — Work Orders: /workorders");
+    }
+
+    @Test
+    void chat_returnsDirectContentWithoutConsultingLadder() {
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        AnswerResolutionLadder ladder = mock(AnswerResolutionLadder.class);
+        when(chatModel.getDefaultOptions())
+                .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("There are 12 open work orders."));
+
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel, () -> "base prompt", List.of(), ragRetriever, ignored -> chatMemory, null, ladder);
+
+        String response = assistant.chat("user-1::ROLE_ADMIN", "how many workorders are open", "ctx");
+
+        assertThat(response).isEqualTo("There are 12 open work orders.");
+        verifyNoInteractions(ladder); // a direct answer must never trigger the fallback
+    }
+
     private static ChatResponse chatResponse(String text) {
         return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
+    }
+
+    private static ChatResponse chatResponseWithThinking(String content, String thinking) {
+        AssistantMessage message = AssistantMessage.builder()
+                .content(content)
+                .properties(Map.of("thinking", thinking))
+                .build();
+        return new ChatResponse(List.of(new Generation(message)));
     }
 
     static final class PingTool {
