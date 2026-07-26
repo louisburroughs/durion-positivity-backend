@@ -6,6 +6,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
+import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
+import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.orchestration.retrieval.PermissionAwareMetadataFilter;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.document.Document;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -44,8 +48,10 @@ import org.springframework.test.context.ActiveProfiles;
  *       -Dmcp.eval.live=true -Dspring.profiles.active=alpha
  * </pre>
  *
- * <p>RAG recall@k capture is a follow-up (needs the retriever + the doc-id metadata key) — see the
- * TODO below; tool-selection hit@5/MRR is the primary Gate 0 baseline.
+ * <p>Captures two baselines: tool-selection hit@5/MRR ({@link #captureToolSelectionBaseline()}) and
+ * RAG recall@k ({@link #captureRagRecallBaseline()}, #783 AC3) through the real scope- and
+ * permission-filtered retriever ({@link ScopedContentRetrieverFactory} +
+ * {@link PermissionAwareMetadataFilter}).
  */
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
@@ -63,8 +69,14 @@ class BaselineCaptureIT {
     private static final Path EVAL_ROOT = Paths.get(System.getProperty("user.dir"), "src/test/resources/eval");
     private static final int K = 5;
 
+    private static final String DOCUMENT_ID = "document_id";
+    private static final String AUTHENTICATED = "AUTHENTICATED";
+
     @Autowired
     private ToolRegistryService toolRegistryService;
+
+    @Autowired
+    private ScopedContentRetrieverFactory scopedContentRetrieverFactory;
 
     @Test
     @DisplayName("capture tool-selection hit@5 / MRR baseline against the live selector")
@@ -132,6 +144,83 @@ class BaselineCaptureIT {
         double minMrr = Double.parseDouble(System.getProperty("mcp.eval.min-mrr", "0.65"));
         assertThat(hitAt5).as("tool-selection hit@5 floor").isGreaterThanOrEqualTo(minHit5);
         assertThat(mrr).as("tool-selection MRR floor").isGreaterThanOrEqualTo(minMrr);
+    }
+
+    @Test
+    @DisplayName("capture RAG recall@k baseline against the live scope+permission-filtered retriever")
+    void captureRagRecallBaseline() throws Exception {
+        List<Double> recalls = new ArrayList<>();
+        List<Map.Entry<String, Boolean>> forbiddenViolations = new ArrayList<>();
+        int scored = 0;
+
+        for (Path file : suiteFiles("rag-retrieval")) {
+            JsonNode root = MAPPER.readTree(file.toFile());
+            for (JsonNode fx : root.get("fixtures")) {
+                String id = fx.path("fixture_id").asText();
+                String query = fx.path("query").asText();
+                JsonNode actor = fx.get("actor");
+                Set<String> permissionCodes = new HashSet<>(stringSet(actor.get("permission_codes")));
+                permissionCodes.add(AUTHENTICATED); // any authenticated caller carries the synthetic code
+                String scope = fx.path("rag_scope").asText("master");
+                JsonNode expected = fx.get("expected");
+                List<String> expectedDocs = stringList(expected.get("doc_ids"));
+                Set<String> forbidden = stringSet(expected.get("forbidden_doc_ids"));
+                int k = expected.path("k").asInt(K);
+
+                // Reproduce the production RAG path: scope-filtered ANN + permission-aware visibility.
+                QueryDocumentRetriever retriever = new PermissionAwareMetadataFilter(
+                        scopedContentRetrieverFactory.create(scope, Math.max(k * 10, 50), 0.0), permissionCodes);
+                List<String> docs = distinctDocIds(retriever.retrieve(query));
+                List<String> topK = docs.subList(0, Math.min(k, docs.size()));
+
+                if (!forbidden.isEmpty() && topK.stream().anyMatch(forbidden::contains)) {
+                    forbiddenViolations.add(Map.entry(id, true));
+                }
+                if (!expectedDocs.isEmpty()) {
+                    long found = expectedDocs.stream().filter(topK::contains).count();
+                    recalls.add((double) found / expectedDocs.size());
+                    scored++;
+                }
+            }
+        }
+
+        double recallAtK = EvalMetrics.mean(recalls);
+        String json = MAPPER.writerWithDefaultPrettyPrinter()
+                .writeValueAsString(Map.of(
+                        "metric",
+                        "rag_recall",
+                        "fixtures_scored",
+                        scored,
+                        "recall_at_k",
+                        recallAtK,
+                        "forbidden_violations",
+                        forbiddenViolations.size()));
+        Path out = Paths.get(System.getProperty("user.dir"), "target/eval/baseline-rag-recall.json");
+        Files.createDirectories(out.getParent());
+        Files.writeString(out, json);
+        LOGGER.info("MCP baseline rag recall@k={} scored={} -> {}", recallAtK, scored, out);
+
+        // Forbidden RAG docs leaking past the permission filter is a hard-fail security invariant.
+        assertThat(forbiddenViolations)
+                .as("forbidden (permission-negative) RAG docs must never be visible")
+                .isEmpty();
+
+        // Recall floor is report-only by default (override with -Dmcp.eval.min-recall) until the
+        // recall@k baseline is calibrated against the live corpus.
+        double minRecall = Double.parseDouble(System.getProperty("mcp.eval.min-recall", "0.0"));
+        assertThat(recallAtK).as("RAG recall@k floor").isGreaterThanOrEqualTo(minRecall);
+    }
+
+    /** Collapse retrieved chunks to distinct document_ids, preserving rank order. */
+    private static List<String> distinctDocIds(List<Document> documents) {
+        List<String> ordered = new ArrayList<>();
+        for (Document document : documents) {
+            Object raw = document.getMetadata().get(DOCUMENT_ID);
+            if (raw instanceof String documentId && !documentId.isBlank() && !ordered.contains(documentId)) {
+                ordered.add(documentId);
+            }
+        }
+        return ordered;
     }
 
     private static List<Path> suiteFiles(String suite) throws Exception {

@@ -16,9 +16,14 @@ ToolMetadataRepositoryImpl.findTopKByEmbeddingForPermissions:
     ORDER BY t.embedding <=> :query::vector, t.id
     LIMIT :k
 
+It also captures RAG recall@k (#783 AC3): each rag-retrieval fixture is embedded and run through the
+production RAG path — ScopedContentRetrieverFactory (ANN filtered by the fixture's rag_scope metadata)
+plus PermissionAwareMetadataFilter (drop docs whose required_permissions the caller lacks) — with
+chunks collapsed to distinct document_ids, then scored against expected/forbidden doc_ids.
+
 Caveat: this scores on the raw ANN order; the Java path applies a light ToolScorer re-rank on top,
 so hit@5 here is a close proxy, not bit-identical. It is sufficient to confirm hit@5 > 0 (the #783
-name-mismatch fix) and the #779 permission-gating invariant.
+name-mismatch fix), the #779 permission-gating invariant, and RAG recall@k / forbidden-doc gating.
 
 Deps: pg8000 (pure-Python PG driver: `pip install --user pg8000`). Everything else is stdlib.
 Config: reads POS_MCP_DB_HOST/PORT/NAME/USER/PASSWORD and OLLAMA_EMBEDDING_BASE_URL from the
@@ -129,6 +134,34 @@ def main():
         )
         return [r[0] for r in rows]
 
+    def rag_visible_docs(query_vec, scope, caller_perms, want):
+        """Reproduce the production RAG path: ScopedContentRetrieverFactory (ANN filtered by the
+        rag_scope metadata) + PermissionAwareMetadataFilter (drop docs whose required_permissions the
+        caller lacks). Returns ordered distinct document_ids (chunks collapsed to their document)."""
+        rows = con.run(
+            """
+            SELECT metadata->>'document_id'        AS document_id,
+                   metadata->>'required_permissions' AS required_permissions
+            FROM mcp_document_embedding
+            WHERE metadata->>'rag_scope' = :scope AND embedding IS NOT NULL
+            ORDER BY embedding <=> CAST(:q AS vector), id
+            LIMIT :limit
+            """,
+            scope=scope, q=vec_literal(query_vec), limit=max(want * 10, 50),
+        )
+        caller = set(caller_perms) | {"AUTHENTICATED"}  # any authenticated caller holds AUTHENTICATED
+        ordered = []
+        for document_id, required in rows:
+            if document_id is None:
+                continue
+            req = {p.strip() for p in (required or "").split(",") if p.strip()}
+            # PermissionAwareMetadataFilter: public (no req) visible; else caller must hold >=1 code
+            if req and not (req & caller):
+                continue
+            if document_id not in ordered:  # collapse chunks -> distinct docs, preserve rank order
+                ordered.append(document_id)
+        return ordered
+
     # ---- #783: tool-selection hit@5 / MRR ---------------------------------
     hits, rr, violations, scored = [], [], [], 0
     for fx in suite("tool-selection"):
@@ -158,6 +191,35 @@ def main():
 
     hit_at_5 = sum(hits) / len(hits) if hits else 0.0
     mrr = sum(rr) / len(rr) if rr else 0.0
+
+    # ---- #783 AC3: RAG recall@k (scope + permission filtered) --------------
+    recalls, rag_scored, rag_violations = [], 0, []
+    for fx in suite("rag-retrieval"):
+        actor = fx["actor"]
+        perms = actor.get("permission_codes", [])
+        scope = fx.get("rag_scope", "master")
+        expected = fx.get("expected", {})
+        expected_docs = expected.get("doc_ids", []) or []
+        forbidden = set(expected.get("forbidden_doc_ids", []) or [])
+        k = expected.get("k", K)
+        visible = rag_visible_docs(embed(fx["query"]), scope, perms, k)
+        top_k = visible[:k]
+        forbidden_present = [d for d in top_k if d in forbidden]
+        if forbidden_present:
+            rag_violations.append({
+                "fixture_id": fx.get("fixture_id"),
+                "query": fx.get("query"),
+                "forbidden_present": forbidden_present,
+                "rag_scope": scope,
+                "permission_codes": perms,
+                "top_k": top_k,
+            })
+        if expected_docs:
+            found = sum(1 for d in expected_docs if d in top_k)
+            recalls.append(found / len(expected_docs))
+            rag_scored += 1
+
+    recall_at_k = sum(recalls) / len(recalls) if recalls else 0.0
 
     # ---- #779: permission gating (openapi tool) ---------------------------
     gating = {"status": "skipped"}
@@ -198,8 +260,11 @@ def main():
 
     # AC4 (#783) thresholds — calibrated from the live baseline (hit@5 0.84 / MRR 0.77),
     # set with margin below observed. Override with EVAL_MIN_HIT5 / EVAL_MIN_MRR.
+    # EVAL_MIN_RECALL defaults to 0.0 (report-only) until recall@k is calibrated against the live
+    # corpus; set it once a floor is established. RAG forbidden leaks are always a hard fail.
     floor_hit5 = float(os.environ.get("EVAL_MIN_HIT5", "0.75"))
     floor_mrr = float(os.environ.get("EVAL_MIN_MRR", "0.65"))
+    floor_recall = float(os.environ.get("EVAL_MIN_RECALL", "0.0"))
     failures = []
     if hit_at_5 < floor_hit5:
         failures.append(f"hit@5 {hit_at_5:.4f} < {floor_hit5}")
@@ -207,6 +272,10 @@ def main():
         failures.append(f"mrr {mrr:.4f} < {floor_mrr}")
     if violations:
         failures.append(f"forbidden_violations {len(violations)} > 0")
+    if rag_violations:
+        failures.append(f"rag_forbidden_violations {len(rag_violations)} > 0")
+    if rag_scored and recall_at_k < floor_recall:
+        failures.append(f"recall@k {recall_at_k:.4f} < {floor_recall}")
     if gating.get("status") == "FAIL":
         failures.append("permission_gating_779 FAIL")
 
@@ -214,8 +283,11 @@ def main():
         "tool_selection": {"hit_at_5": round(hit_at_5, 4), "mrr": round(mrr, 4),
                             "scored": scored, "forbidden_violations": len(violations),
                             "forbidden_violation_detail": violations},
+        "rag_retrieval": {"recall_at_k": round(recall_at_k, 4), "scored": rag_scored,
+                          "forbidden_violations": len(rag_violations),
+                          "forbidden_violation_detail": rag_violations},
         "permission_gating_779": gating,
-        "thresholds": {"min_hit_at_5": floor_hit5, "min_mrr": floor_mrr,
+        "thresholds": {"min_hit_at_5": floor_hit5, "min_mrr": floor_mrr, "min_recall_at_k": floor_recall,
                        "passed": not failures, "failures": failures},
     }
     out = ROOT / "pos-mcp-server/target/eval/baseline-live-python.json"

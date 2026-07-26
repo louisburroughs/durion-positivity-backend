@@ -1004,7 +1004,7 @@
           "admin.governance"
         ]
       },
-      "rag_scope": "master",
+      "rag_scope": "admin",
       "tags": [
         "negative",
         "visibility-negative"
@@ -1026,7 +1026,7 @@
           "crm.customer-vehicle"
         ]
       },
-      "rag_scope": "master",
+      "rag_scope": "customer",
       "tags": [
         "negative",
         "visibility-negative"
@@ -1048,7 +1048,7 @@
           "events.observability"
         ]
       },
-      "rag_scope": "master",
+      "rag_scope": "events",
       "tags": [
         "negative",
         "visibility-negative"
@@ -1070,7 +1070,7 @@
           "order.guide"
         ]
       },
-      "rag_scope": "master",
+      "rag_scope": "order",
       "tags": [
         "negative",
         "visibility-negative"
@@ -1092,7 +1092,7 @@
           "pricing.guide"
         ]
       },
-      "rag_scope": "master",
+      "rag_scope": "pricing",
       "tags": [
         "negative",
         "visibility-negative"
@@ -1114,7 +1114,7 @@
           "reporting.metrics"
         ]
       },
-      "rag_scope": "master",
+      "rag_scope": "reporting",
       "tags": [
         "negative",
         "visibility-negative"
@@ -1136,7 +1136,7 @@
           "security.role-permission-matrix"
         ]
       },
-      "rag_scope": "master",
+      "rag_scope": "security",
       "tags": [
         "negative",
         "visibility-negative"
@@ -1158,7 +1158,7 @@
           "tax.guide"
         ]
       },
-      "rag_scope": "master",
+      "rag_scope": "tax",
       "tags": [
         "negative",
         "visibility-negative"

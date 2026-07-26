@@ -101,16 +101,23 @@ synchronously at Flux-assembly time).
   (`-Dmcp.eval.min-hit5`/`-Dmcp.eval.min-mrr` overridable) and enforced with a non-zero exit in
   `eval_live.py` (`EVAL_MIN_HIT5`/`EVAL_MIN_MRR`) so a Python-only host can gate CI. Wiring the run into
   the CI pipeline still needs a CI-reachable embedding backend (or recorded-fixture mode).
-- **AC3 (recall@k live capture): fixtures ready — capture remaining, live-gated.** Metadata keys identified
-  (`document_id`, `rag_scope` from `DocumentEmbeddingIngestor` / `ScopedContentRetrieverFactory`). The scope
-  design choice is resolved: every rag fixture (`rag-retrieval/{seed,generated}.json`, 56 total) now carries a
-  top-level `rag_scope`, derived from its expected docs' configured scope in `application.yml` static-preload
-  (e.g. `admin.governance→admin`, `crm.customer-vehicle→customer`, `tax.guide→tax`), defaulting to `master`
-  for negative or cross-scope fixtures — matching `RagScope.normalize(null)` and
-  `MasterAgentRegistry.resolveRagScopeForTools` fallback. Schema updated (`schema/rag-retrieval.schema.json`).
-  Remaining: wire recall@k into `eval_live.py` + `BaselineCaptureIT` using `rag_scope` (scope filter) + the
-  `document_id` metadata key, and run it against the live corpus.
-- **Close when:** AC3 recall@k is captured and the threshold run is wired into CI.
+- **AC3 (recall@k): harness wired this session — live capture remaining.** Metadata keys identified
+  (`document_id`, `rag_scope` from `DocumentEmbeddingIngestor` / `ScopedContentRetrieverFactory`). Every rag
+  fixture (`rag-retrieval/{seed,generated}.json`, 56 total) now carries a top-level `rag_scope`, derived from
+  its expected docs' configured scope in `application.yml` static-preload (e.g. `admin.governance→admin`,
+  `crm.customer-vehicle→customer`, `tax.guide→tax`), defaulting to `master` for cross-scope/unknown fixtures —
+  matching `RagScope.normalize(null)` and `MasterAgentRegistry.resolveRagScopeForTools` fallback. Negative
+  fixtures point at their forbidden doc's own scope so the permission filter (not the scope filter) is what
+  must exclude the doc. Schema updated (`schema/rag-retrieval.schema.json`).
+  - **Recall@k harness (both hosts):** `eval_live.py` and `BaselineCaptureIT.captureRagRecallBaseline`
+    reproduce the production RAG path — `ScopedContentRetrieverFactory` (ANN filtered by `rag_scope`) +
+    `PermissionAwareMetadataFilter` (drop docs whose `required_permissions` the caller lacks) — collapse
+    chunks to distinct `document_id`s, then score recall@k plus a forbidden-doc leak check. Forbidden leaks
+    hard-fail (security invariant); the recall floor is report-only (`EVAL_MIN_RECALL` /
+    `-Dmcp.eval.min-recall`, default 0.0) until calibrated.
+  - Remaining: run against alpha to record the recall@k baseline and set the floor.
+- **Close when:** AC3 recall@k baseline is captured on alpha with the floor set, and the threshold run is
+  wired into CI.
 
 ### #784 — Hybrid dense + BM25 retrieval  · effort L · **depends on #783** · priority low
 - Add a lexical `QueryDocumentRetriever` (Postgres FTS `tsvector` + `ts_rank` / `websearch_to_tsquery`),
