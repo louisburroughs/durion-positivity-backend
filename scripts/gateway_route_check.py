@@ -18,6 +18,7 @@ Config (reuses eval_live's DB/.env resolution):
                 stored service_id is a docker-internal host (http://pos-api-gateway:8080) the Python
                 host can't resolve. If unset, each op's own service_id is used.
   MCP_EVAL_BEARER  optional bearer token relayed as Authorization (get a full 2xx instead of 401).
+  GATEWAY_TIMEOUT  per-request timeout in seconds (default 20); raise it for slow/remote gateways.
 
 Usage:
   ENV_FILE=/opt/durion/alpha/.env GATEWAY_URL=http://localhost:8080 \

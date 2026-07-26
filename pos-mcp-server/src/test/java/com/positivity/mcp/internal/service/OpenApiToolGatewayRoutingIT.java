@@ -34,7 +34,7 @@ import org.springframework.test.context.ActiveProfiles;
  *
  * <p>A gateway that matched the route but rejected auth returns 401/403; a matched route with missing
  * query params returns 400; a healthy call returns 2xx. All of those prove the route resolved — only
- * an unmatched route 404s. So a bearer token is <em>optional</em>: supply {@code -Dmcp.eval.bearer=<jwt>}
+ * an unmatched route 404s. So a bearer token is <em>optional</em>: supply {@code -Dmcp.eval.bearer=&lt;jwt&gt;}
  * (or {@code MCP_EVAL_BEARER}) to additionally exercise the downstream service (expect 2xx); without
  * it the 401/403 still proves routing.
  *
@@ -46,7 +46,7 @@ import org.springframework.test.context.ActiveProfiles;
  * <pre>
  *   POS_MCP_DB_HOST=... POS_MCP_DB_PASSWORD=... OLLAMA_EMBEDDING_BASE_URL=... \
  *   ./mvnw -pl pos-mcp-server test -Dtest=OpenApiToolGatewayRoutingIT \
- *       -Dmcp.eval.live=true -Dspring.profiles.active=alpha [-Dmcp.eval.bearer=<jwt>]
+ *       -Dmcp.eval.live=true -Dspring.profiles.active=alpha [-Dmcp.eval.bearer=&lt;jwt&gt;]
  * </pre>
  */
 @SpringBootTest(
@@ -136,11 +136,13 @@ class OpenApiToolGatewayRoutingIT {
                         || lower.contains("no instance available")),
                 "gateway not reachable from this host (infra, not a #645 routing failure): " + result);
 
-        // The #645 assertion: the discovered path resolved through the gateway (no 404 Not Found).
+        // The #645 assertion: the discovered path resolved through the gateway (no 404).
         // A 2xx body, or a routed 400/401/403/5xx, all pass; only an unmatched route surfaces a 404.
-        assertThat(result)
+        // Match the status token, not the reason phrase — the WebClient error message renders the
+        // reason case-variantly ("404 Not Found" vs "404 NOT_FOUND"), so key off the lowercased "404".
+        assertThat(lower)
                 .as("#645: discovered op %s [GET %s] must route through the gateway without a 404", toolName, httpPath)
-                .doesNotContain("404 Not Found");
+                .doesNotContain("404");
     }
 
     private static String bearerHeader() {
