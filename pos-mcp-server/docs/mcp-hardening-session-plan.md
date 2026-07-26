@@ -19,51 +19,59 @@ Everything except the two rows above can be finished and merged without a live e
 
 ## Batch A — Code-only quick wins (no infra)
 
-### #780 — Remove legacy role-gating  · effort S · risk low
-- Remove the always-empty `roleToolAssignments` field + branch in `MasterAgentRegistry.resolveDomainTools`
-  (~line 61) and the empty-map constructors in `LoadedMasterAgentRegistry`.
-- Drop the unused role-scoped `resolveDomainTools(String, Collection)` overload (`MasterAgentRegistry`
-  ~125–135, `ToolSelectionEngine` ~112–115).
-- New migration `V27` dropping `mcp_role_deprecated` / `mcp_tool_role_deprecated` — **only if the V19
-  retention window has passed** (owner confirm).
-- **Close when:** dead code gone, cashier/manager/admin/`ROLE_USER` selection tests + ArchUnit green.
+### #780 — Remove legacy role-gating  · **code done** · only owner-gated migration remains
+**Verified 2026-07-26 — code removal already complete:** `roleToolAssignments` no longer exists
+anywhere; `LoadedMasterAgentRegistry` does not exist; the two-arg `resolveDomainTools(String,
+Collection)` overload does not exist (only the 1-arg domain resolver); `MasterAgentRegistry.
+resolveDomainTools` has no role branch; `findEnabledByRoleAndWorkflow`/`findAllRoleNames`/
+`ToolRegistryRoleMapper` are gone. Scenario suites (cashier/manager/admin/`ROLE_USER`) pass.
+- **Done this session:** owner confirmed the V19 retention window has passed; migration
+  `V27__drop_legacy_role_gating.sql` drops both deprecated tables (validated: full Flyway chain
+  V1→V27 boots clean on H2). **Closeable on merge.**
 
-### #778 — Workflow state beyond IDLE for gating  · effort S–M · risk low-med
-**Verify first — largely implemented already:** `SessionAgentManager.chat` (line 199) threads persisted
-state via `workflowStateService.resolveActiveState(username)` → 4-arg `selectRoleTools(role, perms,
-message, state)`, heuristic 3-arg only as fallback; `NltiWorkflowStateService.setWorkflowState` (line 62)
-is a real write path. Remaining:
-- Confirm `StreamingSessionAgentManager.streamChat` threads persisted state the same way (parity with
-  `SessionAgentManager`).
-- Confirm the write path is actually **invoked on workflow progression** (find/complete the caller that
-  advances `NltiSession.workflowState` to a non-IDLE state).
-- `MasterAgentRegistryLoader` preloads the active **non-IDLE** states, not just the single
-  `mcp.agent.preload-workflow-state`.
-- **Close when:** a persisted non-IDLE session receives that state's gated tool set — tested for **both**
-  managers.
+### #778 — Workflow state beyond IDLE for gating  · **done**
+**Verified 2026-07-26 — all functional ACs implemented:**
+- **Both** managers thread persisted state: `SessionAgentManager.chat` (line 199) and
+  `StreamingSessionAgentManager.streamChat` (line 167) call `resolveActiveState` → 4-arg
+  `selectRoleTools`, heuristic 3-arg only as fallback.
+- Write path is wired: `NltiWorkflowStateService.advance(...)` is invoked by
+  `NltiController.setWorkflowState` (`POST .../workflow-state`), ownership-checked.
+- `MasterAgentRegistryLoader` defaults `mcp.agent.preload-workflow-state=ALL` and preloads the union
+  across all workflow states (non-IDLE included).
+- Tests: sync persisted-state (`SessionAgentManagerTest`), service + ownership
+  (`NltiWorkflowStateServiceTest`), controller (`NltiControllerTest`), **and now the streaming
+  persisted-state parity test** added this session.
+- **Close when:** merged — no code gaps remain.
 
-### #779 — OpenAPI tools agent-callable (code-only parts)  · effort M · risk low
-- Add an integration test (`*IT`): low-permission caller → chat endpoint → assert a high-permission
-  openapi tool is neither offered nor executed, and an authorized op executes through a **stubbed
-  gateway** (WireMock/local stub). Today the permission-filter assertion lives only at unit level.
-- Fix stale comments in `OpenApiToolProvider` (~38–42) and `RequestScopedUserContext` (~20–25) that still
-  claim the streaming/Reactor path is "not yet wired" — it is (`StreamingSessionAgentManager` sets the
-  ThreadLocal synchronously before resolution).
-- **Close when:** the IT passes and comments are corrected. (Gate 3 live verification → Batch D.)
+### #779 — OpenAPI tools agent-callable (code-only parts)  · **partly done**
+**Verified 2026-07-26 — the stale comments are already fixed:** `OpenApiToolProvider` (~33–43) and
+`RequestScopedUserContext` (~12–27) both now correctly describe streaming as wired (caller published
+synchronously at Flux-assembly time).
+- **Done this session:** authored `OpenApiToolPermissionGatingIT` (live-gated, `@ActiveProfiles("alpha")`
+  + `-Dmcp.eval.live=true`, mirroring `BaselineCaptureIT`). It drives the real `OpenApiToolProvider`
+  against live pgvector with DB-derived fixtures: fail-closed with no context; a caller lacking a tool's
+  permission never receives it; granting it does. Compiles in CI; **runs on the alpha stack** (can't
+  execute in the offline sandbox — gated off by default).
+- **Close when:** the IT is run green on alpha (owner confirmed the stack exists) and Gate 3
+  live verification is recorded → Batch D.
 
 ---
 
 ## Batch B — Discovery hardening (#645, mostly code)  · effort M · risk med
 
-- Wire `OpenApiDocumentFetcher.fetchForService(serviceId)` (exists, no prod caller) into
-  `ToolRegistrationServiceImpl.registerDiscoveredTools()` as the **per-service Eureka fallback** when the
-  aggregate fetch returns empty.
-- `@Scheduled` periodic refresh that re-runs discovery and diffs against currently-registered tools
-  (configurable interval); must be idempotent (no duplicate/rogue re-registration).
-- Micrometer counters `tools_discovered_total` / `tools_registered_total`; alert rules under
-  `docs/alerts/`; ops runbook section under `docs/runbooks/`.
-- **Close when:** fallback + scheduled refresh land with tests, metrics emit, docs added. (Alpha 404
-  check → Batch D.)
+**Verified 2026-07-26 — all code items already implemented and tested:**
+- **Per-service Eureka fallback: done.** `ToolRegistrationServiceImpl.registerViaPerServiceFallback`
+  wires `fetchForService` / `fallbackServiceIds` when the aggregate is empty/matches no tools; fail-soft
+  per service. Tested (`ToolRegistrationServiceImplTest` fallback / no-fallback-on-success / both-empty).
+- **Periodic refresh: done.** `DiscoveryRefreshScheduler` (`@Scheduled fixedDelay`, opt-in via
+  `mcp.server.discovery-refresh.enabled`, timeout-bounded, serialized) + `SchedulingConfiguration`
+  (`@EnableScheduling`). Re-registration is idempotent (`addToolWithTiming` removes-then-adds). Note the
+  issue lists **dynamic unregistration (stale-tool pruning) as out of scope**, so re-adding new/changed
+  tools without pruning is the intended behavior. Tested (`DiscoveryRefreshSchedulerTest`).
+- **Metrics + alerting + runbook: done.** Counters `tools.discovered` / `tools.registered` (both
+  incremented); `docs/alerts/tool-discovery-alerts.md`; `docs/runbooks/tool-discovery-failure.md`.
+- **Only remaining:** alpha end-to-end 404 verification → **Batch D** (live).
+- **Close when:** the alpha 404 check passes on the live stack.
 
 ---
 

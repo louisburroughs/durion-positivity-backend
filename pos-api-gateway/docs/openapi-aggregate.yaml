@@ -785,6 +785,8 @@ paths:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1nlt~1audit
   /v1/nlt/requests:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1nlt~1requests
+  /v1/nlt/sessions/{sessionId}/workflow-state:
+    $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1nlt~1sessions~1{sessionId}~1workflow-state
   /v1/prompts:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1prompts
   /v1/prompts/{id}:
@@ -1305,6 +1307,8 @@ paths:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1changeRequests~1{changeId}~1decline
   /v1/workorders/changeRequests/{changeId}/emergency-override:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1changeRequests~1{changeId}~1emergency-override
+  /v1/workorders/count:
+    $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1count
   /v1/workorders/estimates:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1estimates
   /v1/workorders/estimates/customer/{customerId}:
