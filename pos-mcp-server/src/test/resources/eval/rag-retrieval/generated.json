@@ -17,6 +17,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "admin",
       "tags": [
         "positive",
         "gated"
@@ -39,6 +40,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "admin",
       "tags": [
         "positive",
         "gated"
@@ -61,6 +63,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "admin",
       "tags": [
         "positive",
         "gated"
@@ -83,6 +86,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "admin",
       "tags": [
         "positive",
         "gated"
@@ -104,6 +108,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "master",
       "tags": [
         "positive",
         "public"
@@ -125,6 +130,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "master",
       "tags": [
         "positive",
         "public"
@@ -146,6 +152,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "master",
       "tags": [
         "positive",
         "public"
@@ -167,6 +174,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "master",
       "tags": [
         "positive",
         "public"
@@ -188,6 +196,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "master",
       "tags": [
         "positive",
         "public"
@@ -209,6 +218,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "master",
       "tags": [
         "positive",
         "public"
@@ -230,6 +240,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "master",
       "tags": [
         "positive",
         "public"
@@ -251,6 +262,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "master",
       "tags": [
         "positive",
         "public"
@@ -273,6 +285,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "customer",
       "tags": [
         "positive",
         "gated"
@@ -295,6 +308,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "customer",
       "tags": [
         "positive",
         "gated"
@@ -317,6 +331,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "customer",
       "tags": [
         "positive",
         "gated"
@@ -339,6 +354,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "customer",
       "tags": [
         "positive",
         "gated"
@@ -360,6 +376,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "events",
       "tags": [
         "positive",
         "gated"
@@ -381,6 +398,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "events",
       "tags": [
         "positive",
         "gated"
@@ -402,6 +420,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "events",
       "tags": [
         "positive",
         "gated"
@@ -423,6 +442,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "events",
       "tags": [
         "positive",
         "gated"
@@ -444,6 +464,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "master",
       "tags": [
         "positive",
         "public"
@@ -465,6 +486,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "master",
       "tags": [
         "positive",
         "public"
@@ -486,6 +508,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "master",
       "tags": [
         "positive",
         "public"
@@ -507,6 +530,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "master",
       "tags": [
         "positive",
         "public"
@@ -528,6 +552,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "order",
       "tags": [
         "positive",
         "gated"
@@ -549,6 +574,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "order",
       "tags": [
         "positive",
         "gated"
@@ -570,6 +596,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "order",
       "tags": [
         "positive",
         "gated"
@@ -591,6 +618,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "order",
       "tags": [
         "positive",
         "gated"
@@ -613,6 +641,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "pricing",
       "tags": [
         "positive",
         "gated"
@@ -635,6 +664,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "pricing",
       "tags": [
         "positive",
         "gated"
@@ -657,6 +687,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "pricing",
       "tags": [
         "positive",
         "gated"
@@ -679,6 +710,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "pricing",
       "tags": [
         "positive",
         "gated"
@@ -701,6 +733,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "reporting",
       "tags": [
         "positive",
         "gated"
@@ -723,6 +756,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "reporting",
       "tags": [
         "positive",
         "gated"
@@ -745,6 +779,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "reporting",
       "tags": [
         "positive",
         "gated"
@@ -767,6 +802,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "reporting",
       "tags": [
         "positive",
         "gated"
@@ -789,6 +825,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "security",
       "tags": [
         "positive",
         "gated"
@@ -811,6 +848,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "security",
       "tags": [
         "positive",
         "gated"
@@ -833,6 +871,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "security",
       "tags": [
         "positive",
         "gated"
@@ -855,6 +894,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "security",
       "tags": [
         "positive",
         "gated"
@@ -876,6 +916,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "tax",
       "tags": [
         "positive",
         "gated"
@@ -897,6 +938,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "tax",
       "tags": [
         "positive",
         "gated"
@@ -918,6 +960,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "tax",
       "tags": [
         "positive",
         "gated"
@@ -939,6 +982,7 @@
         ],
         "k": 5
       },
+      "rag_scope": "tax",
       "tags": [
         "positive",
         "gated"
@@ -960,6 +1004,7 @@
           "admin.governance"
         ]
       },
+      "rag_scope": "admin",
       "tags": [
         "negative",
         "visibility-negative"
@@ -981,6 +1026,7 @@
           "crm.customer-vehicle"
         ]
       },
+      "rag_scope": "customer",
       "tags": [
         "negative",
         "visibility-negative"
@@ -1002,6 +1048,7 @@
           "events.observability"
         ]
       },
+      "rag_scope": "events",
       "tags": [
         "negative",
         "visibility-negative"
@@ -1023,6 +1070,7 @@
           "order.guide"
         ]
       },
+      "rag_scope": "order",
       "tags": [
         "negative",
         "visibility-negative"
@@ -1044,6 +1092,7 @@
           "pricing.guide"
         ]
       },
+      "rag_scope": "pricing",
       "tags": [
         "negative",
         "visibility-negative"
@@ -1065,6 +1114,7 @@
           "reporting.metrics"
         ]
       },
+      "rag_scope": "reporting",
       "tags": [
         "negative",
         "visibility-negative"
@@ -1086,6 +1136,7 @@
           "security.role-permission-matrix"
         ]
       },
+      "rag_scope": "security",
       "tags": [
         "negative",
         "visibility-negative"
@@ -1107,6 +1158,7 @@
           "tax.guide"
         ]
       },
+      "rag_scope": "tax",
       "tags": [
         "negative",
         "visibility-negative"

@@ -28,12 +28,25 @@ import org.springframework.test.context.ActiveProfiles;
  * Disabled by default, so offline CI never starts a context; it starts a Spring context (via
  * {@code @SpringBootTest}) only when {@code -Dmcp.eval.live=true} is set:
  *
+ * <p>Runs read-only against the live DB: Flyway is disabled (no migrations applied to the target
+ * schema), and the web server, Eureka client, and permission registration are off — so only the
+ * alpha Postgres/pgvector and the embedding model need to be reachable. Required env vars:
+ * {@code POS_MCP_DB_HOST}, {@code POS_MCP_DB_PASSWORD} (and {@code POS_MCP_DB_USER} if not
+ * {@code pos_mcp}), and {@code OLLAMA_EMBEDDING_BASE_URL}.
+ *
  * <pre>
- *   ./mvnw -o -pl pos-mcp-server test -Dtest=OpenApiToolPermissionGatingIT \
+ *   POS_MCP_DB_HOST=... POS_MCP_DB_PASSWORD=... OLLAMA_EMBEDDING_BASE_URL=... \
+ *   ./mvnw -pl pos-mcp-server test -Dtest=OpenApiToolPermissionGatingIT \
  *       -Dmcp.eval.live=true -Dspring.profiles.active=alpha
  * </pre>
  */
-@SpringBootTest
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = {
+            "spring.flyway.enabled=false",
+            "pos.security.permission-registration.enabled=false",
+            "eureka.client.enabled=false"
+        })
 @ActiveProfiles("alpha")
 @EnabledIfSystemProperty(named = "mcp.eval.live", matches = "true")
 class OpenApiToolPermissionGatingIT {
