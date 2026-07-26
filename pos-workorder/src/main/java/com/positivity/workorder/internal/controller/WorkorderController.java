@@ -79,7 +79,8 @@ public class WorkorderController {
     public CountResponse countWorkorders(
             @Parameter(
                             description = "Count only open (non-terminal) work orders. Ignored when 'status' is "
-                                    + "supplied. Defaults to false (count all statuses).")
+                                    + "supplied. Defaults to false (count all statuses).",
+                            schema = @Schema(type = "boolean", defaultValue = "false"))
                     @RequestParam(defaultValue = "false")
                     boolean openOnly,
             @Parameter(description = "Exact statuses to count; repeatable. Takes precedence over 'openOnly'.")

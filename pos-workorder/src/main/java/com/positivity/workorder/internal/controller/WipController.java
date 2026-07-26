@@ -6,6 +6,7 @@ import com.positivity.workorder.internal.dto.WorkorderStatusView;
 import com.positivity.workorder.service.WipService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -54,7 +55,9 @@ public class WipController {
     @EmitEvent(id = "WORKORDER_WIP_LIST", apiVersion = "1")
     public ResponseEntity<Page<WorkorderStatusView>> listWip(
             @Parameter(description = "Location ID to filter workorders by") @RequestParam String locationId,
-            @Parameter(description = "Request cross-location results; requires workorder:wip:view_all_locations")
+            @Parameter(
+                            description = "Request cross-location results; requires workorder:wip:view_all_locations",
+                            schema = @Schema(type = "boolean", defaultValue = "false"))
                     @RequestParam(defaultValue = "false")
                     boolean multiLocation,
             @PageableDefault(size = 25) Pageable pageable,

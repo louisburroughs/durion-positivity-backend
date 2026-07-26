@@ -1974,7 +1974,9 @@ paths:
         description: Maximum number of results (1–100)
         required: false
         schema:
-          type: string
+          type: integer
+          format: int32
+          default: 20
       responses:
         '200':
           description: Matching services
@@ -2056,13 +2058,16 @@ paths:
         description: Maximum number of results (1–100)
         required: false
         schema:
-          type: string
+          type: integer
+          format: int32
+          default: 20
       - name: detailed
         in: query
         description: When true, enrich each row with lifecycle state, effective instant, and active MSRP
         required: false
         schema:
-          type: string
+          type: boolean
+          default: false
       responses:
         '200':
           description: Search results
