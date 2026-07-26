@@ -260,11 +260,12 @@ def main():
 
     # AC4 (#783) thresholds — calibrated from the live baseline (hit@5 0.84 / MRR 0.77),
     # set with margin below observed. Override with EVAL_MIN_HIT5 / EVAL_MIN_MRR.
-    # EVAL_MIN_RECALL defaults to 0.0 (report-only) until recall@k is calibrated against the live
-    # corpus; set it once a floor is established. RAG forbidden leaks are always a hard fail.
+    # Floors calibrated from the live alpha baseline (17-doc corpus): hit@5 0.84, MRR 0.77,
+    # recall@k 0.96 — each set ~10% below observed. RAG forbidden leaks are always a hard fail.
+    # Override with EVAL_MIN_HIT5 / EVAL_MIN_MRR / EVAL_MIN_RECALL.
     floor_hit5 = float(os.environ.get("EVAL_MIN_HIT5", "0.75"))
     floor_mrr = float(os.environ.get("EVAL_MIN_MRR", "0.65"))
-    floor_recall = float(os.environ.get("EVAL_MIN_RECALL", "0.0"))
+    floor_recall = float(os.environ.get("EVAL_MIN_RECALL", "0.85"))
     failures = []
     if hit_at_5 < floor_hit5:
         failures.append(f"hit@5 {hit_at_5:.4f} < {floor_hit5}")

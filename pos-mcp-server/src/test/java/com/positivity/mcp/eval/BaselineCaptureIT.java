@@ -205,9 +205,9 @@ class BaselineCaptureIT {
                 .as("forbidden (permission-negative) RAG docs must never be visible")
                 .isEmpty();
 
-        // Recall floor is report-only by default (override with -Dmcp.eval.min-recall) until the
-        // recall@k baseline is calibrated against the live corpus.
-        double minRecall = Double.parseDouble(System.getProperty("mcp.eval.min-recall", "0.0"));
+        // AC3 (#783) recall floor — calibrated from the live alpha baseline (recall@k 0.96 on the
+        // 17-doc corpus), set ~10% below observed. Override with -Dmcp.eval.min-recall.
+        double minRecall = Double.parseDouble(System.getProperty("mcp.eval.min-recall", "0.85"));
         assertThat(recallAtK).as("RAG recall@k floor").isGreaterThanOrEqualTo(minRecall);
     }
 

@@ -115,9 +115,17 @@ synchronously at Flux-assembly time).
     chunks to distinct `document_id`s, then score recall@k plus a forbidden-doc leak check. Forbidden leaks
     hard-fail (security invariant); the recall floor is report-only (`EVAL_MIN_RECALL` /
     `-Dmcp.eval.min-recall`, default 0.0) until calibrated.
-  - Remaining: run against alpha to record the recall@k baseline and set the floor.
-- **Close when:** AC3 recall@k baseline is captured on alpha with the floor set, and the threshold run is
-  wired into CI.
+  - **Captured live on alpha 2026-07-26: recall@k = 0.9574** (47 scored, forbidden_violations = 0),
+    alongside hit@5 0.84 / MRR 0.77 / permission_gating_779 PASS. Floor set to **0.85** (~10% below
+    observed, matching the hit@5/MRR convention) in `eval_live.py` (`EVAL_MIN_RECALL`) and
+    `BaselineCaptureIT` (`-Dmcp.eval.min-recall`).
+  - **Corpus fix:** alpha preloaded only 6 of the 17 catalog docs (`application-alpha.yml` lagged
+    `application.yml`); synced to full parity. Baseline captured on a Python-seeded corpus
+    (`scripts/rag_seed.py`, faithful to `DocumentEmbeddingIngestor` chunking + metadata) to validate
+    pre-merge; matches what the preload will produce once the config change is merged and redeployed.
+- **Close when:** the config sync is merged + redeployed to alpha (preload repopulates the 17-doc
+  corpus, confirmed by re-running the eval), and the threshold run is wired into CI (needs a
+  CI-reachable embedding backend or recorded-fixture mode).
 
 ### #784 — Hybrid dense + BM25 retrieval  · effort L · **depends on #783** · priority low
 - Add a lexical `QueryDocumentRetriever` (Postgres FTS `tsvector` + `ts_rank` / `websearch_to_tsquery`),
