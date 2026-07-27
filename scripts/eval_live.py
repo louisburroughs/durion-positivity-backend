@@ -46,6 +46,9 @@ K = 5
 # ScopedContentRetrieverFactory.create(scope, 10, 0.6) and (scope, 20, 0.55)). Score at the loosest
 # value a doc must clear to enter the pipeline (0.55) so recall@k isn't over-reported vs the live path.
 RAG_MIN_SCORE = float(os.environ.get("EVAL_RAG_MIN_SCORE", "0.55"))
+# #784: Reciprocal Rank Fusion constant for the dense+lexical hybrid diagnostic. Matches the
+# application default (HybridRetrievalProperties.rrfK / mcp.rag.hybrid.rrf-k).
+RRF_K = int(os.environ.get("EVAL_RRF_K", "60"))
 
 
 def env_file(key):
@@ -109,6 +112,19 @@ def suite(name):
     return fixtures
 
 
+def rrf_fuse(ranked_lists, k=RRF_K, limit=None):
+    """#784: Reciprocal Rank Fusion of ordered doc-id lists — score(d) = Σ 1/(k + rank_i). Stable
+    Python sort keeps first-seen order among equal scores, matching HybridContentRetriever."""
+    scores, first_seen = {}, []
+    for ranked in ranked_lists:
+        for rank, doc in enumerate(ranked, start=1):
+            if doc not in scores:
+                first_seen.append(doc)
+            scores[doc] = scores.get(doc, 0.0) + 1.0 / (k + rank)
+    fused = sorted(first_seen, key=lambda d: scores[d], reverse=True)
+    return fused[:limit] if limit else fused
+
+
 def main():
     try:
         import pg8000.native
@@ -165,6 +181,36 @@ def main():
             if req and not (req & caller):
                 continue
             if document_id not in ordered:  # collapse chunks -> distinct docs, preserve rank order
+                ordered.append(document_id)
+        return ordered
+
+    def rag_lexical_docs(query_text, scope, caller_perms, want):
+        """#784: lexical (Postgres FTS) counterpart of rag_visible_docs — mirrors
+        LexicalDocumentRetriever (websearch_to_tsquery / ts_rank_cd over content_tsv, scope-filtered)
+        plus the same PermissionAwareMetadataFilter. Returns ordered distinct document_ids. Raises if
+        the content_tsv column is absent (migration V28 not applied); the caller treats that as
+        'lexical unavailable' and skips the diagnostic rather than failing."""
+        rows = con.run(
+            """
+            SELECT metadata->>'document_id'          AS document_id,
+                   metadata->>'required_permissions' AS required_permissions
+            FROM mcp_document_embedding
+            WHERE metadata->>'rag_scope' = :scope
+              AND content_tsv @@ websearch_to_tsquery('english', :q)
+            ORDER BY ts_rank_cd(content_tsv, websearch_to_tsquery('english', :q)) DESC, id
+            LIMIT :limit
+            """,
+            scope=scope, q=query_text, limit=max(want * 10, 50),
+        )
+        caller = set(caller_perms) | {"AUTHENTICATED"}
+        ordered = []
+        for document_id, required in rows:
+            if document_id is None:
+                continue
+            req = {p.strip() for p in (required or "").split(",") if p.strip()}
+            if req and not (req & caller):
+                continue
+            if document_id not in ordered:
                 ordered.append(document_id)
         return ordered
 
@@ -226,6 +272,47 @@ def main():
             rag_scored += 1
 
     recall_at_k = sum(recalls) / len(recalls) if recalls else 0.0
+
+    # ---- #784: lexical vs hybrid recall on the exact-code suite (diagnostic, NOT gated) ----
+    # Scores the separate 'rag-lexical' suite under dense-only vs dense+lexical(RRF) so the value of
+    # the hybrid path is measurable. Never contributes to threshold failures, and degrades to a
+    # 'skipped' status (rather than aborting the eval) when the FTS column / fixtures are absent.
+    rag_lexical_summary = {"status": "skipped: no rag-lexical fixtures"}
+    lexical_fixtures = suite("rag-lexical")
+    if lexical_fixtures:
+        try:
+            dense_recalls, hybrid_recalls, per_fixture = [], [], []
+            for fx in lexical_fixtures:
+                expected_docs = fx.get("expected", {}).get("doc_ids", []) or []
+                if not expected_docs:
+                    continue
+                perms = fx.get("actor", {}).get("permission_codes", [])
+                scope = fx.get("rag_scope", "master")
+                k = fx.get("expected", {}).get("k", K)
+                qvec = embed(fx["query"])
+                dense = rag_visible_docs(qvec, scope, perms, k)[:k]
+                lexical = rag_lexical_docs(fx["query"], scope, perms, k)
+                hybrid = rrf_fuse([dense, lexical], k=RRF_K, limit=k)
+                dense_r = sum(1 for d in expected_docs if d in dense) / len(expected_docs)
+                hybrid_r = sum(1 for d in expected_docs if d in hybrid) / len(expected_docs)
+                dense_recalls.append(dense_r)
+                hybrid_recalls.append(hybrid_r)
+                per_fixture.append({
+                    "fixture_id": fx.get("fixture_id"), "query": fx.get("query"),
+                    "expected": expected_docs, "dense_recall": round(dense_r, 4),
+                    "hybrid_recall": round(hybrid_r, 4), "dense_top_k": dense, "hybrid_top_k": hybrid,
+                })
+            n = len(dense_recalls)
+            rag_lexical_summary = {
+                "status": "scored",
+                "scored": n,
+                "rrf_k": RRF_K,
+                "dense_recall_at_k": round(sum(dense_recalls) / n, 4) if n else 0.0,
+                "hybrid_recall_at_k": round(sum(hybrid_recalls) / n, 4) if n else 0.0,
+                "detail": per_fixture,
+            }
+        except Exception as e:  # missing content_tsv (V28 not deployed), FTS error, etc.
+            rag_lexical_summary = {"status": f"skipped: lexical FTS unavailable ({type(e).__name__}: {e})"}
 
     # ---- #779: permission gating (openapi tool) ---------------------------
     gating = {"status": "skipped"}
@@ -296,6 +383,7 @@ def main():
         "rag_retrieval": {"recall_at_k": round(recall_at_k, 4), "scored": rag_scored,
                           "forbidden_violations": len(rag_violations),
                           "forbidden_violation_detail": rag_violations},
+        "rag_lexical_hybrid_784": rag_lexical_summary,
         "permission_gating_779": gating,
         "thresholds": {"min_hit_at_5": floor_hit5, "min_mrr": floor_mrr, "min_recall_at_k": floor_recall,
                        "passed": not failures, "failures": failures},
