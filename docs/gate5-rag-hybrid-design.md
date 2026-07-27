@@ -88,7 +88,10 @@ LIMIT  ?;
 
 ### 3.3 Fusion — Reciprocal Rank Fusion in `HybridContentRetriever`
 
-Replace the current putIfAbsent-by-content merge with **RRF**:
+`HybridContentRetriever` gains a selectable fusion mode. With the flag **off** it keeps the
+existing insertion-order (putIfAbsent) merge unchanged, so the dense-only path is byte-for-byte
+identical to today; with the flag **on** (lexical source present) it fuses with **RRF**. Dedup
+is by document **id** in both modes (falling back to normalized content). RRF scoring:
 
 ```
 score(d) = Σ_retrievers  weight_i / (k + rank_i(d))
