@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "_comment": "#784 lexical-sensitive RAG fixtures. Exact-code / rare-identifier queries that dense embeddings under-retrieve but Postgres FTS (LexicalDocumentRetriever) recalls. Kept in a SEPARATE suite ('rag-lexical') from 'rag-retrieval' so they do NOT count toward the #783 dense recall@k gate; they are scored dense-vs-hybrid once eval_live.py grows a hybrid-scoring pass. Queries use tokens verbatim from rag/glossary-identifiers.md and rag/role-permission-matrix.md.",
+  "fixtures": [
+    {
+      "fixture_id": "rag-lexical-glossary-wo-number",
+      "query": "WO-2026-1001 workorder number format",
+      "actor": { "role": "ROLE_STAFF", "permission_codes": [] },
+      "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
+      "rag_scope": "master",
+      "tags": ["positive", "lexical", "exact-code"],
+      "notes": "Human-facing workorder number WO-YYYY-NNNN. Dense under-retrieves codes; FTS should recall glossary.identifiers."
+    },
+    {
+      "fixture_id": "rag-lexical-glossary-est-number",
+      "query": "EST-YYYY-NNNN estimate number unique per location",
+      "actor": { "role": "ROLE_STAFF", "permission_codes": [] },
+      "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
+      "rag_scope": "master",
+      "tags": ["positive", "lexical", "exact-code"],
+      "notes": "Estimate number format EST-YYYY-NNNN, a verbatim token in the glossary."
+    },
+    {
+      "fixture_id": "rag-lexical-glossary-sku-constraint",
+      "query": "uk_product_sku unique immutable SKU",
+      "actor": { "role": "ROLE_STAFF", "permission_codes": [] },
+      "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
+      "rag_scope": "master",
+      "tags": ["positive", "lexical", "exact-identifier"],
+      "notes": "Exact DB constraint name uk_product_sku; a rare token dense retrieval misses."
+    },
+    {
+      "fixture_id": "rag-lexical-glossary-vin-pattern",
+      "query": "vin_normalized 17 character pattern ^[A-HJ-NPR-Z0-9]{17}$",
+      "actor": { "role": "ROLE_STAFF", "permission_codes": [] },
+      "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
+      "rag_scope": "master",
+      "tags": ["positive", "lexical", "exact-identifier"],
+      "notes": "VIN regex + vin_normalized column; symbol-heavy exact tokens embeddings blur."
+    },
+    {
+      "fixture_id": "rag-lexical-glossary-gr-receipt",
+      "query": "GR- goods receipt number prefix",
+      "actor": { "role": "ROLE_STAFF", "permission_codes": [] },
+      "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
+      "rag_scope": "master",
+      "tags": ["positive", "lexical", "exact-code"],
+      "notes": "Goods-receipt prefix GR-<uuid8>; short code, poor dense signal."
+    },
+    {
+      "fixture_id": "rag-lexical-glossary-invoice-number",
+      "query": "INV- epochMillis invoice number generateInvoiceNumber",
+      "actor": { "role": "ROLE_STAFF", "permission_codes": [] },
+      "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
+      "rag_scope": "master",
+      "tags": ["positive", "lexical", "exact-code"],
+      "notes": "Runtime invoice number format INV-<epochMillis>-<uuid8>; verbatim in the glossary."
+    },
+    {
+      "fixture_id": "rag-lexical-role-matrix-permission-code",
+      "query": "security:permission:view security:role:view exact permission codes",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": ["security:role:view", "security:permission:view"]
+      },
+      "expected": { "doc_ids": ["security.role-permission-matrix"], "k": 5 },
+      "rag_scope": "security",
+      "tags": ["positive", "lexical", "permission-code", "gated"],
+      "notes": "Colon-delimited permission codes are exact tokens; caller holds the scope perms, so hybrid should recall security.role-permission-matrix."
+    }
+  ]
+}

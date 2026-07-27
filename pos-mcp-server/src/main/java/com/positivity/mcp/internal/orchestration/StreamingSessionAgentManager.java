@@ -24,6 +24,7 @@ import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -272,8 +273,16 @@ public class StreamingSessionAgentManager
                 scopedContentRetrieverFactory.create(ragScope, TIER2_RETRIEVAL_CANDIDATES, 0.55);
         QueryDocumentRetriever expandedRetriever = new QueryExpansionContentRetriever(
                 broadSemanticRetriever, TIER2_EXPANDED_QUERY_LIMIT, TIER2_RETRIEVAL_CANDIDATES);
-        QueryDocumentRetriever hybridRetriever =
-                new HybridContentRetriever(List.of(semanticRetriever, expandedRetriever), TIER2_RETRIEVAL_CANDIDATES);
+        // #784: dense + query-expansion, plus the lexical (FTS) source when enabled. RRF fusion when
+        // lexical is present; otherwise the original insertion-order merge, so the dense-only path is
+        // byte-for-byte unchanged when the feature flag is off.
+        List<QueryDocumentRetriever> hybridSources = new ArrayList<>(List.of(semanticRetriever, expandedRetriever));
+        Optional<QueryDocumentRetriever> lexicalRetriever = scopedContentRetrieverFactory.createLexical(ragScope);
+        lexicalRetriever.ifPresent(hybridSources::add);
+        QueryDocumentRetriever hybridRetriever = lexicalRetriever.isPresent()
+                ? HybridContentRetriever.reciprocalRankFusion(
+                        hybridSources, TIER2_RETRIEVAL_CANDIDATES, scopedContentRetrieverFactory.rrfK())
+                : new HybridContentRetriever(hybridSources, TIER2_RETRIEVAL_CANDIDATES);
         QueryDocumentRetriever rerankedRetriever = new RerankedContentRetriever(hybridRetriever, TIER2_FINAL_TOP_K);
         QueryDocumentRetriever resilientContentRetriever =
                 new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
