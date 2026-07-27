@@ -184,9 +184,9 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
         return Mono.fromRunnable(() -> {
                     List<DiscoveredOperation> operations =
                             openApiToolMapper.toDiscoveredOperations(gatewayBaseUrl, openApi);
-                    // Names of every op discovered this run — the desired persisted set. Collected for the
-                    // #1121 prune below; includes ops with a null path (skipped from persist) so a skipped
-                    // op is never mistaken for an orphan and deleted.
+                    // Names of every op discovered this run — the desired persisted set for the #1121 prune
+                    // below. name is @NonNull by contract; the filter is a defensive guard so a stray null
+                    // can never enter the keep-set and turn the prune's NOT IN (...) into a silent no-op.
                     Set<String> discoveredNames = operations.stream()
                             .map(DiscoveredOperation::name)
                             .filter(java.util.Objects::nonNull)
