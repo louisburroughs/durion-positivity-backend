@@ -43,13 +43,14 @@ public class AnswerResolutionLadderImpl implements AnswerResolutionLadder {
     @Override
     public @NonNull LadderResult resolveFallback(@NonNull String userMessage) {
         Set<String> permissions = callerPermissions();
+        Set<String> roles = callerRoles();
         // No structured entity extraction yet (v1): pass no params, so the screen's url_template
         // resolves to its base path with optional filters dropped.
         // Screen resolution is best-effort: this is the graceful-degradation tail, so any failure
         // (embedding-model outage, DB error) must degrade to the hand-off, never fail the chat.
         Optional<ScreenLink> link;
         try {
-            link = screenLinkResolver.resolve(userMessage, null, permissions, Map.of());
+            link = screenLinkResolver.resolve(userMessage, null, permissions, roles, Map.of());
         } catch (RuntimeException exception) {
             LOGGER.warn("Screen resolution failed; falling back to hand-off", exception);
             link = Optional.empty();
@@ -73,5 +74,12 @@ public class AnswerResolutionLadderImpl implements AnswerResolutionLadder {
                 .current()
                 .map(CurrentUserContext::permissionCodes)
                 .orElseGet(Set::of);
+    }
+
+    private @NonNull Set<String> callerRoles() {
+        if (requestScopedUserContext == null) {
+            return Set.of();
+        }
+        return requestScopedUserContext.current().map(CurrentUserContext::roles).orElseGet(Set::of);
     }
 }

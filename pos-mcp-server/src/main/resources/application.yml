@@ -33,6 +33,12 @@ mcp:
       - /admin/
       - /actuator/
       - /internal/
+  sitemap:
+    # Origin of the frontend SSR server (NOT the API gateway). The SSR server defaults to port 4000.
+    base-url: ${FRONTEND_BASE_URL:http://localhost:4000}
+    cache-ttl: ${SITEMAP_CACHE_TTL:600s}
+    fetch-timeout: ${SITEMAP_FETCH_TIMEOUT:5s}
+    expected-version: ${SITEMAP_EXPECTED_VERSION:1}
   security:
     permit-all-transport: false
   rag:
