@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -171,5 +173,28 @@ class ScreenLinkResolverImplTest {
 
         assertThat(resolver().resolve("manage customers", null, VIEW_PERM, NO_ROLES, Map.of()))
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName("warm-up pre-embeds sections so the request path reuses cached section embeddings")
+    void warmUpPreEmbedsSections() {
+        when(siteMapService.getSiteMap())
+                .thenReturn(siteMap(
+                        section("/app/crm", "Customers", "Manage customers, contacts, and relationships.", null)));
+        when(embeddingModel.embed(argThat((String text) -> text != null && text.contains("Customers"))))
+                .thenReturn(vecA);
+        when(repository.findNearest(any(), nullable(String.class), anyInt())).thenReturn(List.of());
+        when(embeddingModel.embed("where can I manage customers")).thenReturn(vecA);
+
+        ScreenLinkResolverImpl resolver = resolver();
+        resolver.warmUp(); // embeds the section once, up front
+
+        Optional<ScreenLink> link =
+                resolver.resolve("where can I manage customers", null, VIEW_PERM, NO_ROLES, Map.of());
+
+        assertThat(link).isPresent();
+        assertThat(link.get().url()).isEqualTo("/app/crm");
+        // Section embedded exactly once (during warm-up), never again on the request path.
+        verify(embeddingModel, times(1)).embed(argThat((String text) -> text != null && text.contains("Customers")));
     }
 }

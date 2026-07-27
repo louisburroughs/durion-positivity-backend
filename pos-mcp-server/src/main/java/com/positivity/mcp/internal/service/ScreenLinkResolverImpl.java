@@ -35,6 +35,11 @@ import org.springframework.stereotype.Service;
  * caller. This keeps top-level routes reachable across frontend deployments without re-seeding the
  * registry, while the registry stays the fine-grained path. The fallback is best-effort — a site-map
  * outage degrades to no result, never an error.
+ *
+ * <p>Section embeddings are pre-computed at startup by {@link SiteMapEmbeddingWarmupRunner} (via
+ * {@link #warmUp()}) and cached by section text, so request-time matching is a pure cache read with
+ * no embedding call on the hot path. A cache miss — warm-up never ran/failed, or a section appeared
+ * after a frontend redeploy — falls back to a lazy embed and self-heals the cache for later requests.
  */
 @Service
 @Profile({"!test", "openapi"})
@@ -145,6 +150,28 @@ public class ScreenLinkResolverImpl implements ScreenLinkResolver {
         } catch (RuntimeException exception) {
             LOGGER.debug("Site map screen fallback unavailable: {}", exception.getMessage());
             return Optional.empty();
+        }
+    }
+
+    /**
+     * Pre-embeds every current site-map section so request-time fallback matching is a pure cache
+     * read. Invoked once at startup by {@link SiteMapEmbeddingWarmupRunner}. Best-effort — a site-map
+     * outage leaves the cache to be filled lazily on first use, so warm-up never blocks startup.
+     */
+    public void warmUp() {
+        if (siteMapService == null) {
+            return;
+        }
+        try {
+            SiteMap siteMap = siteMapService.getSiteMap();
+            for (SiteMapSection section : siteMap.sections()) {
+                sectionEmbedding(section);
+            }
+            LOGGER.info(
+                    "Warmed site-map section embeddings for {} sections",
+                    siteMap.sections().size());
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Site-map embedding warm-up skipped: {}", exception.getMessage());
         }
     }
 
