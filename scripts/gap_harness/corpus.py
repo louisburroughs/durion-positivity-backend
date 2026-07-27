@@ -9,8 +9,9 @@ module provides:
    unknown gap (no SME-declared expected doc) can still be distinguished from a retrieval miss.
 
 The manifest is a verbatim copy of ``scripts/rag_seed.py``'s ``MANIFEST`` (itself a copy of
-``application-alpha.yml``'s ``mcp.rag.preload.docs``). ``test_corpus.py`` asserts the two stay in
-sync, so a doc added to the corpus fails the test until it is mirrored here.
+``application-alpha.yml``'s ``mcp.rag.preload.docs``). ``CorpusTest.test_manifest_in_sync_with_rag_seed``
+in ``scripts/tests/test_gap_harness.py`` asserts the two stay in sync, so a doc added to the corpus
+fails the test until it is mirrored here.
 """
 
 from __future__ import annotations

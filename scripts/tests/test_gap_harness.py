@@ -60,7 +60,9 @@ class CorpusTest(unittest.TestCase):
         self.assertEqual(norm(corpus_mod.MANIFEST), norm(rag_seed.MANIFEST))
 
     def test_all_docs_load_with_content(self):
-        self.assertEqual(len(self.idx.all_doc_ids()), 17)
+        # Assert against the manifest (the source of truth, kept in sync with rag_seed.py) rather
+        # than a hard-coded count, so routine corpus growth doesn't fail this test spuriously.
+        self.assertEqual(len(self.idx.all_doc_ids()), len(corpus_mod.MANIFEST))
         for doc_id in self.idx.all_doc_ids():
             self.assertTrue(self.idx.get(doc_id).content, f"{doc_id} has empty content")
 
@@ -271,6 +273,42 @@ class FusionTest(unittest.TestCase):
     def test_no_misses_no_flip(self):
         decision = fusion.flip_decision([], recall_at_k=0.9)
         self.assertFalse(decision.recommend_flip)
+
+    def test_flip_held_when_recall_unknown(self):
+        # recall_at_k=None must NOT satisfy the recall gate: without the retrieval-quality value we
+        # cannot confirm no regression, so hold the flag even when recovery clears the bar.
+        recs = [fusion.recovery_record(f"q{i}", ["d"], dense=["x"], lexical=["d"], k=5) for i in range(5)]
+        decision = fusion.flip_decision(recs, recall_at_k=None, min_recovery_rate=0.30)
+        self.assertFalse(decision.recommend_flip)
+        self.assertIn("not supplied", decision.rationale)
+
+
+class RetrievalCollapseTest(unittest.TestCase):
+    """DbRetriever._collapse is pure (no DB): permission-filter, collapse chunks to distinct docs,
+    cap at top-k. Importing the module is safe offline (eval_live is imported lazily in connect())."""
+
+    def setUp(self):
+        from gap_harness.retrieval import DbRetriever
+
+        self._collapse = DbRetriever._collapse
+
+    def test_caps_at_k_distinct_docs(self):
+        # 12 distinct docs across the rows; only the first k must be returned as retrieved context.
+        rows = [(f"doc-{i}", None, 0.9 - i * 0.01) for i in range(12)]
+        out = self._collapse(rows, set(), k=5)
+        self.assertEqual([d.doc_id for d in out], [f"doc-{i}" for i in range(5)])
+
+    def test_collapses_chunks_to_distinct_docs(self):
+        rows = [("a", None, 0.9), ("a", None, 0.8), ("b", None, 0.7)]
+        out = self._collapse(rows, set(), k=5)
+        self.assertEqual([d.doc_id for d in out], ["a", "b"])
+
+    def test_drops_permission_gated_docs(self):
+        rows = [("public", None, 0.9), ("gated", "security:permission:view", 0.8)]
+        out = self._collapse(rows, set(), k=5)
+        self.assertEqual([d.doc_id for d in out], ["public"])
+        out2 = self._collapse(rows, {"security:permission:view"}, k=5)
+        self.assertEqual({d.doc_id for d in out2}, {"public", "gated"})
 
 
 class QuestionSourcingTest(unittest.TestCase):

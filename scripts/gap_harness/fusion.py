@@ -134,9 +134,13 @@ def flip_decision(
     """Aggregate recovery records into a documented flip recommendation.
 
     Flip when: hybrid recovers ≥ ``min_recovery_rate`` of the retrieval misses dense could not, AND
-    the gated ``rag_retrieval.recall_at_k`` is at/above its floor (so enabling lexical is not
-    masking a recall regression). Recovery rate is measured over the *dense-missed* misses only —
+    the gated ``rag_retrieval.recall_at_k`` is known and at/above its floor (so enabling lexical is
+    not masking a recall regression). Recovery rate is measured over the *dense-missed* misses only —
     the misses lexical actually has a chance to help — not diluted by misses dense already caught.
+
+    A missing ``recall_at_k`` (``None``) does NOT satisfy the recall gate: without the
+    retrieval-quality value we cannot confirm there is no regression, so the conservative outcome is
+    to hold the flag, not flip it.
     """
     records = list(records)
     dense_missed = [r for r in records if not r.dense_hit]
@@ -146,7 +150,8 @@ def flip_decision(
     rate_lex = lex / n if n else 0.0
     rate_hyb = hyb / n if n else 0.0
 
-    recall_ok = recall_at_k is None or recall_at_k >= recall_floor
+    recall_known = recall_at_k is not None
+    recall_ok = recall_known and recall_at_k >= recall_floor
     rate_ok = n > 0 and rate_hyb >= min_recovery_rate
     recommend = rate_ok and recall_ok
 
@@ -156,6 +161,12 @@ def flip_decision(
         rationale = (
             f"hybrid recovered {hyb}/{n} ({rate_hyb:.0%}) of dense-missed misses, "
             f"below the {min_recovery_rate:.0%} flip threshold"
+        )
+    elif not recall_known:
+        rationale = (
+            f"hybrid recovered {hyb}/{n} ({rate_hyb:.0%}) of dense-missed misses (≥ "
+            f"{min_recovery_rate:.0%}), but recall@k was not supplied (pass --recall-at-k); "
+            "holding the flag until the retrieval-quality gate value confirms no regression"
         )
     elif not recall_ok:
         rationale = (

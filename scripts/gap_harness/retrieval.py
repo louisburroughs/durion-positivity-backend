@@ -101,7 +101,11 @@ class DbRetriever:
     @staticmethod
     def _collapse(rows, caller: set[str], k: int) -> list[RetrievedDoc]:
         """Apply the permission filter and collapse chunks to distinct documents, preserving rank
-        order and the best score seen per doc."""
+        order, then return the top-k distinct docs. The SQL over-fetches chunk rows (``k*10``/50) so
+        there are enough chunks to yield k *distinct* documents; the returned context must still be
+        capped at k, since that is the retrieval depth the eval scores recall@k over. Returning the
+        full window would count a doc appearing far below k as 'retrieved' and mis-file a retrieval
+        miss as a generation failure."""
         out: list[RetrievedDoc] = []
         seen: set[str] = set()
         for document_id, required, score in rows:
@@ -111,7 +115,7 @@ class DbRetriever:
                 continue
             seen.add(document_id)
             out.append(RetrievedDoc(doc_id=document_id, score=float(score) if score is not None else 0.0))
-            if len(out) >= max(k * 10, 50):
+            if len(out) >= k:
                 break
         return out
 
