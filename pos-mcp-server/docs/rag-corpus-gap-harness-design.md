@@ -87,7 +87,7 @@ corpus bloats with duplicates and retrieval bugs get mis-filed as content gaps.
 
 ## 6. Corpus suggestions — propose, never author
 
-When classification yields a **corpus gap (#5.1)**, the harness emits a **gap report entry**, not a
+When classification yields a **corpus gap (taxonomy #1)**, the harness emits a **gap report entry**, not a
 document:
 
 ```
